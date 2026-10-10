@@ -44,16 +44,20 @@ tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout $((DEADLINE_S
 TSPID=$!
 
 mkfifo "$WORK/in.ts"
-ffmpeg -hide_banner -loglevel error -re -i "$WORK/clip.ts" -c copy -f mpegts - \
-    >"$WORK/in.ts" 2>"$WORK/ffmpeg.log" &
+exec 3<>"$WORK/in.ts"
+ffmpeg -hide_banner -loglevel error -progress "$WORK/progress.txt" -re -i "$WORK/clip.ts" \
+    -c copy -f mpegts - >"$WORK/in.ts" 2>"$WORK/ffmpeg.log" &
 FFPID=$!
+wait_until 30 grep -q 'total_size=[1-9]' "$WORK/progress.txt" \
+    || fail "cas: source never produced data (see $WORK/ffmpeg.log)"
 
 timeout $((DEADLINE_S + 10)) "$BIN" -O lo -u -m $MCAST:$PORT -i - -s "CAS Test" \
     --cas-algo cissa --cas-ecmg "tcp://127.0.0.1:$ECMG_PORT" --cas-ecmg-version 2 \
-    --cas-emmg-port $EMMG_PORT --cas-super-id 0x4A750002 --cas-ecm-id 1 --cas-pids video,audio \
+    --cas-emmg-listen $EMMG_PORT --cas-super-id 0x4A750002 --cas-ecm-id 1 --cas-pids video,audio \
     --cas-cp-duration 3000 \
     <"$WORK/in.ts" >"$WORK/dipitvhead.log" 2>&1 &
 TVPID=$!
+exec 3<&-
 
 end=$(( $(date +%s) + DEADLINE_S ))
 until scrambled_ready; do

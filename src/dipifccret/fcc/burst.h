@@ -51,7 +51,7 @@ typedef struct {
   _Atomic unsigned refs; /* slot ownership + transient pacer snapshots */
   _Atomic uint16_t rtx_seq;
   unsigned char rtx_pt;
-  size_t cursor;
+  uint64_t cursor; /* cache write position, pinned to newest RAP at burst_new */
   _Atomic double target_bps; /* pacer-thread-written at claim; nack_cb may reduce it mid-burst, see main.c */
   double bytes_sent;
   struct timespec start_time; /* CLOCK_MONOTONIC, sub-second pacing precision */

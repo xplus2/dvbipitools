@@ -418,6 +418,28 @@ static size_t file_size_of(const char *path, unsigned char *buf, size_t cap) {
   return (size_t)n;
 }
 
+static int file_has_top_box(const char *path, const char *fourcc) {
+  int fd = open(path, O_RDONLY);
+  unsigned char h[16];
+  off_t pos = 0;
+  int found = 0;
+
+  ck_assert_int_ge(fd, 0);
+  while (!found && pread(fd, h, 8, pos) == 8) {
+    uint64_t sz = ((uint64_t)h[0] << 24) | ((uint64_t)h[1] << 16) | ((uint64_t)h[2] << 8) | h[3];
+    if (!memcmp(h + 4, fourcc, 4)) found = 1;
+    if (sz == 1) {
+      if (pread(fd, h + 8, 8, pos + 8) != 8) break;
+      sz = 0;
+      for (int i = 8; i < 16; i++) sz = (sz << 8) | h[i];
+    }
+    if (sz < 8) break;
+    pos += (off_t)sz;
+  }
+  close(fd);
+  return found;
+}
+
 START_TEST(sink_writes_a_file) {
   config_t cfg;
   out_sink_t o;
@@ -501,11 +523,13 @@ START_TEST(sink_sends_udp_and_rtp_datagrams) {
   rx = mcast_open(AF_INET, group, port, NULL, 1000);
   ck_assert_ptr_nonnull(rx);
   for (size_t i = 0; i < sizeof data; i++) data[i] = (unsigned char)(i * 3 + 7);
+  for (size_t i = 0; i < sizeof data; i += 188) data[i] = 0x47;
   rec_cfg_defaults(&cfg);
   ck_assert_int_eq(rec_cfg_add_out(&cfg, uri), 0);
   ck_assert_int_eq(sink_open(&cfg, &cfg.out[0], &o), 0);
   ck_assert_int_eq(o.kind, _i ? OUT_RTP : OUT_UDP);
   ck_assert_int_eq(sink_write(&o, data, sizeof data), 0);
+  sinks_flush(&o, 1);
   ck_assert_int_eq(o.net_had_error, 0);
   ck_assert_uint_eq(o.errors_total, 0u);
   for (int i = 0; i < 3; i++) {
@@ -1404,7 +1428,7 @@ START_TEST(run_stream_mp4_writes_an_iso_file_with_the_audio_track) {
   ck_assert_uint_gt(r.out_len, 8u);
   ck_assert_int_eq(memcmp(r.out + 4, "ftyp", 4), 0);
   ck_assert_ptr_nonnull(memmem(r.out, r.out_len, "moov", 4));
-  ck_assert_ptr_nonnull(memmem(r.out, r.out_len, "mdat", 4));
+  ck_assert_int_eq(file_has_top_box(r.out_path, "mdat"), 1);
   ck_assert_ptr_nonnull(memmem(r.out, r.out_len, "mp4a", 4));
   container_run_close(&r);
 }

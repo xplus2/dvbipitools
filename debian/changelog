@@ -23,6 +23,7 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + hls
       - #EXT-X-KEY AES128 segment decryption, SAMPLE-AES, foreign KEYFORMAT and encrypted init segments are rejected
       - protocol-relative //host/path URIs resolver fixed (on DASH too)
+    * al-fec recovery fixed
   * dipitvhead
     + eit+scte35 input crc32 verification
     + checking scte35 continuation packet adaptation length
@@ -32,6 +33,7 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + PSI table versions get bumped on content change and kept
     + detect tracks added to the source PMT mid-stream
     + teletext+subs descriptors passthrough fixed
+    * --cas-emmg-port becomes --cas-emmg-listen and allows a bind address
   * dipiradiohead
     + PMT lost CA descriptors with 5+ CAS vendors
     + shoutcast v1 support
@@ -40,18 +42,33 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + fixed 5s shutdown delay
     * ID3v2.2 tag support
     * stabilized generated EIT (+e2e)
+    * --cas-emmg-port becomes --cas-emmg-listen and allows a bind address
   * dipidescramble
     + last cw and ecm/biss-ca keys were not properly wiped
   * dipiscan
     + write error handling
+    * softened 300ms initial wait to 30% of teh time budget
+    * convert SDT names to UTF-8 in output lists
   * dipirec
     + fixed stack-use-after-scope on mkv/mp4/flv muxers (asan)
+    + mkv 30s cues / 1s clusters, cue sync at stop
+    + mp4 moov on killed recordings
+    + pts discontinuity corruption fix on mkv/mp4
+    + rtp:// and udp:// output: TS-aligned, 7x188 datagrams on -f raw/ts
+  * dipicam378
+    + sane connection limit
+    * new -b|--bind address, defaults to loopback
   * dipirist
     + free config on error
   * dipixy
     + UAF on snap/segmenter retire under OOM
     + qsbr: pad per-worker epochs to cache lines
     + fix memory ordering on arm64 in qsbr_worker_online
+  * dipimetrics
+    + better concurrency handling (>8 conns)
+    + stricter OpenMetrics 1.0.0 response
+  * dipisrt
+    + fixed receiver stop after sender disconnect
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.5.0-1) unstable; urgency=low

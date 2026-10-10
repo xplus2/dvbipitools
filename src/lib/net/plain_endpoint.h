@@ -20,6 +20,7 @@ typedef struct {
   int rtp_wrapped; /* RTP payload. PLAIN_EP_RTP / PLAIN_EP_UDP only, protocol-inherent */
   int family; /* AF_INET or AF_INET6. PLAIN_EP_RTP/PLAIN_EP_UDP only */
   char group[64];
+  char source[64]; /* SSM source, "" = ASM. PLAIN_EP_RTP/PLAIN_EP_UDP only */
   unsigned port;
   unsigned al_fec_l;
   unsigned al_fec_d;

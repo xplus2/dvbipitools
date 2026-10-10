@@ -20,7 +20,7 @@ static const opt_case_t BAD_VENDOR_VALUE[] = {
   {"--cas-super-id", "0"},
   {"--cas-ecm-id", "0"},
   {"--cas-ecm-pid", "0x2000"},
-  {"--cas-emmg-port", "x"},
+  {"--cas-emmg-listen", "x"},
   {"--cas-emmg-reverse", "nocolon"},
   {"--cas-emmg-version", "5"},
   {"--cas-emmg-max-conns", "0"},
@@ -47,7 +47,7 @@ static const opt_case_t NEEDS_ECMG[] = {
   {"--cas-super-id", "1"},
   {"--cas-ecm-id", "1"},
   {"--cas-ecm-pid", "0x0100"},
-  {"--cas-emmg-port", "9000"},
+  {"--cas-emmg-listen", "9000"},
   {"--cas-emmg-reverse", "h:1"},
   {"--cas-emmg-version", "2"},
   {"--cas-emmg-max-conns", "2"},
@@ -102,7 +102,7 @@ START_TEST(vendor_options_fill_the_current_vendor) {
     "--cas-super-id", "0x12345678",
     "--cas-ecm-id", "7",
     "--cas-ecm-pid", "0x0100",
-    "--cas-emmg-port", "9000",
+    "--cas-emmg-listen", "9000",
     "--cas-emmg-version", "2",
     "--cas-emmg-max-conns", "4",
     "--cas-emm-pid", "0x0101",
@@ -137,6 +137,23 @@ START_TEST(vendor_options_fill_the_current_vendor) {
   ck_assert_int_eq(cfg.cas_pids_lcevc, 1);
   ck_assert_uint_eq(cfg.cas_pid_count, 1u);
   ck_assert_uint_eq(cfg.cas_pids[0], 0x0200u);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(emmg_listen_fills_host_and_port) {
+  const char *extra[] = {
+    "--cas-algo", "csa2",
+    "--cas-ecmg", "ecmg.example:1234",
+    "--cas-super-id", "1",
+    "--cas-ecm-id", "1",
+    "--cas-emmg-listen", "[::1]:7000",
+    NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_OK);
+  ck_assert_str_eq(cfg.cas_vendors[0].emmg_listen_host, "::1");
+  ck_assert_uint_eq(cfg.cas_vendors[0].emmg_port, 7000u);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -234,6 +251,7 @@ static Suite *args_cas_suite(void) {
   tcase_add_loop_test(tc, vendor_option_without_ecmg_is_rejected, 0, (int)ARRAY_LEN(NEEDS_ECMG));
   tcase_add_test(tc, unknown_option_is_left_to_the_caller);
   tcase_add_test(tc, vendor_options_fill_the_current_vendor);
+  tcase_add_test(tc, emmg_listen_fills_host_and_port);
   tcase_add_test(tc, emmg_reverse_fills_host_and_port);
   tcase_add_test(tc, cwenc_options_are_recorded_before_validation);
   tcase_add_test(tc, biss_options_enable_and_store_keys);

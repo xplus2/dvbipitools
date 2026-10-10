@@ -5,9 +5,10 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze jq python3 ss; do
+for t in ffmpeg tsp tsanalyze jq ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
+require_itest_helper
 
 MCAST=$(unique_mcast 61)
 FPB=$(free_port_block 2)
@@ -23,8 +24,7 @@ cp "$WORK/stream.mp3" "$WORK/httproot/stream.mp3"
 cap="$WORK/spts_capture.ts"
 report="$WORK/spts_report.json"
 
-(cd "$WORK/httproot" && python3 -u -m http.server "$HTTP_PORT" --bind 127.0.0.1 \
-    >"$WORK/httpd.log" 2>&1) &
+"$DVBIPI_ITEST_HELPER" httpd "$HTTP_PORT" "$WORK/httproot" >"$WORK/httpd.log" 2>&1 &
 HTTPD=$!
 trap 'kill $HTTPD 2>/dev/null; rm -rf "$WORK"' EXIT
 i=0

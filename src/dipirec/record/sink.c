@@ -56,6 +56,7 @@ int src_open(const config_t *cfg, src_t *s) {
       tc.kind = (s->kind == URI_RTP) ? TSSRC_RTP : TSSRC_UDP;
       tc.family = cfg->source.family;
       tc.group = cfg->source.group;
+      tc.source = cfg->source.source;
       tc.port = cfg->source.port;
       tc.iface = cfg->iface_in;
       if (s->kind == URI_RTP) {
@@ -186,6 +187,7 @@ int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
   tc.port = t->port;
   tc.iface = cfg->iface_out;
   tc.ttl = cfg->out_ttl;
+  tc.pack = 1;
   if (t->kind == OUT_RTP) {
     tc.al_fec_l = cfg->al_fec_l;
     tc.al_fec_d = cfg->al_fec_d;
@@ -226,6 +228,12 @@ int sink_write(out_sink_t *o, const unsigned char *p, size_t n) {
       break;
   }
   return write_all(o->fd, p, n);
+}
+
+void sinks_flush(out_sink_t *sinks, int n_sinks) {
+  for (int i = 0; i < n_sinks; i++) {
+    if (sinks[i].net) note_send_result(tssink_flush(sinks[i].net) >= 0, &sinks[i].net_had_error, &sinks[i].errors_total, "net");
+  }
 }
 
 void sinks_service_srt(out_sink_t *sinks, int n_sinks) {

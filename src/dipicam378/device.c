@@ -31,8 +31,7 @@ void device_on_emm(device_state_t *d, const unsigned char *emm, size_t emm_len) 
   device_core_on_emm(&d->core, emm, emm_len, TOOL_NAME ": ");
 }
 
-/* oscam writes cw[0:8)/[8:16) as independent odd/even hw keys, skipping only an
-   all-zero half - never duplicate, or every answer clobbers the other parity's key */
+/* oscam: cw[0:8) even key, cw[8:16) odd key. Zero half skipped, never duplicate */
 #define SC_SECTION_TID_ECM_ODD 0x81
 
 int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_len, unsigned srvid, unsigned caid, unsigned char cw_out[16]) {
@@ -54,9 +53,9 @@ int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_le
   if (d->cw_len == 16) {
     memcpy(cw_out, cw, 16);
   } else if (ecm[0] == SC_SECTION_TID_ECM_ODD) {
-    memcpy(cw_out, cw, (size_t)d->cw_len);
-  } else {
     memcpy(cw_out + 8, cw, (size_t)d->cw_len);
+  } else {
+    memcpy(cw_out, cw, (size_t)d->cw_len);
   }
   secure_zero(cw, sizeof cw);
   return 0;

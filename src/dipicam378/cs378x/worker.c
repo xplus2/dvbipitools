@@ -3,8 +3,10 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -35,13 +37,16 @@ static void log_unknown_command(const unsigned char *body, size_t buflen, int sl
   log_line(TOOL_NAME ": unknown command %d, len=%zu, bytes=%s(slot %d)", body[0], buflen, hex, slot);
 }
 
-/* read n bytes, honoring stop flag between recv() timeouts. 1 ok, 0 stopped, -1 closed/error */
-static int read_exact(int fd, unsigned char *buf, size_t n, atomic_int *stop) {
+/* read n bytes, honoring stop flag and deadline (mono_seconds). 1 ok, 0 stopped, -1 closed/error, -2 deadline */
+static int read_exact(int fd, unsigned char *buf, size_t n, atomic_int *stop, double deadline) {
   size_t got = 0;
   int wfd = signal_wake_fd();
   while (got < n) {
     ssize_t r;
+    double remain;
     if (atomic_load_explicit(stop, memory_order_relaxed) || signal_stop_requested()) return 0;
+    remain = deadline - mono_seconds();
+    if (remain <= 0) return -2;
     if (wfd >= 0) {
       struct pollfd pfds[2];
       pfds[0].fd = fd;
@@ -50,8 +55,8 @@ static int read_exact(int fd, unsigned char *buf, size_t n, atomic_int *stop) {
       pfds[1].fd = wfd;
       pfds[1].events = POLLIN;
       pfds[1].revents = 0;
-      poll(pfds, 2, -1);
-      if (!(pfds[0].revents & POLLIN)) continue;
+      poll(pfds, 2, (int)(remain * 1000.0) + 1);
+      if (!(pfds[0].revents & (POLLIN | POLLHUP | POLLERR))) continue;
     }
     r = recv(fd, buf + got, n - got, 0);
     if (r > 0) {
@@ -65,18 +70,24 @@ static int read_exact(int fd, unsigned char *buf, size_t n, atomic_int *stop) {
   return 1;
 }
 
-typedef enum { FRAME_OK, FRAME_STOP, FRAME_AUTH_FAIL } frame_status_t;
+typedef enum { FRAME_OK, FRAME_STOP, FRAME_AUTH_FAIL, FRAME_TIMEOUT } frame_status_t;
+
+static frame_status_t frame_timeout(int slot, int authed) {
+  log_line(TOOL_NAME ": %s timeout, closing (slot %d)", authed ? "idle" : "authentication", slot);
+  return FRAME_TIMEOUT;
+}
 
 /* read+decrypt+validate one frame. auth/size/crc failures logged+counted here.
    FRAME_OK: body_out/buflen_out set. FRAME_STOP: read/decrypt failed, no log.
-   FRAME_AUTH_FAIL: already logged */
+   FRAME_AUTH_FAIL, FRAME_TIMEOUT: already logged. deadline covers the whole frame */
 static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned char *buf,
-  unsigned char **body_out, size_t *buflen_out, unsigned char conn_ucrc[4], int *have_ucrc) {
+  unsigned char **body_out, size_t *buflen_out, unsigned char conn_ucrc[4], int *have_ucrc, double deadline) {
   unsigned char *body = buf + 4;
   size_t buflen, total;
   int rc;
 
-  rc = read_exact(fd, buf, CS378X_MIN_FRAME, &s->stop);
+  rc = read_exact(fd, buf, CS378X_MIN_FRAME, &s->stop, deadline);
+  if (rc == -2) return frame_timeout(slot, *have_ucrc);
   if (rc <= 0) return FRAME_STOP;
 
   if (!*have_ucrc) {
@@ -107,7 +118,8 @@ static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned 
   }
 
   if (total > 32) {
-    rc = read_exact(fd, body + 32, total - 32, &s->stop);
+    rc = read_exact(fd, body + 32, total - 32, &s->stop, deadline);
+    if (rc == -2) return frame_timeout(slot, *have_ucrc);
     if (rc <= 0) return FRAME_STOP;
     if (cs378x_aes128_ecb(s->aes_key, body + 32, total - 32, 0) != 0) return FRAME_STOP;
   }
@@ -131,7 +143,12 @@ static void *worker_main(void *arg) {
   struct timeval tv;
   unsigned char conn_ucrc[4];
   int have_ucrc = 0;
+  int ka = 1;
+  double auth_span = (double)s->auth_timeout_ms / 1000.0;
+  double idle_span = (double)s->idle_timeout_ms / 1000.0;
+  double deadline = mono_seconds() + auth_span;
 
+  setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &ka, sizeof ka);
   tv.tv_sec = 0;
   tv.tv_usec = CS378X_RECV_TIMEOUT_MS * 1000;
   setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
@@ -143,7 +160,8 @@ static void *worker_main(void *arg) {
     unsigned char *body;
     size_t buflen;
 
-    if (read_frame(s, fd, slot, buf, &body, &buflen, conn_ucrc, &have_ucrc) != FRAME_OK) break;
+    if (read_frame(s, fd, slot, buf, &body, &buflen, conn_ucrc, &have_ucrc, deadline) != FRAME_OK) break;
+    deadline = mono_seconds() + idle_span;
     switch (body[0]) {
       case CMD_ECM_REQUEST:
         handle_ecm(s, fd, conn_ucrc, body, buflen);
@@ -169,38 +187,33 @@ static void *worker_main(void *arg) {
   return NULL;
 }
 
-int tcp_listen_dualstack(unsigned port) {
-  struct sockaddr_storage ss;
-  socklen_t sslen;
-  int fd, on = 1, off = 0, flags;
+int tcp_listen(const char *bind_addr, unsigned port) {
+  struct addrinfo hints, *ai;
+  char portstr[8];
+  int fd, on = 1, off = 0, flags, rc;
 
-  memset(&ss, 0, sizeof ss);
-  fd = socket(AF_INET6, SOCK_STREAM, 0);
-  if (fd >= 0) {
-    struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)&ss;
-    setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off);
-    a6->sin6_family = AF_INET6;
-    a6->sin6_addr = in6addr_any;
-    a6->sin6_port = htons((unsigned short)port);
-    sslen = sizeof *a6;
-  } else if (errno == EAFNOSUPPORT) {
-    struct sockaddr_in *a4 = (struct sockaddr_in *)&ss;
-    fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-      log_line(TOOL_NAME ": socket: %s", strerror(errno));
-      return -1;
-    }
-    a4->sin_family = AF_INET;
-    a4->sin_addr.s_addr = htonl(INADDR_ANY);
-    a4->sin_port = htons((unsigned short)port);
-    sslen = sizeof *a4;
-  } else {
-    log_line(TOOL_NAME ": socket: %s", strerror(errno));
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+  snprintf(portstr, sizeof portstr, "%u", port);
+  rc = getaddrinfo(bind_addr, portstr, &hints, &ai);
+  if (rc != 0) {
+    log_line(TOOL_NAME ": bind address %s: %s", bind_addr, gai_strerror(rc));
     return -1;
   }
+  fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+  if (fd < 0) {
+    log_line(TOOL_NAME ": socket: %s", strerror(errno));
+    freeaddrinfo(ai);
+    return -1;
+  }
+  if (ai->ai_family == AF_INET6) setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off);
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
-  if (bind(fd, (struct sockaddr *)&ss, sslen) < 0) {
-    log_line(TOOL_NAME ": bind :%u: %s", port, strerror(errno));
+  rc = bind(fd, ai->ai_addr, ai->ai_addrlen);
+  freeaddrinfo(ai);
+  if (rc < 0) {
+    log_line(TOOL_NAME ": bind %s port %u: %s", bind_addr, port, strerror(errno));
     close(fd);
     return -1;
   }

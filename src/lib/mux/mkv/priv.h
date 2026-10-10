@@ -18,7 +18,9 @@
 #define MKV_PEND_MAX 1024
 #define MKV_PEND_BYTES (8u * 1024 * 1024)
 #define MKV_REM_MAX 65536
-#define CLUSTER_MS 30000
+#define CLUSTER_MS 1000     /* cut at next video keyframe past this */
+#define CLUSTER_MAX_MS 30000 /* forced, block offset is int16 */
+#define MKV_SEEKHEAD_RESERVE 128
 
 typedef struct {
   unsigned pid;
@@ -29,6 +31,8 @@ typedef struct {
   unsigned width, height;    /* v */
   int hdr_parsed;
   int64_t ts_ms;
+  int64_t step_ms; /* last video ts delta, expected-next hint */
+  int ts_seen;
   pts_unwrap_t pts;
   int psi_idx; /* m->psi[] index. TrackName resolved late in write_head(), sdt may lag setup() */
   unsigned char *rem; /* audio: partial frame carry-over */
@@ -47,6 +51,11 @@ typedef struct {
 } track_t;
 
 typedef struct {
+  int64_t time;
+  uint64_t pos; /* segment-relative */
+} cue_t;
+
+typedef struct {
   int num, key;
   int64_t ts, dur;
   unsigned char *data;
@@ -62,6 +71,7 @@ struct mkv {
   int npsi;
   pes_t *pes;
   track_t trk[MKV_MAX_TRACKS];
+  pts_disc_t disc;
   int ntrk;
   int last_trk_idx;
   int setup, started, err;
@@ -76,6 +86,14 @@ struct mkv {
   ebuf_t cl;
   int64_t cl_base;
   int cl_open;
+  int cl_cue; /* open cluster starts on a video keyframe */
+  int cut_num; /* video track number, 0 = cut on any keyframe */
+  int seekable;
+  uint64_t seg_size_pos, seg_data;
+  uint64_t pos_info, pos_tracks, pos_tags, dur_pos;
+  int64_t dur_ms;
+  cue_t *cue;
+  size_t ncue, cuecap;
 };
 
 /* video.c: codec_id_for only, rest -> lib/demux/escodec */
@@ -87,6 +105,7 @@ track_t *find_track(mkv_t *m, unsigned pid);
 void cluster_flush(mkv_t *m);
 void put_block(mkv_t *m, int num, int64_t rel, const unsigned char *d, size_t n, int key, int64_t dur);
 void start(mkv_t *m);
+void seg_finish(mkv_t *m);
 void pend_add(mkv_t *m, int num, int64_t ts, const unsigned char *d, size_t n, int key, int64_t dur);
 void emit(mkv_t *m, track_t *t, const unsigned char *d, size_t n, int key);
 

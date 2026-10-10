@@ -30,8 +30,8 @@ typedef struct {
 #define OPT(field, kind, num, str, ...) {{"dipiscan", __VA_ARGS__}, 1 + (int)(sizeof((const char *[]){__VA_ARGS__}) / sizeof(char *)), kind, offsetof(config_t, field), num, str}
 
 static const option_case_t option_cases[] = {
-  OPT(total, CFG_UINT, 254, NULL, "-m", "239.1.2.3"),
-  OPT(total, CFG_UINT, 254, NULL, "--mcast", "239.1.2.0/24"),
+  OPT(total, CFG_UINT, 256, NULL, "-m", "239.1.2.3"),
+  OPT(total, CFG_UINT, 256, NULL, "--mcast", "239.1.2.0/24"),
   OPT(total, CFG_UINT, 9, NULL, "-m", "239.1.2.1-239.1.2.9"),
   OPT(family, CFG_INT, AF_INET6, NULL, "-m", "ff0e::1"),
   OPT(port_lo, CFG_UINT, 8000, NULL, "-p", "8000-8002"),
@@ -234,10 +234,10 @@ typedef struct {
 } range_case_t;
 
 static const range_case_t range_cases[] = {
-  {"239.1.2.3", "239.1.2.1-239.1.2.254"},
-  {"239.1.2.0/30", "239.1.2.1-239.1.2.2"},
+  {"239.1.2.3", "239.1.2.0-239.1.2.255"},
+  {"239.1.2.0/30", "239.1.2.0-239.1.2.3"},
   {"239.1.2.5-239.1.2.9", "239.1.2.5-239.1.2.9"},
-  {"ff0e::5", "ff0e::1-ff0e::fe"},
+  {"ff0e::5", "ff0e::-ff0e::ff"},
   {"ff0e::1-ff0e::9", "ff0e::1-ff0e::9"},
 };
 
@@ -261,7 +261,7 @@ START_TEST(range_describe_truncates_to_buffer) {
   ck_assert_int_eq(scan_cfg_mcast(&cfg, "239.1.2.3"), 0);
   args_range_describe(&cfg, buf, sizeof buf);
   ck_assert_uint_eq(strlen(buf), sizeof buf - 1);
-  ck_assert_int_eq(strncmp(buf, "239.1.2.1-239", sizeof buf - 1), 0);
+  ck_assert_int_eq(strncmp(buf, "239.1.2.0-239", sizeof buf - 1), 0);
 }
 END_TEST
 

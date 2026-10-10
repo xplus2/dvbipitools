@@ -2,6 +2,8 @@
 #key: <path>
 # -s|--serial [not set]
 #serial: <id>
+# -b|--bind 127.0.0.1
+bind: 127.0.0.1
 # -p|--port 27500
 port: 27500
 # -a|--auth dipicam378

@@ -26,6 +26,9 @@ typedef struct ret_ctx ret_ctx_t;
 ret_ctx_t *ret_ctx_new(channel_table_t *channels, unsigned char rtx_pt, size_t max_ret_clients, ret_send_fn send_mc, ret_send_unicast_fn send_unicast, void *user);
 void ret_ctx_free(ret_ctx_t *r);
 
+/* 0 = off. client_rate: packets/s per IP. dedup drops MC copy only. -1 OOM */
+int ret_ctx_set_limits(ret_ctx_t *r, unsigned client_rate, unsigned mc_dedup_ms);
+
 /* amortized idle reap of unicast RTX client sessions, same pattern as channel_table_reap_step */
 void ret_ctx_reap_step(ret_ctx_t *r, time_t max_age_s, size_t max_scan);
 

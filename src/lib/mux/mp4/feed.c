@@ -19,8 +19,18 @@ static void video_emit(mp4_t *m, track_t *t, int64_t pts_ms, int64_t dts_ms, con
   t->prev_dts_ms = dts_ms;
 }
 
+static int64_t cue_shift(const mp4_t *m, int64_t start_ms) {
+  int64_t ref = PTS_DISC_NONE;
+  for (int i = 0; i < m->ntrk; i++) {
+    const track_t *t = &m->trk[i];
+    if (t->cls != PID_TELETEXT && t->ts_seen && t->ts_ms > ref) ref = t->ts_ms;
+  }
+  return ref == PTS_DISC_NONE ? m->disc.shift : pts_disc_peek(&m->disc, start_ms, ref);
+}
+
 static void on_cue(void *ctx, const ttx_cue_t *cue) {
   mp4_t *m = ctx;
+  int64_t start_ms = cue->start_ms - cue_shift(m, cue->start_ms);
   int64_t dur = cue->end_ms - cue->start_ms;
   unsigned char buf[2 + TTX_TEXT_MAX];
   size_t n = strlen(cue->text);
@@ -31,7 +41,7 @@ static void on_cue(void *ctx, const ttx_cue_t *cue) {
   for (int i = 0; i < m->ntrk; i++) {
     track_t *t = &m->trk[i];
     if (t->cls != PID_TELETEXT) continue;
-    p4_route(m, t, cue->start_ms, 0, buf, n + 2, 1, (uint32_t)dur);
+    p4_route(m, t, start_ms, 0, buf, n + 2, 1, (uint32_t)dur);
     return;
   }
 }
@@ -97,11 +107,17 @@ static void try_parse_av1_hdr(mp4_t *m, track_t *t) {
 
 static void handle_video(mp4_t *m, track_t *t, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *d, size_t len) {
   int key = 0;
+  int64_t rpts;
   lcevc_strip_t strip;
   if (m->flushing) return;
-  if (has_pts)
-    t->pts_ms = pts_unwrap(&t->pts_uw, pts);
-  t->ts_ms = has_dts ? pts_unwrap(&t->dts_uw, dts) : t->pts_ms;
+  rpts = has_pts ? pts_unwrap(&t->pts_uw, pts) : 0;
+  if (has_dts || has_pts) {
+    int64_t rts = has_dts ? pts_unwrap(&t->dts_uw, dts) : rpts;
+    int64_t shift = pts_disc_shift(&m->disc, rts, t->ts_seen ? t->ts_ms + t->last_dur : PTS_DISC_NONE);
+    t->ts_ms = rts - shift;
+    t->ts_seen = 1;
+    if (has_pts) t->pts_ms = rpts - shift;
+  }
   t->vbuflen = 0;
   strip.rb = &t->lcevc_rb;
   strip.rbcap = &t->lcevc_rbcap;
@@ -127,7 +143,11 @@ static void handle_video(mp4_t *m, track_t *t, int has_pts, uint64_t pts, int ha
 
 static void handle_audio(mp4_t *m, track_t *t, int has_pts, uint64_t pts, const unsigned char *data, size_t len) {
   size_t pos = 0;
-  if (has_pts && t->remlen == 0) t->ts_ms = pts_unwrap(&t->pts_uw, pts);
+  if (has_pts && t->remlen == 0) {
+    int64_t raw = pts_unwrap(&t->pts_uw, pts);
+    t->ts_ms = raw - pts_disc_shift(&m->disc, raw, t->ts_seen ? t->ts_ms : PTS_DISC_NONE);
+    t->ts_seen = 1;
+  }
   if (t->remlen > MP4_REM_MAX) t->remlen = 0;
   if (esc_rem_append(&t->rem, &t->remlen, &t->remcap, data, len)) return;
 

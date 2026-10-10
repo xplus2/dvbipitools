@@ -41,15 +41,19 @@ static void didl_container_close(FILE *f) {
 
 static int didl_mcast_res(FILE *f, const config_t *cfg, const char *src_uri, unsigned bitrate_bps) {
   int family, rtp;
-  char addr[64], hostport[80];
+  char addr[64], src[64], hostport[80];
   unsigned port;
   if (!cfg->dlna_keep_multicast || !src_uri) return -1;
-  if (route_resolve_channel_uri(src_uri, &family, addr, sizeof addr, &port, &rtp)) return -1;
+  if (route_resolve_channel_uri(src_uri, &family, addr, sizeof addr, src, sizeof src, &port, &rtp)) return -1;
   uriparse_mcast_describe(family, addr, port, hostport, sizeof hostport);
   fputs(family == AF_INET6 ? "<res protocolInfo=\"" MCAST_MLD_PROTOCOL_INFO "\"" : "<res protocolInfo=\"" MCAST_IGMP_PROTOCOL_INFO "\"", f);
   if (bitrate_bps) fprintf(f, " bitrate=\"%u\"", bitrate_bps);
   fputs(">", f);
   fputs(rtp ? "rtp://" : "udp://", f);
+  if (src[0]) {
+    xml_escape(f, src);
+    fputs("@", f);
+  }
   xml_escape(f, hostport);
   fputs("</res>", f);
   return 0;

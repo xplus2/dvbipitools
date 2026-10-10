@@ -400,6 +400,42 @@ START_TEST(announce_run_counts_services_with_events_across_unsorted_channels) {
 }
 END_TEST
 
+START_TEST(version_track_bumps_only_when_content_changes) {
+  static const unsigned char a[] = {1, 2, 3};
+  static const unsigned char b[] = {1, 2, 4};
+  static const unsigned char c[] = {1, 2};
+  bcg_version_t v;
+
+  memset(&v, 0, sizeof v);
+  version_track(&v, a, sizeof a);
+  ck_assert_uint_eq(v.version, 1u);
+  version_track(&v, a, sizeof a);
+  ck_assert_uint_eq(v.version, 1u);
+  version_track(&v, b, sizeof b);
+  ck_assert_uint_eq(v.version, 2u);
+  version_track(&v, c, sizeof c);
+  ck_assert_uint_eq(v.version, 3u);
+  version_track(&v, c, sizeof c);
+  ck_assert_uint_eq(v.version, 3u);
+  free(v.last);
+}
+END_TEST
+
+START_TEST(version_track_wraps_from_255_to_1) {
+  static const unsigned char a[] = {1};
+  static const unsigned char b[] = {2};
+  bcg_version_t v;
+
+  memset(&v, 0, sizeof v);
+  v.version = 255;
+  version_track(&v, a, sizeof a);
+  ck_assert_uint_eq(v.version, 1u);
+  version_track(&v, b, sizeof b);
+  ck_assert_uint_eq(v.version, 2u);
+  free(v.last);
+}
+END_TEST
+
 static Suite *announce_suite(void) {
   Suite *s = suite_create("dipibcg_announce");
   TCase *tc = tcase_create("core");
@@ -423,6 +459,8 @@ static Suite *announce_suite(void) {
   tcase_add_test(tc, load_doc_rejects_missing_map);
   tcase_add_loop_test(tc, announce_run_reloads_the_guide_on_sighup_or_keeps_the_previous_one, 0, (int)(sizeof reload_cases / sizeof reload_cases[0]));
   tcase_add_test(tc, announce_run_counts_services_with_events_across_unsorted_channels);
+  tcase_add_test(tc, version_track_bumps_only_when_content_changes);
+  tcase_add_test(tc, version_track_wraps_from_255_to_1);
   suite_add_tcase(s, tc);
   return s;
 }

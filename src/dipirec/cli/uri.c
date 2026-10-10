@@ -20,7 +20,7 @@ static int parse_mcast_addrport(const char *rest, int *family, char *group, size
 }
 
 static int parse_direct(const char *rest, source_t *s) {
-  return parse_mcast_addrport(rest, &s->family, s->group, sizeof s->group, &s->port);
+  return uriparse_mcast_src_addrport(rest, &s->family, s->group, sizeof s->group, &s->port, s->source, sizeof s->source);
 }
 
 static int parse_uri(const char *uri, source_t *s) {
@@ -68,10 +68,10 @@ static int parse_uri(const char *uri, source_t *s) {
 void source_describe(const source_t *s, char *buf, size_t n) {
   switch (s->kind) {
     case URI_RTP:
-      describe_mcast_uri(buf, n, "rtp", s->family, s->group, s->port);
+      uriparse_mcast_src_uri(buf, n, "rtp", s->family, s->source, s->group, s->port);
       break;
     case URI_UDP:
-      describe_mcast_uri(buf, n, "udp", s->family, s->group, s->port);
+      uriparse_mcast_src_uri(buf, n, "udp", s->family, s->source, s->group, s->port);
       break;
     case URI_HTTP:
       describe_http_uri(buf, n, s->http.tls, s->http.host, s->http.port, s->http.path);

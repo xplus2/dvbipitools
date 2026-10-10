@@ -19,6 +19,7 @@ typedef struct {
   /* TSSRC_RTP / TSSRC_UDP */
   int family; /* AF_INET or AF_INET6 */
   const char *group;
+  const char *source; /* SSM source, NULL or "" = ASM */
   unsigned port;
   const char *iface; /* NULL = kernel default route */
   unsigned al_fec_l;

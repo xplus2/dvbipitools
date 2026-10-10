@@ -75,9 +75,9 @@ void channels_stop_refresh(void);
 /* 1 if refresh thread running, 0 otherwise */
 int channels_refresh_active(void);
 
-/* list_num/item_num 1-based (URL convention).
+/* list_num/item_num 1-based (URL convention). src/srcsz: SSM source out, "" = ASM, NULL ok.
    item_name non-NULL: sel by name[item_num]. rf: NULL ok. thread-safe vs concurrent refresh. 0 ok, -1 not found/malformed */
-int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, int *family, char *addr, size_t addrsz, unsigned *port, int *rtp, channel_ret_fcc_t *rf);
+int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, int *family, char *addr, size_t addrsz, char *src, size_t srcsz, unsigned *port, int *rtp, channel_ret_fcc_t *rf);
 
 /* same params as channels_resolve(). srt/http items only: ref++'d ctx instead of family/addr/port. NULL otherwise */
 capture_ctx_t *channels_resolve_static(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name);

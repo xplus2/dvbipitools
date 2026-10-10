@@ -11,11 +11,12 @@
 #include "lib/helper/log.h"
 #include "priv.h"
 
-static const char *const shortopts = "k:s:p:a:c:vdh";
+static const char *const shortopts = "k:s:b:p:a:c:vdh";
 
 static const struct option longopts[] = {
   {"key", required_argument, 0, 'k'},
   {"serial", required_argument, 0, 's'},
+  {"bind", required_argument, 0, 'b'},
   {"port", required_argument, 0, 'p'},
   {"auth", required_argument, 0, 'a'},
   {"caid", required_argument, 0, OPT_CAID},
@@ -72,6 +73,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 's':
         cfg->serial = optarg;
+        break;
+      case 'b':
+        cfg->bind = optarg;
         break;
       case 'p':
         if (argutil_port_parse(optarg, &cfg->port)) {

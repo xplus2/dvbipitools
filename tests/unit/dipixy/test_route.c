@@ -19,6 +19,19 @@ START_TEST(rtp_ts_direct_route_parses) {
 }
 END_TEST
 
+START_TEST(udp_ssm_source_route_parses) {
+  route_t r;
+  ck_assert_int_eq(route_parse("/udp/10.0.0.1@232.1.2.3:8000/ts", &r), 0);
+  ck_assert_int_eq(r.kind, ROUTE_UDP);
+  ck_assert_str_eq(r.src, "10.0.0.1");
+  ck_assert_str_eq(r.addr, "232.1.2.3");
+  ck_assert_uint_eq(r.port, 8000u);
+  ck_assert_int_eq(route_parse("/udp/10.0.0.1@10.0.0.2:8000/ts", &r), -1);
+  ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/ts", &r), 0);
+  ck_assert_str_eq(r.src, "");
+}
+END_TEST
+
 START_TEST(udp_spts_direct_route_parses) {
   route_t r;
   ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/spts", &r), 0);
@@ -479,6 +492,7 @@ static Suite *route_suite(void) {
   Suite *s = suite_create("dipixy_route");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, rtp_ts_direct_route_parses);
+  tcase_add_test(tc, udp_ssm_source_route_parses);
   tcase_add_test(tc, udp_spts_direct_route_parses);
   tcase_add_test(tc, udp_rawaudio_direct_route_parses);
   tcase_add_test(tc, named_list_name_spts_route_parses);

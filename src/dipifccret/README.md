@@ -57,6 +57,8 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 |      | --no-mc-ret               |          |               | disable multicast RET session                    |
 |      | --max-ret-clients         | <n>      | 16384         | pre-allocated unicast RTX client slots, F.3.2.1  |
 |      | --ret-client-idle-timeout | <s>      | 300           | free RTX client slot after X seconds (0 = never) |
+|      | --ret-client-rate         | <n>      | 200           | repair packets/s per client IP (0 = unlimited)   |
+|      | --ret-mc-dedup            | <ms>     | 100           | skip repeat MC repair of one seq (0 = off)       |
 |      | --no-rsi                  |          |               | disable RSI self-announcement                    |
 |      | --rsi-interval            | <s>      | 5             | RSI self-announcement interval (seconds)         |
 |      | --rsi-mc-ret              |          |               | RSI rides the MC RET session, needs MC RET       |
@@ -77,6 +79,7 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 |      | --congestion-nack-threshold | n          | 5         | NACKs during one burst before terminating it as congested (0 = disabled) |
 |      | --fcc-range                 | cidr[,...] | all of -g | restrict FCC to these -g sub-ranges                                      |
 |      | --fcc-client-range          | cidr[,...] | any       | restrict FCC requests to these client source ranges                      |
+|      | --fcc-client-rate           | n          | 2         | RAMS-R requests/s per client IP (0 = unlimited)                          |
 
 
 ## Configuration file

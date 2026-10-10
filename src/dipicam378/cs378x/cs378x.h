@@ -9,11 +9,16 @@
 
 typedef struct cs378x_server cs378x_server_t;
 
+#define CS378X_DEFAULT_BIND "127.0.0.1"
+
 typedef struct {
+  const char *bind;      /* listen address, literal or name. "::" all */
   unsigned port;
-  const char *password;  /* must match reader's "password ="; MD5 is AES-128 key */
-  const char *username;  /* must match reader's "user ="; empty/NULL = no check, accept any */
+  const char *password;  /* must match reader's "password =". MD5 is AES-128 key */
+  const char *username;  /* must match reader's "user =". empty/NULL = no check, accept any */
   int verbose;
+  unsigned auth_timeout_ms; /* close if no valid frame this long after accept. default=0 */
+  unsigned idle_timeout_ms; /* close if no valid frame this long after last. default=0 */
 } cs378x_cfg_t;
 
 /* append-only: index also selects auth_errors_total[] slot, metrics wire label */

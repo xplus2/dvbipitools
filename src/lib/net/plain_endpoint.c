@@ -8,9 +8,9 @@
 
 #include "plain_endpoint.h"
 
-static int plain_endpoint_parse_direct(const char *rest, plain_endpoint_t *s) {
-  if (*rest == '@') rest++;
-  return uriparse_mcast_addrport(rest, &s->family, s->group, sizeof s->group, &s->port);
+static int plain_endpoint_parse_direct(const char *rest, plain_endpoint_t *s, int is_sink) {
+  if (uriparse_mcast_src_addrport(rest, &s->family, s->group, sizeof s->group, &s->port, s->source, sizeof s->source)) return -1;
+  return is_sink && s->source[0] ? -1 : 0; /* a source filter only makes sense on input */
 }
 
 int plain_endpoint_parse(const char *uri, plain_endpoint_t *s, int is_sink) {
@@ -22,12 +22,12 @@ int plain_endpoint_parse(const char *uri, plain_endpoint_t *s, int is_sink) {
   if (strncmp(uri, "rtp://", 6) == 0) {
     s->kind = PLAIN_EP_RTP;
     s->rtp_wrapped = 1;
-    return plain_endpoint_parse_direct(uri + 6, s);
+    return plain_endpoint_parse_direct(uri + 6, s, is_sink);
   }
   if (strncmp(uri, "udp://", 6) == 0) {
     s->kind = PLAIN_EP_UDP;
     s->rtp_wrapped = 0;
-    return plain_endpoint_parse_direct(uri + 6, s);
+    return plain_endpoint_parse_direct(uri + 6, s, is_sink);
   }
   if (strncmp(uri, "http://", 7) == 0 || strncmp(uri, "https://", 8) == 0) {
     if (is_sink) return -1; /* an HTTP TS source makes no sense as an output */
@@ -62,6 +62,7 @@ void plain_endpoint_to_tssrc_cfg(const plain_endpoint_t *s, const char *iface, c
     tc->kind = (s->kind == PLAIN_EP_RTP) ? TSSRC_RTP : TSSRC_UDP;
     tc->family = s->family;
     tc->group = s->group;
+    tc->source = s->source;
     tc->port = s->port;
     tc->iface = iface;
     tc->al_fec_l = s->al_fec_l;

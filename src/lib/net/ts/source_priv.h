@@ -55,6 +55,9 @@ struct tssrc {
   size_t rtp_stride; /* DEFRAME_RTP: 12 + 188*N */
   size_t rtp_pos;     /* DEFRAME_RTP: offset within current stride, carried across reads */
   uint32_t last_rtp_ts;
+  /* TSSRC_STDIN/TSSRC_FILE/TSSRC_HTTP: partial packet carried to next read */
+  unsigned char align_tail[188];
+  size_t align_len;
   /* de-jitter. epfd = src fd + tfd, returned by tssrc_fd() */
   jitbuf_t *jb;
   int epfd;

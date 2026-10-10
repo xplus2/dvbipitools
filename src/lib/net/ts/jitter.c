@@ -40,6 +40,10 @@ int tssrc_jitter_attach(tssrc_t *s, unsigned delay_ms) {
   if (epoll_ctl(s->epfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0) return -1;
   ev.data.fd = s->tfd;
   if (epoll_ctl(s->epfd, EPOLL_CTL_ADD, s->tfd, &ev) < 0) return -1;
+  if (s->fec_dec) {
+    ev.data.fd = tssrc_fec_fd(s);
+    if (epoll_ctl(s->epfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0) return -1;
+  }
   return 0;
 }
 
@@ -54,12 +58,21 @@ static void jitter_src_failed(tssrc_t *s, net_err_reason_t r) {
   epoll_ctl(s->epfd, EPOLL_CTL_DEL, tssrc_src_fd(s), NULL); /* dead fd stays readable */
 }
 
+static void jitter_fec_drain(tssrc_t *s, unsigned char *tmp, size_t cap, uint64_t now) {
+  size_t n;
+  while ((n = fec2022_dec_drain(s->fec_dec, tmp, cap)) > 0) jitbuf_push(s->jb, tmp, n, now);
+}
+
 static void jitter_fill(tssrc_t *s) {
   unsigned char tmp[JITTER_RECV_CAP];
   uint64_t expirations;
   ssize_t tr = read(s->tfd, &expirations, sizeof expirations);
 
   (void)tr;
+  if (s->fec_dec) {
+    tssrc_fec_poll(s);
+    jitter_fec_drain(s, tmp, sizeof tmp, mono_ns());
+  }
   for (unsigned i = 0; i < JITTER_FILL_MAX && !s->jb_failed; i++) {
     struct pollfd p;
     net_err_reason_t r = NET_ERR_OTHER;
@@ -82,7 +95,8 @@ static void jitter_fill(tssrc_t *s) {
       continue;
     }
     fec2022_dec_source(s->fec_dec, tmp, (size_t)n);
-    while ((n = (ssize_t)fec2022_dec_drain(s->fec_dec, tmp, sizeof tmp)) > 0) jitbuf_push(s->jb, tmp, (size_t)n, now);
+    tssrc_fec_poll(s);
+    jitter_fec_drain(s, tmp, sizeof tmp, now);
   }
 }
 

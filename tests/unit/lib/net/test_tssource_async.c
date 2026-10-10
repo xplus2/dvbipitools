@@ -463,6 +463,106 @@ START_TEST(tssrc_fec_poll_feeds_repair_and_recovers_lost_packet) {
 }
 END_TEST
 
+START_TEST(tssrc_read_consumes_repair_without_explicit_fec_poll) {
+  enum { SRC_PKTS = 4, SRC_LEN = 12 + 188 };
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+  fec2022_enc_t *enc = fec2022_enc_new(2, 2, 96);
+  struct sockaddr_in src_dst;
+  struct sockaddr_in fec_dst;
+  unsigned char pkt[SRC_PKTS][SRC_LEN];
+  unsigned char repair[FEC2022_MAX_REPAIR];
+  size_t rlen = 0;
+  char group[32];
+  unsigned port = free_udp_port();
+  unsigned fec_port = free_udp_port();
+  int src_sock;
+  int fec_sock;
+  unsigned char next[SRC_LEN];
+  unsigned char buf[2048];
+
+  ck_assert_ptr_nonnull(enc);
+  ck_assert_uint_ne(port, fec_port);
+  unique_group(group, sizeof group);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_RTP;
+  cfg.family = AF_INET;
+  cfg.group = group;
+  cfg.port = port;
+  cfg.al_fec_l = 2;
+  cfg.al_fec_d = 2;
+  cfg.al_fec_port = fec_port;
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_ge(tssrc_fec_fd(s), 0);
+  src_sock = open_sender(group, port, &src_dst);
+  fec_sock = open_sender(group, fec_port, &fec_dst);
+
+  for (unsigned i = 0; i < SRC_PKTS; i++) {
+    build_rtp_ts(pkt[i], (uint16_t)(0x2000 + i), (unsigned char)i);
+    rlen = fec2022_enc_feed(enc, pkt[i], SRC_LEN, 1000 + i, repair, sizeof repair);
+  }
+  ck_assert_uint_gt(rlen, 0u);
+  for (unsigned i = 0; i < SRC_PKTS - 1; i++)
+    ck_assert_int_eq((int)sendto(src_sock, pkt[i], SRC_LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), SRC_LEN);
+  for (unsigned i = 0; i < SRC_PKTS - 1; i++) {
+    struct pollfd pfd = {tssrc_fd(s), POLLIN, 0};
+
+    ck_assert_int_eq(poll(&pfd, 1, 1000), 1);
+    ck_assert_int_ge((int)tssrc_read(s, buf, sizeof buf, NULL), 0);
+  }
+  ck_assert_int_eq((int)sendto(fec_sock, repair, rlen, 0, (struct sockaddr *)&fec_dst, sizeof fec_dst), (int)rlen);
+  {
+    struct pollfd fpfd = {tssrc_fec_fd(s), POLLIN, 0};
+
+    ck_assert_int_eq(poll(&fpfd, 1, 1000), 1);
+  }
+  for (unsigned i = 0; i < 3; i++) {
+    build_rtp_ts(next, (uint16_t)(0x2000 + SRC_PKTS + i), (unsigned char)(SRC_PKTS + i));
+    ck_assert_int_eq((int)sendto(src_sock, next, SRC_LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), SRC_LEN);
+  }
+  for (unsigned i = 1; i <= 3; i++) {
+    struct pollfd pfd = {tssrc_fd(s), POLLIN, 0};
+
+    ck_assert_int_eq(poll(&pfd, 1, 1000), 1);
+    ck_assert_int_eq((int)tssrc_read(s, buf, sizeof buf, NULL), 188);
+    ck_assert_uint_eq(buf[0], 0x47);
+    ck_assert_uint_eq(buf[1], i);
+  }
+
+  fec2022_enc_free(enc);
+  close(src_sock);
+  close(fec_sock);
+  tssrc_close(s);
+}
+END_TEST
+
+START_TEST(tssrc_read_with_fec_returns_zero_when_idle) {
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+  char group[32];
+  unsigned char buf[2048];
+  struct timespec t0, t1;
+
+  unique_group(group, sizeof group);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_RTP;
+  cfg.family = AF_INET;
+  cfg.group = group;
+  cfg.port = free_udp_port();
+  cfg.al_fec_l = 2;
+  cfg.al_fec_d = 2;
+  cfg.al_fec_port = free_udp_port();
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  ck_assert_int_eq((int)tssrc_read(s, buf, sizeof buf, NULL), 0);
+  clock_gettime(CLOCK_MONOTONIC, &t1);
+  ck_assert_int_lt((int)(t1.tv_sec - t0.tv_sec), 1);
+  tssrc_close(s);
+}
+END_TEST
+
 START_TEST(tssrc_buffer_ms_is_minus_one_without_jitter_buffer) {
   tssrc_cfg_t cfg;
   tssrc_t *s;
@@ -563,6 +663,8 @@ static Suite *tssource_async_suite(void) {
   tcase_add_test(tc, tssrc_open_async_reports_error_on_refused_connection);
   tcase_add_test(tc, tssrc_mcast_returns_the_joined_socket_for_udp_only);
   tcase_add_test(tc, tssrc_fec_poll_feeds_repair_and_recovers_lost_packet);
+  tcase_add_test(tc, tssrc_read_consumes_repair_without_explicit_fec_poll);
+  tcase_add_test(tc, tssrc_read_with_fec_returns_zero_when_idle);
   tcase_add_test(tc, tssrc_buffer_ms_is_minus_one_without_jitter_buffer);
   tcase_add_test(tc, tssrc_buffer_ms_reports_depth_with_jitter_buffer);
   tcase_add_test(tc, tssrc_jitter_source_failure_drains_then_reports_error);

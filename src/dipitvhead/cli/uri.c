@@ -16,6 +16,11 @@ static int mcast_group_parse(const char *s, int *family, char *addr_out, size_t 
   return uriparse_mcast_addrport(s, family, addr_out, addr_out_sz, port_out);
 }
 
+/* [[src]@]<addr>:<port>, mcast literal required */
+static int mcast_src_parse(const char *s, source_t *src) {
+  return uriparse_mcast_src_addrport(s, &src->family, src->group, sizeof src->group, &src->port, src->source, sizeof src->source);
+}
+
 int tvh_cfg_mcast(config_t *cfg, const char *s) {
   return mcast_group_parse(s, &cfg->family, cfg->mcast_group, sizeof cfg->mcast_group, &cfg->mcast_port);
 }
@@ -28,11 +33,11 @@ static int source_parse(const char *uri, source_t *s) {
   }
   if (strncmp(uri, "rtp://", 6) == 0) {
     s->kind = SRC_RTP;
-    return mcast_group_parse(uri + 6, &s->family, s->group, sizeof s->group, &s->port);
+    return mcast_src_parse(uri + 6, s);
   }
   if (strncmp(uri, "udp://", 6) == 0) {
     s->kind = SRC_UDP;
-    return mcast_group_parse(uri + 6, &s->family, s->group, sizeof s->group, &s->port);
+    return mcast_src_parse(uri + 6, s);
   }
   if (strncmp(uri, "http://", 7) == 0 || strncmp(uri, "https://", 8) == 0) {
     s->kind = SRC_HTTP;
@@ -60,10 +65,10 @@ static int source_parse(const char *uri, source_t *s) {
 void source_describe(const source_t *s, char *buf, size_t n) {
   switch (s->kind) {
     case SRC_RTP:
-      describe_mcast_uri(buf, n, "rtp", s->family, s->group, s->port);
+      uriparse_mcast_src_uri(buf, n, "rtp", s->family, s->source, s->group, s->port);
       break;
     case SRC_UDP:
-      describe_mcast_uri(buf, n, "udp", s->family, s->group, s->port);
+      uriparse_mcast_src_uri(buf, n, "udp", s->family, s->source, s->group, s->port);
       break;
     case SRC_HTTP:
       describe_http_uri(buf, n, s->http.tls, s->http.host, s->http.port, s->http.path);

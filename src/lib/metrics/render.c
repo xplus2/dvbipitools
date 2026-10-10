@@ -20,6 +20,19 @@ static const char *metric_kind_name(metric_kind_t k) {
   return "gauge";
 }
 
+/* OpenMetrics family name: counter loses _total, info loses _info. sample names stay */
+static void add_family_name(dstrbuf_t *sb, const char *name, const char *type, int openmetrics) {
+  size_t n = strlen(name);
+  size_t cut = 0;
+  char buf[96];
+  if (openmetrics) {
+    if (strcmp(type, "counter") == 0 && n > 6 && strcmp(name + n - 6, "_total") == 0) cut = 6;
+    else if (strcmp(type, "info") == 0 && n > 5 && strcmp(name + n - 5, "_info") == 0) cut = 5;
+  }
+  snprintf(buf, sizeof buf, "%.*s", (int)(n - cut), name);
+  dstrbuf_add(sb, buf);
+}
+
 typedef enum { TS_LABEL_NONE, TS_LABEL_STREAM, TS_LABEL_TABLE, TS_LABEL_PID, TS_LABEL_SERVICE } ts_label_kind_t;
 
 typedef struct {
@@ -122,7 +135,7 @@ static const metric_def_t DEFS[] = {
     {.id = METRICS_ID_REC_OUTPUT_ERRORS_TOTAL, .name = "dvbipi_rec_output_errors_total", .kind = M_COUNTER, .help = "output write failures", .label_name = "output", .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_REC_ELAPSED_SECONDS, .name = "dvbipi_rec_elapsed_seconds", .kind = M_GAUGE, .help = "seconds since recording started", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_REC_DURATION_LIMIT_SECONDS, .name = "dvbipi_rec_duration_limit_seconds", .kind = M_GAUGE, .help = "configured recording duration, 0 if unlimited", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
-    {.id = METRICS_ID_DESCRAMBLE_MODE, .name = "dvbipi_descramble_mode", .kind = M_INFO, .help = "detected CAS scheme", .label_name = "mode", .composite_input_reason = 0, .ts_label = 0},
+    {.id = METRICS_ID_DESCRAMBLE_MODE, .name = "dvbipi_descramble_mode", .kind = M_GAUGE, .help = "detected CAS scheme", .label_name = "mode", .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_DESCRAMBLE_KEY_LOAD_ERRORS_TOTAL, .name = "dvbipi_descramble_key_load_errors_total", .kind = M_COUNTER, .help = "RSA/device key load failures", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_DESCRAMBLE_OUTPUT_ERRORS_TOTAL, .name = "dvbipi_descramble_output_errors_total", .kind = M_COUNTER, .help = "output emit failures", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
     {.id = METRICS_ID_CAM_CONNECTIONS_ACTIVE, .name = "dvbipi_cam_connections_active", .kind = M_GAUGE, .help = "connected cs378x clients", .label_name = NULL, .composite_input_reason = 0, .ts_label = 0},
@@ -365,8 +378,20 @@ static void close_labels(dstrbuf_t *sb, size_t mark, int instance_labels) {
   sb->buf[sb->len] = '\0';
 }
 
+static void add_head(dstrbuf_t *sb, const char *name, const char *type, const char *help, int openmetrics) {
+  dstrbuf_add(sb, "# HELP ");
+  add_family_name(sb, name, type, openmetrics);
+  dstrbuf_add(sb, " ");
+  dstrbuf_add(sb, help);
+  dstrbuf_add(sb, "\n# TYPE ");
+  add_family_name(sb, name, type, openmetrics);
+  dstrbuf_add(sb, " ");
+  dstrbuf_add(sb, type);
+  dstrbuf_add(sb, "\n");
+}
+
 /* one pass over every stored entry, bucketed by def instead of one scan per def */
-void render_series(dstrbuf_t *sb, const store_t *st, int instance_labels) {
+void render_series(dstrbuf_t *sb, const store_t *st, int instance_labels, int openmetrics) {
   int def_idx[DEF_ID_MAX]; /* metrics_id_t -> DEFS[] index, -1 if unused */
   size_t count[N_DEFS];
   size_t start[N_DEFS];
@@ -398,15 +423,7 @@ void render_series(dstrbuf_t *sb, const store_t *st, int instance_labels) {
   for (unsigned i = 0; i < N_DEFS; i++) {
     const metric_def_t *def = &DEFS[i];
     if (!count[i] || !refs) continue;
-    dstrbuf_add(sb, "# HELP ");
-    dstrbuf_add(sb, def->name);
-    dstrbuf_add(sb, " ");
-    dstrbuf_add(sb, def->help);
-    dstrbuf_add(sb, "\n# TYPE ");
-    dstrbuf_add(sb, def->name);
-    dstrbuf_add(sb, " ");
-    dstrbuf_add(sb, metric_kind_name(def->kind));
-    dstrbuf_add(sb, "\n");
+    add_head(sb, def->name, metric_kind_name(def->kind), def->help, openmetrics);
     for (size_t k = start[i]; k < start[i] + count[i]; k++) {
       const entry_ref_t *e = &refs[k];
       char label[METRICS_LABEL_MAX + 1];
@@ -440,18 +457,6 @@ void render_series(dstrbuf_t *sb, const store_t *st, int instance_labels) {
   free(refs);
 }
 
-static void add_head(dstrbuf_t *sb, const char *name, const char *type, const char *help) {
-  dstrbuf_add(sb, "# HELP ");
-  dstrbuf_add(sb, name);
-  dstrbuf_add(sb, " ");
-  dstrbuf_add(sb, help);
-  dstrbuf_add(sb, "\n# TYPE ");
-  dstrbuf_add(sb, name);
-  dstrbuf_add(sb, " ");
-  dstrbuf_add(sb, type);
-  dstrbuf_add(sb, "\n");
-}
-
 static void add_sample(dstrbuf_t *sb, const char *series, uint64_t value) {
   dstrbuf_add(sb, series);
   dstrbuf_add(sb, " ");
@@ -466,7 +471,7 @@ static void render_snapshot_age(dstrbuf_t *sb, const store_t *st, double now_mon
   }
   if (!any) return;
 
-  add_head(sb, "dvbipi_metrics_snapshot_age_seconds", "gauge", "seconds since this instance's last snapshot was received");
+  add_head(sb, "dvbipi_metrics_snapshot_age_seconds", "gauge", "seconds since this instance's last snapshot was received", 1);
   for (int i = 0; i < STORE_MAX_INSTANCES; i++) {
     const store_slot_t *slot = &st->slots[i];
     if (!slot->valid) continue;
@@ -482,26 +487,26 @@ static void render_self_metrics(dstrbuf_t *sb, const store_t *st) {
     if (st->slots[i].valid) active++;
   }
 
-  add_head(sb, "dvbipi_metrics_instances", "gauge", "exporter instances currently tracked");
+  add_head(sb, "dvbipi_metrics_instances", "gauge", "exporter instances currently tracked", 1);
   add_sample(sb, "dvbipi_metrics_instances", active);
 
-  add_head(sb, "dvbipi_metrics_snapshots_received_total", "counter", "snapshots accepted and stored");
+  add_head(sb, "dvbipi_metrics_snapshots_received_total", "counter", "snapshots accepted and stored", 1);
   add_sample(sb, "dvbipi_metrics_snapshots_received_total", st->stats.snapshots_received_total);
 
-  add_head(sb, "dvbipi_metrics_snapshots_rejected_total", "counter", "snapshots rejected by reason");
+  add_head(sb, "dvbipi_metrics_snapshots_rejected_total", "counter", "snapshots rejected by reason", 1);
   add_sample(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"malformed\"}", st->stats.snapshots_rejected_malformed);
   add_sample(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"stale\"}", st->stats.snapshots_rejected_stale);
   add_sample(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"full\"}", st->stats.snapshots_rejected_full);
   add_sample(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"version\"}", st->stats.snapshots_rejected_version);
   add_sample(sb, "dvbipi_metrics_snapshots_rejected_total{reason=\"toolarge\"}", st->stats.snapshots_rejected_toolarge);
 
-  add_head(sb, "dvbipi_metrics_snapshots_incomplete_total", "counter", "snapshots discarded because a piece of them was lost");
+  add_head(sb, "dvbipi_metrics_snapshots_incomplete_total", "counter", "snapshots discarded because a piece of them was lost", 1);
   add_sample(sb, "dvbipi_metrics_snapshots_incomplete_total", st->stats.snapshots_incomplete);
 
-  add_head(sb, "dvbipi_metrics_parts_orphaned_total", "counter", "stray snapshot pieces dropped");
+  add_head(sb, "dvbipi_metrics_parts_orphaned_total", "counter", "stray snapshot pieces dropped", 1);
   add_sample(sb, "dvbipi_metrics_parts_orphaned_total", st->stats.parts_orphaned);
 
-  add_head(sb, "dvbipi_metrics_http_requests_total", "counter", "/metrics HTTP requests by response status");
+  add_head(sb, "dvbipi_metrics_http_requests_total", "counter", "/metrics HTTP requests by response status", 1);
   add_sample(sb, "dvbipi_metrics_http_requests_total{status=\"200\"}", st->stats.http_requests_200);
   add_sample(sb, "dvbipi_metrics_http_requests_total{status=\"404\"}", st->stats.http_requests_404);
 }
@@ -509,7 +514,7 @@ static void render_self_metrics(dstrbuf_t *sb, const store_t *st) {
 void render_openmetrics(const store_t *st, double now_mono, char **out, size_t *out_len) {
   dstrbuf_t sb;
   dstrbuf_init(&sb);
-  render_series(&sb, st, 1);
+  render_series(&sb, st, 1, 1);
   render_snapshot_age(&sb, st, now_mono);
   render_self_metrics(&sb, st);
   dstrbuf_add(&sb, "# EOF\n");
@@ -547,7 +552,7 @@ int render_local(metrics_component_t component, metrics_extra_fn fill, void *ctx
   }
   store_ingest(&st, w.buf, len, 0.0, 0);
   dstrbuf_init(&sb);
-  render_series(&sb, &st, 0);
+  render_series(&sb, &st, 0, 0);
   store_free(&st);
   if (!sb.buf) return -1;
   *out = sb.buf;

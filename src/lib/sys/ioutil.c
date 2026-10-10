@@ -56,6 +56,14 @@ size_t bufcpy(char *dst, size_t dstsz, const char *src) {
   size_t len = strlen(src);
   if (dstsz) {
     size_t n = len < dstsz - 1 ? len : dstsz - 1;
+    if (n < len) {
+      size_t back = 0;
+      while (n > 0 && back < 3 && ((unsigned char)src[n] & 0xC0) == 0x80) { /* no cut inside UTF-8 sequence */
+        n--;
+        back++;
+      }
+      if (back == 3 && ((unsigned char)src[n] & 0xC0) == 0x80) n += back;
+    }
     memcpy(dst, src, n);
     dst[n] = '\0';
   }

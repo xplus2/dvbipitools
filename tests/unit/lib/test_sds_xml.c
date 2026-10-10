@@ -690,6 +690,43 @@ START_TEST(sds_build_rms_fus_emits_fus_provider) {
 }
 END_TEST
 
+START_TEST(sds_broadcast_round_trips_ssm_source) {
+  sds_service_t svc, out[2];
+  unsigned char buf[2048];
+  size_t len;
+
+  memset(&svc, 0, sizeof svc);
+  bufcpy(svc.name, sizeof svc.name, "Ssm");
+  bufcpy(svc.address, sizeof svc.address, "232.1.2.3");
+  bufcpy(svc.source, sizeof svc.source, "10.9.8.7");
+  svc.port = 5000;
+  svc.tsid = svc.onid = svc.sid = 1;
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_nonnull(strstr((const char *)buf, "Source=\"10.9.8.7\""));
+  ck_assert_int_eq(sds_parse_broadcast((const char *)buf, out, 2, NULL), 1);
+  ck_assert_str_eq(out[0].address, "232.1.2.3");
+  ck_assert_str_eq(out[0].source, "10.9.8.7");
+}
+END_TEST
+
+START_TEST(sds_broadcast_omits_source_for_asm) {
+  sds_service_t svc, out[2];
+  unsigned char buf[2048];
+  size_t len;
+
+  memset(&svc, 0, sizeof svc);
+  bufcpy(svc.name, sizeof svc.name, "Asm");
+  bufcpy(svc.address, sizeof svc.address, "239.1.2.3");
+  svc.port = 5000;
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_null(strstr((const char *)buf, "Source="));
+  ck_assert_int_eq(sds_parse_broadcast((const char *)buf, out, 2, NULL), 1);
+  ck_assert_str_eq(out[0].source, "");
+}
+END_TEST
+
 static Suite *sds_xml_suite(void) {
   Suite *s = suite_create("sds_xml");
   TCase *tc = tcase_create("core");
@@ -724,6 +761,8 @@ static Suite *sds_xml_suite(void) {
   tcase_add_test(tc, sds_parse_broadcast_round_trips_multicast_ret_override_port);
   tcase_add_test(tc, sds_parse_broadcast_round_trips_fcc);
   tcase_add_test(tc, sds_parse_broadcast_round_trips_fcc_resolve_by_port);
+  tcase_add_test(tc, sds_broadcast_round_trips_ssm_source);
+  tcase_add_test(tc, sds_broadcast_omits_source_for_asm);
   suite_add_tcase(s, tc);
   return s;
 }

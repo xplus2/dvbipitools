@@ -58,9 +58,9 @@ ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=2
 timeout $((DEADLINE_S + 10)) "$DIPITVHEAD" -O lo -u -m $MCAST:$PORT -i - -s "CAS Metrics Scrape" \
     --cas-algo cissa \
     --cas-ecmg "tcp://127.0.0.1:$ECMG_A_PORT" --cas-ecmg-version 2 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
-               --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port $EMMG_A_PORT --cas-required \
+               --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-listen $EMMG_A_PORT --cas-required \
     --cas-ecmg "tcp://127.0.0.1:$ECMG_B_PORT" --cas-ecmg-version 2 --cas-super-id 0x0D960001 --cas-ecm-id 1 \
-               --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-port $EMMG_B_PORT \
+               --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-listen $EMMG_B_PORT \
     --cas-pids video,audio --cas-cp-duration 3000 \
     --metrics "$SOCK" --metrics-id tv-cas-it --metrics-interval 1 \
     >"$WORK/dipitvhead.log" 2>&1 &

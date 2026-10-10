@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/socket.h>
 
+#include "dipifccret/ret/ratelimit.h"
 #include "dipifccret/ret/ret.h"
 #include "lib/demux/rtcp.h"
 #include "lib/demux/rtx.h"
@@ -413,9 +414,123 @@ START_TEST(reap_step_is_bounded_per_call) {
 }
 END_TEST
 
+static void nack_ten_seqs(ret_ctx_t *r, const char *ip, unsigned short port) {
+  rtcp_nack_t nack;
+  struct sockaddr_in from = make_client_addr(ip, port);
+
+  memset(&nack, 0, sizeof nack);
+  nack.sender_ssrc = 0x1111;
+  nack.media_ssrc = 0xAAAA;
+  nack.entry_count = 1;
+  nack.entry[0].pid = 100;
+  nack.entry[0].blp = 0x01FF; /* 100..109 */
+  ret_handle_nack(r, &nack, 42, (const struct sockaddr *)&from, sizeof from);
+}
+
+START_TEST(client_rate_caps_repairs_per_source_ip) {
+  channel_table_t *t;
+  channel_t *c = make_channel(&t, 0xAAAA, 100, 12);
+  ret_ctx_t *r = ret_ctx_new(t, 99, 32, send_mc, send_unicast, NULL);
+
+  (void)c;
+  ck_assert_int_eq(ret_ctx_set_limits(r, 2, 0), 0); /* depth 6: FF + 5 repairs */
+  reset_capture();
+  nack_ten_seqs(r, "192.0.2.1", 7000);
+  ck_assert_int_eq(g_uni_calls, 5);
+  ck_assert_int_eq(g_mc_calls, 1 + 5);
+
+  /* same IP, other port: same bucket, nothing left */
+  reset_capture();
+  nack_ten_seqs(r, "192.0.2.1", 7001);
+  ck_assert_int_eq(g_uni_calls, 0);
+  ck_assert_int_eq(g_mc_calls, 0);
+
+  /* other IP: own bucket */
+  reset_capture();
+  nack_ten_seqs(r, "192.0.2.2", 7000);
+  ck_assert_int_eq(g_uni_calls, 5);
+  ret_ctx_free(r);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(client_rate_zero_is_unlimited) {
+  channel_table_t *t;
+  channel_t *c = make_channel(&t, 0xAAAA, 100, 12);
+  ret_ctx_t *r = ret_ctx_new(t, 99, 32, send_mc, send_unicast, NULL);
+  int i;
+
+  (void)c;
+  ck_assert_int_eq(ret_ctx_set_limits(r, 0, 0), 0);
+  reset_capture();
+  for (i = 0; i < 10; i++)
+    nack_ten_seqs(r, "192.0.2.1", 7000);
+  ck_assert_int_eq(g_uni_calls, 100);
+  ret_ctx_free(r);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(mc_dedup_skips_repeat_multicast_repair_keeps_unicast) {
+  channel_table_t *t;
+  channel_t *c = make_channel(&t, 0xAAAA, 100, 12);
+  ret_ctx_t *r = ret_ctx_new(t, 99, 32, send_mc, send_unicast, NULL);
+
+  (void)c;
+  ck_assert_int_eq(ret_ctx_set_limits(r, 0, 60000), 0);
+  reset_capture();
+  nack_ten_seqs(r, "192.0.2.1", 7000);
+  ck_assert_int_eq(g_mc_calls, 1 + 10);
+  nack_ten_seqs(r, "192.0.2.2", 7000);
+  ck_assert_int_eq(g_uni_calls, 20);
+  ck_assert_int_eq(g_mc_calls, 1 + 10 + 1); /* second NACK: FF only */
+  ret_ctx_free(r);
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(ratelimit_bucket_refills_and_ignores_port) {
+  ratelimit_t *rl = ratelimit_new(64);
+  struct sockaddr_in a = make_client_addr("198.51.100.7", 1000);
+  struct sockaddr_in b = make_client_addr("198.51.100.7", 2000);
+
+  ck_assert_uint_eq(ratelimit_take(rl, (struct sockaddr *)&a, 10, 20, 15, 1000), 15u);
+  ck_assert_uint_eq(ratelimit_take(rl, (struct sockaddr *)&b, 10, 20, 15, 1000), 5u);
+  ck_assert_uint_eq(ratelimit_take(rl, (struct sockaddr *)&a, 10, 20, 1, 1000), 0u);
+  ck_assert_uint_eq(ratelimit_take(rl, (struct sockaddr *)&a, 10, 20, 5, 1500), 5u); /* 0.5 s x 10/s */
+  ck_assert_uint_eq(ratelimit_take(rl, (struct sockaddr *)&a, 10, 20, 50, 600000), 20u); /* capped at depth */
+  ck_assert_uint_eq(ratelimit_take(rl, (struct sockaddr *)&a, 0, 20, 50, 600000), 50u); /* rate 0 unlimited */
+  ratelimit_free(rl);
+}
+END_TEST
+
+START_TEST(ratelimit_keys_ipv6_by_slash64) {
+  ratelimit_t *rl = ratelimit_new(64);
+  struct sockaddr_in6 a, b, c;
+
+  memset(&a, 0, sizeof a);
+  a.sin6_family = AF_INET6;
+  inet_pton(AF_INET6, "2001:db8:1:2::1", &a.sin6_addr);
+  b = a;
+  inet_pton(AF_INET6, "2001:db8:1:2:ffff::9", &b.sin6_addr);
+  c = a;
+  inet_pton(AF_INET6, "2001:db8:1:3::1", &c.sin6_addr);
+
+  ck_assert_uint_eq(ratelimit_take(rl, (struct sockaddr *)&a, 1, 4, 4, 1000), 4u);
+  ck_assert_uint_eq(ratelimit_take(rl, (struct sockaddr *)&b, 1, 4, 4, 1000), 0u);
+  ck_assert_uint_eq(ratelimit_take(rl, (struct sockaddr *)&c, 1, 4, 4, 1000), 4u);
+  ratelimit_free(rl);
+}
+END_TEST
+
 static Suite *ret_suite(void) {
   Suite *s = suite_create("ret");
   TCase *tc = tcase_create("core");
+  tcase_add_test(tc, client_rate_caps_repairs_per_source_ip);
+  tcase_add_test(tc, client_rate_zero_is_unlimited);
+  tcase_add_test(tc, mc_dedup_skips_repeat_multicast_repair_keeps_unicast);
+  tcase_add_test(tc, ratelimit_bucket_refills_and_ignores_port);
+  tcase_add_test(tc, ratelimit_keys_ipv6_by_slash64);
   tcase_add_test(tc, ret_handle_nack_repairs_primary_and_blp_bits);
   tcase_add_test(tc, ret_handle_nack_generic_nack_matches_requested_entries);
   tcase_add_test(tc, ret_handle_nack_ignores_unknown_ssrc);

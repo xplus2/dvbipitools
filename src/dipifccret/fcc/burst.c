@@ -64,6 +64,7 @@ burst_t *burst_new(const channel_t *c, double multiplier, double client_max_bps,
 
   b->channel = c;
   b->generation = atomic_load_explicit(&c->generation, memory_order_relaxed);
+  b->cursor = channel_cache_pin(c);
   atomic_init(&b->refs, 1u);
   b->rtx_pt = rtx_pt;
   atomic_store_explicit(&b->target_bps, target, memory_order_relaxed);
@@ -86,7 +87,7 @@ void burst_release(burst_t *b) {
 
 burst_tick_result_t burst_tick(burst_t *b, unsigned duration_cap_ms, burst_send_fn send_cb, void *user) {
   double elapsed_s, budget_bytes;
-  size_t count;
+  uint64_t end;
 
   if (atomic_load_explicit(&b->done, memory_order_acquire))
     return BURST_TICK_DONE;
@@ -103,9 +104,13 @@ burst_tick_result_t burst_tick(burst_t *b, unsigned duration_cap_ms, burst_send_
   }
 
   budget_bytes = atomic_load_explicit(&b->target_bps, memory_order_relaxed) * elapsed_s / 8.0;
-  count = channel_cache_count(b->channel);
+  end = channel_cache_end(b->channel);
+  if (end - b->cursor > b->channel->cache.cap) {
+    atomic_store_explicit(&b->done, 1, memory_order_release);
+    return BURST_TICK_DONE; /* writer lapped cursor, start overwritten */
+  }
 
-  while (b->cursor < count && b->bytes_sent < budget_bytes) {
+  while (b->cursor < end && b->bytes_sent < budget_bytes) {
     rap_cache_entry_t e;
     unsigned char pkt[BURST_PKT_MAX];
     size_t n;
@@ -119,8 +124,8 @@ burst_tick_result_t burst_tick(burst_t *b, unsigned duration_cap_ms, burst_send_
       return BURST_TICK_DONE; /* slot recycled mid-tick */
     }
 
-    if (!channel_cache_get(b->channel, b->cursor, &e))
-      break; /* raced with reap/reclaim, stop rather than misread */
+    if (!channel_cache_get_abs(b->channel, b->cursor, &e))
+      break; /* lapped by writer or raced with reclaim, stop rather than misread */
 
     if (atomic_load_explicit(&b->has_stop_seq, memory_order_acquire)) {
       uint16_t stop_seq = atomic_load_explicit(&b->stop_seq, memory_order_relaxed);
@@ -139,7 +144,7 @@ burst_tick_result_t burst_tick(burst_t *b, unsigned duration_cap_ms, burst_send_
     b->cursor++;
   }
 
-  if (b->cursor >= count) {
+  if (b->cursor >= end) {
     atomic_store_explicit(&b->done, 1, memory_order_release);
     return BURST_TICK_DONE;
   }

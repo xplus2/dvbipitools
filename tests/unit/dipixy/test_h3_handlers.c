@@ -198,7 +198,7 @@ START_TEST(cold_waiter_table_fills_and_releases_by_stream_and_connection) {
 
   h3r_open(&h);
   c = server_conn();
-  ctx = capture_open(AF_INET, PARK_GROUP, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
   {
     hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 60000, -1};
@@ -227,7 +227,7 @@ START_TEST(llhls_waiter_is_answered_when_its_deadline_passes) {
   lcevc_select_t lcevc = {0};
 
   h3r_open(&h);
-  ctx = capture_open(AF_INET, PARK_GROUP, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
   sid = parked_request(&h, PARK_PATH);
   {
@@ -252,7 +252,7 @@ START_TEST(llhls_waiter_table_fills_and_releases_by_stream_and_connection) {
 
   h3r_open(&h);
   c = server_conn();
-  ctx = capture_open(AF_INET, PARK_GROUP, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
   {
     llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 60000, -1};
@@ -437,7 +437,7 @@ START_TEST(ts_push_streams_deliver_ring_data_and_release_the_subscription) {
   h3r_open(&h);
   ts_push_init(1, 8);
   memset(&info, 0, sizeof info);
-  ctx = capture_open(AF_INET, PARK_GROUP, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
   sid = parked_request(&h, PARK_PATH);
   c = server_conn();

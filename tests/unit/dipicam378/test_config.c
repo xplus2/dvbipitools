@@ -18,6 +18,7 @@
 static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "key: /dev/null\n", CFG_STRPTR, key_path, 0, "/dev/null"),
   CFG_FIELD(config_t, "serial: SER-9\n", CFG_STRPTR, serial, 0, "SER-9"),
+  CFG_FIELD(config_t, "bind: 0.0.0.0\n", CFG_STRPTR, bind, 0, "0.0.0.0"),
   CFG_FIELD(config_t, "port: 15378\n", CFG_UINT, port, 15378, NULL),
   CFG_FIELD(config_t, "auth: alice:s3cret\n", CFG_STRPTR, username, 0, "alice"),
   CFG_FIELD(config_t, "auth: alice:s3cret\n", CFG_STRPTR, password, 0, "s3cret"),
@@ -84,6 +85,7 @@ START_TEST(defaults_are_the_documented_values) {
   config_t cfg;
 
   cam378_cfg_defaults(&cfg);
+  ck_assert_str_eq(cfg.bind, ARGS_DEFAULT_BIND);
   ck_assert_uint_eq(cfg.port, ARGS_DEFAULT_PORT);
   ck_assert_str_eq(cfg.password, ARGS_DEFAULT_PASSWORD);
   ck_assert_int_eq(cfg.cw_len, 16);

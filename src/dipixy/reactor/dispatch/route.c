@@ -140,13 +140,13 @@ static unsigned source_ordinal_by_name(const config_t *cfg, const char *name) {
 
 capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num) {
   int family, rtp;
-  char addr[64];
+  char addr[64], src[64];
   unsigned port;
   const config_t *cfg = reactor_cfg();
   switch (rt->kind) {
     case ROUTE_RTP:
     case ROUTE_UDP:
-      return capture_open(rt->family, rt->addr, rt->port, cfg->iface, rt->kind == ROUTE_RTP, NULL, NULL, NULL, 0, 0);
+      return capture_open(rt->family, rt->addr, rt->src, rt->port, cfg->iface, rt->kind == ROUTE_RTP, NULL, NULL, NULL, 0, 0);
     case ROUTE_SRT:
       return capture_open_srt(rt->addr, rt->port);
     case ROUTE_RIST:
@@ -170,8 +170,8 @@ capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num) {
       ctx = channels_resolve_static(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL);
       if (ctx) return ctx;
       memset(&rf, 0, sizeof rf);
-      if (channels_resolve(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL, &family, addr, sizeof addr, &port, &rtp, &rf)) return NULL;
-      return capture_open(family, addr, port, cfg->iface, rtp, rf.has_ret && !cfg->no_ret ? &rf.ret : NULL, rf.has_fcc && !cfg->no_fcc ? &rf.fcc : NULL,
+      if (channels_resolve(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL, &family, addr, sizeof addr, src, sizeof src, &port, &rtp, &rf)) return NULL;
+      return capture_open(family, addr, src, port, cfg->iface, rtp, rf.has_ret && !cfg->no_ret ? &rf.ret : NULL, rf.has_fcc && !cfg->no_fcc ? &rf.fcc : NULL,
         rf.has_fec && !cfg->no_al_fec ? &rf.fec : NULL, cfg->al_fec_l, cfg->al_fec_d);
     }
   }
@@ -193,7 +193,12 @@ void route_client_info(const route_t *rt, unsigned list_num, const pid_filter_t 
     case ROUTE_UDP:
     case ROUTE_SRT:
       out->src_proto = rt->kind == ROUTE_RTP ? "rtp" : rt->kind == ROUTE_UDP ? "udp" : "srt";
-      off = bufcpy(bufs->addr, sizeof bufs->addr, rt->addr);
+      off = 0;
+      if (rt->src[0]) {
+        off = bufcpy(bufs->addr, sizeof bufs->addr, rt->src);
+        off += bufcpy(bufs->addr + off, sizeof bufs->addr - off, "@");
+      }
+      off += bufcpy(bufs->addr + off, sizeof bufs->addr - off, rt->addr);
       off += bufcpy(bufs->addr + off, sizeof bufs->addr - off, ":");
       uint_to_str(portbuf, rt->port);
       bufcpy(bufs->addr + off, sizeof bufs->addr - off, portbuf);

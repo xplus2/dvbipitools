@@ -14,6 +14,8 @@
 #define CS378X_POLL_INTERVAL_MS 150
 #define CS378X_RECV_TIMEOUT_MS 200
 #define CS378X_SEND_TIMEOUT_MS 3000
+#define CS378X_AUTH_TIMEOUT_MS 10000
+#define CS378X_IDLE_TIMEOUT_MS 120000
 #define CS378X_BUF_CAP 2048
 #define CS378X_MIN_FRAME 36 /* 4-byte ucrc + 2 AES blocks */
 
@@ -45,6 +47,8 @@ struct cs378x_server {
   unsigned char expected_ucrc[4]; /* crc32(MD5(username)); only checked if check_ucrc */
   int check_ucrc;
   int verbose;
+  unsigned auth_timeout_ms;
+  unsigned idle_timeout_ms;
 
   cs378x_ecm_cb ecm_cb;
   cs378x_emm_cb emm_cb;
@@ -63,7 +67,7 @@ void handle_emm(cs378x_server_t *s, unsigned char *body, size_t buflen);
 void send_keepalive_answer(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4]);
 
 /* worker.c */
-int tcp_listen_dualstack(unsigned port);
+int tcp_listen(const char *bind_addr, unsigned port);
 void *accept_main(void *arg);
 
 #endif

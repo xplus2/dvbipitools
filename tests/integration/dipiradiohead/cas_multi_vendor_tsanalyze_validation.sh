@@ -97,9 +97,9 @@ run_phase() {
     timeout $((DEADLINE_S + 10)) "$BIN" -O lo -m $MCAST:$mport -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "$name" \
         --cas-algo cissa \
         --cas-ecmg "tcp://127.0.0.1:$a_port" --cas-ecmg-version 2 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
-                   --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port $EMMG_A_PORT --cas-required \
+                   --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-listen $EMMG_A_PORT --cas-required \
         --cas-ecmg "tcp://127.0.0.1:$b_port" --cas-ecmg-version 2 --cas-super-id 0x0D960001 --cas-ecm-id 1 \
-                   --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-port $EMMG_B_PORT \
+                   --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-listen $EMMG_B_PORT \
         --cas-cp-duration 1000 --cas-fallback-clear \
         >"$WORK/dipiradiohead$n.log" 2>&1 &
     RDPID=$!

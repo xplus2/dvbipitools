@@ -77,11 +77,11 @@ START_TEST(mcast_parse_plain_address_sweeps_default_24) {
   char lo[64], hi[64];
 
   ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_OK);
-  ck_assert_uint_eq(cfg.total, 254u);
+  ck_assert_uint_eq(cfg.total, 256u);
   inet_ntop(AF_INET, cfg.start, lo, sizeof lo);
   inet_ntop(AF_INET, cfg.end, hi, sizeof hi);
-  ck_assert_str_eq(lo, "239.1.1.1");
-  ck_assert_str_eq(hi, "239.1.1.254");
+  ck_assert_str_eq(lo, "239.1.1.0");
+  ck_assert_str_eq(hi, "239.1.1.255");
 }
 END_TEST
 
@@ -92,11 +92,11 @@ START_TEST(mcast_parse_cidr_sweeps_host_range) {
   char lo[64], hi[64];
 
   ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_OK);
-  ck_assert_uint_eq(cfg.total, 510u); /* 2^9 - 2 */
+  ck_assert_uint_eq(cfg.total, 512u);
   inet_ntop(AF_INET, cfg.start, lo, sizeof lo);
   inet_ntop(AF_INET, cfg.end, hi, sizeof hi);
-  ck_assert_str_eq(lo, "239.1.0.1");
-  ck_assert_str_eq(hi, "239.1.1.254");
+  ck_assert_str_eq(lo, "239.1.0.0");
+  ck_assert_str_eq(hi, "239.1.1.255");
 }
 END_TEST
 
@@ -391,6 +391,58 @@ START_TEST(probe_common_times_out_with_no_data) {
 
   ck_assert_int_eq(r.kind, PROBE_NONE);
   ck_assert_uint_eq(r.pkts, 0u);
+}
+END_TEST
+
+typedef struct {
+  stub_reader_t base;
+  double start, delay;
+} delayed_reader_t;
+
+static double test_now(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
+
+static ssize_t delayed_read(void *ctx, unsigned char *buf, size_t cap) {
+  delayed_reader_t *dr = ctx;
+  if (test_now() - dr->start < dr->delay) {
+    struct timespec nap = {0, 1000000};
+    nanosleep(&nap, NULL);
+    return 0;
+  }
+  return stub_read(&dr->base, buf, cap);
+}
+
+START_TEST(probe_common_first_packet_wait_scales_with_timeout) {
+  unsigned char sec[64], pat[188], pmt[188], sdt[188];
+  size_t slen;
+  const unsigned char *pkts[3];
+  size_t lens[3];
+  delayed_reader_t dr;
+  probe_result_t r;
+
+  slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
+  wrap_ts_packet(pat, 0x0000, sec, slen);
+  slen = build_pmt(sec, 7, 0x0101);
+  wrap_ts_packet(pmt, 0x0100, sec, slen);
+  slen = psi_build_sdt(0, 0x1234, 5, 7, 0x01, "Provider", "Channel One", sec, sizeof sec);
+  wrap_ts_packet(sdt, 0x0011, sec, slen);
+  pkts[0] = pat; lens[0] = 188;
+  pkts[1] = pmt; lens[1] = 188;
+  pkts[2] = sdt; lens[2] = 188;
+  dr.base.pkts = pkts;
+  dr.base.lens = lens;
+  dr.base.count = 3;
+  dr.base.next = 0;
+  dr.delay = 0.45;
+  dr.start = test_now();
+
+  probe_common(delayed_read, &dr, 5000, 0, &r);
+
+  ck_assert_int_eq(r.kind, PROBE_NAMED);
+  ck_assert_str_eq(r.name, "Channel One");
 }
 END_TEST
 
@@ -954,6 +1006,7 @@ static Suite *scan_suite(void) {
   tcase_add_test(tc, probe_common_resolves_named_single_program);
   tcase_add_test(tc, probe_common_detects_rtp_wrapping_and_strips_header);
   tcase_add_test(tc, probe_common_times_out_with_no_data);
+  tcase_add_test(tc, probe_common_first_packet_wait_scales_with_timeout);
   tcase_add_test(tc, probe_common_multi_mode_resolves_every_program);
   tcase_add_test(tc, config_file_provides_settings);
   tcase_add_test(tc, cmdline_wins_over_config);

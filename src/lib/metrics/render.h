@@ -14,8 +14,9 @@
 void render_openmetrics(const store_t *st, double now_mono, char **out, size_t *out_len);
 
 /* appends metric families only, no snapshot age, self metrics or EOF.
-   instance_labels 0 drops component/headend_id */
-void render_series(dstrbuf_t *sb, const store_t *st, int instance_labels);
+   instance_labels 0 drops component/headend_id. openmetrics 1 declares counter
+   and info families without their _total/_info sample suffix */
+void render_series(dstrbuf_t *sb, const store_t *st, int instance_labels, int openmetrics);
 
 /* renders what fill puts as one body without instance labels or EOF. mallocs *out
    (free()), *out_len excludes NUL. 0 ok, -1 OOM or fill overflow */

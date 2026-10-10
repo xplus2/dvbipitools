@@ -38,6 +38,10 @@ Device's serial, matched against EMM-U addressing. EMM-U for any
 other device on the same carousel is skipped. Default: unset, no
 filtering.
 .TP
+.BR \-b ", " \-\-bind\ \fI<addr>\fR
+Listen address, IP or hostname. \fB::\fR listens on all (IPv4 and IPv6),
+\fB0.0.0.0\fR on all IPv4 interfaces. Default: \fB127.0.0.1\fR.
+.TP
 .BR \-p ", " \-\-port\ \fI<n>\fR
 cs378x TCP listen port, the one OSCam's \fBprotocol = cs378x\fR reader
 dials into. Default: \fB27500\fR.

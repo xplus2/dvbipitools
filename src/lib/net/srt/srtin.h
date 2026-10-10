@@ -29,12 +29,12 @@ typedef struct {
 typedef struct srtin srtin_t;
 
 /* blocks until connected/accepted or a fatal setup error. NULL on failure.
-   built without libsrt: always fails, logs why */
+   cfg and what it points to must outlive srtin_t. built without libsrt: always fails, logs why */
 srtin_t *srtin_open(const srtin_cfg_t *cfg);
 
 /* blocks up to a short internal timeout. n>0: data. 0: nothing this call (timeout,
-   transient async-recv, or a group reconnect happened/was attempted, see
-   reconnected_out). -1: fatal, unrecoverable read error */
+   transient async-recv, or a lost link is being re-established, see reconnected_out).
+   lost link: listener re-accepts, caller re-dials. -1: fatal read error on a group without listeners */
 int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out);
 
 void srtin_close(srtin_t *r);

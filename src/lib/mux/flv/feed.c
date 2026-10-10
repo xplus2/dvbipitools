@@ -63,12 +63,20 @@ static void try_parse_av1_hdr(flv_t *f, flv_track_t *t) {
   }
 }
 
+static void video_ts(flv_t *f, flv_track_t *t, uint64_t pts) {
+  int64_t raw = pts_unwrap(&t->pts, pts);
+  int64_t ts = raw - pts_disc_shift(&f->disc, raw, t->ts_seen ? t->ts_ms + t->step_ms : PTS_DISC_NONE);
+  if (t->ts_seen && ts > t->ts_ms && ts - t->ts_ms < 1000) t->step_ms = ts - t->ts_ms;
+  t->ts_ms = ts;
+  t->ts_seen = 1;
+}
+
 /* one video PES = one Annex-B access unit */
 static void handle_video(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   int key = 0;
   lcevc_strip_t strip;
   if (f->flushing) return;
-  if (has_pts) t->ts_ms = pts_unwrap(&t->pts, pts);
+  if (has_pts) video_ts(f, t, pts);
   t->vbuflen = 0;
   strip.rb = &t->lcevc_rb;
   strip.rbcap = &t->lcevc_rbcap;
@@ -93,7 +101,11 @@ static void handle_video(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, co
 static void handle_audio(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, const unsigned char *data, size_t len) {
   size_t pos = 0;
 
-  if (has_pts && t->remlen == 0) t->ts_ms = pts_unwrap(&t->pts, pts);
+  if (has_pts && t->remlen == 0) {
+    int64_t raw = pts_unwrap(&t->pts, pts);
+    t->ts_ms = raw - pts_disc_shift(&f->disc, raw, t->ts_seen ? t->ts_ms : PTS_DISC_NONE);
+    t->ts_seen = 1;
+  }
   if (t->remlen > FLV_REM_MAX) t->remlen = 0;
   if (esc_rem_append(&t->rem, &t->remlen, &t->remcap, data, len)) return;
 

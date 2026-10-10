@@ -80,9 +80,9 @@ assert_contains "$body" 'dvbipi_sds_services{component="sds",headend_id="sds-mul
 assert_contains "$body" 'dvbipi_bcg_services{component="bcg",headend_id="bcg-multi"} 1' "bcg services value"
 
 # the same family must group both instances' samples together, not interleave
-# with other families - one TYPE/HELP pair for dvbipi_headend_info total
-info_type_count=$(grep -c '^# TYPE dvbipi_headend_info ' "$body")
-[ "$info_type_count" = "1" ] || fail "expected exactly one dvbipi_headend_info TYPE line, got $info_type_count"
+# with other families - one TYPE/HELP pair for dvbipi_headend total
+info_type_count=$(grep -c '^# TYPE dvbipi_headend info' "$body")
+[ "$info_type_count" = "1" ] || fail "expected exactly one dvbipi_headend TYPE line, got $info_type_count"
 
 age_count=$(grep -c '^dvbipi_metrics_snapshot_age_seconds{' "$body")
 [ "$age_count" = "2" ] || fail "expected snapshot_age_seconds for both instances, got $age_count series"

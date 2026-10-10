@@ -55,7 +55,7 @@ TSPID=$!
     -i "udp://@$SRC1:$SRC1_PORT" -I lo --sid 101 -s "Channel One" \
     -i "udp://@$SRC2:$SRC2_PORT" -I lo --sid 102 -s "Channel Two" \
     --cas-algo csa2 --cas-ecmg "tcp://127.0.0.1:$ECMG_PORT" --cas-ecmg-version 2 \
-    --cas-emmg-port $EMMG_PORT --cas-super-id 0x4A750003 --cas-ecm-id 1 --cas-pids video,audio \
+    --cas-emmg-listen $EMMG_PORT --cas-super-id 0x4A750003 --cas-ecm-id 1 --cas-pids video,audio \
     --cas-cp-duration 3000 \
     >"$tvlog" 2>&1 &
 TVPID=$!

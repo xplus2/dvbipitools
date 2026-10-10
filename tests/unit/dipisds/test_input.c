@@ -88,6 +88,32 @@ START_TEST(csv_parses_ipv6_address) {
 }
 END_TEST
 
+START_TEST(csv_parses_ssm_source) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".csv", "Ssm One,udp://10.0.0.1@232.1.1.1:5000\nSsm Six,rtp://2001:db8::1@[ff3e::1]:5001\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.service_count, 2);
+  ck_assert_str_eq(in.services[0].source, "10.0.0.1");
+  ck_assert_str_eq(in.services[0].address, "232.1.1.1");
+  ck_assert_int_eq(in.services[0].family, AF_INET);
+  ck_assert_str_eq(in.services[1].source, "2001:db8::1");
+  ck_assert_str_eq(in.services[1].address, "ff3e::1");
+  ck_assert_int_eq(in.services[1].family, AF_INET6);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(csv_rejects_source_of_wrong_family) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".csv", "Bad,udp://2001:db8::1@232.1.1.1:5000\n");
+  ck_assert_int_eq(input_load(path, &in), -1);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(m3u_pairs_extinf_attrs_with_following_uri) {
   char path[160];
   input_t in;
@@ -574,6 +600,8 @@ static Suite *input_suite(void) {
   tcase_add_test(tc, csv_rejects_line_with_only_name);
   tcase_add_test(tc, csv_rejects_bad_uri);
   tcase_add_test(tc, csv_parses_ipv6_address);
+  tcase_add_test(tc, csv_parses_ssm_source);
+  tcase_add_test(tc, csv_rejects_source_of_wrong_family);
   tcase_add_test(tc, m3u_pairs_extinf_attrs_with_following_uri);
   tcase_add_test(tc, m3u_uri_without_preceding_extinf_is_ignored);
   tcase_add_test(tc, m3u_rejects_malformed_extinf);

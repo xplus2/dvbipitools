@@ -82,19 +82,23 @@ run_phase() {
     TSPID=$!
 
     mkfifo "$WORK/in$n.ts"
-    ffmpeg -hide_banner -loglevel error -re -i "$WORK/clip.ts" -c copy -f mpegts - \
-        >"$WORK/in$n.ts" 2>"$WORK/ffmpeg$n.log" &
+    exec 3<>"$WORK/in$n.ts"
+    ffmpeg -hide_banner -loglevel error -progress "$WORK/progress$n.txt" -re -i "$WORK/clip.ts" \
+        -c copy -f mpegts - >"$WORK/in$n.ts" 2>"$WORK/ffmpeg$n.log" &
     FFPID=$!
+    wait_until 30 grep -q 'total_size=[1-9]' "$WORK/progress$n.txt" \
+        || fail "$name: source never produced data (see $WORK/ffmpeg$n.log)"
 
     timeout $((DEADLINE_S + 10)) "$BIN" -O lo -u -m $MCAST:$mport -i - -s "$name" \
         --cas-algo cissa \
         --cas-ecmg "tcp://127.0.0.1:$a_port" --cas-ecmg-version 2 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
-                   --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port $EMMG_A_PORT --cas-required \
+                   --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-listen $EMMG_A_PORT --cas-required \
         --cas-ecmg "tcp://127.0.0.1:$b_port" --cas-ecmg-version 2 --cas-super-id 0x0D960001 --cas-ecm-id 1 \
-                   --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-port $EMMG_B_PORT \
+                   --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-listen $EMMG_B_PORT \
         --cas-pids video,audio --cas-cp-duration 3000 --cas-fallback-clear \
         <"$WORK/in$n.ts" >"$WORK/dipitvhead$n.log" 2>&1 &
     TVPID=$!
+    exec 3<&-
 
     end=$(( $(date +%s) + DEADLINE_S ))
     until poll_capture "$cap" "$report" "$want_scrambled" "$want_comp" "$want_a" "$want_b"; do
@@ -112,18 +116,12 @@ run_phase() {
 
 # phase 1: both vendors up - content scrambled, both CA_descriptors present with the right
 # CA_system_id on the right pid (super_cas_id >> 16: 0x4A750002 -> 19061, 0x0D960001 -> 3478)
-run_phase 1 $((PORT_BASE + 40 + 1)) "Multi CAS Steady" 1 1 true 2 19061 3478 &
-PHASE1_PID=$!
+run_phase 1 $((PORT_BASE + 40 + 1)) "Multi CAS Steady" 1 1 true 2 19061 3478
 # phase 2: non-required vendor B's ECMG is unreachable throughout - content must stay scrambled
-run_phase 2 $((PORT_BASE + 40 + 2)) "Multi CAS Nonrequired Down" 1 0 true - - - &
-PHASE2_PID=$!
+run_phase 2 $((PORT_BASE + 40 + 2)) "Multi CAS Nonrequired Down" 1 0 true - - -
 # phase 3: required vendor A's ECMG is unreachable throughout, --cas-fallback-clear set -
 # content must go clear even though non-required vendor B is healthy
-run_phase 3 $((PORT_BASE + 40 + 3)) "Multi CAS Required Down" 0 1 false - - - &
-PHASE3_PID=$!
-wait $PHASE1_PID || fail "multi-cas steady: phase failed"
-wait $PHASE2_PID || fail "multi-cas nonrequired-down: phase failed"
-wait $PHASE3_PID || fail "multi-cas required-down: phase failed"
+run_phase 3 $((PORT_BASE + 40 + 3)) "Multi CAS Required Down" 0 1 false - - -
 
 is_scrambled=$(jq -r '.services[0]["is-scrambled"]' "$WORK/cas_phase1.json")
 [ "$is_scrambled" = "true" ] || fail "multi-cas steady: expected scrambled output, is-scrambled=$is_scrambled"

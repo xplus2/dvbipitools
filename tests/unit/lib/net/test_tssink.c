@@ -96,6 +96,63 @@ START_TEST(udp_write_splits_into_ts_datagrams) {
 }
 END_TEST
 
+static void fill_ts(unsigned char *buf, size_t npkt) {
+  for (size_t i = 0; i < npkt; i++) {
+    memset(buf + i * 188, (int)(i & 0x3F), 188);
+    buf[i * 188] = 0x47;
+  }
+}
+
+START_TEST(packed_single_packet_writes_coalesce_to_full_datagrams) {
+  unsigned port;
+  int rx = make_rx(&port);
+  tssink_cfg_t cfg = net_cfg(TSSINK_UDP, port);
+  tssink_t *s;
+  unsigned char data[14 * 188];
+  unsigned char buf[2048];
+
+  cfg.pack = 1;
+  fill_ts(data, 14);
+  s = tssink_open(&cfg);
+  ck_assert_ptr_nonnull(s);
+  for (size_t i = 0; i < 14; i++) ck_assert_int_eq(tssink_write(s, data + i * 188, 188), 0);
+  for (size_t i = 0; i < 2; i++) {
+    ck_assert_int_eq((int)recv(rx, buf, sizeof buf, 0), DGRAM_TS);
+    ck_assert_int_eq(memcmp(buf, data + i * DGRAM_TS, DGRAM_TS), 0);
+  }
+  tssink_close(s);
+  close(rx);
+}
+END_TEST
+
+START_TEST(packed_unaligned_writes_yield_aligned_datagrams_and_flush) {
+  unsigned port;
+  int rx = make_rx(&port);
+  tssink_cfg_t cfg = net_cfg(TSSINK_UDP, port);
+  tssink_t *s;
+  unsigned char data[9 * 188];
+  unsigned char buf[2048];
+  static const size_t cut[] = {44, 1052, 188 * 9 - 44 - 1052};
+  size_t off = 0;
+
+  cfg.pack = 1;
+  fill_ts(data, 9);
+  s = tssink_open(&cfg);
+  ck_assert_ptr_nonnull(s);
+  for (size_t i = 0; i < 3; i++) {
+    ck_assert_int_eq(tssink_write(s, data + off, cut[i]), 0);
+    off += cut[i];
+  }
+  ck_assert_int_eq((int)recv(rx, buf, sizeof buf, 0), DGRAM_TS);
+  ck_assert_int_eq(memcmp(buf, data, DGRAM_TS), 0);
+  ck_assert_int_eq(tssink_flush(s), 0);
+  ck_assert_int_eq((int)recv(rx, buf, sizeof buf, 0), 2 * 188);
+  ck_assert_int_eq(memcmp(buf, data + DGRAM_TS, 2 * 188), 0);
+  tssink_close(s);
+  close(rx);
+}
+END_TEST
+
 START_TEST(rtp_write_prepends_header_with_incrementing_sequence) {
   unsigned port;
   int rx = make_rx(&port);
@@ -271,6 +328,8 @@ static Suite *tssink_suite(void) {
   TCase *tc = tcase_create("core");
 
   tcase_add_test(tc, udp_write_splits_into_ts_datagrams);
+  tcase_add_test(tc, packed_single_packet_writes_coalesce_to_full_datagrams);
+  tcase_add_test(tc, packed_unaligned_writes_yield_aligned_datagrams_and_flush);
   tcase_add_test(tc, rtp_write_prepends_header_with_incrementing_sequence);
   tcase_add_test(tc, rtp_with_al_fec_sends_repair_on_fec_port);
   tcase_add_test(tc, file_sink_writes_and_truncates_on_reopen);

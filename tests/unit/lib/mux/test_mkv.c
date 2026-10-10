@@ -221,6 +221,54 @@ START_TEST(mkv_writes_a_valid_container_for_audio_only) {
 }
 END_TEST
 
+START_TEST(mkv_clusters_are_written_live_and_close_adds_cues_and_duration) {
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mkv_opts_t cfg = base_cfg();
+  mkv_t *m;
+  unsigned char adts[64];
+  unsigned char pes[128];
+  unsigned char pkt[188];
+  unsigned char *buf;
+  unsigned long long live;
+  FILE *f;
+  long fsize;
+  const unsigned char cues[4] = {0x1C, 0x53, 0xBB, 0x6B};
+
+  ck_assert_int_ge(fd, 0);
+  m = mkv_new(fd, &cfg, 0, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  feed_discovery(m);
+  for (unsigned k = 0; k < 6; k++) {
+    size_t alen = build_adts_frame(adts, 50);
+    size_t plen = build_pes_with_pts(pes, 90000u + k * 180000u, adts, alen);
+    wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+    mkv_feed(m, pkt);
+  }
+  live = bytes;
+  ck_assert_uint_gt((unsigned)live, 300u); /* clusters on disk before close */
+  ck_assert_int_eq(mkv_error(m), 0);
+  mkv_close(m);
+  close(fd);
+
+  f = fopen(path, "rb");
+  ck_assert_ptr_nonnull(f);
+  fseek(f, 0, SEEK_END);
+  fsize = ftell(f);
+  rewind(f);
+  buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
+  ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
+  fclose(f);
+  ck_assert_ptr_nonnull(memmem(buf, (size_t)fsize, cues, sizeof cues));
+  ck_assert_ptr_nonnull(memmem(buf, (size_t)fsize, "\x44\x89\x88", 3)); /* Duration, 8 byte float */
+  ck_assert_uint_ne(buf[16 + 4 + 1], 0xFFu); /* Segment size patched */
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(mkv_no_supported_tracks_writes_nothing_and_no_error) {
   char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
   int fd = mkstemp(path);
@@ -715,11 +763,61 @@ START_TEST(mkv_selects_only_the_requested_audio_track) {
 }
 END_TEST
 
+START_TEST(mkv_timestamp_splice_keeps_duration_of_content) {
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mkv_opts_t cfg = base_cfg();
+  mkv_t *m;
+  unsigned char adts[256];
+  unsigned char pes[256];
+  unsigned char pkt[188];
+  unsigned char *buf;
+  unsigned char *dp;
+  FILE *f;
+  long fsize;
+  uint64_t bits = 0;
+  double dur;
+
+  ck_assert_int_ge(fd, 0);
+  m = mkv_new(fd, &cfg, 0, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  feed_discovery(m);
+  for (unsigned k = 0; k < 6; k++) {
+    size_t alen = build_adts_frame(adts, 170);
+    unsigned long long pts = 90000ULL + k * 90000ULL + (k >= 3 ? 5000ULL * 90000ULL : 0);
+    size_t plen = build_pes_with_pts(pes, pts, adts, alen);
+    wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+    mkv_feed(m, pkt);
+  }
+  mkv_close(m);
+  close(fd);
+
+  f = fopen(path, "rb");
+  ck_assert_ptr_nonnull(f);
+  fseek(f, 0, SEEK_END);
+  fsize = ftell(f);
+  rewind(f);
+  buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
+  ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
+  fclose(f);
+  dp = memmem(buf, (size_t)fsize, "\x44\x89\x88", 3);
+  ck_assert_ptr_nonnull(dp);
+  for (int i = 0; i < 8; i++) bits = (bits << 8) | dp[3 + i];
+  memcpy(&dur, &bits, sizeof dur);
+  ck_assert(dur >= 3000.0 && dur < 20000.0);
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
 static Suite *mkv_suite(void) {
   Suite *s = suite_create("mkv");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, mkv_writes_a_valid_container_for_audio_only);
   tcase_add_test(tc, mkv_no_supported_tracks_writes_nothing_and_no_error);
+  tcase_add_test(tc, mkv_clusters_are_written_live_and_close_adds_cues_and_duration);
   tcase_add_test(tc, mkv_multi_program_labels_tracks_with_program_names);
   tcase_add_test(tc, mkv_single_program_still_omits_track_name);
   tcase_add_test(tc, mkv_pts_wraparound_is_rebased_not_dropped);
@@ -728,6 +826,7 @@ static Suite *mkv_suite(void) {
   tcase_add_loop_test(tc, mkv_video_codec_header_and_dimensions, 0, (int)(sizeof mkv_video_cases / sizeof mkv_video_cases[0]));
   tcase_add_loop_test(tc, mkv_edge_case_streams_never_error_and_drop_unusable_frames, 0, EDGE_COUNT);
   tcase_add_test(tc, mkv_selects_only_the_requested_audio_track);
+  tcase_add_test(tc, mkv_timestamp_splice_keeps_duration_of_content);
   suite_add_tcase(s, tc);
   return s;
 }

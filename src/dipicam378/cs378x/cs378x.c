@@ -36,10 +36,12 @@ cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_
     s->check_ucrc = 1;
   }
   s->verbose = cfg->verbose;
+  s->auth_timeout_ms = cfg->auth_timeout_ms ? cfg->auth_timeout_ms : CS378X_AUTH_TIMEOUT_MS;
+  s->idle_timeout_ms = cfg->idle_timeout_ms ? cfg->idle_timeout_ms : CS378X_IDLE_TIMEOUT_MS;
   s->ecm_cb = ecm_cb;
   s->emm_cb = emm_cb;
   s->user = user;
-  s->listen_fd = tcp_listen_dualstack(cfg->port);
+  s->listen_fd = tcp_listen(cfg->bind ? cfg->bind : CS378X_DEFAULT_BIND, cfg->port);
   if (s->listen_fd < 0) {
     free(s);
     return NULL;

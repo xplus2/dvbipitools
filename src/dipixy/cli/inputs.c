@@ -110,8 +110,8 @@ int dixy_cfg_add_input(config_t *cfg, const char *val, char *err, size_t errsz) 
       int rtp;
       char addr[64];
       unsigned port;
-      if (route_resolve_channel_uri(val, &family, addr, sizeof addr, &port, &rtp)) {
-        snprintf(err, errsz, "invalid '%s' (%s:// needs %s://addr:port, multicast)", val, scheme, scheme);
+      if (route_resolve_channel_uri(val, &family, addr, sizeof addr, NULL, 0, &port, &rtp)) {
+        snprintf(err, errsz, "invalid '%s' (%s:// needs %s://[src@]addr:port, multicast)", val, scheme, scheme);
         return -1;
       }
       kind = SRC_MCAST;

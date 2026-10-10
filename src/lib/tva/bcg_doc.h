@@ -5,6 +5,10 @@
 #define DVBIPITOOLS_LIB_TVA_BCG_DOC_H
 
 #include <stddef.h>
+#include <string.h>
+
+#include "../helper/log.h"
+#include "../helper/xml_util.h"
 
 #define BCG_ID_LEN 256
 #define BCG_TEXT_LEN 1024
@@ -59,5 +63,26 @@ const bcg_channel_t *bcg_find_channel(const bcg_doc_t *d, const char *id);
 
 /* appends, silently dropped if already at BCG_MAX_NAMES */
 void bcg_channel_add_name(bcg_channel_t *c, const char *name);
+
+static inline int bcg_elem_text(const char *s, const char *end, const char *tag, char *out, size_t outcap) {
+  int cut = 0;
+  if (xml_elem_text_chk(s, end, tag, out, outcap, &cut)) return -1;
+  if (cut) log_line("bcg: <%s> text truncated to %zu bytes", tag, strlen(out));
+  return 0;
+}
+
+static inline int bcg_attr(const char *s, const char *end, const char *name, char *out, size_t outcap) {
+  int cut = 0;
+  if (xml_attr_chk(s, end, name, out, outcap, &cut)) return -1;
+  if (cut) log_line("bcg: attribute %s truncated to %zu bytes", name, strlen(out));
+  return 0;
+}
+
+static inline int bcg_tag_attr(const char *s, const char *end, const char *name, char *out, size_t outcap) {
+  int cut = 0;
+  if (xml_tag_attr_chk(s, end, name, out, outcap, &cut)) return -1;
+  if (cut) log_line("bcg: attribute %s truncated to %zu bytes", name, strlen(out));
+  return 0;
+}
 
 #endif

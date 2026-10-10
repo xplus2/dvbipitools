@@ -204,7 +204,7 @@ static void gen_dvbstp(const char *dir) {
   unsigned char pkt[12 + sizeof payload - 1];
 
   pkt[0] = 0x00; /* version 0, crc_present 0 */
-  pkt[1] = 0x00; pkt[2] = 0x00; pkt[3] = 0x00; /* total_segment_size, informational */
+  pkt[1] = 0x00; pkt[2] = 0x00; pkt[3] = 0x05; /* total_segment_size */
   pkt[4] = DVBSTP_PAYLOAD_BROADCAST_DISCOVERY;
   pkt[5] = 0x00; pkt[6] = 0x01; /* segment_id */
   pkt[7] = 0x01; /* segment_version */
@@ -223,7 +223,7 @@ static void gen_dvbstp_bcg_compressed(const char *dir) {
   unsigned char pkt[12 + sizeof payload - 1];
 
   pkt[0] = 0x00;
-  pkt[1] = 0x00; pkt[2] = 0x00; pkt[3] = 0x00;
+  pkt[1] = 0x00; pkt[2] = 0x00; pkt[3] = 0x07;
   pkt[4] = DVBSTP_PAYLOAD_BCG_DATA_CONTAINER;
   pkt[5] = 0x00; pkt[6] = 0x01;
   pkt[7] = 0x01;

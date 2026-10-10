@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "lib/sys/ioutil.h"
+#include "lib/helper/log.h"
 #include "lib/helper/xml_util.h"
 #include "lib/hls/m3u_lines.h"
 
@@ -26,51 +27,37 @@ static unsigned pt_seconds_to_ms(const char *v) {
   return p ? (unsigned)(strtod(p + 1, NULL) * 1000.0 + 0.5) : 0;
 }
 
-static void parse_mpd_attrs(const char *body, const char *mpd_end, dash_mpd_t *out) {
+static void parse_mpd_attrs(const char *mpd_tag, const char *mpd_end, dash_mpd_t *out) {
   char v[32];
-  if (xml_attr(body, mpd_end, "type", v, sizeof v) == 0) out->is_dynamic = !strcmp(v, "dynamic");
-  if (xml_attr(body, mpd_end, "minimumUpdatePeriod", v, sizeof v) == 0) out->minimum_update_period_ms = pt_seconds_to_ms(v);
+  if (xml_tag_attr(mpd_tag, mpd_end, "type", v, sizeof v) == 0) out->is_dynamic = !strcmp(v, "dynamic");
+  if (xml_tag_attr(mpd_tag, mpd_end, "minimumUpdatePeriod", v, sizeof v) == 0) out->minimum_update_period_ms = pt_seconds_to_ms(v);
 }
 
 static void parse_segment_template(const char *blk, const char *blk_end, const http_url_t *base, segtmpl_defaults_t *out) {
-  const char *st = strstr(blk, "<SegmentTemplate");
-  const char *st_end;
+  xml_span_t st;
   char v[2048];
-  if (!st || st >= blk_end) return;
-  st_end = strchr(st, '>');
-  if (!st_end || st_end > blk_end) return;
-  if (xml_attr(st, st_end, "initialization", v, sizeof v) == 0) playlist_resolve_uri(base, v, out->init_url, sizeof out->init_url);
-  if (xml_attr(st, st_end, "media", v, sizeof v) == 0) playlist_resolve_uri(base, v, out->media_url_tmpl, sizeof out->media_url_tmpl);
-  if (xml_attr(st, st_end, "timescale", v, sizeof v) == 0) out->timescale = (unsigned)strtoul(v, NULL, 10);
-  if (xml_attr(st, st_end, "duration", v, sizeof v) == 0) out->duration = strtoull(v, NULL, 10);
-  if (xml_attr(st, st_end, "startNumber", v, sizeof v) == 0) out->start_number = strtoull(v, NULL, 10);
-  if (xml_attr(st, st_end, "availabilityTimeOffset", v, sizeof v) == 0) out->availability_time_offset_ms = seconds_attr_to_ms(v);
+  if (xml_find_elem(blk, blk_end, "SegmentTemplate", &st)) return;
+  if (xml_tag_attr(st.tag, st.end, "initialization", v, sizeof v) == 0) playlist_resolve_uri(base, v, out->init_url, sizeof out->init_url);
+  if (xml_tag_attr(st.tag, st.end, "media", v, sizeof v) == 0) playlist_resolve_uri(base, v, out->media_url_tmpl, sizeof out->media_url_tmpl);
+  if (xml_tag_attr(st.tag, st.end, "timescale", v, sizeof v) == 0) out->timescale = (unsigned)strtoul(v, NULL, 10);
+  if (xml_tag_attr(st.tag, st.end, "duration", v, sizeof v) == 0) out->duration = strtoull(v, NULL, 10);
+  if (xml_tag_attr(st.tag, st.end, "startNumber", v, sizeof v) == 0) out->start_number = strtoull(v, NULL, 10);
+  if (xml_tag_attr(st.tag, st.end, "availabilityTimeOffset", v, sizeof v) == 0) out->availability_time_offset_ms = seconds_attr_to_ms(v);
 }
 
 static void parse_service_description(const char *body, const char *end, dash_mpd_t *out) {
-  const char *sd = strstr(body, "<ServiceDescription");
-  const char *sd_end;
+  xml_span_t sd, lat, pr;
   char v[32];
-  const char *lat;
-  const char *lat_end;
-  const char *pr;
-  const char *pr_end;
-  if (!sd || sd >= end) return;
-  sd_end = strstr(sd, "</ServiceDescription>");
-  if (!sd_end || sd_end > end) return;
+  if (xml_find_elem(body, end, "ServiceDescription", &sd)) return;
   out->is_low_latency = 1;
-  lat = strstr(sd, "<Latency");
-  lat_end = lat ? strchr(lat, '>') : NULL;
-  if (lat && lat < sd_end && lat_end && lat_end < sd_end) {
-    if (xml_attr(lat, lat_end, "target", v, sizeof v) == 0) out->latency_target_ms = (unsigned)strtoul(v, NULL, 10);
-    if (xml_attr(lat, lat_end, "min", v, sizeof v) == 0) out->latency_min_ms = (unsigned)strtoul(v, NULL, 10);
-    if (xml_attr(lat, lat_end, "max", v, sizeof v) == 0) out->latency_max_ms = (unsigned)strtoul(v, NULL, 10);
+  if (xml_find_elem(sd.tag, sd.end, "Latency", &lat) == 0) {
+    if (xml_tag_attr(lat.tag, lat.end, "target", v, sizeof v) == 0) out->latency_target_ms = (unsigned)strtoul(v, NULL, 10);
+    if (xml_tag_attr(lat.tag, lat.end, "min", v, sizeof v) == 0) out->latency_min_ms = (unsigned)strtoul(v, NULL, 10);
+    if (xml_tag_attr(lat.tag, lat.end, "max", v, sizeof v) == 0) out->latency_max_ms = (unsigned)strtoul(v, NULL, 10);
   }
-  pr = strstr(sd, "<PlaybackRate");
-  pr_end = pr ? strchr(pr, '>') : NULL;
-  if (pr && pr < sd_end && pr_end && pr_end < sd_end) {
-    if (xml_attr(pr, pr_end, "min", v, sizeof v) == 0) out->playback_rate_min = strtod(v, NULL);
-    if (xml_attr(pr, pr_end, "max", v, sizeof v) == 0) out->playback_rate_max = strtod(v, NULL);
+  if (xml_find_elem(sd.tag, sd.end, "PlaybackRate", &pr) == 0) {
+    if (xml_tag_attr(pr.tag, pr.end, "min", v, sizeof v) == 0) out->playback_rate_min = strtod(v, NULL);
+    if (xml_tag_attr(pr.tag, pr.end, "max", v, sizeof v) == 0) out->playback_rate_max = strtod(v, NULL);
   }
 }
 
@@ -85,11 +72,13 @@ static int representation_cb(const char *tag, const char *blk_end, void *vctx) {
   dash_representation_t *r;
   segtmpl_defaults_t st;
   char v[32];
+  int cut = 0;
   if (ctx->as->n_representations >= DASH_MAX_REPRESENTATIONS) return 0;
   r = &ctx->as->representations[ctx->as->n_representations];
   memset(r, 0, sizeof *r);
   st = *ctx->inherited;
-  xml_attr(tag, blk_end, "id", r->id, sizeof r->id);
+  if (xml_attr_chk(tag, blk_end, "id", r->id, sizeof r->id, &cut) == 0 && cut)
+    log_line("mpd: Representation id truncated to %zu bytes", strlen(r->id));
   if (xml_attr(tag, blk_end, "bandwidth", v, sizeof v) == 0) r->bandwidth = (unsigned)strtoul(v, NULL, 10);
   if (xml_attr(tag, blk_end, "width", v, sizeof v) == 0) r->width = (unsigned)strtoul(v, NULL, 10);
   if (xml_attr(tag, blk_end, "height", v, sizeof v) == 0) r->height = (unsigned)strtoul(v, NULL, 10);
@@ -123,7 +112,7 @@ static int adaptation_set_cb(const char *tag, const char *blk_end, void *vctx) {
   rctx.as = as;
   rctx.base = ctx->base;
   rctx.inherited = &defaults;
-  for_each_xml_block(tag, blk_end, "<Representation", "</Representation>", representation_cb, &rctx);
+  for_each_xml_elem(tag, blk_end, "Representation", representation_cb, &rctx);
   ctx->period->n_adaptation_sets++;
   return 0;
 }
@@ -142,7 +131,7 @@ static int period_cb(const char *tag, const char *blk_end, void *vctx) {
   memset(period, 0, sizeof *period);
   actx.period = period;
   actx.base = ctx->base;
-  for_each_xml_block(tag, blk_end, "<AdaptationSet", "</AdaptationSet>", adaptation_set_cb, &actx);
+  for_each_xml_elem(tag, blk_end, "AdaptationSet", adaptation_set_cb, &actx);
   ctx->mpd->n_periods++;
   return 0;
 }
@@ -151,16 +140,14 @@ int dash_mpd_parse(const char *body, const http_url_t *base, dash_mpd_t *out) {
   const char *end = body + strlen(body);
   period_ctx_t ctx;
   const char *mpd_tag;
-  const char *mpd_end;
   memset(out, 0, sizeof *out);
-  mpd_tag = strstr(body, "<MPD");
+  mpd_tag = xml_find_start(body, end, "MPD");
   if (!mpd_tag) return 0;
-  mpd_end = strchr(mpd_tag, '>');
-  if (mpd_end) parse_mpd_attrs(mpd_tag, mpd_end, out);
+  parse_mpd_attrs(mpd_tag, end, out);
   parse_service_description(body, end, out);
   ctx.mpd = out;
   ctx.base = base;
-  for_each_xml_block(body, end, "<Period", "</Period>", period_cb, &ctx);
+  for_each_xml_elem(body, end, "Period", period_cb, &ctx);
   for (unsigned p = 0; !out->is_low_latency && p < out->n_periods; p++)
     for (unsigned a = 0; !out->is_low_latency && a < out->periods[p].n_adaptation_sets; a++)
       for (unsigned r = 0; !out->is_low_latency && r < out->periods[p].adaptation_sets[a].n_representations; r++)

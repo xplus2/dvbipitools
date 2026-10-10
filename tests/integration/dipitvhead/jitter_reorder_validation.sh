@@ -5,9 +5,10 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze jq python3 ss; do
+for t in ffmpeg tsp tsanalyze jq ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
+require_itest_helper
 
 IN_GROUP=$(unique_mcast 61)
 FPB=$(free_port_block 2)
@@ -22,24 +23,6 @@ rxlog="$WORK/receiver.log"
 
 gen_test_clip "$clip" 1000 3
 
-# every 5th adjacent RTP pair is sent swapped
-cat >"$WORK/send.py" <<'EOF'
-import socket, struct, sys, time
-
-clip, group, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
-data = open(clip, "rb").read()
-pkts = [data[i:i + 7 * 188] for i in range(0, len(data) - 7 * 188 + 1, 7 * 188)]
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
-s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
-frames = [struct.pack("!BBHII", 0x80, 33, (1000 + i) & 0xFFFF, i * 900, 0x1234) + p for i, p in enumerate(pkts)]
-for i in range(0, len(frames) - 1, 5):
-    frames[i], frames[i + 1] = frames[i + 1], frames[i]
-for f in frames:
-    s.sendto(f, (group, port))
-    time.sleep(0.003)
-EOF
-
 tsp -I ip "$OUT_GROUP:$OUT_PORT" --local-address 127.0.0.1 --receive-timeout 60000 -O file "$cap" >"$WORK/tsp.log" 2>&1 &
 tsp_pid=$!
 wait_until 30 udp_port_busy $OUT_PORT || fail "tsp capture never bound $OUT_PORT"
@@ -49,7 +32,7 @@ rx_pid=$!
 wait_until 30 udp_port_busy $IN_PORT || fail "receiver never bound $IN_PORT (see $rxlog)"
 kill -0 "$rx_pid" 2>/dev/null || fail "receiver exited early (see $rxlog)"
 
-python3 "$WORK/send.py" "$clip" "$IN_GROUP" "$IN_PORT" || fail "sender failed"
+"$DVBIPI_ITEST_HELPER" rtp-send "$clip" "$IN_GROUP" "$IN_PORT" || fail "sender failed"
 sleep 1.5
 kill -INT "$rx_pid" 2>/dev/null
 wait "$rx_pid" 2>/dev/null

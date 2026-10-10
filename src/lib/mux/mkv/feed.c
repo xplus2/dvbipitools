@@ -8,26 +8,38 @@
 #include "lib/helper/log.h"
 #include "priv.h"
 
+static int64_t cue_shift(const mkv_t *m, int64_t start_ms) {
+  int64_t ref = PTS_DISC_NONE;
+  for (int i = 0; i < m->ntrk; i++) {
+    const track_t *t = &m->trk[i];
+    if (t->cls != PID_TELETEXT && t->ts_seen && t->ts_ms > ref) ref = t->ts_ms;
+  }
+  return ref == PTS_DISC_NONE ? m->disc.shift : pts_disc_peek(&m->disc, start_ms, ref);
+}
+
 /* finished subtitle -> one timed block */
 static void on_cue(void *ctx, const ttx_cue_t *cue) {
   mkv_t *m = ctx;
-  int64_t dur = cue->end_ms - cue->start_ms;
+  int64_t shift = cue_shift(m, cue->start_ms);
+  int64_t start_ms = cue->start_ms - shift;
+  int64_t end_ms = cue->end_ms - shift;
+  int64_t dur = end_ms - start_ms;
   size_t n = strlen(cue->text);
   if (!n || dur <= 0) return;
   for (int i = 0; i < m->ntrk; i++) {
     track_t *t = &m->trk[i];
     if (t->cls != PID_TELETEXT) continue;
     if (!m->started) {
-      pend_add(m, t->num, cue->start_ms, (const unsigned char *)cue->text, n, 1, dur);
+      pend_add(m, t->num, start_ms, (const unsigned char *)cue->text, n, 1, dur);
       return;
     }
-    if (cue->end_ms <= m->t0) return;
-    if (cue->start_ms < m->t0) { /* --sub-lead pulled it in: clip, keep it */
-      dur = cue->end_ms - m->t0;
+    if (end_ms <= m->t0) return;
+    if (start_ms < m->t0) { /* --sub-lead pulled it in: clip, keep it */
+      dur = end_ms - m->t0;
       put_block(m, t->num, 0, (const unsigned char *)cue->text, n, 1, dur);
       return;
     }
-    put_block(m, t->num, cue->start_ms - m->t0, (const unsigned char *)cue->text, n, 1, dur);
+    put_block(m, t->num, start_ms - m->t0, (const unsigned char *)cue->text, n, 1, dur);
     return;
   }
 }
@@ -100,13 +112,21 @@ static void try_parse_av1_hdr(mkv_t *m, track_t *t) {
   }
 }
 
+static void video_ts(mkv_t *m, track_t *t, uint64_t pts) {
+  int64_t raw = pts_unwrap(&t->pts, pts);
+  int64_t ts = raw - pts_disc_shift(&m->disc, raw, t->ts_seen ? t->ts_ms + t->step_ms : PTS_DISC_NONE);
+  if (t->ts_seen && ts > t->ts_ms && ts - t->ts_ms < 1000) t->step_ms = ts - t->ts_ms;
+  t->ts_ms = ts;
+  t->ts_seen = 1;
+}
+
 static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   int key = 0;
   lcevc_strip_t strip;
 
   /* EOS flush: cut-off picture */
   if (m->flushing) return;
-  if (has_pts) t->ts_ms = pts_unwrap(&t->pts, pts);
+  if (has_pts) video_ts(m, t, pts);
   t->vbuflen = 0;
   strip.rb = &t->lcevc_rb;
   strip.rbcap = &t->lcevc_rbcap;
@@ -136,7 +156,7 @@ static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
   int key = 0;
 
   if (m->flushing) return;
-  if (has_pts) t->ts_ms = pts_unwrap(&t->pts, pts);
+  if (has_pts) video_ts(m, t, pts);
   p = find_startcode(d, len, 0, &scl);
   while (p < len) {
     size_t ns = p + scl, scl2 = 0;
@@ -164,7 +184,11 @@ static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
 
 static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const unsigned char *data, size_t len) {
   size_t pos = 0;
-  if (has_pts && t->remlen == 0) t->ts_ms = pts_unwrap(&t->pts, pts);
+  if (has_pts && t->remlen == 0) {
+    int64_t raw = pts_unwrap(&t->pts, pts);
+    t->ts_ms = raw - pts_disc_shift(&m->disc, raw, t->ts_seen ? t->ts_ms : PTS_DISC_NONE);
+    t->ts_seen = 1;
+  }
   if (t->remlen > MKV_REM_MAX) t->remlen = 0;
   if (esc_rem_append(&t->rem, &t->remlen, &t->remcap, data, len)) return;
 

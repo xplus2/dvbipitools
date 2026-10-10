@@ -527,6 +527,33 @@ START_TEST(emmg_server_queue_holds_more_than_old_256_cap) {
 }
 END_TEST
 
+START_TEST(emmg_server_listens_on_given_address) {
+  emmg_server_cfg_t cfg = {0};
+  emmg_server_t *s;
+  int fd;
+
+  cfg.listen_host = "127.0.0.1";
+  cfg.port = 0;
+  s = emmg_server_start(&cfg);
+  ck_assert_ptr_nonnull(s);
+
+  fd = fake_connect(emmg_server_port(s));
+  ck_assert_int_ge(fd, 0);
+
+  close(fd);
+  emmg_server_stop(s);
+}
+END_TEST
+
+START_TEST(emmg_server_rejects_unresolvable_listen_address) {
+  emmg_server_cfg_t cfg = {0};
+
+  cfg.listen_host = "not-an-address";
+  cfg.port = 0;
+  ck_assert_ptr_null(emmg_server_start(&cfg));
+}
+END_TEST
+
 START_TEST(emmg_server_rejects_stream_setup_before_channel_setup) {
   emmg_server_cfg_t cfg = {0};
   emmg_server_t *s;
@@ -1148,6 +1175,8 @@ static Suite *emmg_server_suite(void) {
     TCase *tc_integ = tcase_create("integration");
     tcase_set_timeout(tc_integ, 15);
     tcase_add_test(tc_integ, emmg_server_completes_real_handshake_and_queues_datagram);
+    tcase_add_test(tc_integ, emmg_server_listens_on_given_address);
+    tcase_add_test(tc_integ, emmg_server_rejects_unresolvable_listen_address);
     tcase_add_test(tc_integ, emmg_server_rejects_stream_setup_before_channel_setup);
     tcase_add_test(tc_integ, emmg_server_rejects_channel_setup_wrong_version);
     tcase_add_test(tc_integ, emmg_server_dial_mode_completes_handshake_and_queues_datagram);

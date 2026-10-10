@@ -25,7 +25,7 @@ while [ $i -lt 30 ]; do
 done
 nc -z 127.0.0.1 $PORT >/dev/null 2>&1 || fail "server never accepted a TCP connection on port $PORT (see $WORK/dipicam378.log)"
 
-assert_contains "$WORK/dipicam378.log" "listening on port $PORT" "startup log line"
+assert_contains "$WORK/dipicam378.log" "listening on 127.0.0.1 port $PORT" "startup log line"
 
 kill $PID 2>/dev/null
 wait $PID 2>/dev/null

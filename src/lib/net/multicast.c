@@ -191,6 +191,11 @@ fail:
   return NULL;
 }
 
+mcast_t *mcast_open_src(int family, const char *group, unsigned port, const char *source, const char *iface, int recv_timeout_ms) {
+  if (source && source[0]) return mcast_open_ssm(family, group, port, source, iface, recv_timeout_ms);
+  return mcast_open(family, group, port, iface, recv_timeout_ms);
+}
+
 int mcast_enable_rx_timestamps(mcast_t *m) {
   int on = 1;
   if (setsockopt(m->fd, SOL_SOCKET, SO_TIMESTAMPNS, &on, sizeof on) < 0) return -1;

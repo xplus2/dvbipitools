@@ -17,6 +17,7 @@ static char auth_buf[AUTH_BUF];
 
 void cam378_cfg_defaults(config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
+  cfg->bind = ARGS_DEFAULT_BIND;
   cfg->port = ARGS_DEFAULT_PORT;
   cfg->password = ARGS_DEFAULT_PASSWORD;
   cfg->cw_len = 16;
@@ -40,6 +41,11 @@ static int apply_key(void *c, const char *v, char *e, size_t n) {
 static int apply_serial(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   return yamlcfg_set_str(&cfg->str_pool, &cfg->serial, v, e, n);
+}
+
+static int apply_bind(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->bind, v, e, n);
 }
 
 static int apply_port(void *c, const char *v, char *e, size_t n) {
@@ -113,6 +119,7 @@ static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
 static const yamlcfg_key_t keys[] = {
     {"key", apply_key, 1, 0},
     {"serial", apply_serial, 0, 0},
+    {"bind", apply_bind, 0, 0},
     {"port", apply_port, 0, 0},
     {"auth", apply_auth, 0, 0},
     {"caid", apply_caid, 0, 0},

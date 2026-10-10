@@ -53,7 +53,7 @@ int rdh_apply_cas_ecmg_version(void *c, const char *v, char *e, size_t n);
 int rdh_apply_cas_super_id(void *c, const char *v, char *e, size_t n);
 int rdh_apply_cas_ecm_id(void *c, const char *v, char *e, size_t n);
 int rdh_apply_cas_ecm_pid(void *c, const char *v, char *e, size_t n);
-int rdh_apply_cas_emmg_port(void *c, const char *v, char *e, size_t n);
+int rdh_apply_cas_emmg_listen(void *c, const char *v, char *e, size_t n);
 int rdh_apply_cas_emmg_max_conns(void *c, const char *v, char *e, size_t n);
 int rdh_apply_cas_emmg_version(void *c, const char *v, char *e, size_t n);
 int rdh_apply_cas_emmg_reverse(void *c, const char *v, char *e, size_t n);

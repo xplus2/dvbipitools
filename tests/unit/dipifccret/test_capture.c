@@ -31,6 +31,7 @@ typedef struct {
   uint16_t seq;
   uint32_t timestamp;
   unsigned char payload[16];
+  size_t payload_len;
 } record_t;
 
 static void record_cb(int family, const void *addr, size_t addr_len, unsigned port, unsigned char dscp, uint32_t ssrc, uint16_t seq, uint32_t timestamp, const unsigned char *payload, size_t payload_len, void *user) {
@@ -45,6 +46,7 @@ static void record_cb(int family, const void *addr, size_t addr_len, unsigned po
   r->ssrc = ssrc;
   r->seq = seq;
   r->timestamp = timestamp;
+  r->payload_len = payload_len;
   memcpy(r->payload, payload, payload_len < sizeof r->payload ? payload_len : sizeof r->payload);
 }
 
@@ -176,6 +178,57 @@ START_TEST(capture_ipv4_novlan_accepted) {
   ck_assert_uint_eq(rec.seq, 1);
   ck_assert_uint_eq(rec.timestamp, 0x1000);
   ck_assert_uint_eq(rec.payload[0], 0x47);
+}
+END_TEST
+
+START_TEST(capture_ipv4_payload_len_excludes_ethernet_padding) {
+  unsigned char pkt[512];
+  cidr_t ranges[2];
+  record_t rec;
+  size_t len;
+
+  make_ranges(ranges);
+  memset(&rec, 0, sizeof rec);
+  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0, 1);
+  memset(pkt + len, 0, 12);
+  capture_handle_frame(pkt, len + 12, ranges, 2, record_cb, &rec);
+
+  ck_assert_int_eq(rec.called, 1);
+  ck_assert_uint_eq(rec.payload_len, 188);
+}
+END_TEST
+
+START_TEST(capture_ipv6_payload_len_excludes_ethernet_padding) {
+  unsigned char pkt[512];
+  cidr_t ranges[2];
+  record_t rec;
+  size_t len;
+
+  make_ranges(ranges);
+  memset(&rec, 0, sizeof rec);
+  len = build_ipv6_frame(pkt, 0, "ff3e::5", 6000, 0, 0, 1);
+  memset(pkt + len, 0, 12);
+  capture_handle_frame(pkt, len + 12, ranges, 2, record_cb, &rec);
+
+  ck_assert_int_eq(rec.called, 1);
+  ck_assert_uint_eq(rec.payload_len, 188);
+}
+END_TEST
+
+START_TEST(capture_ipv4_udp_length_below_header_rejected) {
+  unsigned char pkt[512];
+  cidr_t ranges[2];
+  record_t rec;
+  size_t len;
+
+  make_ranges(ranges);
+  memset(&rec, 0, sizeof rec);
+  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0, 1);
+  pkt[14 + 20 + 4] = 0;
+  pkt[14 + 20 + 5] = 7;
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+
+  ck_assert_int_eq(rec.called, 0);
 }
 END_TEST
 
@@ -763,6 +816,9 @@ static Suite *capture_suite(void) {
   Suite *s = suite_create("capture");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, capture_ipv4_novlan_accepted);
+  tcase_add_test(tc, capture_ipv4_payload_len_excludes_ethernet_padding);
+  tcase_add_test(tc, capture_ipv6_payload_len_excludes_ethernet_padding);
+  tcase_add_test(tc, capture_ipv4_udp_length_below_header_rejected);
   tcase_add_test(tc, capture_ipv4_vlan_tagged_accepted);
   tcase_add_test(tc, capture_ipv6_hopbyhop_accepted);
   tcase_add_test(tc, capture_ipv4_dscp_extracted);

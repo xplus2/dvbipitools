@@ -44,6 +44,7 @@ typedef struct {
 typedef struct {
   char name[SDS_MAX_NAME];
   char address[SDS_MAX_ADDR];
+  char source[SDS_MAX_ADDR]; /* SSM source, "" = ASM */
   int family;
   unsigned port;
   int rtp;

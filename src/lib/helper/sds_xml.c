@@ -34,6 +34,11 @@ static unsigned fcc_resolve_port(const sds_service_t *s, const sds_fcc_t *fcc) {
 
 void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec) {
   fprintf(f, "<SingleService><ServiceLocation><IPMulticastAddress Address=\"%s\" Port=\"%u\" Streaming=\"%s\"", s->address, s->port, s->rtp ? "rtp" : "udp");
+  if (s->source[0]) {
+    fputs(" Source=\"", f);
+    xml_escape(f, s->source);
+    fputs("\"", f);
+  }
   if (ret || fcc || fec) {
     fputs(">", f);
     if (fec) {
@@ -249,24 +254,12 @@ size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *
   return len;
 }
 
-typedef struct {
-  const char *tag;
-  const char *end;
-} xml_span_t;
-
-static int capture_first_span(const char *tag, const char *blk_end, void *ctx) {
-  xml_span_t *sp = ctx;
-  sp->tag = tag;
-  sp->end = blk_end;
-  return -1;
-}
-
 static void parse_ret(const char *tag, const char *end, sds_service_t *s) {
-  xml_span_t ret = {0};
+  xml_span_t ret;
   char tmp[32];
-  xml_span_t mc = {0};
+  xml_span_t mc;
 
-  if (for_each_xml_block(tag, end, "<RTPRetransmission", "</RTPRetransmission>", capture_first_span, &ret) != -1) return;
+  if (xml_find_elem(tag, end, "RTPRetransmission", &ret)) return;
   s->has_ret = 1;
   xml_attr(ret.tag, ret.end, "DestinationAddress", s->ret.addr, sizeof s->ret.addr);
   if (xml_attr(ret.tag, ret.end, "DestinationPort", tmp, sizeof tmp) == 0) s->ret.port = (unsigned)strtoul(tmp, NULL, 10);
@@ -274,7 +267,7 @@ static void parse_ret(const char *tag, const char *end, sds_service_t *s) {
   if (xml_attr(ret.tag, ret.end, "RTPPayloadTypeNumber", tmp, sizeof tmp) == 0) s->ret.rtx_pt = (unsigned char)strtoul(tmp, NULL, 10);
   s->ret.rsi_mc_ret = xml_attr(ret.tag, ret.end, "dvb-rsi-mc-ret", tmp, sizeof tmp) == 0 && !strcmp(tmp, "true");
 
-  if (for_each_xml_block(ret.tag, ret.end, "<MulticastRET", "/>", capture_first_span, &mc) == -1) {
+  if (xml_find_elem(ret.tag, ret.end, "MulticastRET", &mc) == 0) {
     s->ret.mc = 1;
     if (xml_attr(mc.tag, mc.end, "DestinationPort", tmp, sizeof tmp) == 0) {
       unsigned mc_port = (unsigned)strtoul(tmp, NULL, 10);
@@ -284,9 +277,9 @@ static void parse_ret(const char *tag, const char *end, sds_service_t *s) {
 }
 
 static void parse_fec(const char *tag, const char *end, sds_service_t *s) {
-  xml_span_t fec = {0};
+  xml_span_t fec;
   char tmp[32];
-  if (for_each_xml_block(tag, end, "<FECBaseLayer", "/>", capture_first_span, &fec) != -1) return;
+  if (xml_find_elem(tag, end, "FECBaseLayer", &fec)) return;
   s->has_fec = 1;
   xml_attr(fec.tag, fec.end, "Address", s->fec.addr, sizeof s->fec.addr);
   if (xml_attr(fec.tag, fec.end, "Port", tmp, sizeof tmp) == 0) s->fec.port = (unsigned)strtoul(tmp, NULL, 10);
@@ -295,65 +288,77 @@ static void parse_fec(const char *tag, const char *end, sds_service_t *s) {
 }
 
 static void parse_fcc(const char *tag, const char *end, sds_service_t *s) {
-  xml_span_t fcc = {0};
+  xml_span_t fcc;
   char tmp[32];
-  xml_span_t rep = {0};
-  xml_span_t rtx = {0};
-  if (for_each_xml_block(tag, end, "<ServerBasedEnhancementServiceInfo", "</ServerBasedEnhancementServiceInfo>", capture_first_span, &fcc) != -1) return;
+  xml_span_t rep;
+  xml_span_t rtx;
+  if (xml_find_elem(tag, end, "ServerBasedEnhancementServiceInfo", &fcc)) return;
   s->has_fcc = 1;
 
-  if (for_each_xml_block(fcc.tag, fcc.end, "<RTCPReporting", "/>", capture_first_span, &rep) == -1) {
+  if (xml_find_elem(fcc.tag, fcc.end, "RTCPReporting", &rep) == 0) {
     xml_attr(rep.tag, rep.end, "DestinationAddress", s->fcc.addr, sizeof s->fcc.addr);
     if (xml_attr(rep.tag, rep.end, "DestinationPort", tmp, sizeof tmp) == 0) s->fcc.port = (unsigned)strtoul(tmp, NULL, 10);
   }
-  if (for_each_xml_block(fcc.tag, fcc.end, "<Retransmission_session", "/>", capture_first_span, &rtx) == -1) {
+  if (xml_find_elem(fcc.tag, fcc.end, "Retransmission_session", &rtx) == 0) {
     if (xml_attr(rtx.tag, rtx.end, "rtx-time", tmp, sizeof tmp) == 0) s->fcc.rtx_time_ms = (unsigned)strtoul(tmp, NULL, 10);
     if (xml_attr(rtx.tag, rtx.end, "RTPPayloadTypeNumber", tmp, sizeof tmp) == 0) s->fcc.rtx_pt = (unsigned char)strtoul(tmp, NULL, 10);
   }
 }
 
-int sds_parse_broadcast(const char *xml, sds_service_t *out, int max, int *truncated) {
-  const char *p = xml;
-  int n = 0;
+/* Source attr of the IPMulticastAddress start tag only */
+static void parse_source(const char *tag, const char *end, sds_service_t *s) {
+  xml_span_t ip;
+  if (xml_find_elem(tag, end, "IPMulticastAddress", &ip)) return;
+  if (xml_tag_attr(ip.tag, ip.end, "Source", s->source, sizeof s->source)) s->source[0] = '\0';
+}
 
-  if (truncated) *truncated = 0;
-  while (n < max) {
-    const char *tag = strstr(p, "<SingleService");
-    const char *end;
-    char tmp[32];
-    sds_service_t *s;
-    xml_span_t si = {0};
-    if (!tag) break;
-    end = strstr(tag, "</SingleService>");
-    if (!end)
-      break;
-    s = &out[n];
-    memset(s, 0, sizeof *s);
-    if (xml_attr(tag, end, "Address", s->address, sizeof s->address) == 0 && xml_attr(tag, end, "Port", tmp, sizeof tmp) == 0) {
-      s->port = (unsigned)strtoul(tmp, NULL, 10);
-      s->family = strchr(s->address, ':') ? AF_INET6 : AF_INET;
-      if (xml_attr(tag, end, "ServiceName", s->name, sizeof s->name)) s->name[0] = '\0';
-      s->rtp = xml_attr(tag, end, "Streaming", tmp, sizeof tmp) == 0 && !strcmp(tmp, "rtp");
-      s->onid = xml_attr(tag, end, "OrigNetId", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
-      s->tsid = xml_attr(tag, end, "TSId", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
-      s->sid = xml_attr(tag, end, "ServiceId", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : (unsigned)(n + 1);
-      if (xml_elem_text(tag, end, "MaxBitrate", tmp, sizeof tmp) == 0) {
-        s->max_bitrate_kbps = (unsigned)strtoul(tmp, NULL, 10);
-        s->has_bitrate = 1;
-      }
+typedef struct {
+  sds_service_t *out;
+  int max;
+  int n;
+  int truncated;
+} bcast_ctx_t;
 
-      if (for_each_xml_block(tag, end, "<SI", "</SI>", capture_first_span, &si) == -1 &&
-          xml_elem_text(si.tag, si.end, "ContentGenre", tmp, sizeof tmp) == 0) {
-        s->content_nibble = (unsigned)strtoul(tmp, NULL, 10);
-        s->has_content_nibble = 1;
-      }
-      parse_ret(tag, end, s);
-      parse_fcc(tag, end, s);
-      parse_fec(tag, end, s);
-      n++;
-    }
-    p = end + 16;
+static int single_service_cb(const char *tag, const char *end, void *vctx) {
+  bcast_ctx_t *c = vctx;
+  char tmp[32];
+  sds_service_t *s;
+  xml_span_t si;
+
+  if (c->n >= c->max) {
+    c->truncated = 1;
+    return -1;
   }
-  if (truncated && n == max && strstr(p, "<SingleService")) *truncated = 1;
-  return n;
+  s = &c->out[c->n];
+  memset(s, 0, sizeof *s);
+  if (xml_attr(tag, end, "Address", s->address, sizeof s->address) || xml_attr(tag, end, "Port", tmp, sizeof tmp)) return 0;
+  s->port = (unsigned)strtoul(tmp, NULL, 10);
+  s->family = strchr(s->address, ':') ? AF_INET6 : AF_INET;
+  parse_source(tag, end, s);
+  if (xml_attr(tag, end, "ServiceName", s->name, sizeof s->name)) s->name[0] = '\0';
+  s->rtp = xml_attr(tag, end, "Streaming", tmp, sizeof tmp) == 0 && !strcmp(tmp, "rtp");
+  s->onid = xml_attr(tag, end, "OrigNetId", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
+  s->tsid = xml_attr(tag, end, "TSId", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
+  s->sid = xml_attr(tag, end, "ServiceId", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : (unsigned)(c->n + 1);
+  if (xml_elem_text(tag, end, "MaxBitrate", tmp, sizeof tmp) == 0) {
+    s->max_bitrate_kbps = (unsigned)strtoul(tmp, NULL, 10);
+    s->has_bitrate = 1;
+  }
+  if (xml_find_elem(tag, end, "SI", &si) == 0 && xml_elem_text(si.tag, si.end, "ContentGenre", tmp, sizeof tmp) == 0) {
+    s->content_nibble = (unsigned)strtoul(tmp, NULL, 10);
+    s->has_content_nibble = 1;
+  }
+  parse_ret(tag, end, s);
+  parse_fcc(tag, end, s);
+  parse_fec(tag, end, s);
+  c->n++;
+  return 0;
+}
+
+int sds_parse_broadcast(const char *xml, sds_service_t *out, int max, int *truncated) {
+  bcast_ctx_t c = {out, max, 0, 0};
+
+  for_each_xml_elem(xml, xml + strlen(xml), "SingleService", single_service_cb, &c);
+  if (truncated) *truncated = c.truncated;
+  return c.n;
 }

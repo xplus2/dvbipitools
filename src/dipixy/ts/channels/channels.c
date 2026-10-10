@@ -122,7 +122,7 @@ void channel_list_build_index(channel_list_t *l) {
   qsort(l->name_order, (size_t)l->count, sizeof(channel_name_slot_t), channel_name_slot_cmp);
 }
 
-int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, int *family, char *addr, size_t addrsz, unsigned *port, int *rtp, channel_ret_fcc_t *rf) {
+int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, int *family, char *addr, size_t addrsz, char *src, size_t srcsz, unsigned *port, int *rtp, channel_ret_fcc_t *rf) {
   char uri[256];
   const channel_list_t *l;
   const channel_item_t *it;
@@ -138,7 +138,7 @@ int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num,
     rf->has_fec = it->has_fec;
     rf->fec = it->fec;
   }
-  return route_resolve_channel_uri(uri, family, addr, addrsz, port, rtp);
+  return route_resolve_channel_uri(uri, family, addr, addrsz, src, srcsz, port, rtp);
 }
 
 capture_ctx_t *channels_resolve_static(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name) {

@@ -160,6 +160,8 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   int conn_cap;
   pthread_t threads[REACTOR_MAX_WORKERS];
   pthread_t pumps[CAPTURE_PUMP_MAX_THREADS];
+  int threads_started[REACTOR_MAX_WORKERS] = {0};
+  int pumps_started[CAPTURE_PUMP_MAX_THREADS] = {0};
   const char *cert_path;
   const char *key_path;
 
@@ -218,18 +220,18 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   capture_pump_set_thread_count(n_pump);
 
   for (i = 0; i < n_pump; i++) {
-    if (pthread_create(&pumps[i], NULL, pump_thread, (void *)(intptr_t)i)) pumps[i] = 0;
+    pumps_started[i] = pthread_create(&pumps[i], NULL, pump_thread, (void *)(intptr_t)i) == 0;
   }
   for (i = 1; i < workers; i++) {
-    if (pthread_create(&threads[i], NULL, worker_thread, (void *)(intptr_t)i)) threads[i] = 0;
+    threads_started[i] = pthread_create(&threads[i], NULL, worker_thread, (void *)(intptr_t)i) == 0;
   }
   worker_thread((void *)(intptr_t)0);
   if (g_on_listening_thread_started) pthread_join(g_on_listening_thread, NULL);
   for (i = 1; i < workers; i++) {
-    if (threads[i]) pthread_join(threads[i], NULL);
+    if (threads_started[i]) pthread_join(threads[i], NULL);
   }
   for (i = 0; i < n_pump; i++) {
-    if (pumps[i]) pthread_join(pumps[i], NULL);
+    if (pumps_started[i]) pthread_join(pumps[i], NULL);
   }
   conn_graveyard_free();
 

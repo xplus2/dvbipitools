@@ -369,6 +369,55 @@ START_TEST(rams_r_from_client_inside_client_range_is_accepted) {
 }
 END_TEST
 
+START_TEST(rams_r_beyond_client_rate_gets_503) {
+  fx_t fx;
+  unsigned char pkt[128];
+  replies_t r;
+  rtcp_rams_r_t req = rams_r_for(HNED_SSRC, MEDIA_SSRC);
+  size_t plen;
+
+  fx_open(&fx, 0, 1);
+  fx_fill_channel(&fx, 3, 1);
+  fx.d.fcc_limiter = ratelimit_new(64);
+  ck_assert_ptr_nonnull(fx.d.fcc_limiter);
+  fx.d.fcc_client_rate = 1; /* depth 5 */
+  plen = build_rams_r(pkt, &req);
+  for (int i = 0; i < 6; i++)
+    fx_send(&fx, pkt, plen);
+  fx_drain(&fx, &r);
+  ck_assert_int_eq(r.n_rams_i, 6);
+  for (int i = 0; i < 5; i++)
+    ck_assert_uint_ne(r.rams_i[i].response, (unsigned)BURST_TABLE_FULL);
+  ck_assert_uint_eq(r.rams_i[5].response, (unsigned)BURST_TABLE_FULL);
+  ratelimit_free(fx.d.fcc_limiter);
+  fx_close(&fx);
+}
+END_TEST
+
+START_TEST(rams_r_client_rate_zero_is_unlimited) {
+  fx_t fx;
+  unsigned char pkt[128];
+  replies_t r;
+  rtcp_rams_r_t req = rams_r_for(HNED_SSRC, MEDIA_SSRC);
+  size_t plen;
+
+  fx_open(&fx, 0, 1);
+  fx_fill_channel(&fx, 3, 1);
+  fx.d.fcc_limiter = ratelimit_new(64);
+  ck_assert_ptr_nonnull(fx.d.fcc_limiter);
+  fx.d.fcc_client_rate = 0;
+  plen = build_rams_r(pkt, &req);
+  for (int i = 0; i < 8; i++)
+    fx_send(&fx, pkt, plen);
+  fx_drain(&fx, &r);
+  ck_assert_int_eq(r.n_rams_i, 8);
+  for (int i = 0; i < 8; i++)
+    ck_assert_uint_ne(r.rams_i[i].response, (unsigned)BURST_TABLE_FULL);
+  ratelimit_free(fx.d.fcc_limiter);
+  fx_close(&fx);
+}
+END_TEST
+
 START_TEST(rams_r_decide_rejections_map_to_their_codes) {
   struct {
     int rap;
@@ -1096,6 +1145,8 @@ static Suite *dispatch_suite(void) {
   tcase_add_test(tc, rams_r_from_client_outside_client_range_gets_505);
   tcase_add_test(tc, rams_r_for_channel_outside_fcc_range_gets_506);
   tcase_add_test(tc, rams_r_from_client_inside_client_range_is_accepted);
+  tcase_add_test(tc, rams_r_beyond_client_rate_gets_503);
+  tcase_add_test(tc, rams_r_client_rate_zero_is_unlimited);
   tcase_add_test(tc, rams_r_decide_rejections_map_to_their_codes);
   tcase_add_test(tc, rams_r_accept_carries_rams_i_tlvs_and_repeat_gets_update);
   tcase_add_test(tc, rams_r_client_bitrate_cap_lowers_the_burst_rate);

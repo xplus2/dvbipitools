@@ -41,7 +41,7 @@ static const struct option longopts[] = {
   {"cas-super-id", required_argument, 0, OPT_CAS_SUPER_ID},
   {"cas-ecm-id", required_argument, 0, OPT_CAS_ECM_ID},
   {"cas-ecm-pid", required_argument, 0, OPT_CAS_ECM_PID},
-  {"cas-emmg-port", required_argument, 0, OPT_CAS_EMMG_PORT},
+  {"cas-emmg-listen", required_argument, 0, OPT_CAS_EMMG_LISTEN},
   {"cas-emmg-version", required_argument, 0, OPT_CAS_EMMG_VERSION},
   {"cas-emmg-max-conns", required_argument, 0, OPT_CAS_EMMG_MAX_CONNS},
   {"cas-emmg-reverse", required_argument, 0, OPT_CAS_EMMG_REVERSE},

@@ -76,6 +76,7 @@ dvbipitools_add_unit_test(lib_demux_psi
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -85,6 +86,7 @@ dvbipitools_add_unit_test(lib_demux_psi
 dvbipitools_add_unit_test(lib_demux_descriptors
     unit/lib/demux/test_descriptors.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c)
 
@@ -151,6 +153,7 @@ dvbipitools_add_unit_test(lib_tsinspect_inspect
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -173,6 +176,7 @@ dvbipitools_add_unit_test(lib_mux_psi_build
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -192,6 +196,7 @@ dvbipitools_add_unit_test(lib_demux_mpts_probe
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -227,6 +232,7 @@ dvbipitools_add_unit_test(lib_demux_mpts_probe
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -322,6 +328,7 @@ dvbipitools_add_unit_test(lib_mux_mkv
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -353,6 +360,7 @@ dvbipitools_add_unit_test(lib_mux_mp4
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -456,6 +464,7 @@ dvbipitools_add_unit_test(lib_mux_flv
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -598,6 +607,7 @@ dvbipitools_add_unit_test(lib_net_tssource_async
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -654,6 +664,7 @@ dvbipitools_add_unit_test(lib_net_tssource_async
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c)
 
@@ -689,6 +700,7 @@ dvbipitools_add_unit_test(lib_net_tssource_http_dispatch
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -744,6 +756,7 @@ dvbipitools_add_unit_test(lib_net_tssource_http_dispatch
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c)
 
@@ -779,6 +792,7 @@ dvbipitools_add_unit_test(lib_net_tssource_dash_fmp4
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -834,6 +848,7 @@ dvbipitools_add_unit_test(lib_net_tssource_dash_fmp4
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
@@ -874,6 +889,7 @@ dvbipitools_add_unit_test(lib_net_tssource_file
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -929,6 +945,7 @@ dvbipitools_add_unit_test(lib_net_tssource_file
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c)
 
@@ -1250,6 +1267,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
@@ -1561,6 +1579,7 @@ dvbipitools_add_unit_test(dipiscan_scan
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -1623,6 +1642,7 @@ dvbipitools_add_unit_test(dipiradiohead_psi
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -1849,6 +1869,7 @@ dvbipitools_add_unit_test(dipiradiohead_source_async
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rawaudio.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -1901,6 +1922,7 @@ dvbipitools_add_unit_test(dipiradiohead_source_frame
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rawaudio.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -1995,6 +2017,7 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rawaudio.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -2048,6 +2071,7 @@ dvbipitools_add_unit_test(lib_hls_live
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -2086,6 +2110,7 @@ dvbipitools_add_unit_test(lib_hls_tspassthrough
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -2104,6 +2129,7 @@ dvbipitools_add_unit_test(lib_dash_mpd
     unit/lib/dash/test_mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
 
@@ -2125,6 +2151,7 @@ dvbipitools_add_unit_test(lib_dash_live
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -2178,6 +2205,7 @@ dvbipitools_add_unit_test(dipiradiohead_source_hls
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rawaudio.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -2234,6 +2262,7 @@ dvbipitools_add_unit_test(dipiradiohead_inputset
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rawaudio.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -2257,6 +2286,7 @@ dvbipitools_add_unit_test(lib_mux_mpts
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -2288,6 +2318,7 @@ dvbipitools_add_unit_test(dipiradiohead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -2336,6 +2367,7 @@ dvbipitools_add_unit_test(dipitvhead_source
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -2631,6 +2663,7 @@ dvbipitools_add_unit_test(dipitvhead_discover
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -2657,6 +2690,7 @@ dvbipitools_add_unit_test(dipitvhead_discover
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -2674,6 +2708,7 @@ dvbipitools_add_unit_test(dipitvhead_pmtbuild
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -2752,6 +2787,7 @@ dvbipitools_add_unit_test(dipitvhead_remux
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -2813,6 +2849,7 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -2863,6 +2900,7 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -2938,6 +2976,7 @@ dvbipitools_add_unit_test(dipitvhead_mpts
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -3043,6 +3082,7 @@ dvbipitools_add_unit_test(dipitvhead_single
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -3107,6 +3147,7 @@ dvbipitools_add_unit_test(dipitvhead_simulcrypt_msg
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -3130,6 +3171,7 @@ dvbipitools_add_unit_test(dipitvhead_ecmg_client
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -3153,6 +3195,7 @@ dvbipitools_add_unit_test(dipitvhead_emmg_server
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -3186,6 +3229,7 @@ dvbipitools_add_unit_test(dipitvhead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -3224,6 +3268,7 @@ dvbipitools_add_unit_test(lib_cas_cas_group
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -3240,6 +3285,7 @@ dvbipitools_add_unit_test(dipirec_ts_filter
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
@@ -3325,6 +3371,7 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -3356,6 +3403,7 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
@@ -3468,6 +3516,7 @@ if (TARGET dipirist AND TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
         ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -3504,6 +3553,7 @@ if (TARGET dipirist AND TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/pes.c
@@ -3674,6 +3724,7 @@ dvbipitools_add_unit_test(dipifccret_channel
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -3708,6 +3759,13 @@ dvbipitools_add_unit_test(dipifccret_serve
     ${DIPIFCCRET_SRCS})
 target_link_libraries(test_dipifccret_serve PRIVATE atomic)
 
+dvbipitools_add_unit_test(dipifccret_e2e
+    unit/dipifccret/test_e2e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/rtx.c
+    ${DIPIFCCRET_SRCS})
+target_link_libraries(test_dipifccret_e2e PRIVATE atomic)
+
 dvbipitools_add_unit_test(dipifccret_burst_table
     unit/dipifccret/test_burst_table.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst_table.c
@@ -3730,6 +3788,7 @@ dvbipitools_add_unit_test(dipifccret_burst_table
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -3744,6 +3803,7 @@ dvbipitools_add_unit_test(dipifccret_pacer
     ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/ranges.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ret.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ratelimit.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/mcsend.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -3771,6 +3831,7 @@ dvbipitools_add_unit_test(dipifccret_pacer
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -3798,12 +3859,15 @@ dvbipitools_add_unit_test(dipifccret_burst
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
+add_executable(itest_helper integration/helpers/itest_helper.c)
 
 function(dvbipitools_add_integration_test tool script_path)
     get_filename_component(case_name ${script_path} NAME_WE)
@@ -3812,7 +3876,8 @@ function(dvbipitools_add_integration_test tool script_path)
         list(APPEND extra_bins $<TARGET_FILE:${extra}>)
     endforeach()
     add_test(NAME integration_${tool}_${case_name} COMMAND sh ${script_path} $<TARGET_FILE:${tool}> ${extra_bins})
-    set_tests_properties(integration_${tool}_${case_name} PROPERTIES SKIP_RETURN_CODE 77)
+    set_tests_properties(integration_${tool}_${case_name} PROPERTIES SKIP_RETURN_CODE 77
+        ENVIRONMENT "DVBIPI_ITEST_HELPER=$<TARGET_FILE:itest_helper>")
 endfunction()
 
 file(GLOB DIPISCAN_INTEGRATION_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/dipiscan/*.sh")
@@ -3905,6 +3970,7 @@ dvbipitools_add_unit_test(dipifccret_ret
     unit/dipifccret/test_ret.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ret.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ratelimit.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/sockaddr_index.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/channel/channel.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -3925,6 +3991,7 @@ dvbipitools_add_unit_test(dipifccret_ret
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -4217,6 +4284,7 @@ if (TARGET dipirist)
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -4271,6 +4339,7 @@ if (TARGET dipirist)
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -4401,6 +4470,7 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+        ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -4455,6 +4525,7 @@ if (TARGET dipisrt)
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -4535,7 +4606,8 @@ dvbipitools_add_unit_test(dipisds_input
 dvbipitools_add_unit_test(dipisds_format_out
     unit/dipisds/test_format_out.c
     ${CMAKE_SOURCE_DIR}/src/dipisds/format_out.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c)
@@ -4679,6 +4751,7 @@ dvbipitools_add_unit_test(dipixy_capture
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -4725,6 +4798,7 @@ dvbipitools_add_unit_test(dipixy_capture
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -4774,6 +4848,7 @@ dvbipitools_add_unit_test(dipixy_channels
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -4830,6 +4905,7 @@ dvbipitools_add_unit_test(dipixy_channels
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -4883,6 +4959,7 @@ dvbipitools_add_unit_test(dipixy_playlist
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -4939,6 +5016,7 @@ dvbipitools_add_unit_test(dipixy_playlist
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -4988,6 +5066,7 @@ dvbipitools_add_unit_test(dipixy_gena
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -5044,6 +5123,7 @@ dvbipitools_add_unit_test(dipixy_gena
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -5103,6 +5183,7 @@ dvbipitools_add_unit_test(dipixy_dlna
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -5159,6 +5240,7 @@ dvbipitools_add_unit_test(dipixy_dlna
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -5202,6 +5284,7 @@ dvbipitools_add_unit_test(dipixy_ts_push_queue
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -5232,6 +5315,7 @@ dvbipitools_add_unit_test(dipixy_rawaudio
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
@@ -5332,6 +5416,7 @@ dvbipitools_add_unit_test(dipixy_ws_sources
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -5387,6 +5472,7 @@ dvbipitools_add_unit_test(dipixy_ws_sources
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
@@ -5613,6 +5699,7 @@ dvbipitools_add_unit_test(lib_playlist_in
     unit/lib/test_playlist_in.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_in.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c)
 
 dvbipitools_add_unit_test(lib_net_sockaddr_index
@@ -5635,6 +5722,7 @@ dvbipitools_add_unit_test(dipifccret_dispatch
     ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/ranges.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ret.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ratelimit.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/mcsend.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -5662,6 +5750,7 @@ dvbipitools_add_unit_test(dipifccret_dispatch
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -5677,6 +5766,7 @@ dvbipitools_add_unit_test(dipifccret_metrics
     ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/ranges.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ret.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ratelimit.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/mcsend.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -5704,6 +5794,7 @@ dvbipitools_add_unit_test(dipifccret_metrics
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -5718,6 +5809,7 @@ dvbipitools_add_unit_test(dipifccret_rsi
     ${CMAKE_SOURCE_DIR}/src/dipifccret/capture/ranges.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ret.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/rtx_session_table.c
+    ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/ratelimit.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/ret/mcsend.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -5745,6 +5837,7 @@ dvbipitools_add_unit_test(dipifccret_rsi
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -5784,6 +5877,7 @@ dvbipitools_add_unit_test(dipidescramble_pmt_select
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/dvbtext.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/section_asm.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c

@@ -19,6 +19,8 @@
 #define MP4_PEND_BYTES (8u * 1024 * 1024)
 #define MP4_REM_MAX 65536
 #define MP4_TIMESCALE 1000 /* ms, every track, no cross-track rescale needed */
+#define MP4_MOOV_RESERVE (8u * 1024 * 1024) /* free box before mdat, holds moov checkpoints */
+#define MP4_CKPT_MS 5000
 
 typedef struct {
   uint64_t offset;
@@ -39,6 +41,7 @@ typedef struct {
   int psi_idx; /* m->psi[] index */
   int64_t ts_ms;      /* video: dts. audio/subs: pts (no reordering, dts==pts) */
   int64_t pts_ms;     /* video only, for cts_offset */
+  int ts_seen;
   pts_unwrap_t pts_uw;
   pts_unwrap_t dts_uw;
   unsigned char *rem; /* audio: partial frame carry-over */
@@ -71,6 +74,8 @@ typedef struct {
   uint32_t *prev_dur_slot;
   int64_t prev_dts_ms;
   uint32_t last_dur;
+  int64_t first_ts_ms; /* first written sample: video dts, else pts */
+  int32_t first_cts;
 } track_t;
 
 typedef struct {
@@ -92,6 +97,7 @@ struct mp4mux {
   int npsi;
   pes_t *pes;
   track_t trk[MP4_MAX_TRACKS];
+  pts_disc_t disc;
   int ntrk;
   int last_trk_idx;
   int setup;
@@ -100,12 +106,16 @@ struct mp4mux {
   int flushing;
   int ready_seen;
   int64_t ready_ms;
-  int64_t t0;
+  int64_t t0; /* presentation origin, non-video samples before it dropped */
   pend_t pend[MP4_PEND_MAX];
   int npend;
   size_t pend_bytes;
   unsigned char *pend_arena;
-  uint64_t mdat_hdr_pos; /* file offset of mdat's size+largesize fields */
+  uint64_t mdat_hdr_pos; /* 16 bytes: free(8) + mdat(8, size 0 = to EOF) while recording */
+  uint64_t moov_pos;     /* reserved region, moov checkpoints rewritten here */
+  int64_t next_ckpt_ms;  /* t0-relative */
+  int ckpt_full;         /* moov outgrew region, checkpoints stopped */
+  int ckpt_done;         /* region holds a moov */
 };
 
 /* write.c */
@@ -113,12 +123,13 @@ void p4_wfd(mp4_t *m, const void *p, size_t n);
 track_t *p4_find_track(mp4_t *m, unsigned pid);
 void p4_start(mp4_t *m);
 void p4_pend_add(mp4_t *m, int trk, int64_t ts, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur);
-void p4_write_sample(mp4_t *m, track_t *t, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur);
+void p4_write_sample(mp4_t *m, track_t *t, int64_t ts_ms, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur);
 void p4_route(mp4_t *m, track_t *t, int64_t ts_ms, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur);
 
 /* moov.c */
 void p4_write_ftyp_mdat_head(mp4_t *m);
 void p4_write_moov(mp4_t *m);
+void p4_checkpoint(mp4_t *m);
 
 /* feed.c */
 void p4_all_ready(mp4_t *m);

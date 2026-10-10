@@ -38,7 +38,7 @@ static void world_open(void) {
 }
 
 static capture_ctx_t *open_ctx(void) {
-  capture_ctx_t *ctx = capture_open(AF_INET, GROUP, PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  capture_ctx_t *ctx = capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
 
   ck_assert_ptr_nonnull(ctx);
   return ctx;
@@ -47,7 +47,7 @@ static capture_ctx_t *open_ctx(void) {
 static hls_seg_ctx_t *make_seg(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt, const lcevc_select_t *lcevc, seg_container_t container, double part) {
   hls_seg_ctx_t *s;
 
-  ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), filter, pmt, lcevc, SEG_TARGET, MAX_SEGS, container, part), 1);
+  ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), filter, pmt, lcevc, SEG_TARGET, MAX_SEGS, container, part), 1);
   hls_seg_registry_lock();
   s = hls_seg_find_locked(ctx, filter, pmt, lcevc, container);
   hls_seg_registry_unlock();

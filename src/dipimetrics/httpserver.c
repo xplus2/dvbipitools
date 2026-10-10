@@ -64,7 +64,7 @@ int http_listen(int family, const char *addr, unsigned port) {
     close(fd);
     return -1;
   }
-  if (listen(fd, 16) < 0) {
+  if (listen(fd, HTTP_MAX_CONNS) < 0) {
     log_line("dipimetrics: listen failed: %s", strerror(errno));
     close(fd);
     return -1;
@@ -86,6 +86,8 @@ typedef struct {
   int handshaking;
   int tls_want_write;
   int reading; /* 1 = still reading request, 0 = sending response */
+  struct sockaddr_storage peer;
+  unsigned long long seq; /* accept order, lower = older */
   double deadline;
   char reqbuf[REQ_BUF_CAP];
   size_t reqlen;
@@ -99,6 +101,7 @@ struct http_server {
   int listen_pfd_idx;
   tls_server_ctx_t *tls_ctx;
   char http_auth[200];
+  unsigned long long next_seq;
   http_conn_t conns[HTTP_MAX_CONNS];
 };
 
@@ -159,17 +162,62 @@ static void conn_close(http_conn_t *c) {
   memset(c, 0, sizeof *c);
 }
 
-static void conn_accept(http_server_t *hs, int fd, double now_mono) {
+static int peer_same(const struct sockaddr_storage *a, const struct sockaddr_storage *b) {
+  if (a->ss_family != b->ss_family) return 0;
+  if (a->ss_family == AF_INET)
+    return ((const struct sockaddr_in *)a)->sin_addr.s_addr == ((const struct sockaddr_in *)b)->sin_addr.s_addr;
+  if (a->ss_family == AF_INET6)
+    return !memcmp(&((const struct sockaddr_in6 *)a)->sin6_addr, &((const struct sockaddr_in6 *)b)->sin6_addr, sizeof(struct in6_addr));
+  return 1;
+}
+
+static int peer_count(const http_server_t *hs, const struct sockaddr_storage *peer) {
+  int n = 0;
+  for (int i = 0; i < HTTP_MAX_CONNS; i++)
+    if (hs->conns[i].used && peer_same(&hs->conns[i].peer, peer)) n++;
+  return n;
+}
+
+static http_conn_t *conn_victim(http_server_t *hs, const struct sockaddr_storage *peer, int same_peer_only) {
+  http_conn_t *best = NULL;
+  int best_w = 0, best_pc = 0;
+
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) {
+    http_conn_t *c = &hs->conns[i];
+    int w, pc;
+    if (!c->used) continue;
+    if (same_peer_only && !peer_same(&c->peer, peer)) continue;
+    w = !c->handshaking && !c->reading;
+    pc = peer_count(hs, &c->peer);
+    if (!best || w < best_w || (w == best_w && (pc > best_pc || (pc == best_pc && c->seq < best->seq)))) {
+      best = c;
+      best_w = w;
+      best_pc = pc;
+    }
+  }
+  return best;
+}
+
+static void conn_accept(http_server_t *hs, int fd, const struct sockaddr_storage *peer, double now_mono) {
   int flags;
   http_conn_t *c = NULL;
+  http_conn_t *victim = NULL;
+
   for (int i = 0; i < HTTP_MAX_CONNS; i++) {
     if (!hs->conns[i].used) {
       c = &hs->conns[i];
       break;
     }
   }
+  /* new conn wins: idle sockets must not lock out scrapers */
+  if (peer_count(hs, peer) >= HTTP_MAX_CONNS_PER_PEER) victim = conn_victim(hs, peer, 1);
+  else if (!c) victim = conn_victim(hs, peer, 0);
+  if (victim) {
+    conn_close(victim);
+    if (!c) c = victim;
+  }
   if (!c) {
-    close(fd); /* pool full, drop rather than let it queue up unbounded */
+    close(fd);
     return;
   }
   flags = fcntl(fd, F_GETFL, 0);
@@ -181,6 +229,8 @@ static void conn_accept(http_server_t *hs, int fd, double now_mono) {
   c->used = 1;
   c->fd = fd;
   c->pfd_idx = -1;
+  c->peer = *peer;
+  c->seq = hs->next_seq++;
   c->deadline = now_mono + HTTP_IDLE_TIMEOUT_S;
   if (hs->tls_ctx) {
     c->tls = tls_server_accept_start(hs->tls_ctx, fd);
@@ -376,9 +426,13 @@ static void conn_write_step(http_conn_t *c) {
 void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, store_t *st, double now_mono, int verbose) {
   if (hs->listen_pfd_idx >= 0 && hs->listen_pfd_idx < n && (pfds[hs->listen_pfd_idx].revents & POLLIN)) {
     for (;;) {
-      int fd = accept(hs->listen_fd, NULL, NULL);
+      struct sockaddr_storage peer;
+      socklen_t plen = sizeof peer;
+      int fd;
+      memset(&peer, 0, sizeof peer);
+      fd = accept(hs->listen_fd, (struct sockaddr *)&peer, &plen);
       if (fd < 0) break;
-      conn_accept(hs, fd, now_mono);
+      conn_accept(hs, fd, &peer, now_mono);
     }
   }
 

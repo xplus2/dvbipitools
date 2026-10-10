@@ -107,7 +107,7 @@ capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num);
 typedef struct {
   char name[128];
   char proto[16];
-  char addr[80]; /* rt->addr (63) + ':' + port (5) + nul */
+  char addr[160]; /* [rt->src (63) + '@'] + rt->addr (63) + ':' + port (5) + nul */
 } route_item_bufs_t;
 
 /* fills *out from rt (post open_source, list_num = its out_list_num) */

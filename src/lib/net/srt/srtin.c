@@ -23,6 +23,7 @@ struct srtin {
   SRTSOCKET listeners[SRTCOMMON_MAX_PEERS]; /* kept alive alongside sock, see open_single_listener() */
   int n_listeners;
   srtgroup_mode_t group_mode;
+  srtin_cfg_t cfg; /* caller reconnect re-dials from it */
   metrics_exporter_t *mx;
   const char *tool_version;
 };
@@ -74,36 +75,48 @@ static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
   return s;
 }
 
-static SRTSOCKET accept_single(const srtin_cfg_t *cfg, SRTSOCKET lsn) {
-  SRTSOCKET s = SRT_INVALID_SOCK;
+/* bounded wait. 1: accepted into *out. 0: timeout. -1: error */
+static int accept_poll(SRTSOCKET lsn, SRTSOCKET *out) {
   int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
   int eid = srt_epoll_create();
+  SRTSOCKET ready[1];
+  int nready = 1;
+  int rc = 1;
 
   if (eid < 0) {
     log_line("srt: epoll create failed: %s", srt_getlasterror_str());
-    return SRT_INVALID_SOCK;
+    return -1;
   }
   if (srt_epoll_add_usock(eid, lsn, &events) != 0) {
     log_line("srt: epoll add failed: %s", srt_getlasterror_str());
     srt_epoll_release(eid);
-    return SRT_INVALID_SOCK;
+    return -1;
   }
-  while (!stop_wanted(cfg)) {
-    SRTSOCKET ready[1];
-    int nready = 1;
-
-    if (srt_epoll_wait(eid, ready, &nready, NULL, NULL, SRT_RCVTIMEO_MS, NULL, NULL, NULL, NULL) == SRT_ERROR) {
-      if (srt_getlasterror(NULL) == SRT_ETIMEOUT)
-        continue;
+  if (srt_epoll_wait(eid, ready, &nready, NULL, NULL, SRT_RCVTIMEO_MS, NULL, NULL, NULL, NULL) == SRT_ERROR) {
+    if (srt_getlasterror(NULL) == SRT_ETIMEOUT) {
+      rc = 0;
+    } else {
       log_line("srt: accept wait failed: %s", srt_getlasterror_str());
-      break;
+      rc = -1;
     }
-    s = srt_accept(lsn, NULL, NULL);
-    if (s == SRT_INVALID_SOCK)
+  } else {
+    *out = srt_accept(lsn, NULL, NULL);
+    if (*out == SRT_INVALID_SOCK) {
       log_line("srt: accept failed: %s", srt_getlasterror_str());
-    break;
+      rc = -1;
+    }
   }
   srt_epoll_release(eid);
+  return rc;
+}
+
+static SRTSOCKET accept_single(const srtin_cfg_t *cfg, SRTSOCKET lsn) {
+  SRTSOCKET s = SRT_INVALID_SOCK;
+
+  while (!stop_wanted(cfg)) {
+    if (accept_poll(lsn, &s) != 0)
+      break;
+  }
   return s;
 }
 
@@ -278,6 +291,7 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
   r->n_listeners = n_listeners;
   memcpy(r->listeners, listeners, (size_t)n_listeners * sizeof listeners[0]);
   r->group_mode = cfg->group_mode;
+  r->cfg = *cfg;
   r->mx = cfg->mx;
   r->tool_version = cfg->tool_version;
   return r;
@@ -297,6 +311,34 @@ static void push_stats(srtin_t *r) {
   metrics_push_entries(r->mx, r->tool_version, e, sizeof e / sizeof e[0]);
 }
 
+static void idle_wait(void) {
+  int wfd = signal_wake_fd();
+
+  if (wfd >= 0) {
+    struct pollfd pfd = {wfd, POLLIN, 0};
+    poll(&pfd, 1, SRT_RCVTIMEO_MS);
+  } else {
+    usleep(SRT_RCVTIMEO_MS * 1000);
+  }
+}
+
+/* 1: r->sock live again */
+static int reconnect_once(srtin_t *r) {
+  if (r->group_mode != SRTGROUP_NONE) {
+    r->sock = srt_accept_bond(r->listeners, r->n_listeners, SRT_RCVTIMEO_MS);
+    if (r->sock != SRT_INVALID_SOCK) return 1;
+    if (srt_getlasterror(NULL) != SRT_ETIMEOUT) log_line("srt: reconnect attempt failed: %s", srt_getlasterror_str());
+    return 0;
+  }
+  if (r->n_listeners > 0) {
+    if (accept_poll(r->listeners[0], &r->sock) < 0) idle_wait();
+    return r->sock != SRT_INVALID_SOCK;
+  }
+  r->sock = open_single_caller(&r->cfg);
+  if (r->sock == SRT_INVALID_SOCK) idle_wait();
+  return r->sock != SRT_INVALID_SOCK;
+}
+
 int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out) {
   int n;
 
@@ -305,11 +347,7 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
   /* mid-reconnect: one attempt per call, returns like a timeout. caller's loop drives retry cadence, !internal */
   if (r->sock == SRT_INVALID_SOCK) {
     if (signal_stop_requested()) return 0;
-    r->sock = srt_accept_bond(r->listeners, r->n_listeners, SRT_RCVTIMEO_MS);
-    if (r->sock == SRT_INVALID_SOCK) {
-      if (srt_getlasterror(NULL) != SRT_ETIMEOUT) log_line("srt: reconnect attempt failed: %s", srt_getlasterror_str());
-      return 0;
-    }
+    if (!reconnect_once(r)) return 0;
     *reconnected_out = 1;
     return 0;
   }
@@ -320,19 +358,20 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
     if (err == SRT_ETIMEOUT) return 0;
     if (err == SRT_EASYNCRCV) {
       /* group with every member link down right now, not a dead group: retry */
-      int wfd = signal_wake_fd();
-      if (wfd >= 0) {
-        struct pollfd pfd = {wfd, POLLIN, 0};
-        poll(&pfd, 1, SRT_RCVTIMEO_MS);
-      } else {
-        usleep(SRT_RCVTIMEO_MS * 1000);
-      }
+      idle_wait();
       return 0;
     }
     if (r->group_mode != SRTGROUP_NONE && r->n_listeners > 0) {
       /* group error: state could be corrupted, reconnect regardless of cause.
          next call retries, one attempt each, see above */
       log_line("srt: read failed on group (%s), reconnecting", srt_getlasterror_str());
+      srt_close(r->sock);
+      r->sock = SRT_INVALID_SOCK;
+      return 0;
+    }
+    if (r->group_mode == SRTGROUP_NONE) {
+      /* peer gone: listener goes back to accept, caller re-dials */
+      log_line("srt: link lost (%s), reconnecting", srt_getlasterror_str());
       srt_close(r->sock);
       r->sock = SRT_INVALID_SOCK;
       return 0;

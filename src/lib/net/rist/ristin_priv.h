@@ -14,6 +14,13 @@ struct ristin {
   pipereader_t io;
   metrics_exporter_t *mx;
   const char *tool_version;
+  char peer_uri[512];
+  char secret[128];
+  char cname[128];
+  int key_size;
+  unsigned buffer_ms;
+  int simple;
+  int verbose;
 };
 
 /* librist stats callback, owns stats */

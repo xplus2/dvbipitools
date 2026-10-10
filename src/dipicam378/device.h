@@ -19,7 +19,7 @@ void device_on_emm(device_state_t *d, const unsigned char *emm, size_t emm_len);
 /* resolve one ECM section for given service into CW.
     0 ok: cw_out[16] filled
       CISSA: fills all 16
-      CSA2: 8B CW in the half matching the ECM's table_id parity (0x81 odd -> [0:8), else even -> [8:16)), other half zeroed
+      CSA2: 8B CW in the half matching the ECM's table_id parity (0x81 odd -> [8:16), else even -> [0:8)), other half zeroed
    -1 transient: no SK/bad ECM, stay silent, peer keeps retrying.
    -2 permanent: caid configured and mismatched, peer may stop asking */
 int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_len, unsigned srvid, unsigned caid, unsigned char cw_out[16]);

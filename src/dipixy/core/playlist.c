@@ -214,15 +214,19 @@ static void emit_item(void *vctx, const channel_item_t *item) {
   char target[600];
   int family;
   int rtp_flag;
-  char maddr[64];
+  char maddr[64], msrc[64];
   unsigned mport;
   size_t n;
   rc->item_num++;
-  if (rc->keep_multicast && item->uri && !route_resolve_channel_uri(item->uri, &family, maddr, sizeof maddr, &mport, &rtp_flag)) {
+  if (rc->keep_multicast && item->uri && !route_resolve_channel_uri(item->uri, &family, maddr, sizeof maddr, msrc, sizeof msrc, &mport, &rtp_flag)) {
     char hostport[80];
     uriparse_mcast_describe(family, maddr, mport, hostport, sizeof hostport);
     n = sb_add(target, sizeof target, 0, rtp_flag ? "rtp" : "udp");
     n = sb_add(target, sizeof target, n, "://");
+    if (msrc[0]) {
+      n = sb_add(target, sizeof target, n, msrc);
+      n = sb_add(target, sizeof target, n, "@");
+    }
     sb_add(target, sizeof target, n, hostport);
   } else {
     char name_enc[192];

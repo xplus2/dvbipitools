@@ -201,7 +201,7 @@ static const cold_case_t cold_cases[] = {
 };
 
 static capture_ctx_t *open_cold_ctx(void) {
-  capture_ctx_t *ctx = capture_open(AF_INET, COLD_GROUP, COLD_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  capture_ctx_t *ctx = capture_open(AF_INET, COLD_GROUP, NULL, COLD_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
 
   ck_assert_ptr_nonnull(ctx);
   return ctx;

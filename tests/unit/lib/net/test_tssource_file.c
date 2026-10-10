@@ -150,12 +150,47 @@ START_TEST(tssrc_rewind_restarts_raw_file_from_zero) {
 }
 END_TEST
 
+START_TEST(tssrc_file_reads_are_packet_aligned) {
+  unsigned char content[20 * 188], readback[20 * 188], buf[500];
+  size_t got = 0;
+  char *path;
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+
+  for (unsigned i = 0; i < 20; i++)
+    fill_ts_packet(content + i * 188, (unsigned char)i);
+
+  path = write_temp(content, sizeof content);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_FILE;
+  cfg.file_path = path;
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+
+  for (int tries = 0; tries < 1000; tries++) {
+    ssize_t n = tssrc_read(s, buf, sizeof buf, NULL);
+    if (n < 0)
+      break;
+    ck_assert_int_eq(n % 188, 0);
+    memcpy(readback + got, buf, (size_t)n);
+    got += (size_t)n;
+  }
+  ck_assert_uint_eq(got, sizeof content);
+  ck_assert_int_eq(memcmp(content, readback, sizeof content), 0);
+
+  tssrc_close(s);
+  unlink(path);
+  free(path);
+}
+END_TEST
+
 static Suite *tssource_file_suite(void) {
   Suite *s = suite_create("tssource_file");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, tssrc_file_raw_ts_passthrough);
   tcase_add_test(tc, tssrc_file_rtp_framed_deframes);
   tcase_add_test(tc, tssrc_rewind_restarts_raw_file_from_zero);
+  tcase_add_test(tc, tssrc_file_reads_are_packet_aligned);
   suite_add_tcase(s, tc);
   return s;
 }

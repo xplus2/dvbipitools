@@ -24,6 +24,7 @@ typedef struct {
   /* URI_RTP / URI_UDP */
   int family; /* AF_INET or AF_INET6 */
   char group[64];
+  char source[64]; /* SSM source, "" = ASM */
   unsigned port;
   /* URI_HTTP */
   http_url_t http;

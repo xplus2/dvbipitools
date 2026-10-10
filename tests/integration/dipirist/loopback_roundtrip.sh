@@ -6,7 +6,7 @@ BIN=$1
 . "$(dirname "$0")/../common.sh"
 
 PORT=$(free_udp_port_pair)
-N_PKTS=200
+N_PKTS=5000
 
 fixture="$WORK/fixture.ts"
 out="$WORK/out.ts"
@@ -28,10 +28,20 @@ sleep 0.5
 # file source hits EOF -> nonzero rc by this toolkit's convention, not a failure here
 
 sleep 1
+
+cmp -s "$fixture" "$out" || fail "dipirist: round-tripped output differs from input (see $WORK/send.log, $WORK/recv.log)"
+
+size1=$(wc -c < "$out")
+
+# sender restart, receiver kept up
+"$BIN" -i "$fixture" -o "rist://127.0.0.1:$PORT" --buffer 200 >"$WORK/send2.log" 2>&1
+out_complete() { [ "$(wc -c < "$out")" -ge "$((size1 * 2))" ]; }
+wait_until 8 out_complete
 kill -INT $RECPID 2>/dev/null
 wait $RECPID 2>/dev/null || true
 
-cmp -s "$fixture" "$out" || fail "dipirist: round-tripped output differs from input (see $WORK/send.log, $WORK/recv.log)"
+cat "$fixture" "$fixture" > "$WORK/expect2.ts"
+cmp -s "$WORK/expect2.ts" "$out" || fail "dipirist: output after sender restart differs from two concatenated inputs (first run $size1 B, see $WORK/send2.log, $WORK/recv.log)"
 
 echo "OK"
 

@@ -164,8 +164,9 @@ static int parse_name_tail(char *name_seg, const char *fmt_seg, route_t *out) {
   return 0;
 }
 
-int route_resolve_channel_uri(const char *uri, int *family, char *addr, size_t addrsz, unsigned *port, int *rtp) {
+int route_resolve_channel_uri(const char *uri, int *family, char *addr, size_t addrsz, char *src, size_t srcsz, unsigned *port, int *rtp) {
   const char *rest;
+  char srcbuf[64];
   if (!strncmp(uri, "rtp://", 6)) {
     *rtp = 1;
     rest = uri + 6;
@@ -175,9 +176,11 @@ int route_resolve_channel_uri(const char *uri, int *family, char *addr, size_t a
   } else {
     return -1;
   }
-  if (*rest == '@')
-    rest++;
-  return uriparse_mcast_addrport(rest, family, addr, addrsz, port);
+  if (!src) {
+    src = srcbuf;
+    srcsz = sizeof srcbuf;
+  }
+  return uriparse_mcast_src_addrport(rest, family, addr, addrsz, port, src, srcsz);
 }
 
 /* unlike route_resolve_channel_uri, host may be a DNS name not just numeric */
@@ -220,7 +223,11 @@ int route_parse(const char *path, route_t *out) {
   if ((nseg == 3 || nseg == 2) && !map_lookup(kind_map, sizeof kind_map / sizeof kind_map[0], seg[0], &kind)) {
     int family;
     unsigned port;
-    if (argutil_addrport_parse(seg[1], &family, out->addr, sizeof out->addr, &port)) return -1;
+    if (kind == ROUTE_SRT || !strchr(seg[1], '@')) {
+      if (argutil_addrport_parse(seg[1], &family, out->addr, sizeof out->addr, &port)) return -1;
+    } else if (uriparse_mcast_src_addrport(seg[1], &family, out->addr, sizeof out->addr, &port, out->src, sizeof out->src)) {
+      return -1;
+    }
     if (parse_trailing_fmt(nseg == 3 ? seg[2] : NULL, out)) return -1;
     out->kind = (route_kind_t)kind;
     out->family = family;

@@ -51,7 +51,7 @@ ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=2
     -c:v libx264 -preset ultrafast -c:a aac -f mpegts - 2>"$WORK/ffmpeg.log" | \
 timeout $((DEADLINE_S + 10)) "$DIPITVHEAD" -O lo -u -m $MCAST:$PORT -i - -s "CAS Test" \
     --cas-algo cissa --cas-ecmg "tcp://127.0.0.1:$ECMG_PORT" --cas-ecmg-version 2 \
-    --cas-emmg-port $EMMG_PORT --cas-super-id 0x4A750002 --cas-ecm-id 1 --cas-pids video,audio \
+    --cas-emmg-listen $EMMG_PORT --cas-super-id 0x4A750002 --cas-ecm-id 1 --cas-pids video,audio \
     --cas-cp-duration 3000 \
     >"$WORK/dipitvhead.log" 2>&1 &
 TVPID=$!

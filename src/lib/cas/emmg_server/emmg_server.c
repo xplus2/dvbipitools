@@ -3,7 +3,9 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <netdb.h>
 #include <netinet/in.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -110,25 +112,18 @@ unsigned emmg_server_client_count(emmg_server_t *s) {
 
 unsigned long emmg_server_emm_total(emmg_server_t *s) { return atomic_load_explicit(&s->emm_total, memory_order_relaxed); }
 
-static int tcp_listen_any(unsigned port) {
-  struct sockaddr_storage ss;
-  socklen_t sslen;
-  int fd;
-  int on = 1;
+static int socket_wildcard(unsigned port, struct sockaddr_storage *ss, socklen_t *sslen) {
   int off = 0;
-  int flags;
-
-  memset(&ss, 0, sizeof ss);
-  fd = socket(AF_INET6, SOCK_STREAM, 0);
+  int fd = socket(AF_INET6, SOCK_STREAM, 0);
   if (fd >= 0) {
-    struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)&ss;
+    struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)ss;
     setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off);
     a6->sin6_family = AF_INET6;
     a6->sin6_addr = in6addr_any;
     a6->sin6_port = htons((unsigned short)port);
-    sslen = sizeof *a6;
+    *sslen = sizeof *a6;
   } else if (errno == EAFNOSUPPORT) {
-    struct sockaddr_in *a4 = (struct sockaddr_in *)&ss;
+    struct sockaddr_in *a4 = (struct sockaddr_in *)ss;
     fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
       log_line("emmg: socket: %s", strerror(errno));
@@ -137,14 +132,56 @@ static int tcp_listen_any(unsigned port) {
     a4->sin_family = AF_INET;
     a4->sin_addr.s_addr = htonl(INADDR_ANY);
     a4->sin_port = htons((unsigned short)port);
-    sslen = sizeof *a4;
+    *sslen = sizeof *a4;
   } else {
     log_line("emmg: socket: %s", strerror(errno));
     return -1;
   }
+  return fd;
+}
+
+static int socket_host(const char *host, unsigned port, struct sockaddr_storage *ss, socklen_t *sslen) {
+  struct addrinfo hints;
+  struct addrinfo *res;
+  char portstr[8];
+  int rc;
+  int fd;
+
+  memset(&hints, 0, sizeof hints);
+  hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV | AI_PASSIVE;
+  hints.ai_socktype = SOCK_STREAM;
+  snprintf(portstr, sizeof portstr, "%u", port);
+  rc = getaddrinfo(host, portstr, &hints, &res);
+  if (rc != 0) {
+    log_line("emmg: listen address %s: %s", host, gai_strerror(rc));
+    return -1;
+  }
+  fd = socket(res->ai_family, SOCK_STREAM, 0);
+  if (fd < 0) {
+    log_line("emmg: socket: %s", strerror(errno));
+  } else {
+    memcpy(ss, res->ai_addr, res->ai_addrlen);
+    *sslen = res->ai_addrlen;
+  }
+  freeaddrinfo(res);
+  return fd;
+}
+
+static int tcp_listen(const char *host, unsigned port) {
+  struct sockaddr_storage ss;
+  socklen_t sslen = 0;
+  int fd;
+  int on = 1;
+  int flags;
+  int named = host && host[0];
+
+  memset(&ss, 0, sizeof ss);
+  fd = named ? socket_host(host, port, &ss, &sslen) : socket_wildcard(port, &ss, &sslen);
+  if (fd < 0)
+    return -1;
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
   if (bind(fd, (struct sockaddr *)&ss, sslen) < 0) {
-    log_line("emmg: bind :%u: %s", port, strerror(errno));
+    log_line("emmg: bind %s:%u: %s", named ? host : "*", port, strerror(errno));
     close(fd);
     return -1;
   }
@@ -178,7 +215,7 @@ emmg_server_t *emmg_server_start(const emmg_server_cfg_t *cfg) {
     s->max_conns = cfg->max_conns ? cfg->max_conns : 8;
     if (s->max_conns > EMMG_MAX_CONNS_CEILING)
       s->max_conns = EMMG_MAX_CONNS_CEILING;
-    s->listen_fd = tcp_listen_any(cfg->port);
+    s->listen_fd = tcp_listen(cfg->listen_host, cfg->port);
     if (s->listen_fd < 0) {
       free(s);
       return NULL;

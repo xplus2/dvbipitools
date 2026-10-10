@@ -54,7 +54,7 @@ TSPID=$!
 "$BIN" -O lo -u -m $MCAST:$PORT -i "udp://@$BAD:$BAD_PORT" -I lo \
     -b $KBPS -S -B --pcr-mode regenerate \
     --cas-algo csa2 --cas-ecmg "tcp://127.0.0.1:$ECMG_PORT" --cas-ecmg-version 2 \
-    --cas-emmg-port $EMMG_PORT --cas-super-id 0x4A750003 --cas-ecm-id 1 --cas-pids video,audio \
+    --cas-emmg-listen $EMMG_PORT --cas-super-id 0x4A750003 --cas-ecm-id 1 --cas-pids video,audio \
     --cas-cp-duration 2000 >"$tvlog" 2>&1 &
 TVPID=$!
 

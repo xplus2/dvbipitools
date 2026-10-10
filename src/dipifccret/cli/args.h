@@ -38,6 +38,8 @@ typedef struct {
   int no_mc_ret; /* --no-mc-ret */
   size_t max_ret_clients; /* --max-ret-clients, unicast RTX per-client seq table cap, F.3.2.1 */
   unsigned ret_client_idle_timeout_s; /* --ret-client-idle-timeout, 0 = never reap */
+  unsigned ret_client_rate; /* --ret-client-rate, repair packets/s per client IP, 0 = unlimited */
+  unsigned ret_mc_dedup_ms; /* --ret-mc-dedup, 0 = off */
   int no_rsi; /* --no-rsi */
   unsigned rsi_interval_s; /* --rsi-interval */
   int rsi_mc_ret; /* --rsi-mc-ret, requires !no_mc_ret, matches dipisds --ret-rsi-mc-ret */
@@ -58,6 +60,7 @@ typedef struct {
   size_t fcc_range_count;
   cidr_t fcc_client_ranges[ARGS_MAX_RANGES]; /* --fcc-client-range, empty = every client eligible (505) */
   size_t fcc_client_range_count;
+  unsigned fcc_client_rate; /* --fcc-client-rate, RAMS-R starts/s per client IP, 0 = unlimited */
 
   const char *metrics_sock;    /* --metrics. NULL = default socket path */
   const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */

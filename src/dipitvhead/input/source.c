@@ -33,6 +33,7 @@ tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_er
   tc.kind = tssrc_kind_of(input->input.kind);
   tc.family = input->input.family;
   tc.group = input->input.group;
+  tc.source = input->input.source;
   tc.port = input->input.port;
   tc.iface = input->iface_in;
   tc.http = input->input.http;
@@ -89,6 +90,7 @@ tvsrc_open_t *tvsrc_open_async_start(const config_t *cfg, const dipitvhead_input
   tc.kind = tssrc_kind_of(input->input.kind);
   tc.family = input->input.family;
   tc.group = input->input.group;
+  tc.source = input->input.source;
   tc.port = input->input.port;
   tc.iface = input->iface_in;
   tc.http = input->input.http;

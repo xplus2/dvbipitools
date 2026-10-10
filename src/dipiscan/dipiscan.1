@@ -46,12 +46,12 @@ that address gets its own playlist entry, same URI, distinct
 .SH OPTIONS
 .TP
 .BR \-m ", " \-\-mcast " \fIaddr\fR"
-Base multicast group, IPv4 or IPv6; the last byte is swept 1..254.
+Base multicast group, IPv4 or IPv6; the last byte is swept 0..255.
 Default: 239.19.75.0.
 .RS
 Also accepts
 .IR addr / prefixlen
-(CIDR, same asdefault /24) or
+(CIDR, every address in the block is swept) or
 .IR startaddr \- stopaddr
 (explicit inclusive range, swept as given).
 .RE
@@ -72,8 +72,8 @@ Output file, or "\-" for stdout. Default: stdout. Progress and
 .BR \-t ", " \-\-timeout " \fIsecs\fR"
 Wall-clock time budget per candidate for a named result (PAT + SDT
 service name). 1..3600. Default: 1. If a candidate produces no packets
-at all within 300 ms of the join, it is skipped early, without waiting
-out the full budget.
+at all within 30% of the budget after the join (300 ms at the default),
+it is skipped early, without waiting out the full budget.
 .TP
 .BR \-j ", " \-\-jets " \fIjets\fR"
 Concurrent probing threads. 1..256. Default: 1.

@@ -233,6 +233,7 @@ void cas_core_fill_group_cfg(cas_algo_t cas_algo, unsigned cp_duration_ms, int f
     gv->ecm_id = v->ecm_id;
     gv->ecm_pid = v->ecm_pid;
     gv->emm_pid = v->emm_pid;
+    gv->emmg_listen_host = v->emmg_listen_host[0] ? v->emmg_listen_host : NULL;
     gv->emmg_port = v->emmg_port;
     gv->emmg_max_conns = v->emmg_max_conns;
     gv->emmg_version = v->emmg_version;

@@ -65,13 +65,15 @@ int listen_run(const config_t *cfg) {
     if (dvbstp_already_seen(seen, &seen_count, &hdr)) continue;
     segments++;
 
-    if (cfg->format == OUT_XML) {
-      format_out_raw(f, cfg->format, data, len);
-    } else {
+    {
       sds_service_t entries[SDS_MAX_SERVICES];
       int count, truncated;
       count = sds_parse_broadcast((const char *)data, entries, SDS_MAX_SERVICES, &truncated);
-      for (int i = 0; i < count; i++) format_out_item(f, cfg->format, &entries[i]);
+      if (cfg->format == OUT_XML) {
+        format_out_raw(f, cfg->format, data, len);
+      } else {
+        for (int i = 0; i < count; i++) format_out_item(f, cfg->format, &entries[i]);
+      }
       total_services += (unsigned)count;
       if (truncated)
         log_line("segment %u: %d services, more present beyond the %d cap", segments, count, SDS_MAX_SERVICES);

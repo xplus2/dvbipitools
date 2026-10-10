@@ -119,7 +119,7 @@ static inline void *dvbstp_sender_thread(void *arg) {
 }
 
 static inline unsigned run_helper_port(unsigned idx) {
-  return (20000u + ((unsigned)getpid() * 257u + idx * 2u) % 30000u) & ~1u;
+  return (20000u + ((unsigned)getpid() * 257u + idx * 2u) % 10000u) & ~1u;
 }
 
 static inline const char *run_helper_group_n(unsigned idx) {

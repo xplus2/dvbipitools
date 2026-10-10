@@ -29,8 +29,10 @@ static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
   strrepo_writer_init(&sw);
   accessunit_scratch_init(&sc);
   if (tva_xml_read(in, &doc)) {
+    log_line("cannot parse input XML");
     rc = -1;
   } else if (accessunit_encode(&sc, &doc, &bw, &sw, &nfuu)) {
+    log_line("BiM encoding failed");
     rc = -1;
   } else {
     size_t bits_len, strs_len;
@@ -68,22 +70,31 @@ static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
 
   bcg_doc_init(&doc);
   accessunit_scratch_init(&sc);
-  if (read_all(in, &buf, &len) || len < 4) {
+  if (read_all(in, &buf, &len)) {
+    log_line("read failed");
+    rc = -1;
+    goto done;
+  }
+  if (len < 4) {
+    log_line("input truncated: %zu bytes, need 4 byte length header", len);
     rc = -1;
     goto done;
   }
   ubuf = (const unsigned char *)buf;
   bits_len = ((size_t)ubuf[0] << 24) | ((size_t)ubuf[1] << 16) | ((size_t)ubuf[2] << 8) | (size_t)ubuf[3];
   if (bits_len > len - 4) {
+    log_line("input truncated: bitstream needs %zu bytes, %zu present", bits_len, len - 4);
     rc = -1;
     goto done;
   }
   bitreader_init(&br, ubuf + 4, bits_len);
   if (strrepo_reader_init(&sr, ubuf + 4 + bits_len, len - 4 - bits_len)) {
+    log_line("string repository missing or unsupported encoding");
     rc = -1;
     goto done;
   }
   if (accessunit_decode(&sc, &br, &sr, &doc, &nfuu)) {
+    log_line("malformed or truncated BiM stream");
     rc = -1;
     goto done;
   }

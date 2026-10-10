@@ -29,6 +29,9 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "no-mc-ret: 1\n", CFG_INT, no_mc_ret, 1, NULL),
   CFG_FIELD(config_t, "max-ret-clients: 99\n", CFG_SIZE, max_ret_clients, 99, NULL),
   CFG_FIELD(config_t, "ret:\n  client-idle-timeout: 61\n", CFG_UINT, ret_client_idle_timeout_s, 61, NULL),
+  CFG_FIELD(config_t, "ret:\n  client-rate: 55\n", CFG_UINT, ret_client_rate, 55, NULL),
+  CFG_FIELD(config_t, "ret:\n  mc-dedup: 250\n", CFG_UINT, ret_mc_dedup_ms, 250, NULL),
+  CFG_FIELD(config_t, "fcc:\n  client-rate: 7\n", CFG_UINT, fcc_client_rate, 7, NULL),
   CFG_FIELD(config_t, "no-rsi: true\n", CFG_INT, no_rsi, 1, NULL),
   CFG_FIELD(config_t, "rsi:\n  interval: 17\n", CFG_UINT, rsi_interval_s, 17, NULL),
   CFG_FIELD(config_t, "rsi:\n  mc-ret: true\n", CFG_INT, rsi_mc_ret, 1, NULL),
@@ -128,6 +131,8 @@ static const bad_case_t bad_cases[] = {
   {"fcc:\n  resolve-base-port: 70000\n"},
   {"fcc:\n  range: bogus\n"},
   {"fcc:\n  client-range: bogus\n"},
+  {"fcc:\n  client-rate: 1000001\n"},
+  {"ret:\n  client-rate: -1\n"},
   {"metrics:\n  interval: 0\n"},
   {"metrics:\n  inspect-ts: loud\n"},
 };

@@ -677,6 +677,70 @@ START_TEST(connections_beyond_the_limit_are_rejected) {
 }
 END_TEST
 
+START_TEST(silent_connections_time_out_and_free_their_slots) {
+  cs378x_cfg_t cfg;
+  cs378x_server_t *srv;
+  cb_state_t st = {0};
+  unsigned char body[32];
+  int idle[4], fd;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.port = test_free_port();
+  cfg.password = TEST_PASSWORD;
+  cfg.auth_timeout_ms = 300;
+  cfg.idle_timeout_ms = 600;
+  srv = cs378x_server_start(&cfg, scripted_ecm, recording_emm, &st);
+  ck_assert_ptr_nonnull(srv);
+
+  for (int i = 0; i < 4; i++) idle[i] = connect_loopback(cfg.port);
+  for (int i = 0; i < 4; i++) {
+    ck_assert_int_eq(peer_closed(idle[i]), 1);
+    close(idle[i]);
+  }
+
+  fd = connect_loopback(cfg.port);
+  send_simple(fd, UCRC, 55, (const unsigned char *)"\0", 1);
+  ck_assert_int_eq(read_reply(fd, body, sizeof body, 1500), 0);
+  ck_assert_int_eq(peer_closed(fd), 1);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(bind_address_is_honored) {
+  static const char *const wild[] = {"127.0.0.1", "0.0.0.0"};
+  cs378x_cfg_t cfg;
+  cs378x_server_t *srv;
+  cb_state_t st = {0};
+  unsigned char body[48];
+  int fd;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.password = TEST_PASSWORD;
+  cfg.bind = wild[_i];
+  cfg.port = test_free_port();
+  srv = cs378x_server_start(&cfg, scripted_ecm, recording_emm, &st);
+  ck_assert_ptr_nonnull(srv);
+  fd = connect_loopback(cfg.port);
+  send_ecm(fd, UCRC, TEST_PASSWORD);
+  ck_assert_int_eq(read_reply(fd, body, sizeof body, 1500), 0);
+  close(fd);
+  cs378x_server_stop(srv);
+}
+END_TEST
+
+START_TEST(unusable_bind_address_fails_start) {
+  static const char *const bad[] = {"192.0.2.1", "not a host name"};
+  cs378x_cfg_t cfg;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.password = TEST_PASSWORD;
+  cfg.bind = bad[_i];
+  cfg.port = test_free_port();
+  ck_assert_ptr_null(cs378x_server_start(&cfg, scripted_ecm, NULL, NULL));
+}
+END_TEST
+
 static Suite *cs378x_suite(void) {
   Suite *s = suite_create("cs378x");
   TCase *tc = tcase_create("core");
@@ -699,6 +763,9 @@ static Suite *cs378x_suite(void) {
   tcase_add_test(tc, a_wrong_password_is_refused);
   tcase_add_test(tc, an_oversized_request_is_refused);
   tcase_add_test(tc, connections_beyond_the_limit_are_rejected);
+  tcase_add_test(tc, silent_connections_time_out_and_free_their_slots);
+  tcase_add_loop_test(tc, bind_address_is_honored, 0, 2);
+  tcase_add_loop_test(tc, unusable_bind_address_fails_start, 0, 2);
   tcase_set_timeout(tc, 10);
   suite_add_tcase(s, tc);
   return s;

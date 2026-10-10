@@ -61,6 +61,7 @@ void sink_close(out_sink_t *o);
 /* advances every -o srt:// sink's connect state, flushes queued data.
    call every loop iteration, even if nothing was read */
 void sinks_service_srt(out_sink_t *sinks, int n_sinks);
+void sinks_flush(out_sink_t *sinks, int n_sinks);
 
 /* failed network sink never fatal, log only on failure/recovery edge, retry every write */
 void note_send_result(int ok, int *had_error, uint64_t *errors_total, const char *label);

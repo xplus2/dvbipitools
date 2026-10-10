@@ -27,10 +27,10 @@ static int iface_eq(const char *a, const char *b) {
   return strcmp(a, b) == 0;
 }
 
-static capture_ctx_t *find_existing(int family, const char *group, unsigned port, const char *iface) {
+static capture_ctx_t *find_existing(int family, const char *group, const char *source, unsigned port, const char *iface) {
   for (capture_ctx_t *c = g_open; c; c = c->next)
     if (c->backend == CAP_BACKEND_MCAST && c->family == family && c->port == port &&
-        strcmp(c->group, group) == 0 && iface_eq(c->iface, iface))
+        strcmp(c->group, group) == 0 && strcmp(c->source, source) == 0 && iface_eq(c->iface, iface))
       return c;
   return NULL;
 }
@@ -184,17 +184,18 @@ static fcc_client_t *open_fcc(const sds_fcc_t *fcc) {
   return f;
 }
 
-capture_ctx_t *capture_open(int family, const char *group, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d) {
+capture_ctx_t *capture_open(int family, const char *group, const char *source, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d) {
   capture_ctx_t *c, *dup;
+  if (!source) source = "";
   pthread_mutex_lock(&g_lock);
-  c = find_existing(family, group, port, iface);
+  c = find_existing(family, group, source, port, iface);
   if (c) {
     atomic_fetch_add_explicit(&c->refcount, 1, memory_order_relaxed);
     pthread_mutex_unlock(&g_lock);
     return c;
   }
   pthread_mutex_unlock(&g_lock);
-  if (strlen(group) >= sizeof c->group) return NULL;
+  if (strlen(group) >= sizeof c->group || strlen(source) >= sizeof c->source) return NULL;
   c = calloc(1, sizeof *c);
   if (!c) return NULL;
   atomic_init(&c->ts_push_head, -1);
@@ -206,11 +207,12 @@ capture_ctx_t *capture_open(int family, const char *group, unsigned port, const 
   }
   c->backend = CAP_BACKEND_MCAST;
   bufcpy(c->group, sizeof c->group, group);
+  bufcpy(c->source, sizeof c->source, source);
   c->iface = iface ? strdup(iface) : NULL;
   c->family = family;
   c->port = port;
   c->rtp = rtp;
-  c->m = mcast_open(family, group, port, iface, 0); /* blocking join, unlocked */
+  c->m = mcast_open_src(family, group, port, source, iface, 0); /* blocking join, unlocked */
   if (!c->m || mcast_set_nonblock(c->m)) {
     free_ctx_resources(c);
     return NULL;
@@ -220,7 +222,7 @@ capture_ctx_t *capture_open(int family, const char *group, unsigned port, const 
   if (fec && al_fec_l) open_fec(c, fec, al_fec_l, al_fec_d, iface);
   c->refcount = 1;
   pthread_mutex_lock(&g_lock);
-  dup = find_existing(family, group, port, iface); /* raced another opener while unlocked */
+  dup = find_existing(family, group, source, port, iface); /* raced another opener while unlocked */
   if (dup) {
     atomic_fetch_add_explicit(&dup->refcount, 1, memory_order_relaxed);
     pthread_mutex_unlock(&g_lock);

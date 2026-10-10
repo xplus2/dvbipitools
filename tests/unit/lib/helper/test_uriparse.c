@@ -148,11 +148,62 @@ START_TEST(rtmp_or_file_classifies_and_bounds_targets) {
 }
 END_TEST
 
+typedef struct {
+  const char *in;
+  int rc;
+  int family;
+  const char *src;
+  const char *group;
+  unsigned port;
+} ssm_case_t;
+
+static const ssm_case_t ssm_cases[] = {
+    {"232.1.2.3:5000", 0, AF_INET, "", "232.1.2.3", 5000},
+    {"@232.1.2.3:5000", 0, AF_INET, "", "232.1.2.3", 5000},
+    {"10.0.0.1@232.1.2.3:5000", 0, AF_INET, "10.0.0.1", "232.1.2.3", 5000},
+    {"2001:db8::1@[ff3e::8000:1]:5000", 0, AF_INET6, "2001:db8::1", "ff3e::8000:1", 5000},
+    {"[2001:db8::1]@[ff3e::8000:1]:5000", 0, AF_INET6, "2001:db8::1", "ff3e::8000:1", 5000},
+    {"2001:db8::1@232.1.2.3:5000", -1, 0, "", "", 0},
+    {"10.0.0.1@[ff3e::1]:5000", -1, 0, "", "", 0},
+    {"239.1.1.1@232.1.2.3:5000", -1, 0, "", "", 0},
+    {"0.0.0.0@232.1.2.3:5000", -1, 0, "", "", 0},
+    {"host@232.1.2.3:5000", -1, 0, "", "", 0},
+    {"10.0.0.1@192.168.1.1:5000", -1, 0, "", "", 0},
+};
+
+START_TEST(mcast_src_addrport_table) {
+  const ssm_case_t *c = &ssm_cases[_i];
+  int family = 0;
+  unsigned port = 0;
+  char group[64] = "", src[64] = "";
+  int rc = uriparse_mcast_src_addrport(c->in, &family, group, sizeof group, &port, src, sizeof src);
+  ck_assert_msg(rc == c->rc, "'%s': rc %d, want %d", c->in, rc, c->rc);
+  if (rc) return;
+  ck_assert_int_eq(family, c->family);
+  ck_assert_str_eq(src, c->src);
+  ck_assert_str_eq(group, c->group);
+  ck_assert_uint_eq(port, c->port);
+}
+END_TEST
+
+START_TEST(mcast_src_uri_formats) {
+  char buf[128];
+  uriparse_mcast_src_uri(buf, sizeof buf, "udp", AF_INET, "10.0.0.1", "232.1.2.3", 5000);
+  ck_assert_str_eq(buf, "udp://10.0.0.1@232.1.2.3:5000");
+  uriparse_mcast_src_uri(buf, sizeof buf, "rtp", AF_INET, "", "239.1.2.3", 5000);
+  ck_assert_str_eq(buf, "rtp://@239.1.2.3:5000");
+  uriparse_mcast_src_uri(buf, sizeof buf, "rtp", AF_INET6, "2001:db8::1", "ff3e::1", 5000);
+  ck_assert_str_eq(buf, "rtp://2001:db8::1@[ff3e::1]:5000");
+}
+END_TEST
+
 static Suite *uriparse_suite(void) {
   Suite *s = suite_create("uriparse");
   TCase *tc = tcase_create("core");
   tcase_add_loop_test(tc, mcast_addrport_table, 0, (int)(sizeof mcast_cases / sizeof mcast_cases[0]));
   tcase_add_test(tc, mcast_addrport_respects_group_buffer_size);
+  tcase_add_loop_test(tc, mcast_src_addrport_table, 0, (int)(sizeof ssm_cases / sizeof ssm_cases[0]));
+  tcase_add_test(tc, mcast_src_uri_formats);
   tcase_add_loop_test(tc, mcast_describe_formats_and_truncates, 0, (int)(sizeof describe_cases / sizeof describe_cases[0]));
   tcase_add_test(tc, mcast_describe_leaves_zero_capacity_buffer_alone);
   tcase_add_loop_test(tc, rtmp_or_file_classifies_and_bounds_targets, 0, (int)(sizeof target_cases / sizeof target_cases[0]));

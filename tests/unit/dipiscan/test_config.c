@@ -14,7 +14,7 @@
 #include "lib/helper/log.h"
 
 static const cfg_field_case_t field_cases[] = {
-  CFG_FIELD(config_t, "mcast: 239.1.2.0/30\n", CFG_UINT, total, 2, NULL),
+  CFG_FIELD(config_t, "mcast: 239.1.2.0/30\n", CFG_UINT, total, 4, NULL),
   CFG_FIELD(config_t, "mcast: ff0e::1-ff0e::5\n", CFG_INT, family, AF_INET6, NULL),
   CFG_FIELD(config_t, "port: 8000-8002\n", CFG_UINT, port_lo, 8000, NULL),
   CFG_FIELD(config_t, "port: 8000-8002\n", CFG_UINT, port_hi, 8002, NULL),
@@ -84,7 +84,7 @@ START_TEST(defaults_are_the_documented_values) {
 
   scan_cfg_defaults(&cfg);
   ck_assert_int_eq(cfg.family, AF_INET);
-  ck_assert_uint_eq(cfg.total, 254u);
+  ck_assert_uint_eq(cfg.total, 256u);
   ck_assert_uint_eq(cfg.port_lo, 8700u);
   ck_assert_uint_eq(cfg.port_hi, 8700u);
   ck_assert_int_eq(cfg.format, OUT_M3U);

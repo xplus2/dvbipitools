@@ -31,7 +31,7 @@ static _Atomic int g_pin_failures;
 static _Atomic long g_evictions;
 
 static capture_ctx_t *open_ctx(void) {
-  return capture_open(AF_INET, GROUP, PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  return capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
 }
 
 static qsbr_domain_t *g_qsbr;

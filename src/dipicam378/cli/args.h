@@ -7,6 +7,7 @@
 typedef struct {
   const char *key_path;  /* -k, RSA private key PEM, required */
   const char *serial;    /* -s, matched against EMM-U addressing; NULL = no filter */
+  const char *bind;      /* -b, listen address. default: loopback */
   unsigned port;         /* -p, cs378x TCP listen port */
   const char *username;  /* -a's "user:" part; matches reader's "user ="; NULL = no check */
   const char *password;  /* -a's password part; matches reader's "password ="; default "dipicam378" */

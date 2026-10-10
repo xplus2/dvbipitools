@@ -1,10 +1,12 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "lib/helper/log.h"
 #include "priv.h"
 
 static void put_be32(unsigned char *p, uint32_t v) {
@@ -43,10 +45,21 @@ void p4_write_ftyp_mdat_head(mp4_t *m) {
   mb_box(&top, "ftyp", &ftyp);
   p4_wfd(m, top.p, top.len);
   mp4buf_free(&top);
+  m->moov_pos = *m->bytes;
+  put_be32(mdat_hdr, MP4_MOOV_RESERVE);
+  memcpy(mdat_hdr + 4, "free", 4);
+  p4_wfd(m, mdat_hdr, 8);
+  for (size_t left = MP4_MOOV_RESERVE - 8; left && !m->err;) {
+    static const unsigned char zero[4096];
+    size_t n = left < sizeof zero ? left : sizeof zero;
+    p4_wfd(m, zero, n);
+    left -= n;
+  }
   m->mdat_hdr_pos = *m->bytes;
-  put_be32(mdat_hdr, 1);
-  memcpy(mdat_hdr + 4, "mdat", 4);
-  memset(mdat_hdr + 8, 0, 8); /* largesize, patched at close */
+  put_be32(mdat_hdr, 8);
+  memcpy(mdat_hdr + 4, "free", 4);
+  put_be32(mdat_hdr + 8, 0); /* size 0: to EOF, stays valid while recording */
+  memcpy(mdat_hdr + 12, "mdat", 4);
   p4_wfd(m, mdat_hdr, sizeof mdat_hdr);
 }
 
@@ -288,34 +301,144 @@ static uint32_t track_duration_ms(const track_t *t) {
   return d;
 }
 
-static void build_trak(mp4buf_t *out, const track_t *t) {
+typedef struct {
+  uint32_t empty_ms; /* leading gap vs movie origin */
+  uint32_t skip_ms;  /* media arrival time, first presented sample */
+} track_edit_t;
+
+static track_edit_t track_edit(const track_t *t, int64_t origin_ms) {
+  track_edit_t e = {0, 0};
+  int64_t pres;
+  if (!t->nsamp) return e;
+  if (t->cls == PID_VIDEO && t->first_cts > 0) e.skip_ms = (uint32_t)t->first_cts;
+  pres = t->first_ts_ms + e.skip_ms - origin_ms;
+  if (pres > 0) e.empty_ms = (uint32_t)pres;
+  return e;
+}
+
+static uint32_t track_movie_duration_ms(const track_t *t, const track_edit_t *e) {
+  uint32_t d = track_duration_ms(t);
+  return e->empty_ms + (d > e->skip_ms ? d - e->skip_ms : 0);
+}
+
+static void build_edts(mp4buf_t *out, const track_t *t, const track_edit_t *e) {
+  mp4buf_t edts;
+  mp4buf_t elst;
+  uint32_t media_dur = track_duration_ms(t);
+  uint32_t seg = media_dur > e->skip_ms ? media_dur - e->skip_ms : 0;
+  if (!e->empty_ms && !e->skip_ms) return;
+  memset(&edts, 0, sizeof edts);
+  memset(&elst, 0, sizeof elst);
+  mb_u8(&elst, 0);
+  mb_u24(&elst, 0);
+  mb_u32(&elst, e->empty_ms ? 2 : 1);
+  if (e->empty_ms) {
+    mb_u32(&elst, e->empty_ms);
+    mb_u32(&elst, 0xFFFFFFFFu); /* media_time -1: empty edit */
+    mb_u32(&elst, 0x00010000);
+  }
+  mb_u32(&elst, seg);
+  mb_u32(&elst, e->skip_ms);
+  mb_u32(&elst, 0x00010000);
+  mb_box(&edts, "elst", &elst);
+  mb_box(out, "edts", &edts);
+}
+
+static void build_trak(mp4buf_t *out, const track_t *t, int64_t origin_ms) {
   mp4buf_t trak;
-  uint32_t dur = track_duration_ms(t);
+  track_edit_t e = track_edit(t, origin_ms);
   memset(&trak, 0, sizeof trak);
-  build_tkhd(&trak, t, dur);
-  build_mdia(&trak, t, dur);
+  build_tkhd(&trak, t, track_movie_duration_ms(t, &e));
+  build_edts(&trak, t, &e);
+  build_mdia(&trak, t, track_duration_ms(t));
   mb_box(out, "trak", &trak);
 }
 
-void p4_write_moov(mp4_t *m) {
+static int build_moov(const mp4_t *m, mp4buf_t *top) {
   mp4buf_t moov;
-  mp4buf_t top;
-  unsigned char patch[8];
-  uint64_t mdat_size;
   uint32_t movie_dur = 0;
 
   for (int i = 0; i < m->ntrk; i++) {
-    uint32_t d = track_duration_ms(&m->trk[i]);
+    track_edit_t e = track_edit(&m->trk[i], m->t0);
+    uint32_t d = track_movie_duration_ms(&m->trk[i], &e);
     if (d > movie_dur) movie_dur = d;
   }
-  mdat_size = *m->bytes - m->mdat_hdr_pos; /* before moov, or it'd count itself into mdat */
-  put_be64(patch, mdat_size);
-  if (pwrite(m->fd, patch, sizeof patch, (off_t)(m->mdat_hdr_pos + 8)) != (ssize_t)sizeof patch) m->err = 1;
   memset(&moov, 0, sizeof moov);
   build_mvhd(&moov, m->ntrk, movie_dur);
-  for (int i = 0; i < m->ntrk; i++) build_trak(&moov, &m->trk[i]);
-  memset(&top, 0, sizeof top);
-  mb_box(&top, "moov", &moov);
-  p4_wfd(m, top.p, top.len);
+  for (int i = 0; i < m->ntrk; i++) build_trak(&moov, &m->trk[i], m->t0);
+  memset(top, 0, sizeof *top);
+  mb_box(top, "moov", &moov);
+  return top->p != NULL;
+}
+
+/* moov + trailing free header into region */
+static int fits_region(const mp4buf_t *moov) {
+  size_t rest;
+  if (moov->len > MP4_MOOV_RESERVE) return 0;
+  rest = MP4_MOOV_RESERVE - moov->len;
+  return rest == 0 || rest >= 8;
+}
+
+static void write_region(mp4_t *m, const mp4buf_t *moov) {
+  unsigned char buf[8];
+  size_t rest = MP4_MOOV_RESERVE - moov->len;
+  unsigned char *all = malloc(moov->len + (rest ? 8 : 0));
+
+  if (!all) {
+    m->err = 1;
+    return;
+  }
+  memcpy(all, moov->p, moov->len);
+  if (rest) {
+    put_be32(buf, (uint32_t)rest);
+    memcpy(buf + 4, "free", 4);
+    memcpy(all + moov->len, buf, 8);
+  }
+  if (pwrite(m->fd, all, moov->len + (rest ? 8 : 0), (off_t)m->moov_pos) != (ssize_t)(moov->len + (rest ? 8 : 0)))
+    m->err = 1;
+  free(all);
+}
+
+void p4_checkpoint(mp4_t *m) {
+  mp4buf_t top;
+
+  if (!m->started || m->err || m->ckpt_full) return;
+  for (int i = 0; i < m->ntrk; i++) {
+    track_t *t = &m->trk[i];
+    if (t->cls == PID_VIDEO && t->prev_dur_slot && !*t->prev_dur_slot) *t->prev_dur_slot = t->last_dur ? t->last_dur : 1; /* next frame overwrites */
+  }
+  if (!build_moov(m, &top)) {
+    m->err = 1;
+    return;
+  }
+  if (!fits_region(&top)) {
+    log_line("mp4: index outgrew reserved region, no further crash checkpoints");
+    m->ckpt_full = 1;
+  } else {
+    write_region(m, &top);
+    m->ckpt_done = 1;
+  }
   mp4buf_free(&top);
+}
+
+void p4_write_moov(mp4_t *m) {
+  mp4buf_t top;
+  unsigned char hdr[16];
+  uint64_t mdat_size = *m->bytes - m->mdat_hdr_pos; /* before moov, or it'd count itself into mdat */
+
+  if (!build_moov(m, &top)) {
+    m->err = 1;
+    return;
+  }
+  put_be32(hdr, 1);
+  memcpy(hdr + 4, "mdat", 4);
+  put_be64(hdr + 8, mdat_size);
+  if (fits_region(&top)) {
+    write_region(m, &top);
+  } else {
+    p4_wfd(m, top.p, top.len);
+    if (!m->err && m->ckpt_done && pwrite(m->fd, "free", 4, (off_t)(m->moov_pos + 4)) != 4) m->err = 1; /* retire checkpoint */
+  }
+  mp4buf_free(&top);
+  if (!m->err && pwrite(m->fd, hdr, sizeof hdr, (off_t)m->mdat_hdr_pos) != (ssize_t)sizeof hdr) m->err = 1;
 }

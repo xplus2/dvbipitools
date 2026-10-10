@@ -35,6 +35,7 @@ typedef struct {
   route_fmt_t fmt;
   int family;              /* AF_INET or AF_INET6. ROUTE_RTP/ROUTE_UDP only */
   char addr[64];           /* ROUTE_RTP/ROUTE_UDP/ROUTE_SRT only */
+  char src[64];            /* ROUTE_RTP/ROUTE_UDP SSM source, "" = ASM */
   unsigned port;           /* ROUTE_RTP/ROUTE_UDP/ROUTE_SRT only */
   unsigned list_num;       /* ROUTE_LIST_*, 1-based, from URL. 0 if addressed via src_name instead */
   char src_name[ROUTE_NAME_MAX + 1]; /* ROUTE_NAMED_BARE, or ROUTE_LIST_* addressed by -n name instead of list_num */
@@ -53,8 +54,9 @@ int route_parse(const char *path, route_t *out);
 
 int fmt_parse(const char *s, route_fmt_t *out);
 
-/* uri like "rtp://@239.0.0.1:8000" or "udp://@[ff0e::1]:8000" from channel_item_t.uri. 0 ok, -1 malformed */
-int route_resolve_channel_uri(const char *uri, int *family, char *addr, size_t addrsz, unsigned *port, int *rtp);
+/* uri like "rtp://@239.0.0.1:8000", "udp://@[ff0e::1]:8000" or SSM "udp://10.0.0.1@232.1.1.1:8000"
+   from channel_item_t.uri. src: SSM source, "" when absent, NULL ok (srcsz 0). 0 ok, -1 malformed */
+int route_resolve_channel_uri(const char *uri, int *family, char *addr, size_t addrsz, char *src, size_t srcsz, unsigned *port, int *rtp);
 
 /* uri like "srt://host:port" from channel_item_t.uri, host numeric or DNS name. 0 ok, -1 malformed */
 int route_parse_srt_uri(const char *uri, char *host, size_t hostsz, unsigned *port);

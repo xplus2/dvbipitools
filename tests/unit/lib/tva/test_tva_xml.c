@@ -312,6 +312,47 @@ START_TEST(tva_xml_read_of_empty_input_yields_an_empty_document) {
 }
 END_TEST
 
+START_TEST(tva_xml_read_accepts_prefixes_single_quotes_and_cdata) {
+  static const char xml[] =
+      "<tva:TVAMain xmlns:tva='urn:tva'><tva:ProgramDescription>\n"
+      "<tva:ProgramInformationTable>\n"
+      "<tva:ProgramInformation programId = 'crid://x/1'><tva:BasicDescription>"
+      "<tva:Title><![CDATA[Tom & Jerry]]></tva:Title></tva:BasicDescription></tva:ProgramInformation>\n"
+      "</tva:ProgramInformationTable>\n"
+      "<tva:ServiceInformationTable>"
+      "<tva:ServiceInformation serviceId='svc1'><tva:Name>Svc One</tva:Name>"
+      "<tva:ServiceURL name='IPTV'>rtp://239.1.1.1:5000</tva:ServiceURL>"
+      "<tva:ServiceURL name='DTT'>dvb://1.2.3</tva:ServiceURL></tva:ServiceInformation>"
+      "</tva:ServiceInformationTable>\n"
+      "<tva:ProgramLocationTable><tva:Schedule serviceIDRef = \"svc1\">"
+      "<tva:ScheduleEvent><tva:Program crid='crid://x/1'/>"
+      "<tva:PublishedStartTime>2024-03-15T12:30:45Z</tva:PublishedStartTime>"
+      "<tva:PublishedEndTime>2024-03-15T13:00:00Z</tva:PublishedEndTime>"
+      "</tva:ScheduleEvent></tva:Schedule></tva:ProgramLocationTable>\n"
+      "</tva:ProgramDescription></tva:TVAMain>\n";
+  bcg_doc_t doc;
+  FILE *f = tmpfile();
+
+  ck_assert_ptr_nonnull(f);
+  fputs(xml, f);
+  rewind(f);
+  bcg_doc_init(&doc);
+  ck_assert_int_eq(tva_xml_read(f, &doc), 0);
+  fclose(f);
+
+  ck_assert_int_eq(doc.channel_count, 1);
+  ck_assert_str_eq(doc.channels[0].id, "svc1");
+  ck_assert_str_eq(doc.channels[0].names[0], "Svc One");
+  ck_assert_str_eq(doc.channels[0].uri, "rtp://239.1.1.1:5000");
+  ck_assert_uint_eq(doc.channels[0].sid, 3);
+  ck_assert_int_eq(doc.programme_count, 1);
+  ck_assert_str_eq(doc.programmes[0].channel_id, "svc1");
+  ck_assert_str_eq(doc.programmes[0].start, "2024-03-15T12:30:45Z");
+  ck_assert_str_eq(doc.programmes[0].title, "Tom & Jerry");
+  bcg_doc_free(&doc);
+}
+END_TEST
+
 static Suite *tva_xml_suite(void) {
   Suite *s = suite_create("tva_xml");
   TCase *tc = tcase_create("core");
@@ -323,6 +364,7 @@ static Suite *tva_xml_suite(void) {
   tcase_add_test(tc, tva_xml_write_handles_empty_documents_and_channels_without_programmes);
   tcase_add_test(tc, tva_xml_read_tolerates_incomplete_elements);
   tcase_add_test(tc, tva_xml_read_of_empty_input_yields_an_empty_document);
+  tcase_add_test(tc, tva_xml_read_accepts_prefixes_single_quotes_and_cdata);
   suite_add_tcase(s, tc);
   return s;
 }

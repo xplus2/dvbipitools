@@ -95,8 +95,9 @@ START_TEST(headend_info_uses_version_label_and_info_type) {
   add_entry(s, METRICS_ID_HEADEND_INFO, "2.2.0", 1);
 
   render_openmetrics(&st, 10.0, &out, &len);
-  ck_assert(strstr(out, "# TYPE dvbipi_headend_info info") != NULL);
-  ck_assert(strstr(out, "version=\"2.2.0\"") != NULL);
+  ck_assert(strstr(out, "# TYPE dvbipi_headend info") != NULL);
+  ck_assert(strstr(out, "dvbipi_headend_info{component=\"tvhead\",headend_id=\"inst1\",version=\"2.2.0\"} 1") != NULL);
+  ck_assert(strstr(out, "# TYPE dvbipi_headend_info ") == NULL);
   free(out);
   store_free(&st);
 }
@@ -196,6 +197,8 @@ START_TEST(self_metrics_reflect_stats_and_instance_count) {
 
   render_openmetrics(&st, 0.0, &out, &len);
   ck_assert(strstr(out, "dvbipi_metrics_instances 2") != NULL);
+  ck_assert(strstr(out, "# TYPE dvbipi_metrics_snapshots_received counter") != NULL);
+  ck_assert(strstr(out, "# TYPE dvbipi_metrics_snapshots_received_total") == NULL);
   ck_assert(strstr(out, "dvbipi_metrics_snapshots_received_total 7") != NULL);
   ck_assert(strstr(out, "dvbipi_metrics_snapshots_rejected_total{reason=\"malformed\"} 1") != NULL);
   ck_assert(strstr(out, "dvbipi_metrics_snapshots_rejected_total{reason=\"stale\"} 2") != NULL);

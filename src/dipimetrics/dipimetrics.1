@@ -113,9 +113,11 @@ is the address:port
 .B GET /metrics
 is served on. Every other path returns
 .BR 404 .
-The server is intentionally minimal: up to 8 connections in flight at
-once, a 5-second read/write budget per connection so a stalled client
-can't wedge the collector, and
+The server is intentionally minimal: up to 128 connections in flight at
+once (at most 64 per source address), a 5-second read/write budget per
+connection so a stalled client can't wedge the collector, idle
+connections evicted oldest-first when a new one arrives and the pool is
+full, and
 .B Connection: close
 on every response. This is a local diagnostics endpoint meant for
 infrequent scraping, not a general-purpose web server. Authentication is

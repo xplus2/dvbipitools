@@ -69,6 +69,7 @@ void mkv_close(mkv_t *m) {
   }
   if (!m->started && m->ntrk) start(m);
   cluster_flush(m);
+  seg_finish(m);
   for (int i = 0; i < m->ntrk; i++) {
     free(m->trk[i].rem);
     free(m->trk[i].vbuf);
@@ -78,6 +79,7 @@ void mkv_close(mkv_t *m) {
     ttx_free(m->trk[i].ttx);
   }
   ebuf_free(&m->cl);
+  free(m->cue);
   pes_free(m->pes);
   for (int i = 0; i < m->npsi; i++) psi_free(m->psi[i]);
   free(m->pend_arena);

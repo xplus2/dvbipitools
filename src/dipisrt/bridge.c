@@ -10,6 +10,7 @@
 
 #include "lib/demux/crc32.h"
 #include "lib/helper/log.h"
+#include "lib/net/send_result.h"
 #include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtout.h"
 #include "lib/net/ts/sink.h"
@@ -22,6 +23,7 @@
 #include "version.h"
 
 #define DIPISRT_SENDER_POLL_MS 200
+#define DIPISRT_SENDER_FEC_READS_MAX 64
 #define DIPISRT_SENDER_DRAIN_MS_DEFAULT 1000 /* srt's own default latency buffer */
 
 static void fill_common_opts(const config_t *cfg, srtcommon_opts_t *o) {
@@ -39,7 +41,9 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   srtout_t *srt;
   tsinspect_t *insp;
   tsinspect_set_t set = {&insp, 1, NULL, 0};
-  struct pollfd pfd;
+  struct pollfd pfd[2];
+  nfds_t nfds = 1;
+  int fec_fd;
   unsigned char buf[65536];
   int rc = 0;
   int was_connected = 0;
@@ -75,8 +79,14 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   if (insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
   if (tsinspect_wants_rx_ns(insp)) tssrc_enable_rx_timestamps(src);
 
-  pfd.fd = tssrc_fd(src);
-  pfd.events = POLLIN;
+  pfd[0].fd = tssrc_fd(src);
+  pfd[0].events = POLLIN;
+  fec_fd = tssrc_fec_fd(src);
+  if (fec_fd >= 0) {
+    pfd[1].fd = fec_fd;
+    pfd[1].events = POLLIN;
+    nfds = 2;
+  }
 
   while (!signal_stop_requested()) {
     srtout_status_t st;
@@ -91,26 +101,31 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
       was_connected = st.connected;
     }
 
-    pr = poll(&pfd, 1, DIPISRT_SENDER_POLL_MS);
+    pfd[0].revents = 0;
+    pfd[1].revents = 0;
+    pr = poll(pfd, nfds, DIPISRT_SENDER_POLL_MS);
     if (pr < 0) {
       if (errno == EINTR) continue;
       log_line("srt output: poll failed: %s", strerror(errno));
       rc = 1;
       break;
     }
-    if (pr == 0 || !(pfd.revents & (POLLIN | POLLERR | POLLHUP))) continue;
+    if (pr == 0) continue;
+    if (nfds == 2 && pfd[1].revents) tssrc_fec_poll(src);
 
-    n = tssrc_read(src, buf, sizeof buf, &reason);
-    if (n < 0) {
-      rc = 1;
-      break;
-    }
-    if (n > 0) {
+    for (unsigned reads = 0; reads < DIPISRT_SENDER_FEC_READS_MAX; reads++) {
+      n = tssrc_read(src, buf, sizeof buf, &reason);
+      if (n <= 0) break;
       if (insp) {
         tsinspect_set_rx_ns(insp, tssrc_last_rx_ns(src));
         tsinspect_grid(insp, buf, (size_t)n);
       }
       srtout_write(srt, buf, (size_t)n);
+      if (fec_fd < 0) break;
+    }
+    if (n < 0) {
+      rc = 1;
+      break;
     }
   }
   if (rc) {
@@ -153,9 +168,13 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   dedup_entry_t dedup_hist[RECV_DEDUP_HISTORY] = {{0, 0}};
   int dedup_hist_next = 0;
   int dedup_active = 0; /* set on reconnect, cleared at first non-duplicate chunk */
+  int net_had_error = 0;
+  unsigned long long net_errors = 0;
+  int net_retry;
   int rc = 0;
 
   plain_endpoint_to_tssink_cfg(&cfg->out.nonsrt, cfg->iface, &tk);
+  net_retry = tk.kind == TSSINK_UDP || tk.kind == TSSINK_RTP;
   sink = tssink_open(&tk);
   if (!sink) {
     return 1;
@@ -191,6 +210,7 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
     int reconnected = 0;
     int n = srtin_read(srt, buf, sizeof buf, &reconnected);
     uint32_t h;
+    int wr;
     if (insp_in) {
       double now = mono_seconds();
       tsinspect_tick(insp_in, now);
@@ -209,11 +229,13 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
       if (dedup_is_duplicate(dedup_hist, RECV_DEDUP_HISTORY, h, n)) continue;
       dedup_active = 0;
     }
-    if (tssink_write(sink, buf, (size_t)n) < 0) {
+    wr = tssink_write(sink, buf, (size_t)n);
+    if (wr < 0 && !net_retry) {
       rc = 1;
       break;
     }
-    if (insp_out) tsinspect_grid(insp_out, buf, (size_t)n);
+    note_send_result(wr >= 0, &net_had_error, &net_errors, "net");
+    if (wr >= 0 && insp_out) tsinspect_grid(insp_out, buf, (size_t)n);
     dedup_record(dedup_hist, RECV_DEDUP_HISTORY, &dedup_hist_next, h, n);
   }
 

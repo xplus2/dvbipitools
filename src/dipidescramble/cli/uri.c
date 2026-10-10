@@ -13,10 +13,9 @@
 #include "priv.h"
 
 
-/* [@]<addr>:<port> or [@][<addr6>]:<port>, multicast literal required */
-static int mcast_group_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out) {
-  if (*s == '@') s++;
-  return uriparse_mcast_addrport(s, family, addr_out, addr_out_sz, port_out);
+/* [[src]@]<addr>:<port>, multicast literal required */
+static int mcast_src_parse(const char *s, input_t *in) {
+  return uriparse_mcast_src_addrport(s, &in->family, in->group, sizeof in->group, &in->port, in->source, sizeof in->source);
 }
 
 static int input_parse(const char *uri, input_t *s) {
@@ -27,11 +26,11 @@ static int input_parse(const char *uri, input_t *s) {
   }
   if (strncmp(uri, "rtp://", 6) == 0) {
     s->kind = INPUT_RTP;
-    return mcast_group_parse(uri + 6, &s->family, s->group, sizeof s->group, &s->port);
+    return mcast_src_parse(uri + 6, s);
   }
   if (strncmp(uri, "udp://", 6) == 0) {
     s->kind = INPUT_UDP;
-    return mcast_group_parse(uri + 6, &s->family, s->group, sizeof s->group, &s->port);
+    return mcast_src_parse(uri + 6, s);
   }
   if (strncmp(uri, "rist://", 7) == 0) {
     if (uri[7] != '@') return -1; /* rist:// as input always listens */
@@ -55,10 +54,10 @@ static int input_parse(const char *uri, input_t *s) {
 void input_describe(const input_t *s, char *buf, size_t n) {
   switch (s->kind) {
     case INPUT_RTP:
-      describe_mcast_uri(buf, n, "rtp", s->family, s->group, s->port);
+      uriparse_mcast_src_uri(buf, n, "rtp", s->family, s->source, s->group, s->port);
       break;
     case INPUT_UDP:
-      describe_mcast_uri(buf, n, "udp", s->family, s->group, s->port);
+      uriparse_mcast_src_uri(buf, n, "udp", s->family, s->source, s->group, s->port);
       break;
     case INPUT_STDIN:
       bufcpy(buf, n, "-");

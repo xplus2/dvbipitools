@@ -106,8 +106,8 @@ static int build_broadcast_and_sp_docs(const config_t *cfg, sds_state_t *st) {
   if (!st->broadcast_doc) { state_free(st); return -1; }
   st->sp_doc = doc_alloc("Service Provider Discovery");
   if (!st->sp_doc) { state_free(st); return -1; }
-  st->broadcast_len = sds_build_broadcast(cfg->provider, 1, st->in.services, st->in.service_count, ret, fcc, fec, st->broadcast_doc, DOC_CAP);
-  st->sp_len = sds_build_sp(cfg->provider, cfg->offering, cfg->lang, 1, cfg->mcast_group, cfg->mcast_port, extra_payload_ids, extra_count, st->sp_doc, DOC_CAP);
+  st->broadcast_len = sds_build_broadcast(cfg->provider, st->version, st->in.services, st->in.service_count, ret, fcc, fec, st->broadcast_doc, DOC_CAP);
+  st->sp_len = sds_build_sp(cfg->provider, cfg->offering, cfg->lang, st->version, cfg->mcast_group, cfg->mcast_port, extra_payload_ids, extra_count, st->sp_doc, DOC_CAP);
   if (!st->broadcast_len || !st->sp_len) {
     log_line("SD&S document too large (max %d bytes), reduce the service list", DOC_CAP);
     state_free(st);
@@ -132,7 +132,7 @@ static int build_package_doc(const config_t *cfg, sds_state_t *st) {
     state_free(st);
     return -1;
   }
-  st->package_len = sds_build_package(cfg->provider, 1, pkgs, pkg_count, st->in.services, st->in.service_count, st->package_doc, DOC_CAP);
+  st->package_len = sds_build_package(cfg->provider, st->version, pkgs, pkg_count, st->in.services, st->in.service_count, st->package_doc, DOC_CAP);
   free(pkgs);
   if (!st->package_len) {
     log_line("Package Discovery document too large (max %d bytes)", DOC_CAP);
@@ -158,7 +158,7 @@ static int build_cell_doc(const config_t *cfg, sds_state_t *st) {
     state_free(st);
     return -1;
   }
-  st->cell_len = sds_build_regionalisation(cfg->provider, 1, cells, cell_count, st->cell_doc, DOC_CAP);
+  st->cell_len = sds_build_regionalisation(cfg->provider, st->version, cells, cell_count, st->cell_doc, DOC_CAP);
   free(cells);
   if (!st->cell_len) {
     log_line("Regionalisation Discovery document too large (max %d bytes)", DOC_CAP);
@@ -192,7 +192,7 @@ static int build_rmsfus_doc(const config_t *cfg, sds_state_t *st) {
   }
   st->rmsfus_doc = doc_alloc("RMS-FUS Discovery");
   if (!st->rmsfus_doc) { state_free(st); return -1; }
-  st->rmsfus_len = sds_build_rms_fus(cfg->provider, 1, &rms_val, rms_count, &fus_val, fus_count, st->rmsfus_doc, DOC_CAP);
+  st->rmsfus_len = sds_build_rms_fus(cfg->provider, st->version, &rms_val, rms_count, &fus_val, fus_count, st->rmsfus_doc, DOC_CAP);
   if (!st->rmsfus_len) {
     log_line("RMS-FUS Discovery document too large (max %d bytes)", DOC_CAP);
     state_free(st);
@@ -201,8 +201,9 @@ static int build_rmsfus_doc(const config_t *cfg, sds_state_t *st) {
   return 0;
 }
 
-int state_load(const config_t *cfg, sds_state_t *st) {
+static int state_load_version(const config_t *cfg, sds_state_t *st, unsigned version) {
   memset(st, 0, sizeof *st);
+  st->version = version;
   if (input_load(cfg->input_path, &st->in)) return -1;
   if (st->in.kind != INPUT_SERVICES) return 0;
   if (build_broadcast_and_sp_docs(cfg, st)) return -1;
@@ -212,15 +213,24 @@ int state_load(const config_t *cfg, sds_state_t *st) {
   return 0;
 }
 
-static void reload_state(const config_t *cfg, sds_state_t *st, sds_metrics_t *sm, int metrics_on) {
+int state_load(const config_t *cfg, sds_state_t *st) {
+  return state_load_version(cfg, st, 1);
+}
+
+int state_reload(const config_t *cfg, sds_state_t *st) {
   sds_state_t next;
-  if (state_load(cfg, &next)) {
+  if (state_load_version(cfg, &next, st->version % 255 + 1)) return -1;
+  state_free(st);
+  *st = next;
+  return 0;
+}
+
+static void reload_state(const config_t *cfg, sds_state_t *st, sds_metrics_t *sm, int metrics_on) {
+  if (state_reload(cfg, st)) {
     log_line("reload failed, keeping previous input");
     if (metrics_on) sm->document_errors_total++;
     return;
   }
-  state_free(st);
-  *st = next;
   log_line("reloaded %s: %d service%s", cfg->input_path, st->in.service_count, st->in.service_count == 1 ? "" : "s");
   if (metrics_on) sm->documents_generated_total++;
 }
@@ -254,13 +264,13 @@ static int sds_announce_cycle(void *ctx_, mcast_t *m, unsigned cycle) {
   sds_announce_ctx_t *ctx = ctx_;
   int ok;
   if (ctx->st.in.kind == INPUT_RAW_XML) {
-    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = ctx->st.in.raw_payload_id, .segment_id = 1, .segment_version = 1, .want_crc = 1}, ctx->st.in.raw_xml, ctx->st.in.raw_xml_len) == 0;
+    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = ctx->st.in.raw_payload_id, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1}, ctx->st.in.raw_xml, ctx->st.in.raw_xml_len) == 0;
   } else {
-    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, .segment_id = 1, .segment_version = 1, .want_crc = 1}, ctx->st.broadcast_doc, ctx->st.broadcast_len) == 0;
-    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_SP_DISCOVERY, .segment_id = 1, .segment_version = 1, .want_crc = 1}, ctx->st.sp_doc, ctx->st.sp_len) == 0 && ok;
-    if (ctx->st.package_doc) ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_PACKAGE_DISCOVERY, .segment_id = 1, .segment_version = 1, .want_crc = 1}, ctx->st.package_doc, ctx->st.package_len) == 0 && ok;
-    if (ctx->st.cell_doc) ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY, .segment_id = 1, .segment_version = 1, .want_crc = 1}, ctx->st.cell_doc, ctx->st.cell_len) == 0 && ok;
-    if (ctx->st.rmsfus_doc) ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_RMSFUS_DISCOVERY, .segment_id = 1, .segment_version = 1, .want_crc = 1}, ctx->st.rmsfus_doc, ctx->st.rmsfus_len) == 0 && ok;
+    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1}, ctx->st.broadcast_doc, ctx->st.broadcast_len) == 0;
+    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_SP_DISCOVERY, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1}, ctx->st.sp_doc, ctx->st.sp_len) == 0 && ok;
+    if (ctx->st.package_doc) ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_PACKAGE_DISCOVERY, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1}, ctx->st.package_doc, ctx->st.package_len) == 0 && ok;
+    if (ctx->st.cell_doc) ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1}, ctx->st.cell_doc, ctx->st.cell_len) == 0 && ok;
+    if (ctx->st.rmsfus_doc) ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_RMSFUS_DISCOVERY, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1}, ctx->st.rmsfus_doc, ctx->st.rmsfus_len) == 0 && ok;
   }
   if (ctx->metrics_on) {
     if (ok) {

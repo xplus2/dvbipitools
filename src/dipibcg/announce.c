@@ -203,7 +203,24 @@ static void reload_doc(const config_t *cfg, bcg_doc_t *doc, bcg_metrics_t *bm, i
   if (metrics_on) bm->sources_up = 1;
 }
 
-static void publish_document(mcast_t *m, bitwriter_t *bw, const strrepo_writer_t *sw, unsigned cycles, int compress, bcg_metrics_t *bm, int metrics_on) {
+void version_track(bcg_version_t *v, const unsigned char *cont, size_t cont_len) {
+  unsigned char *copy;
+  if (v->last && v->last_len == cont_len && !memcmp(v->last, cont, cont_len)) return;
+  v->version = v->version % 255 + 1;
+  copy = malloc(cont_len ? cont_len : 1);
+  if (!copy) {
+    free(v->last);
+    v->last = NULL;
+    v->last_len = 0;
+    return;
+  }
+  memcpy(copy, cont, cont_len);
+  free(v->last);
+  v->last = copy;
+  v->last_len = cont_len;
+}
+
+static void publish_document(mcast_t *m, bitwriter_t *bw, const strrepo_writer_t *sw, bcg_version_t *ver, int compress, bcg_metrics_t *bm, int metrics_on) {
   size_t bits_len, strs_len, cont_len;
   const unsigned char *bits = bitwriter_data(bw, &bits_len);
   const unsigned char *strs = strrepo_writer_data(sw, &strs_len);
@@ -216,8 +233,9 @@ static void publish_document(mcast_t *m, bitwriter_t *bw, const strrepo_writer_t
     if (metrics_on) bm->document_errors_total++;
     return;
   }
+  version_track(ver, cont, cont_len);
   if (wrapper_build(cont, cont_len, compress, &wrapped, &wrapped_len) == 0) {
-    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_BCG_DATA_CONTAINER, .segment_id = 1, .segment_version = cycles % 256, .compr = 1, .want_crc = 1}, wrapped, wrapped_len) == 0;
+    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_BCG_DATA_CONTAINER, .segment_id = 1, .segment_version = ver->version, .compr = 1, .want_crc = 1}, wrapped, wrapped_len) == 0;
     free(wrapped);
   }
   free(cont);
@@ -237,6 +255,7 @@ typedef struct {
   bcg_doc_t doc;
   bcg_metrics_t bm;
   accessunit_scratch_t sc;
+  bcg_version_t ver;
   int metrics_on;
 } bcg_announce_ctx_t;
 
@@ -278,7 +297,7 @@ static int bcg_announce_cycle(void *ctx_, mcast_t *m, unsigned cycle) {
     if (ctx->metrics_on) ctx->bm.document_errors_total++;
     return -1;
   }
-  publish_document(m, &bw, &sw, cycle - 1, ctx->cfg->compress, &ctx->bm, ctx->metrics_on);
+  publish_document(m, &bw, &sw, &ctx->ver, ctx->cfg->compress, &ctx->bm, ctx->metrics_on);
   bitwriter_free(&bw);
   strrepo_writer_free(&sw);
   if (ctx->cfg->verbose) log_line("cycle %u sent, %d fragments", cycle, nfuu);
@@ -290,6 +309,7 @@ static int bcg_announce_cycle(void *ctx_, mcast_t *m, unsigned cycle) {
 static void bcg_announce_cleanup(void *ctx_) {
   bcg_announce_ctx_t *ctx = ctx_;
   accessunit_scratch_free(&ctx->sc);
+  free(ctx->ver.last);
   bcg_doc_free(&ctx->doc);
 }
 

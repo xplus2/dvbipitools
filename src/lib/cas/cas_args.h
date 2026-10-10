@@ -29,12 +29,13 @@ typedef struct {
   unsigned super_cas_id;         /* --cas-super-id right after this --cas-ecmg */
   unsigned ecm_id;               /* --cas-ecm-id right after this --cas-ecmg */
   unsigned ecm_pid;              /* --cas-ecm-pid right after this --cas-ecmg; default 0x0020 */
-  unsigned emmg_port;            /* --cas-emmg-port right after this --cas-ecmg; default 8002 */
+  unsigned emmg_port;            /* --cas-emmg-listen right after this --cas-ecmg; default 8002 */
+  char emmg_listen_host[64];     /* numeric address from --cas-emmg-listen; empty = wildcard */
   unsigned emmg_max_conns;       /* --cas-emmg-max-conns right after this --cas-ecmg. 0 = default (8) */
   unsigned emmg_version;         /* --cas-emmg-version right after this --cas-ecmg; 0 = accept client's proposal */
   char emmg_reverse_host[256];   /* --cas-emmg-reverse right after this --cas-ecmg; empty = standard (listening) EMMG */
   unsigned emmg_reverse_port;
-  int emmg_port_given;
+  int emmg_listen_given;
   unsigned emm_pid;              /* --cas-emm-pid right after this --cas-ecmg; default 0x0021 */
   cas_outage_mode_t resilience;  /* --cas-resilience right after this --cas-ecmg; default frozen */
   int required;                  /* --cas-required right after this --cas-ecmg */
@@ -54,7 +55,7 @@ int cas_vendor_set_ecmg_version(cas_vendor_t *v, const char *val, char *err, siz
 int cas_vendor_set_super_id(cas_vendor_t *v, const char *val, char *err, size_t errsz);
 int cas_vendor_set_ecm_id(cas_vendor_t *v, const char *val, char *err, size_t errsz);
 int cas_vendor_set_ecm_pid(cas_vendor_t *v, const char *val, char *err, size_t errsz);
-int cas_vendor_set_emmg_port(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+int cas_vendor_set_emmg_listen(cas_vendor_t *v, const char *val, char *err, size_t errsz);
 int cas_vendor_set_emmg_reverse(cas_vendor_t *v, const char *val, char *err, size_t errsz);
 int cas_vendor_set_emmg_version(cas_vendor_t *v, const char *val, char *err, size_t errsz);
 int cas_vendor_set_emmg_max_conns(cas_vendor_t *v, const char *val, char *err, size_t errsz);

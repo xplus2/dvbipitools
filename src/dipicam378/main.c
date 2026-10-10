@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -37,6 +38,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  memset(&srv_cfg, 0, sizeof srv_cfg);
+  srv_cfg.bind = cfg.bind;
   srv_cfg.port = cfg.port;
   srv_cfg.username = cfg.username;
   srv_cfg.password = cfg.password;
@@ -44,11 +47,11 @@ int main(int argc, char **argv) {
   signals_install();
   srv = cs378x_server_start(&srv_cfg, cam378_ecm_cb, cam378_emm_cb, dev);
   if (!srv) {
-    fprintf(stderr, "%s: failed to start cs378x listener on port %u\n", TOOL_NAME, cfg.port);
+    fprintf(stderr, "%s: failed to start cs378x listener on %s port %u\n", TOOL_NAME, cfg.bind, cfg.port);
     device_state_free(dev);
     return 1;
   }
-  log_line(TOOL_NAME ": listening on port %u", cfg.port);
+  log_line(TOOL_NAME ": listening on %s port %u", cfg.bind, cfg.port);
 
   metrics_exporter_init(&mx, METRICS_COMPONENT_CAM378, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
   if (!metrics_exporter_enabled(&mx)) {

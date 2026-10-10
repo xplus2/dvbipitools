@@ -112,12 +112,42 @@ START_TEST(xmltv_write_untitled_fallback_for_empty_title) {
 }
 END_TEST
 
+START_TEST(xmltv_read_accepts_single_quotes_cdata_short_times_and_zone_names) {
+  static const char xml[] =
+      "<?xml version='1.0'?><tv>\n"
+      "<channel id = 'c1'><display-name><![CDATA[Chan & One]]></display-name></channel>\n"
+      "<programme start='202012151230 +0200' stop = '202012151300 CET' channel='c1'>\n"
+      "<title lang='en'><![CDATA[Tom & Jerry]]></title></programme>\n"
+      "</tv>\n";
+  bcg_doc_t doc;
+  FILE *f = tmpfile();
+
+  ck_assert_ptr_nonnull(f);
+  fputs(xml, f);
+  rewind(f);
+  bcg_doc_init(&doc);
+  ck_assert_int_eq(xmltv_read(f, &doc), 0);
+  fclose(f);
+
+  ck_assert_int_eq(doc.channel_count, 1);
+  ck_assert_str_eq(doc.channels[0].id, "c1");
+  ck_assert_str_eq(doc.channels[0].names[0], "Chan & One");
+  ck_assert_int_eq(doc.programme_count, 1);
+  ck_assert_str_eq(doc.programmes[0].channel_id, "c1");
+  ck_assert_str_eq(doc.programmes[0].start, "2020-12-15T12:30:00+02:00");
+  ck_assert_str_eq(doc.programmes[0].stop, "2020-12-15T13:00:00+01:00");
+  ck_assert_str_eq(doc.programmes[0].title, "Tom & Jerry");
+  bcg_doc_free(&doc);
+}
+END_TEST
+
 static Suite *xmltv_suite(void) {
   Suite *s = suite_create("xmltv");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, xmltv_write_read_round_trips);
   tcase_add_test(tc, xmltv_write_falls_back_to_id_when_no_names);
   tcase_add_test(tc, xmltv_write_untitled_fallback_for_empty_title);
+  tcase_add_test(tc, xmltv_read_accepts_single_quotes_cdata_short_times_and_zone_names);
   suite_add_tcase(s, tc);
   return s;
 }

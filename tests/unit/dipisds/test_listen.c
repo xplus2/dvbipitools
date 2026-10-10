@@ -155,7 +155,7 @@ static const listen_case_t listen_cases[] = {
   {steps_one, 1, OUT_CSV, 1, 1, 2, "segment 1: 2 services", "Svc A,rtp://@239.1.1.1:5000,1,2,101"},
   {steps_other_and_dup, 4, OUT_CSV, 0, 1, 2, "found 2 services in 1 segment", "Svc A"},
   {steps_two_versions, 2, OUT_CSV, 0, 2, 3, "found 3 services in 2 segments", "Svc A"},
-  {steps_one, 1, OUT_XML, 0, 1, 0, "found 0 services in 1 segment", "<BroadcastDiscovery"},
+  {steps_one, 1, OUT_XML, 0, 1, 2, "found 2 services in 1 segment", "<BroadcastDiscovery"},
 };
 
 START_TEST(listen_run_collects_broadcast_discovery_in_every_format) {

@@ -13,6 +13,7 @@ void rec_print_help(void) {
   "sources (-i):\n"
   "  rtp://@<group>:<port>        RTP wrapped TS multicast (@ optional)\n"
   "  udp://@<group>:<port>        raw TS multicast (@ optional)\n"
+  "  rtp://<src>@<group>:<port>   source-specific multicast (SSM), same for udp://\n"
   "  http://<host>:<port>/<path>  HTTP TS stream\n"
   "  https://<host>:<port>/<path> same, TLS (--insecure skips verification)\n"
   "  -                            stdin, TS or RTP wrapped TS\n"

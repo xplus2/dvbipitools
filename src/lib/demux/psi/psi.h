@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 #define PSI_MAX_ES 32
-#define PSI_NAME 64
+#define PSI_NAME 256
 #define PSI_ES_DESC_MAX 255 /* raw ES descriptor loop bytes kept for opaque passthrough */
 #define PSI_LCEVC_MAX_LINKS 4
 #define PSI_OBS_OTHER_MAX 128

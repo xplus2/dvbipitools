@@ -46,10 +46,54 @@ START_TEST(state_load_builds_broadcast_and_sp_docs_for_service_input) {
   ck_assert_int_eq(state_load(&cfg, &st), 0);
   ck_assert_int_eq(st.in.kind, INPUT_SERVICES);
   ck_assert_int_eq(st.in.service_count, 1);
+  ck_assert_uint_eq(st.version, 1u);
+  ck_assert_ptr_nonnull(memmem(st.broadcast_doc, st.broadcast_len, "Version=\"1\"", 11));
   ck_assert_uint_gt(st.broadcast_len, 0u);
   ck_assert_uint_gt(st.sp_len, 0u);
   ck_assert_ptr_nonnull(memmem(st.broadcast_doc, st.broadcast_len, "example.org", strlen("example.org")));
   ck_assert_ptr_nonnull(memmem(st.sp_doc, st.sp_len, "My Headend", strlen("My Headend")));
+
+  state_free(&st);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(state_reload_bumps_version_in_docs_and_keeps_state_on_failure) {
+  char path[160];
+  config_t cfg;
+  sds_state_t st;
+  unsigned i;
+
+  write_temp_file(path, ".csv", "Alpha,rtp://239.1.1.1:5000\n");
+  memset(&cfg, 0, sizeof cfg);
+  cfg.input_path = path;
+  cfg.provider = "example.org";
+  cfg.offering = "My Headend";
+  memcpy(cfg.lang, "deu", 3);
+  cfg.family = AF_INET;
+  strcpy(cfg.mcast_group, "239.255.0.1");
+  cfg.mcast_port = 3937;
+
+  ck_assert_int_eq(state_load(&cfg, &st), 0);
+  write_temp_file(path, ".csv", "Alpha,rtp://239.1.1.1:5000\nGamma,rtp://239.1.1.2:5000\n");
+  cfg.input_path = path;
+  ck_assert_int_eq(state_reload(&cfg, &st), 0);
+  ck_assert_uint_eq(st.version, 2u);
+  ck_assert_int_eq(st.in.service_count, 2);
+  ck_assert_ptr_nonnull(memmem(st.broadcast_doc, st.broadcast_len, "Version=\"2\"", 11));
+  ck_assert_ptr_nonnull(memmem(st.sp_doc, st.sp_len, "Version=\"2\"", 11));
+
+  cfg.input_path = "/nonexistent/services.csv";
+  ck_assert_int_eq(state_reload(&cfg, &st), -1);
+  ck_assert_uint_eq(st.version, 2u);
+  ck_assert_int_eq(st.in.service_count, 2);
+
+  cfg.input_path = path;
+  st.version = 255;
+  ck_assert_int_eq(state_reload(&cfg, &st), 0);
+  ck_assert_uint_eq(st.version, 1u);
+  for (i = 0; i < 3; i++) ck_assert_int_eq(state_reload(&cfg, &st), 0);
+  ck_assert_uint_eq(st.version, 4u);
 
   state_free(&st);
   unlink(path);
@@ -547,6 +591,7 @@ static Suite *announce_suite(void) {
   Suite *s = suite_create("dipisds_announce");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, state_load_builds_broadcast_and_sp_docs_for_service_input);
+  tcase_add_test(tc, state_reload_bumps_version_in_docs_and_keeps_state_on_failure);
   tcase_add_test(tc, state_load_leaves_docs_unset_for_raw_xml_input);
   tcase_add_test(tc, state_load_applies_ret_and_fcc_to_broadcast_doc);
   tcase_add_test(tc, state_load_builds_package_doc_and_lists_it_in_sp_doc);

@@ -51,6 +51,18 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
         return ARGS_ERR;
       }
       break;
+    case OPT_RET_CLIENT_RATE:
+      if (argutil_uint_range(optarg, 0, RATE_MAX, &cfg->ret_client_rate)) {
+        argerr("invalid --ret-client-rate: %s (packets/s, 0 = unlimited)", optarg);
+        return ARGS_ERR;
+      }
+      break;
+    case OPT_RET_MC_DEDUP:
+      if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->ret_mc_dedup_ms)) {
+        argerr("invalid --ret-mc-dedup: %s (ms, 0 = off)", optarg);
+        return ARGS_ERR;
+      }
+      break;
     case OPT_NO_RSI:
       cfg->no_rsi = 1;
       break;
@@ -134,6 +146,12 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
     case OPT_FCC_CLIENT_RANGE:
       if (fccret_cfg_fcc_client_range(cfg, optarg)) {
         argerr("invalid --fcc-client-range: %s", optarg);
+        return ARGS_ERR;
+      }
+      break;
+    case OPT_FCC_CLIENT_RATE:
+      if (argutil_uint_range(optarg, 0, RATE_MAX, &cfg->fcc_client_rate)) {
+        argerr("invalid --fcc-client-rate: %s (requests/s, 0 = unlimited)", optarg);
         return ARGS_ERR;
       }
       break;

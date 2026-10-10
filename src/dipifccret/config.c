@@ -24,6 +24,9 @@ void fccret_cfg_defaults(config_t *cfg) {
   cfg->max_ret_clients = 16384;
   cfg->ret_client_idle_timeout_s = 300;
   cfg->rsi_interval_s = 5;
+  cfg->ret_client_rate = 200;
+  cfg->ret_mc_dedup_ms = 100;
+  cfg->fcc_client_rate = 2;
 }
 
 static int set_size(size_t *dst, const char *v, unsigned min, char *e, size_t n) {
@@ -119,6 +122,14 @@ static int apply_ret_client_idle_timeout(void *c, const char *v, char *e, size_t
   return yamlcfg_set_uint(&((config_t *)c)->ret_client_idle_timeout_s, v, 0, UINT_MAX, e, n);
 }
 
+static int apply_ret_client_rate(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_uint(&((config_t *)c)->ret_client_rate, v, 0, 1000000, e, n);
+}
+
+static int apply_ret_mc_dedup(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_uint(&((config_t *)c)->ret_mc_dedup_ms, v, 0, UINT_MAX, e, n);
+}
+
 static int apply_no_rsi(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_bool(&((config_t *)c)->no_rsi, v, e, n);
 }
@@ -193,6 +204,10 @@ static int apply_fcc_client_range(void *c, const char *v, char *e, size_t n) {
   return 0;
 }
 
+static int apply_fcc_client_rate(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_uint(&((config_t *)c)->fcc_client_rate, v, 0, 1000000, e, n);
+}
+
 static int apply_metrics_sock(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   return yamlcfg_set_str(&cfg->str_pool, &cfg->metrics_sock, v, e, n);
@@ -234,6 +249,8 @@ static const yamlcfg_key_t keys[] = {
   {"no-mc-ret", apply_no_mc_ret, 0, 0},
   {"max-ret-clients", apply_max_ret_clients, 0, 0},
   {"ret.client-idle-timeout", apply_ret_client_idle_timeout, 0, 0},
+  {"ret.client-rate", apply_ret_client_rate, 0, 0},
+  {"ret.mc-dedup", apply_ret_mc_dedup, 0, 0},
   {"no-rsi", apply_no_rsi, 0, 0},
   {"rsi.interval", apply_rsi_interval, 0, 0},
   {"rsi.mc-ret", apply_rsi_mc_ret, 0, 0},
@@ -249,6 +266,7 @@ static const yamlcfg_key_t keys[] = {
   {"fcc.resolve-base-port", apply_fcc_resolve_base_port, 0, 0},
   {"fcc.range", apply_fcc_range, 0, 0},
   {"fcc.client-range", apply_fcc_client_range, 0, 0},
+  {"fcc.client-rate", apply_fcc_client_rate, 0, 0},
   {"metrics.sock", apply_metrics_sock, 0, 0},
   {"metrics.id", apply_metrics_id, 0, 0},
   {"metrics.interval", apply_metrics_interval, 0, 0},

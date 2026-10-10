@@ -161,6 +161,17 @@ Pre-allocated unicast RTX per-client sequence slots (F.3.2.1). Default:
 Free a unicast RTX client slot after this many seconds with no NACKs.
 Default: 300, 0 = never reap.
 .TP
+.B \-\-ret\-client\-rate \fI<n>\fR
+Maximum repair packets per second per client IP address (IPv6: /64). The
+bucket holds three seconds. NACK entries beyond the budget are dropped.
+Bounds reflection and amplification through spoofed NACK sources.
+Default: 200, 0 = unlimited.
+.TP
+.B \-\-ret\-mc\-dedup \fI<ms>\fR
+Skip the multicast repair of a sequence number already repaired this
+recently. The unicast reply to the requester is still sent. Default: 100,
+0 = off.
+.TP
 .B \-\-no\-rsi
 Disable RSI self-announcement.
 .TP
@@ -225,7 +236,13 @@ sub-ranges. Default: all of
 .BR \-g .
 .TP
 .B \-\-fcc\-client\-range \fI<cidr>\fR[,...]
-Restrict FCC requests to these client source ranges. Default: any client.
+Restrict FCC requests to these client source ranges. Default: any client,
+a warning is logged at startup.
+.TP
+.B \-\-fcc\-client\-rate \fI<n>\fR
+Maximum RAMS-R requests per second per client IP address (IPv6: /64).
+The bucket holds five seconds. Excess requests are rejected with 503.
+Default: 2, 0 = unlimited.
 .SH EXAMPLES
 .TP
 .B dipifccret \-g 239.0.0.0/8 \-l 10.0.0.1:6000 \-I eth0

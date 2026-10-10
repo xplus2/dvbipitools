@@ -13,6 +13,7 @@
 #include "run.h"
 
 #define MC_SEND_TTL 1 /* fixed, no CLI flag */
+#define FCC_LIMIT_SLOTS 4096 /* per-source RAMS-R buckets, direct-mapped */
 
 #define FCC_ASSUMED_MAX_BITRATE_BPS 20000000.0
 #define FCC_ASSUMED_TS_PACKET_BYTES 1316.0
@@ -35,6 +36,7 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   mcsend_table_t *rsi_mt = NULL;
   ret_ctx_t *ret = NULL;
   burst_table_t *bursts = NULL;
+  ratelimit_t *fcc_limiter = NULL;
   capture_t *cap = NULL;
   char errbuf[256];
   ret_send_ctx_t ret_send_ctx = {NULL, -1};
@@ -92,6 +94,16 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
       rc = 1;
       goto cleanup;
     }
+    if (cfg->fcc_client_rate) {
+      fcc_limiter = ratelimit_new(FCC_LIMIT_SLOTS);
+      if (!fcc_limiter) {
+        fprintf(stderr, "%s: out of memory allocating FCC rate limiter\n", TOOL_NAME);
+        rc = 1;
+        goto cleanup;
+      }
+    }
+    if (cfg->fcc_client_range_count == 0)
+      log_line(TOOL_NAME ": --fcc-client-range not set, any source address can request FCC bursts, set it on exposed networks");
   }
 
   cap = open_capture(cfg, errbuf, sizeof errbuf);
@@ -111,6 +123,11 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
     ret = ret_ctx_new(channels, cfg->rtx_pt, cfg->max_ret_clients, ret_send_mc_impl, ret_send_unicast_impl, &ret_send_ctx);
     if (!ret) {
       fprintf(stderr, "%s: out of memory creating ret context\n", TOOL_NAME);
+      rc = 1;
+      goto cleanup;
+    }
+    if (ret_ctx_set_limits(ret, cfg->ret_client_rate, cfg->ret_mc_dedup_ms) != 0) {
+      fprintf(stderr, "%s: out of memory allocating RET rate limiter\n", TOOL_NAME);
       rc = 1;
       goto cleanup;
     }
@@ -138,6 +155,8 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
     .fcc_range_count = cfg->fcc_range_count,
     .fcc_client_ranges = cfg->fcc_client_ranges,
     .fcc_client_range_count = cfg->fcc_client_range_count,
+    .fcc_limiter = fcc_limiter,
+    .fcc_client_rate = cfg->fcc_client_rate,
     .rtx_pt = cfg->rtx_pt,
     .idle_timeout_s = cfg->channel_idle_timeout_s,
     .ret_client_idle_timeout_s = cfg->ret_client_idle_timeout_s,
@@ -222,6 +241,7 @@ cleanup:
   if (resolve_pool) listen_multi_stop(resolve_pool);
   if (ret) ret_ctx_free(ret);
   if (bursts) burst_table_free(bursts);
+  ratelimit_free(fcc_limiter);
   if (mt) mcsend_table_free(mt);
   if (rsi_mt) mcsend_table_free(rsi_mt);
   if (channels) channel_table_free(channels);

@@ -33,6 +33,10 @@ no-ret: off
 ret:
   # --ret-client-idle-timeout 300 # seconds, 0 = never reap
   client-idle-timeout: 300
+  # --ret-client-rate 200 # 0 = unlimited
+  client-rate: 200
+  # --ret-mc-dedup 100 # ms, 0 = off
+  mc-dedup: 100
 
 rsi:
   # --rsi-interval 5 # seconds
@@ -66,6 +70,8 @@ fcc:
   #range: 239.1.0.0/16
   # --fcc-client-range [not set]
   #client-range: 10.0.0.0/8
+  # --fcc-client-rate 2 # 0 = unlimited
+  client-rate: 2
 
 metrics:
   # --metrics /run/dvbipitools/metrics.sock

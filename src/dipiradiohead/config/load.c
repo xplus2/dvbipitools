@@ -55,7 +55,7 @@ static const yamlcfg_key_t keys[] = {
 {"cas.ecmg.super-id", rdh_apply_cas_super_id, 0, 0},
 {"cas.ecmg.ecm-id", rdh_apply_cas_ecm_id, 0, 0},
 {"cas.ecmg.ecm-pid", rdh_apply_cas_ecm_pid, 0, 0},
-{"cas.ecmg.emmg-port", rdh_apply_cas_emmg_port, 0, 0},
+{"cas.ecmg.emmg-listen", rdh_apply_cas_emmg_listen, 0, 0},
 {"cas.ecmg.emmg-max-conns", rdh_apply_cas_emmg_max_conns, 0, 0},
 {"cas.ecmg.emmg-version", rdh_apply_cas_emmg_version, 0, 0},
 {"cas.ecmg.emmg-reverse", rdh_apply_cas_emmg_reverse, 0, 0},

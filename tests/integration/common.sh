@@ -23,6 +23,10 @@ skip() {
     exit 77
 }
 
+require_itest_helper() {
+    [ -x "${DVBIPI_ITEST_HELPER:-}" ] || fail "itest_helper not found, set DVBIPI_ITEST_HELPER"
+}
+
 # run_expect_rc <expected-rc> <label> -- rest of the line runs
 run_expect_rc() {
     want=$1
@@ -62,7 +66,7 @@ port_claim() {
 
 # free_tcp_port: first port from a pid-derived start that nothing listens on
 free_tcp_port() {
-    ftp_port=$((20000 + ($$ * 211) % 30000))
+    ftp_port=$((20000 + ($$ * 211) % 10000))
     while port_open "$ftp_port" || ! port_claim "$ftp_port"; do
         ftp_port=$((ftp_port + 1))
     done
@@ -73,7 +77,7 @@ free_tcp_port() {
 # free_tcp_port_block <n>: first of n consecutive ports nothing listens on
 free_tcp_port_block() {
     ftb_n=$1
-    ftb_port=$((20000 + ($$ * 211) % 30000))
+    ftb_port=$((20000 + ($$ * 211) % 10000))
     while :; do
         ftb_ok=1
         ftb_i=0
@@ -104,7 +108,7 @@ udp_port_busy() {
 
 # free_udp_port: first port from a pid-derived start that no UDP socket is bound to
 free_udp_port() {
-    fup_port=$((20000 + ($$ * 211) % 30000))
+    fup_port=$((20000 + ($$ * 211) % 10000))
     while udp_port_busy "$fup_port"; do
         fup_port=$((fup_port + 1))
     done
@@ -114,7 +118,7 @@ free_udp_port() {
 
 # free_udp_port_pair: even port whose successor is free too (RIST data and RTCP)
 free_udp_port_pair() {
-    fupp_port=$((20000 + ($$ * 211) % 30000))
+    fupp_port=$((20000 + ($$ * 211) % 10000))
     fupp_port=$((fupp_port - fupp_port % 2))
     while udp_port_busy "$fupp_port" || udp_port_busy $((fupp_port + 1)); do
         fupp_port=$((fupp_port + 2))
@@ -223,9 +227,10 @@ run_radiohead_link_validation() {
     skip_pattern=$7
     rx_bin=$8
 
-    for t in ffmpeg tsp tsanalyze jq python3; do
+    for t in ffmpeg tsp tsanalyze jq; do
         command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
     done
+    require_itest_helper
     [ -x "$rx_bin" ] || fail "$label: no receiver binary given as \$2 ($rx_bin)"
 
     cap="$WORK/capture.ts"
@@ -235,8 +240,7 @@ run_radiohead_link_validation() {
     ffmpeg -hide_banner -loglevel error -f lavfi -i "sine=frequency=1000:duration=3" \
         -c:a libmp3lame -f mp3 "$WORK/httproot/stream.mp3"
 
-    (cd "$WORK/httproot" && python3 -u -m http.server "$http_port" --bind 127.0.0.1 \
-        >"$WORK/httpd.log" 2>&1) &
+    "$DVBIPI_ITEST_HELPER" httpd "$http_port" "$WORK/httproot" >"$WORK/httpd.log" 2>&1 &
     httpd_pid=$!
     trap 'kill $httpd_pid 2>/dev/null; rm -rf "$WORK"' EXIT
     i=0
@@ -291,7 +295,7 @@ run_radiohead_link_validation() {
 # test concurrency helper
 free_port_block() {
     fpb_n=$1
-    fpb_port=$((20000 + ($$ * 211) % 30000))
+    fpb_port=$((20000 + ($$ * 211) % 10000))
     fpb_port=$((fpb_port - fpb_port % 2))
     while :; do
         fpb_ok=1

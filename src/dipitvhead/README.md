@@ -86,7 +86,7 @@ using one before any `--cas-ecmg` is an error. Everything else is shared across 
 | `--cas-super-id`         | `<n>`                     | required per vendor                      | per-vendor |
 | `--cas-ecm-id`           | `<n>`                     | required per vendor                      | per-vendor |
 | `--cas-ecm-pid`          | `<pid>`                   | `0x0020`                                 | per-vendor |
-| `--cas-emmg-port`        | `<n>`                     | `8002`                                   | per-vendor |
+| `--cas-emmg-listen`      | `[addr:]port`             | `8002`                                   | per-vendor |
 | `--cas-emmg-max-conns`   | `<n>`                     | `8` (max `64`)                           | per-vendor |
 | `--cas-emmg-version`     | `2\|3`                    | accept client's proposal                 | per-vendor |
 | `--cas-emmg-reverse`     | `tcp://host:port`         | listening EMMG                           | per-vendor |
@@ -471,10 +471,10 @@ However, it allows extensions, so we used it _as generic as possible_ for some m
 * `--cas-cwenc-key-list-a`/`-b`: optional 2048-byte Annex D key list files. When at least one is
   loaded, `CW_provision` messages rotate through it instead of using the fixed key.
 
-### EMMG (`--cas-emmg-port`, `--cas-emmg-max-conns`, `--cas-emmg-version`)
+### EMMG (`--cas-emmg-listen`, `--cas-emmg-max-conns`, `--cas-emmg-version`)
 
-dipitvhead is the EMMG-side MUX: it listens (`--cas-emmg-port`, default 8002) and the EMMG
-client connects to it, once per `--cas-ecmg` vendor (each with its own `--cas-emmg-port`).
+dipitvhead is the EMMG-side MUX: it listens (`--cas-emmg-listen`, default 8002) and the EMMG
+client connects to it, once per `--cas-ecmg` vendor (each with its own `--cas-emmg-listen`).
 `--cas-emmg-max-conns` caps concurrent client connections per vendor (default 8, max 64).
 Accepts whichever protocol version the client proposes unless `--cas-emmg-version` is set. EMM
 datagrams are queued and drained onto that vendor's own `--cas-emm-pid` on arrival.
@@ -609,9 +609,9 @@ dipitvhead -i rtp://@239.19.75.1:8700 -m 239.1.1.1:5000 \
 # (version/super-id/ecm-id/pid/resilience/required) pair with that --cas-ecmg.
 dipitvhead -i rtp://@239.19.75.1:8700 -m 239.1.1.1:5000 --cas-algo cissa \
   --cas-ecmg tcp://ecmg-a.example:2222 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
-             --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port 8002 --cas-required \
+             --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-listen 8002 --cas-required \
   --cas-ecmg tcp://ecmg-b.example:2222 --cas-super-id 0x0D960001 --cas-ecm-id 1 \
-             --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-port 8003 --cas-resilience silent \
+             --cas-ecm-pid 0x0022 --cas-emm-pid 0x0023 --cas-emmg-listen 8003 --cas-resilience silent \
   --cas-pids 0x0100,0x0101 --cas-fallback-clear
 
 # BISS2 Mode 1/E: no ECMG/EMMG needed

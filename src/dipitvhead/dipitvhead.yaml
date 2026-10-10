@@ -138,8 +138,8 @@ cas:
         #ecm-id: 1
         # --cas-ecm-pid 0x0020
         #ecm-pid: 0x0020
-        # --cas-emmg-port 8002
-        #emmg-port: 8002
+        # --cas-emmg-listen 8002
+        #emmg-listen: 8002
         # --cas-emmg-max-conns 8 # max 64
         #emmg-max-conns: 8
         # --cas-emmg-version [client proposal] # 2|3

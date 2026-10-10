@@ -59,7 +59,9 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 ## HTTP endpoint
 
 `-l`/`--listen` is the address:port `GET /metrics` is served on, default `127.0.0.1:9109` (pass e.g. `-l 0.0.0.0:9109` for "any").
-The server is intentionally minimal: one request handled at a time, `Connection: close` on every response.
+The server is intentionally minimal: up to 128 connections in flight (64 per source address), a 5 s budget per connection,
+`Connection: close` on every response.
+When the pool or a peer's quota is full, the oldest idle connection is evicted, so idle sockets cannot lock out scrapes.
 This is a local diagnostics endpoint meant for infrequent scraping, not
 a general-purpose web server. Authentication is off unless `--auth <user>:<pass>` is given.
 

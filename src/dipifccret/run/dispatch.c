@@ -10,6 +10,7 @@
 
 #include "lib/demux/rtcp.h"
 #include "lib/helper/log.h"
+#include "lib/sys/ioutil.h"
 #include "lib/sys/signal.h"
 #include "lib/mux/rtcp_build.h"
 
@@ -171,7 +172,7 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
   burst_response_t resp;
   rtcp_rams_i_tlvs_t tlvs;
   burst_t *b;
-  rap_cache_meta_t first;
+  rap_cache_entry_t first;
   uint8_t msn;
   uint16_t response;
   int start_result;
@@ -185,6 +186,13 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
   }
   if (rc->ctx->fcc_client_range_count > 0 && !addr_in_ranges(rc->from, rc->ctx->fcc_client_ranges, rc->ctx->fcc_client_range_count)) {
     send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_NOT_ELIGIBLE, NULL);
+    return;
+  }
+  if (ratelimit_take(rc->ctx->fcc_limiter, rc->from, rc->ctx->fcc_client_rate, rc->ctx->fcc_client_rate * FCC_BUCKET_SECONDS, 1, now_ms()) == 0) {
+    uint64_t n = atomic_fetch_add_explicit(&rc->ctx->fcc_limited_total, 1, memory_order_relaxed) + 1;
+    if ((n & (n - 1)) == 0) /* log on powers of two only */
+      log_line(TOOL_NAME ": RAMS-R rate-limited, %llu so far", (unsigned long long)n);
+    send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_TABLE_FULL, NULL);
     return;
   }
 
@@ -225,7 +233,7 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
   }
   response = start_result ? (uint16_t)BURST_UPDATE : (uint16_t)BURST_ACCEPT;
 
-  if (channel_cache_peek_meta(c, 0, &first)) {
+  if (channel_cache_get_abs(c, b->cursor, &first)) {
     tlvs.has_first_packet_seqnum = 1;
     tlvs.first_packet_seqnum = first.seq;
   }

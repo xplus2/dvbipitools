@@ -390,16 +390,18 @@ START_TEST(a_dead_peer_makes_the_receiver_fail_and_the_sender_reconnect) {
 }
 END_TEST
 
-START_TEST(the_receiver_reports_a_vanished_sender) {
+START_TEST(the_listener_reaccepts_after_the_sender_vanishes) {
   unsigned port = free_udp_port();
   opener_t o;
   pthread_t th;
   srtout_cfg_t oc;
   srtout_t *out;
+  srtout_status_t st;
   unsigned char buf[READ_BUF];
   double deadline;
   int n = 0;
   int reconnected = 0;
+  int saw_reconnect = 0;
 
   memset(&o, 0, sizeof o);
   in_cfg(&o.cfg, port, 1);
@@ -412,9 +414,26 @@ START_TEST(the_receiver_reports_a_vanished_sender) {
   ck_assert_int_eq(pump_until_connected(out, th, &o), 1);
   ck_assert_int_eq(srtin_read(o.in, buf, sizeof buf, &reconnected), 0);
   srtout_close(out);
-  deadline = now_seconds() + 12.0;
-  while (now_seconds() < deadline && n == 0) n = srtin_read(o.in, buf, sizeof buf, &reconnected);
-  ck_assert_int_eq(n, -1);
+
+  deadline = now_seconds() + 8.0;
+  while (now_seconds() < deadline) {
+    n = srtin_read(o.in, buf, sizeof buf, &reconnected);
+    ck_assert_int_ge(n, 0);
+  }
+
+  out = srtout_open(&oc);
+  ck_assert_ptr_nonnull(out);
+  memset(&st, 0, sizeof st);
+  deadline = now_seconds() + LINK_DEADLINE_S;
+  while (now_seconds() < deadline && !saw_reconnect) {
+    srtout_service(out, &st);
+    n = srtin_read(o.in, buf, sizeof buf, &reconnected);
+    ck_assert_int_ge(n, 0);
+    if (reconnected) saw_reconnect = 1;
+  }
+  ck_assert_int_eq(saw_reconnect, 1);
+  exchange_payload(out, o.in);
+  srtout_close(out);
   srtin_close(o.in);
 }
 END_TEST
@@ -433,7 +452,7 @@ static Suite *srtin_out_suite(void) {
   tcase_add_test(tc, bonded_groups_open_only_where_libsrt_supports_them);
   tcase_add_test(tc, the_queue_drops_oldest_chunks_while_unconnected);
   tcase_add_test(tc, a_dead_peer_makes_the_receiver_fail_and_the_sender_reconnect);
-  tcase_add_test(tc, the_receiver_reports_a_vanished_sender);
+  tcase_add_test(tc, the_listener_reaccepts_after_the_sender_vanishes);
   suite_add_tcase(s, tc);
   return s;
 }

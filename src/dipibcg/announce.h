@@ -4,6 +4,8 @@
 #ifndef DIPIBCG_ANNOUNCE_H
 #define DIPIBCG_ANNOUNCE_H
 
+#include <stddef.h>
+
 #include "lib/metrics/export.h"
 #include "lib/tva/bcg_doc.h"
 
@@ -24,5 +26,13 @@ int build_windowed_doc(const bcg_doc_t *src, bcg_doc_t *dst, long now, long wind
 
 /* reads cfg->input_path (xmltv) and cfg->map_path (csv), applies mapping. 0 ok, -1 error on stderr */
 int load_doc(const config_t *cfg, bcg_doc_t *out);
+
+typedef struct {
+  unsigned char *last;
+  size_t last_len;
+  unsigned version;
+} bcg_version_t;
+
+void version_track(bcg_version_t *v, const unsigned char *cont, size_t cont_len);
 
 #endif

@@ -37,6 +37,13 @@ static size_t build_header(unsigned char *buf, unsigned payload_id, unsigned seg
   return hdrlen;
 }
 
+/* total_segment_size field of an already built header */
+static void set_total(unsigned char *buf, unsigned total) {
+  buf[1] = (unsigned char)((total >> 16) & 0xFF);
+  buf[2] = (unsigned char)((total >> 8) & 0xFF);
+  buf[3] = (unsigned char)(total & 0xFF);
+}
+
 START_TEST(parse_header_reads_minimal_fields) {
   unsigned char buf[12];
   dvbstp_header_t h;
@@ -145,6 +152,7 @@ START_TEST(reasm_feed_single_section_completes_immediately) {
   const unsigned char *out_data;
   size_t out_len;
   size_t hdrlen = build_header(pkt, 0xA3, 1, 1, 0, 0, 0, 0, 0, 0);
+  set_total(pkt, 5);
   memcpy(pkt + hdrlen, "hello", 5);
 
   ck_assert_ptr_nonnull(r);
@@ -165,6 +173,8 @@ START_TEST(reasm_feed_reassembles_two_sections_in_order) {
   size_t out_len;
   size_t h0 = build_header(pkt0, 1, 1, 1, 0, 1, 0, 0, 0, 0);
   size_t h1 = build_header(pkt1, 1, 1, 1, 1, 1, 0, 0, 0, 0);
+  set_total(pkt0, 7);
+  set_total(pkt1, 7);
   memcpy(pkt0 + h0, "abc", 3);
   memcpy(pkt1 + h1, "defg", 4);
 
@@ -184,6 +194,7 @@ START_TEST(reasm_feed_verifies_crc_on_final_section) {
   size_t out_len;
   uint32_t crc;
   size_t hdrlen = build_header(pkt, 1, 1, 1, 0, 0, 1, 0, 0, 0);
+  set_total(pkt, 5);
   memcpy(pkt + hdrlen, "hello", 5);
   crc = crc32_mpeg((const unsigned char *)"hello", 5);
   pkt[hdrlen + 5] = (unsigned char)((crc >> 24) & 0xFF);
@@ -205,12 +216,47 @@ START_TEST(reasm_feed_rejects_crc_mismatch) {
   const unsigned char *out_data;
   size_t out_len;
   size_t hdrlen = build_header(pkt, 1, 1, 1, 0, 0, 1, 0, 0, 0);
+  set_total(pkt, 5);
   memcpy(pkt + hdrlen, "hello", 5);
   memset(pkt + hdrlen + 5, 0, 4); /* wrong crc */
 
   ck_assert_int_eq(dvbstp_reasm_feed(r, pkt, sizeof pkt, NULL, &out_data, &out_len), 0);
 
   dvbstp_reasm_free(r);
+}
+END_TEST
+
+static void crc_final_first(const char *sec0, int expect_done) {
+  dvbstp_reasm_t *r = dvbstp_reasm_new();
+  unsigned char p0[12 + 3];
+  unsigned char p1[12 + 3 + 4];
+  const unsigned char *out_data;
+  size_t out_len;
+  uint32_t crc = crc32_mpeg((const unsigned char *)"abcdef", 6);
+  size_t h0 = build_header(p0, 1, 1, 1, 0, 1, 0, 0, 0, 0);
+  size_t h1 = build_header(p1, 1, 1, 1, 1, 1, 1, 0, 0, 0);
+  set_total(p0, 6);
+  set_total(p1, 6);
+  memcpy(p0 + h0, sec0, 3);
+  memcpy(p1 + h1, "def", 3);
+  p1[h1 + 3] = (unsigned char)((crc >> 24) & 0xFF);
+  p1[h1 + 4] = (unsigned char)((crc >> 16) & 0xFF);
+  p1[h1 + 5] = (unsigned char)((crc >> 8) & 0xFF);
+  p1[h1 + 6] = (unsigned char)(crc & 0xFF);
+
+  ck_assert_int_eq(dvbstp_reasm_feed(r, p1, h1 + 7, NULL, &out_data, &out_len), 0);
+  ck_assert_int_eq(dvbstp_reasm_feed(r, p0, h0 + 3, NULL, &out_data, &out_len), expect_done);
+  if (expect_done) ck_assert_uint_eq(out_len, 6u);
+  dvbstp_reasm_free(r);
+}
+
+START_TEST(reasm_feed_accepts_good_crc_when_final_section_first) {
+  crc_final_first("abc", 1);
+}
+END_TEST
+
+START_TEST(reasm_feed_rejects_bad_crc_when_final_section_first) {
+  crc_final_first("abX", 0);
 }
 END_TEST
 
@@ -237,14 +283,54 @@ START_TEST(reasm_feed_rejects_section_number_past_last) {
 }
 END_TEST
 
-START_TEST(reasm_feed_rejects_last_section_number_too_large) {
+START_TEST(reasm_feed_assembles_more_than_64_sections) {
+  dvbstp_reasm_t *r = dvbstp_reasm_new();
+  const unsigned char *out_data = NULL;
+  size_t out_len = 0;
+  int done = 0;
+
+  for (unsigned i = 0; i < 300; i++) {
+    unsigned char pkt[12 + 2];
+    size_t h = build_header(pkt, 1, 1, 1, 299 - i, 299, 0, 0, 0, 0); /* reverse order */
+    set_total(pkt, 600);
+    pkt[h] = (unsigned char)('a' + i % 26);
+    pkt[h + 1] = (unsigned char)i;
+    done = dvbstp_reasm_feed(r, pkt, h + 2, NULL, &out_data, &out_len);
+    ck_assert_int_eq(done, i == 299 ? 1 : 0);
+  }
+  ck_assert_uint_eq(out_len, 600u);
+  ck_assert_int_eq(out_data[0], 'a' + 299 % 26);
+  ck_assert_int_eq(out_data[598], 'a');
+  dvbstp_reasm_free(r);
+}
+END_TEST
+
+START_TEST(reasm_feed_accepts_last_section_4095) {
   dvbstp_reasm_t *r = dvbstp_reasm_new();
   unsigned char pkt[12 + 1];
   const unsigned char *out_data;
   size_t out_len;
-  size_t hdrlen = build_header(pkt, 1, 1, 1, 0, 64, 0, 0, 0, 0); /* REASM_MAX_SECTIONS == 64 */
+  size_t hdrlen = build_header(pkt, 1, 1, 1, 0, 4095, 0, 0, 0, 0);
   pkt[hdrlen] = 'x';
   ck_assert_int_eq(dvbstp_reasm_feed(r, pkt, sizeof pkt, NULL, &out_data, &out_len), 0);
+  dvbstp_reasm_free(r);
+}
+END_TEST
+
+START_TEST(reasm_feed_rejects_segment_over_byte_cap) {
+  dvbstp_reasm_t *r = dvbstp_reasm_new();
+  static unsigned char pkt[12 + DVBSTP_MAX_SECTION];
+  const unsigned char *out_data;
+  size_t out_len;
+  unsigned n = DVBSTP_MAX_SEGMENT / DVBSTP_MAX_SECTION + 2;
+  int done = 0;
+
+  for (unsigned i = 0; i < n; i++) {
+    size_t h = build_header(pkt, 1, 1, 1, i, n, 0, 0, 0, 0);
+    memset(pkt + h, 'x', DVBSTP_MAX_SECTION);
+    done |= dvbstp_reasm_feed(r, pkt, h + DVBSTP_MAX_SECTION, NULL, &out_data, &out_len);
+  }
+  ck_assert_int_eq(done, 0);
   dvbstp_reasm_free(r);
 }
 END_TEST
@@ -268,6 +354,8 @@ START_TEST(reasm_feed_ignores_duplicate_section) {
   size_t out_len;
   size_t h0 = build_header(pkt0, 1, 1, 1, 0, 1, 0, 0, 0, 0);
   size_t h1 = build_header(pkt1, 1, 1, 1, 1, 1, 0, 0, 0, 0);
+  set_total(pkt0, 7);
+  set_total(pkt1, 7);
   memcpy(pkt0 + h0, "abc", 3);
   memcpy(pkt1 + h1, "defg", 4);
 
@@ -289,18 +377,71 @@ START_TEST(reasm_feed_version_bump_resets_in_progress_slot) {
   size_t h;
 
   h = build_header(pkt_v1, 1, 1, 1, 0, 1, 0, 0, 0, 0);
+  set_total(pkt_v1, 7);
   memcpy(pkt_v1 + h, "old", 3);
   ck_assert_int_eq(dvbstp_reasm_feed(r, pkt_v1, sizeof pkt_v1, NULL, &out_data, &out_len), 0);
 
   h = build_header(pkt_v2_0, 1, 1, 2, 0, 1, 0, 0, 0, 0); /* version bumped to 2 */
+  set_total(pkt_v2_0, 7);
   memcpy(pkt_v2_0 + h, "new", 3);
   ck_assert_int_eq(dvbstp_reasm_feed(r, pkt_v2_0, sizeof pkt_v2_0, NULL, &out_data, &out_len), 0);
 
   h = build_header(pkt_v2_1, 1, 1, 2, 1, 1, 0, 0, 0, 0);
+  set_total(pkt_v2_1, 7);
   memcpy(pkt_v2_1 + h, "data", 4);
   ck_assert_int_eq(dvbstp_reasm_feed(r, pkt_v2_1, sizeof pkt_v2_1, NULL, &out_data, &out_len), 1);
   ck_assert_uint_eq(out_len, 7u);
   ck_assert_mem_eq(out_data, "newdata", 7); /* v1's section carried over: v2's data only */
+
+  dvbstp_reasm_free(r);
+}
+END_TEST
+
+START_TEST(reasm_feed_rejects_total_segment_size_mismatch) {
+  dvbstp_reasm_t *r = dvbstp_reasm_new();
+  unsigned char pkt0[12 + 3], pkt1[12 + 4];
+  const unsigned char *out_data;
+  size_t out_len;
+  size_t h0 = build_header(pkt0, 1, 1, 1, 0, 1, 0, 0, 0, 0);
+  size_t h1 = build_header(pkt1, 1, 1, 1, 1, 1, 0, 0, 0, 0);
+  memcpy(pkt0 + h0, "abc", 3);
+  memcpy(pkt1 + h1, "defg", 4);
+  set_total(pkt0, 8);
+  set_total(pkt1, 8);
+
+  ck_assert_int_eq(dvbstp_reasm_feed(r, pkt0, sizeof pkt0, NULL, &out_data, &out_len), 0);
+  ck_assert_int_eq(dvbstp_reasm_feed(r, pkt1, sizeof pkt1, NULL, &out_data, &out_len), 0);
+
+  dvbstp_reasm_free(r);
+}
+END_TEST
+
+START_TEST(reasm_feed_keeps_providers_apart) {
+  dvbstp_reasm_t *r = dvbstp_reasm_new();
+  unsigned char a0[16 + 3], a1[16 + 4], b0[16 + 3], b1[16 + 4];
+  const unsigned char *out_data;
+  size_t out_len;
+  size_t h;
+
+  h = build_header(a0, 1, 1, 1, 0, 1, 0, 1, 0xAAAA, 0);
+  set_total(a0, 7);
+  memcpy(a0 + h, "aaa", 3);
+  h = build_header(a1, 1, 1, 1, 1, 1, 0, 1, 0xAAAA, 0);
+  set_total(a1, 7);
+  memcpy(a1 + h, "AAAA", 4);
+  h = build_header(b0, 1, 1, 1, 0, 1, 0, 1, 0xBBBB, 0);
+  set_total(b0, 7);
+  memcpy(b0 + h, "bbb", 3);
+  h = build_header(b1, 1, 1, 1, 1, 1, 0, 1, 0xBBBB, 0);
+  set_total(b1, 7);
+  memcpy(b1 + h, "BBBB", 4);
+
+  ck_assert_int_eq(dvbstp_reasm_feed(r, a0, sizeof a0, NULL, &out_data, &out_len), 0);
+  ck_assert_int_eq(dvbstp_reasm_feed(r, b0, sizeof b0, NULL, &out_data, &out_len), 0);
+  ck_assert_int_eq(dvbstp_reasm_feed(r, a1, sizeof a1, NULL, &out_data, &out_len), 1);
+  ck_assert_mem_eq(out_data, "aaaAAAA", 7);
+  ck_assert_int_eq(dvbstp_reasm_feed(r, b1, sizeof b1, NULL, &out_data, &out_len), 1);
+  ck_assert_mem_eq(out_data, "bbbBBBB", 7);
 
   dvbstp_reasm_free(r);
 }
@@ -356,12 +497,18 @@ static Suite *dvbstp_suite(void) {
   tcase_add_test(tc, reasm_feed_reassembles_two_sections_in_order);
   tcase_add_test(tc, reasm_feed_verifies_crc_on_final_section);
   tcase_add_test(tc, reasm_feed_rejects_crc_mismatch);
+  tcase_add_test(tc, reasm_feed_accepts_good_crc_when_final_section_first);
+  tcase_add_test(tc, reasm_feed_rejects_bad_crc_when_final_section_first);
   tcase_add_test(tc, reasm_feed_rejects_short_packet);
   tcase_add_test(tc, reasm_feed_rejects_section_number_past_last);
-  tcase_add_test(tc, reasm_feed_rejects_last_section_number_too_large);
+  tcase_add_test(tc, reasm_feed_assembles_more_than_64_sections);
+  tcase_add_test(tc, reasm_feed_accepts_last_section_4095);
+  tcase_add_test(tc, reasm_feed_rejects_segment_over_byte_cap);
   tcase_add_test(tc, reasm_feed_rejects_crc_flag_on_non_final_section);
   tcase_add_test(tc, reasm_feed_ignores_duplicate_section);
   tcase_add_test(tc, reasm_feed_version_bump_resets_in_progress_slot);
+  tcase_add_test(tc, reasm_feed_rejects_total_segment_size_mismatch);
+  tcase_add_test(tc, reasm_feed_keeps_providers_apart);
   tcase_add_test(tc, reasm_feed_evicts_oldest_slot_once_all_slots_are_busy);
   suite_add_tcase(s, tc);
   return s;

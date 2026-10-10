@@ -27,4 +27,23 @@ typedef struct {
 /* unwrap a 33-bit PTS into a monotonic tick count, ms = return/90 */
 int64_t pts_unwrap(pts_unwrap_t *st, uint64_t raw);
 
+#define PTS_DISC_MS 10000
+#define PTS_DISC_NONE INT64_MIN
+
+/* recorders: audio ahead of first video keyframe kept up to this, keeps A/V offset */
+#define PTS_LEAD_KEEP_MS 500
+
+/* mux-wide timeline rebase across splices. shift is subtracted from unwrapped ms */
+typedef struct {
+  int64_t shift;
+  int64_t prev;
+  int have_prev;
+} pts_disc_t;
+
+/* shift to subtract from raw (and sibling dts/pts of same PES). next: expected ms. jump > PTS_DISC_MS re-bases to next */
+int64_t pts_disc_shift(pts_disc_t *d, int64_t raw, int64_t next);
+
+/* same, no state change. ref: any current media position. for side channels (teletext) */
+int64_t pts_disc_peek(const pts_disc_t *d, int64_t raw, int64_t ref);
+
 #endif

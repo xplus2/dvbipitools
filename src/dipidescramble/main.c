@@ -113,6 +113,7 @@ int main(int argc, char **argv) {
     case INPUT_STDIN:
       tc.family = cfg.input.family;
       tc.group = cfg.input.group;
+      tc.source = cfg.input.source;
       tc.port = cfg.input.port;
       tc.iface = cfg.iface_in;
       break;

@@ -195,6 +195,57 @@ START_TEST(pes_ignores_start_without_valid_startcode) {
 }
 END_TEST
 
+START_TEST(pts_disc_small_steps_keep_shift) {
+  pts_disc_t d;
+  memset(&d, 0, sizeof d);
+  ck_assert_int_eq(pts_disc_shift(&d, 1000, PTS_DISC_NONE), 0);
+  ck_assert_int_eq(pts_disc_shift(&d, 1040, 1000), 0);
+  ck_assert_int_eq(pts_disc_shift(&d, 4000, 1040), 0); /* 3 s gap < threshold: kept */
+}
+END_TEST
+
+START_TEST(pts_disc_forward_jump_rebases_to_expected) {
+  pts_disc_t d;
+  int64_t sh;
+  memset(&d, 0, sizeof d);
+  sh = pts_disc_shift(&d, 5001000, 1000 + 40);
+  ck_assert_int_eq(5001000 - sh, 1040);
+  ck_assert_int_eq(pts_disc_shift(&d, 5001040, 1040 + 40), sh);
+}
+END_TEST
+
+START_TEST(pts_disc_backward_jump_rebases_to_expected) {
+  pts_disc_t d;
+  int64_t sh;
+  memset(&d, 0, sizeof d);
+  sh = pts_disc_shift(&d, 100, 600000 + 40);
+  ck_assert_int_eq(100 - sh, 600040);
+}
+END_TEST
+
+START_TEST(pts_disc_old_timeline_straggler_uses_previous_shift) {
+  pts_disc_t d;
+  int64_t sh_new;
+  int64_t sh_old;
+  memset(&d, 0, sizeof d);
+  sh_new = pts_disc_shift(&d, 5001000, 1040);
+  ck_assert_int_ne(sh_new, 0);
+  sh_old = pts_disc_shift(&d, 1100, 1060); /* other track, pre-splice raw time */
+  ck_assert_int_eq(sh_old, 0);
+  ck_assert_int_eq(d.shift, sh_new);
+}
+END_TEST
+
+START_TEST(pts_disc_peek_does_not_modify_state) {
+  pts_disc_t d;
+  memset(&d, 0, sizeof d);
+  ck_assert_int_eq(pts_disc_shift(&d, 5001000, 1040), 5000000 - 40);
+  ck_assert_int_eq(pts_disc_peek(&d, 5002000, 2000), 5000000 - 40);
+  ck_assert_int_eq(pts_disc_peek(&d, 2000, 2000), 0);
+  ck_assert_int_eq(d.shift, 5000000 - 40);
+}
+END_TEST
+
 static Suite *pes_suite(void) {
   Suite *s = suite_create("pes");
   TCase *tc = tcase_create("core");
@@ -203,6 +254,11 @@ static Suite *pes_suite(void) {
   tcase_add_test(tc, pes_has_no_dts_when_pts_only);
   tcase_add_test(tc, pes_ignores_untracked_pid);
   tcase_add_test(tc, pes_ignores_start_without_valid_startcode);
+  tcase_add_test(tc, pts_disc_small_steps_keep_shift);
+  tcase_add_test(tc, pts_disc_forward_jump_rebases_to_expected);
+  tcase_add_test(tc, pts_disc_backward_jump_rebases_to_expected);
+  tcase_add_test(tc, pts_disc_old_timeline_straggler_uses_previous_shift);
+  tcase_add_test(tc, pts_disc_peek_does_not_modify_state);
   suite_add_tcase(s, tc);
   return s;
 }

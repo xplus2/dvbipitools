@@ -9,6 +9,13 @@
 /* rest: addr:port or [addr6]:port, multicast required (224.0.0.0/4, ff00::/8). caller strips leading '@' first. */
 int uriparse_mcast_addrport(const char *rest, int *family, char *group, size_t groupsz, unsigned *port);
 
+/* like uriparse_mcast_addrport() with optional SSM source: [@]addr:port or src@addr:port.
+   src: unicast literal of group's family, bare or [bracketed]. "" absent. */
+int uriparse_mcast_src_addrport(const char *rest, int *family, char *group, size_t groupsz, unsigned *port, char *src, size_t srcsz);
+
+/* scheme://[src]@group:port, [group] when family is AF_INET6. src NULL or "" = ASM */
+void uriparse_mcast_src_uri(char *buf, size_t n, const char *scheme, int family, const char *src, const char *group, unsigned port);
+
 /* group:port, or [group]:port when family is AF_INET6 */
 void uriparse_mcast_describe(int family, const char *group, unsigned port, char *buf, size_t n);
 

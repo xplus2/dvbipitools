@@ -8,32 +8,39 @@
 #include "lib/helper/xml_util.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
+#include "bcg_doc.h"
 #include "timefmt.h"
 #include "xmltv.h"
 
-static void scan_display_names(const char *s, const char *end, bcg_channel_t *c) {
-  const char *p = s;
-  for (;;) {
-    char name[BCG_ID_LEN];
-    const char *hit = strstr(p, "<display-name");
-    if (!hit || hit >= end) break;
-    if (xml_elem_text(hit, end, "display-name", name, sizeof name)) break;
+static int display_name_cb(const char *tag, const char *blk_end, void *ctx) {
+  bcg_channel_t *c = ctx;
+  char name[BCG_ID_LEN];
+  int cut = 0;
+  if (xml_span_text_chk(tag, blk_end, name, sizeof name, &cut) == 0) {
+    if (cut) log_line("bcg: <display-name> text truncated to %zu bytes", strlen(name));
     bcg_channel_add_name(c, name);
-    p = hit + 1;
   }
+  return 0;
 }
 
 /* fills remaining programme fields (stop/title/desc/category) once start parsed ok */
 static void fill_programme_details(bcg_programme_t *pr, const char *tag, const char *blk_end) {
   char stop[BCG_TIME_LEN];
   pr->stop[0] = '\0';
-  if (xml_attr(tag, blk_end, "stop", stop, sizeof stop) == 0 && xmltv_time_to_iso8601(stop, pr->stop, sizeof pr->stop))
-    pr->stop[0] = '\0';
-  if (xml_elem_text(tag, blk_end, "title", pr->title, sizeof pr->title))
+  if (xml_tag_attr(tag, blk_end, "stop", stop, sizeof stop) == 0) {
+    int rc = xmltv_time_to_iso8601(stop, pr->stop, sizeof pr->stop);
+    if (rc < 0) {
+      pr->stop[0] = '\0';
+      log_line("xmltv: ignoring bad stop time: %s", stop);
+    } else if (rc > 0) {
+      log_line("xmltv: unknown time zone in stop time, no offset applied: %s", stop);
+    }
+  }
+  if (bcg_elem_text(tag, blk_end, "title", pr->title, sizeof pr->title))
     pr->title[0] = '\0';
-  if (xml_elem_text(tag, blk_end, "desc", pr->desc, sizeof pr->desc))
+  if (bcg_elem_text(tag, blk_end, "desc", pr->desc, sizeof pr->desc))
     pr->desc[0] = '\0';
-  if (xml_elem_text(tag, blk_end, "category", pr->category, sizeof pr->category))
+  if (bcg_elem_text(tag, blk_end, "category", pr->category, sizeof pr->category))
     pr->category[0] = '\0';
 }
 
@@ -41,11 +48,11 @@ static int channel_cb(const char *tag, const char *blk_end, void *ctx) {
   bcg_doc_t *doc = ctx;
   bcg_channel_t *c;
   char id[BCG_ID_LEN];
-  if (xml_attr(tag, blk_end, "id", id, sizeof id) == 0) {
+  if (bcg_tag_attr(tag, blk_end, "id", id, sizeof id) == 0) {
     c = bcg_add_channel(doc);
     if (!c) return -1;
     bufcpy(c->id, sizeof c->id, id);
-    scan_display_names(tag, blk_end, c);
+    for_each_xml_elem(tag, blk_end, "display-name", display_name_cb, c);
   }
   return 0;
 }
@@ -56,12 +63,17 @@ static int programme_cb(const char *tag, const char *blk_end, void *ctx) {
   char start[BCG_TIME_LEN];
   char channel[BCG_ID_LEN];
   char start_iso[BCG_TIME_LEN];
-  if (xml_attr(tag, blk_end, "start", start, sizeof start) != 0 || xml_attr(tag, blk_end, "channel", channel, sizeof channel) != 0)
+  int rc;
+  if (xml_tag_attr(tag, blk_end, "start", start, sizeof start) != 0 || bcg_tag_attr(tag, blk_end, "channel", channel, sizeof channel) != 0) {
+    log_line("xmltv: skipping programme without start or channel attribute");
     return 0;
-  if (xmltv_time_to_iso8601(start, start_iso, sizeof start_iso)) {
+  }
+  rc = xmltv_time_to_iso8601(start, start_iso, sizeof start_iso);
+  if (rc < 0) {
     log_line("xmltv: skipping programme, bad start time: %s", start);
     return 0;
   }
+  if (rc > 0) log_line("xmltv: unknown time zone in start time, no offset applied: %s", start);
   pr = bcg_add_programme(doc);
   if (!pr) return -1;
   bufcpy(pr->channel_id, sizeof pr->channel_id, channel);
@@ -81,8 +93,8 @@ int xmltv_read(FILE *f, bcg_doc_t *doc) {
     return -1;
   }
   end = buf + len;
-  rc = for_each_xml_block(buf, end, "<channel", "</channel>", channel_cb, doc);
-  if (rc == 0) rc = for_each_xml_block(buf, end, "<programme", "</programme>", programme_cb, doc);
+  rc = for_each_xml_elem(buf, end, "channel", channel_cb, doc);
+  if (rc == 0) rc = for_each_xml_elem(buf, end, "programme", programme_cb, doc);
   free(buf);
   return rc;
 }

@@ -47,8 +47,8 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 
 `-m` takes one of three forms:
 
-- `<addr>` - base multicast group, IPv4 or IPv6; last byte is swept 1..254 (/24). Default `239.19.75.0`.
-- `<addr>/<prefixlen>` - CIDR block; (same as the default /24).
+- `<addr>` - base multicast group, IPv4 or IPv6. 0..255 (/24). Default `239.19.75.0`.
+- `<addr>/<prefixlen>` - CIDR block, every address in it (same as the default /24).
 - `<startaddr>-<stopaddr>` - explicit inclusive address range, swept as given.
 
 `-p <port[-port]>` is a port or inclusive port range. Default `8700`.
@@ -83,7 +83,8 @@ it's just reporting what it found under whatever name you give it. Feed the resu
 
 `-t <secs>` deadline budget per candidate for a named result (PAT + SDT service name). Default 1 second.
 
-If an address does not produce within 300 ms after the IGMP join, it gets skipped.
+If an address does not produce any packet within 30% of the `-t` budget after the IGMP join (300 ms at the default),
+it's skipped.
 
 ## Multi Program Transport Stream support (`-M`)
 

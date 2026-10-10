@@ -24,6 +24,7 @@ struct capture_ctx {
   cap_backend_t backend;
   int family;
   char group[64];
+  char source[64]; /* SSM source, "" = ASM */
   unsigned port;
   char *iface; /* malloc'd, NULL = kernel default */
   int rtp;

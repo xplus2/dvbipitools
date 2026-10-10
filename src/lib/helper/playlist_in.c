@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "../sys/ioutil.h"
+#include "log.h"
 #include "playlist_in.h"
 #include "xml_util.h"
 
@@ -84,7 +85,7 @@ static void extinf_parse(const char *body, playlist_item_t *it) {
     has_t = uint_attr(attrs, "tsid", &t);
     has_o = uint_attr(attrs, "onid", &o);
     has_s = uint_attr(attrs, "sid", &s);
-    if (xml_attr(attrs, attrs + alen, "tvg-logo", icon, sizeof icon) == 0)
+    if (xml_attr_list(attrs, attrs + alen, "tvg-logo", icon, sizeof icon) == 0)
       it->icon_uri = strdup(icon);
     it->name = strdup(comma + 1);
   } else {
@@ -208,12 +209,19 @@ static int track_cb(const char *tag, const char *blk_end, void *ctx) {
   int has_t;
   int has_o;
   int has_s;
+  int cut = 0;
   playlist_item_t *slot;
 
-  if (xml_elem_text(tag, blk_end, "location", uri, sizeof uri))
+  if (xml_elem_text_chk(tag, blk_end, "location", uri, sizeof uri, &cut))
     return 0; /* no location: skip track, not a parse failure */
-  if (xml_elem_text(tag, blk_end, "title", name, sizeof name))
+  if (cut) {
+    log_line("playlist: skipping track, location longer than %zu bytes", sizeof uri - 1);
+    return 0;
+  }
+  if (xml_elem_text_chk(tag, blk_end, "title", name, sizeof name, &cut))
     name[0] = '\0';
+  else if (cut)
+    log_line("playlist: title truncated to %zu bytes", strlen(name));
 
   slot = list_append(pl);
   if (!slot)
@@ -251,7 +259,7 @@ playlist_list_t *playlist_in_parse_xspf(const char *path) {
     free(buf);
     return NULL;
   }
-  if (for_each_xml_block(buf, buf + len, "<track", "</track>", track_cb, pl)) {
+  if (for_each_xml_elem(buf, buf + len, "track", track_cb, pl)) {
     playlist_list_free(pl);
     free(buf);
     return NULL;

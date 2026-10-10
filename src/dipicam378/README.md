@@ -1,7 +1,7 @@
 # dipicam378
 
-Smartcard simulator for integration tests. It uses the `cs378x` protocol, holds a device's RSA private key and 
-answers ECM/EMM requests with a CW. Nothing more.
+Smartcard simulator for integration tests and debugging, lab- and LAN use only.
+It uses the `cs378x` protocol, holds a device's RSA private key and answers ECM/EMM requests with a CW. Nothing more.
 
 ## Usage
 ```
@@ -14,6 +14,7 @@ dipicam378 -k <keyfile> [options]
 |------|----------------------|-----------------------|-------------------------------------|
 | `-k` | `--key`              | `<path>`              | required                            |
 | `-s` | `--serial`           | `<id>`                | none = no filtering                 |
+| `-b` | `--bind`             | `<addr>`              | `127.0.0.1`                         |
 | `-p` | `--port`             | `<n>`                 | `27500`                             |
 | `-a` | `--auth`             | `[user:]<pass>`       | `dipicam378`                        |
 |      | `--caid`             | `<hex>`               | none = no filtering                 |
@@ -58,6 +59,11 @@ Decryption of EMM-U/EMM-G/ECM all happens locally with this key.
 Optional. Matched against EMM-U addressing. EMM-U for any other device on the
 same carousel is skipped.
 
+### Listen address (`-b`)
+
+Set the server bind address, IP or hostname. Default is `127.0.0.1`.
+Use `::` for all IPv4 and IPv6, `0.0.0.0` for all IPv4 interfaces.
+
 ### Listen port (`-p`)
 
 TCP port OSCam's `protocol = cs378x` reader dials into. Default `27500`.
@@ -86,6 +92,11 @@ Nothing else.
 
 Connection accept/close and cs378x message types in/out are logged unconditionally.
 `-v` adds finer detail like ECM/EMM request fields
+
+### Connection limits
+
+Up to 4 concurrent connections. A connection that sends no valid frame within 10 s of accept, or
+none for 120 s after its last one, is closed. TCP keepalive is enabled to reap half-open peers.
 
 ## Running under systemd
 

@@ -173,8 +173,8 @@ static void cas_lazy_start(cas_group_t *g) {
       g->fatal = 1;
       continue;
     }
-
     memset(&mcfg, 0, sizeof mcfg);
+    mcfg.listen_host = vc->emmg_listen_host;
     mcfg.port = vc->emmg_port;
     mcfg.max_conns = vc->emmg_max_conns;
     mcfg.required_version = vc->emmg_version;

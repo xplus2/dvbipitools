@@ -457,6 +457,40 @@ START_TEST(fcc_client_range_rejects_malformed_cidr) {
 }
 END_TEST
 
+START_TEST(abuse_limit_options_have_defaults_and_can_be_set) {
+  char *plain[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", NULL};
+  char *set[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0",
+                 "--ret-client-rate", "0", "--ret-mc-dedup", "40", "--fcc-client-rate", "9", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_parse(ARGC(plain), plain, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.ret_client_rate, 200u);
+  ck_assert_uint_eq(cfg.ret_mc_dedup_ms, 100u);
+  ck_assert_uint_eq(cfg.fcc_client_rate, 2u);
+  yamlcfg_strpool_free(cfg.str_pool);
+
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(set), set, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.ret_client_rate, 0u);
+  ck_assert_uint_eq(cfg.ret_mc_dedup_ms, 40u);
+  ck_assert_uint_eq(cfg.fcc_client_rate, 9u);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(abuse_limit_options_reject_out_of_range) {
+  char *bad_ret[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "--ret-client-rate", "1000001", NULL};
+  char *bad_fcc[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "--fcc-client-rate", "x", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_parse(ARGC(bad_ret), bad_ret, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(bad_fcc), bad_fcc, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(help_returns_help_status) {
   char *argv[] = {"dipifccret", "-h", NULL};
   config_t cfg = {0};
@@ -660,6 +694,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, fcc_range_rejects_malformed_cidr);
   tcase_add_test(tc, fcc_client_range_accepts_cidr_list);
   tcase_add_test(tc, fcc_client_range_rejects_malformed_cidr);
+  tcase_add_test(tc, abuse_limit_options_have_defaults_and_can_be_set);
+  tcase_add_test(tc, abuse_limit_options_reject_out_of_range);
   tcase_add_test(tc, help_returns_help_status);
   tcase_add_test(tc, metrics_options_require_metrics_id);
   tcase_add_test(tc, metrics_id_alone_is_accepted);

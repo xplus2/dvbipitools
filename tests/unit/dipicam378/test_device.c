@@ -170,12 +170,12 @@ START_TEST(full_chain_csa2_recovers_cw) {
 
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
   ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 0, cw_out), 0);
-  /* build_ecm() uses SC_SECTION_TID_ECM_EVEN: cw lands in the even half [8:16),
-     odd half [0:8) stays zeroed - never duplicated (see device_resolve_cw()) */
-  ck_assert_mem_eq(cw_out + 8, cw, 8);
+  /* build_ecm() uses SC_SECTION_TID_ECM_EVEN: cw lands in even half [0:8),
+     odd half [8:16) stays zeroed, never duplicated */
+  ck_assert_mem_eq(cw_out, cw, 8);
   {
     unsigned char zero[8] = {0};
-    ck_assert_mem_eq(cw_out, zero, 8);
+    ck_assert_mem_eq(cw_out + 8, zero, 8);
   }
 
   EVP_PKEY_free(pub);
@@ -205,10 +205,10 @@ START_TEST(csa2_odd_ecm_fills_odd_half_only) {
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
   buf[0] = 0x81; /* SC_SECTION_TID_ECM_ODD, overriding build_ecm()'s default even */
   ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0065, 0, cw_out), 0);
-  ck_assert_mem_eq(cw_out, cw, 8);
+  ck_assert_mem_eq(cw_out + 8, cw, 8);
   {
     unsigned char zero[8] = {0};
-    ck_assert_mem_eq(cw_out + 8, zero, 8);
+    ck_assert_mem_eq(cw_out, zero, 8);
   }
 
   EVP_PKEY_free(pub);
@@ -354,7 +354,7 @@ START_TEST(no_serial_configured_accepts_any_emm_u) {
 
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
   ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0001, 0, cw_out), 0);
-  ck_assert_mem_eq(cw_out + 8, cw, 8); /* build_ecm() defaults to SC_SECTION_TID_ECM_EVEN */
+  ck_assert_mem_eq(cw_out, cw, 8); /* build_ecm() defaults to SC_SECTION_TID_ECM_EVEN */
 
   EVP_PKEY_free(pub);
   device_state_free(d);
@@ -411,7 +411,7 @@ START_TEST(resolve_cw_accepts_matching_caid) {
 
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
   ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0064, 0x0B75, cw_out), 0);
-  ck_assert_mem_eq(cw_out + 8, cw, 8); /* build_ecm() defaults to SC_SECTION_TID_ECM_EVEN */
+  ck_assert_mem_eq(cw_out, cw, 8); /* build_ecm() defaults to SC_SECTION_TID_ECM_EVEN */
 
   EVP_PKEY_free(pub);
   device_state_free(d);
@@ -498,7 +498,7 @@ START_TEST(ecm_cb_forwards_to_the_device_and_passes_its_result_through) {
   device_on_emm(d, buf, n);
   n = build_ecm(sk, cw, 8, buf, sizeof buf);
   ck_assert_int_eq(cam378_ecm_cb(buf, n, 0x0064, 0, 0xFFFF, cw_out, d), 0);
-  ck_assert_mem_eq(cw_out + 8, cw, 8);
+  ck_assert_mem_eq(cw_out, cw, 8);
   EVP_PKEY_free(pub);
   EVP_PKEY_free(pub_caid);
   device_state_free(d);

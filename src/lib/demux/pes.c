@@ -157,3 +157,23 @@ int64_t pts_unwrap(pts_unwrap_t *st, uint64_t raw) {
   }
   return (int64_t)(st->pts_ext / 90);
 }
+
+static int disc_near(int64_t raw, int64_t shift, int64_t ref) {
+  int64_t dev = raw - shift - ref;
+  return dev >= -PTS_DISC_MS && dev <= PTS_DISC_MS;
+}
+
+int64_t pts_disc_shift(pts_disc_t *d, int64_t raw, int64_t next) {
+  if (next == PTS_DISC_NONE || disc_near(raw, d->shift, next)) return d->shift;
+  if (d->have_prev && disc_near(raw, d->prev, next)) return d->prev;
+  d->prev = d->shift;
+  d->have_prev = 1;
+  d->shift = raw - next;
+  return d->shift;
+}
+
+int64_t pts_disc_peek(const pts_disc_t *d, int64_t raw, int64_t ref) {
+  if (disc_near(raw, d->shift, ref)) return d->shift;
+  if (d->have_prev && disc_near(raw, d->prev, ref)) return d->prev;
+  return d->shift;
+}

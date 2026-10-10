@@ -228,6 +228,62 @@ START_TEST(burst_new_caps_target_to_client_max) {
 }
 END_TEST
 
+START_TEST(burst_tick_survives_new_rap_arriving_mid_burst) {
+  channel_t *c = make_channel_with_rap(64, 9); /* 10 cached from old RAP */
+  burst_t *b;
+  unsigned char pkt[188];
+  struct timespec ts;
+  int i;
+
+  atomic_store_explicit(&c->nominal_bps, 100000000.0, memory_order_relaxed);
+  b = burst_new(c, 1.0, 0, 99);
+
+  /* new RAP lands after burst start, then 2 more pkgs */
+  memset(pkt, 0xAB, sizeof pkt);
+  pkt[0] = 0x47;
+  atomic_store_explicit(&c->cache.rap_write_count, atomic_load_explicit(&c->cache.write_count, memory_order_relaxed), memory_order_relaxed);
+  for (i = 0; i < 3; i++)
+    channel_store(g_table, c, 0x1234, (uint16_t)(100 + i), 0, 0, pkt, sizeof pkt);
+
+  g_send_calls = 0;
+  ts.tv_sec = 0;
+  ts.tv_nsec = 20000000;
+  nanosleep(&ts, NULL);
+  for (i = 0; i < 5 && !burst_is_done(b); i++) {
+    burst_tick(b, 60000, capture_send, NULL);
+    nanosleep(&ts, NULL);
+  }
+
+  ck_assert_int_eq(burst_is_done(b), 1);
+  ck_assert_int_eq(g_send_calls, 13); /* full old GOP tail plus new RAP run */
+
+  burst_free(b);
+  channel_table_free(g_table);
+}
+END_TEST
+
+START_TEST(burst_tick_stops_when_writer_laps_cursor) {
+  channel_t *c = make_channel_with_rap(8, 3);
+  burst_t *b;
+  unsigned char pkt[188];
+  int i;
+
+  atomic_store_explicit(&c->nominal_bps, 100000000.0, memory_order_relaxed);
+  b = burst_new(c, 1.0, 0, 99);
+  memset(pkt, 0xAB, sizeof pkt);
+  pkt[0] = 0x47;
+  for (i = 0; i < 8; i++)
+    channel_store(g_table, c, 0x1234, (uint16_t)(100 + i), 0, 0, pkt, sizeof pkt);
+
+  g_send_calls = 0;
+  ck_assert_int_eq(burst_tick(b, 60000, capture_send, NULL), BURST_TICK_DONE);
+  ck_assert_int_eq(g_send_calls, 0); /* start overwritten, nothing valid to send */
+
+  burst_free(b);
+  channel_table_free(g_table);
+}
+END_TEST
+
 START_TEST(burst_tick_delivers_cached_packets_and_completes) {
   channel_t *c = make_channel_with_rap(8, 3); /* RAP + 3 more = 4 cached entries */
   burst_t *b;
@@ -428,6 +484,8 @@ static Suite *burst_suite(void) {
   tcase_add_test(tc, burst_decide_accepts_valid_request);
   tcase_add_test(tc, burst_new_caps_target_to_client_max);
   tcase_add_test(tc, burst_tick_delivers_cached_packets_and_completes);
+  tcase_add_test(tc, burst_tick_survives_new_rap_arriving_mid_burst);
+  tcase_add_test(tc, burst_tick_stops_when_writer_laps_cursor);
   tcase_add_test(tc, burst_tick_stops_at_duration_cap);
   tcase_add_test(tc, burst_tick_detects_slot_reuse);
   tcase_add_test(tc, burst_terminate_marks_done_immediately);

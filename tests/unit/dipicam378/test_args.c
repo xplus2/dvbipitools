@@ -25,6 +25,7 @@ START_TEST(key_alone_applies_defaults) {
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_str_eq(cfg.key_path, "device.key");
+  ck_assert_str_eq(cfg.bind, "127.0.0.1");
   ck_assert_uint_eq(cfg.port, 27500u);
   ck_assert_str_eq(cfg.password, "dipicam378");
   ck_assert_ptr_null(cfg.username);
@@ -39,6 +40,15 @@ START_TEST(port_is_overridable) {
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.port, 9999u);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(bind_is_overridable) {
+  char *argv[] = {"dipicam378", "-k", "device.key", "-b", "::", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.bind, "::");
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -277,6 +287,7 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, key_is_required);
   tcase_add_test(tc, key_alone_applies_defaults);
   tcase_add_test(tc, port_is_overridable);
+  tcase_add_test(tc, bind_is_overridable);
   tcase_add_test(tc, invalid_port_is_rejected);
   tcase_add_test(tc, auth_without_colon_sets_password_only);
   tcase_add_test(tc, auth_with_colon_splits_user_and_password);

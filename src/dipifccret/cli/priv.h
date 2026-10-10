@@ -34,6 +34,11 @@
 #define OPT_CONFIG_STRICT 1026
 #define OPT_CONFIGTEST 1025
 #define OPT_CPU_AFFINITY 1028
+#define OPT_RET_CLIENT_RATE 1029
+#define OPT_RET_MC_DEDUP 1030
+#define OPT_FCC_CLIENT_RATE 1031
+
+#define RATE_MAX 1000000 /* per-source rate cap, keeps burst depth math in range */
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 

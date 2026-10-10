@@ -19,7 +19,6 @@
 
 args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
   config_t *cfg = p->cfg;
-
   switch (c) {
     case OPT_CAS_ALGO: {
       static const enum_map_t map[] = {{"cissa", CAS_ALGO_CISSA}, {"csa2", CAS_ALGO_CSA2}, {"csa1", CAS_ALGO_CSA1}};
@@ -95,15 +94,15 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       }
       break;
     }
-    case OPT_CAS_EMMG_PORT: {
-      cas_vendor_t *vend = rdh_current_cas_vendor(cfg, p->cli_vendors, "cas-emmg-port");
+    case OPT_CAS_EMMG_LISTEN: {
+      cas_vendor_t *vend = rdh_current_cas_vendor(cfg, p->cli_vendors, "cas-emmg-listen");
+      char lerr[128];
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
-      if (argutil_port_parse(optarg, &vend->emmg_port)) {
-        argerr("invalid --cas-emmg-port: %s", optarg);
+      if (cas_vendor_set_emmg_listen(vend, optarg, lerr, sizeof lerr)) {
+        argerr("--cas-emmg-listen: %s", lerr);
         return ARGS_ERR;
       }
-      vend->emmg_port_given = 1;
       break;
     }
     case OPT_CAS_EMMG_REVERSE: {

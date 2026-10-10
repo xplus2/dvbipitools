@@ -9,7 +9,8 @@
 #define EMMG_MAX_CONNS_CEILING 64
 
 typedef struct {
-  unsigned port; /* dual-stack (v4+v6) wildcard listener */
+  const char *listen_host; /* numeric address; NULL or empty = dual-stack (v4+v6) wildcard */
+  unsigned port;
   unsigned max_conns; /* 0 = default (8), else 1..EMMG_MAX_CONNS_CEILING */
   unsigned required_version;
   const char *dial_host; /* reverse: dial out to host:port instead */

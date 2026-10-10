@@ -41,19 +41,7 @@ void args_range_describe(const config_t *cfg, char *buf, size_t n) {
 
 /* cap on swept addresses: do not sweep millions of candidates */
 #define MAX_SWEEP_HOSTBITS 20
-#define MAX_SWEEP_ADDRS ((1u << MAX_SWEEP_HOSTBITS) - 2u)
-
-static void addr_incr1(unsigned char *a, int alen) {
-  for (int i = alen - 1; i >= 0; i--) {
-    if (++a[i]) break;
-  }
-}
-
-static void addr_decr1(unsigned char *a, int alen) {
-  for (int i = alen - 1; i >= 0; i--) {
-    if (a[i]--) break;
-  }
-}
+#define MAX_SWEEP_ADDRS (1u << MAX_SWEEP_HOSTBITS)
 
 /* end-start, capped. -1 if end<start or range exceeds cap */
 static int addr_diff_capped(const unsigned char *start, const unsigned char *end, int alen, unsigned cap, unsigned *out) {
@@ -81,7 +69,7 @@ static int addr_diff_capped(const unsigned char *start, const unsigned char *end
   return 0;
 }
 
-/* addr/prefixlen. host range is net+1 .. broadcast-1 */
+/* addr/prefixlen. whole block, all addresses are valid groups */
 static int cidr_parse(const char *addrs, const char *prefixs, int *family, unsigned char *start, unsigned char *end, unsigned *total) {
   unsigned char addr[16];
   unsigned char net[16];
@@ -100,7 +88,7 @@ static int cidr_parse(const char *addrs, const char *prefixs, int *family, unsig
   if (errno || pend == prefixs || *pend != '\0' || prefix < 0) return -1;
   alen = (fam == AF_INET6) ? 16 : 4;
   maxprefix = alen * 8;
-  if (prefix > maxprefix - 2) return -1; /* need >= 2 host bits */
+  if (prefix > maxprefix) return -1;
   hostbits = maxprefix - (int)prefix;
   if (hostbits > MAX_SWEEP_HOSTBITS) return -1;
   memcpy(net, addr, (size_t)alen);
@@ -116,12 +104,12 @@ static int cidr_parse(const char *addrs, const char *prefixs, int *family, unsig
     i--;
   }
 
+  memset(start, 0, 16);
+  memset(end, 0, 16);
   memcpy(start, net, (size_t)alen);
-  addr_incr1(start, alen);
   memcpy(end, top, (size_t)alen);
-  addr_decr1(end, alen);
   *family = fam;
-  *total = (1u << hostbits) - 2u;
+  *total = 1u << hostbits;
   return 0;
 }
 
@@ -145,14 +133,14 @@ static int range_parse(const char *los, const char *his, int *family, unsigned c
   return 0;
 }
 
-/* default /24, last byte swept 1..254 */
+/* default /24, last byte swept 0..255 */
 static void plain_parse(const unsigned char *addr, int family, unsigned char *start, unsigned char *end, unsigned *total) {
   int alen = (family == AF_INET6) ? 16 : 4;
   memcpy(start, addr, 16);
   memcpy(end, addr, 16);
-  start[alen - 1] = 1;
-  end[alen - 1] = 254;
-  *total = 254;
+  start[alen - 1] = 0;
+  end[alen - 1] = 255;
+  *total = 256;
 }
 
 /* plain addr, CIDR or startaddr-stopaddr */

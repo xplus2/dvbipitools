@@ -40,8 +40,8 @@ static int walk_ipv6_ext_headers(const unsigned char *pkt, size_t len, size_t *h
 }
 
 void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ranges, size_t range_count, capture_frame_cb cb, void *user) {
-  size_t off, ip_off, udp_off, rtp_off, addr_len;
-  unsigned ethertype, dport;
+  size_t off, ip_off, udp_off, rtp_off, addr_len, end;
+  unsigned ethertype, dport, udp_len;
   int family;
   struct in_addr dst4;
   struct in6_addr dst6;
@@ -112,16 +112,22 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
     return;
 
   dport = ((unsigned)pkt[udp_off + 2] << 8) | pkt[udp_off + 3];
+  udp_len = ((unsigned)pkt[udp_off + 4] << 8) | pkt[udp_off + 5];
+  if (udp_len < 8)
+    return;
+  end = udp_off + udp_len; /* excludes Ethernet padding */
+  if (end > len) /* snaplen truncation */
+    end = len;
   rtp_off = udp_off + 8;
-  if (rtp_off > len)
+  if (rtp_off > end)
     return;
 
-  if (rtp_payload_offset(pkt + rtp_off, len - rtp_off) == 0) /* not RTP-wrapped TS */
+  if (rtp_payload_offset(pkt + rtp_off, end - rtp_off) == 0) /* not RTP-wrapped TS */
     return;
-  if (!rtp_parse_header(pkt + rtp_off, len - rtp_off, &rtp))
+  if (!rtp_parse_header(pkt + rtp_off, end - rtp_off, &rtp))
     return;
 
   if (!cb)
     return;
-  cb(family, dst_bytes, addr_len, dport, dscp, rtp.ssrc, rtp.seq, rtp.timestamp, pkt + rtp_off + rtp.payload_off, len - rtp_off - rtp.payload_off, user);
+  cb(family, dst_bytes, addr_len, dport, dscp, rtp.ssrc, rtp.seq, rtp.timestamp, pkt + rtp_off + rtp.payload_off, end - rtp_off - rtp.payload_off, user);
 }

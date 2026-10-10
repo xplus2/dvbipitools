@@ -35,10 +35,11 @@ typedef struct {
   unsigned ecm_id;
   unsigned ecm_pid;
   unsigned emm_pid;
+  const char *emmg_listen_host; /* NULL = wildcard */
   unsigned emmg_port;
   unsigned emmg_max_conns; /* 0 = library default (8) */
   unsigned emmg_version;
-  const char *emmg_reverse_host; /* set: dial out instead of listening on emmg_port */
+  const char *emmg_reverse_host; /* set: dial out instead of listening */
   unsigned emmg_reverse_port;
   ecmg_outage_mode_t outage_mode; /* per-vendor: frozen/cycling/silent on ECMG loss */
   int required;                  /* down triggers global fallback regardless of other vendors */

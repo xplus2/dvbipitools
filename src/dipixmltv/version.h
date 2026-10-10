@@ -5,6 +5,6 @@
 #define DIPIXMLTV_VERSION_H
 
 #define TOOL_NAME    "dipixmltv"
-#define TOOL_VERSION "1.0.1"
+#define TOOL_VERSION "1.0.2"
 
 #endif

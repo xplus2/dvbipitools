@@ -130,9 +130,19 @@ int cas_vendor_set_ecm_pid(cas_vendor_t *v, const char *val, char *err, size_t e
   return pid_parse(val, &v->ecm_pid) ? bad(err, errsz, val, "0x0001..0x1FFE") : 0;
 }
 
-int cas_vendor_set_emmg_port(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  if (argutil_port_parse(val, &v->emmg_port)) return bad(err, errsz, val, "port");
-  v->emmg_port_given = 1;
+int cas_vendor_set_emmg_listen(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
+  unsigned port;
+  if (argutil_port_parse(val, &port) == 0) {
+    v->emmg_listen_host[0] = '\0';
+  } else {
+    int family;
+    if (argutil_addrport_parse(val, &family, v->emmg_listen_host, sizeof v->emmg_listen_host, &port)) {
+      v->emmg_listen_host[0] = '\0';
+      return bad(err, errsz, val, "port | v4addr:port | [v6addr]:port");
+    }
+  }
+  v->emmg_port = port;
+  v->emmg_listen_given = 1;
   return 0;
 }
 
@@ -289,8 +299,8 @@ int cas_args_validate(const char *tool_name, const cas_args_t *a) {
       args_err(tool_name, "--cas-ecm-pid and --cas-emm-pid must differ (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
       return -1;
     }
-    if (v->emmg_reverse_host[0] && v->emmg_port_given) {
-      args_err(tool_name, "--cas-emmg-reverse is mutually exclusive with --cas-emmg-port (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
+    if (v->emmg_reverse_host[0] && v->emmg_listen_given) {
+      args_err(tool_name, "--cas-emmg-reverse is mutually exclusive with --cas-emmg-listen (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
       return -1;
     }
     if (v->emmg_reverse_host[0] && v->emmg_max_conns) {
@@ -311,8 +321,9 @@ int cas_args_validate(const char *tool_name, const cas_args_t *a) {
         args_err(tool_name, "--cas-ecm-pid/--cas-emm-pid collide across --cas-ecmg vendors");
         return -1;
       }
-      if (v->emmg_port == o->emmg_port) {
-        args_err(tool_name, "--cas-emmg-port %u used by more than one --cas-ecmg vendor (each needs its own EMMG listener)", v->emmg_port);
+      if (!v->emmg_reverse_host[0] && !o->emmg_reverse_host[0] && v->emmg_port == o->emmg_port &&
+          (!v->emmg_listen_host[0] || !o->emmg_listen_host[0] || !strcmp(v->emmg_listen_host, o->emmg_listen_host))) {
+        args_err(tool_name, "--cas-emmg-listen port %u used by more than one --cas-ecmg vendor (each needs its own EMMG listener)", v->emmg_port);
         return -1;
       }
     }

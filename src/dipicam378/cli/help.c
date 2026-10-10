@@ -14,6 +14,7 @@ void cam378_print_help(void) {
     "options:\n"
     "  -k, --key <path>           RSA private key, PEM (required)\n"
     "  -s, --serial <id>          device's serial, matched against EMM-U\n"
+    "  -b, --bind <addr>          listen address, (default: %s)\n"
     "  -p, --port <n>             cs378x TCP listen port (default: %u)\n"
     "  -a, --auth [user:]<pass>   password must match the reader's \"password =\"\n"
     "                             (default: \"%s\") - its digest is the AES-128 key.\n"
@@ -32,5 +33,5 @@ void cam378_print_help(void) {
     "  -h, --help                 this help\n\n"
     "example:\n"
     "  %s -k device.key -s e2e-01 -p %u\n",
-    TOOL_NAME, ARGS_DEFAULT_PORT, ARGS_DEFAULT_PASSWORD, DEFAULT_CONFIG_PATH, TOOL_NAME, ARGS_DEFAULT_PORT);
+    TOOL_NAME, ARGS_DEFAULT_BIND, ARGS_DEFAULT_PORT, ARGS_DEFAULT_PASSWORD, DEFAULT_CONFIG_PATH, TOOL_NAME, ARGS_DEFAULT_PORT);
 }

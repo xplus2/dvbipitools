@@ -46,10 +46,10 @@ args_status_t tvh_opt_cas(tvh_opt_t *p, int c) {
       cfg->any_cas_flag = 1;
       CHECK(cas_vendor_set_ecm_pid(vd, optarg, err, sizeof err), "--cas-ecm-pid");
       break;
-    case OPT_CAS_EMMG_PORT:
-      CAS_VENDOR("--cas-emmg-port");
+    case OPT_CAS_EMMG_LISTEN:
+      CAS_VENDOR("--cas-emmg-listen");
       cfg->any_cas_flag = 1;
-      CHECK(cas_vendor_set_emmg_port(vd, optarg, err, sizeof err), "--cas-emmg-port");
+      CHECK(cas_vendor_set_emmg_listen(vd, optarg, err, sizeof err), "--cas-emmg-listen");
       break;
     case OPT_CAS_EMMG_REVERSE:
       CAS_VENDOR("--cas-emmg-reverse");

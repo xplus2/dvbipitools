@@ -13,6 +13,7 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx);
 
 typedef struct {
   input_t in;
+  unsigned version; /* XML Version and segment_version, 1..255, bumped per reload */
   unsigned char *broadcast_doc;
   unsigned char *sp_doc;
   size_t broadcast_len;
@@ -27,6 +28,7 @@ typedef struct {
 
 /* loads cfg->input_path via input_load; INPUT_SERVICES also builds broadcast_doc/sp_doc. 0 ok, -1 error on stderr */
 int state_load(const config_t *cfg, sds_state_t *st);
+int state_reload(const config_t *cfg, sds_state_t *st);
 void state_free(sds_state_t *st);
 
 #endif

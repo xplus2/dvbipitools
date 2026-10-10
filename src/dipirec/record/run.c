@@ -66,7 +66,10 @@ int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const
     if (ctx.insp) tsinspect_tick(ctx.insp, mono_seconds());
     pr = src_wait_readable(s, 100);
     if (pr < 0) break;
-    if (pr == 0) continue;
+    if (pr == 0) {
+      sinks_flush(sinks, n_sinks);
+      continue;
+    }
     n = src_read(s, buf, sizeof buf);
     if (n < 0) break;
     if (n == 0) continue;
@@ -247,7 +250,10 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
     if (ctx.out) tsinspect_tick(ctx.out, mono_seconds());
     pr = src_wait_readable(s, 100);
     if (pr < 0) break;
-    if (pr == 0) continue;
+    if (pr == 0) {
+      sinks_flush(sinks, n_sinks);
+      continue;
+    }
     n = src_read(s, buf, sizeof buf);
     if (n < 0) break;
     if (n == 0) continue;

@@ -22,9 +22,9 @@ void capture_set_inspect(tsinspect_agg_t *agg);
 /* main() only, before any capture_open/capture_rist_init/capture_stdin_init call */
 void capture_set_ring_cap(size_t bytes);
 
-/* 1 join per unique (family, group, port, iface). repeat calls share it (refcount).
-   rtp: nonzero unwraps RTP before buffer. ret/fcc: NULL = none */
-capture_ctx_t *capture_open(int family, const char *group, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d);
+/* 1 join per unique (family, group, source, port, iface). repeat calls share it (refcount).
+   source: SSM source, NULL or "" = ASM. rtp: nonzero unwraps RTP before buffer. ret/fcc: NULL = none */
+capture_ctx_t *capture_open(int family, const char *group, const char *source, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d);
 
 void capture_close(capture_ctx_t *ctx);
 
@@ -66,7 +66,7 @@ int capture_defer_after_quiescent(qsbr_deferred_fn fn, void *arg);
 
 void capture_flush_deferred_quiescent(void);
 
-/* count of distinct (family, group, port, iface) joins currently open */
+/* count of distinct (family, group, source, port, iface) joins currently open */
 int capture_active_count(void);
 
 /* sum of bytes ever written across every currently open source */

@@ -19,6 +19,8 @@ typedef struct {
   pid_class_t cls;
   int hdr_parsed;
   int64_t ts_ms;
+  int64_t step_ms; /* last video ts delta, expected-next hint */
+  int ts_seen;
   pts_unwrap_t pts;
   unsigned char *rem; /* audio: partial frame carry-over */
   size_t remlen;
@@ -44,6 +46,7 @@ struct flv {
   pes_t *pes;
   flv_track_t vtrk;
   flv_track_t atrk;
+  pts_disc_t disc;
   int have_v;
   int have_a;
   int setup;

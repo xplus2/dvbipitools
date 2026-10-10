@@ -59,8 +59,8 @@ int probe_cb(void *v, const unsigned char *pkt) {
 static ssize_t mcast_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return mcast_recv((mcast_t *)ctx, buf, cap, NULL); }
 static ssize_t http_read_adapter(void *ctx, unsigned char *buf, size_t cap) { return http_read((http_t *)ctx, buf, cap, NULL); }
 
-/* budget until first packet, dead addrs bail early */
-#define PROBE_QUIET_MS 300
+/* first packet budget as percent of -t, dead addrs bail early */
+#define PROBE_QUIET_PCT 30
 
 void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_result_t *r) {
   unsigned char buf[65536];
@@ -80,7 +80,7 @@ void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_
   pc.multi = multi;
   if (multi) psi_enable_multi_program(pc.psi);
   deadline = mono_seconds() + (double)timeout_ms / 1000.0;
-  quiet_deadline = mono_seconds() + (double)PROBE_QUIET_MS / 1000.0;
+  quiet_deadline = mono_seconds() + (double)timeout_ms * PROBE_QUIET_PCT / 100000.0;
   if (quiet_deadline > deadline) quiet_deadline = deadline;
   while (mono_seconds() < (pc.pkts ? deadline : quiet_deadline) && !signal_stop_requested()) {
     ssize_t n = rf(rctx, buf, sizeof buf);
@@ -271,6 +271,7 @@ int scan_run(const config_t *cfg, FILE *out) {
   int af = cfg->family == AF_INET6 ? AF_INET6 : AF_INET;
   unsigned jets = cfg->jets ? cfg->jets : 1;
   pthread_t threads[DIPISCAN_MAX_JETS];
+  int started[DIPISCAN_MAX_JETS] = {0};
   scan_job_t job = {.cfg = cfg, .out = out, .next_commit = 1, .total = 0, .found = 0};
   args_range_describe(cfg, basestr, sizeof basestr);
   inet_ntop(af, cfg->start, lo, sizeof lo);
@@ -286,11 +287,11 @@ int scan_run(const config_t *cfg, FILE *out) {
   pthread_mutex_init(&job.mtx, NULL);
   pthread_cond_init(&job.cv, NULL);
   for (unsigned t = 1; t < jets; t++) {
-    if (pthread_create(&threads[t], NULL, scan_worker, &job)) threads[t] = 0;
+    started[t] = pthread_create(&threads[t], NULL, scan_worker, &job) == 0;
   }
   scan_worker(&job);
   for (unsigned t = 1; t < jets; t++) {
-    if (threads[t]) pthread_join(threads[t], NULL);
+    if (started[t]) pthread_join(threads[t], NULL);
   }
   pthread_cond_destroy(&job.cv);
   pthread_mutex_destroy(&job.mtx);

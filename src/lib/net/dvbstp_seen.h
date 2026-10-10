@@ -6,7 +6,7 @@
 
 #include "dvbstp.h"
 
-#define LISTEN_SEEN_MAX 16
+#define LISTEN_SEEN_MAX 256
 
 typedef struct {
   unsigned payload_id, segment_id, version;

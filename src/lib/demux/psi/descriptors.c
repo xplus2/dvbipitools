@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "lib/demux/bitreader.h"
+#include "dvbtext.h"
 #include "priv.h"
 
 const unsigned char *desc_scan(const unsigned char *d, size_t len, desc_match_fn match, void *ctx, size_t *dlen) {
@@ -104,17 +105,9 @@ int dts_hd_has_ma_asset(const unsigned char *d, size_t len) {
   return 0;
 }
 
-/* DVB text: skip charset prefix, controls -> space. not ISO 6937 */
+/* DVB text to UTF-8 */
 void copy_name(char *dst, size_t dstsz, const unsigned char *src, size_t len) {
-  size_t i = 0;
-  size_t o = 0;
-  if (len && src[0] < 0x20) {
-    if (src[0] == 0x10 && len >= 3) i = 3;
-    else if (src[0] == 0x1F && len >= 2) i = 2;
-    else i = 1;
-  }
-  for (; i < len && o + 1 < dstsz; i++) dst[o++] = (src[i] < 0x20) ? ' ' : (char)src[i];
-  dst[o] = '\0';
+  if (dstsz) dvbtext_to_utf8(dst, dstsz, src, len);
 }
 
 void add_ecm(psi_t *c, unsigned pid) {

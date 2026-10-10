@@ -45,6 +45,18 @@ START_TEST(m3u_item_writes_extinf_and_uri_line) {
 }
 END_TEST
 
+START_TEST(m3u_item_prefixes_ssm_source) {
+  FILE *f = tmpfile();
+  sds_service_t s = make_service("Channel One", "232.1.1.1", AF_INET, 5000, 0);
+  ck_assert_ptr_nonnull(f);
+  bufcpy(s.source, sizeof s.source, "10.0.0.1");
+  format_out_item(f, OUT_M3U, &s);
+  ck_assert_str_eq(read_all_and_close(f),
+                    "#EXTINF:-1 tsid=\"1\" onid=\"2\" sid=\"101\",Channel One\n"
+                    "udp://10.0.0.1@232.1.1.1:5000\n");
+}
+END_TEST
+
 START_TEST(m3u_item_brackets_ipv6_address) {
   FILE *f = tmpfile();
   sds_service_t s = make_service("Channel One", "ff15::1", AF_INET6, 5000, 0);
@@ -128,6 +140,7 @@ static Suite *format_out_suite(void) {
   Suite *s = suite_create("dipisds_format_out");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, m3u_item_writes_extinf_and_uri_line);
+  tcase_add_test(tc, m3u_item_prefixes_ssm_source);
   tcase_add_test(tc, m3u_item_brackets_ipv6_address);
   tcase_add_test(tc, csv_item_strips_commas_from_name);
   tcase_add_test(tc, xspf_item_escapes_title_and_writes_extension);

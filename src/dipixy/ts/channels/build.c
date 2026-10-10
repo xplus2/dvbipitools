@@ -90,15 +90,10 @@ void build_from_csv(channel_list_t *l, const char *path, int insecure_tls) {
 /* shared by build_from_sds()/build_from_xml(): sds_parse_broadcast() output to channel_item_t */
 static void append_sds_entries(channel_list_t *l, const sds_service_t *entries, int count) {
   for (int i = 0; i < count; i++) {
-    char addrbuf[80];
-    char uribuf[96];
+    char uribuf[160];
     channel_item_t *it = list_append(l);
-    size_t off;
     if (!it) break;
-    uriparse_mcast_describe(entries[i].family, entries[i].address, entries[i].port, addrbuf, sizeof addrbuf);
-    off = bufcpy(uribuf, sizeof uribuf, entries[i].rtp ? "rtp" : "udp");
-    off += bufcpy(uribuf + off, sizeof uribuf - off, "://@");
-    bufcpy(uribuf + off, sizeof uribuf - off, addrbuf);
+    uriparse_mcast_src_uri(uribuf, sizeof uribuf, entries[i].rtp ? "rtp" : "udp", entries[i].family, entries[i].source, entries[i].address, entries[i].port);
     it->name = strdup(entries[i].name);
     it->uri = strdup(uribuf);
     it->tsid = entries[i].tsid;
@@ -168,11 +163,11 @@ void channels_join_all(channel_list_t *l, const config_t *cfg) {
     channel_item_t *it = &l->items[i];
     int family;
     int rtp;
-    char addr[64];
+    char addr[64], src[64];
     unsigned port;
     if (it->static_ctx) continue;
-    if (route_resolve_channel_uri(it->uri, &family, addr, sizeof addr, &port, &rtp)) continue;
-    it->static_ctx = capture_open(family, addr, port, cfg->iface, rtp, it->has_ret && !cfg->no_ret ? &it->ret : NULL,
+    if (route_resolve_channel_uri(it->uri, &family, addr, sizeof addr, src, sizeof src, &port, &rtp)) continue;
+    it->static_ctx = capture_open(family, addr, src, port, cfg->iface, rtp, it->has_ret && !cfg->no_ret ? &it->ret : NULL,
       it->has_fcc && !cfg->no_fcc ? &it->fcc : NULL, it->has_fec && !cfg->no_al_fec ? &it->fec : NULL, cfg->al_fec_l, cfg->al_fec_d);
     if (!it->static_ctx) log_line(TOOL_NAME ": --join-all: %s unreachable, left unjoined", it->uri);
   }

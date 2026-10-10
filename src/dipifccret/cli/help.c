@@ -41,6 +41,8 @@ void fccret_print_help(void) {
   "                                   F.3.2.1 (default: 16384)\n"
   "      --ret-client-idle-timeout <s> free a unicast RTX client slot after this many\n"
   "                                   seconds with no NACKs (default: 300, 0 = never reap)\n"
+  "      --ret-client-rate <n>        max repair packets/s per client IP (default: 200, 0 = unlimited)\n"
+  "      --ret-mc-dedup <ms>          skip multicast repair of a seq already done (default: 100, 0 = off)\n"
   "      --no-rsi                     disable RSI self-announcement\n"
   "      --rsi-interval <s>           RSI self-announcement interval, IPv4 -l only (default: 5)\n"
   "      --rsi-mc-ret                 RSI (F.5.3) rides MC RET session, not default session,\n"
@@ -62,7 +64,8 @@ void fccret_print_help(void) {
   "                                   congested (RFC 6285 Sec 6.4, default: 5, 0 = disabled)\n"
   "      --fcc-range <cidr>[,...]     restrict FCC to these -g sub-ranges (default: all of -g)\n"
   "      --fcc-client-range <cidr>[,...] restrict FCC requests to these client source ranges\n"
-  "                                   (default: any client)\n\n"
+  "                                   (default: any client)\n"
+  "      --fcc-client-rate <n>        max RAMS-R requests/s per client IP (default: 2, 0 = unlimited)\n\n"
   "example:\n"
   "  %s -g 239.0.0.0/8 -l 10.0.0.1:6000 -I eth0\n",
   TOOL_NAME, DEFAULT_CONFIG_PATH, TOOL_NAME);

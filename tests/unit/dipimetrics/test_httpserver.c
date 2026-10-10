@@ -656,33 +656,97 @@ START_TEST(idle_connection_is_dropped_once_its_deadline_passes) {
 }
 END_TEST
 
-START_TEST(connections_beyond_the_pool_are_dropped_and_the_pool_keeps_serving) {
+static int connect_from(int listen_fd, const char *src) {
+  struct sockaddr_in sa, la;
+  socklen_t sl = sizeof sa;
+  int cfd;
+
+  ck_assert_int_eq(getsockname(listen_fd, (struct sockaddr *)&sa, &sl), 0);
+  memset(&la, 0, sizeof la);
+  la.sin_family = AF_INET;
+  ck_assert_int_eq(inet_pton(AF_INET, src, &la.sin_addr), 1);
+  cfd = socket(AF_INET, SOCK_STREAM, 0);
+  ck_assert_int_ge(cfd, 0);
+  ck_assert_int_eq(bind(cfd, (struct sockaddr *)&la, sizeof la), 0);
+  ck_assert_int_eq(connect(cfd, (struct sockaddr *)&sa, sl), 0);
+  return cfd;
+}
+
+static void service_once(http_server_t *hs, store_t *st, int *n_open) {
+  struct pollfd pfds[1 + HTTP_MAX_CONNS];
+  int n = 0;
+  http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+  poll(pfds, (nfds_t)n, 200);
+  http_server_service(hs, pfds, n, st, mono(), 0);
+  n = 0;
+  http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
+  *n_open = n - 1;
+}
+
+static int is_closed_by_server(int fd) {
+  char b[8];
+  return recv(fd, b, sizeof b, MSG_DONTWAIT) == 0;
+}
+
+START_TEST(idle_flood_from_one_peer_is_capped_and_scrape_still_served) {
   store_t st;
   int lfd;
-  int clients[HTTP_MAX_CONNS + 1];
+  int clients[HTTP_MAX_CONNS];
+  int scrape;
+  int open_conns = 0;
   http_server_t *hs;
-  struct pollfd pfds[1 + HTTP_MAX_CONNS];
   char buf[8192];
-  char extra[8];
-  int n = 0;
   const char req[] = "GET /metrics HTTP/1.1\r\nHost: x\r\n\r\n";
 
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);
   hs = http_server_new(lfd, NULL, "");
-  for (int i = 0; i < HTTP_MAX_CONNS + 1; i++) clients[i] = connect_to(lfd);
-  http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
-  poll(pfds, (nfds_t)n, 200);
-  http_server_service(hs, pfds, n, &st, mono(), 0);
-  n = 0;
-  http_server_poll_fds(hs, pfds, (int)(sizeof pfds / sizeof *pfds), &n);
-  ck_assert_int_eq(n, 1 + HTTP_MAX_CONNS);
-  ck_assert_int_le((int)recv(clients[HTTP_MAX_CONNS], extra, sizeof extra, 0), 0);
-  ck_assert_int_eq((int)send(clients[0], req, sizeof req - 1, 0), (int)sizeof req - 1);
-  drive_until_closed(hs, &st, clients[0]);
-  recv_all(clients[0], buf, sizeof buf);
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) clients[i] = connect_to(lfd);
+  service_once(hs, &st, &open_conns);
+  ck_assert_int_eq(open_conns, HTTP_MAX_CONNS_PER_PEER);
+  ck_assert(is_closed_by_server(clients[0]));
+  ck_assert(!is_closed_by_server(clients[HTTP_MAX_CONNS - 1]));
+  scrape = connect_to(lfd);
+  ck_assert_int_eq((int)send(scrape, req, sizeof req - 1, 0), (int)sizeof req - 1);
+  drive_until_closed(hs, &st, scrape);
+  recv_all(scrape, buf, sizeof buf);
   ck_assert_ptr_nonnull(strstr(buf, "200 OK"));
-  for (int i = 0; i < HTTP_MAX_CONNS + 1; i++) close(clients[i]);
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) close(clients[i]);
+  close(scrape);
+  http_server_free(hs);
+  close(lfd);
+}
+END_TEST
+
+START_TEST(full_pool_evicts_oldest_idle_connection_for_a_new_peer) {
+  store_t st;
+  int lfd;
+  int clients[HTTP_MAX_CONNS];
+  int scrape;
+  int open_conns = 0;
+  http_server_t *hs;
+  char buf[8192];
+  char src[16];
+  const char req[] = "GET /metrics HTTP/1.1\r\nHost: x\r\n\r\n";
+
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  hs = http_server_new(lfd, NULL, "");
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) {
+    snprintf(src, sizeof src, "127.0.1.%d", i + 1);
+    clients[i] = connect_from(lfd, src);
+  }
+  service_once(hs, &st, &open_conns);
+  ck_assert_int_eq(open_conns, HTTP_MAX_CONNS);
+  scrape = connect_from(lfd, "127.0.2.1");
+  ck_assert_int_eq((int)send(scrape, req, sizeof req - 1, 0), (int)sizeof req - 1);
+  drive_until_closed(hs, &st, scrape);
+  recv_all(scrape, buf, sizeof buf);
+  ck_assert_ptr_nonnull(strstr(buf, "200 OK"));
+  ck_assert(is_closed_by_server(clients[0]));
+  ck_assert(!is_closed_by_server(clients[HTTP_MAX_CONNS - 1]));
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) close(clients[i]);
+  close(scrape);
   http_server_free(hs);
   close(lfd);
 }
@@ -761,7 +825,8 @@ static Suite *httpserver_suite(void) {
   tcase_add_test(tc, unknown_paths_need_no_credentials_even_when_auth_is_configured);
   tcase_add_test(tc, oversized_request_is_dropped_without_a_response);
   tcase_add_test(tc, idle_connection_is_dropped_once_its_deadline_passes);
-  tcase_add_test(tc, connections_beyond_the_pool_are_dropped_and_the_pool_keeps_serving);
+  tcase_add_test(tc, idle_flood_from_one_peer_is_capped_and_scrape_still_served);
+  tcase_add_test(tc, full_pool_evicts_oldest_idle_connection_for_a_new_peer);
   tcase_add_loop_test(tc, other_methods_and_malformed_requests_get_404, 0, (int)(sizeof method_cases / sizeof method_cases[0]));
   tcase_add_test(tc, overlong_path_is_truncated_in_the_log_and_still_gets_404);
   suite_add_tcase(s, tc);

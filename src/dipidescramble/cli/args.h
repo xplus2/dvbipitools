@@ -23,6 +23,7 @@ typedef struct {
   /* INPUT_RTP / INPUT_UDP */
   int family; /* AF_INET or AF_INET6 */
   char group[64];
+  char source[64]; /* SSM source, "" = ASM */
   unsigned port;
   /* INPUT_RIST */
   char rist_uri[256]; /* rist://@host:port[?query], @ required (listen) */

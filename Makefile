@@ -99,6 +99,7 @@ dipiscan_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c
@@ -426,6 +427,7 @@ dipirec_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/pes.c \
@@ -593,6 +595,7 @@ dipiradiohead_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/rawaudio.c \
 	src/dipiradiohead/input/playlist.c \
@@ -842,6 +845,7 @@ dipitvhead_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -899,6 +903,7 @@ dipifccret_SRCS := \
 	src/dipifccret/listen.c \
 	src/dipifccret/ret/ret.c \
 	src/dipifccret/ret/rtx_session_table.c \
+	src/dipifccret/ret/ratelimit.c \
 	src/dipifccret/ret/mcsend.c \
 	src/dipifccret/fcc/burst.c \
 	src/dipifccret/fcc/burst_table.c \
@@ -918,6 +923,7 @@ dipifccret_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -1099,6 +1105,7 @@ dipidescramble_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/tspack.c \
@@ -1203,6 +1210,7 @@ dipirist_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -1332,6 +1340,7 @@ dipisrt_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -1671,6 +1680,7 @@ dipixy_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/escodec/aubuild.c \
 	src/lib/demux/escodec/audio/ac3.c \
@@ -1985,6 +1995,7 @@ dipifccret_dispatch_SRCS := \
 	src/dipifccret/capture/ranges.c \
 	src/dipifccret/ret/ret.c \
 	src/dipifccret/ret/rtx_session_table.c \
+	src/dipifccret/ret/ratelimit.c \
 	src/dipifccret/ret/mcsend.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -2012,6 +2023,7 @@ dipifccret_dispatch_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -2029,6 +2041,7 @@ dipifccret_metrics_SRCS := \
 	src/dipifccret/capture/ranges.c \
 	src/dipifccret/ret/ret.c \
 	src/dipifccret/ret/rtx_session_table.c \
+	src/dipifccret/ret/ratelimit.c \
 	src/dipifccret/ret/mcsend.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -2056,6 +2069,7 @@ dipifccret_metrics_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -2072,6 +2086,7 @@ dipifccret_rsi_SRCS := \
 	src/dipifccret/capture/ranges.c \
 	src/dipifccret/ret/ret.c \
 	src/dipifccret/ret/rtx_session_table.c \
+	src/dipifccret/ret/ratelimit.c \
 	src/dipifccret/ret/mcsend.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -2099,6 +2114,7 @@ dipifccret_rsi_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -2142,6 +2158,7 @@ dipidescramble_pmt_select_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -2433,6 +2450,7 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/pes.c \
@@ -2752,6 +2770,7 @@ dipirist_bridge_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -2927,6 +2946,7 @@ dipisrt_bridge_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -3054,7 +3074,8 @@ dipisds_format_out_BIN := tests/unit/dipisds/test_format_out
 dipisds_format_out_SRCS := \
 	tests/unit/dipisds/test_format_out.c \
 	src/dipisds/format_out.c \
-	src/lib/helper/describe.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/xml_util.c
@@ -3330,6 +3351,7 @@ lib_demux_psi_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -3340,6 +3362,7 @@ lib_demux_descriptors_BIN := tests/unit/lib/demux/test_descriptors
 lib_demux_descriptors_SRCS := \
 	tests/unit/lib/demux/test_descriptors.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/bim/bitwriter.c
 
@@ -3356,6 +3379,7 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -3473,6 +3497,7 @@ lib_tsinspect_inspect_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -3497,6 +3522,7 @@ lib_mux_psi_build_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -3588,6 +3614,7 @@ lib_mux_mkv_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -3620,6 +3647,7 @@ lib_mux_mp4_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -3732,6 +3760,7 @@ lib_mux_flv_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -3927,6 +3956,7 @@ dipiscan_scan_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -3996,6 +4026,7 @@ dipiradiohead_psi_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -4107,6 +4138,7 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/rawaudio.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -4161,6 +4193,7 @@ dipiradiohead_cas_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -4337,6 +4370,16 @@ dipiradiohead_source_async_BIN := tests/unit/dipiradiohead/input/test_source_asy
 dipiradiohead_source_async_SRCS := \
 	tests/unit/dipiradiohead/input/test_source_async.c \
 	src/dipiradiohead/input/source/open.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
 	src/dipiradiohead/input/source/open_async.c \
 	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/framequeue.c \
@@ -4363,6 +4406,7 @@ dipiradiohead_source_async_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/rawaudio.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -4382,6 +4426,16 @@ dipiradiohead_source_frame_BIN := tests/unit/dipiradiohead/input/test_frame
 dipiradiohead_source_frame_SRCS := \
 	tests/unit/dipiradiohead/input/test_frame.c \
 	src/dipiradiohead/input/source/open.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
 	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/framequeue.c \
 	src/dipiradiohead/input/playlist.c \
@@ -4406,6 +4460,7 @@ dipiradiohead_source_frame_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/rawaudio.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -4454,6 +4509,7 @@ lib_hls_live_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -4472,6 +4528,11 @@ lib_hls_tspassthrough_BIN := tests/unit/lib/hls/test_tspassthrough
 lib_hls_tspassthrough_SRCS := \
 	tests/unit/lib/hls/test_tspassthrough.c \
 	src/lib/hls/tspassthrough.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
 	src/lib/hls/live.c \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/m3u_lines.c \
@@ -4488,6 +4549,7 @@ lib_hls_tspassthrough_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -4507,6 +4569,7 @@ lib_dash_mpd_SRCS := \
 	tests/unit/lib/dash/test_mpd.c \
 	src/lib/dash/mpd.c \
 	src/lib/hls/m3u_lines.c \
+	src/lib/helper/log.c \
 	src/lib/helper/xml_util.c \
 	src/lib/sys/ioutil.c
 
@@ -4529,6 +4592,7 @@ lib_dash_live_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -4547,6 +4611,16 @@ dipiradiohead_source_hls_BIN := tests/unit/dipiradiohead/input/test_source_hls
 dipiradiohead_source_hls_SRCS := \
 	tests/unit/dipiradiohead/input/test_source_hls.c \
 	src/dipiradiohead/input/source/open.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
 	src/dipiradiohead/input/source/open_async.c \
 	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/framequeue.c \
@@ -4573,6 +4647,7 @@ dipiradiohead_source_hls_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/rawaudio.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -4594,6 +4669,16 @@ dipiradiohead_inputset_SRCS := \
 	src/dipiradiohead/input/inputset.c \
 	src/lib/net/retryset.c \
 	src/dipiradiohead/input/source/open.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
 	src/dipiradiohead/input/source/open_async.c \
 	src/dipiradiohead/input/source/frame.c \
 	src/dipiradiohead/input/framequeue.c \
@@ -4620,6 +4705,7 @@ dipiradiohead_inputset_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/rawaudio.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -4644,6 +4730,7 @@ lib_mux_mpts_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -4689,6 +4776,7 @@ dipitvhead_source_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/metrics/protocol.c \
@@ -4997,6 +5085,7 @@ dipitvhead_discover_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
@@ -5015,6 +5104,7 @@ dipitvhead_pmtbuild_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -5101,6 +5191,7 @@ dipitvhead_remux_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -5163,6 +5254,7 @@ dipitvhead_output_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -5274,6 +5366,7 @@ dipitvhead_mpts_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -5380,6 +5473,7 @@ dipitvhead_single_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -5454,6 +5548,7 @@ dipitvhead_ecmg_client_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -5479,6 +5574,7 @@ dipitvhead_emmg_server_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -5495,6 +5591,7 @@ dipitvhead_simulcrypt_msg_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -5528,6 +5625,7 @@ dipitvhead_cas_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -5725,6 +5823,7 @@ lib_net_tssource_async_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c
 
@@ -5784,6 +5883,7 @@ lib_net_tssource_http_dispatch_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c
 
@@ -5843,6 +5943,7 @@ lib_net_tssource_dash_fmp4_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/mux/fmp4/box.c \
@@ -5907,6 +6008,7 @@ lib_net_tssource_file_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c
 
@@ -5965,6 +6067,7 @@ lib_cas_cas_group_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -5982,6 +6085,7 @@ dipirec_ts_filter_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/psi/section_asm.c \
@@ -6087,6 +6191,7 @@ dipirec_record_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/pes.c \
@@ -6225,6 +6330,7 @@ dipirec_record_net_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
 	src/lib/demux/pes.c \
@@ -6405,6 +6511,7 @@ dipifccret_channel_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -6446,6 +6553,7 @@ dipifccret_burst_table_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -6461,6 +6569,7 @@ dipifccret_pacer_SRCS := \
 	src/dipifccret/capture/ranges.c \
 	src/dipifccret/ret/ret.c \
 	src/dipifccret/ret/rtx_session_table.c \
+	src/dipifccret/ret/ratelimit.c \
 	src/dipifccret/ret/mcsend.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -6488,6 +6597,7 @@ dipifccret_pacer_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -6516,6 +6626,7 @@ dipifccret_burst_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -6528,6 +6639,7 @@ dipifccret_ret_SRCS := \
 	tests/unit/dipifccret/test_ret.c \
 	src/dipifccret/ret/ret.c \
 	src/dipifccret/ret/rtx_session_table.c \
+	src/dipifccret/ret/ratelimit.c \
 	src/lib/net/sockaddr_index.c \
 	src/dipifccret/channel/channel.c \
 	src/lib/tsinspect/core.c \
@@ -6548,6 +6660,7 @@ dipifccret_ret_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -6579,6 +6692,16 @@ dipifccret_serve_SRCS := \
 	$(filter-out src/dipifccret/main.c,$(dipifccret_SRCS))
 dipifccret_serve_EXTRA_CFLAGS := -pthread
 dipifccret_serve_EXTRA_LDFLAGS := -pthread -latomic
+
+UNIT_TESTS += dipifccret_e2e
+dipifccret_e2e_BIN := tests/unit/dipifccret/test_e2e
+dipifccret_e2e_SRCS := \
+	tests/unit/dipifccret/test_e2e.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/rtx.c \
+	$(filter-out src/dipifccret/main.c,$(dipifccret_SRCS))
+dipifccret_e2e_EXTRA_CFLAGS := -pthread
+dipifccret_e2e_EXTRA_LDFLAGS := -pthread -latomic
 
 UNIT_TESTS += dipixy_args dipixy_config dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_status dipixy_htdocs dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_ssdp dipixy_conn dipixy_conn_concurrency dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_segstore_reclaim dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
 
@@ -6676,6 +6799,7 @@ dipixy_playlist_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -6756,6 +6880,7 @@ dipixy_capture_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -6838,6 +6963,7 @@ dipixy_channels_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -6926,6 +7052,7 @@ dipixy_ts_push_queue_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/crc32.c \
@@ -6959,6 +7086,7 @@ dipixy_rawaudio_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/helper/log.c \
@@ -7048,7 +7176,7 @@ dipixy_hls_SRCS := \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 dipixy_hls_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
-dipixy_hls_EXTRA_LDFLAGS := -Wl,--gc-sections
+dipixy_hls_EXTRA_LDFLAGS := -Wl,--gc-sections -Wl,--wrap=malloc
 
 dipixy_segstore_concurrency_BIN := tests/unit/dipixy/test_segstore_concurrency
 dipixy_segstore_concurrency_SRCS := \
@@ -7111,6 +7239,7 @@ ifeq ($(HAVE_TLS),yes)
 UNIT_TESTS += dipixy_reactor_tls dipixy_reactor_tls_cert dipixy_reactor_tls_lifecycle
 endif
 $(eval $(call DIPIXY_FULL_TEST,dipixy_segment,segment))
+dipixy_segment_EXTRA_LDFLAGS += -Wl,--wrap=malloc
 $(eval $(call DIPIXY_FULL_TEST,dipixy_segment_concurrency,segment_concurrency))
 $(eval $(call DIPIXY_FULL_TEST,dipixy_segment_demux,segment_demux))
 $(eval $(call DIPIXY_FULL_TEST,dipixy_lldash,lldash))
@@ -7260,6 +7389,7 @@ dipixy_ws_sources_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -7351,6 +7481,7 @@ dipixy_gena_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -7454,6 +7585,7 @@ dipixy_dlna_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -7528,6 +7660,7 @@ lib_playlist_in_SRCS := \
 	tests/unit/lib/test_playlist_in.c \
 	src/lib/helper/playlist_in.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c \
 	src/lib/helper/xml_util.c
 
 # _BIN/_SRCS/TEST_BINS stay unconditional (unlike TESTS=yes gate below).
@@ -7572,6 +7705,12 @@ INTEGRATION_DIPISRT_SCRIPTS := $(filter-out tests/integration/dipisrt/bonding_co
 INTEGRATION_DIPIXY_SCRIPTS := $(wildcard tests/integration/dipixy/*.sh)
 INTEGRATION_DVBIPITOOLS_SCRIPTS := $(wildcard tests/integration/dvbipitools/*.sh)
 
+ITEST_HELPER_BIN := tests/integration/helpers/itest_helper
+ITEST_HELPER_OBJS := tests/integration/helpers/itest_helper.o
+ALL_OBJS += $(ITEST_HELPER_OBJS)
+$(ITEST_HELPER_BIN): $(ITEST_HELPER_OBJS)
+	$(CC) $^ $(LDFLAGS) -o $@
+
 INTEGRATION_TEST_DEPS := dipibim dipiscan dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipibcg dipimetrics dipifccret dipixy dvbipitools
 ifeq ($(HAVE_OPENSSL),yes)
 INTEGRATION_TEST_DEPS += dipicam378
@@ -7582,8 +7721,10 @@ endif
 ifeq ($(HAVE_SRT),yes)
 INTEGRATION_TEST_DEPS += dipisrt
 endif
+INTEGRATION_TEST_DEPS += $(ITEST_HELPER_BIN)
 
 .PHONY: integration-test
+integration-test: export DVBIPI_ITEST_HELPER := $(abspath $(ITEST_HELPER_BIN))
 integration-test: $(INTEGRATION_TEST_DEPS)
 	@set -e; \
 	for s in $(INTEGRATION_DIPIBIM_SCRIPTS); do echo "running $$s"; sh $$s ./dipibim; done; \
@@ -7635,6 +7776,7 @@ fuzz_psi_SRCS := \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/tspack.c \
@@ -7877,6 +8019,6 @@ install: $(TOOLS) dvbipitools
 TLS_VARIANTS := src/lib/net/tls.o src/lib/net/tls_stub.o
 
 clean:
-	rm -f $(ALL_OBJS) $(ALL_OBJS:.o=.d) $(TLS_VARIANTS) $(TLS_VARIANTS:.o=.d) $(TOOLS) dvbipitools $(TEST_BINS) $(FUZZ_BINS) $(RIST_SEND_HELPER_BIN)
+	rm -f $(ALL_OBJS) $(ALL_OBJS:.o=.d) $(TLS_VARIANTS) $(TLS_VARIANTS:.o=.d) $(TOOLS) dvbipitools $(TEST_BINS) $(FUZZ_BINS) $(RIST_SEND_HELPER_BIN) $(ITEST_HELPER_BIN)
 	rm -f $(GEN_HTDOCS_BIN) src/dipixy/htdocs_index.gen.c src/dipixy/htdocs_index.gen.d
 	rm -rf build/dvbipitools

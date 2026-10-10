@@ -9,6 +9,7 @@
 #include "lib/helper/log.h"
 #include "lib/net/rist/ristout.h"
 #include "lib/net/rist/ristpeer.h"
+#include "lib/net/send_result.h"
 #include "lib/net/ts/sink.h"
 #include "lib/net/ts/source.h"
 #include "lib/tsinspect/inspect.h"
@@ -31,7 +32,7 @@ static int rist_log_cb(void *arg, enum rist_log_level level, const char *msg) {
   return 0;
 }
 
-/* NULL on failure; verbose gates INFO/DEBUG, otherwise WARN+ only */
+/* NULL on failure. verbose enables INFO/DEBUG, else WARN+ */
 static struct rist_logging_settings *open_logging(int verbose) {
   struct rist_logging_settings *ls = NULL;
 
@@ -168,6 +169,21 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   return rc;
 }
 
+static struct rist_ctx *receiver_start(const config_t *cfg, metrics_exporter_t *mx, struct rist_logging_settings *log_settings) {
+  struct rist_ctx *ctx;
+
+  if (rist_receiver_create(&ctx, profile_of(cfg->profile), log_settings) != 0) {
+    log_line("rist: receiver create failed");
+    return NULL;
+  }
+  if (add_peers(ctx, &cfg->in, cfg) || rist_start(ctx) != 0) {
+    rist_destroy(ctx);
+    return NULL;
+  }
+  rist_stats_callback_set(ctx, RIST_STATS_INTERVAL_MS, bridge_receiver_stats_cb, mx);
+  return ctx;
+}
+
 static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   tssink_cfg_t tk;
   tssink_t *sink;
@@ -175,51 +191,68 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   struct rist_logging_settings *log_settings;
   tsinspect_t *insp = tsinspect_new_relay(cfg->metrics_inspect_ts);
   tsinspect_set_t set = {&insp, 1, NULL, 0};
+  int net_had_error = 0;
+  unsigned long long net_errors = 0;
+  int net_retry;
   int rc = 0;
+  unsigned idle_ms = 0;
+  unsigned reset_ms = 2 * cfg->buffer_ms + RIST_READ_TIMEOUT_MS;
+  int got = 0;
 
   plain_endpoint_to_tssink_cfg(&cfg->out.nonrist, cfg->iface, &tk);
+  net_retry = tk.kind == TSSINK_UDP || tk.kind == TSSINK_RTP;
   sink = tssink_open(&tk);
   if (!sink) {
     tsinspect_free(insp);
     return 1;
   }
   log_settings = open_logging(cfg->verbose);
-  if (rist_receiver_create(&ctx, profile_of(cfg->profile), log_settings) != 0) {
-    log_line("rist: receiver create failed");
-    if (log_settings) rist_logging_settings_free2(&log_settings);
-    tssink_close(sink);
-    tsinspect_free(insp);
-    return 1;
-  }
-  if (add_peers(ctx, &cfg->in, cfg) || rist_start(ctx) != 0) {
-    rist_destroy(ctx);
+  ctx = receiver_start(cfg, mx, log_settings);
+  if (!ctx) {
     if (log_settings) rist_logging_settings_free2(&log_settings);
     tssink_close(sink);
     tsinspect_free(insp);
     return 1;
   }
   if (insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
-  rist_stats_callback_set(ctx, RIST_STATS_INTERVAL_MS, bridge_receiver_stats_cb, mx);
 
   while (!signal_stop_requested()) {
     struct rist_data_block *db = NULL;
+    int wr;
     int ret = rist_receiver_data_read2(ctx, &db, RIST_READ_TIMEOUT_MS);
     if (insp) tsinspect_tick(insp, mono_seconds());
     if (ret < 0) {
       rc = 1;
       break;
     }
-    if (ret == 0 || !db) continue;
+    if (ret == 0 || !db) {
+      idle_ms += RIST_READ_TIMEOUT_MS;
+      if (got && cfg->buffer_ms && idle_ms >= reset_ms) {
+        /* stale flow lingers to session timeout, restart collides */
+        rist_destroy(ctx);
+        ctx = receiver_start(cfg, mx, log_settings);
+        if (!ctx) {
+          rc = 1;
+          break;
+        }
+        got = 0;
+      }
+      continue;
+    }
+    idle_ms = 0;
+    got = 1;
     if (insp) tsinspect_grid(insp, db->payload, db->payload_len);
-    if (tssink_write(sink, db->payload, db->payload_len) < 0) {
+    wr = tssink_write(sink, db->payload, db->payload_len);
+    if (wr < 0 && !net_retry) {
       rc = 1;
       rist_receiver_data_block_free2(&db);
       break;
     }
+    note_send_result(wr >= 0, &net_had_error, &net_errors, "net");
     rist_receiver_data_block_free2(&db);
   }
 
-  rist_destroy(ctx);
+  if (ctx) rist_destroy(ctx);
   if (insp) metrics_exporter_set_extra(mx, NULL, NULL);
   tsinspect_free(insp);
   if (log_settings) rist_logging_settings_free2(&log_settings);

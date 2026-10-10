@@ -117,7 +117,7 @@ START_TEST(mixed_scheme_playlist_opens_static_ctx_per_scheme) {
   /* rtp entry: resolved per-request via channels_resolve(), no static_ctx */
   rtp_ctx = channels_resolve_static(ch, 1, 1, NULL);
   ck_assert_ptr_null(rtp_ctx);
-  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
   ck_assert_str_eq(addr, "239.1.1.1");
   ck_assert_uint_eq(port, 5000u);
   ck_assert_int_eq(rtp, 1);
@@ -131,7 +131,7 @@ START_TEST(mixed_scheme_playlist_opens_static_ctx_per_scheme) {
      static_ctx NULL, unresolvable either way */
   srt_ctx = channels_resolve_static(ch, 1, 3, NULL);
   ck_assert_ptr_null(srt_ctx);
-  ck_assert_int_ne(channels_resolve(ch, 1, 3, NULL, &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_ne(channels_resolve(ch, 1, 3, NULL, &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
 
   channels_free(ch);
   stop_local_http_server(listen_fd, tid);
@@ -386,7 +386,7 @@ START_TEST(channels_resolve_passes_ret_and_fcc_through) {
   ck_assert_ptr_nonnull(ch);
 
   memset(&rf, 0, sizeof rf);
-  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, &port, &rtp, &rf), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, NULL, 0, &port, &rtp, &rf), 0);
   ck_assert_int_eq(rf.has_ret, 1);
   ck_assert_str_eq(rf.ret.addr, "10.0.0.1");
   ck_assert_uint_eq(rf.ret.port, 6000u);
@@ -417,18 +417,18 @@ START_TEST(resolve_by_name_finds_correct_entry_regardless_of_input_order) {
   unlink(path);
   ck_assert_ptr_nonnull(ch);
 
-  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Alpha", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Alpha", &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
   ck_assert_str_eq(addr, "239.1.1.1");
   ck_assert_uint_eq(port, 5001u);
 
-  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Zulu", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Zulu", &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
   ck_assert_str_eq(addr, "239.1.1.26");
   ck_assert_uint_eq(port, 5000u);
 
-  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Kilo", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Kilo", &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
   ck_assert_uint_eq(port, 5003u);
 
-  ck_assert_int_ne(channels_resolve(ch, 1, 0, "NoSuchName", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_ne(channels_resolve(ch, 1, 0, "NoSuchName", &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
 
   channels_free(ch);
 }
@@ -491,10 +491,10 @@ START_TEST(resolve_by_name_works_across_a_larger_list) {
   for (i = 0; i < 64; i++) {
     char name[16];
     snprintf(name, sizeof name, "Chan%02d", i);
-    ck_assert_int_eq(channels_resolve(ch, 1, 0, name, &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+    ck_assert_int_eq(channels_resolve(ch, 1, 0, name, &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
     ck_assert_uint_eq(port, 6000u);
   }
-  ck_assert_int_ne(channels_resolve(ch, 1, 0, "Chan99", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_ne(channels_resolve(ch, 1, 0, "Chan99", &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
 
   channels_free(ch);
 }
@@ -513,7 +513,7 @@ START_TEST(resolve_by_name_after_reload_uses_fresh_index) {
   write_temp_file(path, "#EXTINF:-1,First\nrtp://@239.3.0.1:7000\n");
   ch = build_single_m3u_list(path);
   ck_assert_ptr_nonnull(ch);
-  ck_assert_int_eq(channels_resolve(ch, 1, 0, "First", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "First", &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
 
   write_temp_file(path, "#EXTINF:-1,Second\nrtp://@239.3.0.2:7001\n#EXTINF:-1,First\nrtp://@239.3.0.3:7002\n");
   memset(&cfg, 0, sizeof cfg);
@@ -526,9 +526,9 @@ START_TEST(resolve_by_name_after_reload_uses_fresh_index) {
   channels_reload_all(ch, &cfg);
   unlink(path);
 
-  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Second", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "Second", &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
   ck_assert_uint_eq(port, 7001u);
-  ck_assert_int_eq(channels_resolve(ch, 1, 0, "First", &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 0, "First", &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
   ck_assert_uint_eq(port, 7002u);
 
   channels_free(ch);
@@ -555,7 +555,7 @@ START_TEST(direct_mcast_source_builds_single_item_list) {
   ck_assert_ptr_nonnull(ch);
 
   ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 1);
-  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
   ck_assert_int_eq(family, AF_INET);
   ck_assert_str_eq(addr, "239.2.24.1");
   ck_assert_uint_eq(port, 8208u);
@@ -587,7 +587,7 @@ START_TEST(direct_mcast_source_survives_sighup_reload) {
   channels_reload_all(ch, &cfg);
 
   ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 1);
-  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
   ck_assert_uint_eq(port, 8208u);
   ck_assert_int_eq(rtp, 0);
 
@@ -631,7 +631,7 @@ START_TEST(file_lists_build_one_item_each) {
   unlink(path);
   ck_assert_ptr_nonnull(ch);
   ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 1);
-  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, &port, &rtp, NULL), 0);
+  ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
   ck_assert_str_eq(addr, "239.1.0.1");
   ck_assert_uint_eq(port, 5000u);
   channels_free(ch);

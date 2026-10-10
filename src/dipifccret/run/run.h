@@ -18,7 +18,10 @@
 #include "../channel/channel.h"
 #include "../fcc/burst_table.h"
 #include "../ret/mcsend.h"
+#include "../ret/ratelimit.h"
 #include "../ret/ret.h"
+
+#define FCC_BUCKET_SECONDS 5 /* RAMS-R bucket depth = rate x this */
 
 typedef struct {
   int fd;
@@ -58,6 +61,9 @@ typedef struct {
   size_t fcc_range_count;
   const cidr_t *fcc_client_ranges; /* 505: empty = every client eligible */
   size_t fcc_client_range_count;
+  ratelimit_t *fcc_limiter; /* NULL or fcc_client_rate 0: unlimited */
+  unsigned fcc_client_rate; /* RAMS-R starts/s per client IP */
+  _Atomic uint64_t fcc_limited_total;
   unsigned char rtx_pt;
 
   unsigned idle_timeout_s; /* 0 = reaping disabled */

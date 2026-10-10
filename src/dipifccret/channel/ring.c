@@ -145,23 +145,11 @@ size_t channel_cache_count(const channel_t *c) {
   return (size_t)avail;
 }
 
-int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out) {
+static int cache_read_abs(const channel_t *c, uint64_t abs_pos, rap_cache_entry_t *out) {
   const fcc_ring_entry_t *ring = (const fcc_ring_entry_t *)c->cache.entries;
-  uint64_t wc, rwc, avail, start, abs_pos;
-  const fcc_ring_entry_t *slot;
+  const fcc_ring_entry_t *slot = &ring[abs_pos % c->cache.cap];
   uint64_t words[FCC_PAYLOAD_WORDS] = {0};
   unsigned g;
-
-  if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire)) return 0;
-  wc = atomic_load_explicit(&c->cache.write_count, memory_order_acquire);
-  rwc = atomic_load_explicit(&c->cache.rap_write_count, memory_order_relaxed);
-  avail = wc - rwc;
-  if (avail > c->cache.cap) avail = c->cache.cap;
-  if (index >= avail) return 0;
-
-  start = wc - avail;
-  abs_pos = start + index;
-  slot = &ring[abs_pos % c->cache.cap];
 
   SEQLOCK_READ_LOOP(&slot->gen, g) {
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
@@ -175,4 +163,40 @@ int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out) 
     }
   }
   return 0; /* repeated race treated as not-found */
+}
+
+int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out) {
+  uint64_t wc, rwc, avail;
+
+  if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire)) return 0;
+  wc = atomic_load_explicit(&c->cache.write_count, memory_order_acquire);
+  rwc = atomic_load_explicit(&c->cache.rap_write_count, memory_order_relaxed);
+  avail = wc - rwc;
+  if (avail > c->cache.cap) avail = c->cache.cap;
+  if (index >= avail) return 0;
+
+  return cache_read_abs(c, wc - avail + index, out);
+}
+
+uint64_t channel_cache_pin(const channel_t *c) {
+  uint64_t wc = atomic_load_explicit(&c->cache.write_count, memory_order_acquire);
+  uint64_t rwc;
+
+  if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire)) return wc;
+  rwc = atomic_load_explicit(&c->cache.rap_write_count, memory_order_relaxed);
+  if (wc - rwc > c->cache.cap) return wc - c->cache.cap; /* true RAP already overwritten */
+  return rwc;
+}
+
+uint64_t channel_cache_end(const channel_t *c) {
+  return atomic_load_explicit(&c->cache.write_count, memory_order_acquire);
+}
+
+int channel_cache_get_abs(const channel_t *c, uint64_t abs_pos, rap_cache_entry_t *out) {
+  uint64_t wc;
+
+  if (c->cache.cap == 0) return 0;
+  wc = atomic_load_explicit(&c->cache.write_count, memory_order_acquire);
+  if (abs_pos >= wc || wc - abs_pos > c->cache.cap) return 0; /* not yet written, or overwritten */
+  return cache_read_abs(c, abs_pos, out);
 }

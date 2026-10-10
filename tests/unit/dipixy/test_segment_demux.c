@@ -39,9 +39,9 @@ typedef struct {
 static void seg_open(seg_t *g, const pid_filter_t *filter, seg_container_t container) {
   hls_store_init(MAX_STORES);
   hls_seg_init(MAX_STORES);
-  g->ctx = capture_open(AF_INET, GROUP, PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  g->ctx = capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(g->ctx);
-  ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), filter, 0, &full, SEG_TARGET, MAX_SEGS, container, 0.0), 1);
+  ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), filter, 0, &full, SEG_TARGET, MAX_SEGS, container, 0.0), 1);
   hls_seg_registry_lock();
   g->s = hls_seg_find_locked(g->ctx, filter, 0, &full, container);
   hls_seg_registry_unlock();

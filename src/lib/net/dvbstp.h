@@ -11,6 +11,9 @@
 /* ETSI TS 102 034 clause 5.4.1. recommended max to stay under ethernet MTU */
 #define DVBSTP_MAX_SECTION 1452
 
+/* byte cap per reassembled segment, enforced on send and receive */
+#define DVBSTP_MAX_SEGMENT (4u * 1024u * 1024u)
+
 /* payload ids used by SD&S, TS 102 034 V2.1.1 table 12a */
 #define DVBSTP_PAYLOAD_SP_DISCOVERY 0x01
 #define DVBSTP_PAYLOAD_BROADCAST_DISCOVERY 0x02

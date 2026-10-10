@@ -19,6 +19,7 @@ typedef struct {
   unsigned al_fec_l;
   unsigned al_fec_d;
   unsigned al_fec_port;
+  int pack; /* 1: aligned full datagrams, resync on 0x47 */
   /* TSSINK_FILE; O_TRUNC on open */
   const char *file_path;
 } tssink_cfg_t;
@@ -30,8 +31,12 @@ tssink_t *tssink_open(const tssink_cfg_t *cfg);
 
 /* TSSINK_FILE/TSSINK_STDOUT: written as given. TSSINK_UDP/TSSINK_RTP: split into
    TS_PER_DGRAM*188-byte (or smaller final) datagrams, RTP header prepended for TSSINK_RTP.
+   cfg->pack: bytes accumulate across calls, only 188-aligned dgs.
    0 ok, -1 error */
 int tssink_write(tssink_t *s, const unsigned char *buf, size_t n);
+
+/* cfg->pack: send pending packets. 0 ok, -1 error */
+int tssink_flush(tssink_t *s);
 
 void tssink_close(tssink_t *s);
 

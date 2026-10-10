@@ -51,9 +51,9 @@ static int read_whole_file(const char *path, unsigned char **out, size_t *out_le
   return 0;
 }
 
-/* rtp://[@]<addr>:<port> or udp://..., [addr6] for v6. fills address/family/port */
+/* rtp://[[src]@]<addr>:<port> or udp://..., [addr6] for v6. fills address/source/family/port */
 static int parse_mcast_uri(const char *uri, sds_service_t *s) {
-  const char *p;
+  const char *p, *at;
   char addr[SDS_MAX_ADDR];
   size_t alen;
   char *end;
@@ -62,7 +62,18 @@ static int parse_mcast_uri(const char *uri, sds_service_t *s) {
   else if (!strncmp(uri, "udp://", 6)) s->rtp = 0;
   else return -1;
   p = uri + 6;
-  if (*p == '@') p++;
+  at = strchr(p, '@');
+  if (at) {
+    size_t slen = (size_t)(at - p);
+    if (slen >= sizeof s->source) return -1;
+    if (slen > 2 && p[0] == '[' && at[-1] == ']') {
+      p++;
+      slen -= 2;
+    }
+    memcpy(s->source, p, slen);
+    s->source[slen] = '\0';
+    p = at + 1;
+  }
   if (*p == '[') {
     const char *close = strchr(p, ']');
     if (!close) return -1;
@@ -87,6 +98,10 @@ static int parse_mcast_uri(const char *uri, sds_service_t *s) {
   if (*end != '\0' || v == 0 || v > 65535) return -1;
   s->port = (unsigned)v;
   bufcpy(s->address, sizeof s->address, addr);
+  if (s->source[0]) {
+    unsigned char b[16];
+    if (inet_pton(s->family, s->source, b) != 1) return -1;
+  }
   return 0;
 }
 
@@ -146,11 +161,11 @@ static int load_m3u(FILE *f, input_t *in) {
       bufcpy(pending_name, sizeof pending_name, comma + 1);
       pending_tsid = pending_onid = 1;
       pending_sid = 0;
-      if (xml_attr(line, comma, "tsid", tmp, sizeof tmp) == 0)
+      if (xml_attr_list(line, comma, "tsid", tmp, sizeof tmp) == 0)
         pending_tsid = (unsigned)strtoul(tmp, NULL, 10);
-      if (xml_attr(line, comma, "onid", tmp, sizeof tmp) == 0)
+      if (xml_attr_list(line, comma, "onid", tmp, sizeof tmp) == 0)
         pending_onid = (unsigned)strtoul(tmp, NULL, 10);
-      if (xml_attr(line, comma, "sid", tmp, sizeof tmp) == 0)
+      if (xml_attr_list(line, comma, "sid", tmp, sizeof tmp) == 0)
         pending_sid = (unsigned)strtoul(tmp, NULL, 10);
       have_pending = 1;
       continue;
@@ -177,69 +192,46 @@ static int load_m3u(FILE *f, input_t *in) {
   return 0;
 }
 
-/* copies [tb,te) into title, truncating to fit */
-static void copy_title_field(char *title, size_t title_cap, const char *tb, const char *te) {
-  size_t n = (size_t)(te - tb);
-  if (n >= title_cap) n = title_cap - 1;
-  memcpy(title, tb, n);
-  title[n] = '\0';
+typedef struct {
+  input_t *in;
+  int idx;
+} xspf_ctx_t;
+
+static int xspf_track_cb(const char *tag, const char *end, void *vctx) {
+  xspf_ctx_t *c = vctx;
+  input_t *in = c->in;
+  char loc[2 * SDS_MAX_ADDR + 16], title[SDS_MAX_NAME], tmp[32];
+  sds_service_t *s;
+
+  if (c->idx >= SDS_MAX_SERVICES) {
+    log_line("too many entries (max %d)", SDS_MAX_SERVICES);
+    return -1;
+  }
+  if (xml_elem_text(tag, end, "location", loc, sizeof loc)) {
+    log_line("xspf track missing <location>");
+    return -1;
+  }
+  if (xml_elem_text(tag, end, "title", title, sizeof title)) title[0] = '\0';
+
+  s = &in->services[c->idx];
+  memset(s, 0, sizeof *s);
+  bufcpy(s->name, sizeof s->name, title);
+  if (parse_mcast_uri(loc, s)) {
+    log_line("bad uri: %s", loc);
+    return -1;
+  }
+  s->tsid = xml_attr(tag, end, "tsid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
+  s->onid = xml_attr(tag, end, "onid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
+  s->sid = xml_attr(tag, end, "sid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : (unsigned)(c->idx + 1);
+  c->idx++;
+  return 0;
 }
 
 static int load_xspf(input_t *in, const unsigned char *buf) {
   const char *p = (const char *)buf;
-  int idx = 0;
-  for (;;) {
-    const char *tag = strstr(p, "<track");
-    const char *end, *lb, *le, *tb;
-    char loc[SDS_MAX_ADDR + 16], title[SDS_MAX_NAME], tmp[32];
-    sds_service_t *s;
-    size_t n;
-
-    if (!tag) break;
-    end = strstr(tag, "</track>");
-    if (!end) break;
-    if (idx >= SDS_MAX_SERVICES) {
-      log_line("too many entries (max %d)", SDS_MAX_SERVICES);
-      return -1;
-    }
-    lb = strstr(tag, "<location>");
-    if (!lb || lb >= end) {
-      log_line("xspf track missing <location>");
-      return -1;
-    }
-    lb += 10;
-    le = strstr(lb, "</location>");
-    if (!le || le > end) {
-      log_line("xspf track missing </location>");
-      return -1;
-    }
-    n = (size_t)(le - lb);
-    if (n >= sizeof loc) n = sizeof loc - 1;
-    memcpy(loc, lb, n);
-    loc[n] = '\0';
-    title[0] = '\0';
-    tb = strstr(tag, "<title>");
-    if (tb && tb < end) {
-      const char *te;
-      tb += 7;
-      te = strstr(tb, "</title>");
-      if (te && te <= end) copy_title_field(title, sizeof title, tb, te);
-    }
-
-    s = &in->services[idx];
-    memset(s, 0, sizeof *s);
-    bufcpy(s->name, sizeof s->name, title);
-    if (parse_mcast_uri(loc, s)) {
-      log_line("bad uri: %s", loc);
-      return -1;
-    }
-    s->tsid = xml_attr(tag, end, "tsid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
-    s->onid = xml_attr(tag, end, "onid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
-    s->sid = xml_attr(tag, end, "sid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : (unsigned)(idx + 1);
-    idx++;
-    p = end + 8;
-  }
-  in->service_count = idx;
+  xspf_ctx_t c = {in, 0};
+  if (for_each_xml_elem(p, p + strlen(p), "track", xspf_track_cb, &c)) return -1;
+  in->service_count = c.idx;
   return 0;
 }
 
@@ -250,11 +242,11 @@ int input_load(const char *path, input_t *in) {
     unsigned char *buf;
     size_t len;
     static const struct { const char *tag; unsigned payload_id; } root_tags[] = {
-      {"<BroadcastDiscovery", DVBSTP_PAYLOAD_BROADCAST_DISCOVERY},
-      {"<ServiceProviderDiscovery", DVBSTP_PAYLOAD_SP_DISCOVERY},
-      {"<PackageDiscovery", DVBSTP_PAYLOAD_PACKAGE_DISCOVERY},
-      {"<RegionalisationDiscovery", DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY},
-      {"<RMSFUSDiscovery", DVBSTP_PAYLOAD_RMSFUS_DISCOVERY},
+      {"BroadcastDiscovery", DVBSTP_PAYLOAD_BROADCAST_DISCOVERY},
+      {"ServiceProviderDiscovery", DVBSTP_PAYLOAD_SP_DISCOVERY},
+      {"PackageDiscovery", DVBSTP_PAYLOAD_PACKAGE_DISCOVERY},
+      {"RegionalisationDiscovery", DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY},
+      {"RMSFUSDiscovery", DVBSTP_PAYLOAD_RMSFUS_DISCOVERY},
     };
     size_t i;
     if (read_whole_file(path, &buf, &len)) {
@@ -262,7 +254,7 @@ int input_load(const char *path, input_t *in) {
       return -1;
     }
     for (i = 0; i < sizeof root_tags / sizeof root_tags[0]; i++) {
-      if (strstr((char *)buf, root_tags[i].tag)) {
+      if (xml_find_start((char *)buf, (char *)buf + len, root_tags[i].tag)) {
         in->raw_payload_id = root_tags[i].payload_id;
         break;
       }

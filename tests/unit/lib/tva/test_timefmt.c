@@ -37,6 +37,48 @@ START_TEST(xmltv_time_to_iso8601_rejects_malformed) {
 }
 END_TEST
 
+START_TEST(xmltv_time_to_iso8601_accepts_reduced_precision) {
+  char out[32];
+  ck_assert_int_eq(xmltv_time_to_iso8601("202012151230 +0200", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-15T12:30:00+02:00");
+  ck_assert_int_eq(xmltv_time_to_iso8601("2020121512", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-15T12:00:00");
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-15T00:00:00");
+  ck_assert_int_eq(xmltv_time_to_iso8601("202012", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-01T00:00:00");
+  ck_assert_int_eq(xmltv_time_to_iso8601("2020", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-01-01T00:00:00");
+}
+END_TEST
+
+START_TEST(xmltv_time_to_iso8601_maps_named_zones) {
+  char out[32];
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 CET", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-15T12:30:45+01:00");
+  ck_assert_int_eq(xmltv_time_to_iso8601("20200715123045 CEST", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-07-15T12:30:45+02:00");
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 UTC", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-15T12:30:45Z");
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 EEST", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-15T12:30:45+03:00");
+}
+END_TEST
+
+START_TEST(xmltv_time_to_iso8601_reports_unknown_zone_name) {
+  char out[32];
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 XYZ", out, sizeof out), 1);
+  ck_assert_str_eq(out, "2020-12-15T12:30:45");
+}
+END_TEST
+
+START_TEST(xmltv_time_to_iso8601_rejects_trailing_junk) {
+  char out[32];
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 +02", out, sizeof out), -1);
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045+0200x", out, sizeof out), -1);
+}
+END_TEST
+
 START_TEST(iso8601_to_xmltv_time_z_becomes_plus_zero) {
   char out[32];
   ck_assert_int_eq(iso8601_to_xmltv_time("2020-12-15T12:30:45Z", out, sizeof out), 0);
@@ -79,6 +121,10 @@ static Suite *timefmt_suite(void) {
   tcase_add_test(tc, xmltv_time_to_iso8601_zero_offset_becomes_z);
   tcase_add_test(tc, xmltv_time_to_iso8601_nonzero_offset);
   tcase_add_test(tc, xmltv_time_to_iso8601_rejects_malformed);
+  tcase_add_test(tc, xmltv_time_to_iso8601_accepts_reduced_precision);
+  tcase_add_test(tc, xmltv_time_to_iso8601_maps_named_zones);
+  tcase_add_test(tc, xmltv_time_to_iso8601_reports_unknown_zone_name);
+  tcase_add_test(tc, xmltv_time_to_iso8601_rejects_trailing_junk);
   tcase_add_test(tc, iso8601_to_xmltv_time_z_becomes_plus_zero);
   tcase_add_test(tc, iso8601_to_xmltv_time_with_offset);
   tcase_add_test(tc, iso8601_to_xmltv_time_no_offset);

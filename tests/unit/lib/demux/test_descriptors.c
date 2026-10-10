@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/demux/psi/dvbtext.h"
 #include "lib/demux/psi/priv.h"
 
 #include "bitstream_test.h"
@@ -399,6 +400,95 @@ START_TEST(service_descriptor_truncation) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  unsigned char data[16];
+  size_t len;
+  size_t cap;
+  const char *want;
+} text_case_t;
+
+static const text_case_t text_cases[] = {
+    {"ascii", {'D', 'a', 's', ' ', 'E'}, 5, 64, "Das E"},
+    {"6937 acute", {'c', 'a', 'f', 0xC2, 'e'}, 5, 64, "caf\xC3\xA9"},
+    {"6937 diaeresis", {0xC8, 'u'}, 2, 64, "\xC3\xBC"},
+    {"6937 sharp s and AE", {0xFB, 0xE1}, 2, 64, "\xC3\x9F\xC3\x86"},
+    {"6937 euro", {0xA4}, 1, 64, "\xE2\x82\xAC"},
+    {"6937 spacing acute", {0xC2, ' '}, 2, 64, "\xC2\xB4"},
+    {"6937 accent without composition", {0xC2, 'x'}, 2, 64, "x"},
+    {"6937 unmapped", {0xC0, 'A'}, 2, 64, "?A"},
+    {"control to space", {'A', 0x01, 'B'}, 3, 64, "A B"},
+    {"emphasis dropped, crlf to space", {0x86, 'A', 0x87, 0x8A, 'B'}, 5, 64, "A B"},
+    {"8859-5", {0x01, 0xB0}, 2, 64, "\xD0\x90"},
+    {"8859-7 via 0x10", {0x10, 0x00, 0x07, 0xC1}, 4, 64, "\xCE\x91"},
+    {"8859-11", {0x07, 0xA1}, 2, 64, "\xE0\xB8\x81"},
+    {"8859-12 reserved", {0x08, 'A', 0xB0}, 3, 64, "A?"},
+    {"ucs2", {0x11, 0x00, 'A', 0x20, 0xAC}, 5, 64, "A\xE2\x82\xAC"},
+    {"ucs2 surrogate pair", {0x11, 0xD8, 0x3D, 0xDE, 0x00}, 5, 64, "\xF0\x9F\x98\x80"},
+    {"ucs2 lone surrogate", {0x11, 0xD8, 0x3D, 0x00, 'A'}, 5, 64, "?A"},
+    {"utf8 passthrough", {0x15, 'a', 0xC3, 0xA9}, 4, 64, "a\xC3\xA9"},
+    {"utf8 truncated sequence", {0x15, 'a', 0xC3}, 3, 64, "a?"},
+    {"utf8 overlong", {0x15, 0xC0, 0x80}, 3, 64, "??"},
+    {"utf8 c1 control dropped", {0x15, 'a', 0xC2, 0x86, 'b'}, 5, 64, "ab"},
+    {"ksx1001", {0x12, 0xB0, 0xA1}, 3, 64, "\xEA\xB0\x80"},
+    {"gb2312", {0x13, 0xB0, 0xA1, 'A'}, 4, 64, "\xE5\x95\x8A" "A"},
+    {"big5", {0x14, 0xA4, 0x40}, 3, 64, "\xE4\xB8\x80"},
+    {"dbcs bad trail resyncs", {0x13, 0xB0, 'A'}, 3, 64, "?A"},
+    {"encoding_type_id ascii only", {0x1F, 0x01, 'A', 0xE9}, 4, 64, "A?"},
+    {"cut on code point boundary", {'a', 'b', 'c', 0xC2, 'e'}, 5, 5, "abc"},
+    {"fits exactly", {'a', 'b', 'c', 0xC2, 'e'}, 5, 7, "abc\xC3\xA9"},
+};
+
+START_TEST(dvbtext_conversion_table) {
+  const text_case_t *c = &text_cases[_i];
+  char out[64];
+  size_t n;
+
+  memset(out, 'x', sizeof out);
+  n = dvbtext_to_utf8(out, c->cap, c->data, c->len);
+  ck_assert_msg(strcmp(out, c->want) == 0, "%s: got '%s'", c->name, out);
+  ck_assert_msg(n == strlen(c->want), "%s: length %zu", c->name, n);
+}
+END_TEST
+
+START_TEST(dvbtext_zero_cap_writes_nothing) {
+  char out[4] = {'x', 'x', 'x', 'x'};
+
+  ck_assert_uint_eq(dvbtext_to_utf8(out, 0, (const unsigned char *)"A", 1), 0);
+  ck_assert_int_eq(out[0], 'x');
+}
+END_TEST
+
+START_TEST(dvbtext_never_overruns_or_emits_invalid_utf8) {
+  unsigned char in[24];
+  char out[12];
+  unsigned seed = 12345u + (unsigned)_i;
+
+  for (int round = 0; round < 400; round++) {
+    size_t len = 1 + (seed >> 8) % sizeof in;
+    size_t n;
+
+    for (size_t k = 0; k < len; k++) {
+      seed = seed * 1103515245u + 12345u;
+      in[k] = (unsigned char)(seed >> 16);
+    }
+    if (_i < 8) in[0] = (unsigned char)(_i + 0x11);
+    n = dvbtext_to_utf8(out, sizeof out, in, len);
+    ck_assert_uint_lt(n, sizeof out);
+    ck_assert_uint_eq(strlen(out), n);
+    for (size_t k = 0; k < n;) {
+      unsigned char b = (unsigned char)out[k];
+      size_t seq = b < 0x80 ? 1 : (b & 0xE0) == 0xC0 ? 2 : (b & 0xF0) == 0xE0 ? 3 : (b & 0xF8) == 0xF0 ? 4 : 0;
+
+      ck_assert_uint_ne(seq, 0);
+      ck_assert_uint_le(k + seq, n);
+      for (size_t m = 1; m < seq; m++) ck_assert_int_eq((unsigned char)out[k + m] & 0xC0, 0x80);
+      k += seq;
+    }
+  }
+}
+END_TEST
+
 static Suite *descriptors_suite(void) {
   Suite *s = suite_create("psi_descriptors");
   TCase *tc = tcase_create("core");
@@ -413,6 +503,9 @@ static Suite *descriptors_suite(void) {
   tcase_add_loop_test(tc, subtitle_descriptor_entries, 0, (int)(sizeof sub_cases / sizeof sub_cases[0]));
   tcase_add_loop_test(tc, classify_descriptor_table, 0, (int)(sizeof classify_cases / sizeof classify_cases[0]));
   tcase_add_loop_test(tc, service_descriptor_truncation, 0, (int)(sizeof service_cases / sizeof service_cases[0]));
+  tcase_add_loop_test(tc, dvbtext_conversion_table, 0, (int)(sizeof text_cases / sizeof text_cases[0]));
+  tcase_add_test(tc, dvbtext_zero_cap_writes_nothing);
+  tcase_add_loop_test(tc, dvbtext_never_overruns_or_emits_invalid_utf8, 0, 16);
   suite_add_tcase(s, tc);
   return s;
 }

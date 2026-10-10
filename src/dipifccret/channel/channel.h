@@ -138,6 +138,10 @@ int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out);
 /* seq/timestamp only, skips payload copy */
 int channel_cache_peek_meta(const channel_t *c, size_t index, rap_cache_meta_t *out);
 
+uint64_t channel_cache_pin(const channel_t *c);
+uint64_t channel_cache_end(const channel_t *c);
+int channel_cache_get_abs(const channel_t *c, uint64_t abs_pos, rap_cache_entry_t *out);
+
 /* F.5.3 SRBT 8 source. cname NULL/0-length if none this time.
    collision: [ssrc,cname] if both known, else [ssrc,address]. locks c->hned_lock, callable from any listen worker thread. */
 void channel_hned_seen(channel_t *c, uint32_t ssrc, const struct sockaddr *from, socklen_t fromlen, const char *cname, size_t cname_len);

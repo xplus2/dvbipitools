@@ -211,6 +211,83 @@ START_TEST(srtin_single_caller_receives_from_listener) {
 }
 END_TEST
 
+START_TEST(srtin_single_caller_redials_after_listener_drops) {
+  const size_t total = (size_t)PAYLOAD_CHUNKS * PAYLOAD_CHUNK_BYTES;
+  unsigned port = free_udp_port();
+  unsigned char *payload[2];
+  unsigned char rx[2048];
+  unsigned char *got_buf = malloc(total);
+  struct sockaddr_in addr;
+  listener_arg_t la[2];
+  pthread_t th[2];
+  srtin_cfg_t cfg;
+  srtin_t *in;
+  int reconnects = 0;
+  double deadline = now_seconds() + 2 * LINK_DEADLINE_S;
+
+  ck_assert_ptr_nonnull(got_buf);
+  for (int k = 0; k < 2; k++) {
+    payload[k] = malloc(total);
+    ck_assert_ptr_nonnull(payload[k]);
+    for (size_t i = 0; i < total; i++) payload[k][i] = (unsigned char)(i * 11 + 5 + k * 50);
+  }
+  ck_assert_int_ne(srt_startup(), SRT_ERROR);
+  la[0].lsn = srt_create_socket();
+  ck_assert_int_ne(la[0].lsn, SRT_INVALID_SOCK);
+  la[1].lsn = la[0].lsn;
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons((unsigned short)port);
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ck_assert_int_ne(srt_bind(la[0].lsn, (struct sockaddr *)&addr, sizeof addr), SRT_ERROR);
+  ck_assert_int_ne(srt_listen(la[0].lsn, 1), SRT_ERROR);
+  for (int k = 0; k < 2; k++) {
+    la[k].payload = payload[k];
+    la[k].len = total;
+    atomic_init(&la[k].go, 0);
+  }
+  ck_assert_int_eq(pthread_create(&th[0], NULL, listener_thread, &la[0]), 0);
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.peers[0].host = "127.0.0.1";
+  cfg.peers[0].port = port;
+  cfg.npeers = 1;
+  in = srtin_open(&cfg);
+  atomic_store(&la[0].go, 1);
+  ck_assert_ptr_nonnull(in);
+
+  for (int k = 0; k < 2; k++) {
+    size_t got = 0;
+
+    if (k == 1) ck_assert_int_eq(pthread_create(&th[1], NULL, listener_thread, &la[1]), 0);
+    while (got < total && now_seconds() < deadline) {
+      int reconnected = 0;
+      int n = srtin_read(in, rx, sizeof rx, &reconnected);
+
+      ck_assert_int_ge(n, 0);
+      reconnects += reconnected;
+      if (reconnected) atomic_store(&la[1].go, 1);
+      if (n > 0) {
+        ck_assert_uint_le(got + (size_t)n, total);
+        memcpy(got_buf + got, rx, (size_t)n);
+        got += (size_t)n;
+      }
+    }
+    ck_assert_uint_eq(got, total);
+    ck_assert_mem_eq(got_buf, payload[k], total);
+  }
+  ck_assert_int_eq(reconnects, 1);
+  srtin_close(in);
+  pthread_join(th[0], NULL);
+  pthread_join(th[1], NULL);
+  srt_close(la[0].lsn);
+  srt_cleanup();
+  free(payload[0]);
+  free(payload[1]);
+  free(got_buf);
+}
+END_TEST
+
 START_TEST(srtin_rendezvous_without_local_address_fails) {
   srtin_cfg_t cfg;
 
@@ -410,7 +487,9 @@ static Suite *srtsrc_sink_suite(void) {
   tcase_add_test(tc, queue_ms_with_connected_peer_stays_small_while_streaming);
   suite_add_tcase(s, tc);
   tc = tcase_create("srtin");
+  tcase_set_timeout(tc, 60);
   tcase_add_test(tc, srtin_single_caller_receives_from_listener);
+  tcase_add_test(tc, srtin_single_caller_redials_after_listener_drops);
   tcase_add_test(tc, srtin_rendezvous_without_local_address_fails);
   suite_add_tcase(s, tc);
   return s;

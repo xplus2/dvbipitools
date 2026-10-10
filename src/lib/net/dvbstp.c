@@ -4,10 +4,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "../demux/crc32.h"
 #include "../helper/log.h"
 #include "dvbstp.h"
+
+/* gap between sections of one segment, keeps receivers' socket buffers from overflowing */
+#define SECTION_GAP_NS 1000000L
 
 size_t dvbstp_parse_header(const unsigned char *buf, size_t len, dvbstp_header_t *h) {
   unsigned ver;
@@ -53,7 +57,7 @@ int dvbstp_send_segment(mcast_t *m, const dvbstp_send_t *seg, const unsigned cha
   uint32_t crc = 0;
 
   nsections = len ? (len + DVBSTP_MAX_SECTION - 1) / DVBSTP_MAX_SECTION : 1;
-  if (nsections > 4096) return -1; /* section_number is 12 bit */
+  if (nsections > 4096 || len > DVBSTP_MAX_SEGMENT) return -1; /* section_number is 12 bit */
 
   last_section = (unsigned)(nsections - 1);
   if (seg->want_crc) crc = crc32_mpeg(data, len);
@@ -97,35 +101,59 @@ int dvbstp_send_segment(mcast_t *m, const dvbstp_send_t *seg, const unsigned cha
       pkt[hpos++] = (unsigned char)(crc & 0xFF);
     }
     if (mcast_send(m, pkt, hpos) < 0) return -1;
+    if (!is_last) {
+      struct timespec gap = {0, SECTION_GAP_NS};
+      nanosleep(&gap, NULL);
+    }
   }
   return 0;
 }
 
 #define REASM_SLOTS 8
-#define REASM_MAX_SECTIONS 64
-#define REASM_MAX_LEN (REASM_MAX_SECTIONS * DVBSTP_MAX_SECTION)
 
 typedef struct {
   int used;
   unsigned payload_id;
   unsigned segment_id;
+  int has_provider_id;
+  unsigned provider_id;
   unsigned version;
   unsigned last_section_number;
-  unsigned char have[REASM_MAX_SECTIONS];
-  unsigned sec_len[REASM_MAX_SECTIONS];
-  unsigned char buf[REASM_MAX_LEN];
+  unsigned total_segment_size;
+  unsigned have_count;
+  size_t bytes;
+  unsigned char **sec; /* NULL until section arrives */
+  unsigned *sec_len;
+  int crc_present; /* set when final section seen, whatever its arrival order */
+  uint32_t crc;
 } reasm_slot_t;
 
 struct dvbstp_reasm {
   reasm_slot_t slots[REASM_SLOTS];
-  unsigned char assembled[REASM_MAX_LEN + 1];
+  unsigned char *assembled;
+  size_t assembled_cap;
   int malformed_logged; /* re-armed on next accepted packet */
   int slots_full_logged; /* re-armed once a slot is free again */
   unsigned next_evict;
 };
 
 dvbstp_reasm_t *dvbstp_reasm_new(void) { return calloc(1, sizeof(dvbstp_reasm_t)); }
-void dvbstp_reasm_free(dvbstp_reasm_t *r) { free(r); }
+
+static void slot_release(reasm_slot_t *s) {
+  if (s->sec) {
+    for (unsigned i = 0; i <= s->last_section_number; i++) free(s->sec[i]);
+  }
+  free(s->sec);
+  free(s->sec_len);
+  memset(s, 0, sizeof *s);
+}
+
+void dvbstp_reasm_free(dvbstp_reasm_t *r) {
+  if (!r) return;
+  for (int i = 0; i < REASM_SLOTS; i++) slot_release(&r->slots[i]);
+  free(r->assembled);
+  free(r);
+}
 
 /* first malformed/oversized packet after a healthy run. re-armed at accepted pkg */
 static void log_malformed_once(dvbstp_reasm_t *r, const char *reason) {
@@ -134,13 +162,26 @@ static void log_malformed_once(dvbstp_reasm_t *r, const char *reason) {
   r->malformed_logged = 1;
 }
 
-static void slot_reset(reasm_slot_t *s, const dvbstp_header_t *h) {
-  memset(s, 0, sizeof *s);
+static int slot_reset(reasm_slot_t *s, const dvbstp_header_t *h) {
+  size_t n = (size_t)h->last_section_number + 1;
+  slot_release(s);
+  s->sec = calloc(n, sizeof *s->sec);
+  s->sec_len = calloc(n, sizeof *s->sec_len);
+  if (!s->sec || !s->sec_len) {
+    free(s->sec);
+    free(s->sec_len);
+    memset(s, 0, sizeof *s);
+    return -1;
+  }
   s->used = 1;
   s->payload_id = h->payload_id;
   s->segment_id = h->segment_id;
+  s->has_provider_id = h->has_provider_id;
+  s->provider_id = h->provider_id;
   s->version = h->segment_version;
   s->last_section_number = h->last_section_number;
+  s->total_segment_size = h->total_segment_size;
+  return 0;
 }
 
 int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, dvbstp_header_t *out_header, const unsigned char **out_data, size_t *out_len) {
@@ -158,7 +199,7 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
     log_malformed_once(r, "bad header");
     return 0;
   }
-  if (h.last_section_number >= REASM_MAX_SECTIONS || h.section_number > h.last_section_number) {
+  if (h.section_number > h.last_section_number) {
     log_malformed_once(r, "bad section numbering");
     return 0;
   }
@@ -182,7 +223,8 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
   }
 
   for (i = 0; i < REASM_SLOTS; i++) {
-    if (r->slots[i].used && r->slots[i].payload_id == h.payload_id && r->slots[i].segment_id == h.segment_id) {
+    if (r->slots[i].used && r->slots[i].payload_id == h.payload_id && r->slots[i].segment_id == h.segment_id &&
+        r->slots[i].has_provider_id == h.has_provider_id && r->slots[i].provider_id == h.provider_id) {
       s = &r->slots[i];
       break;
     }
@@ -200,41 +242,65 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
         r->slots_full_logged = 1;
       }
     }
-    slot_reset(s, &h);
-  } else if (s->version != h.segment_version || s->last_section_number != h.last_section_number) {
-    slot_reset(s, &h);
+    if (slot_reset(s, &h) < 0) return 0;
+  } else if (s->version != h.segment_version || s->last_section_number != h.last_section_number ||
+             s->total_segment_size != h.total_segment_size) {
+    if (slot_reset(s, &h) < 0) return 0;
   }
 
-  if (s->have[h.section_number]) return 0;
-  memcpy(s->buf + (size_t)h.section_number * DVBSTP_MAX_SECTION, payload, paylen);
+  if (s->sec[h.section_number]) return 0;
+  if (s->bytes + paylen > DVBSTP_MAX_SEGMENT) {
+    slot_release(s);
+    log_malformed_once(r, "segment exceeds size cap");
+    return 0;
+  }
+  s->sec[h.section_number] = malloc(paylen + 1);
+  if (!s->sec[h.section_number]) {
+    slot_release(s);
+    return 0;
+  }
+  memcpy(s->sec[h.section_number], payload, paylen);
   s->sec_len[h.section_number] = (unsigned)paylen;
-  s->have[h.section_number] = 1;
+  s->bytes += paylen;
+  s->have_count++;
+  if (h.crc_present) {
+    const unsigned char *crcp = pkt + len - 4;
+    s->crc_present = 1;
+    s->crc = ((uint32_t)crcp[0] << 24) | ((uint32_t)crcp[1] << 16) | ((uint32_t)crcp[2] << 8) | crcp[3];
+  }
   r->malformed_logged = 0;
 
-  for (i = 0; i <= (int)s->last_section_number; i++) {
-    if (!s->have[i]) return 0;
-  }
+  if (s->have_count != s->last_section_number + 1) return 0;
 
-  o = 0;
-  for (i = 0; i <= (int)s->last_section_number; i++) {
-    memcpy(r->assembled + o, s->buf + (size_t)i * DVBSTP_MAX_SECTION, s->sec_len[i]);
-    o += s->sec_len[i];
-  }
-  if (h.crc_present) {
-    uint32_t want = crc32_mpeg(r->assembled, o);
-    const unsigned char *crcp = pkt + len - 4;
-    uint32_t got = ((unsigned)crcp[0] << 24) | ((unsigned)crcp[1] << 16) | ((unsigned)crcp[2] << 8) | crcp[3];
-    if (want != got) {
-      s->used = 0;
-      log_malformed_once(r, "crc mismatch on reassembled segment");
+  if (r->assembled_cap < s->bytes + 1) {
+    unsigned char *nb = realloc(r->assembled, s->bytes + 1);
+    if (!nb) {
+      slot_release(s);
       return 0;
     }
+    r->assembled = nb;
+    r->assembled_cap = s->bytes + 1;
+  }
+  o = 0;
+  for (i = 0; i <= (int)s->last_section_number; i++) {
+    memcpy(r->assembled + o, s->sec[i], s->sec_len[i]);
+    o += s->sec_len[i];
+  }
+  if (o != s->total_segment_size) {
+    slot_release(s);
+    log_malformed_once(r, "total_segment_size mismatch on reassembled segment");
+    return 0;
+  }
+  if (s->crc_present && crc32_mpeg(r->assembled, o) != s->crc) {
+    slot_release(s);
+    log_malformed_once(r, "crc mismatch on reassembled segment");
+    return 0;
   }
 
   r->assembled[o] = '\0';
   *out_data = r->assembled;
   *out_len = o;
   if (out_header) *out_header = h;
-  s->used = 0; /* free for the next cycle's repeat, or a version bump */
+  slot_release(s); /* free for the next cycle's repeat, or a version bump */
   return 1;
 }

@@ -8,7 +8,8 @@
 #include "lib/net/tls_server.h"
 #include "lib/metrics/store.h"
 
-#define HTTP_MAX_CONNS 8 /* concurrent in-flight connections, sized for occasional scrapes not real load */
+#define HTTP_MAX_CONNS 128 /* concurrent in-flight connections, sized for occasional scrapes not real load */
+#define HTTP_MAX_CONNS_PER_PEER 64 /* per source address, oldest of that peer is evicted beyond */
 
 typedef struct http_server http_server_t;
 
@@ -16,6 +17,7 @@ typedef struct http_server http_server_t;
 int http_listen(int family, const char *addr, unsigned port);
 
 /* owns HTTP_MAX_CONNS connection slots against listen_fd. NULL on OOM.
+   a full pool or peer quota evicts an existing conn rather than refusing the new one.
    http_auth: "Basic <b64>" to require on GET /metrics, "" to allow anyone */
 http_server_t *http_server_new(int listen_fd, tls_server_ctx_t *tls_ctx, const char *http_auth);
 void http_server_free(http_server_t *hs);
