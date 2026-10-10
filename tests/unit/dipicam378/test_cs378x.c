@@ -682,7 +682,8 @@ START_TEST(silent_connections_time_out_and_free_their_slots) {
   cs378x_server_t *srv;
   cb_state_t st = {0};
   unsigned char body[32];
-  int idle[4], fd;
+  int idle[4];
+  int fd;
 
   memset(&cfg, 0, sizeof cfg);
   cfg.port = test_free_port();

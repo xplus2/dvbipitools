@@ -248,7 +248,8 @@ static void write_cues(mkv_t *m) {
 
   memset(&cues, 0, sizeof cues);
   for (size_t i = 0; i < m->ncue; i++) {
-    ebuf_t cp, tp;
+    ebuf_t cp;
+    ebuf_t tp;
     memset(&cp, 0, sizeof cp);
     memset(&tp, 0, sizeof tp);
     eb_uint(&cp, 0xB3, (uint64_t)m->cue[i].time);
@@ -264,7 +265,8 @@ static void write_cues(mkv_t *m) {
 }
 
 void seg_finish(mkv_t *m) {
-  ebuf_t sh, out;
+  ebuf_t sh;
+  ebuf_t out;
   unsigned char sz[8];
   uint64_t pos_cues = 0;
   uint64_t end;

@@ -38,7 +38,7 @@ static void log_unknown_command(const unsigned char *body, size_t buflen, int sl
 }
 
 /* read n bytes, honoring stop flag and deadline (mono_seconds). 1 ok, 0 stopped, -1 closed/error, -2 deadline */
-static int read_exact(int fd, unsigned char *buf, size_t n, atomic_int *stop, double deadline) {
+static int read_exact(int fd, unsigned char *buf, size_t n, const atomic_int *stop, double deadline) {
   size_t got = 0;
   int wfd = signal_wake_fd();
   while (got < n) {
@@ -188,9 +188,14 @@ static void *worker_main(void *arg) {
 }
 
 int tcp_listen(const char *bind_addr, unsigned port) {
-  struct addrinfo hints, *ai;
+  struct addrinfo hints;
+  struct addrinfo *ai;
   char portstr[8];
-  int fd, on = 1, off = 0, flags, rc;
+  int fd;
+  int on = 1;
+  int off = 0;
+  int flags;
+  int rc;
 
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;

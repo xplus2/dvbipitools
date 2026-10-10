@@ -542,7 +542,8 @@ START_TEST(tssrc_read_with_fec_returns_zero_when_idle) {
   tssrc_t *s;
   char group[32];
   unsigned char buf[2048];
-  struct timespec t0, t1;
+  struct timespec t0;
+  struct timespec t1;
 
   unique_group(group, sizeof group);
   memset(&cfg, 0, sizeof cfg);

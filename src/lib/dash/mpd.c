@@ -46,7 +46,9 @@ static void parse_segment_template(const char *blk, const char *blk_end, const h
 }
 
 static void parse_service_description(const char *body, const char *end, dash_mpd_t *out) {
-  xml_span_t sd, lat, pr;
+  xml_span_t sd;
+  xml_span_t lat;
+  xml_span_t pr;
   char v[32];
   if (xml_find_elem(body, end, "ServiceDescription", &sd)) return;
   out->is_low_latency = 1;

@@ -243,9 +243,10 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
       }
     }
     if (slot_reset(s, &h) < 0) return 0;
-  } else if (s->version != h.segment_version || s->last_section_number != h.last_section_number ||
-             s->total_segment_size != h.total_segment_size) {
-    if (slot_reset(s, &h) < 0) return 0;
+  } else if ((s->version != h.segment_version || s->last_section_number != h.last_section_number ||
+              s->total_segment_size != h.total_segment_size) &&
+             slot_reset(s, &h) < 0) {
+    return 0;
   }
 
   if (s->sec[h.section_number]) return 0;

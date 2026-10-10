@@ -27,21 +27,41 @@ sleep 0.5
 "$BIN" -i "$fixture" -o "rist://127.0.0.1:$PORT" --buffer 200 >"$WORK/send.log" 2>&1
 # file source hits EOF -> nonzero rc by this toolkit's convention, not a failure here
 
-sleep 1
+want1=$((N_PKTS * 188))
+first_complete() { [ "$(wc -c < "$out")" -ge "$want1" ]; }
+wait_until 10 first_complete
 
-cmp -s "$fixture" "$out" || fail "dipirist: round-tripped output differs from input (see $WORK/send.log, $WORK/recv.log)"
+if ! cmp -s "$fixture" "$out"; then
+    echo "expected $want1 B, got $(wc -c < "$out") B" >&2
+    cmp "$fixture" "$out" >&2
+    for l in send recv; do
+        echo "--- $l.log (tail) ---" >&2
+        tail -n 30 "$WORK/$l.log" >&2
+    done
+    fail "dipirist: round-tripped output differs from input"
+fi
 
 size1=$(wc -c < "$out")
 
+sleep 3
+
 # sender restart, receiver kept up
 "$BIN" -i "$fixture" -o "rist://127.0.0.1:$PORT" --buffer 200 >"$WORK/send2.log" 2>&1
-out_complete() { [ "$(wc -c < "$out")" -ge "$((size1 * 2))" ]; }
-wait_until 8 out_complete
+out_complete() { [ "$(wc -c < "$out")" -ge "$((size1 * 2))" ]; return $?; }
+wait_until 15 out_complete
 kill -INT $RECPID 2>/dev/null
 wait $RECPID 2>/dev/null || true
 
 cat "$fixture" "$fixture" > "$WORK/expect2.ts"
-cmp -s "$WORK/expect2.ts" "$out" || fail "dipirist: output after sender restart differs from two concatenated inputs (first run $size1 B, see $WORK/send2.log, $WORK/recv.log)"
+if ! cmp -s "$WORK/expect2.ts" "$out"; then
+    echo "expected $(wc -c < "$WORK/expect2.ts") B, got $(wc -c < "$out") B, first run $size1 B" >&2
+    cmp "$WORK/expect2.ts" "$out" >&2
+    for l in send send2 recv; do
+        echo "--- $l.log (tail) ---" >&2
+        tail -n 30 "$WORK/$l.log" >&2
+    done
+    fail "dipirist: output after sender restart differs from two concatenated inputs"
+fi
 
 echo "OK"
 

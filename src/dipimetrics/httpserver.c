@@ -180,11 +180,13 @@ static int peer_count(const http_server_t *hs, const struct sockaddr_storage *pe
 
 static http_conn_t *conn_victim(http_server_t *hs, const struct sockaddr_storage *peer, int same_peer_only) {
   http_conn_t *best = NULL;
-  int best_w = 0, best_pc = 0;
+  int best_w = 0;
+  int best_pc = 0;
 
   for (int i = 0; i < HTTP_MAX_CONNS; i++) {
     http_conn_t *c = &hs->conns[i];
-    int w, pc;
+    int w;
+    int pc;
     if (!c->used) continue;
     if (same_peer_only && !peer_same(&c->peer, peer)) continue;
     w = !c->handshaking && !c->reading;

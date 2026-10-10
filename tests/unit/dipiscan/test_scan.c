@@ -396,7 +396,8 @@ END_TEST
 
 typedef struct {
   stub_reader_t base;
-  double start, delay;
+  double start;
+  double delay;
 } delayed_reader_t;
 
 static double test_now(void) {

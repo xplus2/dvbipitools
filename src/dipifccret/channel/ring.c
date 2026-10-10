@@ -166,7 +166,9 @@ static int cache_read_abs(const channel_t *c, uint64_t abs_pos, rap_cache_entry_
 }
 
 int channel_cache_get(const channel_t *c, size_t index, rap_cache_entry_t *out) {
-  uint64_t wc, rwc, avail;
+  uint64_t wc;
+  uint64_t rwc;
+  uint64_t avail;
 
   if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire)) return 0;
   wc = atomic_load_explicit(&c->cache.write_count, memory_order_acquire);

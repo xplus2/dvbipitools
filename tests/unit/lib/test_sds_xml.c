@@ -691,7 +691,8 @@ START_TEST(sds_build_rms_fus_emits_fus_provider) {
 END_TEST
 
 START_TEST(sds_broadcast_round_trips_ssm_source) {
-  sds_service_t svc, out[2];
+  sds_service_t svc;
+  sds_service_t out[2];
   unsigned char buf[2048];
   size_t len;
 
@@ -700,7 +701,9 @@ START_TEST(sds_broadcast_round_trips_ssm_source) {
   bufcpy(svc.address, sizeof svc.address, "232.1.2.3");
   bufcpy(svc.source, sizeof svc.source, "10.9.8.7");
   svc.port = 5000;
-  svc.tsid = svc.onid = svc.sid = 1;
+  svc.tsid = 1;
+  svc.onid = 1;
+  svc.sid = 1;
   len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((const char *)buf, "Source=\"10.9.8.7\""));
@@ -711,7 +714,8 @@ START_TEST(sds_broadcast_round_trips_ssm_source) {
 END_TEST
 
 START_TEST(sds_broadcast_omits_source_for_asm) {
-  sds_service_t svc, out[2];
+  sds_service_t svc;
+  sds_service_t out[2];
   unsigned char buf[2048];
   size_t len;
 

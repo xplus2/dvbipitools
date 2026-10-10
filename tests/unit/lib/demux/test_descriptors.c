@@ -478,7 +478,11 @@ START_TEST(dvbtext_never_overruns_or_emits_invalid_utf8) {
     ck_assert_uint_eq(strlen(out), n);
     for (size_t k = 0; k < n;) {
       unsigned char b = (unsigned char)out[k];
-      size_t seq = b < 0x80 ? 1 : (b & 0xE0) == 0xC0 ? 2 : (b & 0xF0) == 0xE0 ? 3 : (b & 0xF8) == 0xF0 ? 4 : 0;
+      size_t seq = 0;
+      if (b < 0x80) seq = 1;
+      else if ((b & 0xE0) == 0xC0) seq = 2;
+      else if ((b & 0xF0) == 0xE0) seq = 3;
+      else if ((b & 0xF8) == 0xF0) seq = 4;
 
       ck_assert_uint_ne(seq, 0);
       ck_assert_uint_le(k + seq, n);

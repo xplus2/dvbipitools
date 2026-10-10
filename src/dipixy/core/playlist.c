@@ -214,7 +214,8 @@ static void emit_item(void *vctx, const channel_item_t *item) {
   char target[600];
   int family;
   int rtp_flag;
-  char maddr[64], msrc[64];
+  char maddr[64];
+  char msrc[64];
   unsigned mport;
   size_t n;
   rc->item_num++;

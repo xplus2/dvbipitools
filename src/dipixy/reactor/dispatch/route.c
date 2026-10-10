@@ -140,7 +140,8 @@ static unsigned source_ordinal_by_name(const config_t *cfg, const char *name) {
 
 capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num) {
   int family, rtp;
-  char addr[64], src[64];
+  char addr[64];
+  char src[64];
   unsigned port;
   const config_t *cfg = reactor_cfg();
   switch (rt->kind) {

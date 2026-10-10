@@ -506,7 +506,9 @@ END_TEST
 
 START_TEST(ratelimit_keys_ipv6_by_slash64) {
   ratelimit_t *rl = ratelimit_new(64);
-  struct sockaddr_in6 a, b, c;
+  struct sockaddr_in6 a;
+  struct sockaddr_in6 b;
+  struct sockaddr_in6 c;
 
   memset(&a, 0, sizeof a);
   a.sin6_family = AF_INET6;

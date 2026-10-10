@@ -287,7 +287,8 @@ Known gaps:
 
 Joins `-m`, reassembles DVBSTP segments, and after `-t` (`--timeout`) seconds (default 35, just
 over the spec's 30s max cycle time so one full cycle is always captured) writes whatever
-Broadcast Discovery records it saw as a playlist.
+Broadcast Discovery records it saw as a playlist. A segment is keyed by payload and segment id:
+when its version changes (announcer reload), the newer version replaces the earlier one.
 
 `-f` (`--format`) is `m3u`/`csv`/`xspf` (same shapes as dipiscan, including the triplet), `xml`
 (dumps the reassembled document as received, for debugging), or `null`.

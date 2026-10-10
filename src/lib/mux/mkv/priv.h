@@ -89,11 +89,16 @@ struct mkv {
   int cl_cue; /* open cluster starts on a video keyframe */
   int cut_num; /* video track number, 0 = cut on any keyframe */
   int seekable;
-  uint64_t seg_size_pos, seg_data;
-  uint64_t pos_info, pos_tracks, pos_tags, dur_pos;
+  uint64_t seg_size_pos;
+  uint64_t seg_data;
+  uint64_t pos_info;
+  uint64_t pos_tracks;
+  uint64_t pos_tags;
+  uint64_t dur_pos;
   int64_t dur_ms;
   cue_t *cue;
-  size_t ncue, cuecap;
+  size_t ncue;
+  size_t cuecap;
 };
 
 /* video.c: codec_id_for only, rest -> lib/demux/escodec */

@@ -47,7 +47,8 @@ void xml_escape(FILE *f, const char *s) {
 
 typedef struct {
   char *out;
-  size_t cap, len;
+  size_t cap;
+  size_t len;
   int cut;
 } sink_t;
 
@@ -114,12 +115,16 @@ static void sink_decode(sink_t *k, const char *src, size_t n) {
 
 /* len minus a trailing incomplete UTF-8 sequence */
 static size_t utf8_complete_len(const char *s, size_t len) {
-  size_t i = len, need;
+  size_t i = len;
+  size_t need;
   unsigned char lead;
   while (i > 0 && len - i < 3 && ((unsigned char)s[i - 1] & 0xC0) == 0x80) i--;
   if (i == 0) return len;
   lead = (unsigned char)s[i - 1];
-  need = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1;
+  if (lead >= 0xF0) need = 4;
+  else if (lead >= 0xE0) need = 3;
+  else if (lead >= 0xC0) need = 2;
+  else need = 1;
   return need > len - (i - 1) ? i - 1 : len;
 }
 
@@ -208,8 +213,8 @@ static int next_tok(const char *p, const char *end, xml_tok_t *t) {
     t->lt = lt;
     t->close = lt[1] == '/';
     t->name = lt + 1 + t->close;
-    for (q = t->name; q < end && !is_name_end(*q); q++) {
-    }
+    q = t->name;
+    while (q < end && !is_name_end(*q)) q++;
     t->nlen = (size_t)(q - t->name);
     if (!t->nlen) {
       p = lt + 1;
@@ -231,7 +236,8 @@ static int next_tok(const char *p, const char *end, xml_tok_t *t) {
 static const char *tok_after(const xml_tok_t *t, const char *end) { return t->gt < end ? t->gt + 1 : end; }
 
 static int name_is(const char *n, size_t nl, const char *want) {
-  size_t wl = strlen(want), i = nl;
+  size_t wl = strlen(want);
+  size_t i = nl;
   if (nl == wl && !memcmp(n, want, nl)) return 1;
   while (i > 0 && n[i - 1] != ':') i--;
   return nl - i == wl && !memcmp(n + i, want, wl);
@@ -256,7 +262,8 @@ static int find_close(const xml_tok_t *st, const char *end, xml_tok_t *cl) {
 /* name="v" / name='v' pairs in [p,end), value decoded. stray tokens skipped. 0 ok, -1 not found */
 static int attr_lookup(const char *p, const char *end, const char *name, char *out, size_t outcap, int *truncated) {
   while (p < end) {
-    const char *n, *v;
+    const char *n;
+    const char *v;
     size_t nl;
     char q;
     while (p < end && (isspace((unsigned char)*p) || *p == '/')) p++;
@@ -330,7 +337,8 @@ const char *xml_find_start(const char *s, const char *end, const char *name) {
 
 int xml_find_elem(const char *s, const char *end, const char *name, xml_span_t *sp) {
   const char *p = s;
-  xml_tok_t t, cl;
+  xml_tok_t t;
+  xml_tok_t cl;
   while (p < end && next_tok(p, end, &t) == 0) {
     p = tok_after(&t, end);
     if (t.close || !name_is(t.name, t.nlen, name)) continue;
@@ -358,7 +366,8 @@ int xml_elem_text(const char *s, const char *end, const char *tag, char *out, si
 
 int for_each_xml_elem(const char *buf, const char *end, const char *name, xml_block_cb cb, void *ctx) {
   const char *p = buf;
-  xml_tok_t t, cl;
+  xml_tok_t t;
+  xml_tok_t cl;
   while (p < end && next_tok(p, end, &t) == 0) {
     const char *blk_end;
     p = tok_after(&t, end);

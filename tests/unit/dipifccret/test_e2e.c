@@ -127,7 +127,9 @@ static void wrap_section_packet(unsigned char pkt[TS_LEN], unsigned pid, const u
 
 static size_t build_pmt_section(unsigned char *sec, unsigned prog_num, unsigned video_pid) {
   unsigned char body[16];
-  size_t n = 0, crc_at, hdr;
+  size_t n = 0;
+  size_t crc_at;
+  size_t hdr;
   uint32_t crc;
 
   body[n++] = (unsigned char)(prog_num >> 8);
@@ -195,7 +197,10 @@ static size_t build_payload(unsigned char *out, uint16_t seq) {
 
 /* Ethernet + IPv4 + UDP + RTP(PT 33) around payload, then pad trailer bytes the way a NIC pads short frames */
 static size_t build_frame(unsigned char *p, uint16_t seq, const unsigned char *payload, size_t payload_len, size_t pad) {
-  size_t ip = 14, udp = ip + 20, rtp = udp + 8, total;
+  size_t ip = 14;
+  size_t udp = ip + 20;
+  size_t rtp = udp + 8;
+  size_t total;
   uint32_t ts = (uint32_t)seq * 3600u;
 
   memset(p, 0xAA, 12);
@@ -287,8 +292,8 @@ static int recv_one(const e2e_t *fx, replies_t *r, int timeout_ms) {
 
 /* collect until n_rtx datagrams of media arrived or the wait ran dry */
 static void drain_media(const e2e_t *fx, replies_t *r, int want_rtx) {
-  while (r->n_rtx < want_rtx && recv_one(fx, r, RECV_TIMEOUT_MS)) {
-  }
+  int more = 1;
+  while (more && r->n_rtx < want_rtx) more = recv_one(fx, r, RECV_TIMEOUT_MS);
 }
 
 static void expect_original(const rtx_reply_t *got, uint16_t seq) {

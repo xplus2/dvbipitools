@@ -163,7 +163,8 @@ void channels_join_all(channel_list_t *l, const config_t *cfg) {
     channel_item_t *it = &l->items[i];
     int family;
     int rtp;
-    char addr[64], src[64];
+    char addr[64];
+    char src[64];
     unsigned port;
     if (it->static_ctx) continue;
     if (route_resolve_channel_uri(it->uri, &family, addr, sizeof addr, src, sizeof src, &port, &rtp)) continue;

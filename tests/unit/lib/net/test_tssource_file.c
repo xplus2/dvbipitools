@@ -151,7 +151,9 @@ START_TEST(tssrc_rewind_restarts_raw_file_from_zero) {
 END_TEST
 
 START_TEST(tssrc_file_reads_are_packet_aligned) {
-  unsigned char content[20 * 188], readback[20 * 188], buf[500];
+  unsigned char content[20 * 188];
+  unsigned char readback[20 * 188];
+  unsigned char buf[500];
   size_t got = 0;
   char *path;
   tssrc_cfg_t cfg;

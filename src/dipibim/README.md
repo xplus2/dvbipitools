@@ -42,8 +42,6 @@ See `dipibcg` for distribution.
 `-f xml` output is TS 102 323 table 56/57's own DVBBiMAccessUnit shape: a count, then per fragment
 a length + 16-bit `DVBContextPath` type tag + the fragment's own BiM bytes, wrapped as
 `[4-byte BE][access unit][string repo]`. 
-`dvbStringCodec` (9.4.3.3) points into that repo instead of inlining bytes, pooled across all fragments
-(TS 102 822-3-2#4.8.4.1), fragment-order unchanged.
 
 ## Codecs (9.4.3)
 

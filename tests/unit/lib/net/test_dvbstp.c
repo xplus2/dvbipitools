@@ -399,7 +399,8 @@ END_TEST
 
 START_TEST(reasm_feed_rejects_total_segment_size_mismatch) {
   dvbstp_reasm_t *r = dvbstp_reasm_new();
-  unsigned char pkt0[12 + 3], pkt1[12 + 4];
+  unsigned char pkt0[12 + 3];
+  unsigned char pkt1[12 + 4];
   const unsigned char *out_data;
   size_t out_len;
   size_t h0 = build_header(pkt0, 1, 1, 1, 0, 1, 0, 0, 0, 0);
@@ -418,7 +419,10 @@ END_TEST
 
 START_TEST(reasm_feed_keeps_providers_apart) {
   dvbstp_reasm_t *r = dvbstp_reasm_new();
-  unsigned char a0[16 + 3], a1[16 + 4], b0[16 + 3], b1[16 + 4];
+  unsigned char a0[16 + 3];
+  unsigned char a1[16 + 4];
+  unsigned char b0[16 + 3];
+  unsigned char b1[16 + 4];
   const unsigned char *out_data;
   size_t out_len;
   size_t h;

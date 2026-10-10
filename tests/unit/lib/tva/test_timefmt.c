@@ -7,10 +7,10 @@
 
 #include "lib/tva/timefmt.h"
 
-START_TEST(xmltv_time_to_iso8601_no_offset) {
+START_TEST(xmltv_time_to_iso8601_no_zone_is_utc) {
   char out[32];
   ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045", out, sizeof out), 0);
-  ck_assert_str_eq(out, "2020-12-15T12:30:45");
+  ck_assert_str_eq(out, "2020-12-15T12:30:45Z");
 }
 END_TEST
 
@@ -42,13 +42,13 @@ START_TEST(xmltv_time_to_iso8601_accepts_reduced_precision) {
   ck_assert_int_eq(xmltv_time_to_iso8601("202012151230 +0200", out, sizeof out), 0);
   ck_assert_str_eq(out, "2020-12-15T12:30:00+02:00");
   ck_assert_int_eq(xmltv_time_to_iso8601("2020121512", out, sizeof out), 0);
-  ck_assert_str_eq(out, "2020-12-15T12:00:00");
+  ck_assert_str_eq(out, "2020-12-15T12:00:00Z");
   ck_assert_int_eq(xmltv_time_to_iso8601("20201215", out, sizeof out), 0);
-  ck_assert_str_eq(out, "2020-12-15T00:00:00");
+  ck_assert_str_eq(out, "2020-12-15T00:00:00Z");
   ck_assert_int_eq(xmltv_time_to_iso8601("202012", out, sizeof out), 0);
-  ck_assert_str_eq(out, "2020-12-01T00:00:00");
+  ck_assert_str_eq(out, "2020-12-01T00:00:00Z");
   ck_assert_int_eq(xmltv_time_to_iso8601("2020", out, sizeof out), 0);
-  ck_assert_str_eq(out, "2020-01-01T00:00:00");
+  ck_assert_str_eq(out, "2020-01-01T00:00:00Z");
 }
 END_TEST
 
@@ -117,7 +117,7 @@ END_TEST
 static Suite *timefmt_suite(void) {
   Suite *s = suite_create("timefmt");
   TCase *tc = tcase_create("core");
-  tcase_add_test(tc, xmltv_time_to_iso8601_no_offset);
+  tcase_add_test(tc, xmltv_time_to_iso8601_no_zone_is_utc);
   tcase_add_test(tc, xmltv_time_to_iso8601_zero_offset_becomes_z);
   tcase_add_test(tc, xmltv_time_to_iso8601_nonzero_offset);
   tcase_add_test(tc, xmltv_time_to_iso8601_rejects_malformed);

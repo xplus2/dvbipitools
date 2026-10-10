@@ -201,9 +201,8 @@ static int wait_readable(int fd, double timeout_s) {
 }
 
 static void stamp_audio_dgram(const unsigned char *d, size_t n, double *stamps, size_t *cnt) {
-  size_t i;
   if (n != (size_t)TS_PER_DGRAM * TS_PKT || *cnt >= MAX_STAMPS) return;
-  for (i = 0; i < n; i += TS_PKT) {
+  for (size_t i = 0; i < n; i += TS_PKT) {
     if (((((unsigned)d[i + 1] & 0x1Fu) << 8) | d[i + 2]) == 0x0101u) {
       stamps[(*cnt)++] = now_s();
       return;
@@ -226,7 +225,6 @@ static int cmd_jitter_src(int argc, char **argv) {
   double extra = 0.0;
   double t0;
   double gap = 999.0;
-  size_t i;
   size_t nwin = 0;
   int burst = (int)(1.0 / dt);
   int one = 1;
@@ -276,7 +274,7 @@ static int cmd_jitter_src(int argc, char **argv) {
   frame[2] = 0x90;
 
   t0 = now_s();
-  for (i = 0; i < NFRAMES; i++) {
+  for (size_t i = 0; i < NFRAMES; i++) {
     double due;
     if (i == STALL_AT) extra = stall_s;
     due = t0 + (i > (size_t)burst ? (double)(i - (size_t)burst) * dt : 0.0) + extra;
@@ -337,6 +335,7 @@ static int cmd_rtp_send(int argc, char **argv) {
   if (!data || fread(data, 1, (size_t)st.st_size, f) != (size_t)st.st_size) {
     fprintf(stderr, "rtp-send: read failed\n");
     free(data);
+    fclose(f);
     return 1;
   }
   fclose(f);

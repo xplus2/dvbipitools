@@ -51,9 +51,12 @@ int xmltv_time_to_iso8601(const char *in, char *out, size_t outcap) {
   static const char defaults[] = "00000101000000";
   char buf[32]; /* longest case: "YYYY-MM-DDTHH:MM:SS+HH:MM" + NUL, 26 bytes */
   char dig[15];
-  size_t nd = 0, n = 0;
+  size_t nd = 0;
+  size_t n = 0;
   const char *z;
-  int off_min = 0, has_zone = 0, unknown_zone = 0;
+  int off_min = 0;
+  int has_zone = 1;
+  int unknown_zone = 0;
 
   while (isdigit((unsigned char)in[nd])) nd++;
   if (nd < 4 || nd > 14 || (nd & 1)) return -1;
@@ -64,9 +67,11 @@ int xmltv_time_to_iso8601(const char *in, char *out, size_t outcap) {
   z = in + nd;
   while (*z == ' ' || *z == '\t') z++;
   if (*z) {
-    if (zone_from_numeric(z, &off_min) == 0 || zone_from_name(z, &off_min) == 0) has_zone = 1;
-    else if (isalpha((unsigned char)z[0])) unknown_zone = 1;
-    else return -1;
+    if (zone_from_numeric(z, &off_min) != 0 && zone_from_name(z, &off_min) != 0) {
+      if (!isalpha((unsigned char)z[0])) return -1;
+      unknown_zone = 1;
+      has_zone = 0;
+    }
   }
 
   memcpy(buf, dig, 4);

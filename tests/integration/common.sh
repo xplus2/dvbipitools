@@ -25,6 +25,7 @@ skip() {
 
 require_itest_helper() {
     [ -x "${DVBIPI_ITEST_HELPER:-}" ] || fail "itest_helper not found, set DVBIPI_ITEST_HELPER"
+    return 0
 }
 
 # run_expect_rc <expected-rc> <label> -- rest of the line runs

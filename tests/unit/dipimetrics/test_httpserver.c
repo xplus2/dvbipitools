@@ -657,7 +657,8 @@ START_TEST(idle_connection_is_dropped_once_its_deadline_passes) {
 END_TEST
 
 static int connect_from(int listen_fd, const char *src) {
-  struct sockaddr_in sa, la;
+  struct sockaddr_in sa;
+  struct sockaddr_in la;
   socklen_t sl = sizeof sa;
   int cfd;
 

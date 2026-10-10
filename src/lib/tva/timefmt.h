@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 /* "YYYY[MM[DD[HH[MM[SS]]]]][ +HHMM|name]" -> "YYYY-MM-DDTHH:MM:SS[+HH:MM|Z]", missing fields 01/00.
+   no zone: UTC per XMLTV (Z).
    name: UT UTC GMT Z WET WEST BST CET CEST EET EEST.
    0 ok, 1 ok but unknown zone name dropped (time left without offset), -1 bad input */
 int xmltv_time_to_iso8601(const char *in, char *out, size_t outcap);

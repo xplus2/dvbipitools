@@ -53,7 +53,8 @@ static int read_whole_file(const char *path, unsigned char **out, size_t *out_le
 
 /* rtp://[[src]@]<addr>:<port> or udp://..., [addr6] for v6. fills address/source/family/port */
 static int parse_mcast_uri(const char *uri, sds_service_t *s) {
-  const char *p, *at;
+  const char *p;
+  const char *at;
   char addr[SDS_MAX_ADDR];
   size_t alen;
   char *end;
@@ -200,7 +201,9 @@ typedef struct {
 static int xspf_track_cb(const char *tag, const char *end, void *vctx) {
   xspf_ctx_t *c = vctx;
   input_t *in = c->in;
-  char loc[2 * SDS_MAX_ADDR + 16], title[SDS_MAX_NAME], tmp[32];
+  char loc[2 * SDS_MAX_ADDR + 16];
+  char title[SDS_MAX_NAME];
+  char tmp[32];
   sds_service_t *s;
 
   if (c->idx >= SDS_MAX_SERVICES) {
