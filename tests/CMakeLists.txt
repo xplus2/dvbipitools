@@ -3701,6 +3701,13 @@ dvbipitools_add_unit_test(dipifccret_capture
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
 
+dipifccret_resolve_sources()
+list(REMOVE_ITEM DIPIFCCRET_SRCS ${CMAKE_SOURCE_DIR}/src/dipifccret/main.c)
+dvbipitools_add_unit_test(dipifccret_serve
+    unit/dipifccret/test_serve.c
+    ${DIPIFCCRET_SRCS})
+target_link_libraries(test_dipifccret_serve PRIVATE atomic)
+
 dvbipitools_add_unit_test(dipifccret_burst_table
     unit/dipifccret/test_burst_table.c
     ${CMAKE_SOURCE_DIR}/src/dipifccret/fcc/burst_table.c

@@ -505,6 +505,429 @@ START_TEST(hls_aes128cbc_rejects_bad_length) {
 }
 END_TEST
 
+#define RIG_MAX 6
+#define PL_HEAD "#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:%u\n%s"
+#define PL_SEG "#EXTINF:1.0,\ns.ts\n"
+#define KEY_TAG "#EXT-X-KEY:METHOD=AES-128,URI=\"k.bin\"\n"
+#define ENC_PLAIN "ENCRYPTEDSEGMENT"
+
+typedef struct {
+  int fd;
+  unsigned port;
+  pthread_t th;
+  scripted_server_t srv;
+  char buf[RIG_MAX][1536];
+  const char *resp[RIG_MAX];
+  size_t lens[RIG_MAX];
+  int n;
+  hls_live_t *h;
+} rig_t;
+
+typedef struct {
+  int calls;
+  int result;
+  size_t len;
+  unsigned char data[32];
+} init_rec_t;
+
+static const unsigned char enc_key[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
+
+static const unsigned char enc_cipher_iv1[32] = {0x0d, 0xa1, 0xe3, 0xd4, 0xb9, 0x3c, 0x5c, 0x63, 0xf2, 0x43, 0x04, 0x19, 0x76, 0xd2, 0x17, 0x68,
+  0x00, 0x74, 0xb2, 0x50, 0x64, 0xbe, 0xe7, 0xfe, 0x4d, 0xb0, 0x3f, 0x38, 0xa4, 0x52, 0xfd, 0xda};
+
+static const unsigned char enc_cipher_seq7[32] = {0xf4, 0x0e, 0x5e, 0x44, 0x5f, 0xdf, 0xfd, 0xaa, 0xa5, 0xd2, 0x2b, 0xd6, 0x04, 0xdf, 0x6f, 0x6c,
+  0x3b, 0x77, 0xa6, 0xb7, 0x79, 0x24, 0x85, 0xea, 0xc0, 0x93, 0x2a, 0x50, 0x5d, 0xcb, 0x32, 0xf6};
+
+static void rig_init(rig_t *r) {
+  memset(r, 0, sizeof *r);
+  r->fd = make_listener(&r->port);
+}
+
+static void rig_add_with(rig_t *r, const char *conn, const void *body, size_t len) {
+  size_t hl;
+
+  ck_assert_int_lt(r->n, RIG_MAX);
+  hl = (size_t)snprintf(r->buf[r->n], sizeof r->buf[0], "HTTP/1.1 200 OK\r\nContent-Length: %zu\r\n%s\r\n", len, conn);
+  ck_assert_uint_le(hl + len, sizeof r->buf[0]);
+  memcpy(r->buf[r->n] + hl, body, len);
+  r->resp[r->n] = r->buf[r->n];
+  r->lens[r->n] = hl + len;
+  r->n++;
+}
+
+static void rig_add(rig_t *r, const void *body, size_t len) { rig_add_with(r, "Connection: close\r\n", body, len); }
+
+static void rig_add_text(rig_t *r, const char *text) { rig_add(r, text, strlen(text)); }
+
+static void rig_add_keepalive_text(rig_t *r, const char *text) { rig_add_with(r, "", text, strlen(text)); }
+
+static void rig_add_raw(rig_t *r, const char *text) {
+  ck_assert_int_lt(r->n, RIG_MAX);
+  r->resp[r->n] = text;
+  r->lens[r->n] = strlen(text);
+  r->n++;
+}
+
+static void rig_add_playlist(rig_t *r, unsigned seq, const char *body) {
+  char pl[768];
+
+  snprintf(pl, sizeof pl, PL_HEAD, seq, body);
+  rig_add_text(r, pl);
+}
+
+static void rig_add_segment(rig_t *r, const char *tag) {
+  unsigned char raw[188 * 4];
+  size_t len = build_segment(raw, tag);
+
+  rig_add(r, raw, len);
+}
+
+static void rig_open(rig_t *r, const hls_insp_t *si) {
+  char uri[64];
+  http_url_t url;
+
+  r->srv.listen_fd = r->fd;
+  r->srv.responses = r->resp;
+  r->srv.response_lens = r->lens;
+  r->srv.n_responses = r->n;
+  ck_assert_int_eq(pthread_create(&r->th, NULL, serve_scripted, &r->srv), 0);
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/live.m3u8", r->port);
+  ck_assert_int_eq(http_url_parse(uri, &url), 0);
+  r->h = hls_live_new(&url, "test-agent", 0, 0, "test", si, passthrough_cb, NULL);
+  ck_assert_ptr_nonnull(r->h);
+}
+
+static void rig_close(rig_t *r) {
+  hls_live_free(r->h);
+  pthread_join(r->th, NULL);
+  close(r->fd);
+}
+
+static ssize_t pump_once(hls_live_t *h, unsigned char *tmp, size_t cap, net_err_reason_t *reason) {
+  struct pollfd pfd;
+  int fd = hls_live_poll_fd(h);
+
+  if (fd >= 0) {
+    pfd.fd = fd;
+    pfd.events = hls_live_poll_events(h);
+    pfd.revents = 0;
+    poll(&pfd, 1, 100);
+  } else {
+    struct timespec ts = {0, 20000000};
+    nanosleep(&ts, NULL);
+  }
+  return hls_live_read(h, tmp, cap, reason);
+}
+
+static int pump_collect(hls_live_t *h, unsigned char *acc, size_t cap, size_t *len, size_t want, int max_iters) {
+  for (int i = 0; i < max_iters && *len < want; i++) {
+    unsigned char tmp[256];
+    ssize_t n = pump_once(h, tmp, sizeof tmp, NULL);
+    if (n < 0) return -1;
+    if (*len + (size_t)n > cap) return -1;
+    memcpy(acc + *len, tmp, (size_t)n);
+    *len += (size_t)n;
+  }
+  return *len >= want ? 1 : 0;
+}
+
+static int pump_until_error(hls_live_t *h, int max_iters, net_err_reason_t *reason) {
+  for (int i = 0; i < max_iters; i++) {
+    unsigned char tmp[64];
+    if (pump_once(h, tmp, sizeof tmp, reason) < 0) return 1;
+  }
+  return 0;
+}
+
+static int init_rec_cb(void *ctx, const hls_live_t *h, const unsigned char *data, size_t len) {
+  init_rec_t *rec = ctx;
+
+  (void)h;
+  rec->calls++;
+  rec->len = len < sizeof rec->data ? len : sizeof rec->data;
+  memcpy(rec->data, data, rec->len);
+  return rec->result;
+}
+
+START_TEST(hls_live_segment_kind_classifies) {
+  static const unsigned char ts[] = {0x47, 0x00};
+  static const unsigned char id3[] = {'I', 'D', '3', 0x04};
+  static const unsigned char adts[] = {0xFF, 0xF1};
+  static const unsigned char ac3[] = {0x0B, 0x77};
+  static const unsigned char ftyp[] = {0, 0, 0, 0x18, 'f', 't', 'y', 'p'};
+  static const unsigned char styp[] = {0, 0, 0, 0x18, 's', 't', 'y', 'p'};
+  static const unsigned char moof[] = {0, 0, 0, 0x18, 'm', 'o', 'o', 'f'};
+  static const unsigned char ff_bad[] = {0xFF, 0x00};
+  static const unsigned char b_bad[] = {0x0B, 0x00};
+  static const unsigned char one_byte[] = {0x0B};
+  static const unsigned char zeros[16] = {0};
+  unsigned char unsynced[1024] = {0};
+  const struct {
+    const unsigned char *data;
+    size_t len;
+    hls_segment_kind_t want;
+  } rows[] = {
+    {ts, sizeof ts, HLS_SEG_TS},
+    {id3, 3, HLS_SEG_PACKED_AUDIO},
+    {adts, sizeof adts, HLS_SEG_PACKED_AUDIO},
+    {ac3, sizeof ac3, HLS_SEG_PACKED_AUDIO},
+    {ftyp, sizeof ftyp, HLS_SEG_FMP4},
+    {styp, sizeof styp, HLS_SEG_FMP4},
+    {moof, sizeof moof, HLS_SEG_FMP4},
+    {unsynced, sizeof unsynced, HLS_SEG_TS},
+    {ff_bad, sizeof ff_bad, HLS_SEG_UNKNOWN},
+    {b_bad, sizeof b_bad, HLS_SEG_UNKNOWN},
+    {one_byte, sizeof one_byte, HLS_SEG_UNKNOWN},
+    {ftyp, 7, HLS_SEG_UNKNOWN},
+    {zeros, sizeof zeros, HLS_SEG_UNKNOWN},
+    {zeros, 0, HLS_SEG_UNKNOWN},
+  };
+
+  unsynced[5] = 0x47;
+  unsynced[5 + 188] = 0x47;
+  unsynced[5 + 2 * 188] = 0x47;
+  for (size_t i = 0; i < sizeof rows / sizeof rows[0]; i++)
+    ck_assert_msg(hls_live_segment_kind(rows[i].data, rows[i].len) == rows[i].want, "row %zu", i);
+}
+END_TEST
+
+START_TEST(hls_live_emit_drops_when_buffer_full) {
+  static unsigned char big[300000];
+  http_url_t url;
+  hls_live_t *h;
+
+  ck_assert_int_eq(http_url_parse("http://127.0.0.1:1/live.m3u8", &url), 0);
+  h = hls_live_new(&url, NULL, 0, 0, NULL, NULL, passthrough_cb, NULL);
+  ck_assert_ptr_nonnull(h);
+  hls_live_emit(h, big, sizeof big);
+  hls_live_emit(h, big, 16);
+  ck_assert_int_eq(hls_live_has_buffered(h), 1);
+  ck_assert_int_eq(hls_live_poll_fd(h), -1);
+  ck_assert_int_eq(hls_live_poll_events(h), 0);
+  hls_live_free(h);
+}
+END_TEST
+
+static void run_idle_case(rig_t *r) {
+  unsigned char tmp[64];
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  rig_open(r, NULL);
+  ck_assert_int_eq(hls_live_read(r->h, tmp, sizeof tmp, &reason), 0);
+  ck_assert_int_ge(hls_live_poll_fd(r->h), 0);
+  ck_assert_int_ne(hls_live_poll_events(r->h), 0);
+  ck_assert_int_eq(hls_live_has_buffered(r->h), 0);
+  ck_assert_int_eq(pump_until_error(r->h, 15, &reason), 0);
+  ck_assert_int_eq(hls_live_poll_fd(r->h), -1);
+  ck_assert_int_eq(hls_live_has_buffered(r->h), 0);
+  rig_close(r);
+}
+
+START_TEST(hls_live_stays_idle_on_not_modified) {
+  rig_t r;
+
+  rig_init(&r);
+  rig_add_raw(&r, "HTTP/1.1 304 Not Modified\r\nConnection: close\r\n\r\n");
+  run_idle_case(&r);
+}
+END_TEST
+
+START_TEST(hls_live_stays_idle_on_empty_playlist) {
+  rig_t r;
+
+  rig_init(&r);
+  rig_add(&r, "", 0);
+  run_idle_case(&r);
+}
+END_TEST
+
+START_TEST(hls_live_playlist_without_header_is_format_error) {
+  rig_t r;
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  rig_init(&r);
+  rig_add_text(&r, "not a playlist\n");
+  rig_open(&r, NULL);
+  ck_assert_int_eq(pump_until_error(r.h, 50, &reason), 1);
+  ck_assert_int_eq(reason, NET_ERR_FORMAT);
+  rig_close(&r);
+}
+END_TEST
+
+static void run_resequence_case(unsigned second_seq) {
+  rig_t r;
+  unsigned char acc[2048];
+  size_t len = 0;
+
+  rig_init(&r);
+  rig_add_playlist(&r, 100, PL_SEG);
+  rig_add_segment(&r, "FIRSTSEG");
+  rig_add_playlist(&r, second_seq, PL_SEG);
+  rig_add_segment(&r, "SECONDSEG");
+  rig_open(&r, NULL);
+  ck_assert_int_eq(drive_until_contains(r.h, acc, sizeof acc, &len, "FIRSTSEG", 200), 1);
+  ck_assert_int_eq(drive_until_contains(r.h, acc, sizeof acc, &len, "SECONDSEG", 200), 1);
+  rig_close(&r);
+}
+
+START_TEST(hls_live_rejoins_after_media_sequence_reset) { run_resequence_case(50); }
+END_TEST
+
+START_TEST(hls_live_skips_ahead_over_segment_gap) { run_resequence_case(105); }
+END_TEST
+
+static void run_decrypt_case(const char *key_attrs, const unsigned char *cipher, int n_segments) {
+  rig_t r;
+  unsigned char acc[256];
+  size_t len = 0;
+  size_t plain = strlen(ENC_PLAIN);
+  char body[256];
+
+  snprintf(body, sizeof body, "%s%s%s", key_attrs, PL_SEG, n_segments > 1 ? PL_SEG : "");
+  rig_init(&r);
+  rig_add_playlist(&r, 7, body);
+  rig_add(&r, enc_key, sizeof enc_key);
+  for (int i = 0; i < n_segments; i++) rig_add(&r, cipher, 32);
+  rig_open(&r, NULL);
+  ck_assert_int_eq(pump_collect(r.h, acc, sizeof acc, &len, plain * (size_t)n_segments, 300), 1);
+  ck_assert_uint_eq(len, plain * (size_t)n_segments);
+  for (int i = 0; i < n_segments; i++) ck_assert_mem_eq(acc + (size_t)i * plain, ENC_PLAIN, plain);
+  rig_close(&r);
+}
+
+START_TEST(hls_live_decrypts_with_explicit_iv_and_reuses_key) {
+  run_decrypt_case("#EXT-X-KEY:METHOD=AES-128,URI=\"k.bin\",IV=0x00000000000000000000000000000001\n", enc_cipher_iv1, 2);
+}
+END_TEST
+
+START_TEST(hls_live_decrypts_with_sequence_iv) { run_decrypt_case(KEY_TAG, enc_cipher_seq7, 1); }
+END_TEST
+
+START_TEST(hls_live_rejects_key_of_wrong_length) {
+  rig_t r;
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  rig_init(&r);
+  rig_add_playlist(&r, 7, KEY_TAG PL_SEG);
+  rig_add(&r, enc_key, 8);
+  rig_open(&r, NULL);
+  ck_assert_int_eq(pump_until_error(r.h, 100, &reason), 1);
+  ck_assert_int_eq(reason, NET_ERR_FORMAT);
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(hls_live_skips_segment_that_fails_decrypt) {
+  rig_t r;
+  unsigned char acc[64];
+  size_t len = 0;
+
+  rig_init(&r);
+  rig_add_playlist(&r, 7, KEY_TAG PL_SEG);
+  rig_add(&r, enc_key, sizeof enc_key);
+  rig_add(&r, enc_cipher_seq7, 20);
+  rig_open(&r, NULL);
+  ck_assert_int_eq(pump_collect(r.h, acc, sizeof acc, &len, 1, 25), 0);
+  ck_assert_uint_eq(len, 0);
+  rig_close(&r);
+}
+END_TEST
+
+static void run_init_case(int cb_result, const char *init_body, size_t init_len, int expect_error) {
+  rig_t r;
+  init_rec_t rec = {0, cb_result, 0, {0}};
+  unsigned char acc[256];
+  size_t len = 0;
+  tsinspect_t *insp = NULL;
+  hls_insp_t si = {&insp, METRICS_INSPECT_TS_BASIC, NULL, 0};
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  rig_init(&r);
+  rig_add_playlist(&r, 3, "#EXT-X-MAP:URI=\"init.mp4\"\n" PL_SEG);
+  rig_add(&r, init_body, init_len);
+  if (!expect_error) rig_add_text(&r, "SEGDATA");
+  rig_open(&r, &si);
+  hls_live_set_init_cb(r.h, init_rec_cb, &rec);
+  if (expect_error) {
+    ck_assert_int_eq(pump_until_error(r.h, 100, &reason), 1);
+    ck_assert_int_eq(reason, NET_ERR_FORMAT);
+  } else {
+    ck_assert_int_eq(drive_until_contains(r.h, acc, sizeof acc, &len, "SEGDATA", 200), 1);
+    ck_assert_int_eq(rec.calls, 1);
+    ck_assert_uint_eq(rec.len, init_len);
+    ck_assert_mem_eq(rec.data, init_body, init_len);
+    ck_assert_int_eq(hls_live_uses_fmp4(r.h), 1);
+    ck_assert_ptr_null(insp);
+  }
+  rig_close(&r);
+}
+
+START_TEST(hls_live_fetches_init_segment_before_media) { run_init_case(1, "INITDATA", 8, 0); }
+END_TEST
+
+START_TEST(hls_live_rejects_init_segment_when_callback_fails) { run_init_case(0, "INITDATA", 8, 1); }
+END_TEST
+
+START_TEST(hls_live_rejects_empty_init_segment) { run_init_case(1, "", 0, 1); }
+END_TEST
+
+static void run_bad_url_case(const char *tags, int with_init_cb) {
+  rig_t r;
+  init_rec_t rec = {0, 1, 0, {0}};
+  net_err_reason_t reason = NET_ERR_COUNT;
+  char pl[768];
+
+  snprintf(pl, sizeof pl, PL_HEAD, 3u, tags);
+  rig_init(&r);
+  rig_add_keepalive_text(&r, pl);
+  rig_open(&r, NULL);
+  if (with_init_cb) hls_live_set_init_cb(r.h, init_rec_cb, &rec);
+  ck_assert_int_eq(pump_until_error(r.h, 100, &reason), 1);
+  ck_assert_int_eq(reason, NET_ERR_OTHER);
+  rig_close(&r);
+}
+
+START_TEST(hls_live_fails_on_unparsable_segment_url) { run_bad_url_case("#EXTINF:1.0,\nhttp://127.0.0.1:99999/s.ts\n", 0); }
+END_TEST
+
+START_TEST(hls_live_fails_on_unparsable_key_url) {
+  run_bad_url_case("#EXT-X-KEY:METHOD=AES-128,URI=\"http://127.0.0.1:99999/k.bin\"\n" PL_SEG, 0);
+}
+END_TEST
+
+START_TEST(hls_live_fails_on_unparsable_init_url) {
+  run_bad_url_case("#EXT-X-MAP:URI=\"http://127.0.0.1:99999/i.mp4\"\n" PL_SEG, 1);
+}
+END_TEST
+
+START_TEST(hls_live_reports_segment_fetch_error) {
+  rig_t r;
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  rig_init(&r);
+  rig_add_playlist(&r, 3, PL_SEG);
+  rig_add_raw(&r, "");
+  rig_open(&r, NULL);
+  ck_assert_int_eq(pump_until_error(r.h, 100, &reason), 1);
+  ck_assert_int_ne(reason, NET_ERR_COUNT);
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(hls_live_repolls_with_etag_after_empty_playlist) {
+  static const char body[] = "#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:5\n";
+  rig_t r;
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  rig_init(&r);
+  rig_add_with(&r, "ETag: \"v1\"\r\nConnection: close\r\n", body, sizeof body - 1);
+  rig_add_raw(&r, "HTTP/1.1 304 Not Modified\r\nConnection: close\r\n\r\n");
+  rig_open(&r, NULL);
+  ck_assert_int_eq(pump_until_error(r.h, 100, &reason), 0);
+  rig_close(&r);
+}
+END_TEST
+
 static Suite *hls_live_suite(void) {
   Suite *s = suite_create("hls_live");
   TCase *tc = tcase_create("core");
@@ -517,6 +940,25 @@ static Suite *hls_live_suite(void) {
   tcase_add_test(tc, hls_live_uses_fmp4_false_before_first_playlist_fetch);
   tcase_add_test(tc, hls_aes128cbc_matches_nist_vector);
   tcase_add_test(tc, hls_aes128cbc_rejects_bad_length);
+  tcase_add_test(tc, hls_live_segment_kind_classifies);
+  tcase_add_test(tc, hls_live_emit_drops_when_buffer_full);
+  tcase_add_test(tc, hls_live_stays_idle_on_not_modified);
+  tcase_add_test(tc, hls_live_stays_idle_on_empty_playlist);
+  tcase_add_test(tc, hls_live_playlist_without_header_is_format_error);
+  tcase_add_test(tc, hls_live_rejoins_after_media_sequence_reset);
+  tcase_add_test(tc, hls_live_skips_ahead_over_segment_gap);
+  tcase_add_test(tc, hls_live_decrypts_with_explicit_iv_and_reuses_key);
+  tcase_add_test(tc, hls_live_decrypts_with_sequence_iv);
+  tcase_add_test(tc, hls_live_rejects_key_of_wrong_length);
+  tcase_add_test(tc, hls_live_skips_segment_that_fails_decrypt);
+  tcase_add_test(tc, hls_live_fetches_init_segment_before_media);
+  tcase_add_test(tc, hls_live_rejects_init_segment_when_callback_fails);
+  tcase_add_test(tc, hls_live_rejects_empty_init_segment);
+  tcase_add_test(tc, hls_live_fails_on_unparsable_segment_url);
+  tcase_add_test(tc, hls_live_fails_on_unparsable_key_url);
+  tcase_add_test(tc, hls_live_fails_on_unparsable_init_url);
+  tcase_add_test(tc, hls_live_reports_segment_fetch_error);
+  tcase_add_test(tc, hls_live_repolls_with_etag_after_empty_playlist);
   suite_add_tcase(s, tc);
   return s;
 }

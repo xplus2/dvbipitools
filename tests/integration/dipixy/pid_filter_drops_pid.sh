@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg curl tsanalyze jq; do
+for t in ffmpeg curl tsanalyze jq nc; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
@@ -23,7 +23,7 @@ sleep 0.5
 
 timeout 15 "$BIN" -l "127.0.0.1:$HTTPPORT" >"$WORK/dipixy.log" 2>&1 &
 DPID=$!
-sleep 0.5
+wait_until 30 port_open $HTTPPORT || fail "server on $HTTPPORT never became ready"
 
 plain="$WORK/plain.ts"
 plain_report="$WORK/plain.json"

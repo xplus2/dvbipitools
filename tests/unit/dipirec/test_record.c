@@ -1708,6 +1708,63 @@ START_TEST(record_run_open_failures_unwind_and_return_one) {
 }
 END_TEST
 
+START_TEST(run_raw_with_an_inspector_sees_every_packet) {
+  raw_run_t r;
+
+  raw_run_open(&r, RAW_PKTS);
+  r.ri.in = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  ck_assert_ptr_nonnull(r.ri.in);
+  ck_assert_int_eq(run_raw(&r.src, &r.cfg, &r.sink, 1, &r.rf, &r.mx, &r.bytes, mono_seconds(), NULL, &r.ri), 0);
+  ck_assert_uint_eq(tsinspect_counters(r.ri.in)->packets, (unsigned)RAW_PKTS);
+  ck_assert_uint_eq(r.bytes, (unsigned long long)RAW_PKTS * 188);
+  tsinspect_free(r.ri.in);
+  raw_run_close(&r);
+}
+END_TEST
+
+START_TEST(run_raw_pushes_metrics_while_copying) {
+  raw_run_t r;
+  sink_t ms;
+  seen_t seen;
+  uint64_t v = 0;
+
+  raw_run_open(&r, RAW_PKTS);
+  metrics_sink_open(&ms, METRICS_COMPONENT_REC, "rec1", 0.0);
+  ck_assert_int_eq(run_raw(&r.src, &r.cfg, &r.sink, 1, &r.rf, &ms.mx, &r.bytes, mono_seconds(), NULL, &r.ri), 0);
+  ck_assert_int_eq(sink_read(&ms, &seen), 1);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_REC_BYTES_TOTAL, &v), 1);
+  metrics_sink_close(&ms);
+  raw_run_close(&r);
+}
+END_TEST
+
+START_TEST(run_stream_ts_with_inspectors_and_metrics) {
+  stream_run_t r;
+  sink_t ms;
+  seen_t seen;
+  int rc;
+
+  stream_run_open(&r, NULL);
+  ck_assert_int_eq(rec_cfg_strip(&r.cfg, "NUL"), 0);
+  r.cfg.verbose = 1;
+  r.ri.in = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  r.ri.out = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  ck_assert_ptr_nonnull(r.ri.in);
+  ck_assert_ptr_nonnull(r.ri.out);
+  metrics_sink_open(&ms, METRICS_COMPONENT_REC, "rec1", 0.0);
+  rc = run_stream(&r.src, &r.cfg, &r.sink, 1, -1, &r.rf, &ms.mx, &r.bytes, mono_seconds(), 1, 0, NULL, 0, NULL, &r.ri);
+  ck_assert_int_eq(rc, 0);
+  ck_assert_uint_gt(tsinspect_counters(r.ri.in)->packets, 0u);
+  ck_assert_uint_gt(tsinspect_counters(r.ri.out)->packets, 0u);
+  ck_assert_uint_lt(tsinspect_counters(r.ri.out)->packets, tsinspect_counters(r.ri.in)->packets);
+  ck_assert_int_eq(sink_read(&ms, &seen), 1);
+  metrics_sink_close(&ms);
+  tsinspect_free(r.ri.in);
+  tsinspect_free(r.ri.out);
+  stream_run_close(&r);
+}
+END_TEST
+
 static Suite *record_suite(void) {
   Suite *s = suite_create("dipirec_record");
   TCase *tc = tcase_create("core");
@@ -1758,6 +1815,9 @@ static Suite *record_suite(void) {
   tcase_add_loop_test(tc, record_run_open_failures_unwind_and_return_one, 0, FAIL_MPTS + 1);
   tcase_add_loop_test(tc, src_open_with_ret_wires_client_and_unwinds_on_failure, 0, (int)(sizeof ret_cases / sizeof ret_cases[0]));
   tcase_add_loop_test(tc, src_open_reads_http_and_reports_errors, 0, (int)(sizeof http_cases / sizeof http_cases[0]));
+  tcase_add_test(tc, run_raw_with_an_inspector_sees_every_packet);
+  tcase_add_test(tc, run_raw_pushes_metrics_while_copying);
+  tcase_add_test(tc, run_stream_ts_with_inspectors_and_metrics);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -9,6 +9,7 @@ BUILD_LINK=dynamic
 CC=${CC:-cc}
 SANITIZE=no
 TSAN=no
+COVERAGE=no
 TESTS=no
 FUZZING=no
 TLS=auto
@@ -27,6 +28,7 @@ usage: ./configure [options]
   --static       link statically
   --sanitize     build with AddressSanitizer + UndefinedBehaviorSanitizer
   --tsan         build with ThreadSanitizer (cannot combine with --sanitize)
+  --coverage     build with gcov
   --tests        enable 'make test' target
   --fuzz         enable 'make fuzz-harnesses' target (AFL++ standalone harnesses;
                  pass --cc=afl-clang-fast for real instrumentation)
@@ -50,6 +52,7 @@ while [ $# -gt 0 ]; do case "$1" in
   --static)   BUILD_LINK=static ;;
   --sanitize) SANITIZE=yes ;;
   --tsan)     TSAN=yes ;;
+  --coverage) COVERAGE=yes ;;
   --tests)    TESTS=yes ;;
   --fuzz)     FUZZING=yes ;;
   --no-tls)   TLS=no ;;
@@ -106,6 +109,13 @@ if [ "$TSAN" = yes ]; then
   LDFLAGS="$LDFLAGS -fsanitize=thread"
 fi
 
+GCOVR_FLAGS=""
+if [ "$COVERAGE" = yes ]; then
+  CFLAGS="$CFLAGS --coverage -fprofile-update=atomic -O0"
+  LDFLAGS="$LDFLAGS --coverage"
+  GCOVR_FLAGS="--root . --object-directory . --filter src/ --exclude-throw-branches --exclude-unreachable-branches --merge-lines --gcov-ignore-parse-errors=negative_hits.warn_once_per_file --exclude src/lib/vendor/"
+fi
+
 CHECK_CFLAGS=""
 CHECK_LIBS=""
 if [ "$TESTS" = yes ]; then
@@ -127,6 +137,7 @@ CHECK_CFLAGS := $CHECK_CFLAGS
 CHECK_LIBS := $CHECK_LIBS
 FUZZING := $FUZZING
 TSAN := $TSAN
+GCOVR_FLAGS := $GCOVR_FLAGS
 TLS := $TLS
 CSA := $CSA
 RIST := $RIST
@@ -136,7 +147,7 @@ HTTP2 := $HTTP2
 HTTP3 := $HTTP3
 EOF
 
-echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN tests=$TESTS fuzz=$FUZZING tls=$TLS csa=$CSA rist=$RIST srt=$SRT zlib=$ZLIB http2=$HTTP2 http3=$HTTP3"
+echo "configured: $BUILD_TYPE $BUILD_LINK $BUILD_ARCH (CC=$CC) sanitize=$SANITIZE tsan=$TSAN coverage=$COVERAGE tests=$TESTS fuzz=$FUZZING tls=$TLS csa=$CSA rist=$RIST srt=$SRT zlib=$ZLIB http2=$HTTP2 http3=$HTTP3"
 echo "run 'make' to build."
 
 #EOF

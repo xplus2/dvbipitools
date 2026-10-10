@@ -421,6 +421,67 @@ START_TEST(mp4_video_without_reordering_omits_ctts) {
 }
 END_TEST
 
+START_TEST(mp4_selects_only_the_requested_audio_track) {
+  char path[] = "/tmp/dvbipitools_test_mp4_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mp4_opts_t cfg = base_cfg();
+  mp4_t *m;
+  unsigned char adts[64];
+  unsigned char pes[128];
+  unsigned char pkt[188];
+  unsigned char *buf;
+  size_t len = 0;
+  size_t alen;
+  size_t plen;
+
+  cfg.audio_all = 0;
+  cfg.audio_track = 1;
+  ck_assert_int_ge(fd, 0);
+  m = mp4_new(fd, &cfg, 0, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  feed_discovery(m);
+  alen = build_adts_frame(adts, 50);
+  plen = build_pes_with_pts(pes, 90000, adts, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  mp4_feed(m, pkt);
+  ck_assert_int_eq(mp4_error(m), 0);
+  mp4_close(m);
+  close(fd);
+  buf = slurp_file(path, &len);
+  ck_assert_ptr_nonnull(buf);
+  ck_assert_int_eq(memcmp(buf + 4, "ftyp", 4), 0);
+  ck_assert_ptr_nonnull(memmem(buf, len, "mp4a", 4));
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(mp4_unsupported_video_codec_writes_nothing_and_no_error) {
+  char path[] = "/tmp/dvbipitools_test_mp4_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mp4_opts_t cfg = base_cfg();
+  mp4_t *m;
+  unsigned char pkts[DISCOVERY_PACKETS][188];
+  unsigned char *buf;
+  size_t len = 1;
+
+  ck_assert_int_ge(fd, 0);
+  m = mp4_new(fd, &cfg, 1, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  build_video_discovery(pkts, 0, 0x02);
+  for (size_t i = 0; i < DISCOVERY_PACKETS; i++) mp4_feed(m, pkts[i]);
+  ck_assert_int_eq(mp4_error(m), 0);
+  mp4_close(m);
+  close(fd);
+  buf = slurp_file(path, &len);
+  ck_assert_uint_eq(len, 0u);
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
 static Suite *mp4_suite(void) {
   Suite *s = suite_create("mp4");
   TCase *tc = tcase_create("core");
@@ -431,6 +492,8 @@ static Suite *mp4_suite(void) {
   tcase_add_loop_test(tc, mp4_video_header_parse_writes_sample_entry_and_samples, 0, (int)(sizeof video_cases / sizeof video_cases[0]));
   tcase_add_test(tc, mp4_video_with_reordering_writes_ctts_with_runs);
   tcase_add_test(tc, mp4_video_without_reordering_omits_ctts);
+  tcase_add_test(tc, mp4_selects_only_the_requested_audio_track);
+  tcase_add_test(tc, mp4_unsupported_video_codec_writes_nothing_and_no_error);
   suite_add_tcase(s, tc);
   return s;
 }

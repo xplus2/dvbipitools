@@ -5,18 +5,18 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsecmg curl nc; do
+for t in ffmpeg tsecmg curl ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
+DEADLINE_S=${DEADLINE_S:-60}
+
+port_listening() {
+    ss -H -ltn "sport = :$1" 2>/dev/null | grep -q .
+}
+
 wait_port() {
-    i=0
-    while [ $i -lt 50 ]; do
-        nc -z 127.0.0.1 "$1" >/dev/null 2>&1 && return 0
-        i=$((i + 1))
-        sleep 0.1
-    done
-    return 1
+    wait_until 30 port_listening "$1"
 }
 
 DIPITVHEAD=$(echo "$BIN" | sed 's#/dipimetrics\([^/]*\)$#/../dipitvhead/dipitvhead\1#')
@@ -48,14 +48,14 @@ ECMG_B_PID=$!
 wait_port $ECMG_A_PORT || fail "tsecmg (vendor A) never started listening on $ECMG_A_PORT (see $WORK/tsecmg_a.log)"
 wait_port $ECMG_B_PORT || fail "tsecmg (vendor B) never started listening on $ECMG_B_PORT (see $WORK/tsecmg_b.log)"
 
-timeout 8 "$BIN" -S "$SOCK" -l "127.0.0.1:$HTTPPORT" -v >"$WORK/dipimetrics.log" 2>&1 &
+timeout $((DEADLINE_S + 10)) "$BIN" -S "$SOCK" -l "127.0.0.1:$HTTPPORT" -v >"$WORK/dipimetrics.log" 2>&1 &
 MPID=$!
 wait_port $HTTPPORT || fail "dipimetrics never started listening on $HTTPPORT (see $WORK/dipimetrics.log)"
 
 ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=25" \
-    -f lavfi -i "sine=frequency=1000" -t 15 \
+    -f lavfi -i "sine=frequency=1000" -t $((DEADLINE_S + 10)) \
     -c:v libx264 -preset ultrafast -c:a aac -f mpegts - 2>"$WORK/ffmpeg.log" | \
-timeout 8 "$DIPITVHEAD" -O lo -u -m $MCAST:$PORT -i - -s "CAS Metrics Scrape" \
+timeout $((DEADLINE_S + 10)) "$DIPITVHEAD" -O lo -u -m $MCAST:$PORT -i - -s "CAS Metrics Scrape" \
     --cas-algo cissa \
     --cas-ecmg "tcp://127.0.0.1:$ECMG_A_PORT" --cas-ecmg-version 2 --cas-super-id 0x4A750002 --cas-ecm-id 1 \
                --cas-ecm-pid 0x0020 --cas-emm-pid 0x0021 --cas-emmg-port $EMMG_A_PORT --cas-required \
@@ -66,9 +66,22 @@ timeout 8 "$DIPITVHEAD" -O lo -u -m $MCAST:$PORT -i - -s "CAS Metrics Scrape" \
     >"$WORK/dipitvhead.log" 2>&1 &
 TVPID=$!
 
-sleep 5
-
 body="$WORK/metrics.txt"
+
+metrics_ready() {
+    curl -sf -o "$body" "http://127.0.0.1:$HTTPPORT/metrics" || return 1
+    log_has "$body" 'dvbipi_cas_ecmg_connected{component="tvhead",headend_id="tv-cas-it",cas="0x4a750002"} 1' || return 1
+    log_has "$body" 'dvbipi_cas_ecmg_connected{component="tvhead",headend_id="tv-cas-it",cas="0x0d960001"} 1' || return 1
+    mr_a=$(metric_value "$body" 'dvbipi_cas_ecm_total{component="tvhead",headend_id="tv-cas-it",cas="0x4a750002"}')
+    mr_b=$(metric_value "$body" 'dvbipi_cas_ecm_total{component="tvhead",headend_id="tv-cas-it",cas="0x0d960001"}')
+    [ "${mr_a:-0}" -ge 1 ] && [ "${mr_b:-0}" -ge 1 ]
+}
+
+end=$(( $(date +%s) + DEADLINE_S ))
+until metrics_ready; do
+    [ "$(date +%s)" -lt "$end" ] || break
+    sleep 0.5
+done
 code=$(curl -s -o "$body" -w "%{http_code}" "http://127.0.0.1:$HTTPPORT/metrics")
 [ "$code" = "200" ] || fail "GET /metrics: expected HTTP 200, got $code"
 

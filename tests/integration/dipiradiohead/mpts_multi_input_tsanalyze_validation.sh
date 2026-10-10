@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze jq python3; do
+for t in ffmpeg tsp tsanalyze jq python3 ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
@@ -42,16 +42,29 @@ while ! grep -q "Serving HTTP" "$WORK/httpd1.log" 2>/dev/null || \
     sleep 0.1
 done
 
-tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 6000 \
+tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 60000 \
     -O file "$cap" >"$WORK/tsp_mpts.log" 2>&1 &
 TSPID=$!
-sleep 0.3
+wait_until 30 udp_port_busy $PORT || fail "tsp capture never bound $PORT"
 
-timeout 20 "$BIN" -O lo -m $MCAST:$PORT \
+DEADLINE_S=${DEADLINE_S:-60}
+
+mpts_ready() {
+    [ -s "$cap" ] || return 1
+    tsanalyze --json "$cap" >"$report" 2>/dev/null || return 1
+    jq -e '[.services[]? | select(.name == "Station One" or .name == "Station Two")] | length >= 2' \
+        "$report" >/dev/null 2>&1
+}
+
+timeout $((DEADLINE_S + 10)) "$BIN" -O lo -m $MCAST:$PORT \
     -i "http://127.0.0.1:$HTTP_PORT1/stream.mp3" --sid 101 -s "Station One" \
-    -i "http://127.0.0.1:$HTTP_PORT2/stream.mp3" --sid 102 -s "Station Two" || true
+    -i "http://127.0.0.1:$HTTP_PORT2/stream.mp3" --sid 102 -s "Station Two" >"$WORK/dipiradiohead.log" 2>&1 &
+RDPID=$!
 
-wait $TSPID || true
+wait_until $DEADLINE_S mpts_ready || :
+
+kill $RDPID $TSPID 2>/dev/null
+wait $RDPID $TSPID 2>/dev/null || true
 kill $HTTPD1 $HTTPD2 2>/dev/null || true
 
 [ -s "$cap" ] || fail "mpts: no packets captured"

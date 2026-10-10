@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze jq; do
+for t in ffmpeg tsp tsanalyze jq ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
@@ -20,16 +20,18 @@ SRC2_PORT=$((FPB + 2))
 cap="$WORK/mpts_capture.ts"
 report="$WORK/mpts_report.json"
 
-tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 5000 \
+tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 60000 \
     -O file "$cap" >"$WORK/tsp_mpts.log" 2>&1 &
 TSPID=$!
+wait_until 30 udp_port_busy $PORT || fail "mpts: tsp capture never bound $PORT"
 
-timeout 6 "$BIN" -O lo -u -m $MCAST:$PORT \
+timeout 70 "$BIN" -O lo -u -m $MCAST:$PORT \
     -i "udp://@$SRC1:$SRC1_PORT" -I lo --sid 101 -s "Channel One" \
     -i "udp://@$SRC2:$SRC2_PORT" -I lo --sid 102 -s "Channel Two" \
     >"$WORK/dipitvhead.log" 2>&1 &
 TVPID=$!
-sleep 0.5
+wait_until 30 udp_port_busy $SRC1_PORT || fail "mpts: receiver never bound $SRC1_PORT"
+wait_until 30 udp_port_busy $SRC2_PORT || fail "mpts: receiver never bound $SRC2_PORT"
 
 ffmpeg -hide_banner -loglevel error -f lavfi -i "testsrc=size=320x240:rate=25" \
     -f lavfi -i "sine=frequency=1000" -t 3 \
@@ -40,8 +42,11 @@ ffmpeg -hide_banner -loglevel error -f lavfi -i "testsrc=size=320x240:rate=25" \
     -c:v libx264 -preset ultrafast -c:a aac -f mpegts \
     "udp://$SRC2:$SRC2_PORT?localaddr=127.0.0.1&ttl=1"
 
-wait $TVPID || true
-wait $TSPID || true
+sleep 1
+kill $TVPID 2>/dev/null
+wait $TVPID 2>/dev/null || true
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 
 [ -s "$cap" ] || fail "mpts: no packets captured (see $WORK/dipitvhead.log)"
 

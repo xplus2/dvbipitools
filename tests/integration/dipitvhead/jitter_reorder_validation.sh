@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze jq python3; do
+for t in ffmpeg tsp tsanalyze jq python3 ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
@@ -40,19 +40,22 @@ for f in frames:
     time.sleep(0.003)
 EOF
 
-tsp -I ip "$OUT_GROUP:$OUT_PORT" --local-address 127.0.0.1 --receive-timeout 6000 -O file "$cap" >"$WORK/tsp.log" 2>&1 &
+tsp -I ip "$OUT_GROUP:$OUT_PORT" --local-address 127.0.0.1 --receive-timeout 60000 -O file "$cap" >"$WORK/tsp.log" 2>&1 &
 tsp_pid=$!
+wait_until 30 udp_port_busy $OUT_PORT || fail "tsp capture never bound $OUT_PORT"
 
 "$BIN" -i "rtp://@$IN_GROUP:$IN_PORT" -I lo --jitter-ms 100 -O lo -u -m "$OUT_GROUP:$OUT_PORT" -s "Jitter Channel" >"$rxlog" 2>&1 &
 rx_pid=$!
-sleep 0.7
+wait_until 30 udp_port_busy $IN_PORT || fail "receiver never bound $IN_PORT (see $rxlog)"
 kill -0 "$rx_pid" 2>/dev/null || fail "receiver exited early (see $rxlog)"
 
 python3 "$WORK/send.py" "$clip" "$IN_GROUP" "$IN_PORT" || fail "sender failed"
 sleep 1.5
 kill -INT "$rx_pid" 2>/dev/null
 wait "$rx_pid" 2>/dev/null
-wait "$tsp_pid" || true
+sleep 0.5
+kill "$tsp_pid" 2>/dev/null
+wait "$tsp_pid" 2>/dev/null || true
 
 [ -s "$cap" ] || fail "no packets captured (see $rxlog)"
 

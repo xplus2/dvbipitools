@@ -8,11 +8,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <net/if.h>
+#include <net/if_arp.h>
+#include <signal.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
+#include <linux/if_ether.h>
 #include <linux/if_packet.h>
 
 #include "dipifccret/capture/capture.h"
+#include "lib/sys/signal.h"
 
 typedef struct {
   int called;
@@ -652,6 +659,106 @@ START_TEST(drop_privileges_fails_for_an_unknown_user_and_ignores_null) {
 }
 END_TEST
 
+static int have_packet_socket(void) {
+  int fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+
+  if (fd < 0) return 0;
+  close(fd);
+  return 1;
+}
+
+static int find_ethernet_iface(char *out, size_t cap) {
+  struct if_nameindex *ni = if_nameindex();
+  int found = 0;
+  int fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+  if (!ni || fd < 0) {
+    if (ni) if_freenameindex(ni);
+    if (fd >= 0) close(fd);
+    return 0;
+  }
+  for (struct if_nameindex *p = ni; p->if_index && !found; p++) {
+    struct ifreq ifr;
+
+    memset(&ifr, 0, sizeof ifr);
+    snprintf(ifr.ifr_name, sizeof ifr.ifr_name, "%s", p->if_name);
+    if (ioctl(fd, SIOCGIFHWADDR, &ifr) == 0 && ifr.ifr_hwaddr.sa_family == ARPHRD_ETHER) {
+      snprintf(out, cap, "%s", p->if_name);
+      found = 1;
+    }
+  }
+  if_freenameindex(ni);
+  close(fd);
+  return found;
+}
+
+START_TEST(capture_open_rejects_bad_arguments) {
+  const char *good[] = {"239.1.2.0/24"};
+  const char *bad[] = {"not-a-cidr"};
+  char err[256];
+
+  ck_assert_ptr_null(capture_open(NULL, good, 1, err, sizeof err));
+  ck_assert_ptr_nonnull(strstr(err, "interface required"));
+  ck_assert_ptr_null(capture_open("an-interface-name-far-too-long", good, 1, err, sizeof err));
+  ck_assert_ptr_nonnull(strstr(err, "too long"));
+  ck_assert_ptr_null(capture_open("lo", bad, 1, err, sizeof err));
+  ck_assert_ptr_nonnull(strstr(err, "invalid range: not-a-cidr"));
+}
+END_TEST
+
+START_TEST(capture_open_reports_why_an_interface_cannot_be_used) {
+  const char *good[] = {"239.1.2.0/24"};
+  char err[256];
+  int privileged = have_packet_socket();
+
+  ck_assert_ptr_null(capture_open("dvbtnone0", good, 1, err, sizeof err));
+  if (privileged)
+    ck_assert_ptr_nonnull(strstr(err, "dvbtnone0"));
+  else
+    ck_assert_ptr_nonnull(strstr(err, "CAP_NET_RAW"));
+
+  ck_assert_ptr_null(capture_open("lo", good, 1, err, sizeof err));
+  if (privileged)
+    ck_assert_ptr_nonnull(strstr(err, "not an Ethernet interface"));
+  else
+    ck_assert_ptr_nonnull(strstr(err, "CAP_NET_RAW"));
+}
+END_TEST
+
+START_TEST(capture_open_on_an_ethernet_interface_succeeds_or_explains) {
+  const char *good[] = {"239.1.2.0/24", "ff3e::/32"};
+  char iface[64];
+  char err[256];
+  capture_t *cap;
+
+  if (!have_packet_socket() || !find_ethernet_iface(iface, sizeof iface)) return;
+  cap = capture_open(iface, good, 2, err, sizeof err);
+  if (!cap) {
+    ck_assert_uint_gt(strlen(err), 0u);
+    return;
+  }
+  capture_close(cap);
+}
+END_TEST
+
+START_TEST(capture_run_returns_once_stop_is_requested) {
+  unsigned char ring[RING_BLOCK_SIZE];
+  cidr_t ranges[2];
+  capture_t *cap;
+  record_t rec;
+
+  memset(&rec, 0, sizeof rec);
+  make_ranges(ranges);
+  cap = capture_from_ring(ring, RING_BLOCK_SIZE, 1, ranges, 2);
+  ck_assert_ptr_nonnull(cap);
+  signals_install();
+  raise(SIGTERM);
+  capture_run(cap, record_cb, &rec);
+  ck_assert_int_eq(rec.called, 0);
+  capture_close(cap);
+}
+END_TEST
+
 static Suite *capture_suite(void) {
   Suite *s = suite_create("capture");
   TCase *tc = tcase_create("core");
@@ -674,6 +781,10 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, frame_with_null_callback_is_accepted_silently);
   tcase_add_test(tc, bpf_rejects_range_sets_over_the_kernel_instruction_limit);
   tcase_add_test(tc, drop_privileges_fails_for_an_unknown_user_and_ignores_null);
+  tcase_add_test(tc, capture_open_rejects_bad_arguments);
+  tcase_add_test(tc, capture_open_reports_why_an_interface_cannot_be_used);
+  tcase_add_test(tc, capture_open_on_an_ethernet_interface_succeeds_or_explains);
+  tcase_add_test(tc, capture_run_returns_once_stop_is_requested);
   suite_add_tcase(s, tc);
   return s;
 }

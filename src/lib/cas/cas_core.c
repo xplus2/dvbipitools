@@ -134,7 +134,12 @@ int cas_core_start_biss(scramble_algo_t algo, const unsigned char *cw, size_t cw
   memset(out, 0, sizeof *out);
   out->biss_engine = cas_scramble_engine_start(algo, pids, pid_count, flush_pid);
   if (!out->biss_engine) return -1;
-  cas_scramble_engine_set_cw(out->biss_engine, SCRAMBLE_PARITY_EVEN, cw, cw_len, NULL, NULL);
+  if (cas_scramble_engine_set_cw(out->biss_engine, SCRAMBLE_PARITY_EVEN, cw, cw_len, NULL, NULL) != 0) {
+    log_line("%sbiss: %s key rejected by the scrambler, not starting", log_prefix, label);
+    cas_scramble_engine_stop(out->biss_engine);
+    out->biss_engine = NULL;
+    return -1;
+  }
   log_line("%sbiss: %s active, %zu pid(s) scrambled, no ECMG/EMMG", log_prefix, label, pid_count);
   return 0;
 }

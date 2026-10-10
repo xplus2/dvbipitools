@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze jq; do
+for t in ffmpeg tsp tsanalyze jq ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
@@ -25,14 +25,16 @@ gen_clip "$clip1" 1000
 cap="$WORK/spts_capture.ts"
 report="$WORK/spts_report.json"
 
-tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 4000 \
+tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 60000 \
     -O file "$cap" >"$WORK/tsp_spts.log" 2>&1 &
 TSPID=$!
-sleep 0.3
+wait_until 30 udp_port_busy $PORT || fail "tsp capture never bound $PORT"
 
 "$BIN" -O lo -u -m $MCAST:$PORT -i - -s "Test Channel" < "$clip1"
 
-wait $TSPID || true
+sleep 0.5
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 
 [ -s "$cap" ] || fail "spts: no packets captured"
 

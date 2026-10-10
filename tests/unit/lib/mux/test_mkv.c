@@ -680,6 +680,41 @@ START_TEST(mkv_video_codec_header_and_dimensions) {
 }
 END_TEST
 
+START_TEST(mkv_selects_only_the_requested_audio_track) {
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mkv_opts_t cfg = base_cfg();
+  mkv_t *m;
+  unsigned char adts[64];
+  unsigned char pes[128];
+  unsigned char pkt[188];
+  unsigned char *buf;
+  size_t len = 0;
+  size_t alen;
+  size_t plen;
+
+  cfg.audio_all = 0;
+  cfg.audio_track = 1;
+  ck_assert_int_ge(fd, 0);
+  m = mkv_new(fd, &cfg, 0, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  feed_discovery(m);
+  alen = build_adts_frame(adts, 50);
+  plen = build_pes_with_pts(pes, 90000, adts, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  mkv_feed(m, pkt);
+  ck_assert_int_eq(mkv_error(m), 0);
+  mkv_close(m);
+  close(fd);
+  buf = slurp_file(path, &len);
+  ck_assert_ptr_nonnull(buf);
+  ck_assert_ptr_nonnull(memmem(buf, len, "A_AAC", 5));
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
 static Suite *mkv_suite(void) {
   Suite *s = suite_create("mkv");
   TCase *tc = tcase_create("core");
@@ -692,6 +727,7 @@ static Suite *mkv_suite(void) {
   tcase_add_test(tc, mkv_writes_av1_codecid_and_av1c_cpriv);
   tcase_add_loop_test(tc, mkv_video_codec_header_and_dimensions, 0, (int)(sizeof mkv_video_cases / sizeof mkv_video_cases[0]));
   tcase_add_loop_test(tc, mkv_edge_case_streams_never_error_and_drop_unusable_frames, 0, EDGE_COUNT);
+  tcase_add_test(tc, mkv_selects_only_the_requested_audio_track);
   suite_add_tcase(s, tc);
   return s;
 }

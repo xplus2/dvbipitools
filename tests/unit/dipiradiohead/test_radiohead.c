@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <check.h>
 #include <poll.h>
+#include <signal.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -760,6 +761,71 @@ START_TEST(single_frame_reports_a_source_error_and_counts_the_framing_failure) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  int cas;
+  int cas_bad;
+  int mcast;
+  int mcast_bad;
+  int rtp_fec;
+  int inspect;
+  int want_rc;
+} run_case_t;
+
+static const run_case_t run_cases[] = {
+  {"plain output", 0, 0, 0, 0, 0, 0, 0},
+  {"inspectors enabled", 0, 0, 0, 0, 0, 1, 0},
+  {"own cas", 1, 0, 0, 0, 0, 0, 0},
+  {"cas that cannot start", 1, 1, 0, 0, 0, 0, 1},
+  {"multicast target that cannot open", 0, 0, 1, 1, 0, 0, 1},
+  {"rtp output with fec", 0, 0, 1, 0, 1, 0, 0},
+};
+
+START_TEST(run_single_input_sets_up_and_tears_down_for_each_configuration) {
+  const run_case_t *c = &run_cases[_i];
+  static config_t cfg;
+  metrics_exporter_t mx;
+  int rc;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.n_inputs = 1;
+  cfg.tsid = 1;
+  cfg.onid = 1;
+  cfg.inputs[0].sid = 1;
+  cfg.inputs[0].uri = "http://127.0.0.1:1/stream";
+  bufcpy(cfg.inputs[0].sdt_text, sizeof cfg.inputs[0].sdt_text, "Svc");
+  if (c->inspect) cfg.metrics_inspect_ts = METRICS_INSPECT_TS_BASIC;
+  if (c->cas) {
+    cfg.cas_algo = CAS_ALGO_CSA2;
+    cfg.cas_cp_duration_ms = c->cas_bad ? 0 : 10000;
+    cfg.n_cas_vendors = 1;
+    bufcpy(cfg.cas_vendors[0].ecmg_host, sizeof cfg.cas_vendors[0].ecmg_host, "127.0.0.1");
+    cfg.cas_vendors[0].ecmg_port = 1;
+    cfg.cas_vendors[0].super_cas_id = (0x4A75u << 16) | 1u;
+    cfg.cas_vendors[0].ecm_id = 1;
+    cfg.cas_vendors[0].ecm_pid = 0x1FF0;
+    cfg.cas_vendors[0].emm_pid = 0x1FF1;
+  }
+  if (c->mcast) {
+    cfg.family = AF_INET;
+    bufcpy(cfg.mcast_group, sizeof cfg.mcast_group, c->mcast_bad ? "not-an-address" : run_helper_group_n(64));
+    cfg.mcast_port = c->mcast_bad ? 5000 : run_helper_port(64);
+    cfg.ttl = 1;
+  }
+  if (c->rtp_fec) {
+    cfg.rtp = 1;
+    cfg.al_fec_l = 4;
+    cfg.al_fec_d = 3;
+    cfg.al_fec_port = run_helper_port(65);
+  }
+  metrics_exporter_init(&mx, METRICS_COMPONENT_RADIOHEAD, NULL, NULL, 0.0);
+  signals_install();
+  raise(SIGTERM);
+  rc = radiohead_run(&cfg, &mx);
+  ck_assert_msg(rc == c->want_rc, "%s: rc %d", c->name, rc);
+}
+END_TEST
+
 static Suite *radiohead_suite(void) {
   Suite *s = suite_create("dipiradiohead_radiohead");
   TCase *tc = tcase_create("core");
@@ -786,6 +852,7 @@ static Suite *radiohead_suite(void) {
   tcase_add_test(tc, single_frame_attaches_the_cas_and_keeps_running_while_it_is_healthy);
   tcase_add_test(tc, single_frame_reports_a_fatal_cas_failure);
   tcase_add_test(tc, single_frame_reports_a_source_error_and_counts_the_framing_failure);
+  tcase_add_loop_test(tc, run_single_input_sets_up_and_tears_down_for_each_configuration, 0, (int)(sizeof run_cases / sizeof run_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

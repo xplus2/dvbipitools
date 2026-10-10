@@ -221,6 +221,150 @@ END_TEST
 START_TEST(fec2022_seq_wrap_unaligned_l4d3_loss) { wrap_run(4, 3, 1, 5); }
 END_TEST
 
+#define STREAM_PKTS (3 * N)
+#define PKT_LEN 200u
+
+typedef struct {
+  unsigned char src[STREAM_PKTS][PKT_LEN];
+  unsigned char repair[STREAM_PKTS][FEC2022_MAX_REPAIR];
+  size_t repair_len[STREAM_PKTS];
+} stream_t;
+
+static void make_stream(stream_t *st, unsigned first_seq, unsigned count) {
+  fec2022_enc_t *e = fec2022_enc_new(L, D, 96);
+
+  ck_assert_ptr_nonnull(e);
+  ck_assert_uint_le(count, (unsigned)STREAM_PKTS);
+  for (unsigned i = 0; i < count; i++) {
+    build_source(st->src[i], (uint16_t)(first_seq + i), 1000 + i, (unsigned char)(i + 3));
+    st->repair_len[i] = fec2022_enc_feed(e, st->src[i], PKT_LEN, 5000 + i, st->repair[i], sizeof st->repair[i]);
+  }
+  fec2022_enc_free(e);
+}
+
+static stream_t g_stream;
+static stream_t g_restart;
+
+START_TEST(fec2022_dec_source_rejects_bad_lengths) {
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  unsigned char pkt[FEC2022_MAX_PKT + 8];
+
+  memset(pkt, 0, sizeof pkt);
+  pkt[0] = 0x80;
+  ck_assert_int_eq(fec2022_dec_source(dc, pkt, 11), -1);
+  ck_assert_int_eq(fec2022_dec_source(dc, pkt, FEC2022_MAX_PKT + 1), -1);
+  ck_assert_int_eq(fec2022_dec_source(dc, pkt, 12), 0);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
+START_TEST(fec2022_dec_drain_keeps_packets_that_do_not_fit) {
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  unsigned char out[N * FEC2022_MAX_PKT];
+  unsigned char small[10];
+
+  make_stream(&g_stream, 0, N);
+  ck_assert_uint_eq(fec2022_dec_drain(dc, out, sizeof out), 0u);
+  for (unsigned i = 0; i < N; i++) {
+    fec2022_dec_source(dc, g_stream.src[i], PKT_LEN);
+    if (g_stream.repair_len[i]) fec2022_dec_repair(dc, g_stream.repair[i], g_stream.repair_len[i]);
+  }
+  ck_assert_uint_eq(fec2022_dec_drain(dc, small, sizeof small), 0u);
+  ck_assert_uint_eq(drain_all(dc, out, sizeof out), (size_t)N * PKT_LEN);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
+START_TEST(fec2022_dec_ignores_duplicate_and_late_packets) {
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  unsigned char out[3 * N * FEC2022_MAX_PKT];
+  size_t got = 0;
+
+  make_stream(&g_stream, 0, 2 * N);
+  for (unsigned i = 0; i < 2 * N; i++) {
+    fec2022_dec_source(dc, g_stream.src[i], PKT_LEN);
+    fec2022_dec_source(dc, g_stream.src[i], PKT_LEN);
+    if (g_stream.repair_len[i]) {
+      fec2022_dec_repair(dc, g_stream.repair[i], g_stream.repair_len[i]);
+      fec2022_dec_repair(dc, g_stream.repair[i], g_stream.repair_len[i]);
+    }
+    got += drain_all(dc, out, sizeof out);
+  }
+  fec2022_dec_source(dc, g_stream.src[0], PKT_LEN);
+  fec2022_dec_source(dc, g_stream.src[5], PKT_LEN);
+  if (g_stream.repair_len[N - 1]) fec2022_dec_repair(dc, g_stream.repair[N - 1], g_stream.repair_len[N - 1]);
+  got += drain_all(dc, out, sizeof out);
+  ck_assert_uint_eq(got, (size_t)2 * N * PKT_LEN);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
+START_TEST(fec2022_dec_repair_ignores_malformed_and_foreign_geometry) {
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  fec2022_enc_t *other = fec2022_enc_new(5, D, 96);
+  unsigned char foreign[5 * D][PKT_LEN];
+  unsigned char frep[FEC2022_MAX_REPAIR];
+  unsigned char out[N * FEC2022_MAX_PKT];
+  size_t flen = 0;
+  size_t got;
+  unsigned dropped = 6;
+
+  ck_assert_ptr_nonnull(other);
+  make_stream(&g_stream, 0, N);
+  for (unsigned i = 0; i < 5 * D; i++) {
+    build_source(foreign[i], (uint16_t)i, 1000 + i, 9);
+    flen = fec2022_enc_feed(other, foreign[i], PKT_LEN, 5000 + i, frep, sizeof frep);
+    if (flen) fec2022_dec_repair(dc, frep, flen);
+  }
+  fec2022_enc_free(other);
+  fec2022_dec_repair(dc, g_stream.repair[N - 1], 10);
+  fec2022_dec_repair(dc, g_stream.repair[N - 1], 20);
+  for (unsigned i = 0; i < N; i++)
+    if (i != dropped) fec2022_dec_source(dc, g_stream.src[i], PKT_LEN);
+  got = drain_all(dc, out, sizeof out);
+  ck_assert_uint_lt(got, (size_t)N * PKT_LEN);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
+START_TEST(fec2022_dec_resynchronises_when_the_stream_restarts) {
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  unsigned char out[3 * N * FEC2022_MAX_PKT];
+  size_t got;
+
+  make_stream(&g_stream, 0, N);
+  make_stream(&g_restart, 1001, N);
+  for (unsigned i = 0; i < N; i++) {
+    fec2022_dec_source(dc, g_stream.src[i], PKT_LEN);
+    if (g_stream.repair_len[i]) fec2022_dec_repair(dc, g_stream.repair[i], g_stream.repair_len[i]);
+  }
+  for (unsigned i = 0; i < N; i++) {
+    if (g_restart.repair_len[i]) fec2022_dec_repair(dc, g_restart.repair[i], g_restart.repair_len[i]);
+    fec2022_dec_source(dc, g_restart.src[i], PKT_LEN);
+  }
+  got = drain_all(dc, out, sizeof out);
+  ck_assert_uint_ge(got, (size_t)N * PKT_LEN);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
+START_TEST(fec2022_dec_drops_released_packets_while_the_ready_queue_is_full) {
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  unsigned char out[3 * N * FEC2022_MAX_PKT];
+  size_t got;
+
+  make_stream(&g_stream, 0, 3 * N);
+  for (unsigned i = 0; i < 3 * N; i++) {
+    fec2022_dec_source(dc, g_stream.src[i], PKT_LEN);
+    if (g_stream.repair_len[i]) fec2022_dec_repair(dc, g_stream.repair[i], g_stream.repair_len[i]);
+  }
+  got = drain_all(dc, out, sizeof out);
+  ck_assert_uint_gt(got, 0u);
+  ck_assert_uint_le(got, (size_t)N * PKT_LEN);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
 static Suite *fec2022_suite(void) {
   Suite *s = suite_create("fec2022");
   TCase *tc = tcase_create("core");
@@ -235,6 +379,12 @@ static Suite *fec2022_suite(void) {
   tcase_add_test(tc, fec2022_seq_wrap_l10d10_loss);
   tcase_add_test(tc, fec2022_seq_wrap_unaligned_loss);
   tcase_add_test(tc, fec2022_seq_wrap_unaligned_l4d3_loss);
+  tcase_add_test(tc, fec2022_dec_source_rejects_bad_lengths);
+  tcase_add_test(tc, fec2022_dec_drain_keeps_packets_that_do_not_fit);
+  tcase_add_test(tc, fec2022_dec_ignores_duplicate_and_late_packets);
+  tcase_add_test(tc, fec2022_dec_repair_ignores_malformed_and_foreign_geometry);
+  tcase_add_test(tc, fec2022_dec_resynchronises_when_the_stream_restarts);
+  tcase_add_test(tc, fec2022_dec_drops_released_packets_while_the_ready_queue_is_full);
   suite_add_tcase(s, tc);
   return s;
 }

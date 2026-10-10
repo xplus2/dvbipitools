@@ -12,7 +12,10 @@
 
 #include "dipitvhead/cas/cas.h"
 
+#include "lib/scrambler/cissa.h"
+#include "lib/scrambler/csa2.h"
 #include "psi_fixture.h"
+#include "stderr_capture.h"
 
 static void build_pcr_packet(unsigned char pkt[188], int with_pcr, uint64_t base, unsigned ext) {
   memset(pkt, 0xFF, 188);
@@ -685,6 +688,238 @@ START_TEST(reload_receivers_is_a_noop_outside_biss_ca_mode) {
 }
 END_TEST
 
+static size_t count_substr(const char *hay, const char *needle) {
+  size_t n = 0;
+  size_t step = strlen(needle);
+
+  for (const char *p = strstr(hay, needle); p; p = strstr(p + step, needle)) n++;
+  return n;
+}
+
+START_TEST(pcr_ticks_start_the_clock_and_flag_discontinuities) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  psi_t *with_pcr = build_psi_with_pcr(0x0100);
+  unsigned char no_pcr[188];
+  unsigned char first[188];
+  unsigned char next[188];
+  unsigned char jump[188];
+  capture_t cap;
+  char log[4096];
+  cas_t *c;
+
+  init_cas_cfg(&cfg, 1);
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  build_pcr_packet(no_pcr, 0, 0, 0);
+  build_pcr_packet(first, 1, 1000000, 0);
+  build_pcr_packet(next, 1, 1009000, 0);
+  build_pcr_packet(jump, 1, 1009000 + 90000ULL * 500, 0);
+  c = cas_start(&cfg, with_pcr, &es, 1, 0x0100);
+  ck_assert_ptr_nonnull(c);
+
+  capture_begin(&cap);
+  cas_pcr_tick(c, 0x0200, first);
+  cas_pcr_tick(c, 0x0100, no_pcr);
+  cas_pcr_tick(c, 0x0100, first);
+  cas_pcr_tick(c, 0x0100, next);
+  cas_pcr_tick(c, 0x0100, jump);
+  capture_end(&cap, log, sizeof log);
+  ck_assert_uint_eq(count_substr(log, "first PCR observed"), 1u);
+  ck_assert_uint_eq(count_substr(log, "PCR discontinuity"), 1u);
+  ck_assert_int_eq(cas_failed(c), 0);
+  cas_stop(c);
+  psi_free(with_pcr);
+}
+END_TEST
+
+START_TEST(wall_ticks_advance_the_clock_only_forward) {
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  unsigned char pcr[188];
+  cas_t *c;
+
+  init_cas_cfg(&cfg, 1);
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  build_pcr_packet(pcr, 1, 1000000, 0);
+  c = cas_start_multi(&cfg, lists, counts, 1);
+  ck_assert_ptr_nonnull(c);
+  cas_wall_tick(c, 1.0);
+  cas_wall_tick(c, 2.0);
+  cas_wall_tick(c, 2.0);
+  cas_wall_tick(c, 1.5);
+  cas_pcr_tick(c, 0x1FFF, pcr);
+  ck_assert_uint_eq(cas_pcr_pid(c), 0x1FFFu);
+  ck_assert_int_eq(cas_failed(c), 0);
+  cas_stop(c);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  int biss1;
+  int emit_esw;
+  int multi;
+} biss_case_t;
+
+static const biss_case_t biss_cases[] = {
+    {"biss1 single", 1, 0, 0},
+    {"biss1 multi", 1, 0, 1},
+    {"biss2 single", 0, 0, 0},
+    {"biss2 multi", 0, 0, 1},
+    {"biss2 with esw single", 0, 1, 0},
+    {"biss2 with esw multi", 0, 1, 1},
+};
+
+static cas_t *start_biss(const biss_case_t *bc, config_t *cfg, const psi_t *psi, const out_es_t *es) {
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+
+  lists[0] = es;
+  init_cas_cfg(cfg, 0);
+  cfg->biss1_enabled = bc->biss1;
+  cfg->biss2_enabled = !bc->biss1;
+  cfg->biss2_emit_esw = bc->emit_esw;
+  memset(cfg->biss1_cw, 0x11, sizeof cfg->biss1_cw);
+  memset(cfg->biss2_sw, 0x22, sizeof cfg->biss2_sw);
+  memset(cfg->biss2_esw_id, 0x33, sizeof cfg->biss2_esw_id);
+  if (bc->multi) return cas_start_multi(cfg, lists, counts, 1);
+  return cas_start(cfg, psi, es, 1, 0x0100);
+}
+
+typedef struct {
+  unsigned count;
+  unsigned char control;
+} emit_rec_t;
+
+static void rec_emit(void *ctx, const unsigned char pkt[188]) {
+  emit_rec_t *rec = ctx;
+
+  rec->count++;
+  rec->control = pkt[3];
+}
+
+static int biss_key_usable(const biss_case_t *bc) {
+  unsigned char cw[16] = {0};
+
+  if (bc->biss1) {
+    csa2_key_t *k = csa2_key_new(cw);
+
+    csa2_key_free(k);
+    return k != NULL;
+  }
+  {
+    cissa_key_t *k = cissa_key_new(cw);
+
+    cissa_key_free(k);
+    return k != NULL;
+  }
+}
+
+START_TEST(biss_modes_scramble_with_a_fixed_key) {
+  const biss_case_t *bc = &biss_cases[_i];
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  psi_t *with_pcr = build_psi_with_pcr(0x0100);
+  unsigned char pkt[188];
+  emit_rec_t emitted = {0, 0};
+  cas_t *c;
+
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  c = start_biss(bc, &cfg, with_pcr, &es);
+  if (!biss_key_usable(bc)) {
+    ck_assert_msg(c == NULL, "%s: started without a usable key", bc->name);
+    psi_free(with_pcr);
+    return;
+  }
+  ck_assert_msg(c != NULL, "%s: not started", bc->name);
+  ck_assert_int_eq(cas_failed(c), 0);
+  ck_assert_uint_eq(cas_pcr_pid(c), bc->multi ? 0x1FFFu : 0x0100u);
+  memset(pkt, 0xFF, sizeof pkt);
+  pkt[0] = 0x47;
+  pkt[1] = 0x01;
+  pkt[2] = 0x00;
+  pkt[3] = 0x10;
+  cas_wall_tick(c, 1.0);
+  cas_pcr_tick(c, cas_pcr_pid(c), pkt);
+  cas_scramble_packet(c, 0x0100, 1.0, pkt, rec_emit, &emitted);
+  cas_flush(c, rec_emit, &emitted);
+  ck_assert_msg(emitted.count == 1u, "%s: %u packets emitted", bc->name, emitted.count);
+  ck_assert_int_eq(emitted.control & 0xC0, 0x80);
+  cas_stop(c);
+  psi_free(with_pcr);
+}
+END_TEST
+
+START_TEST(biss_modes_refuse_an_empty_scramble_set) {
+  const biss_case_t *bc = &biss_cases[_i];
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  psi_t *with_pcr = build_psi_with_pcr(0x0100);
+
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  init_cas_cfg(&cfg, 0);
+  cfg.cas_pid_count = 0;
+  cfg.biss1_enabled = bc->biss1;
+  cfg.biss2_enabled = !bc->biss1;
+  if (bc->multi) {
+    const out_es_t *lists[1] = {&es};
+    int counts[1] = {1};
+
+    ck_assert_ptr_null(cas_start_multi(&cfg, lists, counts, 1));
+  } else {
+    ck_assert_ptr_null(cas_start(&cfg, with_pcr, &es, 1, 0x0100));
+  }
+  psi_free(with_pcr);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  int multi;
+  int session_given;
+  size_t pid_count;
+} biss_ca_case_t;
+
+static const biss_ca_case_t biss_ca_cases[] = {
+    {"single, fixed session id", 0, 1, 1},
+    {"single, random session id", 0, 0, 1},
+    {"multi, fixed session id", 1, 1, 1},
+    {"multi, random session id", 1, 0, 1},
+    {"single, no pids", 0, 1, 0},
+    {"multi, no pids", 1, 1, 0},
+};
+
+START_TEST(biss_ca_refuses_unusable_start_conditions) {
+  const biss_ca_case_t *bc = &biss_ca_cases[_i];
+  config_t cfg;
+  psi_es_t pe;
+  out_es_t es;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  psi_t *with_pcr = build_psi_with_pcr(0x0100);
+  cas_t *c;
+
+  set_es(&es, &pe, 0x0100, PID_VIDEO);
+  lists[0] = &es;
+  init_cas_cfg(&cfg, 0);
+  cfg.cas_pid_count = bc->pid_count;
+  cfg.biss2_ca_enabled = 1;
+  cfg.biss2_ca_receivers_dir = "/nonexistent/dvbipitools-receivers";
+  cfg.biss2_ca_session_id_given = bc->session_given;
+  cfg.biss2_ca_session_id = 0x1234;
+  c = bc->multi ? cas_start_multi(&cfg, lists, counts, 1) : cas_start(&cfg, with_pcr, &es, 1, 0x0100);
+  ck_assert_msg(c == NULL, "%s: started", bc->name);
+  psi_free(with_pcr);
+}
+END_TEST
+
 static Suite *cas_suite(void) {
   Suite *s = suite_create("cas");
   TCase *tc = tcase_create("core");
@@ -721,6 +956,11 @@ static Suite *cas_suite(void) {
   tcase_add_test(tc, metrics_are_zero_for_missing_or_unstarted_instances);
   tcase_add_test(tc, vendor_accessors_and_descriptors_describe_each_vendor);
   tcase_add_test(tc, reload_receivers_is_a_noop_outside_biss_ca_mode);
+  tcase_add_test(tc, pcr_ticks_start_the_clock_and_flag_discontinuities);
+  tcase_add_test(tc, wall_ticks_advance_the_clock_only_forward);
+  tcase_add_loop_test(tc, biss_modes_scramble_with_a_fixed_key, 0, (int)(sizeof biss_cases / sizeof biss_cases[0]));
+  tcase_add_loop_test(tc, biss_modes_refuse_an_empty_scramble_set, 0, (int)(sizeof biss_cases / sizeof biss_cases[0]));
+  tcase_add_loop_test(tc, biss_ca_refuses_unusable_start_conditions, 0, (int)(sizeof biss_ca_cases / sizeof biss_ca_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

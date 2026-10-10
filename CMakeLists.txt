@@ -11,6 +11,7 @@ endif ()
 option(DVBIPITOOLS_STATIC "link statically" OFF)
 option(DVBIPITOOLS_SANITIZE "build with ASan + UBSan" OFF)
 option(DVBIPITOOLS_TSAN "build with TSan" OFF)
+option(DVBIPITOOLS_COVERAGE "build with gcov" OFF)
 option(DVBIPITOOLS_TESTS "build unit tests (requires 'check' via pkg-config)" OFF)
 option(DVBIPITOOLS_FUZZING "build AFL++ fuzz harnesses (configure with -DCMAKE_C_COMPILER=afl-clang-fast)" OFF)
 option(DVBIPITOOLS_TLS "build with HTTPS/TLS network transport support" ON)
@@ -53,6 +54,23 @@ if (DVBIPITOOLS_TSAN)
     endif ()
     add_compile_options(-fsanitize=thread -fno-omit-frame-pointer)
     add_link_options(-fsanitize=thread)
+endif ()
+
+if (DVBIPITOOLS_COVERAGE)
+    add_compile_options(--coverage -fprofile-update=atomic -O0)
+    add_link_options(--coverage)
+    find_program(GCOVR_EXECUTABLE gcovr)
+    if (GCOVR_EXECUTABLE)
+        add_custom_target(coverage
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
+            COMMAND ${GCOVR_EXECUTABLE} --root . --object-directory ${CMAKE_BINARY_DIR} --filter src/
+                    --exclude-directories ".*/CMakeFiles/[0-9.]+" --exclude-throw-branches --exclude-unreachable-branches
+                    --merge-lines --gcov-ignore-parse-errors=negative_hits.warn_once_per_file
+                    --exclude src/lib/vendor/ --json-summary ${CMAKE_BINARY_DIR}/coverage/src-novendor.json
+                    --txt ${CMAKE_BINARY_DIR}/coverage/src-novendor.txt
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            COMMENT "gcovr report in ${CMAKE_BINARY_DIR}/coverage")
+    endif ()
 endif ()
 
 option(DVBIPITOOLS_RIST "detect librist for rist:// support (dipirist; rist:// output in dipirec/dipitvhead/dipiradiohead; rist:// input in dipirec/dipitvhead/dipidescramble)" ON)

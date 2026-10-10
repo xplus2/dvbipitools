@@ -6,6 +6,7 @@ BIN=$1
 . "$(dirname "$0")/../common.sh"
 
 command -v curl >/dev/null 2>&1 || fail "required tool 'curl' not found on PATH"
+command -v nc >/dev/null 2>&1 || fail "required tool 'nc' not found on PATH"
 
 FPB=$(free_port_block 2)
 HTTPPORT=$((FPB + 0))
@@ -15,7 +16,7 @@ MPORT=$((FPB + 1))
 # nothing ever sends to MCAST:MPORT: the join succeeds, no packet ever arrives.
 timeout 15 "$BIN" -l "127.0.0.1:$HTTPPORT" --ts-startup-timeout 1 >"$WORK/dipixy.log" 2>&1 &
 DPID=$!
-sleep 0.5
+wait_until 30 port_open $HTTPPORT || fail "server on $HTTPPORT never became ready"
 
 code=$(timeout 8 curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$HTTPPORT/udp/$MCAST:$MPORT/ts")
 rc=$?

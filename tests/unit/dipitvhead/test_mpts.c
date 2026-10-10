@@ -3,6 +3,9 @@
 
 #include <check.h>
 #include <fcntl.h>
+#include <sys/socket.h>
+#include <stdio.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -606,6 +609,68 @@ START_TEST(cat_passthrough_ignores_programs_that_are_down) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  int cas;
+  int cas_pids;
+  int cas_discovery;
+  int mcast_bad;
+  int inspect;
+  int want_rc;
+} run_case_t;
+
+static const run_case_t run_cases[] = {
+  {"plain output", 0, 0, 0, 0, 0, 0},
+  {"inspectors enabled", 0, 0, 0, 0, 1, 0},
+  {"own cas with explicit pids", 1, 1, 0, 0, 0, 0},
+  {"cas waiting for pid discovery", 1, 0, 1, 0, 0, 0},
+  {"cas with nothing to scramble", 1, 0, 0, 0, 0, 1},
+  {"multicast target that cannot open", 0, 0, 0, 1, 0, 1},
+};
+
+START_TEST(run_mpts_sets_up_and_tears_down_for_each_configuration) {
+  const run_case_t *c = &run_cases[_i];
+  static config_t cfg;
+  metrics_exporter_t mx;
+  int rc;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.n_inputs = 1;
+  cfg.tsid = 1;
+  cfg.onid = 1;
+  cfg.inputs[0].sid = 1;
+  cfg.inputs[0].sdt_mode = TABLE_DROP;
+  cfg.inputs[0].input.kind = SRC_STDIN;
+  if (c->inspect) cfg.metrics_inspect_ts = METRICS_INSPECT_TS_BASIC;
+  if (c->cas) {
+    cfg.cas_algo = CAS_ALGO_CSA2;
+    cfg.cas_cp_duration_ms = 10000;
+    cfg.n_cas_vendors = 1;
+    snprintf(cfg.cas_vendors[0].ecmg_host, sizeof cfg.cas_vendors[0].ecmg_host, "127.0.0.1");
+    cfg.cas_vendors[0].ecmg_port = 1;
+    cfg.cas_vendors[0].super_cas_id = (0x4A75u << 16) | 1u;
+    cfg.cas_vendors[0].ecm_id = 1;
+    cfg.cas_vendors[0].ecm_pid = 0x1FF0;
+    cfg.cas_vendors[0].emm_pid = 0x1FF1;
+    if (c->cas_pids) {
+      cfg.cas_pid_count = 1;
+      cfg.cas_pids[0] = 0x0100;
+    }
+    cfg.cas_pids_video = c->cas_discovery;
+  }
+  if (c->mcast_bad) {
+    cfg.family = AF_INET;
+    snprintf(cfg.mcast_group, sizeof cfg.mcast_group, "not-an-address");
+    cfg.mcast_port = 5000;
+  }
+  metrics_exporter_init(&mx, METRICS_COMPONENT_TVHEAD, NULL, NULL, 0.0);
+  signals_install();
+  raise(SIGTERM);
+  rc = tvhead_run_mpts(&cfg, &mx);
+  ck_assert_msg(rc == c->want_rc, "%s: rc %d", c->name, rc);
+}
+END_TEST
+
 static Suite *mpts_suite(void) {
   Suite *s = suite_create("dipitvhead_mpts");
   TCase *tc = tcase_create("core");
@@ -629,6 +694,7 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, cat_passthrough_merges_descriptors_of_programs_that_have_one);
   tcase_add_test(tc, cat_passthrough_skips_when_no_program_carries_emm);
   tcase_add_test(tc, cat_passthrough_ignores_programs_that_are_down);
+  tcase_add_loop_test(tc, run_mpts_sets_up_and_tears_down_for_each_configuration, 0, (int)(sizeof run_cases / sizeof run_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

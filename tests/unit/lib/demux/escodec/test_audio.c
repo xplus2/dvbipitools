@@ -590,6 +590,467 @@ START_TEST(ac4_channel_count_escape_consumes_variable_bits) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  unsigned use_same_mux;
+  unsigned amv;
+  unsigned amv_a;
+  unsigned amv_n;
+  unsigned all_same;
+  unsigned num_sub;
+  unsigned aot;
+  unsigned aot_ext;
+  unsigned sfi;
+  unsigned ch;
+  unsigned ext_sfi;
+  unsigned inner_aot;
+  unsigned depends_core;
+  unsigned extension_flag;
+  unsigned flt;
+  unsigned other_data;
+  unsigned crc;
+  unsigned plen;
+  int want;
+  unsigned want_rate;
+  unsigned want_ch;
+} latm_case_t;
+
+static const latm_case_t latm_cases[] = {
+  {"plain", 0, 0, 0, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 4, 0, 44100, 2},
+  {"extended aot", 0, 0, 0, 0, 1, 0, 31, 7, 3, 1, 0, 0, 0, 0, 0, 0, 0, 4, 0, 48000, 1},
+  {"sbr with 24-bit extension rate", 0, 0, 0, 0, 1, 0, 5, 0, 6, 2, 15, 2, 0, 0, 0, 0, 0, 4, 0, 24000, 2},
+  {"ps with extension rate index", 0, 0, 0, 0, 1, 0, 29, 0, 6, 2, 3, 2, 0, 0, 0, 0, 0, 4, 0, 24000, 2},
+  {"audio mux version 1", 0, 1, 0, 1, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 4, 0, 44100, 2},
+  {"audio mux version A set", 0, 1, 1, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 4, -1, 0, 0},
+  {"streams not time framed together", 0, 0, 0, 0, 0, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 4, -1, 0, 0},
+  {"sub frames present", 0, 0, 0, 0, 1, 1, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 4, -1, 0, 0},
+  {"escape sample rate index", 0, 0, 0, 0, 1, 0, 2, 0, 15, 2, 0, 0, 0, 0, 0, 0, 0, 4, -1, 0, 0},
+  {"reserved sample rate index", 0, 0, 0, 0, 1, 0, 2, 0, 13, 2, 0, 0, 0, 0, 0, 0, 0, 4, -1, 0, 0},
+  {"depends on core coder", 0, 0, 0, 0, 1, 0, 2, 0, 4, 2, 0, 0, 1, 0, 0, 0, 0, 4, 0, 44100, 2},
+  {"extension flag set", 0, 0, 0, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 1, 0, 0, 0, 4, -1, 0, 0},
+  {"unsupported frame length type", 0, 0, 0, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 1, 0, 0, 4, -1, 0, 0},
+  {"other data chain", 0, 0, 0, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 2, 0, 4, 0, 44100, 2},
+  {"crc check byte", 0, 0, 0, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 1, 4, 0, 44100, 2},
+  {"long payload length escape", 0, 0, 0, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 300, 0, 44100, 2},
+  {"empty payload", 0, 0, 0, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0},
+  {"channel config zero means stereo", 0, 0, 0, 0, 1, 0, 2, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 44100, 2},
+  {"same mux without a config", 1, 0, 0, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 4, -1, 0, 0},
+};
+
+static size_t build_latm_case(const latm_case_t *c, unsigned char *out, size_t cap) {
+  bitwriter_t bw;
+  const unsigned char *payload;
+  size_t plen;
+  size_t total;
+  unsigned left;
+
+  bitwriter_init(&bw);
+  bitwriter_put(&bw, c->use_same_mux, 1);
+  if (!c->use_same_mux) {
+    bitwriter_put(&bw, c->amv, 1);
+    if (c->amv) {
+      bitwriter_put(&bw, c->amv_a, 1);
+      if (!c->amv_a) {
+        bitwriter_put(&bw, c->amv_n, 2);
+        for (unsigned i = 0; i <= c->amv_n; i++) bitwriter_put(&bw, 0x11, 8);
+      }
+    }
+    if (!c->amv_a || !c->amv) {
+      bitwriter_put(&bw, c->all_same, 1);
+      bitwriter_put(&bw, c->num_sub, 6);
+      bitwriter_put(&bw, 0, 4);
+      bitwriter_put(&bw, 0, 3);
+      if (c->aot == 31) {
+        bitwriter_put(&bw, 31, 5);
+        bitwriter_put(&bw, c->aot_ext, 6);
+      } else {
+        bitwriter_put(&bw, c->aot, 5);
+      }
+      bitwriter_put(&bw, c->sfi, 4);
+      bitwriter_put(&bw, c->ch, 4);
+      if (c->aot == 5 || c->aot == 29) {
+        bitwriter_put(&bw, c->ext_sfi, 4);
+        if (c->ext_sfi == 15) bitwriter_put(&bw, 0, 24);
+        bitwriter_put(&bw, c->inner_aot, 5);
+      }
+      bitwriter_put(&bw, 0, 1);
+      bitwriter_put(&bw, c->depends_core, 1);
+      if (c->depends_core) bitwriter_put(&bw, 0, 14);
+      bitwriter_put(&bw, c->extension_flag, 1);
+      bitwriter_put(&bw, c->flt, 3);
+      bitwriter_put(&bw, 0, 8);
+      bitwriter_put(&bw, c->other_data ? 1 : 0, 1);
+      for (unsigned i = 0; i < c->other_data; i++) {
+        bitwriter_put(&bw, i + 1 < c->other_data, 1);
+        bitwriter_put(&bw, 0, 8);
+      }
+      bitwriter_put(&bw, c->crc, 1);
+      if (c->crc) bitwriter_put(&bw, 0, 8);
+    }
+  }
+  left = c->plen;
+  while (left >= 255) {
+    bitwriter_put(&bw, 255, 8);
+    left -= 255;
+  }
+  bitwriter_put(&bw, left, 8);
+  for (unsigned i = 0; i < c->plen; i++) bitwriter_put(&bw, 0xA0 + (i & 7), 8);
+  payload = bitwriter_data(&bw, &plen);
+  total = 3 + plen;
+  if (total > cap) {
+    bitwriter_free(&bw);
+    return 0;
+  }
+  out[0] = 0x56;
+  out[1] = (unsigned char)(0xE0 | ((plen >> 8) & 0x1F));
+  out[2] = (unsigned char)plen;
+  memcpy(out + 3, payload, plen);
+  bitwriter_free(&bw);
+  return total;
+}
+
+START_TEST(latm_config_and_payload_variants) {
+  const latm_case_t *c = &latm_cases[_i];
+  unsigned char d[512];
+  size_t len = build_latm_case(c, d, sizeof d);
+  esc_track_t t;
+  esc_frame_t f;
+  int r;
+
+  ck_assert_msg(len > 0, "%s: frame too large", c->name);
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AAC_LATM;
+  r = next_frame(&t, d, len, &f);
+  ck_assert_msg(r == c->want, "%s: ret %d", c->name, r);
+  if (!r) {
+    ck_assert_msg(f.rate == c->want_rate, "%s: rate %u", c->name, f.rate);
+    ck_assert_msg(f.ch == c->want_ch, "%s: ch %u", c->name, f.ch);
+    ck_assert_msg(f.outlen == c->plen, "%s: outlen %zu", c->name, f.outlen);
+    ck_assert_msg(f.consumed == len, "%s: consumed", c->name);
+  }
+}
+END_TEST
+
+START_TEST(latm_same_mux_reuses_the_cached_config) {
+  latm_case_t c = latm_cases[0];
+  unsigned char d[64];
+  size_t len = build_latm_case(&c, d, sizeof d);
+  esc_track_t t;
+  esc_frame_t f;
+
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AAC_LATM;
+  ck_assert_int_eq(next_frame(&t, d, len, &f), 0);
+  c.use_same_mux = 1;
+  len = build_latm_case(&c, d, sizeof d);
+  ck_assert_int_eq(next_frame(&t, d, len, &f), 0);
+  ck_assert_uint_eq(f.rate, 44100u);
+  ck_assert_uint_eq(f.ch, 2u);
+}
+END_TEST
+
+START_TEST(latm_framing_errors) {
+  latm_case_t c = latm_cases[0];
+  unsigned char d[64];
+  size_t len = build_latm_case(&c, d, sizeof d);
+  esc_track_t t;
+  esc_frame_t f;
+
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AAC_LATM;
+  ck_assert_int_eq(next_frame(&t, d, 2, &f), 1);
+  ck_assert_int_eq(next_frame(&t, d, len - 1, &f), 1);
+  d[0] = 0x55;
+  ck_assert_int_eq(next_frame(&t, d, len, &f), -1);
+  d[0] = 0x56;
+  d[1] &= 0x1F;
+  ck_assert_int_eq(next_frame(&t, d, len, &f), -1);
+}
+END_TEST
+
+START_TEST(adts_with_crc_header_and_codec_private_set_once) {
+  unsigned char d[128] = {0xFF, 0xF0, 0x50, 0x80, 0x10, 0x00, 0x00};
+  unsigned char other[128] = {0xFF, 0xF1, 0x0C, 0xC0, 0x10, 0x00, 0x00};
+  esc_track_t t;
+  esc_frame_t f;
+
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AAC;
+  ck_assert_int_eq(next_frame(&t, d, sizeof d, &f), 0);
+  ck_assert_uint_eq(f.consumed, 128u);
+  ck_assert_ptr_eq(f.out, d + 9);
+  ck_assert_uint_eq(f.outlen, 119u);
+  ck_assert_uint_eq(f.rate, 44100u);
+  ck_assert_uint_eq(f.ch, 2u);
+  ck_assert_uint_eq(t.cpriv_len, 2u);
+  ck_assert_uint_eq(t.cpriv[0], 0x12u);
+  ck_assert_uint_eq(t.cpriv[1], 0x10u);
+  ck_assert_int_eq(next_frame(&t, other, sizeof other, &f), 0);
+  ck_assert_ptr_eq(f.out, other + 7);
+  ck_assert_uint_eq(t.cpriv[0], 0x12u);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  unsigned char b1;
+  unsigned ext_size;
+  unsigned size_field;
+  size_t trim;
+  int want;
+  size_t want_consumed;
+} ac4_hdr_case_t;
+
+static const ac4_hdr_case_t ac4_hdr_cases[] = {
+  {"crc frame carries two trailer bytes", 0x41, 0, 0, 0, 0, 0},
+  {"crc frame truncated before trailer", 0x41, 0, 0, 1, 1, 0},
+  {"extended size header", 0x40, 1, 0, 0, 0, 0},
+  {"extended size header truncated", 0x40, 1, 0, 100, 1, 0},
+  {"zero frame size", 0x40, 0, 1, 0, -1, 0},
+  {"bad second sync byte", 0x42, 0, 0, 0, -1, 0},
+};
+
+START_TEST(ac4_frame_header_variants) {
+  const ac4_hdr_case_t *c = &ac4_hdr_cases[_i];
+  bitwriter_t bw;
+  const unsigned char *payload;
+  size_t plen;
+  unsigned char d[96];
+  size_t hdr = c->ext_size ? 7 : 4;
+  size_t total;
+  size_t len;
+  esc_track_t t;
+  esc_frame_t f;
+  int r;
+
+  bitwriter_init(&bw);
+  ac4_put_toc_head(&bw, 0, 0);
+  ac4_put_single_substream_stereo_presentation(&bw);
+  payload = bitwriter_data(&bw, &plen);
+  plen += 4;
+  memset(d, 0, sizeof d);
+  d[0] = 0xAC;
+  d[1] = c->b1;
+  if (c->ext_size) {
+    d[2] = 0xFF;
+    d[3] = 0xFF;
+    d[4] = 0;
+    d[5] = (unsigned char)(plen >> 8);
+    d[6] = (unsigned char)plen;
+  } else if (c->size_field) {
+    d[2] = 0;
+    d[3] = 0;
+  } else {
+    d[2] = (unsigned char)(plen >> 8);
+    d[3] = (unsigned char)plen;
+  }
+  memcpy(d + hdr, payload, plen - 4);
+  total = hdr + plen + (c->b1 == 0x41 ? 2u : 0u);
+  len = total > c->trim ? total - c->trim : 0;
+  if (c->ext_size && c->trim) len = 5;
+  bitwriter_free(&bw);
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AC4;
+  r = next_frame(&t, d, len, &f);
+  ck_assert_msg(r == c->want, "%s: ret %d", c->name, r);
+  if (!r) ck_assert_msg(f.consumed == total, "%s: consumed %zu want %zu", c->name, f.consumed, total);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  unsigned fs;
+  unsigned frame_rate;
+  unsigned wait_flag;
+  unsigned wait_frames;
+  int want;
+  unsigned want_rate;
+  unsigned want_samples;
+} ac4_rate_case_t;
+
+static const ac4_rate_case_t ac4_rate_cases[] = {
+  {"44.1 kHz needs frame rate index 13", 0, 13, 0, 0, 0, 44100, 2048},
+  {"44.1 kHz with another frame rate", 0, 5, 0, 0, -1, 0, 0},
+  {"frame rate index 14 is reserved", 1, 14, 0, 0, -1, 0, 0},
+  {"frame rate index 15 is reserved", 1, 15, 0, 0, -1, 0, 0},
+  {"48 kHz 23.97 fps", 1, 0, 0, 0, 0, 48000, 1920},
+  {"wait frames present", 1, 3, 1, 2, 0, 48000, 1536},
+  {"wait frames flag with zero count", 1, 3, 1, 0, 0, 48000, 1536},
+};
+
+START_TEST(ac4_sample_rate_frame_rate_and_wait_frames) {
+  const ac4_rate_case_t *c = &ac4_rate_cases[_i];
+  bitwriter_t bw;
+  const unsigned char *payload;
+  size_t plen;
+  unsigned char d[64];
+  esc_track_t t;
+  esc_frame_t f;
+  int r;
+
+  bitwriter_init(&bw);
+  bitwriter_put(&bw, 0, 2);
+  bitwriter_put(&bw, 0, 10);
+  bitwriter_put(&bw, c->wait_flag, 1);
+  if (c->wait_flag) {
+    bitwriter_put(&bw, c->wait_frames, 3);
+    if (c->wait_frames > 0) bitwriter_put(&bw, 0, 2);
+  }
+  bitwriter_put(&bw, c->fs, 1);
+  bitwriter_put(&bw, c->frame_rate, 4);
+  bitwriter_put(&bw, 1, 1);
+  payload = bitwriter_data(&bw, &plen);
+  ck_assert_uint_le(plen + 8, sizeof d);
+  memset(d, 0, sizeof d);
+  d[0] = 0xAC;
+  d[1] = 0x40;
+  d[2] = 0;
+  d[3] = (unsigned char)(plen + 4);
+  memcpy(d + 4, payload, plen);
+  bitwriter_free(&bw);
+  memset(&t, 0, sizeof t);
+  memset(&f, 0, sizeof f);
+  t.codec = CODEC_AC4;
+  r = next_frame(&t, d, plen + 8, &f);
+  ck_assert_msg(r == c->want, "%s: ret %d", c->name, r);
+  if (!r) {
+    ck_assert_msg(f.rate == c->want_rate, "%s: rate %u", c->name, f.rate);
+    ck_assert_msg(f.samples == c->want_samples, "%s: samples %u", c->name, f.samples);
+    ck_assert_msg(f.ac4_iframe == 1, "%s: iframe", c->name);
+  }
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  unsigned single;
+  unsigned config;
+  unsigned pver;
+  unsigned frame_rate;
+  unsigned rate_bit_a;
+  unsigned rate_bit_b;
+  unsigned emdf_version;
+  unsigned key_id;
+  unsigned sub_flag;
+  unsigned sub_idx;
+  unsigned lp;
+  unsigned ls;
+  unsigned ch_code;
+  unsigned want_ch;
+} ac4_pres_case_t;
+
+static const ac4_pres_case_t ac4_pres_cases[] = {
+  {"mono", 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+  {"stereo", 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2},
+  {"three channels", 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3},
+  {"five channels", 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 3, 5},
+  {"six channels", 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 4, 6},
+  {"seven channels", 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 5, 7},
+  {"eight channels", 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 6, 8},
+  {"reserved channel mode", 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0},
+  {"channel escape", 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0},
+  {"emdf with every optional field", 1, 0, 2, 3, 0, 0, 3, 7, 1, 3, 2, 3, 1, 2},
+  {"frame rate multiply for 24 fps family", 1, 0, 0, 2, 1, 1, 0, 0, 0, 0, 0, 0, 1, 2},
+  {"frame rate multiply for 23.97 fps", 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2},
+  {"multi substream presentation", 0, 2, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2},
+  {"presentation config 6 aborts", 0, 6, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+  {"presentation config above 5 aborts", 0, 7, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0},
+};
+
+START_TEST(ac4_presentation_parsing_variants) {
+  const ac4_pres_case_t *c = &ac4_pres_cases[_i];
+  bitwriter_t bw;
+  const unsigned char *payload;
+  size_t plen;
+  unsigned char d[160];
+  esc_track_t t;
+  esc_frame_t f;
+  unsigned n_skip = 0;
+  int r;
+
+  bitwriter_init(&bw);
+  bitwriter_put(&bw, 0, 2);
+  bitwriter_put(&bw, 0, 10);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, c->frame_rate, 4);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, c->single, 1);
+  if (!c->single) {
+    bitwriter_put(&bw, c->config, 3);
+    if (c->config == 7) put_variable_bits(&bw, 0, 2);
+  }
+  for (unsigned i = 0; i < c->pver; i++) bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 0, 1);
+  if (c->single || c->config != 6) {
+    bitwriter_put(&bw, 5, 3);
+    bitwriter_put(&bw, 1, 1);
+    put_variable_bits(&bw, 1, 2);
+    if (c->frame_rate >= 2 && c->frame_rate <= 4) {
+      bitwriter_put(&bw, c->rate_bit_a, 1);
+      if (c->rate_bit_a) bitwriter_put(&bw, c->rate_bit_b, 1);
+    } else if (c->frame_rate <= 1 || (c->frame_rate >= 7 && c->frame_rate <= 9)) {
+      bitwriter_put(&bw, c->rate_bit_a, 1);
+    }
+    bitwriter_put(&bw, c->emdf_version, 2);
+    if (c->emdf_version == 3) put_variable_bits(&bw, 0, 2);
+    bitwriter_put(&bw, c->key_id, 3);
+    if (c->key_id == 7) put_variable_bits(&bw, 0, 3);
+    bitwriter_put(&bw, c->sub_flag, 1);
+    if (c->sub_flag) {
+      bitwriter_put(&bw, c->sub_idx, 2);
+      if (c->sub_idx == 3) put_variable_bits(&bw, 0, 2);
+    }
+    bitwriter_put(&bw, c->lp, 2);
+    bitwriter_put(&bw, c->ls, 2);
+    if (c->lp) n_skip += 1u << (2 * (c->lp - 1));
+    if (c->ls) n_skip += 1u << (2 * (c->ls - 1));
+    for (unsigned i = 0; i < n_skip; i++) bitwriter_put(&bw, 0, 8);
+    if (!c->single) bitwriter_put(&bw, 0, 1);
+    if (c->ch_code == 0) {
+      bitwriter_put(&bw, 0, 1);
+    } else if (c->ch_code == 1) {
+      bitwriter_put(&bw, 1, 1);
+      bitwriter_put(&bw, 0, 1);
+    } else if (c->ch_code <= 4) {
+      bitwriter_put(&bw, 3, 2);
+      bitwriter_put(&bw, c->ch_code - 2, 2);
+    } else if (c->ch_code <= 6) {
+      bitwriter_put(&bw, 3, 2);
+      bitwriter_put(&bw, 3, 2);
+      bitwriter_put(&bw, c->ch_code - 5, 3);
+    } else if (c->ch_code == 7) {
+      bitwriter_put(&bw, 3, 2);
+      bitwriter_put(&bw, 3, 2);
+      bitwriter_put(&bw, 6, 3);
+    } else {
+      bitwriter_put(&bw, 3, 2);
+      bitwriter_put(&bw, 3, 2);
+      bitwriter_put(&bw, 7, 3);
+      put_variable_bits(&bw, 0, 2);
+    }
+  }
+  payload = bitwriter_data(&bw, &plen);
+  ck_assert_uint_le(plen + 8, sizeof d);
+  memset(d, 0, sizeof d);
+  d[0] = 0xAC;
+  d[1] = 0x40;
+  d[2] = 0;
+  d[3] = (unsigned char)(plen + 4);
+  memcpy(d + 4, payload, plen);
+  bitwriter_free(&bw);
+  memset(&t, 0, sizeof t);
+  memset(&f, 0, sizeof f);
+  t.codec = CODEC_AC4;
+  r = next_frame(&t, d, plen + 8, &f);
+  ck_assert_msg(r == 0, "%s: ret %d", c->name, r);
+  ck_assert_msg(f.ch == c->want_ch, "%s: ch %u", c->name, f.ch);
+  if (c->want_ch) ck_assert_msg(f.ac4_presentation_version == c->pver, "%s: pver %u", c->name, f.ac4_presentation_version);
+}
+END_TEST
+
 static Suite *audio_suite(void) {
   Suite *s = suite_create("escodec_audio");
   TCase *tc = tcase_create("core");
@@ -614,6 +1075,13 @@ static Suite *audio_suite(void) {
   tcase_add_loop_test(tc, ac4_presentation_config_seven_consumes_variable_bits_then_aborts, 0, (int)(sizeof ac4_variable_values / sizeof ac4_variable_values[0]));
   tcase_add_loop_test(tc, ac4_channel_count_escape_consumes_variable_bits, 0, (int)(sizeof ac4_variable_values / sizeof ac4_variable_values[0]));
   tcase_add_loop_test(tc, audio_frame_edge_cases, 0, (int)(sizeof frame_cases / sizeof frame_cases[0]));
+  tcase_add_loop_test(tc, latm_config_and_payload_variants, 0, (int)(sizeof latm_cases / sizeof latm_cases[0]));
+  tcase_add_test(tc, latm_same_mux_reuses_the_cached_config);
+  tcase_add_test(tc, latm_framing_errors);
+  tcase_add_test(tc, adts_with_crc_header_and_codec_private_set_once);
+  tcase_add_loop_test(tc, ac4_frame_header_variants, 0, (int)(sizeof ac4_hdr_cases / sizeof ac4_hdr_cases[0]));
+  tcase_add_loop_test(tc, ac4_sample_rate_frame_rate_and_wait_frames, 0, (int)(sizeof ac4_rate_cases / sizeof ac4_rate_cases[0]));
+  tcase_add_loop_test(tc, ac4_presentation_parsing_variants, 0, (int)(sizeof ac4_pres_cases / sizeof ac4_pres_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

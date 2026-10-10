@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -293,6 +294,169 @@ START_TEST(hls_playlist_parse_protocol_relative_segment) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  const char *body;
+} reject_case_t;
+
+static const reject_case_t reject_cases[] = {
+  {"key without method", "#EXTM3U\n#EXT-X-KEY:URI=\"k\"\n#EXTINF:4.0,\ns.ts\n"},
+  {"key without uri", "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128\n#EXTINF:4.0,\ns.ts\n"},
+  {"key with short iv", "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\",IV=0x0102\n#EXTINF:4.0,\ns.ts\n"},
+  {"key with non-hex iv", "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\",IV=0xZZ0102030405060708090A0B0C0D0E0F\n#EXTINF:4.0,\ns.ts\n"},
+  {"key with iv lacking prefix", "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\",IV=000102030405060708090A0B0C0D0E0F00\n#EXTINF:4.0,\ns.ts\n"},
+  {"key with trailing iv bytes", "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\",IV=0x000102030405060708090A0B0C0D0E0F00\n#EXTINF:4.0,\ns.ts\n"},
+  {"key uri with unterminated quote", "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\n#EXTINF:4.0,\ns.ts\n"},
+  {"too many distinct keys",
+   "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k1\"\n#EXTINF:4.0,\na.ts\n#EXT-X-KEY:METHOD=AES-128,URI=\"k2\"\n#EXTINF:4.0,\nb.ts\n"
+   "#EXT-X-KEY:METHOD=AES-128,URI=\"k3\"\n#EXTINF:4.0,\nc.ts\n#EXT-X-KEY:METHOD=AES-128,URI=\"k4\"\n#EXTINF:4.0,\nd.ts\n"
+   "#EXT-X-KEY:METHOD=AES-128,URI=\"k5\"\n#EXTINF:4.0,\ne.ts\n"},
+};
+
+START_TEST(hls_playlist_parse_rejects_malformed_or_unsupported_keys) {
+  const reject_case_t *c = &reject_cases[_i];
+  char body[1024];
+  http_url_t base = make_base("example.com", 80, "/index.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_uint_lt(strlen(c->body), sizeof body);
+  strcpy(body, c->body);
+  ck_assert_msg(hls_playlist_parse(body, &base, &pl) == 0, "%s: accepted", c->name);
+}
+END_TEST
+
+START_TEST(hls_playlist_parse_reuses_a_key_seen_again) {
+  char body[] =
+    "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k1\"\n#EXTINF:4.0,\na.ts\n"
+    "#EXT-X-KEY:METHOD=AES-128,URI=\"k2\"\n#EXTINF:4.0,\nb.ts\n"
+    "#EXT-X-KEY:METHOD=AES-128,URI=\"k1\"\n#EXTINF:4.0,\nc.ts\n";
+  http_url_t base = make_base("example.com", 80, "/index.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
+  ck_assert_uint_eq(pl.n_keys, 2);
+  ck_assert_uint_eq(pl.segments[0].key, 1);
+  ck_assert_uint_eq(pl.segments[1].key, 2);
+  ck_assert_uint_eq(pl.segments[2].key, 1);
+}
+END_TEST
+
+START_TEST(hls_playlist_parse_accepts_identity_keyformat_and_lowercase_iv) {
+  char body[] = "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\",KEYFORMAT=\"identity\",IV=0xaabbccddeeff00112233445566778899\n#EXTINF:4.0,\ns.ts\n";
+  http_url_t base = make_base("example.com", 80, "/index.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
+  ck_assert_int_eq(pl.keys[0].has_iv, 1);
+  ck_assert_uint_eq(pl.keys[0].iv[0], 0xAA);
+  ck_assert_uint_eq(pl.keys[0].iv[15], 0x99);
+}
+END_TEST
+
+START_TEST(hls_playlist_parse_caps_segments_and_skips_unresolvable_uris) {
+  char body[HLS_MAX_SEGMENTS * 40 + 256];
+  size_t n = 0;
+  http_url_t base = make_base("example.com", 80, "/index.m3u8");
+  hls_playlist_t pl;
+
+  n += (size_t)snprintf(body + n, sizeof body - n, "#EXTM3U\n#EXT-X-TARGETDURATION:4\n");
+  for (unsigned i = 0; i < HLS_MAX_SEGMENTS + 5; i++) n += (size_t)snprintf(body + n, sizeof body - n, "#EXTINF:4.0,\ns%u.ts\n", i);
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
+  ck_assert_uint_eq(pl.n_segments, HLS_MAX_SEGMENTS);
+  ck_assert_str_eq(pl.segments[HLS_MAX_SEGMENTS - 1].url, "http://example.com/s63.ts");
+}
+END_TEST
+
+START_TEST(hls_playlist_parse_server_control_without_block_reload_is_not_low_latency) {
+  char body[] = "#EXTM3U\n#EXT-X-SERVER-CONTROL:CAN-BLOCK-RELOAD=NO,HOLD-BACK=9\n#EXTINF:4.0,\ns.ts\n";
+  http_url_t base = make_base("example.com", 80, "/index.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
+  ck_assert_int_eq(pl.low_latency, 0);
+}
+END_TEST
+
+START_TEST(hls_playlist_parse_map_without_uri_leaves_ts_mode) {
+  char body[] = "#EXTM3U\n#EXT-X-MAP:BYTERANGE=\"10@0\"\n#EXTINF:4.0,\ns.ts\n";
+  http_url_t base = make_base("example.com", 80, "/index.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
+  ck_assert_str_eq(pl.map_uri, "");
+}
+END_TEST
+
+START_TEST(hls_body_is_master_requires_tag_at_line_start) {
+  ck_assert_int_eq(hls_body_is_master("#EXTM3U\n#EXTINF:4.0,\n# see #EXT-X-STREAM-INF later\ns.ts\n"), 0);
+  ck_assert_int_eq(hls_body_is_master("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nv.m3u8\n"), 1);
+  ck_assert_int_eq(hls_body_is_master("#EXT-X-STREAM-INF:BANDWIDTH=1\nv.m3u8\n"), 1);
+}
+END_TEST
+
+START_TEST(hls_master_parse_skips_non_audio_media_and_incomplete_entries) {
+  char body[] =
+    "#EXTM3U\n"
+    "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",URI=\"s.m3u8\"\n"
+    "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aud\"\n"
+    "#EXT-X-MEDIA:TYPE=AUDIO,URI=\"x.m3u8\"\n"
+    "#EXT-X-MEDIA:TYPE=audio,GROUP-ID=\"aud\",URI=\"a.m3u8\"\n"
+    "#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=640\n"
+    "v0.m3u8\n"
+    "#EXT-X-STREAM-INF:RESOLUTION=1280x720,AUDIO=\"aud\"\n"
+    "v1.m3u8\n"
+    "stray.m3u8\n";
+  http_url_t base = make_base("example.com", 80, "/master.m3u8");
+  hls_master_t m;
+  const hls_audio_rendition_t *ar;
+
+  ck_assert_int_eq(hls_master_parse(body, &base, &m), 1);
+  ck_assert_uint_eq(m.n_audio_renditions, 1);
+  ck_assert_uint_eq(m.n_variants, 2);
+  ck_assert_uint_eq(m.variants[0].bandwidth, 500000u);
+  ck_assert_uint_eq(m.variants[0].width, 0u);
+  ck_assert_uint_eq(m.variants[1].bandwidth, 0u);
+  ck_assert_uint_eq(m.variants[1].width, 1280u);
+  ck_assert_uint_eq(m.variants[1].height, 720u);
+  ck_assert_str_eq(m.variants[1].audio_group_id, "aud");
+  ar = hls_master_find_audio(&m, "aud");
+  ck_assert_ptr_nonnull(ar);
+  ck_assert_str_eq(ar->url, "http://example.com/a.m3u8");
+  ck_assert_ptr_null(hls_master_find_audio(&m, "missing"));
+  ck_assert_ptr_null(hls_master_find_audio(&m, ""));
+  ck_assert_ptr_null(hls_master_find_audio(&m, NULL));
+}
+END_TEST
+
+START_TEST(hls_master_parse_rejects_missing_header_and_empty_master) {
+  char no_header[] = "#EXT-X-STREAM-INF:BANDWIDTH=1\nv.m3u8\n";
+  char empty[] = "#EXTM3U\n#EXT-X-VERSION:3\n";
+  http_url_t base = make_base("example.com", 80, "/master.m3u8");
+  hls_master_t m;
+
+  ck_assert_int_eq(hls_master_parse(no_header, &base, &m), 0);
+  ck_assert_int_eq(hls_master_parse(empty, &base, &m), 0);
+}
+END_TEST
+
+START_TEST(hls_master_parse_caps_variants_and_renditions) {
+  char body[HLS_MAX_VARIANTS * 160 + 256];
+  size_t n = 0;
+  http_url_t base = make_base("example.com", 80, "/master.m3u8");
+  hls_master_t m;
+
+  n += (size_t)snprintf(body + n, sizeof body - n, "#EXTM3U\n");
+  for (unsigned i = 0; i < HLS_MAX_VARIANTS + 4; i++) {
+    n += (size_t)snprintf(body + n, sizeof body - n, "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"g%u\",URI=\"a%u.m3u8\"\n", i, i);
+    n += (size_t)snprintf(body + n, sizeof body - n, "#EXT-X-STREAM-INF:BANDWIDTH=%u\nv%u.m3u8\n", 1000 + i, i);
+  }
+  ck_assert_int_eq(hls_master_parse(body, &base, &m), 1);
+  ck_assert_uint_eq(m.n_variants, HLS_MAX_VARIANTS);
+  ck_assert_uint_eq(m.n_audio_renditions, HLS_MAX_VARIANTS);
+  ck_assert_int_eq(hls_master_pick_highest(&m), HLS_MAX_VARIANTS - 1);
+}
+END_TEST
+
 static Suite *hls_playlist_suite(void) {
   Suite *s = suite_create("hls_playlist");
   TCase *tc = tcase_create("core");
@@ -319,6 +483,16 @@ static Suite *hls_playlist_suite(void) {
   tcase_add_test(tc, hls_playlist_parse_rejects_foreign_keyformat);
   tcase_add_test(tc, hls_playlist_parse_rejects_encrypted_map);
   tcase_add_test(tc, hls_playlist_parse_protocol_relative_segment);
+  tcase_add_loop_test(tc, hls_playlist_parse_rejects_malformed_or_unsupported_keys, 0, (int)(sizeof reject_cases / sizeof reject_cases[0]));
+  tcase_add_test(tc, hls_playlist_parse_reuses_a_key_seen_again);
+  tcase_add_test(tc, hls_playlist_parse_accepts_identity_keyformat_and_lowercase_iv);
+  tcase_add_test(tc, hls_playlist_parse_caps_segments_and_skips_unresolvable_uris);
+  tcase_add_test(tc, hls_playlist_parse_server_control_without_block_reload_is_not_low_latency);
+  tcase_add_test(tc, hls_playlist_parse_map_without_uri_leaves_ts_mode);
+  tcase_add_test(tc, hls_body_is_master_requires_tag_at_line_start);
+  tcase_add_test(tc, hls_master_parse_skips_non_audio_media_and_incomplete_entries);
+  tcase_add_test(tc, hls_master_parse_rejects_missing_header_and_empty_master);
+  tcase_add_test(tc, hls_master_parse_caps_variants_and_renditions);
   suite_add_tcase(s, tc);
   return s;
 }

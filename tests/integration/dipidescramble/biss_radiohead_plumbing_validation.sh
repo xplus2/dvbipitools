@@ -19,7 +19,9 @@ PORT=$((FPB + 0))
 HTTP_PORT=$((FPB + 1))
 SW=00112233445566778899aabbccddeeff
 
-ffmpeg -hide_banner -loglevel error -f lavfi -i "sine=frequency=1000:duration=8" \
+DEADLINE_S=${DEADLINE_S:-60}
+
+ffmpeg -hide_banner -loglevel error -f lavfi -i "sine=frequency=1000:duration=$((DEADLINE_S + 10))" \
     -c:a libmp3lame -f mp3 "$WORK/stream.mp3"
 
 ffmpeg -hide_banner -loglevel error -re -i "$WORK/stream.mp3" -c copy -f mp3 \
@@ -40,13 +42,15 @@ out="$WORK/descrambled.ts"
 DESCPID=$!
 sleep 0.3
 
-timeout 12 "$DIPIRADIOHEAD" -O lo -m $MCAST:$PORT -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "BISS Radio Test" \
+timeout $((DEADLINE_S + 10)) "$DIPIRADIOHEAD" -O lo -m $MCAST:$PORT -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "BISS Radio Test" \
     --biss2-sw "$SW" \
-    >"$WORK/dipiradiohead.log" 2>&1 || true
+    >"$WORK/dipiradiohead.log" 2>&1 &
+RDPID=$!
 
-sleep 1
-kill $DESCPID $FFSERVE_PID 2>/dev/null
-wait $DESCPID 2>/dev/null
+wait_until $DEADLINE_S log_has "$WORK/dipidescramble.log" "BISS Mode 1/E detected" || :
+
+kill $RDPID $DESCPID $FFSERVE_PID 2>/dev/null
+wait $RDPID $DESCPID $FFSERVE_PID 2>/dev/null || true
 
 assert_not_contains "$WORK/dipidescramble.log" "cannot load RSA private key" "dipidescramble startup"
 

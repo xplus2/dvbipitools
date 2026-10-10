@@ -19,6 +19,8 @@ wait_port() {
     return 1
 }
 
+DEADLINE_S=${DEADLINE_S:-60}
+
 DIPITVHEAD=$(echo "$BIN" | sed 's#/dipidescramble\([^/]*\)$#/../dipitvhead/dipitvhead\1#')
 [ -x "$DIPITVHEAD" ] || DIPITVHEAD="./dipitvhead"
 [ -x "$DIPITVHEAD" ] || fail "cannot locate dipitvhead binary (tried $DIPITVHEAD)"
@@ -45,18 +47,19 @@ DESCPID=$!
 sleep 0.3
 
 ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=25" \
-    -f lavfi -i "sine=frequency=1000" -t 6 \
+    -f lavfi -i "sine=frequency=1000" -t $((DEADLINE_S + 10)) \
     -c:v libx264 -preset ultrafast -c:a aac -f mpegts - 2>"$WORK/ffmpeg.log" | \
-timeout 8 "$DIPITVHEAD" -O lo -u -m $MCAST:$PORT -i - -s "CAS Test" \
+timeout $((DEADLINE_S + 10)) "$DIPITVHEAD" -O lo -u -m $MCAST:$PORT -i - -s "CAS Test" \
     --cas-algo cissa --cas-ecmg "tcp://127.0.0.1:$ECMG_PORT" --cas-ecmg-version 2 \
     --cas-emmg-port $EMMG_PORT --cas-super-id 0x4A750002 --cas-ecm-id 1 --cas-pids video,audio \
     --cas-cp-duration 3000 \
-    >"$WORK/dipitvhead.log" 2>&1
+    >"$WORK/dipitvhead.log" 2>&1 &
+TVPID=$!
 
-sleep 1
-kill $DESCPID 2>/dev/null
-kill $ECMGPID 2>/dev/null
-wait $DESCPID 2>/dev/null
+wait_until $DEADLINE_S log_has "$WORK/dipidescramble.log" "CAS parameters resolved" || :
+
+kill $TVPID $DESCPID $ECMGPID 2>/dev/null
+wait $TVPID $DESCPID $ECMGPID 2>/dev/null || true
 
 assert_not_contains "$WORK/dipidescramble.log" "cannot load RSA private key" "dipidescramble startup"
 

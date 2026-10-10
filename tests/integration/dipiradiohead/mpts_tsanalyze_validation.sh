@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze jq python3; do
+for t in ffmpeg tsp tsanalyze jq python3 ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
@@ -34,14 +34,16 @@ while ! grep -q "Serving HTTP" "$WORK/httpd.log" 2>/dev/null; do
     sleep 0.1
 done
 
-tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 6000 \
+tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 60000 \
     -O file "$cap" >"$WORK/tsp_spts.log" 2>&1 &
 TSPID=$!
-sleep 0.3
+wait_until 30 udp_port_busy $PORT || fail "tsp capture never bound $PORT"
 
 timeout 20 "$BIN" -O lo -m $MCAST:$PORT -i "http://127.0.0.1:$HTTP_PORT/stream.mp3" -s "Test Station" || true
 
-wait $TSPID || true
+sleep 0.5
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 kill $HTTPD 2>/dev/null || true
 
 [ -s "$cap" ] || fail "spts: no packets captured"

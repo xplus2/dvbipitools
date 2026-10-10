@@ -44,24 +44,34 @@ cat >"$WORK/map.csv" <<EOF
 ch1,udp://239.1.9.5:5000,1,1,101
 EOF
 
-timeout 8 "$BIN" -S "$SOCK" -l "127.0.0.1:$HTTPPORT" -v >"$WORK/dipimetrics.log" 2>&1 &
+timeout 60 "$BIN" -S "$SOCK" -l "127.0.0.1:$HTTPPORT" -v >"$WORK/dipimetrics.log" 2>&1 &
 MPID=$!
-sleep 0.3
+trap 'kill $MPID $SPID $BPID 2>/dev/null; rm -rf "$WORK"' EXIT
 
-timeout 6 "$DIPISDS" -a -i "$WORK/channels.csv" -p example.org -O "Test Headend" \
+http_up() { curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$HTTPPORT/metrics"; }
+wait_until 15 http_up || fail "dipimetrics did not open its http port"
+
+timeout 60 "$DIPISDS" -a -i "$WORK/channels.csv" -p example.org -O "Test Headend" \
     -m $SDS_MCAST:$SDS_PORT --metrics-id sds-multi --metrics "$SOCK" --metrics-interval 1 \
     >"$WORK/dipisds.log" 2>&1 &
 SPID=$!
 
-timeout 6 "$DIPIBCG" -a -i "$WORK/guide.xml" -M "$WORK/map.csv" -w 24 \
+timeout 60 "$DIPIBCG" -a -i "$WORK/guide.xml" -M "$WORK/map.csv" -w 24 \
     -m $BCG_MCAST:$BCG_PORT --metrics-id bcg-multi --metrics "$SOCK" --metrics-interval 1 \
     >"$WORK/dipibcg.log" 2>&1 &
 BPID=$!
 
-sleep 2
-
 body="$WORK/metrics.txt"
-code=$(curl -s -o "$body" -w "%{http_code}" "http://127.0.0.1:$HTTPPORT/metrics")
+
+both_exporters_reported() {
+    curl -s -o "$body" --max-time 2 "http://127.0.0.1:$HTTPPORT/metrics" || return 1
+    grep -qF 'dvbipi_sds_services{component="sds",headend_id="sds-multi"} 1' "$body" || return 1
+    grep -qF 'dvbipi_bcg_services{component="bcg",headend_id="bcg-multi"} 1' "$body" || return 1
+    [ "$(grep -c '^dvbipi_metrics_snapshot_age_seconds{' "$body")" = "2" ]
+}
+wait_until 30 both_exporters_reported || fail "both exporters did not report within 30s (see $WORK/*.log)"
+
+code=$(curl -s -o "$body" -w "%{http_code}" --max-time 5 "http://127.0.0.1:$HTTPPORT/metrics")
 [ "$code" = "200" ] || fail "GET /metrics: expected HTTP 200, got $code"
 
 assert_contains "$body" 'dvbipi_headend_info{component="sds",headend_id="sds-multi",version="' "sds headend_info present"

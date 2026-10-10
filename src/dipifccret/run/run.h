@@ -111,4 +111,10 @@ typedef struct {
 void fccret_push_metrics(metrics_ctx_t *mc);
 void *metrics_thread_main(void *arg);
 
+typedef capture_t *(*fccret_open_capture_fn)(const config_t *cfg, char *errbuf, size_t errbuf_len);
+
+capture_t *fccret_open_capture(const config_t *cfg, char *errbuf, size_t errbuf_len);
+
+int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_capture_fn open_capture);
+
 #endif

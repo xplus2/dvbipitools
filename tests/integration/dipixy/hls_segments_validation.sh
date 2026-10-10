@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg curl tsanalyze jq; do
+for t in ffmpeg curl tsanalyze jq nc; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
@@ -25,16 +25,17 @@ sleep 0.5
 
 timeout 25 "$BIN" -l "127.0.0.1:$HTTPPORT" --segment-size 2 --segment-count 3 >"$WORK/dipixy.log" 2>&1 &
 DPID=$!
-sleep 0.5
+wait_until 30 port_open $HTTPPORT || fail "server on $HTTPPORT never became ready"
 
 playlist="$WORK/index.m3u8"
 timeout 15 curl -s -o "$playlist" "$BASE/hls"
 [ -s "$playlist" ] || fail "empty/missing HLS playlist, see $WORK/dipixy.log"
 assert_contains "$playlist" "#EXTM3U" "not a valid m3u8 playlist"
 
-sleep 4
-
-timeout 15 curl -s -o "$playlist" "$BASE/hls"
+segments_listed() {
+    timeout 15 curl -s -o "$playlist" "$BASE/hls" && grep -qE '^seg[0-9]+\.ts$' "$playlist"
+}
+wait_until 60 segments_listed || :
 segs=$(grep -E '^seg[0-9]+\.ts$' "$playlist")
 [ -n "$segs" ] || fail "no segment references found in playlist after warm-up"
 

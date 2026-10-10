@@ -312,6 +312,41 @@ START_TEST(configtest_reports_by_exit_status) {
 }
 END_TEST
 
+START_TEST(invalid_dscp_is_rejected) {
+  char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "--dscp", "bogus", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(announce_requires_map_when_input_is_given) {
+  char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-m", "239.1.2.3:5000", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(config_strict_option_rejects_unknown_keys) {
+  char path[] = "/tmp/dipibcg_cfg_XXXXXX";
+  char *strict_argv[] = {"dipibcg", "--config-strict", "-c", path, NULL};
+  char *lenient_argv[] = {"dipibcg", "-c", path, NULL};
+  char *test_argv[] = {"dipibcg", "--configtest", "--config-strict", "-c", path, NULL};
+  config_t cfg = {0};
+  write_cfg(path, "bogus: 1\nlisten: on\nmcast: 239.1.2.3:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(strict_argv), strict_argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+  cfg = (config_t){0};
+  ck_assert_int_eq(args_parse(ARGC(lenient_argv), lenient_argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+  cfg = (config_t){0};
+  ck_assert_int_eq(args_parse(ARGC(test_argv), test_argv, &cfg), ARGS_ERR);
+  unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipibcg_args");
   TCase *tc = tcase_create("core");
@@ -345,6 +380,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, config_invalid_value_is_error);
   tcase_add_test(tc, config_both_modes_is_error);
   tcase_add_test(tc, configtest_reports_by_exit_status);
+  tcase_add_test(tc, invalid_dscp_is_rejected);
+  tcase_add_test(tc, announce_requires_map_when_input_is_given);
+  tcase_add_test(tc, config_strict_option_rejects_unknown_keys);
   suite_add_tcase(s, tc);
   return s;
 }

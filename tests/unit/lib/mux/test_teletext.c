@@ -5,6 +5,7 @@
 #include <inttypes.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -160,6 +161,199 @@ START_TEST(ttx_new_is_safe_under_concurrent_first_use) {
 }
 END_TEST
 
+#define MAX_LOG_CUES 8
+
+static ttx_cue_t g_log[MAX_LOG_CUES];
+static int g_nlog;
+
+static void log_cb(void *ctx, const ttx_cue_t *cue) {
+  (void)ctx;
+  if (g_nlog < MAX_LOG_CUES) g_log[g_nlog] = *cue;
+  g_nlog++;
+}
+
+static void feed_row(ttx_t *t, unsigned page, const char *text, uint64_t pts_ms) {
+  unsigned char pes[64];
+  size_t n = build_ttx_pes(pes, page, 1, text);
+
+  ttx_pes(t, 1, pts_ms * 90, pes, n);
+}
+
+typedef struct {
+  const char *lang;
+  const char *expect;
+} nat_case_t;
+
+static const nat_case_t nat_cases[] = {
+  {"deu", "#$\xC2\xA7\xC3\x84\xC3\x96\xC3\x9C^_\xC2\xB0\xC3\xA4\xC3\xB6\xC3\xBC\xC3\x9F"},
+  {"fra", "\xC3\xA9\xC3\xAF\xC3\xA0\xC3\xAB\xC3\xAA\xC3\xB9\xC3\xAE#\xC3\xA8\xC3\xA2\xC3\xB4\xC3\xBB\xC3\xA7"},
+  {"ita", "\xC2\xA3$\xC3\xA9\xC2\xB0\xC3\xA7\xE2\x86\x92\xE2\x86\x91#\xC3\xB9\xC3\xA0\xC3\xB2\xC3\xA8\xC3\xAC"},
+  {"swe", "#\xC2\xA4\xC3\x89\xC3\x84\xC3\x96\xC3\x85\xC3\x9C_\xC3\xA9\xC3\xA4\xC3\xB6\xC3\xA5\xC3\xBC"},
+  {"spa", "\xC3\xA7$\xC2\xA1\xC3\xA1\xC3\xA9\xC3\xAD\xC3\xB3\xC3\xBA\xC2\xBF\xC3\xBC\xC3\xB1\xC3\xA8\xC3\xA0"},
+  {"ces", "#u\xC4\x8D\xC5\xA5\xC5\xBE\xC3\xBD\xC3\xAD\xC5\x99\xC3\xA9\xC3\xA1\xC4\x9B\xC3\xBA\xC5\xA1"},
+  {"eng", "\xC2\xA3$@\xE2\x86\x90\xC2\xBD\xE2\x86\x92\xE2\x86\x91#\xE2\x80\x95\xC2\xBC\xE2\x80\x96\xC2\xBE\xC3\xB7"},
+  {NULL, "\xC2\xA3$@\xE2\x86\x90\xC2\xBD\xE2\x86\x92\xE2\x86\x91#\xE2\x80\x95\xC2\xBC\xE2\x80\x96\xC2\xBE\xC3\xB7"},
+  {"xxx", "\xC2\xA3$@\xE2\x86\x90\xC2\xBD\xE2\x86\x92\xE2\x86\x91#\xE2\x80\x95\xC2\xBC\xE2\x80\x96\xC2\xBE\xC3\xB7"},
+};
+
+START_TEST(ttx_maps_national_character_subsets_by_language) {
+  const nat_case_t *c = &nat_cases[_i];
+  ttx_t *t = ttx_new(777, c->lang, 0, log_cb, NULL);
+
+  g_nlog = 0;
+  feed_row(t, 777, "#$@[\\]^_`{|}~", 1000);
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 1);
+  ck_assert_str_eq(g_log[0].text, c->expect);
+  ttx_free(t);
+}
+END_TEST
+
+START_TEST(ttx_turns_control_codes_into_spaces_and_trims_row_edges) {
+  ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+
+  g_nlog = 0;
+  feed_row(t, 777, "\x01  AB\x02" "CD   ", 1000);
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 1);
+  ck_assert_str_eq(g_log[0].text, "AB CD");
+  ttx_free(t);
+}
+END_TEST
+
+START_TEST(ttx_joins_rows_of_one_group_and_drops_repeated_rows) {
+  ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+
+  g_nlog = 0;
+  feed_row(t, 777, "FIRST", 1000);
+  feed_row(t, 777, "SECOND", 1100);
+  feed_row(t, 777, "FIRST", 1200);
+  feed_row(t, 777, "   ", 1250);
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 1);
+  ck_assert_str_eq(g_log[0].text, "FIRST\nSECOND");
+  ttx_free(t);
+}
+END_TEST
+
+START_TEST(ttx_splits_groups_on_a_gap_and_ignores_carousel_repeats) {
+  ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+
+  g_nlog = 0;
+  feed_row(t, 777, "ONE", 1000);
+  feed_row(t, 777, "TWO", 1600);
+  feed_row(t, 777, "TWO", 2400);
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 2);
+  ck_assert_str_eq(g_log[0].text, "ONE");
+  ck_assert_int_eq((int)g_log[0].start_ms, 1000);
+  ck_assert_int_eq((int)g_log[0].end_ms, 1600);
+  ck_assert_str_eq(g_log[1].text, "TWO");
+  ck_assert_int_eq((int)g_log[1].start_ms, 1600);
+  ck_assert_int_eq((int)g_log[1].end_ms, 2800);
+  ttx_free(t);
+}
+END_TEST
+
+START_TEST(ttx_caps_long_cues_and_holds_short_ones_to_the_minimum) {
+  ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+
+  g_nlog = 0;
+  feed_row(t, 777, "LONG", 1000);
+  feed_row(t, 777, "NEXT", 20000);
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 2);
+  ck_assert_int_eq((int)g_log[0].end_ms, 6000);
+  ck_assert_int_eq((int)(g_log[1].end_ms - g_log[1].start_ms), 1200);
+  ttx_free(t);
+}
+END_TEST
+
+START_TEST(ttx_clamps_a_lead_that_would_start_before_zero) {
+  ttx_t *t = ttx_new(777, "eng", 2000, log_cb, NULL);
+
+  g_nlog = 0;
+  feed_row(t, 777, "EARLY", 1000);
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 1);
+  ck_assert_int_eq((int)g_log[0].start_ms, 0);
+  ck_assert(g_log[0].end_ms > 0);
+  ttx_free(t);
+}
+END_TEST
+
+START_TEST(ttx_keeps_at_most_one_screen_of_rows_per_group) {
+  ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  char row[8];
+  int lines = 1;
+
+  g_nlog = 0;
+  for (int i = 0; i < 26; i++) {
+    snprintf(row, sizeof row, "R%02d", i);
+    feed_row(t, 777, row, 1000);
+  }
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 1);
+  for (const char *p = g_log[0].text; *p; p++)
+    if (*p == '\n') lines++;
+  ck_assert_int_eq(lines, 24);
+  ttx_free(t);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  size_t off;
+  unsigned char xor_mask;
+  unsigned char set;
+  int use_set;
+} corrupt_case_t;
+
+static const corrupt_case_t corrupt_cases[] = {
+  {"data_identifier below range", 0, 0, 0x05, 1},
+  {"data_identifier above range", 0, 0, 0x20, 1},
+  {"not an ebu subtitle unit", 1, 0, 0x02, 1},
+  {"unit shorter than a packet", 2, 0, 0x10, 1},
+  {"uncorrectable magazine hamming", 5, 0x03, 0, 0},
+};
+
+START_TEST(ttx_ignores_malformed_data_units) {
+  const corrupt_case_t *c = &corrupt_cases[_i];
+  ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  unsigned char pes[64];
+  size_t n = build_ttx_pes(pes, 777, 1, "TEXT");
+
+  g_nlog = 0;
+  if (c->use_set) pes[c->off] = c->set;
+  else pes[c->off] ^= c->xor_mask;
+  ttx_pes(t, 1, 90000, pes, n);
+  ttx_flush(t);
+  ck_assert_msg(g_nlog == 0, "%s: cue emitted", c->name);
+  ttx_free(t);
+}
+END_TEST
+
+START_TEST(ttx_survives_truncated_and_empty_input_and_missing_pts) {
+  ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  unsigned char pes[64];
+  size_t n = build_ttx_pes(pes, 777, 1, "TEXT");
+
+  g_nlog = 0;
+  ttx_pes(t, 1, 90000, pes, 0);
+  ttx_pes(t, 1, 90000, pes, 1);
+  ttx_pes(t, 1, 90000, pes, n - 5);
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 0);
+  ttx_free(t);
+  t = ttx_new(777, "eng", 0, log_cb, NULL);
+  ttx_pes(t, 0, 0, pes, n);
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 1);
+  ck_assert_int_eq((int)g_log[0].start_ms, 0);
+  ttx_free(t);
+}
+END_TEST
+
 static Suite *teletext_suite(void) {
   Suite *s = suite_create("teletext");
   TCase *tc = tcase_create("core");
@@ -168,6 +362,15 @@ static Suite *teletext_suite(void) {
   tcase_add_test(tc, ttx_skips_the_page_ident_row);
   tcase_add_test(tc, ttx_lead_ms_shifts_cue_times_earlier);
   tcase_add_test(tc, ttx_new_is_safe_under_concurrent_first_use);
+  tcase_add_loop_test(tc, ttx_maps_national_character_subsets_by_language, 0, (int)(sizeof nat_cases / sizeof nat_cases[0]));
+  tcase_add_test(tc, ttx_turns_control_codes_into_spaces_and_trims_row_edges);
+  tcase_add_test(tc, ttx_joins_rows_of_one_group_and_drops_repeated_rows);
+  tcase_add_test(tc, ttx_splits_groups_on_a_gap_and_ignores_carousel_repeats);
+  tcase_add_test(tc, ttx_caps_long_cues_and_holds_short_ones_to_the_minimum);
+  tcase_add_test(tc, ttx_clamps_a_lead_that_would_start_before_zero);
+  tcase_add_test(tc, ttx_keeps_at_most_one_screen_of_rows_per_group);
+  tcase_add_loop_test(tc, ttx_ignores_malformed_data_units, 0, (int)(sizeof corrupt_cases / sizeof corrupt_cases[0]));
+  tcase_add_test(tc, ttx_survives_truncated_and_empty_input_and_missing_pts);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze jq; do
+for t in ffmpeg tsp tsanalyze jq ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 tsp -P pcredit --help >/dev/null 2>&1 || skip "tsp pcredit plugin not available"
@@ -26,37 +26,53 @@ KBPS=6000
 cap="$WORK/regenerate_mpts.ts"
 report="$WORK/regenerate_mpts.json"
 
-tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 5000 \
+tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 60000 \
     -O file "$cap" >"$WORK/tsp_capture.log" 2>&1 &
 TSPID=$!
+wait_until 30 udp_port_busy $PORT || fail "regenerate mpts: tsp capture never bound $PORT"
 
-timeout 10 "$BIN" -O lo -u -m $MCAST:$PORT \
+timeout 70 "$BIN" -O lo -u -m $MCAST:$PORT \
     -i "udp://@$BAD1:$BAD1_PORT" -I lo --sid 101 -s "Channel One" \
     -i "udp://@$BAD2:$BAD2_PORT" -I lo --sid 102 -s "Channel Two" \
     -b $KBPS -S -B --pcr-mode regenerate >"$WORK/dipitvhead.log" 2>&1 &
 TVPID=$!
-sleep 0.8
+wait_until 30 udp_port_busy $BAD1_PORT || fail "regenerate mpts: receiver never bound $BAD1_PORT"
+wait_until 30 udp_port_busy $BAD2_PORT || fail "regenerate mpts: receiver never bound $BAD2_PORT"
 
+RELAYPIDS=
 for n in 1 2; do
     eval "raw=\$RAW$n bad=\$BAD$n raw_port=\$RAW${n}_PORT bad_port=\$BAD${n}_PORT"
-    tsp -I ip $raw:$raw_port --local-address 127.0.0.1 --receive-timeout 4000 \
+    tsp -I ip $raw:$raw_port --local-address 127.0.0.1 --receive-timeout 60000 \
         -P pcredit --add-pcr 100000000 --random -P continuity --fix \
         -O ip $bad:$bad_port --local-address 127.0.0.1 --ttl 1 >"$WORK/tsp_relay$n.log" 2>&1 &
+    RELAYPIDS="$RELAYPIDS $!"
 done
-sleep 0.3
+wait_until 30 udp_port_busy $RAW1_PORT || fail "regenerate mpts: relay never bound $RAW1_PORT"
+wait_until 30 udp_port_busy $RAW2_PORT || fail "regenerate mpts: relay never bound $RAW2_PORT"
 
+FFPIDS=
 for n in 1 2; do
     eval "raw=\$RAW$n raw_port=\$RAW${n}_PORT"
     ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=25" \
         -f lavfi -i "sine=frequency=$((n * 1000))" -t 5 \
         -c:v libx264 -preset ultrafast -c:a aac -f mpegts \
         "udp://$raw:$raw_port?localaddr=127.0.0.1&ttl=1" 2>"$WORK/ffmpeg$n.log" &
+    FFPIDS="$FFPIDS $!"
 done
-wait
+wait $FFPIDS
+
+sleep 0.5
+kill $RELAYPIDS 2>/dev/null
+wait $RELAYPIDS 2>/dev/null || true
+sleep 0.5
+kill $TVPID 2>/dev/null
+wait $TVPID 2>/dev/null || true
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 
 [ -s "$cap" ] || fail "regenerate mpts: no packets captured (see $WORK/dipitvhead.log)"
 
-verify=$(tsp -I file "$cap" -P pcrverify --pid 0x100 --pid 0x120 -O drop 2>&1 | grep "PCR OK")
+verify=$(tsp -I file "$cap" -P pcrverify --pid 0x100 --pid 0x120 -O drop 2>&1 | grep "PCR OK" | sed 's/\([0-9]\),\([0-9]\)/\1\2/g')
 ok=$(echo "$verify" | sed -n 's/.*: \([0-9][0-9]*\) PCR OK, \([0-9][0-9]*\) with jitter.*/\1/p')
 bad=$(echo "$verify" | sed -n 's/.*: \([0-9][0-9]*\) PCR OK, \([0-9][0-9]*\) with jitter.*/\2/p')
 [ "${ok:-0}" -ge 200 ] || fail "regenerate mpts: only ${ok:-0} verified PCRs ($verify)"

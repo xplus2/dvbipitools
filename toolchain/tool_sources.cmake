@@ -329,6 +329,7 @@ function(dipifccret_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipifccret/run/pacer.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/run/rsi.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/run/metrics.c
+            ${CMAKE_SOURCE_DIR}/src/dipifccret/run/serve.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/cli/args.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/cli/check.c
             ${CMAKE_SOURCE_DIR}/src/dipifccret/cli/help.c

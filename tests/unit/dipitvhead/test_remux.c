@@ -12,6 +12,7 @@
 #include "dipitvhead/mux/remux.h"
 #include "dipitvhead/mux/remux/priv.h"
 #include "psi_fixture.h"
+#include "dipitvhead/version.h"
 #include "lib/demux/crc32.h"
 #include "lib/helper/beutil.h"
 #include "lib/mux/psi_build.h"
@@ -2477,6 +2478,117 @@ START_TEST(remux_eit_section_content_survives_every_path) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  table_mode_t sdt_mode;
+  const char *sdt_text;
+  const char *provider_text;
+  const char *default_provider;
+  int want_send;
+  const char *want_service;
+  const char *want_provider;
+} sdt_case_t;
+
+static const sdt_case_t sdt_cases[] = {
+  {"dropped", TABLE_DROP, "", "", "", 0, NULL, NULL},
+  {"override with its own provider", TABLE_OVERRIDE, "My Service", "My Provider", "Default", 1, "My Service", "My Provider"},
+  {"override falls back to the default provider", TABLE_OVERRIDE, "My Service", "", "Default", 1, "My Service", "Default"},
+  {"override falls back to the tool name", TABLE_OVERRIDE, "My Service", "", "", 1, "My Service", TOOL_NAME},
+  {"passthrough of a source without an sdt", TABLE_PASSTHROUGH, "", "", "", 0, "", ""},
+  {"passthrough with an explicit provider", TABLE_PASSTHROUGH, "", "Chosen", "", 0, "", "Chosen"},
+};
+
+START_TEST(remux_resolves_sdt_names_and_providers) {
+  const sdt_case_t *c = &sdt_cases[_i];
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  out_program_pids_t pids;
+  remux_t *r;
+
+  base_cfg(&cfg);
+  base_input(&input);
+  input.sdt_mode = c->sdt_mode;
+  snprintf(input.sdt_text, sizeof input.sdt_text, "%s", c->sdt_text);
+  snprintf(input.provider_text, sizeof input.provider_text, "%s", c->provider_text);
+  snprintf(cfg.default_provider_text, sizeof cfg.default_provider_text, "%s", c->default_provider);
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  ck_assert_msg(r->send_sdt == c->want_send, "%s: send %d", c->name, r->send_sdt);
+  if (c->want_service) ck_assert_msg(!strcmp(r->service_name, c->want_service), "%s: service '%s'", c->name, r->service_name);
+  if (c->want_provider) ck_assert_msg(!strcmp(r->provider_name, c->want_provider), "%s: provider '%s'", c->name, r->provider_name);
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  table_mode_t mode;
+  const char *text;
+  int want_send;
+  const char *want_name;
+} nit_case_t;
+
+static const nit_case_t nit_cases[] = {
+  {"dropped", TABLE_DROP, "", 0, NULL},
+  {"override", TABLE_OVERRIDE, "Net", 1, "Net"},
+  {"passthrough of a source without a nit", TABLE_PASSTHROUGH, "", 0, ""},
+};
+
+START_TEST(remux_resolves_nit_names) {
+  const nit_case_t *c = &nit_cases[_i];
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  out_program_pids_t pids;
+  remux_t *r;
+
+  base_cfg(&cfg);
+  base_input(&input);
+  cfg.nit_mode = c->mode;
+  snprintf(cfg.nit_text, sizeof cfg.nit_text, "%s", c->text);
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  ck_assert_msg(r->send_nit == c->want_send, "%s: send %d", c->name, r->send_nit);
+  if (c->want_name) ck_assert_msg(!strcmp(r->network_name, c->want_name), "%s: name '%s'", c->name, r->network_name);
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+START_TEST(remux_builds_the_hbbtv_ait_or_reports_a_url_that_does_not_fit) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  out_program_pids_t pids;
+  remux_t *r;
+  static char long_url[4096];
+
+  base_cfg(&cfg);
+  base_input(&input);
+  input.hbbtv_url = "http://example.org/app";
+  input.hbbtv_org_id = 1;
+  input.hbbtv_app_id = 2;
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  ck_assert_int_eq(r->send_ait, 1);
+  remux_free(r);
+
+  memset(long_url, 'a', sizeof long_url - 1);
+  memcpy(long_url, "http://", 7);
+  input.hbbtv_url = long_url;
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  ck_assert_int_eq(r->send_ait, 0);
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
 static Suite *remux_suite(void) {
   Suite *s = suite_create("remux");
   TCase *tc = tcase_create("core");
@@ -2537,6 +2649,9 @@ static Suite *remux_suite(void) {
   tcase_add_loop_test(tc, remux_source_ca_passthrough_descriptors_follow_source_and_strip_settings, 0, (int)(sizeof ca_source_cases / sizeof ca_source_cases[0]));
   tcase_add_loop_test(tc, remux_eit_section_content_survives_every_path, 0, 7);
   tcase_add_test(tc, remux_non_standalone_eit_queue_full_counts_drops);
+  tcase_add_loop_test(tc, remux_resolves_sdt_names_and_providers, 0, (int)(sizeof sdt_cases / sizeof sdt_cases[0]));
+  tcase_add_loop_test(tc, remux_resolves_nit_names, 0, (int)(sizeof nit_cases / sizeof nit_cases[0]));
+  tcase_add_test(tc, remux_builds_the_hbbtv_ait_or_reports_a_url_that_does_not_fit);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -63,8 +63,8 @@ int hls_set_init_segment_at(hls_store_t *s, codec_t video_codec, const uint8_t *
   return g_init_result;
 }
 int64_t pts_unwrap(pts_unwrap_t *st, uint64_t raw) {
-  (void)st; (void)raw;
-  return 0;
+  (void)st;
+  return (int64_t)(raw / 90);
 }
 int buf_reserve(unsigned char **buf, size_t *cap, size_t need) {
   unsigned char *grown;
@@ -539,6 +539,175 @@ START_TEST(lcevc_units_are_seeded_and_paired_with_the_next_timestamp) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  unsigned char au[12];
+  size_t n;
+  int want;
+} mpeg2_case_t;
+
+static const mpeg2_case_t mpeg2_cases[] = {
+  {"intra picture", {0x00, 0x00, 0x01, 0x00, 0x00, 0x08, 0xAA}, 7, 1},
+  {"predicted picture", {0x00, 0x00, 0x01, 0x00, 0x00, 0x10, 0xAA}, 7, 0},
+  {"sequence header only", {0x00, 0x00, 0x01, 0xB3, 0x00, 0x08, 0xAA}, 7, 0},
+  {"picture header cut short", {0x00, 0x00, 0x01, 0x00, 0x00}, 5, 0},
+};
+
+START_TEST(mpeg2_intra_pictures_are_keyframes) {
+  const mpeg2_case_t *c = &mpeg2_cases[_i];
+  hls_seg_ctx_t *s = new_ctx(CODEC_MPEG2V);
+
+  ck_assert_msg(detect_keyframe(s, c->au, c->n) == c->want, "%s", c->name);
+  free(s);
+}
+END_TEST
+
+static unsigned char g_idr[8];
+static size_t g_idr_len;
+
+static hls_seg_ctx_t *ts_ctx(double part_target, int boot_left) {
+  static const unsigned char idr[] = {0x65, 0xAA, 0xBB};
+  hls_seg_ctx_t *s = ready_ctx();
+
+  wrap_unit(g_idr, &g_idr_len, idr, sizeof idr);
+  s->container = SEG_CONTAINER_TS;
+  s->buf = calloc(1, 256);
+  ck_assert_ptr_nonnull(s->buf);
+  s->len = 100;
+  s->have_pending_pes = 1;
+  s->pending_pes_off = 10;
+  s->video.seg_target = 2.0;
+  s->video.first_ts_ms = -1;
+  s->video.boot_left = boot_left;
+  atomic_store(&s->part.part_target, part_target);
+  return s;
+}
+
+static void ts_free(hls_seg_ctx_t *s) {
+  free(s->buf);
+  free_ctx(s);
+}
+
+static void feed_idr(hls_seg_ctx_t *s, unsigned ts_ms) {
+  handle_video_pes(s, 1, (uint64_t)ts_ms * 90, 1, (uint64_t)ts_ms * 90, g_idr, g_idr_len);
+}
+
+static void feed_slice(hls_seg_ctx_t *s, unsigned ts_ms) {
+  static const unsigned char slice[] = {0x41, 0xAA};
+  unsigned char buf[8];
+  size_t n;
+
+  wrap_unit(buf, &n, slice, sizeof slice);
+  handle_video_pes(s, 1, (uint64_t)ts_ms * 90, 1, (uint64_t)ts_ms * 90, buf, n);
+}
+
+START_TEST(video_pes_without_a_recorded_offset_is_ignored) {
+  hls_seg_ctx_t *s = ts_ctx(0.0, 0);
+
+  s->have_pending_pes = 0;
+  feed_idr(s, 0);
+  ck_assert_int_eq(s->video.seg_open, 0);
+  ck_assert_uint_eq(s->len, 100u);
+  ts_free(s);
+}
+END_TEST
+
+START_TEST(classic_ts_cuts_segments_at_keyframes_after_the_target) {
+  hls_seg_ctx_t *s = ts_ctx(0.0, 0);
+
+  feed_idr(s, 0);
+  ck_assert_int_eq(s->video.seg_open, 1);
+  ck_assert_uint_eq(s->len, 90u);
+  feed_slice(s, 500);
+  feed_idr(s, 1000);
+  ck_assert_int_eq(g_segment_count, 0);
+  feed_idr(s, 2500);
+  ck_assert_int_eq(g_segment_count, 1);
+  ck_assert_int_eq((int)s->video.first_ts_ms, 2500);
+  g_push_result = -1;
+  feed_idr(s, 5000);
+  ck_assert_int_eq(g_segment_count, 2);
+  s->store = NULL;
+  feed_idr(s, 7500);
+  ck_assert_int_eq(g_segment_count, 2);
+  ts_free(s);
+}
+END_TEST
+
+START_TEST(classic_ts_boot_cuts_early_keyframes_then_follows_the_target) {
+  hls_seg_ctx_t *s = ts_ctx(0.0, 2);
+
+  feed_idr(s, 0);
+  feed_idr(s, 100);
+  ck_assert_int_eq(g_segment_count, 1);
+  ck_assert_int_eq(s->video.boot_left, 1);
+  feed_idr(s, 200);
+  ck_assert_int_eq(g_segment_count, 2);
+  ck_assert_int_eq(s->video.boot_left, 0);
+  feed_idr(s, 300);
+  ck_assert_int_eq(g_segment_count, 2);
+  ts_free(s);
+}
+END_TEST
+
+START_TEST(low_latency_ts_closes_parts_and_cuts_segments_on_keyframes) {
+  hls_seg_ctx_t *s = ts_ctx(0.5, 0);
+
+  feed_idr(s, 0);
+  ck_assert_int_eq(s->part.part_open, 1);
+  feed_slice(s, 200);
+  ck_assert_int_eq(s->part.have_last_au, 1);
+  s->len = 100;
+  feed_slice(s, 600);
+  ck_assert_int_ge(g_part_count, 1);
+  feed_idr(s, 2500);
+  ck_assert_int_eq(g_segment_ll_count, 1);
+  g_push_result = -1;
+  feed_slice(s, 2900);
+  feed_idr(s, 5000);
+  ck_assert_int_eq(g_segment_ll_count, 2);
+  s->store = NULL;
+  feed_slice(s, 5400);
+  feed_idr(s, 7500);
+  ck_assert_int_eq(g_segment_ll_count, 2);
+  ts_free(s);
+}
+END_TEST
+
+START_TEST(fmp4_container_hands_access_units_to_the_mux) {
+  hls_seg_ctx_t *s = ready_ctx();
+  static const unsigned char idr[] = {0x65, 0xAA, 0xBB};
+  unsigned char buf[8];
+  size_t n;
+
+  wrap_unit(buf, &n, idr, sizeof idr);
+  s->container = SEG_CONTAINER_FMP4;
+  s->buf = calloc(1, 64);
+  s->len = 32;
+  s->have_pending_pes = 1;
+  s->pending_pes_off = 0;
+  s->video.seg_target = 2.0;
+  s->video.first_ts_ms = -1;
+  handle_video_pes(s, 1, 0, 0, 0, buf, n);
+  handle_video_pes(s, 1, 90 * 40, 0, 0, buf, n);
+  ck_assert_int_eq(s->video.seg_open, 1);
+  free(s->buf);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(lcevc_pes_needs_a_pts) {
+  hls_seg_ctx_t *s = ready_ctx();
+  static const unsigned char au[] = {1, 2, 3, 4};
+
+  s->demux.lcevc_pid_known = 1;
+  handle_lcevc_pes(s, 0, 0, au, sizeof au);
+  ck_assert_int_eq(s->lcevc_track.have_pend, 0);
+  handle_lcevc_pes(s, 1, 90 * 20, au, sizeof au);
+  free_ctx(s);
+}
+END_TEST
+
 static Suite *segment_video_suite(void) {
   Suite *s = suite_create("dipixy_segment_video");
   TCase *tc = tcase_create("core");
@@ -564,6 +733,13 @@ static Suite *segment_video_suite(void) {
   tcase_add_test(tc, an_unavailable_mux_drops_access_units);
   tcase_add_test(tc, ac4_segment_cuts_wait_for_an_independent_frame);
   tcase_add_test(tc, lcevc_units_are_seeded_and_paired_with_the_next_timestamp);
+  tcase_add_loop_test(tc, mpeg2_intra_pictures_are_keyframes, 0, (int)(sizeof mpeg2_cases / sizeof mpeg2_cases[0]));
+  tcase_add_test(tc, video_pes_without_a_recorded_offset_is_ignored);
+  tcase_add_test(tc, classic_ts_cuts_segments_at_keyframes_after_the_target);
+  tcase_add_test(tc, classic_ts_boot_cuts_early_keyframes_then_follows_the_target);
+  tcase_add_test(tc, low_latency_ts_closes_parts_and_cuts_segments_on_keyframes);
+  tcase_add_test(tc, fmp4_container_hands_access_units_to_the_mux);
+  tcase_add_test(tc, lcevc_pes_needs_a_pts);
   suite_add_tcase(s, tc);
   return s;
 }

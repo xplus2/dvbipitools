@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze jq; do
+for t in ffmpeg tsp tsanalyze jq ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 tsp -P pcredit --help >/dev/null 2>&1 || skip "tsp pcredit plugin not available"
@@ -22,33 +22,39 @@ KBPS=3000
 cap="$WORK/regenerate_spts.ts"
 report="$WORK/regenerate_spts.json"
 
-tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 5000 \
+tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 60000 \
     -O file "$cap" >"$WORK/tsp_capture.log" 2>&1 &
 TSPID=$!
+wait_until 30 udp_port_busy $PORT || fail "regenerate spts: tsp capture never bound $PORT"
 
-timeout 10 "$BIN" -O lo -u -m $MCAST:$PORT -i "udp://@$BAD:$BAD_PORT" -I lo \
+timeout 70 "$BIN" -O lo -u -m $MCAST:$PORT -i "udp://@$BAD:$BAD_PORT" -I lo \
     -b $KBPS -S -B --pcr-mode regenerate >"$WORK/dipitvhead.log" 2>&1 &
 TVPID=$!
-sleep 0.5
+wait_until 30 udp_port_busy $BAD_PORT || fail "regenerate spts: receiver never bound $BAD_PORT"
 
-tsp -I ip $RAW:$RAW_PORT --local-address 127.0.0.1 --receive-timeout 4000 \
+tsp -I ip $RAW:$RAW_PORT --local-address 127.0.0.1 --receive-timeout 60000 \
     -P pcredit --add-pcr 100000000 --random -P continuity --fix \
     -O ip $BAD:$BAD_PORT --local-address 127.0.0.1 --ttl 1 >"$WORK/tsp_relay.log" 2>&1 &
 RELAYPID=$!
-sleep 0.3
+wait_until 30 udp_port_busy $RAW_PORT || fail "regenerate spts: relay never bound $RAW_PORT"
 
 ffmpeg -hide_banner -loglevel error -re -f lavfi -i "testsrc=size=320x240:rate=25" \
     -f lavfi -i "sine=frequency=1000" -t 5 \
     -c:v libx264 -preset ultrafast -c:a aac -f mpegts \
     "udp://$RAW:$RAW_PORT?localaddr=127.0.0.1&ttl=1" 2>"$WORK/ffmpeg.log"
 
-wait $TVPID || true
-wait $RELAYPID || true
-wait $TSPID || true
+sleep 0.5
+kill $RELAYPID 2>/dev/null
+wait $RELAYPID 2>/dev/null || true
+sleep 0.5
+kill $TVPID 2>/dev/null
+wait $TVPID 2>/dev/null || true
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 
 [ -s "$cap" ] || fail "regenerate spts: no packets captured (see $WORK/dipitvhead.log)"
 
-verify=$(tsp -I file "$cap" -P pcrverify --pid 0x100 -O drop 2>&1 | grep "PCR OK")
+verify=$(tsp -I file "$cap" -P pcrverify --pid 0x100 -O drop 2>&1 | grep "PCR OK" | sed 's/\([0-9]\),\([0-9]\)/\1\2/g')
 ok=$(echo "$verify" | sed -n 's/.*: \([0-9][0-9]*\) PCR OK, \([0-9][0-9]*\) with jitter.*/\1/p')
 bad=$(echo "$verify" | sed -n 's/.*: \([0-9][0-9]*\) PCR OK, \([0-9][0-9]*\) with jitter.*/\2/p')
 [ "${ok:-0}" -ge 100 ] || fail "regenerate spts: only ${ok:-0} verified PCRs ($verify)"

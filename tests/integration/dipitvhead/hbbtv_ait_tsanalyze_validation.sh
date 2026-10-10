@@ -5,7 +5,7 @@
 BIN=$1
 . "$(dirname "$0")/../common.sh"
 
-for t in ffmpeg tsp tsanalyze tstables jq; do
+for t in ffmpeg tsp tsanalyze tstables jq ss; do
     command -v "$t" >/dev/null 2>&1 || fail "required tool '$t' not found on PATH"
 done
 
@@ -20,15 +20,17 @@ ait="$WORK/ait_tables.txt"
 
 gen_test_clip "$clip" 1000 3
 
-tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 4000 \
+tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 60000 \
     -O file "$cap" >"$WORK/tsp.log" 2>&1 &
 TSPID=$!
-sleep 0.3
+wait_until 30 udp_port_busy $PORT || fail "tsp capture never bound $PORT"
 
 "$BIN" -O lo -u -m $MCAST:$PORT -i - -s "Ait Channel" \
     --hbbtv http://example.invalid/app.html --hbbtv-org-id 1 --hbbtv-app-id 2 <"$clip" >"$WORK/dipitvhead.log" 2>&1
 
-wait $TSPID || true
+sleep 0.5
+kill $TSPID 2>/dev/null
+wait $TSPID 2>/dev/null || true
 
 [ -s "$cap" ] || fail "hbbtv: no packets captured (see $WORK/dipitvhead.log)"
 

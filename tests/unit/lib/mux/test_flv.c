@@ -365,6 +365,152 @@ START_TEST(flv_video_sequence_header_and_coded_frames) {
 }
 END_TEST
 
+START_TEST(flv_unsupported_video_codec_emits_nothing_and_no_error) {
+  unsigned long long bytes = 0;
+  flv_opts_t opts;
+  flv_t *f;
+  tag_capture_t cap;
+  unsigned char pkts[DISCOVERY_PACKETS][188];
+
+  memset(&opts, 0, sizeof opts);
+  memset(&cap, 0, sizeof cap);
+  f = flv_new(&opts, 0, capture_cb, &cap, &bytes);
+  ck_assert_ptr_nonnull(f);
+  build_video_discovery(pkts, 0, 0x02);
+  for (size_t i = 0; i < DISCOVERY_PACKETS; i++) flv_feed(f, pkts[i]);
+  ck_assert_int_eq(flv_error(f), 0);
+  flv_close(f);
+  ck_assert_int_eq(cap.n, 0);
+}
+END_TEST
+
+START_TEST(flv_selects_the_requested_audio_track) {
+  unsigned long long bytes = 0;
+  flv_opts_t opts;
+  flv_t *f;
+  tag_capture_t cap;
+  unsigned char adts[64];
+  unsigned char pes[128];
+  unsigned char pkt[188];
+  size_t alen;
+  size_t plen;
+
+  memset(&opts, 0, sizeof opts);
+  opts.audio_track = 1;
+  memset(&cap, 0, sizeof cap);
+  f = flv_new(&opts, 0, capture_cb, &cap, &bytes);
+  ck_assert_ptr_nonnull(f);
+  feed_discovery(f);
+  alen = build_adts_frame(adts, 50);
+  plen = build_pes_with_pts(pes, 90000, adts, alen);
+  wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+  flv_feed(f, pkt);
+  ck_assert_int_eq(flv_error(f), 0);
+  flv_close(f);
+  ck_assert(has_tag_type(&cap, FLV_TAG_AUDIO));
+}
+END_TEST
+
+static size_t build_pmt_video_and_aac(unsigned char *out, unsigned prog_num, unsigned video_pid, unsigned audio_pid) {
+  unsigned char body[24];
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
+  uint32_t crc;
+
+  body[n++] = (unsigned char)(prog_num >> 8);
+  body[n++] = (unsigned char)prog_num;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = (unsigned char)(0xE0 | ((video_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)video_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  body[n++] = 0x1B;
+  body[n++] = (unsigned char)(0xE0 | ((video_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)video_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  body[n++] = 0x0F;
+  body[n++] = (unsigned char)(0xE0 | ((audio_pid >> 8) & 0x1F));
+  body[n++] = (unsigned char)audio_pid;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  hdr = n + 4;
+  out[0] = 0x02;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  memcpy(out + 3, body, n);
+  crc_at = 3 + n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
+START_TEST(flv_waits_for_every_track_header_before_emitting) {
+  unsigned long long bytes = 0;
+  flv_opts_t opts;
+  flv_t *f;
+  tag_capture_t cap;
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char adts[128];
+  unsigned char au[128];
+  unsigned char pes[188];
+  size_t slen;
+  size_t alen;
+  size_t plen;
+  int audio_tags = 0;
+
+  memset(&opts, 0, sizeof opts);
+  memset(&cap, 0, sizeof cap);
+  f = flv_new(&opts, 0, capture_cb, &cap, &bytes);
+  ck_assert_ptr_nonnull(f);
+  slen = psi_build_pat(0x1234, 0, 101, 0x0100, sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
+  flv_feed(f, pkt);
+  slen = build_pmt_video_and_aac(sec, 101, 0x0101, 0x0102);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
+  flv_feed(f, pkt);
+  slen = psi_build_sdt(0, 0x1234, 2, 101, 0x01, "Provider", "Service", sec, sizeof sec);
+  wrap_section_packet(pkt, 0x0011, sec, slen);
+  flv_feed(f, pkt);
+
+  alen = build_adts_frame(adts, 50);
+  alen += build_adts_frame(adts + alen, 50);
+  plen = build_pes_with_pts(pes, 90000, adts, alen);
+  wrap_ts_packet(pkt, 0x0102, 1, pes, plen);
+  flv_feed(f, pkt);
+  ck_assert(!has_tag_type(&cap, FLV_TAG_AUDIO));
+  ck_assert(!has_tag_type(&cap, FLV_TAG_SCRIPT));
+
+  for (unsigned i = 0; i < 2; i++) {
+    alen = build_h264_au(au, i == 0);
+    plen = build_pes_with_pts_dts(pes, 90000 + i * 3000, 90000 + i * 3000, au, alen);
+    wrap_ts_packet_exact(pkt, 0x0101, 1, pes, plen);
+    flv_feed(f, pkt);
+  }
+  ck_assert(!has_tag_type(&cap, FLV_TAG_SCRIPT));
+  ck_assert(!has_tag_type(&cap, FLV_TAG_VIDEO));
+
+  alen = build_adts_frame(adts, 50);
+  alen += build_adts_frame(adts + alen, 50);
+  plen = build_pes_with_pts(pes, 94000, adts, alen);
+  wrap_ts_packet(pkt, 0x0102, 1, pes, plen);
+  flv_feed(f, pkt);
+  ck_assert_int_eq(flv_error(f), 0);
+  ck_assert(has_tag_type(&cap, FLV_TAG_SCRIPT));
+  flv_close(f);
+  for (int i = 0; i < cap.n; i++)
+    if (cap.tags[i].type == FLV_TAG_AUDIO) audio_tags++;
+  ck_assert_int_ge(audio_tags, 1);
+}
+END_TEST
+
 static Suite *flv_suite(void) {
   Suite *s = suite_create("flv");
   TCase *tc = tcase_create("core");
@@ -374,6 +520,9 @@ static Suite *flv_suite(void) {
   tcase_add_test(tc, flv_emits_av01_fourcc_and_av1c_seqhdr);
   tcase_add_loop_test(tc, flv_edge_case_streams_never_error_and_drop_unusable_frames, 0, EDGE_COUNT);
   tcase_add_loop_test(tc, flv_video_sequence_header_and_coded_frames, 0, (int)(sizeof flv_video_cases / sizeof flv_video_cases[0]));
+  tcase_add_test(tc, flv_unsupported_video_codec_emits_nothing_and_no_error);
+  tcase_add_test(tc, flv_selects_the_requested_audio_track);
+  tcase_add_test(tc, flv_waits_for_every_track_header_before_emitting);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -1581,6 +1581,230 @@ START_TEST(agg_put_cb_with_null_aggregate_writes_nothing) {
 }
 END_TEST
 
+START_TEST(pcr_pid_packets_without_a_pcr_are_ignored) {
+  tsinspect_t *t = tsinspect_new_relay(METRICS_INSPECT_TS_MEDIUM);
+  unsigned char pkt[188];
+
+  tsinspect_tick(t, 1.0);
+  tsinspect_set_rx_ns(t, 1000000000ULL);
+  pcr_pkt(pkt, 0x101, 0, 27000000ULL, 0);
+  tsinspect_grid(t, pkt, 188);
+  make_pkt(pkt, 0x101, 2, 0);
+  tsinspect_grid(t, pkt, 188);
+  make_pkt(pkt, 0x101, 3, 1);
+  tsinspect_grid(t, pkt, 188);
+  tsinspect_set_rx_ns(t, 1040000000ULL);
+  pcr_pkt(pkt, 0x101, 2, 27000000ULL + 5400000ULL, 0);
+  tsinspect_grid(t, pkt, 188);
+  ck_assert_uint_eq(tsinspect_counters(t)->pcr_repetition_errors, 1u);
+  tsinspect_free(t);
+}
+END_TEST
+
+START_TEST(pcr_accuracy_skips_arrival_times_that_go_backwards) {
+  tsinspect_t *t = tsinspect_new_relay(METRICS_INSPECT_TS_MEDIUM);
+  unsigned char pkt[188];
+
+  tsinspect_tick(t, 1.0);
+  tsinspect_set_rx_ns(t, 2000000000ULL);
+  pcr_pkt(pkt, 0x101, 0, 27000000ULL, 0);
+  tsinspect_grid(t, pkt, 188);
+  tsinspect_set_rx_ns(t, 1000000000ULL);
+  pcr_pkt(pkt, 0x101, 1, 27000000ULL + 1080000ULL, 0);
+  tsinspect_grid(t, pkt, 188);
+  ck_assert_uint_eq(tsinspect_counters(t)->pcr_accuracy_errors, 0u);
+  tsinspect_free(t);
+}
+END_TEST
+
+START_TEST(reserved_adaptation_field_control_skips_continuity_checks) {
+  tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  unsigned char p[188];
+
+  for (unsigned cc = 0; cc < 3; cc++) {
+    make_pkt(p, 0x100, 0, cc * 5);
+    tsinspect_packet(t, p);
+  }
+  ck_assert_uint_eq(tsinspect_counters(t)->packets, 3u);
+  ck_assert_uint_eq(tsinspect_counters(t)->continuity_errors, 0u);
+  tsinspect_free(t);
+}
+END_TEST
+
+static void pes_pkt_adapt(unsigned char *pkt, unsigned pid, uint64_t pts, unsigned adapt_len, unsigned flags, unsigned start_code_byte) {
+  size_t off = 5 + adapt_len;
+
+  memset(pkt, 0xFF, 188);
+  pkt[0] = 0x47;
+  pkt[1] = (unsigned char)(0x40 | (pid >> 8));
+  pkt[2] = (unsigned char)pid;
+  pkt[3] = 0x30;
+  pkt[4] = (unsigned char)adapt_len;
+  pkt[5] = 0;
+  if (off + 9 + 5 > 188) return;
+  pkt[off] = 0;
+  pkt[off + 1] = 0;
+  pkt[off + 2] = (unsigned char)start_code_byte;
+  pkt[off + 3] = 0xE0;
+  pkt[off + 4] = 0;
+  pkt[off + 5] = 0;
+  pkt[off + 6] = 0x80;
+  pkt[off + 7] = (unsigned char)flags;
+  pkt[off + 8] = 5;
+  ts33(pkt + off + 9, 2, pts);
+}
+
+static tsinspect_t *full_with_pcr(psi_t *psi) {
+  tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_FULL);
+  unsigned char sec[128];
+  unsigned char pkt[188];
+  size_t len;
+
+  tsinspect_bind_psi(t, psi);
+  tsinspect_tick(t, 1.0);
+  len = build_pat(sec, 0, 1, 0x100);
+  section_pkt(pkt, 0, sec, len);
+  feed_psi(t, psi, pkt);
+  len = build_pmt(sec, 0, 1, 0x101, 0x101);
+  section_pkt(pkt, 0x100, sec, len);
+  feed_psi(t, psi, pkt);
+  tsinspect_tick(t, 1.05);
+  pcr_pkt(pkt, 0x101, 0, 10ULL * 27000000ULL, 0);
+  tsinspect_packet(t, pkt);
+  make_pkt(pkt, 0x1FFF, 1, 0);
+  for (int k = 0; k < 99; k++) tsinspect_packet(t, pkt);
+  pcr_pkt(pkt, 0x101, 1, 10ULL * 27000000ULL + 1080000ULL, 0);
+  tsinspect_packet(t, pkt);
+  return t;
+}
+
+START_TEST(lead_uses_pts_when_the_dts_does_not_fit_in_the_packet) {
+  psi_t *psi = psi_new();
+  tsinspect_t *t = full_with_pcr(psi);
+  unsigned char pkt[188];
+  int64_t lead = 0;
+
+  pes_pkt_adapt(pkt, 0x101, 10 * 90000ULL + 3600 + 45000, 166, 0xC0, 1);
+  tsinspect_packet(t, pkt);
+  tsinspect_tick(t, 1.4);
+  ck_assert(find_signed(t, METRICS_ID_TS_DTS_PCR_LEAD_MICROSECONDS, &lead));
+  ck_assert_int_ge(lead, 498000);
+  ck_assert_int_le(lead, 500000);
+  psi_free(psi);
+  tsinspect_free(t);
+}
+END_TEST
+
+typedef struct {
+  const char *name;
+  unsigned adapt_len;
+  unsigned flags;
+  unsigned start_code_byte;
+} bad_pes_case_t;
+
+static const bad_pes_case_t bad_pes_cases[] = {
+  {"payload too short for a PES header", 170, 0x80, 1},
+  {"no start code", 0, 0x80, 2},
+  {"no PTS flag", 0, 0x00, 1},
+};
+
+START_TEST(lead_ignores_packets_that_are_not_pes_with_a_pts) {
+  const bad_pes_case_t *c = &bad_pes_cases[_i];
+  psi_t *psi = psi_new();
+  tsinspect_t *t = full_with_pcr(psi);
+  unsigned char pkt[188];
+  int64_t lead = 0;
+
+  pes_pkt_adapt(pkt, 0x101, 10 * 90000ULL + 3600 + 45000, c->adapt_len, c->flags, c->start_code_byte);
+  tsinspect_packet(t, pkt);
+  tsinspect_tick(t, 1.4);
+  ck_assert_msg(!find_signed(t, METRICS_ID_TS_DTS_PCR_LEAD_MICROSECONDS, &lead), "%s: lead reported", c->name);
+  psi_free(psi);
+  tsinspect_free(t);
+}
+END_TEST
+
+static unsigned eit_run(unsigned tid, unsigned second_secno, size_t extra, int refresh_second) {
+  tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  unsigned char sec[64];
+  unsigned char pkt[188];
+  size_t len;
+  unsigned errors;
+
+  tsinspect_tick(t, 1.0);
+  for (int round = 0; round < 2; round++) {
+    len = build_si(sec, tid, 0x1234, 0, extra);
+    section_pkt(pkt, 0x12, sec, len);
+    tsinspect_packet(t, pkt);
+    if (round == 0 || refresh_second) {
+      len = build_si(sec, tid, 0x1234, second_secno, extra);
+      section_pkt(pkt, 0x12, sec, len);
+      tsinspect_packet(t, pkt);
+    }
+    tsinspect_tick(t, round == 0 ? 2.5 : 3.5);
+  }
+  tsinspect_tick(t, 4.0);
+  errors = tsinspect_counters(t)->eit_errors;
+  tsinspect_free(t);
+  return errors;
+}
+
+START_TEST(eit_sections_beyond_the_pf_pair_and_short_sections_are_not_tracked) {
+  ck_assert_uint_eq(eit_run(0x4E, 1, 6, 1), 0u);
+  ck_assert_uint_ge(eit_run(0x4E, 2, 6, 1), 1u);
+  ck_assert_uint_eq(eit_run(0x4E, 1, 0, 1), 0u);
+}
+END_TEST
+
+START_TEST(short_other_eit_sections_are_not_tracked) {
+  tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  unsigned char sec[64];
+  unsigned char pkt[188];
+  size_t len = build_si(sec, 0x4F, 0x1234, 0, 0);
+
+  tsinspect_tick(t, 1.0);
+  tsinspect_tick(t, 30.0);
+  section_pkt(pkt, 0x12, sec, len);
+  tsinspect_packet(t, pkt);
+  tsinspect_tick(t, 35.0);
+  tsinspect_tick(t, 41.0);
+  ck_assert_uint_eq(tsinspect_counters(t)->eit_other_errors, 0u);
+  tsinspect_free(t);
+}
+END_TEST
+
+START_TEST(tot_crc_is_checked_from_medium_only) {
+  tsinspect_t *basic = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  tsinspect_t *medium = tsinspect_new(METRICS_INSPECT_TS_MEDIUM);
+  unsigned char sec[64];
+  unsigned char pkt[188];
+  size_t len = build_si(sec, 0x73, 0, 0, 0);
+
+  sec[len - 1] ^= 0xFF;
+  section_pkt(pkt, 0x14, sec, len);
+  tsinspect_packet(basic, pkt);
+  tsinspect_packet(medium, pkt);
+  ck_assert_uint_eq(tsinspect_counters(basic)->si_crc_errors, 0u);
+  ck_assert_uint_eq(tsinspect_counters(medium)->si_crc_errors, 1u);
+  tsinspect_free(basic);
+  tsinspect_free(medium);
+}
+END_TEST
+
+START_TEST(si_packet_whose_adaptation_field_fills_it_is_ignored) {
+  tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  unsigned char pkt[188];
+
+  make_pkt(pkt, 0x12, 3, 0);
+  pkt[4] = 183;
+  pkt[1] |= 0x40;
+  tsinspect_packet(t, pkt);
+  ck_assert_uint_eq(tsinspect_counters(t)->packets, 1u);
+  ck_assert_uint_eq(tsinspect_counters(t)->eit_errors, 0u);
+  tsinspect_free(t);
+}
+END_TEST
+
 static Suite *inspect_suite(void) {
   Suite *s = suite_create("tsinspect");
   TCase *tc = tcase_create("core");
@@ -1636,6 +1860,15 @@ static Suite *inspect_suite(void) {
   tcase_add_test(tc, set_put_with_empty_set_writes_no_stream_series);
   tcase_add_test(tc, agg_put_cb_writes_aggregate_as_input0);
   tcase_add_test(tc, agg_put_cb_with_null_aggregate_writes_nothing);
+  tcase_add_test(tc, pcr_pid_packets_without_a_pcr_are_ignored);
+  tcase_add_test(tc, pcr_accuracy_skips_arrival_times_that_go_backwards);
+  tcase_add_test(tc, reserved_adaptation_field_control_skips_continuity_checks);
+  tcase_add_test(tc, lead_uses_pts_when_the_dts_does_not_fit_in_the_packet);
+  tcase_add_loop_test(tc, lead_ignores_packets_that_are_not_pes_with_a_pts, 0, (int)(sizeof bad_pes_cases / sizeof bad_pes_cases[0]));
+  tcase_add_test(tc, eit_sections_beyond_the_pf_pair_and_short_sections_are_not_tracked);
+  tcase_add_test(tc, short_other_eit_sections_are_not_tracked);
+  tcase_add_test(tc, tot_crc_is_checked_from_medium_only);
+  tcase_add_test(tc, si_packet_whose_adaptation_field_fills_it_is_ignored);
   suite_add_tcase(s, tc);
   return s;
 }

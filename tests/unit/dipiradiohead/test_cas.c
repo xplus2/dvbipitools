@@ -11,6 +11,8 @@
 #include <unistd.h>
 
 #include "dipiradiohead/cas/cas.h"
+#include "lib/scrambler/cissa.h"
+#include "lib/scrambler/csa2.h"
 
 START_TEST(ninetyk_to_ms_exact_multiple) {
   uint64_t rem = 0;
@@ -82,6 +84,22 @@ static void init_cas_cfg(config_t *cfg, unsigned n_vendors) {
   }
 }
 
+static int csa2_usable(void) {
+  unsigned char cw[CSA2_CW_LEN] = {0};
+  csa2_key_t *k = csa2_key_new(cw);
+
+  csa2_key_free(k);
+  return k != NULL;
+}
+
+static int cissa_usable(void) {
+  unsigned char cw[CISSA_CW_LEN] = {0};
+  cissa_key_t *k = cissa_key_new(cw);
+
+  cissa_key_free(k);
+  return k != NULL;
+}
+
 typedef struct {
   const char *name;
   unsigned n_vendors;
@@ -111,7 +129,7 @@ START_TEST(cas_start_dispatches_each_mode_and_round_trips) {
   cfg.biss2_ca_enabled = c->biss2_ca;
   cfg.biss2_ca_receivers_dir = "/nonexistent/receivers";
   cas = cas_start(&cfg, pids, 2);
-  if (!c->started) {
+  if (!c->started || (c->biss1 && !csa2_usable()) || (c->biss2 && !cissa_usable())) {
     ck_assert_msg(cas == NULL, "%s: started", c->name);
     return;
   }
@@ -176,6 +194,10 @@ START_TEST(clock_tick_is_safe_for_every_engine_and_clock_step) {
   init_cas_cfg(&cfg, 0);
   cfg.biss1_enabled = 1;
   c = cas_start(&cfg, pids, 1);
+  if (!csa2_usable()) {
+    ck_assert_ptr_null(c);
+    return;
+  }
   ck_assert_ptr_nonnull(c);
   cas_clock_tick(c, 90000);
   cas_clock_tick(c, 180000);

@@ -84,11 +84,13 @@ void cas_scramble_engine_stop(cas_scramble_engine_t *e) {
   free(e);
 }
 
-void cas_scramble_engine_set_cw(cas_scramble_engine_t *e, int parity, const unsigned char *cw, size_t len, scrambler_emit_cb emit, void *ctx) {
-  if (parity != SCRAMBLE_PARITY_EVEN && parity != SCRAMBLE_PARITY_ODD) return;
+int cas_scramble_engine_set_cw(cas_scramble_engine_t *e, int parity, const unsigned char *cw, size_t len, scrambler_emit_cb emit, void *ctx) {
+  if (parity != SCRAMBLE_PARITY_EVEN && parity != SCRAMBLE_PARITY_ODD) return -1;
+  e->cw_cache_len[parity] = 0;
+  if (!len) return 0;
+  if (scrambler_set_key(e->scr, parity, cw, len, emit, ctx) != 0) return -1;
   e->cw_cache_len[parity] = len;
-  if (len)
-    scrambler_set_key(e->scr, parity, cw, len, emit, ctx);
+  return 0;
 }
 
 void cas_scramble_engine_scramble_packet(cas_scramble_engine_t *e, unsigned out_pid, int have_source, int have_target, int target_parity, int cw_valid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx) {

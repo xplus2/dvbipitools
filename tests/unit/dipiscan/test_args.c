@@ -265,6 +265,26 @@ START_TEST(range_describe_truncates_to_buffer) {
 }
 END_TEST
 
+START_TEST(config_strict_option_rejects_unknown_keys) {
+  cfg_fixture_t fx;
+  char *strict_argv[] = {"dipiscan", "--config-strict", "-c", NULL, "-m", "239.1.2.3"};
+  char *lenient_argv[] = {"dipiscan", "-c", NULL, "-m", "239.1.2.3"};
+  char *test_argv[] = {"dipiscan", "--configtest", "--config-strict", "-c", NULL};
+  config_t cfg;
+
+  cfg_fixture_write(&fx, "bogus-key: 1\n");
+  strict_argv[3] = fx.path;
+  lenient_argv[2] = fx.path;
+  test_argv[4] = fx.path;
+  ck_assert_int_eq(args_parse(6, strict_argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+  ck_assert_int_eq(args_parse(5, lenient_argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+  ck_assert_int_eq(args_parse(5, test_argv, &cfg), ARGS_ERR);
+  cfg_fixture_remove(&fx);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipiscan_args");
   TCase *tc = tcase_create("core");
@@ -278,6 +298,7 @@ static Suite *args_suite(void) {
   tcase_add_loop_test(tc, http_path_template_validation, 0, (int)(sizeof tmpl_cases / sizeof tmpl_cases[0]));
   tcase_add_loop_test(tc, range_describe_formats_start_and_end, 0, (int)(sizeof range_cases / sizeof range_cases[0]));
   tcase_add_test(tc, range_describe_truncates_to_buffer);
+  tcase_add_test(tc, config_strict_option_rejects_unknown_keys);
   suite_add_tcase(s, tc);
   return s;
 }

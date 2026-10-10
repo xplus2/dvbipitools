@@ -244,6 +244,33 @@ START_TEST(configtest_reports_by_exit_status) {
 }
 END_TEST
 
+START_TEST(invalid_metrics_interval_is_rejected) {
+  char *argv[] = {"dipicam378", "-k", "device.key", "--metrics-id", "inst1", "--metrics-interval", "abc", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(config_strict_option_rejects_unknown_keys) {
+  char path[] = "/tmp/dipicam378_cfg_XXXXXX";
+  char *strict_argv[] = {"dipicam378", "--config-strict", "-c", path, "-k", "device.key", NULL};
+  char *lenient_argv[] = {"dipicam378", "-c", path, "-k", "device.key", NULL};
+  char *test_argv[] = {"dipicam378", "--configtest", "--config-strict", "-c", path, NULL};
+  config_t cfg = {0};
+  write_cfg(path, "bogus: 1\n");
+  ck_assert_int_eq(args_parse(ARGC(strict_argv), strict_argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+  cfg = (config_t){0};
+  ck_assert_int_eq(args_parse(ARGC(lenient_argv), lenient_argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+  cfg = (config_t){0};
+  ck_assert_int_eq(args_parse(ARGC(test_argv), test_argv, &cfg), ARGS_ERR);
+  unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipicam378_args");
   TCase *tc = tcase_create("core");
@@ -270,6 +297,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, config_missing_file_is_error);
   tcase_add_test(tc, config_invalid_value_is_error);
   tcase_add_test(tc, configtest_reports_by_exit_status);
+  tcase_add_test(tc, invalid_metrics_interval_is_rejected);
+  tcase_add_test(tc, config_strict_option_rejects_unknown_keys);
   suite_add_tcase(s, tc);
   return s;
 }

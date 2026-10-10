@@ -194,8 +194,14 @@ biss_ca_engine_t *biss_ca_engine_start(const biss_ca_engine_cfg_t *cfg) {
     free(e);
     return NULL;
   }
-  cas_scramble_engine_set_cw(e->scr, SCRAMBLE_PARITY_EVEN, e->sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN, NULL, NULL);
-  cas_scramble_engine_set_cw(e->scr, SCRAMBLE_PARITY_ODD, e->sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN, NULL, NULL);
+  if (cas_scramble_engine_set_cw(e->scr, SCRAMBLE_PARITY_EVEN, e->sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN, NULL, NULL) != 0 ||
+      cas_scramble_engine_set_cw(e->scr, SCRAMBLE_PARITY_ODD, e->sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN, NULL, NULL) != 0) {
+    log_line("biss-ca: initial key rejected by the scrambler, not starting");
+    cas_scramble_engine_stop(e->scr);
+    set_free(&e->receivers);
+    free(e);
+    return NULL;
+  }
   e->ecm_dirty = 1;
   e->emm_dirty = 1;
 

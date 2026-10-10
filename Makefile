@@ -876,6 +876,7 @@ dipifccret_SRCS := \
 	src/dipifccret/run/pacer.c \
 	src/dipifccret/run/rsi.c \
 	src/dipifccret/run/metrics.c \
+	src/dipifccret/run/serve.c \
 	src/dipifccret/cli/args.c \
 	src/dipifccret/cli/check.c \
 	src/dipifccret/cli/help.c \
@@ -4121,6 +4122,14 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
 	src/lib/helper/log.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/esbuild/tspacketize.c \
 	src/lib/sys/signal.c
 
 dipiradiohead_mpts_BIN := tests/unit/dipiradiohead/test_mpts
@@ -6563,6 +6572,14 @@ dipifccret_capture_SRCS := \
 	src/lib/sys/ioutil.c \
 	src/lib/sys/signal.c
 
+UNIT_TESTS += dipifccret_serve
+dipifccret_serve_BIN := tests/unit/dipifccret/test_serve
+dipifccret_serve_SRCS := \
+	tests/unit/dipifccret/test_serve.c \
+	$(filter-out src/dipifccret/main.c,$(dipifccret_SRCS))
+dipifccret_serve_EXTRA_CFLAGS := -pthread
+dipifccret_serve_EXTRA_LDFLAGS := -pthread -latomic
+
 UNIT_TESTS += dipixy_args dipixy_config dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_status dipixy_htdocs dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_ssdp dipixy_conn dipixy_conn_concurrency dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_segstore_reclaim dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
@@ -7525,6 +7542,11 @@ endef
 $(foreach t,$(UNIT_TESTS),$(eval $(call UNIT_TEST_template,$(t))))
 
 TEST_BINS := $(foreach t,$(UNIT_TESTS),$($(t)_BIN))
+
+.PHONY: coverage
+coverage:
+	mkdir -p coverage
+	gcovr $(GCOVR_FLAGS) --json-summary coverage/src-novendor.json --txt coverage/src-novendor.txt
 
 .PHONY: test
 ifeq ($(TESTS),yes)

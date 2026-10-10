@@ -3,12 +3,15 @@
 
 #include <check.h>
 #include <poll.h>
+#include <sys/socket.h>
+#include <signal.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "lib/sys/ioutil.h"
+#include "lib/sys/signal.h"
 
 #include "dipiradiohead/radiohead/priv.h"
 #include "input/http_fixture.h"
@@ -308,6 +311,63 @@ START_TEST(framing_failure_marks_the_input_down_and_counts_the_error) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  int cas;
+  int cas_bad;
+  int mcast_bad;
+  int inspect;
+  int want_rc;
+} run_case_t;
+
+static const run_case_t run_cases[] = {
+  {"plain output", 0, 0, 0, 0, 0},
+  {"inspectors enabled", 0, 0, 0, 1, 0},
+  {"own cas", 1, 0, 0, 0, 0},
+  {"cas that cannot start", 1, 1, 0, 0, 1},
+  {"multicast target that cannot open", 0, 0, 1, 0, 1},
+};
+
+START_TEST(run_mpts_sets_up_and_tears_down_for_each_configuration) {
+  const run_case_t *c = &run_cases[_i];
+  static config_t cfg;
+  metrics_exporter_t mx;
+  int rc;
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.n_inputs = 2;
+  cfg.tsid = 1;
+  cfg.onid = 1;
+  for (unsigned i = 0; i < 2; i++) {
+    cfg.inputs[i].sid = i + 1;
+    cfg.inputs[i].uri = "http://127.0.0.1:1/stream";
+    bufcpy(cfg.inputs[i].sdt_text, sizeof cfg.inputs[i].sdt_text, "Svc");
+  }
+  if (c->inspect) cfg.metrics_inspect_ts = METRICS_INSPECT_TS_BASIC;
+  if (c->cas) {
+    cfg.cas_algo = CAS_ALGO_CSA2;
+    cfg.cas_cp_duration_ms = c->cas_bad ? 0 : 10000;
+    cfg.n_cas_vendors = 1;
+    bufcpy(cfg.cas_vendors[0].ecmg_host, sizeof cfg.cas_vendors[0].ecmg_host, "127.0.0.1");
+    cfg.cas_vendors[0].ecmg_port = 1;
+    cfg.cas_vendors[0].super_cas_id = (0x4A75u << 16) | 1u;
+    cfg.cas_vendors[0].ecm_id = 1;
+    cfg.cas_vendors[0].ecm_pid = 0x1FF0;
+    cfg.cas_vendors[0].emm_pid = 0x1FF1;
+  }
+  if (c->mcast_bad) {
+    cfg.family = AF_INET;
+    bufcpy(cfg.mcast_group, sizeof cfg.mcast_group, "not-an-address");
+    cfg.mcast_port = 5000;
+  }
+  metrics_exporter_init(&mx, METRICS_COMPONENT_RADIOHEAD, NULL, NULL, 0.0);
+  signals_install();
+  raise(SIGTERM);
+  rc = radiohead_run_mpts(&cfg, &mx);
+  ck_assert_msg(rc == c->want_rc, "%s: rc %d", c->name, rc);
+}
+END_TEST
+
 static Suite *mpts_suite(void) {
   Suite *s = suite_create("dipiradiohead_mpts");
   TCase *tc = tcase_create("core");
@@ -319,6 +379,7 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, codec_change_on_an_existing_program_updates_the_packetizer);
   tcase_add_test(tc, pacing_deadline_ahead_of_the_clock_defers_all_frames);
   tcase_add_test(tc, framing_failure_marks_the_input_down_and_counts_the_error);
+  tcase_add_loop_test(tc, run_mpts_sets_up_and_tears_down_for_each_configuration, 0, (int)(sizeof run_cases / sizeof run_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }
