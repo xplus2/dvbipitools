@@ -62,7 +62,7 @@ void bitrate_account_n(bitrate_pacer_t *p, unsigned n) {
   now = mono_seconds();
   ahead_s = ((double)p->bits_sent - (now - p->start) * p->target_bps) / p->target_bps;
   if (ahead_s > OVERAGE_THRESHOLD_S && (p->last_overage_log < 0.0 || now - p->last_overage_log >= OVERAGE_LOG_COOLDOWN_S)) {
-    log_line("bitrate: content exceeds -b target by >%.0fs of backlog, not corrected (pass -B to throttle)", OVERAGE_THRESHOLD_S);
+    log_code("TW700142", "bitrate: content exceeds -b target by >%.0fs of backlog, not corrected (pass -B to throttle)", OVERAGE_THRESHOLD_S);
     p->last_overage_log = now;
   }
 }

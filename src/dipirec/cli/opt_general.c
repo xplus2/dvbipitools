@@ -22,47 +22,47 @@ args_status_t rec_opt_general(rec_opt_t *p, int c) {
         p->cli_out = 1;
       }
       if (cfg->n_out >= DIPIREC_MAX_OUT) {
-        argerr("too many -o targets (max %d)", DIPIREC_MAX_OUT);
+        argerr("CS000351", "too many -o targets (max %d)", DIPIREC_MAX_OUT);
         return ARGS_ERR;
       }
       if (rec_cfg_add_out(cfg, optarg)) {
-        argerr("invalid -o target: %s", optarg);
+        argerr("CS000352", "invalid -o target: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case 'i':
       if (rec_cfg_set_in(cfg, optarg)) {
-        argerr("invalid -i uri: %s", optarg);
+        argerr("CS000546", "invalid -i uri: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case 'a':
       if (rec_cfg_audio(cfg, optarg)) {
-        argerr("invalid -a track: %s (1..N or \"all\")", optarg);
+        argerr("CS000547", "invalid -a track: %s (1..N or \"all\")", optarg);
         return ARGS_ERR;
       }
       break;
     case 'f':
       if (rec_cfg_format(cfg, optarg)) {
-        argerr("invalid -f format: %s (raw|ts|mkv|mka|mp4|m4a)", optarg);
+        argerr("CS000548", "invalid -f format: %s (raw|ts|mkv|mka|mp4|m4a)", optarg);
         return ARGS_ERR;
       }
       break;
     case 'p':
       if (rec_cfg_pmt(cfg, optarg)) {
-        argerr("invalid -p pmt-pid: %s (0x0010..0x1FFE, or \"all\")", optarg);
+        argerr("CS000354", "invalid -p pmt-pid: %s (0x0010..0x1FFE, or \"all\")", optarg);
         return ARGS_ERR;
       }
       break;
     case 's':
       if (rec_cfg_subs(cfg, optarg)) {
-        argerr("invalid -s: %s (strip|keep|srt)", optarg);
+        argerr("CS000549", "invalid -s: %s (strip|keep|srt)", optarg);
         return ARGS_ERR;
       }
       break;
     case 't':
       if (rec_cfg_time(cfg, optarg)) {
-        argerr("invalid -t duration: %s", optarg);
+        argerr("CS000550", "invalid -t duration: %s", optarg);
         return ARGS_ERR;
       }
       break;
@@ -72,7 +72,7 @@ args_status_t rec_opt_general(rec_opt_t *p, int c) {
     case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {
-        argerr("invalid --color: %s (auto|always|never)", optarg);
+        argerr("CS000105", "invalid --color: %s (auto|always|never)", optarg);
         return ARGS_ERR;
       }
       cfg->color_mode = v;
@@ -81,7 +81,7 @@ args_status_t rec_opt_general(rec_opt_t *p, int c) {
     case OPT_SUB_LEAD: {
       unsigned v;
       if (argutil_uint_range(optarg, 0, 10000, &v)) {
-        argerr("invalid --sub-lead: %s (0..10000 ms)", optarg);
+        argerr("CS000551", "invalid --sub-lead: %s (0..10000 ms)", optarg);
         return ARGS_ERR;
       }
       cfg->sub_lead_ms = (long)v;

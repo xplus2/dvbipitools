@@ -27,7 +27,7 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
     case 'p':
       REQUIRE_INPUT("-p/--pmt-pid");
       if (tvh_cfg_pid(optarg, &in->pmt_pid) || in->pmt_pid == 0) {
-        argerr("invalid -p pmt-pid: %s (0x0010..0x1FFE)", optarg);
+        argerr("TS000604", "invalid -p pmt-pid: %s (0x0010..0x1FFE)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -57,7 +57,7 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
     case OPT_STRIP:
       REQUIRE_INPUT("--strip");
       if (tvh_cfg_strip(&in->strip_mask, optarg)) {
-        argerr("invalid --strip: %s (comma list of DATA,ECM, or \"none\")", optarg);
+        argerr("TS000605", "invalid --strip: %s (comma list of DATA,ECM, or \"none\")", optarg);
         return ARGS_ERR;
       }
       break;
@@ -68,28 +68,28 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
     case OPT_HBBTV_ORG_ID:
       REQUIRE_INPUT("--hbbtv-org-id");
       if (tvh_org_id_parse(optarg, &in->hbbtv_org_id)) {
-        argerr("invalid --hbbtv-org-id: %s", optarg);
+        argerr("TS000606", "invalid --hbbtv-org-id: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_HBBTV_APP_ID:
       REQUIRE_INPUT("--hbbtv-app-id");
       if (tvh_id_parse(optarg, &in->hbbtv_app_id)) {
-        argerr("invalid --hbbtv-app-id: %s", optarg);
+        argerr("TS000607", "invalid --hbbtv-app-id: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_SID:
       REQUIRE_INPUT("--sid");
       if (tvh_id_parse(optarg, &in->sid)) {
-        argerr("invalid --sid: %s (1..65535)", optarg);
+        argerr("TS000502", "invalid --sid: %s (1..65535)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_RIST_ENCRYPTION_TYPE_IN:
       REQUIRE_INPUT("--rist-encryption-type-in");
       if (argutil_rist_key_size(optarg, &in->rist_key_size_in)) {
-        argerr("invalid --rist-encryption-type-in: %s (128|256)", optarg);
+        argerr("TS000552", "invalid --rist-encryption-type-in: %s (128|256)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -98,7 +98,7 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
       int v;
       REQUIRE_INPUT("--rist-profile-in");
       if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-        argerr("invalid --rist-profile-in: %s (simple|main)", optarg);
+        argerr("TS000553", "invalid --rist-profile-in: %s (simple|main)", optarg);
         return ARGS_ERR;
       }
       in->rist_profile_main = v;
@@ -115,7 +115,7 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
       REQUIRE_INPUT("--srt-pbkeylen-in");
       v = strtoul(optarg, &end, 10);
       if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
-        argerr("invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
+        argerr("TS000359", "invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
         return ARGS_ERR;
       }
       in->srt_pbkeylen_in = (int)v;
@@ -134,14 +134,14 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
     case OPT_SRT_LATENCY_IN:
       REQUIRE_INPUT("--srt-latency-in");
       if (argutil_uint_range(optarg, 1, 60000, &in->srt_latency_in_ms)) {
-        argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);
+        argerr("TS000360", "invalid --srt-latency-in: %s (1..60000 ms)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_JITTER_MS:
       REQUIRE_INPUT("--jitter-ms");
       if (argutil_uint_range(optarg, 1, JITBUF_MAX_DELAY_MS, &in->jitter_ms)) {
-        argerr("invalid --jitter-ms: %s (1..%d ms)", optarg, JITBUF_MAX_DELAY_MS);
+        argerr("TS000504", "invalid --jitter-ms: %s (1..%d ms)", optarg, JITBUF_MAX_DELAY_MS);
         return ARGS_ERR;
       }
       break;

@@ -251,7 +251,7 @@ int capture_pump_tick(int pid, void (*sink)(capture_ctx_t *ctx, void *user, cons
     t.user = user;
     t.count = &total;
     if (capture_drain(snap_pin[i], pump_trampoline, &t) < 0)
-      log_throttled(&snap_pin[i]->drain_err_throttle, LOG_THROTTLE_WINDOW_S, "capture: source read error");
+      log_throttled(&snap_pin[i]->drain_err_throttle, LOG_THROTTLE_WINDOW_S, "YE000672", "capture: source read error");
   }
   for (i = 0; i < n; i++) pump_release_pin(snap_pin[i]);
   qsbr_worker_quiescent(g_pump_qsbr, pid);

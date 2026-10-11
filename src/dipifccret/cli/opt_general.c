@@ -20,13 +20,13 @@ args_status_t fccret_opt_general(fccret_opt_t *p, int c) {
   switch (c) {
     case 'g':
       if (fccret_cfg_range(cfg, optarg)) {
-        argerr("invalid -g range: %s", optarg);
+        argerr("FS000450", "invalid -g range: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case 'l':
       if (argutil_addrport_parse(optarg, &cfg->listen_family, cfg->listen_addr, sizeof cfg->listen_addr, &cfg->listen_port)) {
-        argerr("invalid -l addr:port: %s", optarg);
+        argerr("FS000135", "invalid -l addr:port: %s", optarg);
         return ARGS_ERR;
       }
       break;
@@ -36,7 +36,7 @@ args_status_t fccret_opt_general(fccret_opt_t *p, int c) {
     case 'M': {
       unsigned v;
       if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
-        argerr("invalid -M max-channels: %s", optarg);
+        argerr("FS000451", "invalid -M max-channels: %s", optarg);
         return ARGS_ERR;
       }
       cfg->max_channels = (size_t)v;
@@ -44,14 +44,14 @@ args_status_t fccret_opt_general(fccret_opt_t *p, int c) {
     }
     case OPT_CHANNEL_IDLE_TIMEOUT:
       if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->channel_idle_timeout_s)) {
-        argerr("invalid --channel-idle-timeout: %s (s)", optarg);
+        argerr("FS000452", "invalid --channel-idle-timeout: %s (s)", optarg);
         return ARGS_ERR;
       }
       break;
     case 'R': {
       unsigned v;
       if (argutil_uint_range(optarg, 0, 127, &v)) {
-        argerr("invalid -R rtx-pt: %s (0..127)", optarg);
+        argerr("FS000453", "invalid -R rtx-pt: %s (0..127)", optarg);
         return ARGS_ERR;
       }
       cfg->rtx_pt = (unsigned char)v;
@@ -59,13 +59,13 @@ args_status_t fccret_opt_general(fccret_opt_t *p, int c) {
     }
     case 'w':
       if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->workers)) {
-        argerr("invalid -w workers: %s", optarg);
+        argerr("FS000454", "invalid -w workers: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_CPU_AFFINITY:
       if (cpuaff_parse(&cfg->cpu_affinity, optarg)) {
-        argerr("invalid --cpu-affinity: %s (off, auto, or list like 2-5,8)", optarg);
+        argerr("FS000455", "invalid --cpu-affinity: %s (off, auto, or list like 2-5,8)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -81,7 +81,7 @@ args_status_t fccret_opt_general(fccret_opt_t *p, int c) {
     case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {
-        argerr("invalid --color: %s (auto|always|never)", optarg);
+        argerr("FS000105", "invalid --color: %s (auto|always|never)", optarg);
         return ARGS_ERR;
       }
       cfg->color_mode = v;

@@ -36,7 +36,7 @@ int yamlcfg_load(yamlcfg_t *y, const char *tool, int mode, const char *path, con
 
 int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int mode, const char *path, const char *default_path, const yamlcfg_key_t *keys, size_t nkeys, void *cfg, yamlcfg_item_fn item);
 
-void yamlcfg_warn(yamlcfg_t *y, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+void yamlcfg_warn(yamlcfg_t *y, const char *code, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
 
 int yamlcfg_report(const yamlcfg_t *y);
 

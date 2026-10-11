@@ -18,7 +18,7 @@ void cb_rand(uint8_t *dest, size_t destlen, const ngtcp2_rand_ctx *ctx) {
   if (RAND_bytes(dest, (int)destlen) == 1) return;
   memset(dest, 0, destlen);
   if (!logged) {
-    log_line("http3: RAND_bytes failed");
+    log_code("YE300169", "http3: RAND_bytes failed");
     logged = 1;
   }
 }

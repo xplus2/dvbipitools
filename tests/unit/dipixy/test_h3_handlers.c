@@ -19,7 +19,7 @@
 static const char *park_path(void) {
   static char path[96];
 
-  snprintf(path, sizeof path, "/udp/%s:%u/hls", PARK_GROUP, PARK_PORT);
+  snprintf(path, sizeof path, "/udp/%.31s:%u/hls", PARK_GROUP, PARK_PORT);
   return path;
 }
 #define WS_PATH "/ui/ws/"
@@ -181,7 +181,7 @@ START_TEST(cold_waiter_is_answered_when_its_deadline_passes) {
   char path[96];
 
   h3r_open(&h);
-  snprintf(path, sizeof path, "/udp/%s:%u/%s", PARK_GROUP, PARK_PORT, cc->route);
+  snprintf(path, sizeof path, "/udp/%.31s:%u/%s", PARK_GROUP, PARK_PORT, cc->route);
   sid = parked_request(&h, path);
   ck_assert_int_eq(h3r_resp_for(&h, sid)->status, 0);
   for (int waited = 0; waited < COLD_WAIT_MS && !h3r_cond_ended(&h, &sid); waited += SETTLE_MS) {

@@ -660,7 +660,7 @@ END_TEST
 #define LIVE_SLOT 41
 
 static void live_path(char *out, size_t cap, const char *suffix) {
-  snprintf(out, cap, "/udp/%s:%u%s", run_helper_group_n(LIVE_SLOT), run_helper_port(LIVE_SLOT), suffix);
+  snprintf(out, cap, "/udp/%.31s:%u%s", run_helper_group_n(LIVE_SLOT), run_helper_port(LIVE_SLOT), suffix);
 }
 
 START_TEST(head_on_a_live_source_answers_headers_for_stream_formats) {

@@ -31,7 +31,7 @@ args_status_t tvh_opt_general(tvh_opt_t *p, int c) {
       break;
     case 'b':
       if (argutil_uint_range(optarg, 1, 1000000, &cfg->bitrate_kbps)) {
-        argerr("invalid -b bitrate: %s (kbps)", optarg);
+        argerr("TS000603", "invalid -b bitrate: %s (kbps)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -50,7 +50,7 @@ args_status_t tvh_opt_general(tvh_opt_t *p, int c) {
     case 'e': {
       unsigned v;
       if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
-        argerr("invalid -e seconds: %s", optarg);
+        argerr("TS000498", "invalid -e seconds: %s", optarg);
         return ARGS_ERR;
       }
       cfg->error_retry_s = (long)v;
@@ -61,20 +61,20 @@ args_status_t tvh_opt_general(tvh_opt_t *p, int c) {
       break;
     case OPT_TSID:
       if (tvh_id_parse(optarg, &cfg->tsid)) {
-        argerr("invalid --tsid: %s (1..65535)", optarg);
+        argerr("TS000499", "invalid --tsid: %s (1..65535)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_ONID:
       if (tvh_id_parse(optarg, &cfg->onid)) {
-        argerr("invalid --onid: %s (1..65535)", optarg);
+        argerr("TS000500", "invalid --onid: %s (1..65535)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {
-        argerr("invalid --color: %s (auto|always|never)", optarg);
+        argerr("TS000105", "invalid --color: %s (auto|always|never)", optarg);
         return ARGS_ERR;
       }
       cfg->color_mode = v;

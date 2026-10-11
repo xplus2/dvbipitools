@@ -34,7 +34,7 @@ args_status_t rec_opt_srt(rec_opt_t *p, int c) {
       break;
     case OPT_SRT_LATENCY_IN:
       if (argutil_uint_range(optarg, 1, 60000, &cfg->srt_latency_in_ms)) {
-        argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);
+        argerr("CS000360", "invalid --srt-latency-in: %s (1..60000 ms)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -56,7 +56,7 @@ args_status_t rec_opt_srt(rec_opt_t *p, int c) {
       break;
     case OPT_SRT_LATENCY:
       if (argutil_uint_range(optarg, 1, 60000, &cfg->srt_latency_ms)) {
-        argerr("invalid --srt-latency: %s (1..60000 ms)", optarg);
+        argerr("CS000362", "invalid --srt-latency: %s (1..60000 ms)", optarg);
         return ARGS_ERR;
       }
       break;

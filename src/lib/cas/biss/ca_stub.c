@@ -7,27 +7,27 @@
 
 biss_ca_key_t *biss_ca_key_load_public_file(const char *pem_path) {
   (void)pem_path;
-  log_line("biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
+  log_code("LA300124", "biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
   return NULL;
 }
 
 biss_ca_key_t *biss_ca_key_load_private_file(const char *pem_path) {
   (void)pem_path;
-  log_line("biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
+  log_code("LA300124", "biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
   return NULL;
 }
 
 biss_ca_key_t *biss_ca_key_load_public_mem(const char *pem, size_t len) {
   (void)pem;
   (void)len;
-  log_line("biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
+  log_code("LA300124", "biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
   return NULL;
 }
 
 biss_ca_key_t *biss_ca_key_load_private_mem(const char *pem, size_t len) {
   (void)pem;
   (void)len;
-  log_line("biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
+  log_code("LA300124", "biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
   return NULL;
 }
 
@@ -38,7 +38,7 @@ int biss_ca_key_foreach_file(const char *pem_path, int want_private, biss_ca_key
   (void)want_private;
   (void)fn;
   (void)ctx;
-  log_line("biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
+  log_code("LA300124", "biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
   return -1;
 }
 
@@ -48,7 +48,7 @@ int biss_ca_key_foreach_mem(const char *pem, size_t len, int want_private, biss_
   (void)want_private;
   (void)fn;
   (void)ctx;
-  log_line("biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
+  log_code("LA300124", "biss-ca: this build has no OpenSSL, BISS Mode CA unavailable");
   return -1;
 }
 

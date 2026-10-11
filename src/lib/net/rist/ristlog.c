@@ -9,8 +9,9 @@
 
 static int rist_log_cb(void *arg, enum rist_log_level level, const char *msg) {
   (void)arg;
-  (void)level;
-  log_line("rist: %s", msg);
+  if (level <= RIST_LOG_ERROR)     log_code("LE700010", "rist: %s", msg);
+  else if (level <= RIST_LOG_WARN) log_code("LW700010", "rist: %s", msg);
+  else                             log_code("LD700010", "rist: %s", msg);
   return 0;
 }
 

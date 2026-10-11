@@ -29,7 +29,7 @@ static int send_unicast(int fd, const struct sockaddr *to, socklen_t tolen, cons
   }
   if (sendto(fd, pkt, len, 0, to, tolen) < 0) {
     int err = errno;
-    log_line(TOOL_NAME ": unicast sendto: %s", strerror(err));
+    log_code("FE100138", TOOL_NAME ": unicast sendto: %s", strerror(err));
     return err;
   }
   return 0;
@@ -119,7 +119,7 @@ static void nack_cb(const rtcp_nack_t *nack, void *user) {
   listen_req_ctx_t *rc = (listen_req_ctx_t *)user;
   if (nack->truncated) {
     if (!atomic_load_explicit(&rc->ctx->nack_truncated_logged, memory_order_relaxed)) {
-      log_line(TOOL_NAME ": NACK has more than %d FCI entries, dropping the rest", RTCP_NACK_MAX_ENTRIES);
+      log_code("FW400196", TOOL_NAME ": NACK has more than %d FCI entries, dropping the rest", RTCP_NACK_MAX_ENTRIES);
       atomic_store_explicit(&rc->ctx->nack_truncated_logged, 1, memory_order_relaxed);
     }
   } else {
@@ -191,7 +191,7 @@ static void rams_r_cb(const rtcp_rams_r_t *req, void *user) {
   if (ratelimit_take(rc->ctx->fcc_limiter, rc->from, rc->ctx->fcc_client_rate, rc->ctx->fcc_client_rate * FCC_BUCKET_SECONDS, 1, now_ms()) == 0) {
     uint64_t n = atomic_fetch_add_explicit(&rc->ctx->fcc_limited_total, 1, memory_order_relaxed) + 1;
     if ((n & (n - 1)) == 0) /* log on powers of two only */
-      log_line(TOOL_NAME ": RAMS-R rate-limited, %llu so far", (unsigned long long)n);
+      log_code("FW700139", TOOL_NAME ": RAMS-R rate-limited, %llu so far", (unsigned long long)n);
     send_rams_i(&dst, req->media_ssrc, req->media_ssrc, (uint16_t)BURST_TABLE_FULL, NULL);
     return;
   }

@@ -54,16 +54,16 @@ int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, unsigne
     for (unsigned i = 0; i < n; i++) es_lists[i] = remux_es(progs[i].rx, &es_counts[i]);
     cas = cas_start_multi(cfg, es_lists, es_counts, n);
     if (!cas) {
-      log_line("cas: failed to start");
+      log_code("TS300163", "cas: failed to start");
       return -1;
     }
     tvhead_mpts_set_cas(mpts, cas);
     for (unsigned i = 0; i < n; i++) remux_set_cas(progs[i].rx, cas);
     *cas_out = cas;
   } else if (mono_seconds() >= cas_gate_deadline) {
-    log_line("cas: --cas-pids-video/--cas-pids-audio need every -i discovered within %.0fs:", CAS_KEYWORD_DISCOVERY_TIMEOUT_S);
+    log_code("TE000612", "cas: --cas-pids-video/--cas-pids-audio need every -i discovered within %.0fs:", CAS_KEYWORD_DISCOVERY_TIMEOUT_S);
     for (unsigned i = 0; i < n; i++) {
-      if (!progs[i].rx) log_line_ansi("  input \e[1;30m%u\e[0m: %s", i, progs[i].psi ? "still discovering" : "not connected");
+      if (!progs[i].rx) log_code_ansi("TE000613", "  input \e[1;30m%u\e[0m: %s", i, progs[i].psi ? "still discovering" : "not connected");
     }
     return -1;
   }

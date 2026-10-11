@@ -73,7 +73,7 @@ int ret_ctx_set_limits(ret_ctx_t *r, unsigned client_rate, unsigned mc_dedup_ms)
 static void note_limited(ret_ctx_t *r) {
   uint64_t n = atomic_fetch_add_explicit(&r->limited_total, 1, memory_order_relaxed) + 1;
   if ((n & (n - 1)) == 0)
-    log_line(TOOL_NAME ": NACK repairs rate-limited, %llu so far", (unsigned long long)n);
+    log_code("FW700138", TOOL_NAME ": NACK repairs rate-limited, %llu so far", (unsigned long long)n);
 }
 
 /* 1 if MC repaired within window, else marks now. unlocked: race = one extra / skipped cp */

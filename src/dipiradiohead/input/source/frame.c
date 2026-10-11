@@ -213,7 +213,7 @@ static int ensure_codec_known(source_t *s, net_err_reason_t *reason_out, int *re
     drop_front(s, s->buf_len - 1);
   }
   if (s->detect_skipped >= SRC_BUF_CAP) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33munrecognized audio sync\e[0m", s->idx, s->label ? s->label : "?");
+    log_code_ansi("RW400197", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33munrecognized audio sync\e[0m", s->idx, s->label ? s->label : "?");
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     *ret = -1;
     return -1;
@@ -396,7 +396,7 @@ static int next_frame_queued(source_t *s, source_frame_t *out, net_err_reason_t 
 int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason_out) {
   int r = next_frame_queued(s, out, reason_out);
   if (r == 0 && mono_seconds() - s->last_rx > SRC_STALL_TIMEOUT_S) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mno data\e[0m for %.0fs", s->idx, s->label ? s->label : "?", SRC_STALL_TIMEOUT_S);
+    log_code_ansi("RW000523", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mno data\e[0m for %.0fs", s->idx, s->label ? s->label : "?", SRC_STALL_TIMEOUT_S);
     if (reason_out) *reason_out = NET_ERR_TIMEOUT;
     return -1;
   }

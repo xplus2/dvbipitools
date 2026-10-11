@@ -86,18 +86,18 @@ int listen_run(const config_t *cfg) {
   mcast_describe(cfg, mcast, sizeof mcast);
   f = fileutil_open_std(cfg->output_path, "w");
   if (!f) {
-    log_line("cannot open %s for writing", cfg->output_path);
+    log_code("AS100101", "cannot open %s for writing", cfg->output_path);
     return 1;
   }
   m = mcast_open(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, 500);
   if (!m) {
-    log_line("cannot join %s", mcast);
+    log_code("AS500100", "cannot join %s", mcast);
     if (f != stdout) fclose(f);
     return 1;
   }
   r = dvbstp_reasm_new();
   if (!r) {
-    log_line("out of memory");
+    log_code("AS500101", "out of memory");
     mcast_close(m);
     if (f != stdout) fclose(f);
     return 1;
@@ -125,13 +125,13 @@ int listen_run(const config_t *cfg) {
       count = sds_parse_broadcast((const char *)data, entries, SDS_MAX_SERVICES, &truncated);
       stored = cfg->format == OUT_XML ? seg_store(segs, &seg_count, &hdr, NULL, count, data, len)
                                       : seg_store(segs, &seg_count, &hdr, entries, count, NULL, 0);
-      if (stored < 0) log_line("cannot keep segment %u, dropped", hdr.segment_id);
+      if (stored < 0) log_code("AW700107", "cannot keep segment %u, dropped", hdr.segment_id);
       if (stored <= 0) continue;
       received++;
       if (truncated)
-        log_line("segment %u: %d services, more present beyond the %d cap", received, count, SDS_MAX_SERVICES);
+        log_code("AW700108", "segment %u: %d services, more present beyond the %d cap", received, count, SDS_MAX_SERVICES);
       else if (cfg->verbose)
-        log_line("segment %u: %d service%s", received, count, count == 1 ? "" : "s");
+        log_code("AD700109", "segment %u: %d service%s", received, count, count == 1 ? "" : "s");
     }
   }
   for (int i = 0; i < seg_count; i++) {
@@ -147,7 +147,7 @@ int listen_run(const config_t *cfg) {
   mcast_close(m);
   int rc = 0;
   if (f != stdout && fclose(f)) {
-    log_line("error writing %s", cfg->output_path);
+    log_code("AE100102", "error writing %s", cfg->output_path);
     rc = 1;
   }
   log_line("found %u service%s in %u segment%s", total_services, total_services == 1 ? "" : "s", (unsigned)seg_count, seg_count == 1 ? "" : "s");

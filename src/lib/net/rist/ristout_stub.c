@@ -8,7 +8,7 @@
 /* built without librist: rist:// output always fails cleanly */
 ristout_t *ristout_open(const ristout_cfg_t *cfg) {
   (void)cfg;
-  log_line("rist: this build has no librist support, rist:// output unavailable");
+  log_code("LA700130", "rist: this build has no librist support, rist:// output unavailable");
   return NULL;
 }
 

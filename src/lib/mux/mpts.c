@@ -61,7 +61,7 @@ mpts_t *mpts_new(unsigned tsid, unsigned onid, const char *network_name, const p
   mpts_t *m;
 
   if (n_programs > MPTS_MAX_PROGRAMS) {
-    log_line("mpts: %u programs requested, exceeds MPTS_MAX_PROGRAMS (%u)", n_programs, MPTS_MAX_PROGRAMS);
+    log_code("LE000309", "mpts: %u programs requested, exceeds MPTS_MAX_PROGRAMS (%u)", n_programs, MPTS_MAX_PROGRAMS);
     return NULL;
   }
   m = calloc(1, sizeof *m);

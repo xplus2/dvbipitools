@@ -97,7 +97,7 @@ static int load_visit(biss_ca_key_t *k, void *p) {
   unsigned char ekid[BISS_CA_EKID_LEN];
 
   if (biss_ca_entitlement_key_id(k, ekid) != 0) {
-    log_line("biss-ca: entitlement_key_id derivation failed for a key in %s, skipping", lc->path);
+    log_code("LW300107", "biss-ca: entitlement_key_id derivation failed for a key in %s, skipping", lc->path);
     biss_ca_key_free(k);
     return 0;
   }
@@ -135,7 +135,7 @@ static size_t load_receivers(const char *dir, receiver_set_t *out) {
 
   d = opendir(dir);
   if (!d) {
-    log_line("biss-ca: cannot open --biss2-ca-receivers %s: %s", dir, strerror(errno));
+    log_code("LW300108", "biss-ca: cannot open --biss2-ca-receivers %s: %s", dir, strerror(errno));
     return 0;
   }
   while ((ent = readdir(d)) != NULL) {
@@ -144,14 +144,14 @@ static size_t load_receivers(const char *dir, receiver_set_t *out) {
     snprintf(path, sizeof path, "%s/%s", dir, ent->d_name);
     lc.path = path;
     if (biss_ca_key_foreach_file(path, 0, load_visit, &lc) <= 0) {
-      log_line("biss-ca: %s holds no readable PEM public key, skipping", path);
+      log_code("LW300109", "biss-ca: %s holds no readable PEM public key, skipping", path);
       skipped_bad++;
     }
   }
   closedir(d);
-  if (lc.over) log_line("biss-ca: %d key(s) in %s dropped, past the %d-section EMM limit", lc.over, dir, BISS_CA_ENGINE_MAX_SECTIONS);
-  if (lc.dups) log_line("biss-ca: %d duplicate key(s) in %s ignored", lc.dups, dir);
-  if (skipped_bad) log_line("biss-ca: %d file(s) in %s not usable as receiver keys", skipped_bad, dir);
+  if (lc.over) log_code("LW300110", "biss-ca: %d key(s) in %s dropped, past the %d-section EMM limit", lc.over, dir, BISS_CA_ENGINE_MAX_SECTIONS);
+  if (lc.dups) log_code("LW300111", "biss-ca: %d duplicate key(s) in %s ignored", lc.dups, dir);
+  if (skipped_bad) log_code("LW300112", "biss-ca: %d file(s) in %s not usable as receiver keys", skipped_bad, dir);
   log_line("biss-ca: loaded %zu entitled receiver(s) from %s", out->n, dir);
   return out->n;
 }
@@ -188,7 +188,7 @@ biss_ca_engine_t *biss_ca_engine_start(const biss_ca_engine_cfg_t *cfg) {
   if (biss_ca_random(e->sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN) != 0 ||
       biss_ca_random(e->sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN) != 0 ||
       biss_ca_random(e->sk, BISS_CA_SK_LEN) != 0) {
-    log_line("biss-ca: initial key generation failed (RNG unavailable)");
+    log_code("LS300113", "biss-ca: initial key generation failed (RNG unavailable)");
     cas_scramble_engine_stop(e->scr);
     set_free(&e->receivers);
     free(e);
@@ -196,7 +196,7 @@ biss_ca_engine_t *biss_ca_engine_start(const biss_ca_engine_cfg_t *cfg) {
   }
   if (cas_scramble_engine_set_cw(e->scr, SCRAMBLE_PARITY_EVEN, e->sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN, NULL, NULL) != 0 ||
       cas_scramble_engine_set_cw(e->scr, SCRAMBLE_PARITY_ODD, e->sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN, NULL, NULL) != 0) {
-    log_line("biss-ca: initial key rejected by the scrambler, not starting");
+    log_code("LS300114", "biss-ca: initial key rejected by the scrambler, not starting");
     cas_scramble_engine_stop(e->scr);
     set_free(&e->receivers);
     free(e);
@@ -230,7 +230,7 @@ static void rotate_sw(biss_ca_engine_t *e, scrambler_emit_cb emit, void *ctx) {
   unsigned char fresh[BISS_CA_SW_LEN];
 
   if (biss_ca_random(fresh, BISS_CA_SW_LEN) != 0) {
-    log_line("biss-ca: SW rotation failed (RNG unavailable), keeping current key");
+    log_code("LE300115", "biss-ca: SW rotation failed (RNG unavailable), keeping current key");
     return;
   }
   memcpy(e->sw[parity], fresh, BISS_CA_SW_LEN);
@@ -245,7 +245,7 @@ static void rotate_sk(biss_ca_engine_t *e) {
   unsigned char fresh[BISS_CA_SK_LEN];
 
   if (biss_ca_random(fresh, BISS_CA_SK_LEN) != 0) {
-    log_line("biss-ca: SK rotation failed (RNG unavailable), keeping current key");
+    log_code("LE300116", "biss-ca: SK rotation failed (RNG unavailable), keeping current key");
     return;
   }
   memcpy(e->sk, fresh, BISS_CA_SK_LEN);
@@ -326,16 +326,16 @@ static void rebuild_ecm(biss_ca_engine_t *e) {
   size_t len;
 
   if (biss_ca_random(iv, BISS_CA_IV_LEN) != 0) {
-    log_line("biss-ca: ECM rebuild failed (RNG unavailable)");
+    log_code("LE300117", "biss-ca: ECM rebuild failed (RNG unavailable)");
     return;
   }
   if (biss_ca_aes_cbc_encrypt(e->sk, iv, e->sw[SCRAMBLE_PARITY_EVEN], esw_even) != 0 || biss_ca_aes_cbc_encrypt(e->sk, iv, e->sw[SCRAMBLE_PARITY_ODD], esw_odd) != 0) {
-    log_line("biss-ca: ECM rebuild failed (AES-CBC)");
+    log_code("LE300118", "biss-ca: ECM rebuild failed (AES-CBC)");
     return;
   }
   len = biss_ca_build_ecm_section(e->esid, e->ecm_version, 0, 0, e->onid, e->sk_parity, iv, esw_even, esw_odd, e->ecm_cache, sizeof e->ecm_cache);
   if (!len) {
-    log_line("biss-ca: ECM section build overflow");
+    log_code("LE300119", "biss-ca: ECM section build overflow");
     return;
   }
   e->ecm_cache_len = len;
@@ -350,7 +350,7 @@ static void rebuild_emm(biss_ca_engine_t *e) {
   size_t n_secs;
 
   if (!biss_ca_build_session_data(e->sk, e->sk_parity, session_data, sizeof session_data)) {
-    log_line("biss-ca: EMM rebuild failed (session_data build)");
+    log_code("LE300120", "biss-ca: EMM rebuild failed (session_data build)");
     return;
   }
   entries = malloc((e->receivers.n ? e->receivers.n : 1) * sizeof *entries);
@@ -358,7 +358,7 @@ static void rebuild_emm(biss_ca_engine_t *e) {
   for (size_t i = 0; i < e->receivers.n; i++) {
     memcpy(entries[n].entitlement_key_id, e->receivers.v[i].ekid, BISS_CA_EKID_LEN);
     if (biss_ca_rsa_encrypt(e->receivers.v[i].pub, session_data, sizeof session_data, entries[n].encrypted_session_data) != 0) {
-      log_line("biss-ca: RSA-OAEP encrypt failed for one receiver, dropping it this round");
+      log_code("LW300121", "biss-ca: RSA-OAEP encrypt failed for one receiver, dropping it this round");
       continue;
     }
     n++;
@@ -380,7 +380,7 @@ static void rebuild_emm(biss_ca_engine_t *e) {
     size_t cnt = n - first < BISS_CA_ENGINE_ENTRIES_PER_SECTION ? n - first : BISS_CA_ENGINE_ENTRIES_PER_SECTION;
     secs[i].len = biss_ca_build_emm_section(0x81, e->esid, e->emm_version, (unsigned)i, (unsigned)(n_secs - 1), e->onid, 0x81, entries + first, cnt, secs[i].buf, sizeof secs[i].buf);
     if (!secs[i].len) {
-      log_line("biss-ca: EMM section %zu build overflow (%zu receivers)", i, n);
+      log_code("LE300122", "biss-ca: EMM section %zu build overflow (%zu receivers)", i, n);
       free(entries);
       return;
     }
@@ -422,7 +422,7 @@ int biss_ca_engine_reload_receivers(biss_ca_engine_t *e) {
   int changed;
 
   if (load_receivers(e->receivers_dir, &fresh) == 0) {
-    log_line("biss-ca: reload of %s produced zero usable receivers, keeping the previous list", e->receivers_dir);
+    log_code("LW300123", "biss-ca: reload of %s produced zero usable receivers, keeping the previous list", e->receivers_dir);
     set_free(&fresh);
     return -1;
   }

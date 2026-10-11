@@ -10,27 +10,27 @@
 
 args_status_t dixy_cli_check(config_t *cfg) {
   if (cfg->tls_cert && !cfg->tls_key) {
-    argerr("--tls-cert given without --tls-key");
+    argerr("YS000620", "--tls-cert given without --tls-key");
     args_free(cfg);
     return ARGS_ERR;
   }
   if (cfg->tls_key && !cfg->tls_cert) {
-    argerr("--tls-key given without --tls-cert");
+    argerr("YS000621", "--tls-key given without --tls-cert");
     args_free(cfg);
     return ARGS_ERR;
   }
   if (cfg->hls_part_size >= cfg->segment_size) {
-    argerr("--hls-part-size (%.2f) must be smaller than --segment-size (%.2f)", cfg->hls_part_size, cfg->segment_size);
+    argerr("YS000622", "--hls-part-size (%.2f) must be smaller than --segment-size (%.2f)", cfg->hls_part_size, cfg->segment_size);
     args_free(cfg);
     return ARGS_ERR;
   }
   if (cfg->dash_part_size >= cfg->segment_size) {
-    argerr("--dash-part-size (%.2f) must be smaller than --segment-size (%.2f)", cfg->dash_part_size, cfg->segment_size);
+    argerr("YS000623", "--dash-part-size (%.2f) must be smaller than --segment-size (%.2f)", cfg->dash_part_size, cfg->segment_size);
     args_free(cfg);
     return ARGS_ERR;
   }
   if ((double)cfg->ssdp_max_age_s < 2.0 * cfg->ssdp_interval_s) {
-    argerr("--ssdp-max-age (%u) must be at least 2x --ssdp-interval (%.2f)", cfg->ssdp_max_age_s, cfg->ssdp_interval_s);
+    argerr("YS000624", "--ssdp-max-age (%u) must be at least 2x --ssdp-interval (%.2f)", cfg->ssdp_max_age_s, cfg->ssdp_interval_s);
     args_free(cfg);
     return ARGS_ERR;
   }
@@ -43,12 +43,12 @@ args_status_t dixy_cli_check(config_t *cfg) {
     return ARGS_ERR;
   }
   if (cfg->enable_dlna && cfg->no_spts) {
-    argerr("--enable-dlna requires spts in -f/--format (DLNA playback always uses /spts)");
+    argerr("YS000625", "--enable-dlna requires spts in -f/--format (DLNA playback always uses /spts)");
     args_free(cfg);
     return ARGS_ERR;
   }
   if (cfg->enable_dlna && cfg->no_rawaudio) {
-    argerr("--enable-dlna requires rawaudio in -f/--format (DLNA radio items use /rawaudio)");
+    argerr("YS000626", "--enable-dlna requires rawaudio in -f/--format (DLNA radio items use /rawaudio)");
     args_free(cfg);
     return ARGS_ERR;
   }
@@ -72,7 +72,7 @@ args_status_t dixy_cli_check(config_t *cfg) {
       }
       bufcpy(cfg->dlna_host + off, sizeof cfg->dlna_host - off, portbuf);
     } else {
-      argerr("--enable-dlna needs --dlna-host (or a concrete -l/--listen address, not 'all')");
+      argerr("YS000627", "--enable-dlna needs --dlna-host (or a concrete -l/--listen address, not 'all')");
       args_free(cfg);
       return ARGS_ERR;
     }

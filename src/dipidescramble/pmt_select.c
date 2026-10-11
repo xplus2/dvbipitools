@@ -24,22 +24,22 @@ int dscr_resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pmt_
 
   probe = mpts_probe_run(src, MPTS_NAME_WAIT_MS);
   if (probe.kind == MPTS_PROBE_FAIL) {
-    log_line(TOOL_NAME ": no PAT received, giving up");
+    log_code("DE000423", TOOL_NAME ": no PAT received, giving up");
     return 1;
   }
   if (probe.kind == MPTS_PROBE_SPTS) {
-    if (cfg->pmt_sel != PMT_SEL_AUTO) log_line(TOOL_NAME ": -p ignored, single-program source");
+    if (cfg->pmt_sel != PMT_SEL_AUTO) log_code("DA000424", TOOL_NAME ": -p ignored, single-program source");
     return 0;
   }
 
   if (cfg->pmt_sel == PMT_SEL_AUTO) {
     mpts_probe_print_programs(TOOL_NAME, &probe);
-    log_line(TOOL_NAME ": MPTS source, pick one with -p <pid>, or -p all");
+    log_code("DS000425", TOOL_NAME ": MPTS source, pick one with -p <pid>, or -p all");
     return 1;
   }
   if (cfg->pmt_sel == PMT_SEL_ALL) {
     if (cfg->format == FMT_MKV || cfg_has_rtmp(cfg)) {
-      log_line(TOOL_NAME ": -f mkv/-o rtmp:// can't hold multiple programs, pick one with -p <pid>");
+      log_code("DS000426", TOOL_NAME ": -f mkv/-o rtmp:// can't hold multiple programs, pick one with -p <pid>");
       mpts_probe_print_programs(TOOL_NAME, &probe);
       return 1;
     }
@@ -51,7 +51,7 @@ int dscr_resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pmt_
       *pmt_pid = cfg->pmt_pid;
       return 0;
     }
-  log_line(TOOL_NAME ": -p 0x%04x not found in this MPTS", cfg->pmt_pid);
+  log_code("DS000427", TOOL_NAME ": -p 0x%04x not found in this MPTS", cfg->pmt_pid);
   mpts_probe_print_programs(TOOL_NAME, &probe);
   return 1;
 }

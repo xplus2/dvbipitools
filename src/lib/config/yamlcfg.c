@@ -46,47 +46,58 @@ static int soft(const yamlcfg_t *y) {
   return y->check || y->strict;
 }
 
-static void vreport(const yamlcfg_t *y, const char *kind, int line, const char *fmt, va_list ap) __attribute__((format(printf, 4, 0)));
-
-static void vreport(const yamlcfg_t *y, const char *kind, int line, const char *fmt, va_list ap) {
-  char body[512];
-  vsnprintf(body, sizeof body, fmt, ap);
-  if (line > 0) argutil_err(y->tool, "%s:%d: %s%s", y->path, line, kind, body);
-  else          argutil_err(y->tool, "%s: %s%s", y->path, kind, body);
+static void code_for(const yamlcfg_t *y, const char *code, char *out, size_t n) {
+  snprintf(out, n, "%s", code);
+  out[1] = y->strict ? 'S' : 'A';
 }
 
-static int fail(const yamlcfg_t *y, int line, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+static void vreport(const yamlcfg_t *y, const char *kind, int line, const char *code, const char *fmt, va_list ap) __attribute__((format(printf, 5, 0)));
 
-static int fail(const yamlcfg_t *y, int line, const char *fmt, ...) {
+static void vreport(const yamlcfg_t *y, const char *kind, int line, const char *code, const char *fmt, va_list ap) {
+  char body[512];
+  vsnprintf(body, sizeof body, fmt, ap);
+  if (line > 0) argutil_err(y->tool, code, "%s:%d: %s%s", y->path, line, kind, body);
+  else          argutil_err(y->tool, code, "%s: %s%s", y->path, kind, body);
+}
+
+static int fail(const yamlcfg_t *y, int line, const char *code, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
+
+static int fail(const yamlcfg_t *y, int line, const char *code, const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  vreport(y, "", line, fmt, ap);
+  vreport(y, "", line, code, fmt, ap);
   va_end(ap);
   return YAMLCFG_ERROR;
 }
 
-static void warn_at(yamlcfg_t *y, int line, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+static void warn_at(yamlcfg_t *y, int line, const char *code, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
 
-static void warn_at(yamlcfg_t *y, int line, const char *fmt, ...) {
+static void warn_at(yamlcfg_t *y, int line, const char *code, const char *fmt, ...) {
+  char cb[16];
   va_list ap;
+  code_for(y, code, cb, sizeof cb);
   va_start(ap, fmt);
-  vreport(y, y->strict ? "error: " : "warning: ", line, fmt, ap);
+  vreport(y, y->strict ? "error: " : "warning: ", line, cb, fmt, ap);
   va_end(ap);
   y->warnings++;
 }
 
-void yamlcfg_warn(yamlcfg_t *y, const char *fmt, ...) {
+void yamlcfg_warn(yamlcfg_t *y, const char *code, const char *fmt, ...) {
+  char cb[16];
   va_list ap;
+  code_for(y, code, cb, sizeof cb);
   va_start(ap, fmt);
-  vreport(y, y->strict ? "error: " : "warning: ", 0, fmt, ap);
+  vreport(y, y->strict ? "error: " : "warning: ", 0, cb, fmt, ap);
   va_end(ap);
   y->warnings++;
 }
 
 int yamlcfg_report(const yamlcfg_t *y) {
   const char *noun = y->strict ? "error" : "warning";
-  if (y->warnings) argutil_err(y->tool, "%s: %u %s%s", y->path, y->warnings, noun, y->warnings == 1 ? "" : "s");
-  else             argutil_err(y->tool, "%s: ok", y->path);
+  char cb[16];
+  code_for(y, "LA700001", cb, sizeof cb);
+  if (y->warnings) argutil_err(y->tool, cb, "%s: %u %s%s", y->path, y->warnings, noun, y->warnings == 1 ? "" : "s");
+  else             argutil_err(y->tool, NULL, "%s: ok", y->path);
   return y->strict && y->warnings ? -1 : 0;
 }
 
@@ -129,22 +140,22 @@ static int apply_value(walk_t *w, const char *val, int line, int in_seq, unsigne
     if (!strcmp(w->keys[i].key, w->path)) break;
   }
   if (i == w->nkeys) {
-    warn_at(y, line, "unknown key '%s'", w->path);
+    warn_at(y, line, "LA000294", "unknown key '%s'", w->path);
     return 0;
   }
   if (in_seq && !w->keys[i].list) {
-    if (!soft(y)) return fail(y, line, "%s: not a list", w->path);
-    warn_at(y, line, "%s: not a list", w->path);
+    if (!soft(y)) return fail(y, line, "LS000295", "%s: not a list", w->path);
+    warn_at(y, line, "LA000295", "%s: not a list", w->path);
     return 0;
   }
-  if (w->seen[i] && item == 0) warn_at(y, line, "duplicate key '%s', last one wins", w->path);
+  if (w->seen[i] && item == 0) warn_at(y, line, "LA000296", "duplicate key '%s', last one wins", w->path);
   w->seen[i] = 1;
   if (w->keys[i].apply(w->cfg, val, err, sizeof err)) {
-    if (!soft(y)) return fail(y, line, "%s: %s", w->path, err[0] ? err : "invalid value");
-    warn_at(y, line, "%s: %s", w->path, err[0] ? err : "invalid value");
+    if (!soft(y)) return fail(y, line, "LS000297", "%s: %s", w->path, err[0] ? err : "invalid value");
+    warn_at(y, line, "LA000298", "%s: %s", w->path, err[0] ? err : "invalid value");
     return 0;
   }
-  if (soft(y) && w->keys[i].must_exist && access(val, R_OK)) warn_at(y, line, "%s: %s: %s", w->path, val, strerror(errno));
+  if (soft(y) && w->keys[i].must_exist && access(val, R_OK)) warn_at(y, line, "LA000299", "%s: %s: %s", w->path, val, strerror(errno));
   return 0;
 }
 
@@ -158,8 +169,8 @@ static int list_kind(const walk_t *w) {
 static int item_event(walk_t *w, int begin, int line) {
   char err[192] = "";
   if (!w->item_fn || !w->item_fn(w->cfg, w->path, begin, err, sizeof err)) return 0;
-  if (!soft(w->y)) return fail(w->y, line, "%s: %s", w->path, err[0] ? err : "invalid item");
-  warn_at(w->y, line, "%s: %s", w->path, err[0] ? err : "invalid item");
+  if (!soft(w->y)) return fail(w->y, line, "LS000300", "%s: %s", w->path, err[0] ? err : "invalid item");
+  warn_at(w->y, line, "LA000301", "%s: %s", w->path, err[0] ? err : "invalid item");
   return 0;
 }
 
@@ -172,13 +183,13 @@ static void item_reset_seen(walk_t *w) {
 
 static int on_map_start(walk_t *w, int line) {
   int item = 0;
-  if (w->depth >= MAX_DEPTH) return fail(w->y, line, "nesting too deep");
+  if (w->depth >= MAX_DEPTH) return fail(w->y, line, "LS400129", "nesting too deep");
   if (w->depth > 0 && w->st[w->depth - 1].is_seq) {
-    if (list_kind(w) != YAMLCFG_LIST_KEYED) return fail(w->y, line, "mappings inside lists not supported");
+    if (list_kind(w) != YAMLCFG_LIST_KEYED) return fail(w->y, line, "LS400130", "mappings inside lists not supported");
     item = 1;
     item_reset_seen(w);
   }
-  if (w->depth > 0 && w->st[w->depth - 1].want_key) return fail(w->y, line, "mapping used as key");
+  if (w->depth > 0 && w->st[w->depth - 1].want_key) return fail(w->y, line, "LS400131", "mapping used as key");
   w->st[w->depth].plen = strlen(w->path);
   w->st[w->depth].want_key = 1;
   w->st[w->depth].is_seq = 0;
@@ -192,12 +203,12 @@ static int on_map_start(walk_t *w, int line) {
 
 static int on_seq_start(walk_t *w, int line) {
   const frame_t *top;
-  if (w->depth <= 0) return fail(w->y, line, "top level must be a mapping");
-  if (w->depth >= MAX_DEPTH) return fail(w->y, line, "nesting too deep");
+  if (w->depth <= 0) return fail(w->y, line, "LS400132", "top level must be a mapping");
+  if (w->depth >= MAX_DEPTH) return fail(w->y, line, "LS400129", "nesting too deep");
   top = &w->st[w->depth - 1];
-  if (top->is_seq) return fail(w->y, line, "nested lists not supported");
-  if (top->want_key) return fail(w->y, line, "list used as key");
-  if (top->opts) return fail(w->y, line, "%s: options must be a mapping", w->path);
+  if (top->is_seq) return fail(w->y, line, "LS400133", "nested lists not supported");
+  if (top->want_key) return fail(w->y, line, "LS400134", "list used as key");
+  if (top->opts) return fail(w->y, line, "LS400135", "%s: options must be a mapping", w->path);
   w->st[w->depth].plen = strlen(w->path);
   w->st[w->depth].want_key = 0;
   w->st[w->depth].is_seq = 1;
@@ -221,7 +232,7 @@ static void on_seq_end(walk_t *w) {
 static int on_map_end(walk_t *w, int line) {
   int item;
   int rc;
-  if (w->depth < 1) return fail(w->y, line, "unbalanced mapping end");
+  if (w->depth < 1) return fail(w->y, line, "LS400136", "unbalanced mapping end");
   item = w->st[w->depth - 1].is_item;
   rc = item ? item_event(w, 0, line) : 0;
   w->depth--;
@@ -237,7 +248,7 @@ static int on_map_end(walk_t *w, int line) {
 static int on_scalar(walk_t *w, const yaml_event_t *e, int line) {
   frame_t *top;
   int rc = 0;
-  if (w->depth <= 0) return fail(w->y, line, "top level must be a mapping");
+  if (w->depth <= 0) return fail(w->y, line, "LS400132", "top level must be a mapping");
   top = &w->st[w->depth - 1];
   if (top->is_seq) {
     if (scalar_is_null(e)) return 0;
@@ -250,7 +261,7 @@ static int on_scalar(walk_t *w, const yaml_event_t *e, int line) {
       top->opts = 1;
       return rc;
     }
-    if (path_push(w, (const char *)e->data.scalar.value, e->data.scalar.length)) return fail(w->y, line, "key too long");
+    if (path_push(w, (const char *)e->data.scalar.value, e->data.scalar.length)) return fail(w->y, line, "LS400137", "key too long");
     top->want_key = 0;
     return 0;
   }
@@ -258,8 +269,8 @@ static int on_scalar(walk_t *w, const yaml_event_t *e, int line) {
     top->opts = 0;
     top->want_key = 1;
     if (scalar_is_null(e)) return 0;
-    if (!soft(w->y)) return fail(w->y, line, "%s: options must be a mapping", w->path);
-    warn_at(w->y, line, "%s: options must be a mapping", w->path);
+    if (!soft(w->y)) return fail(w->y, line, "LS400135", "%s: options must be a mapping", w->path);
+    warn_at(w->y, line, "LS400135", "%s: options must be a mapping", w->path);
     return 0;
   }
   if (!scalar_is_null(e)) rc = apply_value(w, (const char *)e->data.scalar.value, line, 0, 0);
@@ -271,8 +282,8 @@ static int on_scalar(walk_t *w, const yaml_event_t *e, int line) {
 static int parse_fail(const yamlcfg_t *y, const yaml_parser_t *p) {
   int line = (int)p->problem_mark.line + 1;
   const char *problem = p->problem ? p->problem : "parse error";
-  if (p->context) return fail(y, line, "%s (%s)", problem, p->context);
-  return fail(y, line, "%s", problem);
+  if (p->context) return fail(y, line, "LS400138", "%s (%s)", problem, p->context);
+  return fail(y, line, "LS400139", "%s", problem);
 }
 
 static int walk(walk_t *w, yaml_parser_t *p) {
@@ -287,7 +298,7 @@ static int walk(walk_t *w, yaml_parser_t *p) {
     line = (int)ev.start_mark.line + 1;
     switch (ev.type) {
       case YAML_DOCUMENT_START_EVENT:
-        if (++docs > 1) rc = fail(w->y, line, "multiple documents not supported");
+        if (++docs > 1) rc = fail(w->y, line, "LS400140", "multiple documents not supported");
         break;
       case YAML_STREAM_END_EVENT:
         done = 1;
@@ -308,7 +319,7 @@ static int walk(walk_t *w, yaml_parser_t *p) {
         on_seq_end(w);
         break;
       case YAML_ALIAS_EVENT:
-        rc = fail(w->y, line, "aliases not supported");
+        rc = fail(w->y, line, "LS400141", "aliases not supported");
         break;
       default:
         break;
@@ -340,15 +351,15 @@ int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int mode, const char *pat
   f = fopen(use, "r");
   if (!f) {
     if (!path && !y->check && errno == ENOENT) return YAMLCFG_ABSENT;
-    return fail(y, 0, "%s", strerror(errno));
+    return fail(y, 0, "LS000302", "%s", strerror(errno));
   }
   if (fstat(fileno(f), &sb) || !S_ISREG(sb.st_mode)) {
     fclose(f);
-    return fail(y, 0, "not a regular file");
+    return fail(y, 0, "LS000303", "not a regular file");
   }
   if (!yaml_parser_initialize(&p)) {
     fclose(f);
-    return fail(y, 0, "out of memory");
+    return fail(y, 0, "LS500101", "out of memory");
   }
   w = calloc(1, sizeof *w);
   if (w) w->seen = calloc(nkeys ? nkeys : 1, 1);
@@ -356,7 +367,7 @@ int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int mode, const char *pat
     free(w);
     yaml_parser_delete(&p);
     fclose(f);
-    return fail(y, 0, "out of memory");
+    return fail(y, 0, "LS500101", "out of memory");
   }
   w->y = y;
   w->keys = keys;

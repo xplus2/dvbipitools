@@ -8,7 +8,7 @@
 /* built without libdvbcsa: CSA2 scrambling always fails to even acquire a key */
 csa2_key_t *csa2_key_new(const unsigned char cw[CSA2_CW_LEN]) {
   (void)cw;
-  log_line("csa2: this build has no libdvbcsa, CSA2 scrambling unavailable");
+  log_code("LA300144", "csa2: this build has no libdvbcsa, CSA2 scrambling unavailable");
   return NULL;
 }
 

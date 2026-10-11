@@ -46,14 +46,14 @@ static int cwenc_load_key_list_file(const char *path, unsigned char *out) {
   size_t n;
   int extra;
   if (!f) {
-    log_line("cw_encryption: cannot open key list '%s'", path);
+    log_code("LS000288", "cw_encryption: cannot open key list '%s'", path);
     return -1;
   }
   n = fread(out, 1, CWENC_KEY_LIST_LEN, f);
   extra = fgetc(f);
   fclose(f);
   if (n != CWENC_KEY_LIST_LEN || extra != EOF) {
-    log_line("cw_encryption: key list '%s' must be exactly %d bytes", path, CWENC_KEY_LIST_LEN);
+    log_code("LS000289", "cw_encryption: key list '%s' must be exactly %d bytes", path, CWENC_KEY_LIST_LEN);
     return -1;
   }
   return 0;
@@ -76,7 +76,7 @@ int cwenc_config_init(cwenc_config_t *cfg, const char *algorithm, const char *ae
     if (!strcmp(algorithm, algo_map[i].name)) break;
   }
   if (i == sizeof algo_map / sizeof algo_map[0]) {
-    log_line("cw_encryption: invalid algorithm '%s' (des56|aes128|aes256)", algorithm);
+    log_code("LS000290", "cw_encryption: invalid algorithm '%s' (des56|aes128|aes256)", algorithm);
     return -1;
   }
   cfg->algo = algo_map[i].algo;
@@ -92,7 +92,7 @@ int cwenc_config_init(cwenc_config_t *cfg, const char *algorithm, const char *ae
       if (!strcmp(aes_mode, mode_map[i].name)) break;
     }
     if (i == sizeof mode_map / sizeof mode_map[0]) {
-      log_line("cw_encryption: invalid aes_mode '%s' (stream|ecb)", aes_mode);
+      log_code("LS000291", "cw_encryption: invalid aes_mode '%s' (stream|ecb)", aes_mode);
       return -1;
     }
     cfg->aes_mode = mode_map[i].mode;
@@ -100,7 +100,7 @@ int cwenc_config_init(cwenc_config_t *cfg, const char *algorithm, const char *ae
 
   if (fixed_key_hex && fixed_key_hex[0]) {
     if (cwenc_hex_decode(fixed_key_hex, cfg->fixed_key, want_len) != 0) {
-      log_line("cw_encryption: fixed_key must be %zu hex chars for %s", want_len * 2, algorithm);
+      log_code("LS000292", "cw_encryption: fixed_key must be %zu hex chars for %s", want_len * 2, algorithm);
       return -1;
     }
     cfg->fixed_key_len = want_len;

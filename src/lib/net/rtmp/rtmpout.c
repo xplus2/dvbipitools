@@ -91,7 +91,7 @@ static void outq_flush(rtmpout_t *o) {
 
 static void outq_append(rtmpout_t *o, const unsigned char *data, size_t len) {
   if (outq_pending(o) + len > RTMPOUT_OUTQ_MAX) {
-    log_line("rtmpout: %s: send queue over %u bytes, reconnecting", o->host, RTMPOUT_OUTQ_MAX);
+    log_code("LW600134", "rtmpout: %s: send queue over %u bytes, reconnecting", o->host, RTMPOUT_OUTQ_MAX);
     o->failed = 1;
     return;
   }
@@ -459,9 +459,9 @@ static void log_invalid_url(const char *url) {
   const char *scheme_end = strstr(url, "://");
   const char *at = scheme_end ? strchr(scheme_end, '@') : NULL;
   if (at)
-    log_line("rtmpout: invalid url: %.*s[redacted]@%s", (int)(scheme_end - url + 3), url, at + 1);
+    log_code("LE000319", "rtmpout: invalid url: %.*s[redacted]@%s", (int)(scheme_end - url + 3), url, at + 1);
   else
-    log_line("rtmpout: invalid url: %s", url);
+    log_code("LE000320", "rtmpout: invalid url: %s", url);
 }
 
 rtmpout_t *rtmpout_open(const rtmpout_cfg_t *cfg) {

@@ -109,7 +109,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'w': {
         unsigned v;
         if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-          argerr("invalid -w window hours: %s", optarg);
+          argerr("GS000102", "invalid -w window hours: %s", optarg);
           return ARGS_ERR;
         }
         cfg->window_hours = v;
@@ -117,7 +117,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       case 'm':
         if (mcast_parse(optarg, cfg)) {
-          argerr("invalid -m group:port: %s", optarg);
+          argerr("GS000103", "invalid -m group:port: %s", optarg);
           return ARGS_ERR;
         }
         cfg->fl.have_mcast = 1;
@@ -128,7 +128,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 't': {
         unsigned v;
         if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
-          argerr("invalid -t seconds: %s", optarg);
+          argerr("GS000104", "invalid -t seconds: %s", optarg);
           return ARGS_ERR;
         }
         cfg->fl.t_value = v;
@@ -153,7 +153,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
-          argerr("invalid --color: %s (auto|always|never)", optarg);
+          argerr("GS000105", "invalid --color: %s (auto|always|never)", optarg);
           return ARGS_ERR;
         }
         cfg->color_mode = v;
@@ -170,7 +170,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case OPT_DSCP:
         if (net_dscp_parse(optarg, &cfg->dscp)) {
-          argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
+          argerr("GS000106", "invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
           return ARGS_ERR;
         }
         break;
@@ -182,37 +182,37 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
   }
   if (optind < argc) {
-    argerr("unexpected argument: %s", argv[optind]);
+    argerr("GS000107", "unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
   cfg->mode = cfg->fl.have_l ? MODE_LISTEN : MODE_ANNOUNCE;
   if (cfg->fl.have_a == cfg->fl.have_l) {
-    argerr("exactly one of -a/--announce or -l/--listen is required");
+    argerr("GS000108", "exactly one of -a/--announce or -l/--listen is required");
     return ARGS_ERR;
   }
   if (!cfg->fl.have_mcast) {
-    argerr("missing -m multicast group:port");
+    argerr("GS000109", "missing -m multicast group:port");
     return ARGS_ERR;
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
 
   if (cfg->mode == MODE_ANNOUNCE) {
     if (!cfg->input_path) {
-      argerr("missing -i input");
+      argerr("GS000110", "missing -i input");
       return ARGS_ERR;
     }
     if (!cfg->map_path) {
-      argerr("missing -M map");
+      argerr("GS000111", "missing -M map");
       return ARGS_ERR;
     }
     if (cfg->fl.have_t) cfg->interval_s = cfg->fl.t_value;
   } else {
     if (cfg->metrics_id) {
-      argerr("--metrics-id is announce-only");
+      argerr("GS000112", "--metrics-id is announce-only");
       return ARGS_ERR;
     }
     if (cfg->compress) {
-      argerr("-Z/--compress is announce-only");
+      argerr("GS000113", "-Z/--compress is announce-only");
       return ARGS_ERR;
     }
     if (!cfg->output_path) cfg->output_path = "-";

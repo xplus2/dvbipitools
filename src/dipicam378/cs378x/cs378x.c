@@ -47,7 +47,7 @@ cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_
     return NULL;
   }
   if (pthread_create(&s->accept_thread, NULL, accept_main, s) != 0) {
-    log_line(TOOL_NAME ": pthread_create: %s", strerror(errno));
+    log_code("3S500102", TOOL_NAME ": pthread_create: %s", strerror(errno));
     close(s->listen_fd);
     free(s);
     return NULL;

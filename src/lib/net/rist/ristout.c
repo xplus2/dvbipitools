@@ -53,7 +53,7 @@ ristout_t *ristout_open(const ristout_cfg_t *cfg) {
   ristout_t *r;
   enum rist_profile profile = cfg->profile == RISTOUT_PROFILE_MAIN ? RIST_PROFILE_MAIN : RIST_PROFILE_SIMPLE;
   if (cfg->npeers <= 0 || cfg->npeers > RISTOUT_MAX_PEERS) {
-    log_line("rist: invalid peer count %d", cfg->npeers);
+    log_code("LE000318", "rist: invalid peer count %d", cfg->npeers);
     return NULL;
   }
 
@@ -63,7 +63,7 @@ ristout_t *ristout_open(const ristout_cfg_t *cfg) {
   r->tool_version = cfg->tool_version;
   r->drain_ms = cfg->buffer_ms ? cfg->buffer_ms : RIST_DRAIN_MS_DEFAULT;
   if (rist_sender_create(&r->ctx, profile, 0, ristlog_get(cfg->verbose)) != 0) {
-    log_line("rist: sender create failed");
+    log_code("LE500155", "rist: sender create failed");
     free(r);
     return NULL;
   }
@@ -84,7 +84,7 @@ int ristout_write(ristout_t *r, const unsigned char *buf, size_t n) {
     db.payload = buf + off;
     db.payload_len = chunk;
     if (rist_sender_data_write(r->ctx, &db) < 0) {
-      log_line("rist: write failed");
+      log_code("LE100129", "rist: write failed");
       return -1;
     }
     r->wrote = 1;

@@ -8,14 +8,14 @@
 tls_t *tls_connect(int fd, const char *host, int insecure) {
   (void)fd;
   (void)insecure;
-  log_line("tls: this build has no TLS support, cannot connect to %s over https", host);
+  log_code("LA300141", "tls: this build has no TLS support, cannot connect to %s over https", host);
   return NULL;
 }
 
 tls_t *tls_connect_start(int fd, const char *host, int insecure) {
   (void)fd;
   (void)insecure;
-  log_line("tls: this build has no TLS support, cannot connect to %s over https", host);
+  log_code("LA300141", "tls: this build has no TLS support, cannot connect to %s over https", host);
   return NULL;
 }
 

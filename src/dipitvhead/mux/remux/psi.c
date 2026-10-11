@@ -79,7 +79,7 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
         ts_packet_emit(OUT_PID_PAT, &r->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     if (r->cas && !prog_desc_len) {
-      log_throttled(&r->cas_desc_throttle, LOG_THROTTLE_WINDOW_S, "program %u: CA descriptor build failed, PMT not sent", r->src_service_id);
+      log_throttled(&r->cas_desc_throttle, LOG_THROTTLE_WINDOW_S, "TW300166", "program %u: CA descriptor build failed, PMT not sent", r->src_service_id);
       n = 0;
       desc_truncated = 0;
     } else {
@@ -87,7 +87,7 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
     }
     psi_note(tsm, PSI_TABLE_PMT, n);
     if (n && desc_truncated)
-      log_throttled(&r->pmt_desc_truncated_throttle, LOG_THROTTLE_WINDOW_S, "program %u: PMT section too small, some ES descriptors dropped", r->src_service_id);
+      log_throttled(&r->pmt_desc_truncated_throttle, LOG_THROTTLE_WINDOW_S, "TW400201", "program %u: PMT section too small, some ES descriptors dropped", r->src_service_id);
     if (n) {
       /* diffing itself metrics-only, skipped whole when tsm NULL, not just its counter.
          "updated" relative to this remux_t's own history: fresh remux_t (reconnect) has

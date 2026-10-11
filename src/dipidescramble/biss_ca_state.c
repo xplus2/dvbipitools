@@ -64,17 +64,17 @@ static void load_path(biss_ca_state_t *s, const char *path) {
   const struct dirent *ent;
 
   if (stat(path, &st) != 0) {
-    log_line("biss-ca: cannot access %s", path);
+    log_code("DW000328", "biss-ca: cannot access %s", path);
     return;
   }
   if (!S_ISDIR(st.st_mode)) {
     if (biss_ca_key_foreach_file(path, 1, add_key, s) <= 0)
-      log_line("biss-ca: %s holds no readable PEM private key", path);
+      log_code("DW300145", "biss-ca: %s holds no readable PEM private key", path);
     return;
   }
   d = opendir(path);
   if (!d) {
-    log_line("biss-ca: cannot open directory %s", path);
+    log_code("DW000329", "biss-ca: cannot open directory %s", path);
     return;
   }
   while ((ent = readdir(d)) != NULL) {
@@ -83,7 +83,7 @@ static void load_path(biss_ca_state_t *s, const char *path) {
     snprintf(file, sizeof file, "%s/%s", path, ent->d_name);
     if (stat(file, &st) != 0 || !S_ISREG(st.st_mode)) continue;
     if (biss_ca_key_foreach_file(file, 1, add_key, s) <= 0)
-      log_line("biss-ca: %s holds no readable PEM private key, skipping", file);
+      log_code("DW300146", "biss-ca: %s holds no readable PEM private key, skipping", file);
   }
   closedir(d);
 }

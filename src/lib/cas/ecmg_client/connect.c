@@ -56,7 +56,7 @@ int connect_and_setup(ecmg_client_t *c, int *out_fd, unsigned char *out_version,
     }
     simulcrypt_reader_init(&rd);
     if (wait_for_message(c, &rd, fd, ECMG_HANDSHAKE_TIMEOUT_MS, &hdr, &payload) != 1) {
-      if (!ecmg_stopping(c)) log_line("ecmg: no channel_status/channel_error reply");
+      if (!ecmg_stopping(c)) log_code("LW600106", "ecmg: no channel_status/channel_error reply");
       close(fd);
       return -1;
     }
@@ -69,22 +69,22 @@ int connect_and_setup(ecmg_client_t *c, int *out_fd, unsigned char *out_version,
         tried_min = 1;
         continue;
       }
-      log_line("ecmg: channel_setup rejected, error_status=0x%04x", err);
+      log_code("LE600107", "ecmg: channel_setup rejected, error_status=0x%04x", err);
       return -1;
     }
     if (hdr.type != ECMG_MSG_CHANNEL_STATUS) {
-      log_line("ecmg: unexpected reply 0x%04x to channel_setup", hdr.type);
+      log_code("LE600108", "ecmg: unexpected reply 0x%04x to channel_setup", hdr.type);
       close(fd);
       return -1;
     }
 
     if (ecmg_parse_channel_status(payload, hdr.payload_len, &lead_cw, &cw_per_msg, &max_comp_time_ms, &min_cp_100ms, &ecm_rep_period_ms) < 0) {
-      log_line("ecmg: malformed or unusable channel_status");
+      log_code("LE400125", "ecmg: malformed or unusable channel_status");
       close(fd);
       return -1;
     }
     if (min_cp_100ms && c->cfg.cp_duration_ms < min_cp_100ms * 100)
-      log_line("ecmg: --cas-cp-duration %ums is below the ECMG's min_CP_duration %ums, using it anyway", c->cfg.cp_duration_ms, min_cp_100ms * 100);
+      log_code("LW700113", "ecmg: --cas-cp-duration %ums is below the ECMG's min_CP_duration %ums, using it anyway", c->cfg.cp_duration_ms, min_cp_100ms * 100);
     *out_lead_cw = lead_cw;
     *out_cw_per_msg = cw_per_msg;
     *out_max_comp_time_ms = max_comp_time_ms ? max_comp_time_ms : 1000;
@@ -97,7 +97,7 @@ int connect_and_setup(ecmg_client_t *c, int *out_fd, unsigned char *out_version,
     }
     if (wait_for_message(c, &rd, fd, ECMG_HANDSHAKE_TIMEOUT_MS, &hdr, &payload) != 1) {
       if (!ecmg_stopping(c))
-        log_line("ecmg: no stream_status/stream_error reply");
+        log_code("LW600109", "ecmg: no stream_status/stream_error reply");
       close(fd);
       return -1;
     }
@@ -105,7 +105,7 @@ int connect_and_setup(ecmg_client_t *c, int *out_fd, unsigned char *out_version,
       unsigned short err = 0;
       if (hdr.type == ECMG_MSG_STREAM_ERROR)
         ecmg_find_error_status(payload, hdr.payload_len, &err);
-      log_line("ecmg: stream_setup rejected, reply=0x%04x error_status=0x%04x", hdr.type, err);
+      log_code("LE600110", "ecmg: stream_setup rejected, reply=0x%04x error_status=0x%04x", hdr.type, err);
       close(fd);
       return -1;
     }

@@ -25,7 +25,7 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
     }
   }
   if (s->audio.remlen > HLS_AUDIO_REM_MAX) {
-    log_throttled(&s->audio_parse_throttle, LOG_THROTTLE_WINDOW_S, "hls: remlen exceeded HLS_AUDIO_REM_MAX, discarding pending bytes");
+    log_throttled(&s->audio_parse_throttle, LOG_THROTTLE_WINDOW_S, "YW400202", "hls: remlen exceeded HLS_AUDIO_REM_MAX, discarding pending bytes");
     s->audio.remlen = 0;
   }
   if (esc_rem_append(&s->audio.rem, &s->audio.remlen, &s->audio.remcap, data, len)) return;
@@ -35,7 +35,7 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
     int r = next_frame(&s->audio.es, s->audio.rem + pos, s->audio.remlen - pos, &f);
     if (r > 0) break;
     if (r < 0) {
-      log_throttled(&s->audio_parse_throttle, LOG_THROTTLE_WINDOW_S, "hls: audio ES parse failed, resyncing byte by byte");
+      log_throttled(&s->audio_parse_throttle, LOG_THROTTLE_WINDOW_S, "YW400203", "hls: audio ES parse failed, resyncing byte by byte");
       pos++;
       continue;
     }

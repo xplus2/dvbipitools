@@ -108,7 +108,8 @@ void radiohead_srt_service(out_ctx_t *o) {
   if (!o->srt) return;
   srtsink_service(o->srt, &st);
   if (st.connected != o->srt_connected) {
-    log_line_ansi("srt output: %s", st.connected ? "\e[0;32mconnected\e[0m" : "\e[0;31mlink down, reconnecting\e[0m");
+    if (st.connected) log_line_ansi("srt output: \e[0;32mconnected\e[0m");
+    else              log_code_ansi("RW600150", "srt output: \e[0;31mlink down, reconnecting\e[0m");
     o->srt_connected = st.connected;
   }
 }
@@ -206,7 +207,7 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
     if (tk->meta->dirty) {
       int accepted = tspacketizer_set_metadata(*tk->tsp, tk->meta->artist, tk->meta->title);
       tk->meta->dirty = 0;
-      if (accepted) log_line_ansi("now playing: \e[0;36m%s%s%s\e[0m", tk->meta->artist, (tk->meta->artist[0] && tk->meta->title[0]) ? " - " : "", tk->meta->title);
+      if (accepted) log_line_ansi("now: \e[0;36m%s%s%s\e[0m", tk->meta->artist, (tk->meta->artist[0] && tk->meta->title[0]) ? " - " : "", tk->meta->title);
     }
 
     now = mono_seconds();
@@ -217,7 +218,7 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
     if (tk->cas) {
       cas_clock_tick(tk->cas, (uint64_t)(now * 90000.0));
       if (cas_failed(tk->cas)) {
-        log_line_ansi("cas: \e[0;31mfatal, stopping\e[0m");
+        log_code_ansi("RE300162", "cas: \e[0;31mfatal, stopping\e[0m");
         return -2;
       }
       if (signal_reload_requested()) cas_reload_receivers(tk->cas);
@@ -311,7 +312,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     unsigned audio_pid = TSPACKETIZER_PID_AUDIO;
     cas = cas_start(cfg, &audio_pid, 1);
     if (!cas) {
-      log_line("cas: failed to start");
+      log_code("RS300163", "cas: failed to start");
       rc = 1;
       goto done;
     }

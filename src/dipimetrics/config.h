@@ -19,7 +19,7 @@ int metrics_cfg_load(config_t *cfg, const char *path, int strict);
 
 int metrics_cfg_test(const char *path, int strict);
 
-const char *metrics_cfg_conflict(const config_t *cfg);
+const char *metrics_cfg_conflict(const config_t *cfg, const char **code);
 
 int metrics_cfg_auth(const char *val, char *out, size_t outsz, char *err, size_t errsz);
 

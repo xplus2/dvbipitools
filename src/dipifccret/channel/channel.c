@@ -173,7 +173,7 @@ channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size
     chan_hash_rollback_claim(t, claimed_h, was_tombstone);
     char addrbuf[64];
     if (!inet_ntop(family, addr, addrbuf, sizeof addrbuf)) bufcpy(addrbuf, sizeof addrbuf, "?");
-    log_line(TOOL_NAME ": max-channels (%zu) reached, rejecting %s:%u", t->max_channels, addrbuf, port);
+    log_code("FW700135", TOOL_NAME ": max-channels (%zu) reached, rejecting %s:%u", t->max_channels, addrbuf, port);
   }
   hash_writer_exit(t);
   if (atomic_load_explicit(&t->hash_used, memory_order_relaxed) > (t->hash_size / 4) * 3) chan_hash_rebuild(t);
@@ -252,7 +252,7 @@ void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq
 
   if (payload_len > CHANNEL_MAX_PAYLOAD) {
     if (!c->oversized_logged) {
-      log_line(TOOL_NAME ": %s:%u payload %zu exceeds cap (%d), dropping until it fits again", c->group, c->port, payload_len, CHANNEL_MAX_PAYLOAD);
+      log_code("FW400195", TOOL_NAME ": %s:%u payload %zu exceeds cap (%d), dropping until it fits again", c->group, c->port, payload_len, CHANNEL_MAX_PAYLOAD);
       c->oversized_logged = 1;
     }
     return;
@@ -277,7 +277,7 @@ void channel_store(channel_table_t *t, channel_t *c, uint32_t ssrc, uint16_t seq
   if (c->cache.cap > 0) {
     if (!c->psi) {
       c->psi = psi_new();
-      if (!c->psi) log_line(TOOL_NAME ": out of memory allocating psi state for %s:%u, RAP detection disabled for this packet", c->group, c->port);
+      if (!c->psi) log_code("FE500174", TOOL_NAME ": out of memory allocating psi state for %s:%u, RAP detection disabled for this packet", c->group, c->port);
     }
     if (c->psi) {
       int is_rap = scan_ts_packets(c->psi, payload, payload_len);

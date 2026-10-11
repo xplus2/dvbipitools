@@ -38,7 +38,7 @@ struct fcc_client {
 static void rams_i_cb(const rtcp_rams_i_t *info, void *user) {
   fcc_client_t *r = user;
   if (info->response != 100 && info->response != 200) {
-    log_line("fcc: burst request rejected, response %u", (unsigned)info->response);
+    log_code("LE600119", "fcc: burst request rejected, response %u", (unsigned)info->response);
     r->rejected = 1;
     r->done = 1;
   }
@@ -89,16 +89,16 @@ static int uni_socket_open(const fcc_client_cfg_t *cfg) {
 
   fd = socket(cfg->family, SOCK_DGRAM, IPPROTO_UDP);
   if (fd < 0) {
-    log_line("fcc: socket: %s", strerror(errno));
+    log_code("LE500138", "fcc: socket: %s", strerror(errno));
     return -1;
   }
   if (netaddr_fill(cfg->family, cfg->addr, cfg->port, &ss, &sslen)) {
-    log_line("fcc: bad server address: %s", cfg->addr);
+    log_code("LE600120", "fcc: bad server address: %s", cfg->addr);
     close(fd);
     return -1;
   }
   if (connect(fd, (struct sockaddr *)&ss, sslen) < 0) {
-    log_line("fcc: connect: %s", strerror(errno));
+    log_code("LE600121", "fcc: connect: %s", strerror(errno));
     close(fd);
     return -1;
   }
@@ -168,7 +168,7 @@ ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size
 
   if (poll(pfd, (nfds_t)nfds, 1000) < 0) {
     if (errno == EINTR) return 0;
-    log_line("fcc: poll: %s", strerror(errno));
+    log_code("LE500139", "fcc: poll: %s", strerror(errno));
     return -1;
   }
 

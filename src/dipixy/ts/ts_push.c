@@ -168,7 +168,7 @@ void ts_push_init(int prealloc, int max_clients) {
   if (n > TS_PUSH_MAX_SUBS) n = TS_PUSH_MAX_SUBS;
   g_ts_subs = calloc((size_t)n, sizeof *g_ts_subs);
   if (!g_ts_subs) {
-    log_line(TOOL_NAME ": out of memory sizing ts_push subscriber table (%d entries)", n);
+    log_code("YS500224", TOOL_NAME ": out of memory sizing ts_push subscriber table (%d entries)", n);
     return;
   }
   g_ts_subs_n = n;

@@ -52,9 +52,9 @@ void esc_ps_store(unsigned char *dst, size_t *dlen, const unsigned char *s, size
   }
 }
 
-static void vbuf_add_logged(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *nal, size_t n, const char *what) {
+static void vbuf_add_logged(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *nal, size_t n, const char *code, const char *what) {
   if (esc_vbuf_add(vbuf, vbuflen, vbufcap, nal, n) < 0)
-    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s", what);
+    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, code, "%s", what);
 }
 
 /* 1: handled (kept/dropped). 0: not sei or off */
@@ -63,7 +63,7 @@ static int emit_sei_maybe_stripped(esc_track_t *es, unsigned char **vbuf, size_t
   size_t outlen;
   if (!strip) return 0;
   if (!esc_strip_lcevc_sei(p, n, hdrlen, strip->rb, strip->rbcap, strip->esc, strip->esccap, &outlen)) return 0;
-  if (outlen) vbuf_add_logged(es, vbuf, vbuflen, vbufcap, *strip->esc, outlen, "escodec: esc_vbuf_add failed, sei nal dropped");
+  if (outlen) vbuf_add_logged(es, vbuf, vbuflen, vbufcap, *strip->esc, outlen, "LW500131", "escodec: esc_vbuf_add failed, sei nal dropped");
   return 1;
 }
 
@@ -76,15 +76,15 @@ void esc_handle_h264_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen,
     case H264_NAL_LCEVC_NON_IDR:
     case H264_NAL_LCEVC_IDR:
       if (strip) break;
-      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, h264 nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500132", "escodec: esc_vbuf_add failed, h264 nal dropped");
       break;
     case H264_NAL_SEI:
       if (emit_sei_maybe_stripped(es, vbuf, vbuflen, vbufcap, p, n, 1, strip)) break;
-      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, h264 nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500132", "escodec: esc_vbuf_add failed, h264 nal dropped");
       break;
     default:
       if (type == H264_NAL_IDR) *key = 1;
-      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, h264 nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500132", "escodec: esc_vbuf_add failed, h264 nal dropped");
   }
 }
 
@@ -98,15 +98,15 @@ void esc_handle_hevc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen,
     case HEVC_NAL_LCEVC_NON_IDR:
     case HEVC_NAL_LCEVC_IDR:
       if (strip) break;
-      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, hevc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500133", "escodec: esc_vbuf_add failed, hevc nal dropped");
       break;
     case HEVC_NAL_SEI_PREFIX:
       if (emit_sei_maybe_stripped(es, vbuf, vbuflen, vbufcap, p, n, 2, strip)) break;
-      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, hevc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500133", "escodec: esc_vbuf_add failed, hevc nal dropped");
       break;
     default:
       if (type >= HEVC_NAL_IRAP_FIRST && type <= HEVC_NAL_IRAP_LAST) *key = 1;
-      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, hevc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500133", "escodec: esc_vbuf_add failed, hevc nal dropped");
   }
 }
 
@@ -179,15 +179,15 @@ void esc_handle_vvc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, 
     case VVC_NAL_FILLER:                                                  break;
     case VVC_NAL_LCEVC:
       if (strip) break;
-      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, vvc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500134", "escodec: esc_vbuf_add failed, vvc nal dropped");
       break;
     case VVC_NAL_SEI_PREFIX:
       if (emit_sei_maybe_stripped(es, vbuf, vbuflen, vbufcap, p, n, 2, strip)) break;
-      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, vvc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500134", "escodec: esc_vbuf_add failed, vvc nal dropped");
       break;
     default:
       if (type >= VVC_NAL_IRAP_FIRST && type <= VVC_NAL_IRAP_LAST) *key = 1;
-      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "escodec: esc_vbuf_add failed, vvc nal dropped");
+      vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500134", "escodec: esc_vbuf_add failed, vvc nal dropped");
   }
 }
 
@@ -269,13 +269,13 @@ void esc_handle_av1_obu(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, 
   out_hdr[0] = (unsigned char)(hdr0 | 0x02);
   if (ext) out_hdr[1] = p[1];
   if (growbuf_reserve((void **)vbuf, vbufcap, 1, *vbuflen + hn, 65536)) {
-    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, av1 obu dropped");
+    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW500135", "escodec: esc_vbuf_add failed, av1 obu dropped");
     return;
   }
   memcpy(*vbuf + *vbuflen, out_hdr, hn);
   *vbuflen += hn;
   if (esc_obuf_add(vbuf, vbuflen, vbufcap, p + payload_off, n - payload_off) < 0)
-    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: esc_vbuf_add failed, av1 obu dropped");
+    log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW500135", "escodec: esc_vbuf_add failed, av1 obu dropped");
 }
 
 void esc_split_obus(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *d, size_t len, int *key, unsigned char **rb, size_t *rbcap) {
@@ -290,7 +290,7 @@ void esc_split_obus(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size
     if (n) {
       size_t rblen;
       if (growbuf_reserve((void **)rb, rbcap, 1, n, 4096)) {
-        log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "escodec: av1 obu unescape alloc failed");
+        log_throttled(&es->vbuf_drop_throttle, LOG_THROTTLE_WINDOW_S, "LE500136", "escodec: av1 obu unescape alloc failed");
       } else {
         rblen = rbsp_unescape(d + ns, n, *rb, *rbcap);
         if (rblen) {

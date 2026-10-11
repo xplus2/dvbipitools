@@ -135,7 +135,7 @@ int cas_core_start_biss(scramble_algo_t algo, const unsigned char *cw, size_t cw
   out->biss_engine = cas_scramble_engine_start(algo, pids, pid_count, flush_pid);
   if (!out->biss_engine) return -1;
   if (cas_scramble_engine_set_cw(out->biss_engine, SCRAMBLE_PARITY_EVEN, cw, cw_len, NULL, NULL) != 0) {
-    log_line("%sbiss: %s key rejected by the scrambler, not starting", log_prefix, label);
+    log_code("LS300126", "%sbiss: %s key rejected by the scrambler, not starting", log_prefix, label);
     cas_scramble_engine_stop(out->biss_engine);
     out->biss_engine = NULL;
     return -1;
@@ -154,7 +154,7 @@ int cas_core_start_biss_dispatch(const cas_biss_cfg_t *cfg, const unsigned *pids
       cas_core_hex_format(esw, BISS_KEY_LEN, hex);
       log_line("%sbiss: ESW for this SW under the given --biss2-emit-esw ID: %s", log_prefix, hex);
     } else {
-      log_line("%sbiss: failed to compute ESW (no OpenSSL in this build?)", log_prefix);
+      log_code("LS300127", "%sbiss: failed to compute ESW (no OpenSSL in this build?)", log_prefix);
     }
   }
   return cas_core_start_biss(SCRAMBLE_ALGO_CISSA, cfg->biss2_sw, BISS_KEY_LEN, pids, pid_count, flush_pid, "BISS2 Mode 1/E", log_prefix, out);
@@ -183,7 +183,7 @@ int cas_core_start_biss_ca_dispatch(const cas_biss_ca_cfg_t *cfg, const unsigned
   } else {
     unsigned char rnd[2];
     if (biss_ca_random(rnd, sizeof rnd) != 0) {
-      log_line("%sbiss-ca: failed to generate a random entitlement_session_id (no OpenSSL in this build?)", log_prefix);
+      log_code("LS300128", "%sbiss-ca: failed to generate a random entitlement_session_id (no OpenSSL in this build?)", log_prefix);
       return -1;
     }
     esid = ((unsigned)rnd[0] << 8) | rnd[1];
@@ -221,7 +221,7 @@ void cas_core_fill_group_cfg(cas_algo_t cas_algo, unsigned cp_duration_ms, int f
   gcfg->cp_duration_ms = cp_duration_ms;
   gcfg->fallback_clear = fallback_clear;
   if (n_vendors > CAS_GROUP_MAX_VENDORS)
-    log_line("%scas: %u vendors configured, only the first %d will be started", log_prefix, n_vendors, CAS_GROUP_MAX_VENDORS);
+    log_code("LA700111", "%scas: %u vendors configured, only the first %d will be started", log_prefix, n_vendors, CAS_GROUP_MAX_VENDORS);
   gcfg->vendor_count = n_vendors < CAS_GROUP_MAX_VENDORS ? n_vendors : CAS_GROUP_MAX_VENDORS;
   for (size_t i = 0; i < gcfg->vendor_count; i++) {
     const cas_vendor_t *v = &vendors[i];

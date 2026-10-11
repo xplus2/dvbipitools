@@ -99,13 +99,13 @@ int tls_init(const char *cert_path, const char *key_path, int fd_table_cap) {
   if (!ctx) return 0;
 
   if (fd_table_cap > CONN_TABLE_MAX) {
-    log_line("tls_init: fd table cap %d exceeds max supported %d", fd_table_cap, CONN_TABLE_MAX);
+    log_code("YS000671", "tls_init: fd table cap %d exceeds max supported %d", fd_table_cap, CONN_TABLE_MAX);
     SSL_CTX_free(ctx);
     return -1;
   }
   fd_ssl = calloc((size_t)fd_table_cap, sizeof *fd_ssl);
   if (!fd_ssl) {
-    log_line(TOOL_NAME ": out of memory sizing fd_ssl table (%d entries), TLS not bound", fd_table_cap);
+    log_code("YA500212", TOOL_NAME ": out of memory sizing fd_ssl table (%d entries), TLS not bound", fd_table_cap);
     SSL_CTX_free(ctx);
     return 0;
   }
@@ -231,7 +231,7 @@ int reload_tls(void) {
     g_ctx_retiring[g_ctx_retiring_n].ctx = old;
     g_ctx_retiring_n++;
   } else {
-    log_line(TOOL_NAME ": tls reload: retire queue full, leaking one SSL_CTX");
+    log_code("YW500213", TOOL_NAME ": tls reload: retire queue full, leaking one SSL_CTX");
   }
   pthread_mutex_unlock(&g_ctx_retiring_lock);
   return 0;

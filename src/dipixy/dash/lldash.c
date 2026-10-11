@@ -232,7 +232,7 @@ void dash_lldash_init(int max_clients) {
   if (n > DASHCHUNK_MAX_SUBS) n = DASHCHUNK_MAX_SUBS;
   g_subs = calloc((size_t)n, sizeof *g_subs);
   if (!g_subs) {
-    log_line(TOOL_NAME ": out of memory sizing dash_lldash subscriber table (%d entries)", n);
+    log_code("YS500202", TOOL_NAME ": out of memory sizing dash_lldash subscriber table (%d entries)", n);
     return;
   }
   g_subs_n = n;

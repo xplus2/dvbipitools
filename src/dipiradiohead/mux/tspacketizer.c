@@ -193,7 +193,7 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, 
   if (due(pts_90k, &t->last_pat, INTERVAL_PAT_PMT)) {
     if (t->cas) {
       prog_desc_len = cas_prog_desc(t->cas, prog_desc, sizeof prog_desc);
-      if (!prog_desc_len) log_throttled(&t->cas_desc_throttle, LOG_THROTTLE_WINDOW_S, "PMT: CA descriptor build failed, PMT not sent");
+      if (!prog_desc_len) log_throttled(&t->cas_desc_throttle, LOG_THROTTLE_WINDOW_S, "RW300160", "PMT: CA descriptor build failed, PMT not sent");
     }
     if (t->cfg.standalone) {
       n = psi_build_pat(t->cfg.tsid, t->ver_pat, t->cfg.sid, t->pmt_pid, sec, sizeof sec);

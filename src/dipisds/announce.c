@@ -46,7 +46,7 @@ static void emit_metrics(metrics_exporter_t *mx, double now, const sds_state_t *
 
 static void *doc_alloc(const char *what) {
   void *p = malloc(DOC_CAP);
-  if (!p) log_line("out of memory building %s document", what);
+  if (!p) log_code("AE500114", "out of memory building %s document", what);
   return p;
 }
 
@@ -109,7 +109,7 @@ static int build_broadcast_and_sp_docs(const config_t *cfg, sds_state_t *st) {
   st->broadcast_len = sds_build_broadcast(cfg->provider, st->version, st->in.services, st->in.service_count, ret, fcc, fec, st->broadcast_doc, DOC_CAP);
   st->sp_len = sds_build_sp(cfg->provider, cfg->offering, cfg->lang, st->version, cfg->mcast_group, cfg->mcast_port, extra_payload_ids, extra_count, st->sp_doc, DOC_CAP);
   if (!st->broadcast_len || !st->sp_len) {
-    log_line("SD&S document too large (max %d bytes), reduce the service list", DOC_CAP);
+    log_code("AE100109", "SD&S document too large (max %d bytes), reduce the service list", DOC_CAP);
     state_free(st);
     return -1;
   }
@@ -135,7 +135,7 @@ static int build_package_doc(const config_t *cfg, sds_state_t *st) {
   st->package_len = sds_build_package(cfg->provider, st->version, pkgs, pkg_count, st->in.services, st->in.service_count, st->package_doc, DOC_CAP);
   free(pkgs);
   if (!st->package_len) {
-    log_line("Package Discovery document too large (max %d bytes)", DOC_CAP);
+    log_code("AE100110", "Package Discovery document too large (max %d bytes)", DOC_CAP);
     state_free(st);
     return -1;
   }
@@ -161,7 +161,7 @@ static int build_cell_doc(const config_t *cfg, sds_state_t *st) {
   st->cell_len = sds_build_regionalisation(cfg->provider, st->version, cells, cell_count, st->cell_doc, DOC_CAP);
   free(cells);
   if (!st->cell_len) {
-    log_line("Regionalisation Discovery document too large (max %d bytes)", DOC_CAP);
+    log_code("AE100111", "Regionalisation Discovery document too large (max %d bytes)", DOC_CAP);
     state_free(st);
     return -1;
   }
@@ -194,7 +194,7 @@ static int build_rmsfus_doc(const config_t *cfg, sds_state_t *st) {
   if (!st->rmsfus_doc) { state_free(st); return -1; }
   st->rmsfus_len = sds_build_rms_fus(cfg->provider, st->version, &rms_val, rms_count, &fus_val, fus_count, st->rmsfus_doc, DOC_CAP);
   if (!st->rmsfus_len) {
-    log_line("RMS-FUS Discovery document too large (max %d bytes)", DOC_CAP);
+    log_code("AE100112", "RMS-FUS Discovery document too large (max %d bytes)", DOC_CAP);
     state_free(st);
     return -1;
   }
@@ -227,7 +227,7 @@ int state_reload(const config_t *cfg, sds_state_t *st) {
 
 static void reload_state(const config_t *cfg, sds_state_t *st, sds_metrics_t *sm, int metrics_on) {
   if (state_reload(cfg, st)) {
-    log_line("reload failed, keeping previous input");
+    log_code("AW000175", "reload failed, keeping previous input");
     if (metrics_on) sm->document_errors_total++;
     return;
   }
@@ -280,7 +280,7 @@ static int sds_announce_cycle(void *ctx_, mcast_t *m, unsigned cycle) {
       ctx->sm.announcement_errors_total++;
     }
   }
-  if (ctx->cfg->verbose) log_line("cycle %u sent", cycle);
+  if (ctx->cfg->verbose) log_code("AD100113", "cycle %u sent", cycle);
   emit_metrics(ctx->mx, mono_seconds(), &ctx->st, &ctx->sm);
   return 0;
 }

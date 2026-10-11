@@ -43,7 +43,7 @@ const bcg_channel_t *bcg_find_channel(const bcg_doc_t *d, const char *id) {
 
 void bcg_channel_add_name(bcg_channel_t *c, const char *name) {
   if (c->name_count >= BCG_MAX_NAMES) {
-    log_line("bcg: channel %s has more than %d names, dropping \"%s\"", c->id, BCG_MAX_NAMES, name);
+    log_code("LW400182", "bcg: channel %s has more than %d names, dropping \"%s\"", c->id, BCG_MAX_NAMES, name);
     return;
   }
   bufcpy(c->names[c->name_count], sizeof c->names[0], name);

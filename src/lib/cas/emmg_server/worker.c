@@ -26,7 +26,7 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
   *reply_len = 0;
   *should_close = 0;
 
-  log_throttled(&s->rx_msg_throttle, LOG_THROTTLE_WINDOW_S, "emmg: rx version=0x%02x type=0x%04x body_len=%zu", version, type, body_len);
+  log_throttled(&s->rx_msg_throttle, LOG_THROTTLE_WINDOW_S, "LD700115", "emmg: rx version=0x%02x type=0x%04x body_len=%zu", version, type, body_len);
   switch (type) {
     case EMMG_MSG_CHANNEL_SETUP: {
       unsigned client_id, data_channel_id;
@@ -103,7 +103,7 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
     case EMMG_MSG_STREAM_ERROR: {
       unsigned err = 0;
       simulcrypt_find_u16(body, body_len, EMMG_P_ERROR_STATUS, &err);
-      log_line("emmg: client reported error (message 0x%04x, error_status 0x%04x)", type, err);
+      log_code("LW600116", "emmg: client reported error (message 0x%04x, error_status 0x%04x)", type, err);
       *should_close = 1;
       break;
     }
@@ -118,7 +118,7 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
         *should_close = 1;
         return;
       }
-      log_throttled(&s->data_provision_throttle, LOG_THROTTLE_WINDOW_S, "emmg: data_provision, %d datagram(s) queued", n);
+      log_throttled(&s->data_provision_throttle, LOG_THROTTLE_WINDOW_S, "LD700116", "emmg: data_provision, %d datagram(s) queued", n);
       break;
     }
     default:
@@ -138,7 +138,7 @@ void emmg_run_session(emmg_server_t *s, int fd, int slot) {
   simulcrypt_reader_init(&rd);
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-    log_line("emmg: fcntl O_NONBLOCK (slot %d): %s", slot, strerror(errno));
+    log_code("LE500129", "emmg: fcntl O_NONBLOCK (slot %d): %s", slot, strerror(errno));
     return;
   }
   log_line("emmg: connection established (slot %d)", slot);
@@ -167,15 +167,15 @@ void emmg_run_session(emmg_server_t *s, int fd, int slot) {
     }
     rc = simulcrypt_reader_poll(&rd, fd, EMMG_POLL_INTERVAL_MS, &hdr, &payload);
     if (rc < 0) {
-      log_line("emmg: connection closed by peer or read error (slot %d)", slot);
+      log_code("LW600117", "emmg: connection closed by peer or read error (slot %d)", slot);
       break;
     }
     if (rc == 0) continue;
     handle_message(s, &cs, hdr.version, hdr.type, payload, hdr.payload_len, reply, &reply_len, &should_close);
     if (reply_len) {
-      log_line("emmg: tx version=0x%02x type=0x%04x", reply[0], ((unsigned)reply[1] << 8) | reply[2]);
+      log_code("LD700117", "emmg: tx version=0x%02x type=0x%04x", reply[0], ((unsigned)reply[1] << 8) | reply[2]);
       if (simulcrypt_send_all(fd, reply, reply_len, EMMG_SEND_TIMEOUT_MS) < 0) {
-        log_line("emmg: reply send failed (slot %d)", slot);
+        log_code("LE100120", "emmg: reply send failed (slot %d)", slot);
         break;
       }
     }
@@ -226,7 +226,7 @@ void *accept_main(void *arg) {
     fd = accept(s->listen_fd, NULL, NULL);
     if (fd < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) continue;
-      log_line("emmg: accept: %s", strerror(errno));
+      log_code("LE500130", "emmg: accept: %s", strerror(errno));
       continue;
     }
 
@@ -239,7 +239,7 @@ void *accept_main(void *arg) {
       }
     }
     if (slot < 0) {
-      log_line("emmg: connection limit (%u) reached, rejecting", s->max_conns);
+      log_code("LW600118", "emmg: connection limit (%u) reached, rejecting", s->max_conns);
       close(fd);
       continue;
     }
@@ -250,7 +250,7 @@ void *accept_main(void *arg) {
     wa->fd = fd;
     wa->slot = slot;
     if (pthread_create(&th, NULL, worker_main, wa) != 0) {
-      log_line("emmg: pthread_create: %s", strerror(errno));
+      log_code("LE500128", "emmg: pthread_create: %s", strerror(errno));
       close(fd);
       atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
     } else {

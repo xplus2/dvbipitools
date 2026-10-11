@@ -73,7 +73,7 @@ int emmcache_feed(emmcache_t *c, device_state_t *d, const unsigned char *emm, si
     unsigned service_id = ((unsigned)emm[3] << 8) | emm[4];
     emm_g_slot_t *sl = slot_for(c, service_id);
     if (!sl) {
-      log_line(TOOL_NAME ": emm cache full (%zu services), dropping EMM-G for service_id 0x%04x", c->max_services, service_id);
+      log_code("DW500171", TOOL_NAME ": emm cache full (%zu services), dropping EMM-G for service_id 0x%04x", c->max_services, service_id);
       c->dropped_total++;
       return 0;
     }
@@ -112,7 +112,7 @@ int emmcache_load(emmcache_t *c, device_state_t *d, const char *path) {
       size_t ncap = cap * 2;
       unsigned char *nb;
       if (ncap > EMMCACHE_MAX_FILE) {
-        log_line(TOOL_NAME ": emm cache file too large, ignoring: %s", path);
+        log_code("DW000419", TOOL_NAME ": emm cache file too large, ignoring: %s", path);
         rc = -1;
         break;
       }
@@ -153,21 +153,21 @@ int emmcache_save(const emmcache_t *c, const char *path) {
 
   f = fopen(path, "wb");
   if (!f) {
-    log_line(TOOL_NAME ": cannot write emm cache %s: %s", path, strerror(errno));
+    log_code("DW100133", TOOL_NAME ": cannot write emm cache %s: %s", path, strerror(errno));
     return -1;
   }
   if (c->have_emm_u && fwrite(c->emm_u.raw, 1, c->emm_u.len, f) != c->emm_u.len) {
-    log_line(TOOL_NAME ": short write to emm cache %s", path);
+    log_code("DE100134", TOOL_NAME ": short write to emm cache %s", path);
     rc = -1;
   }
   for (size_t i = 0; rc == 0 && i < c->service_count; i++) {
     if (fwrite(c->services[i].sec.raw, 1, c->services[i].sec.len, f) != c->services[i].sec.len) {
-      log_line(TOOL_NAME ": short write to emm cache %s", path);
+      log_code("DE100134", TOOL_NAME ": short write to emm cache %s", path);
       rc = -1;
     }
   }
   if (fclose(f)) {
-    log_line(TOOL_NAME ": error writing emm cache %s: %s", path, strerror(errno));
+    log_code("DE100135", TOOL_NAME ": error writing emm cache %s: %s", path, strerror(errno));
     rc = -1;
   }
   return rc;

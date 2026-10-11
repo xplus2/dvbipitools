@@ -80,7 +80,7 @@ void mcsend_ensure(mcsend_table_t *t, channel_t *c, unsigned ff_port) {
       break; /* free bucket: not tracked yet */
     h = (h + 1) & t->hash_mask;
     if (h == start) {
-      log_line(TOOL_NAME ": mcsend table full, dropping RET multicast for a channel - accounting invariant violated");
+      log_code("FW700137", TOOL_NAME ": mcsend table full, dropping RET multicast for a channel - accounting invariant violated");
       return; /* can't happen, table 2x key space */
     }
   }

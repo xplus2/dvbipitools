@@ -108,7 +108,7 @@ int metrics_writer_put(metrics_writer_t *w, metrics_id_t id, const char *label, 
   if (w->len == 0) return -1;
   label_len = label ? strlen(label) : 0;
   if (label_len > METRICS_LABEL_MAX) {
-    log_line("metrics: label for id %u truncated to %d bytes: %s", (unsigned)id, METRICS_LABEL_MAX, label);
+    log_code("LW700125", "metrics: label for id %u truncated to %d bytes: %s", (unsigned)id, METRICS_LABEL_MAX, label);
     label_len = METRICS_LABEL_MAX;
   }
   vlen = varint_len(value);

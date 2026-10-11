@@ -44,7 +44,7 @@ static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
 
   s = srt_create_socket();
   if (s == SRT_INVALID_SOCK) {
-    log_line("srt: socket create failed: %s", srt_getlasterror_str());
+    log_code("LE500159", "srt: socket create failed: %s", srt_getlasterror_str());
     return SRT_INVALID_SOCK;
   }
   if (srtcommon_apply_opts(s, &cfg->opts, 0, SRTO_RCVTIMEO, SRT_RCVTIMEO_MS)) {
@@ -54,7 +54,7 @@ static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
 
   if (cfg->rendezvous) {
     if (!cfg->local_host) {
-      log_line("srt: rendezvous requires a local bind address");
+      log_code("LE000321", "srt: rendezvous requires a local bind address");
       srt_close(s);
       return SRT_INVALID_SOCK;
     }
@@ -63,12 +63,12 @@ static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
       return SRT_INVALID_SOCK;
     }
     if (srt_rendezvous(s, (struct sockaddr *)&local, local_len, (struct sockaddr *)&remote, remote_len) != 0) {
-      log_line("srt: rendezvous failed: %s", srt_getlasterror_str());
+      log_code("LE600136", "srt: rendezvous failed: %s", srt_getlasterror_str());
       srt_close(s);
       return SRT_INVALID_SOCK;
     }
   } else if (srt_connect(s, (struct sockaddr *)&remote, remote_len) != 0) {
-    log_line("srt: connect failed: %s", srt_getlasterror_str());
+    log_code("LE600137", "srt: connect failed: %s", srt_getlasterror_str());
     srt_close(s);
     return SRT_INVALID_SOCK;
   }
@@ -84,11 +84,11 @@ static int accept_poll(SRTSOCKET lsn, SRTSOCKET *out) {
   int rc = 1;
 
   if (eid < 0) {
-    log_line("srt: epoll create failed: %s", srt_getlasterror_str());
+    log_code("LE500160", "srt: epoll create failed: %s", srt_getlasterror_str());
     return -1;
   }
   if (srt_epoll_add_usock(eid, lsn, &events) != 0) {
-    log_line("srt: epoll add failed: %s", srt_getlasterror_str());
+    log_code("LE500161", "srt: epoll add failed: %s", srt_getlasterror_str());
     srt_epoll_release(eid);
     return -1;
   }
@@ -96,13 +96,13 @@ static int accept_poll(SRTSOCKET lsn, SRTSOCKET *out) {
     if (srt_getlasterror(NULL) == SRT_ETIMEOUT) {
       rc = 0;
     } else {
-      log_line("srt: accept wait failed: %s", srt_getlasterror_str());
+      log_code("LE500162", "srt: accept wait failed: %s", srt_getlasterror_str());
       rc = -1;
     }
   } else {
     *out = srt_accept(lsn, NULL, NULL);
     if (*out == SRT_INVALID_SOCK) {
-      log_line("srt: accept failed: %s", srt_getlasterror_str());
+      log_code("LE600138", "srt: accept failed: %s", srt_getlasterror_str());
       rc = -1;
     }
   }
@@ -133,7 +133,7 @@ static SRTSOCKET open_single_listener(const srtin_cfg_t *cfg, SRTSOCKET *lsn_out
     return SRT_INVALID_SOCK;
   lsn = srt_create_socket();
   if (lsn == SRT_INVALID_SOCK) {
-    log_line("srt: socket create failed: %s", srt_getlasterror_str());
+    log_code("LE500159", "srt: socket create failed: %s", srt_getlasterror_str());
     return SRT_INVALID_SOCK;
   }
   if (srtcommon_apply_opts(lsn, &cfg->opts, 0, SRTO_RCVTIMEO, SRT_RCVTIMEO_MS)) {
@@ -141,7 +141,7 @@ static SRTSOCKET open_single_listener(const srtin_cfg_t *cfg, SRTSOCKET *lsn_out
     return SRT_INVALID_SOCK;
   }
   if (srt_bind(lsn, (struct sockaddr *)&local, local_len) != 0 || srt_listen(lsn, 1) != 0) {
-    log_line("srt: bind/listen failed: %s", srt_getlasterror_str());
+    log_code("LE500163", "srt: bind/listen failed: %s", srt_getlasterror_str());
     srt_close(lsn);
     return SRT_INVALID_SOCK;
   }
@@ -160,7 +160,7 @@ static SRTSOCKET open_group_caller(const srtin_cfg_t *cfg) {
 
   g = srt_create_group(type);
   if (g == SRT_INVALID_SOCK) {
-    log_line("srt: group create failed: %s", srt_getlasterror_str());
+    log_code("LE500164", "srt: group create failed: %s", srt_getlasterror_str());
     return SRT_INVALID_SOCK;
   }
   if (srtcommon_apply_opts(g, &cfg->opts, 1, SRTO_RCVTIMEO, SRT_RCVTIMEO_MS)) {
@@ -172,7 +172,7 @@ static SRTSOCKET open_group_caller(const srtin_cfg_t *cfg) {
     return SRT_INVALID_SOCK;
   }
   if (srt_connect_group(g, gc, cfg->npeers) == SRT_ERROR) {
-    log_line("srt: group connect failed: %s", srt_getlasterror_str());
+    log_code("LE600139", "srt: group connect failed: %s", srt_getlasterror_str());
     srt_close(g);
     return SRT_INVALID_SOCK;
   }
@@ -194,18 +194,18 @@ static SRTSOCKET open_group_listener(const srtin_cfg_t *cfg, SRTSOCKET *listener
 
     listeners[i] = srt_create_socket();
     if (listeners[i] == SRT_INVALID_SOCK) {
-      log_line("srt: socket create failed: %s", srt_getlasterror_str());
+      log_code("LE500159", "srt: socket create failed: %s", srt_getlasterror_str());
       goto fail;
     }
     if (srtcommon_apply_opts(listeners[i], &cfg->opts, 0, SRTO_RCVTIMEO, SRT_RCVTIMEO_MS) ||
         srt_setsockopt(listeners[i], 0, SRTO_GROUPCONNECT, &groupconnect, sizeof groupconnect) != 0) {
-      log_line("srt: setsockopt failed: %s", srt_getlasterror_str());
+      log_code("LE500158", "srt: setsockopt failed: %s", srt_getlasterror_str());
       goto fail;
     }
     if (srtcommon_resolve(cfg->peers[i].host, cfg->peers[i].port, &local, &local_len))
       goto fail;
     if (srt_bind(listeners[i], (struct sockaddr *)&local, local_len) != 0 || srt_listen(listeners[i], 1) != 0) {
-      log_line("srt: bind/listen failed on peer %d: %s", i, srt_getlasterror_str());
+      log_code("LE500165", "srt: bind/listen failed on peer %d: %s", i, srt_getlasterror_str());
       goto fail;
     }
   }
@@ -214,7 +214,7 @@ static SRTSOCKET open_group_listener(const srtin_cfg_t *cfg, SRTSOCKET *listener
     if (s != SRT_INVALID_SOCK)
       break;
     if (srt_getlasterror(NULL) != SRT_ETIMEOUT) {
-      log_line("srt: accept_bond failed: %s", srt_getlasterror_str());
+      log_code("LE600140", "srt: accept_bond failed: %s", srt_getlasterror_str());
       s = SRT_INVALID_SOCK;
       break;
     }
@@ -259,16 +259,16 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
   int n_listeners;
 
   if (cfg->npeers <= 0 || cfg->npeers > SRTCOMMON_MAX_PEERS) {
-    log_line("srt: invalid peer count %d", cfg->npeers);
+    log_code("LE000322", "srt: invalid peer count %d", cfg->npeers);
     return NULL;
   }
   if (cfg->group_mode == SRTGROUP_NONE && cfg->npeers != 1) {
-    log_line("srt: plain connection needs exactly one peer, got %d", cfg->npeers);
+    log_code("LE000323", "srt: plain connection needs exactly one peer, got %d", cfg->npeers);
     return NULL;
   }
 
   if (srt_startup() == SRT_ERROR) {
-    log_line("srt: startup failed: %s", srt_getlasterror_str());
+    log_code("LE500166", "srt: startup failed: %s", srt_getlasterror_str());
     return NULL;
   }
   srtcommon_open_logging(cfg->verbose);
@@ -327,7 +327,7 @@ static int reconnect_once(srtin_t *r) {
   if (r->group_mode != SRTGROUP_NONE) {
     r->sock = srt_accept_bond(r->listeners, r->n_listeners, SRT_RCVTIMEO_MS);
     if (r->sock != SRT_INVALID_SOCK) return 1;
-    if (srt_getlasterror(NULL) != SRT_ETIMEOUT) log_line("srt: reconnect attempt failed: %s", srt_getlasterror_str());
+    if (srt_getlasterror(NULL) != SRT_ETIMEOUT) log_code("LW600141", "srt: reconnect attempt failed: %s", srt_getlasterror_str());
     return 0;
   }
   if (r->n_listeners > 0) {
@@ -364,19 +364,19 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
     if (r->group_mode != SRTGROUP_NONE && r->n_listeners > 0) {
       /* group error: state could be corrupted, reconnect regardless of cause.
          next call retries, one attempt each, see above */
-      log_line("srt: read failed on group (%s), reconnecting", srt_getlasterror_str());
+      log_code("LW600142", "srt: read failed on group (%s), reconnecting", srt_getlasterror_str());
       srt_close(r->sock);
       r->sock = SRT_INVALID_SOCK;
       return 0;
     }
     if (r->group_mode == SRTGROUP_NONE) {
       /* peer gone: listener goes back to accept, caller re-dials */
-      log_line("srt: link lost (%s), reconnecting", srt_getlasterror_str());
+      log_code("LW600143", "srt: link lost (%s), reconnecting", srt_getlasterror_str());
       srt_close(r->sock);
       r->sock = SRT_INVALID_SOCK;
       return 0;
     }
-    log_line("srt: read failed: %s", srt_getlasterror_str());
+    log_code("LE600144", "srt: read failed: %s", srt_getlasterror_str());
     return -1;
   }
   if (n > 0) push_stats(r);

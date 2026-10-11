@@ -63,7 +63,7 @@ struct ret_client {
 static void outq_push(ret_client_t *r, const unsigned char *data, size_t len) {
   size_t idx;
   if (r->outq_count >= RET_OUTQ_SLOTS) {
-    log_line("ret: outq full (%d slots), dropping packet - accounting invariant violated", RET_OUTQ_SLOTS);
+    log_code("LW700118", "ret: outq full (%d slots), dropping packet - accounting invariant violated", RET_OUTQ_SLOTS);
     return; /* can't happen per the call-site accounting, kept as a backstop */
   }
   if (len > RET_OUTQ_CAP)
@@ -106,7 +106,7 @@ void ret_client_flush_ready(ret_client_t *r, double now) {
       outq_push(r, h->data, h->len);
       gap_shift(r);
     } else if (now >= r->gap_deadline) {
-      log_line("ret: seq %u lost, not repaired in time", (unsigned)r->expected_seq);
+      log_code("LW700119", "ret: seq %u lost, not repaired in time", (unsigned)r->expected_seq);
       gap_shift(r);
     } else {
       break;
@@ -123,7 +123,7 @@ static void abandon_gap(ret_client_t *r) {
     if (h->used)
       outq_push(r, h->data, h->len);
     else
-      log_line("ret: seq %u lost, gap abandoned", (unsigned)r->expected_seq);
+      log_code("LW700120", "ret: seq %u lost, gap abandoned", (unsigned)r->expected_seq);
     gap_shift(r);
     if (!r->hold_n)
       r->gap_pending = 0;
@@ -162,7 +162,7 @@ static int hold_store(ret_client_t *r, size_t slot, const unsigned char *payload
     return 1;
   }
   if (!r->oversized_payload_logged) {
-    log_line("ret: payload %zu exceeds hold cap (%d), dropping until it fits again", len, RET_HOLD_CAP);
+    log_code("LW700121", "ret: payload %zu exceeds hold cap (%d), dropping until it fits again", len, RET_HOLD_CAP);
     r->oversized_payload_logged = 1;
   }
   return 0;
@@ -182,7 +182,7 @@ static void handle_original_seq(ret_client_t *r, uint16_t seq, const unsigned ch
         return;
       }
       if (missing >= RET_GAP_MAX || len > RET_HOLD_CAP) {
-        log_line("ret: gap of %zu too large to track, resyncing at seq %u", missing, (unsigned)seq);
+        log_code("LE400153", "ret: gap of %zu too large to track, resyncing at seq %u", missing, (unsigned)seq);
         r->expected_seq = (uint16_t)(seq + 1);
         outq_push(r, payload, len);
         return;
@@ -215,7 +215,7 @@ static void handle_original_seq(ret_client_t *r, uint16_t seq, const unsigned ch
 
 void ret_client_on_original(ret_client_t *r, const rtp_hdr_t *hdr, const unsigned char *payload, size_t len, double now) {
   if (!r->have_ssrc || hdr->ssrc != r->ssrc) {
-    if (r->have_ssrc) log_line("ret: ssrc changed (0x%08x -> 0x%08x), resetting gap tracking", (unsigned)r->ssrc, (unsigned)hdr->ssrc);
+    if (r->have_ssrc) log_code("LE700122", "ret: ssrc changed (0x%08x -> 0x%08x), resetting gap tracking", (unsigned)r->ssrc, (unsigned)hdr->ssrc);
     if (r->gap_pending) abandon_gap(r);
     r->have_ssrc = 1;
     r->ssrc = hdr->ssrc;
@@ -234,7 +234,7 @@ void ret_client_on_repair(ret_client_t *r, const unsigned char *pkt, size_t len,
   if (!rtx_parse(pkt, len, r->rtx_pt, &rx) || rx.ssrc != r->ssrc) return;
   if (rx.payload_len > RET_HOLD_CAP) {
     if (!r->oversized_payload_logged) {
-      log_line("ret: repair payload %zu exceeds hold cap (%d), dropping until it fits again", rx.payload_len, RET_HOLD_CAP);
+      log_code("LW700123", "ret: repair payload %zu exceeds hold cap (%d), dropping until it fits again", rx.payload_len, RET_HOLD_CAP);
       r->oversized_payload_logged = 1;
     }
     return;
@@ -258,18 +258,18 @@ static int uni_socket_open(const ret_client_cfg_t *cfg) {
 
   fd = socket(cfg->family, SOCK_DGRAM, IPPROTO_UDP);
   if (fd < 0) {
-    log_line("ret: socket: %s", strerror(errno));
+    log_code("LE500140", "ret: socket: %s", strerror(errno));
     return -1;
   }
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
 
   if (netaddr_fill(cfg->family, cfg->addr, cfg->port, &ss, &sslen)) {
-    log_line("ret: bad --ret address: %s", cfg->addr);
+    log_code("LE400154", "ret: bad --ret address: %s", cfg->addr);
     close(fd);
     return -1;
   }
   if (connect(fd, (struct sockaddr *)&ss, sslen) < 0) {
-    log_line("ret: connect: %s", strerror(errno));
+    log_code("LE600122", "ret: connect: %s", strerror(errno));
     close(fd);
     return -1;
   }
@@ -339,7 +339,7 @@ ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size
 
   if (poll(pfd, (nfds_t)nfds, timeout_ms) < 0) {
     if (errno == EINTR) return 0;
-    log_line("ret: poll: %s", strerror(errno));
+    log_code("LE500141", "ret: poll: %s", strerror(errno));
     return -1;
   }
 

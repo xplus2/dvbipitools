@@ -27,12 +27,12 @@ static int uds_listen(const char *path) {
   struct sockaddr_un addr;
 
   if (strlen(path) >= sizeof addr.sun_path) {
-    log_line("dipimetrics: socket path too long: %s", path);
+    log_code("MS000139", "dipimetrics: socket path too long: %s", path);
     return -1;
   }
   fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
   if (fd < 0) {
-    log_line("dipimetrics: socket() failed: %s", strerror(errno));
+    log_code("MS500109", "dipimetrics: socket() failed: %s", strerror(errno));
     return -1;
   }
   unlink(path);
@@ -40,7 +40,7 @@ static int uds_listen(const char *path) {
   addr.sun_family = AF_UNIX;
   bufcpy(addr.sun_path, sizeof addr.sun_path, path);
   if (bind(fd, (struct sockaddr *)&addr, (socklen_t)(sizeof addr.sun_family + strlen(path) + 1)) < 0) {
-    log_line("dipimetrics: bind %s failed: %s", path, strerror(errno));
+    log_code("MS500112", "dipimetrics: bind %s failed: %s", path, strerror(errno));
     close(fd);
     return -1;
   }
@@ -115,10 +115,11 @@ int main(int argc, char **argv) {
     store_reap_expired(&store, now, (double)cfg.expiry_s);
 
     if (signal_tls_reload_requested()) {
-      if (tls_ctx)
-        log_line("dipimetrics: SIGUSR1: TLS cert reload %s", tls_server_ctx_reload(tls_ctx) == 0 ? "ok" : "failed");
-      else
-        log_line("dipimetrics: SIGUSR1: no TLS configured, ignoring");
+      if (tls_ctx) {
+        if (tls_server_ctx_reload(tls_ctx) == 0) log_line("dipimetrics: SIGUSR1: TLS cert reload ok");
+        else                                     log_code("MW300106", "dipimetrics: SIGUSR1: TLS cert reload failed");
+      } else
+        log_code("MW700105", "dipimetrics: SIGUSR1: no TLS configured, ignoring");
     }
   }
 

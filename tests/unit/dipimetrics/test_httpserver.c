@@ -803,7 +803,7 @@ START_TEST(overlong_path_is_truncated_in_the_log_and_still_gets_404) {
   log_capture_end(msg, sizeof msg);
   ck_assert_ptr_nonnull(strstr(buf, "HTTP/1.1 404 Not Found"));
   ck_assert_ptr_nonnull(strstr(msg, "404 GET /ppp"));
-  ck_assert_uint_lt(strlen(msg), (size_t)LONG_FIELD);
+  ck_assert_uint_lt(strlen(msg), (size_t)LONG_FIELD + 20);
 }
 END_TEST
 

@@ -139,8 +139,8 @@ int cam378_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
-  if (cond) yamlcfg_warn(y, "%s", msg);
+static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
+  if (cond) yamlcfg_warn(y, code, "%s", msg);
 }
 
 int cam378_cfg_test(const char *path, int strict) {
@@ -152,8 +152,8 @@ int cam378_cfg_test(const char *path, int strict) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }
-  warn_if(&y, !cfg.key_path, "key not set (required unless given on the command line)");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics and metrics-interval require metrics-id");
+  warn_if(&y, !cfg.key_path, "3A000129", "key not set (required unless given on the command line)");
+  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "3A000130", "metrics and metrics-interval require metrics-id");
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);
   return rc;

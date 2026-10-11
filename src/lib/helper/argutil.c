@@ -10,17 +10,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-void argutil_verr(const char *tool, const char *fmt, va_list ap) {
+void argutil_verr(const char *tool, const char *code, const char *fmt, va_list ap) {
+  if (code) fprintf(stderr, "[%s] ", code);
   fputs(tool, stderr);
   fputs(": ", stderr);
   vfprintf(stderr, fmt, ap);
   fputc('\n', stderr);
 }
 
-void argutil_err(const char *tool, const char *fmt, ...) {
+void argutil_err(const char *tool, const char *code, const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  argutil_verr(tool, fmt, ap);
+  argutil_verr(tool, code, fmt, ap);
   va_end(ap);
 }
 
@@ -37,7 +38,7 @@ int argutil_port_parse(const char *p, unsigned *out) {
 
 int argutil_bufcpy_opt(const char *tool, char *dst, size_t dstsz, const char *val, const char *optname) {
   if (bufcpy(dst, dstsz, val) >= dstsz) {
-    argutil_err(tool, "%s too long", optname);
+    argutil_err(tool, "LS000685", "%s too long", optname);
     return -1;
   }
   return 0;
@@ -46,7 +47,7 @@ int argutil_bufcpy_opt(const char *tool, char *dst, size_t dstsz, const char *va
 int argutil_srt_passphrase_opt(const char *tool, const char *passphrase, const char *optname) {
   size_t len = strlen(passphrase);
   if (passphrase[0] && (len < 10 || len > 79)) {
-    argutil_err(tool, "%s must be 10..79 characters", optname);
+    argutil_err(tool, "LS000686", "%s must be 10..79 characters", optname);
     return -1;
   }
   return 0;
@@ -54,7 +55,7 @@ int argutil_srt_passphrase_opt(const char *tool, const char *passphrase, const c
 
 int argutil_metrics_interval_opt(const char *tool, const char *val, unsigned *out) {
   if (argutil_uint_range(val, 1, 86400, out)) {
-    argutil_err(tool, "invalid --metrics-interval: %s (seconds, 1..86400)", val);
+    argutil_err(tool, "LS000687", "invalid --metrics-interval: %s (seconds, 1..86400)", val);
     return -1;
   }
   return 0;
@@ -62,7 +63,7 @@ int argutil_metrics_interval_opt(const char *tool, const char *val, unsigned *ou
 
 int argutil_metrics_opts_validate(const char *tool, const char *sock, const char *id, unsigned interval_s) {
   if ((sock || interval_s) && !id) {
-    argutil_err(tool, "--metrics/--metrics-interval require --metrics-id");
+    argutil_err(tool, "LS000591", "--metrics/--metrics-interval require --metrics-id");
     return -1;
   }
   return 0;
@@ -87,7 +88,7 @@ int metrics_known_pids_parse(const char *s, unsigned *out, unsigned *n) {
 
 int argutil_metrics_known_pids_opt(const char *tool, const char *val, unsigned *out, unsigned *n) {
   if (metrics_known_pids_parse(val, out, n)) {
-    argutil_err(tool, "invalid --metrics-inspect-ts-pids: %s (comma separated pids, 0..8191)", val);
+    argutil_err(tool, "LS000688", "invalid --metrics-inspect-ts-pids: %s (comma separated pids, 0..8191)", val);
     return -1;
   }
   return 0;
@@ -108,7 +109,7 @@ int metrics_inspect_ts_parse(const char *s, metrics_inspect_ts_t *out) {
 
 int argutil_metrics_inspect_ts_opt(const char *tool, const char *val, metrics_inspect_ts_t *out) {
   if (metrics_inspect_ts_parse(val, out)) {
-    argutil_err(tool, "invalid --metrics-inspect-ts: %s (off|basic|medium|full)", val);
+    argutil_err(tool, "LS000689", "invalid --metrics-inspect-ts: %s (off|basic|medium|full)", val);
     return -1;
   }
   return 0;
@@ -116,7 +117,7 @@ int argutil_metrics_inspect_ts_opt(const char *tool, const char *val, metrics_in
 
 int argutil_metrics_inspect_ts_validate(const char *tool, const char *id, metrics_inspect_ts_t level) {
   if (level != METRICS_INSPECT_TS_OFF && !id) {
-    argutil_err(tool, "--metrics-inspect-ts requires --metrics-id");
+    argutil_err(tool, "LS000592", "--metrics-inspect-ts requires --metrics-id");
     return -1;
   }
   return 0;

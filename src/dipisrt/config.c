@@ -190,8 +190,8 @@ int srt_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
-  if (cond) yamlcfg_warn(y, "%s", msg);
+static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
+  if (cond) yamlcfg_warn(y, code, "%s", msg);
 }
 
 int srt_cfg_test(const char *path, int strict) {
@@ -207,20 +207,20 @@ int srt_cfg_test(const char *path, int strict) {
   }
   srt_ep = cfg.in.is_srt ? &cfg.in : &cfg.out;
   both = cfg.n_in && cfg.n_out;
-  warn_if(&y, !cfg.n_in, "in not set (required unless given on the command line)");
-  warn_if(&y, !cfg.n_out, "out not set (required unless given on the command line)");
-  warn_if(&y, both && cfg.in.is_srt == cfg.out.is_srt, "exactly one of in/out must be srt://, the other a plain endpoint");
-  warn_if(&y, both && srt_ep->n_srt > 1 && cfg.group_mode == SRTGROUP_NONE, "bonding several srt:// peers requires group-mode");
-  warn_if(&y, both && srt_ep->n_srt == 1 && cfg.group_mode != SRTGROUP_NONE, "group-mode has no effect with a single srt:// peer");
-  warn_if(&y, both && cfg.rendezvous && srt_ep->listen, "rendezvous is not combinable with srt://@ (listener)");
-  warn_if(&y, cfg.rendezvous && cfg.group_mode != SRTGROUP_NONE, "rendezvous is not combinable with group-mode");
-  warn_if(&y, cfg.rendezvous && (!cfg.local_host[0] || !cfg.local_port), "rendezvous requires local");
-  warn_if(&y, cfg.passphrase[0] && (strlen(cfg.passphrase) < 10 || strlen(cfg.passphrase) > 79), "passphrase must be 10..79 characters");
-  warn_if(&y, cfg.pbkeylen && !cfg.passphrase[0], "pbkeylen requires passphrase");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
-  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
-  warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "al-fec requires al-fec-port");
-  warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "al-fec-port has no effect without al-fec");
+  warn_if(&y, !cfg.n_in, "HA000156", "in not set (required unless given on the command line)");
+  warn_if(&y, !cfg.n_out, "HA000157", "out not set (required unless given on the command line)");
+  warn_if(&y, both && cfg.in.is_srt == cfg.out.is_srt, "HA000247", "exactly one of in/out must be srt://, the other a plain endpoint");
+  warn_if(&y, both && srt_ep->n_srt > 1 && cfg.group_mode == SRTGROUP_NONE, "HA000248", "bonding several srt:// peers requires group-mode");
+  warn_if(&y, both && srt_ep->n_srt == 1 && cfg.group_mode != SRTGROUP_NONE, "HA000249", "group-mode has no effect with a single srt:// peer");
+  warn_if(&y, both && cfg.rendezvous && srt_ep->listen, "HA000250", "rendezvous is not combinable with srt://@ (listener)");
+  warn_if(&y, cfg.rendezvous && cfg.group_mode != SRTGROUP_NONE, "HA000251", "rendezvous is not combinable with group-mode");
+  warn_if(&y, cfg.rendezvous && (!cfg.local_host[0] || !cfg.local_port), "HA000252", "rendezvous requires local");
+  warn_if(&y, cfg.passphrase[0] && (strlen(cfg.passphrase) < 10 || strlen(cfg.passphrase) > 79), "HA000253", "passphrase must be 10..79 characters");
+  warn_if(&y, cfg.pbkeylen && !cfg.passphrase[0], "HA000254", "pbkeylen requires passphrase");
+  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "HA000120", "metrics.sock and metrics.interval require metrics.id");
+  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "HA000161", "metrics.inspect-ts requires metrics.id");
+  warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "HA000162", "al-fec requires al-fec-port");
+  warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "HA000163", "al-fec-port has no effect without al-fec");
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);
   return rc;

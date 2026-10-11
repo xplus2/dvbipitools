@@ -18,7 +18,7 @@ static ssize_t raw_send_nb(struct http *h, const char *buf, size_t n) {
   w = send(h->fd, buf, n, MSG_NOSIGNAL);
   if (w < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) return 0;
-    log_line("send: %s", strerror(errno));
+    log_code("LE100126", "send: %s", strerror(errno));
     return -1;
   }
   return w;
@@ -105,14 +105,14 @@ static http_async_state_t async_after_headers(http_async_t *a, net_err_reason_t 
     const char *loc;
     http_url_t next;
     if (a->redirects >= HTTP_REDIRECT_MAX) {
-      log_line("http: too many redirects");
+      log_code("LE600123", "http: too many redirects");
       if (reason_out) *reason_out = NET_ERR_HTTP;
       return HTTP_ASYNC_ERROR;
     }
     loc = http_header(h, "location");
     next = h->url;
     if (!loc || resolve_location(&next, loc) != 0) {
-      log_line("http: redirect without usable Location");
+      log_code("LE600124", "http: redirect without usable Location");
       if (reason_out) *reason_out = NET_ERR_FORMAT;
       return HTTP_ASYNC_ERROR;
     }
@@ -129,7 +129,7 @@ static http_async_state_t async_after_headers(http_async_t *a, net_err_reason_t 
   }
   if (h->status == 304) return HTTP_ASYNC_DONE; /* not-modified: caller checks http_status(), empty body */
   if (h->status < 200 || h->status >= 300) {
-    log_line("http %d fetching %s%s", h->status, h->url.host, h->url.path);
+    log_code("LE600125", "http %d fetching %s%s", h->status, h->url.host, h->url.path);
     if (reason_out) *reason_out = NET_ERR_HTTP;
     return HTTP_ASYNC_ERROR;
   }
@@ -170,13 +170,13 @@ static int read_response_headers(struct http *h, http_async_t *a, net_err_reason
     ssize_t n;
     int pr;
     if (a->hdr_got >= sizeof h->hold) {
-      log_line("http: response headers too large");
+      log_code("LE600126", "http: response headers too large");
       if (reason_out) *reason_out = NET_ERR_FORMAT;
       return -1;
     }
     n = raw_recv(h, h->hold + a->hdr_got, sizeof h->hold - a->hdr_got, reason_out);
     if (n < 0) {
-      log_line("http: connection closed while reading headers");
+      log_code("LE600127", "http: connection closed while reading headers");
       return -1;
     }
     if (n == 0) {
@@ -198,7 +198,7 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
       int cr = netconnect_tcp_finish(&a->connect_pending, &h->fd, reason_out);
       if (cr == 0) return HTTP_ASYNC_PENDING; /* this address failed, next candidate connecting on h->fd */
       if (cr < 0) {
-        log_line("connect %s:%u: %s", h->url.host, h->url.port, strerror(errno));
+        log_code("LE600128", "connect %s:%u: %s", h->url.host, h->url.port, strerror(errno));
         return HTTP_ASYNC_ERROR;
       }
       if (h->url.tls) {

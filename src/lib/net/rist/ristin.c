@@ -42,7 +42,7 @@ static struct rist_ctx *ctx_start(ristin_t *r) {
   enum rist_profile profile = r->simple ? RIST_PROFILE_SIMPLE : RIST_PROFILE_MAIN;
 
   if (rist_receiver_create(&ctx, profile, ristlog_get(r->verbose)) != 0) {
-    log_line("rist: receiver create failed");
+    log_code("LE500113", "rist: receiver create failed");
     return NULL;
   }
   if (rist_add_peer(ctx, r->peer_uri, r->secret, r->key_size, r->cname, r->buffer_ms, 0, r->simple) || rist_start(ctx) != 0) {
@@ -99,7 +99,7 @@ ristin_t *ristin_open(const ristin_cfg_t *cfg) {
   ristin_t *r;
 
   if (strncmp(cfg->peer_uri, "rist://", 7) != 0 || cfg->peer_uri[7] != '@') {
-    log_line("rist: input uri must be rist://@host:port (listen)");
+    log_code("LE000317", "rist: input uri must be rist://@host:port (listen)");
     return NULL;
   }
 
@@ -120,7 +120,7 @@ ristin_t *ristin_open(const ristin_cfg_t *cfg) {
     return NULL;
   }
   if (pipereader_start(&r->io, reader_main, r) != 0) {
-    log_line("rist: pipe/thread setup failed");
+    log_code("LE500154", "rist: pipe/thread setup failed");
     rist_destroy(r->ctx);
     free(r);
     return NULL;

@@ -57,7 +57,7 @@ static ssize_t http_read_chunked(struct http *h, void *buf, size_t cap, net_err_
     bufsz = (size_t)n;
     r = phr_decode_chunked(&h->decoder, buf, &bufsz);
     if (r == -1) {
-      log_line("http: malformed chunked body");
+      log_code("LE400181", "http: malformed chunked body");
       if (reason_out) *reason_out = NET_ERR_FORMAT;
       return -1;
     }

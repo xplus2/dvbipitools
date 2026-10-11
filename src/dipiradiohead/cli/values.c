@@ -32,7 +32,7 @@ int rdh_pid_parse(const char *s, unsigned *out) {
 
 cas_vendor_t *rdh_current_cas_vendor(config_t *cfg, int cli_vendors, const char *flag) {
   if (!cli_vendors) {
-    argerr("--%s must follow --cas-ecmg", flag);
+    argerr("RS000512", "--%s must follow --cas-ecmg", flag);
     return NULL;
   }
   return &cfg->cas_vendors[cfg->n_cas_vendors - 1];

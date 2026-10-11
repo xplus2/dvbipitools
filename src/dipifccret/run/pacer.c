@@ -49,7 +49,7 @@ void *pacer_main(void *arg) {
   cpuaff_pin(pc->cpuaff, pc->cpu_idx, "burst pacer");
   snap = calloc(pc->bursts->cap, sizeof *snap);
   if (!snap) {
-    log_line(TOOL_NAME ": pacer: out of memory, burst pacing disabled");
+    log_code("FW500180", TOOL_NAME ": pacer: out of memory, burst pacing disabled");
     return NULL;
   }
 

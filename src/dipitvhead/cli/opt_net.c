@@ -19,7 +19,7 @@ args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
   switch (c) {
     case 'm':
       if (tvh_cfg_mcast(cfg, optarg)) {
-        argerr("invalid -m group:port: %s", optarg);
+        argerr("TS000103", "invalid -m group:port: %s", optarg);
         return ARGS_ERR;
       }
       break;
@@ -32,7 +32,7 @@ args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
     case 'T': {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 255, &v)) {
-        argerr("invalid -T ttl: %s (1..255)", optarg);
+        argerr("TS000495", "invalid -T ttl: %s (1..255)", optarg);
         return ARGS_ERR;
       }
       cfg->ttl = v;
@@ -40,19 +40,19 @@ args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
     }
     case OPT_DSCP:
       if (net_dscp_parse(optarg, &cfg->dscp)) {
-        argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
+        argerr("TS000106", "invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_AL_FEC:
       if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
-        argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
+        argerr("TS000154", "invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_AL_FEC_PORT:
       if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
-        argerr("invalid --al-fec-port: %s", optarg);
+        argerr("TS000155", "invalid --al-fec-port: %s", optarg);
         return ARGS_ERR;
       }
       break;
@@ -73,7 +73,7 @@ args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
       break;
     case OPT_RIST_ENCRYPTION_TYPE:
       if (argutil_rist_key_size(optarg, &cfg->rist_key_size)) {
-        argerr("invalid --rist-encryption-type: %s (128|256)", optarg);
+        argerr("TS000358", "invalid --rist-encryption-type: %s (128|256)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -83,7 +83,7 @@ args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
       break;
     case OPT_RIST_BUFFER:
       if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->rist_buffer_ms)) {
-        argerr("invalid --rist-buffer: %s (ms)", optarg);
+        argerr("TS000511", "invalid --rist-buffer: %s (ms)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -98,7 +98,7 @@ args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
       char *end;
       unsigned long v = strtoul(optarg, &end, 10);
       if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
-        argerr("invalid --srt-pbkeylen: %s (16|24|32)", optarg);
+        argerr("TS000361", "invalid --srt-pbkeylen: %s (16|24|32)", optarg);
         return ARGS_ERR;
       }
       cfg->srt_pbkeylen = (int)v;
@@ -114,7 +114,7 @@ args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
       break;
     case OPT_SRT_LATENCY:
       if (argutil_uint_range(optarg, 1, 60000, &cfg->srt_latency_ms)) {
-        argerr("invalid --srt-latency: %s (1..60000 ms)", optarg);
+        argerr("TS000362", "invalid --srt-latency: %s (1..60000 ms)", optarg);
         return ARGS_ERR;
       }
       break;

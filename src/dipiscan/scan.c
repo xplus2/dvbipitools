@@ -73,7 +73,7 @@ void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_
   r->rtp_wrapped = -1;
   pc.psi = psi_new();
   if (!pc.psi) {
-    log_line("out of memory");
+    log_code("SE500101", "out of memory");
     return;
   }
   pc.pkts = 0;
@@ -191,7 +191,7 @@ static void report_mpts_programs(const config_t *cfg, FILE *out, const probe_res
     format_item(out, cfg->format, r->programs[k].name, uri, cfg->family, group, port, r->rtp_wrapped == 1, r->tsid, r->onid, r->programs[k].sid);
   }
   if (r->program_count == 0)
-    log_line_ansi("%u/%u %-28s \e[0;33mstream present, no program resolved\e[0m", i, cfg->total, uri);
+    log_code_ansi("SW400109", "%u/%u %-28s \e[0;33mstream present, no program resolved\e[0m", i, cfg->total, uri);
 }
 
 static void report_single_program(const config_t *cfg, FILE *out, const probe_result_t *r, unsigned i, const char *uri, const char *group, unsigned port, unsigned *found) {

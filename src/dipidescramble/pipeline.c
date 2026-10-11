@@ -46,7 +46,7 @@ static void emit_downstream_inspect(void *ctx, const unsigned char pkt[188]);
 void descramble_rtmp_note_result(int ok, int *had_error, int idx) {
   if (!ok) {
     if (!*had_error) {
-      log_line(TOOL_NAME ": rtmp[%d] output: write failed, will keep retrying", idx);
+      log_code("DW100137", TOOL_NAME ": rtmp[%d] output: write failed, will keep retrying", idx);
       *had_error = 1;
     }
   } else if (*had_error) {
@@ -65,7 +65,8 @@ void srt_service_all(loop_ctx_t *lc) {
     srtsink_status_t st;
     srtsink_service(lc->srt[i], &st);
     if (st.connected != lc->srt_connected[i]) {
-      log_line(TOOL_NAME ": srt[%d] output: %s", i, st.connected ? "connected" : "link down, reconnecting");
+      if (st.connected) log_line(TOOL_NAME ": srt[%d] output: connected", i);
+      else              log_code("DW600148", TOOL_NAME ": srt[%d] output: link down, reconnecting", i);
       lc->srt_connected[i] = st.connected;
     }
   }
@@ -82,7 +83,7 @@ static void handle_ecm_section(loop_ctx_t *lc) {
   else return;
 
   if (device_resolve_cw(lc->dev, sec, seclen, psi_program_number(lc->psi), lc->cw_len, lc->ecm_pid, cw) != 0) {
-    if (lc->cfg->ecm_profile.set) log_line(TOOL_NAME ": ecm_profile: CW resolve failed for this ECM section");
+    if (lc->cfg->ecm_profile.set) log_code("DE300148", TOOL_NAME ": ecm_profile: CW resolve failed for this ECM section");
     lc->ecm_errors_total++;
     return;
   }
@@ -198,7 +199,7 @@ static int resolve_biss1e_key(const config_t *cfg, unsigned char sw_buf[BISS_KEY
 static void setup_unicast_emm(loop_ctx_t *lc) {
   lc->ipi = ipiclient_new(lc->cfg->unicast_emm_uri, lc->cfg->insecure_tls, lc->cfg->unicast_emm_token_header);
   if (!lc->ipi) {
-    log_line(TOOL_NAME ": invalid -u/--unicast-emm uri, ignoring: %s", lc->cfg->unicast_emm_uri);
+    log_code("DW000421", TOOL_NAME ": invalid -u/--unicast-emm uri, ignoring: %s", lc->cfg->unicast_emm_uri);
     return;
   }
   lc->ipi_pending = ipiclient_poll_start(lc->ipi);
@@ -242,20 +243,20 @@ static int detect_cas_scheme(loop_ctx_t *lc) {
       lc->cas_logged = 1;
       log_line(TOOL_NAME ": BISS Mode CA detected (ca_system_id=0x%04x)", BISS_CA_SYSTEM_ID_CA);
       if (lc->cfg->n_biss2_ca_key == 0) {
-        log_line(TOOL_NAME ": BISS Mode CA stream detected, no --biss2-ca-key given");
+        log_code("DW300149", TOOL_NAME ": BISS Mode CA stream detected, no --biss2-ca-key given");
         lc->fatal = 1;
         return 1;
       }
       lc->biss_ca = biss_ca_state_new(lc->cfg->biss2_ca_key, (size_t)lc->cfg->n_biss2_ca_key);
       if (!lc->biss_ca) {
-        log_line(TOOL_NAME ": no usable RSA private key in --biss2-ca-key");
+        log_code("DW300150", TOOL_NAME ": no usable RSA private key in --biss2-ca-key");
         lc->key_load_errors_total++;
         lc->fatal = 1;
         return 1;
       }
       lc->scr = scrambler_new(SCRAMBLE_ALGO_CISSA);
       if (!lc->scr) {
-        log_line(TOOL_NAME ": failed to set up BISS-CA descrambler");
+        log_code("DE300151", TOOL_NAME ": failed to set up BISS-CA descrambler");
         lc->fatal = 1;
         return 1;
       }
@@ -271,19 +272,19 @@ static int detect_cas_scheme(loop_ctx_t *lc) {
       lc->cas_logged = 1;
       log_line(TOOL_NAME ": BISS Mode 1/E detected (ca_system_id=0x%04x)", BISS_CA_SYSTEM_ID);
       if (!lc->cfg->biss1_sw_given && !lc->cfg->biss2_sw_given && !lc->cfg->biss2_esw_given) {
-        log_line(TOOL_NAME ": BISS stream detected, no --biss1-sw/--biss2-sw/--biss2-esw given");
+        log_code("DW300152", TOOL_NAME ": BISS stream detected, no --biss1-sw/--biss2-sw/--biss2-esw given");
         lc->fatal = 1;
         return 1;
       }
       if (resolve_biss1e_key(lc->cfg, sw, &algo, &cw, &cw_len) != 0) {
-        log_line(TOOL_NAME ": failed to decrypt --biss2-esw (no OpenSSL in this build?)");
+        log_code("DW300153", TOOL_NAME ": failed to decrypt --biss2-esw (no OpenSSL in this build?)");
         lc->key_load_errors_total++;
         lc->fatal = 1;
         return 1;
       }
       lc->scr = scrambler_new(algo);
       if (!lc->scr) {
-        log_line(TOOL_NAME ": failed to set up BISS descrambler");
+        log_code("DE300154", TOOL_NAME ": failed to set up BISS descrambler");
         lc->fatal = 1;
         return 1;
       }
@@ -299,25 +300,25 @@ static int detect_cas_scheme(loop_ctx_t *lc) {
         log_line(TOOL_NAME ": CAS parameters resolved: ecm_pid=0x%04x emm_pid=0x%04x ca_system_id=0x%04x scrambling_mode=0x%02x", lc->ecm_pid, psi_emm_pid(lc->psi), psi_ca_system_id(lc->psi), psi_scrambling_mode(lc->psi));
         lc->cas_logged = 1;
         if (!lc->cfg->key_path || !lc->cfg->serial || !lc->cfg->emm_file) {
-          log_line(TOOL_NAME ": ECM/EMM CAS detected, no -k/-s/-e given, giving up");
+          log_code("DE300155", TOOL_NAME ": ECM/EMM CAS detected, no -k/-s/-e given, giving up");
           lc->fatal = 1;
           return 1;
         }
         lc->dev = device_state_new(lc->cfg->key_path, lc->cfg->serial, &lc->cfg->ecm_profile, lc->cfg->max_services);
         if (!lc->dev) {
-          log_line(TOOL_NAME ": cannot load RSA private key from -k %s", lc->cfg->key_path);
+          log_code("DE300156", TOOL_NAME ": cannot load RSA private key from -k %s", lc->cfg->key_path);
           lc->key_load_errors_total++;
           lc->fatal = 1;
           return 1;
         }
         lc->cas_mode = "classic";
-        if (emmcache_load(lc->cache, lc->dev, lc->emm_file) != 0) log_line(TOOL_NAME ": failed to read emm cache %s", lc->emm_file);
+        if (emmcache_load(lc->cache, lc->dev, lc->emm_file) != 0) log_code("DE000422", TOOL_NAME ": failed to read emm cache %s", lc->emm_file);
         if (lc->cfg->unicast_emm_uri) setup_unicast_emm(lc);
         if (algo_from_mode(psi_scrambling_mode(lc->psi), &algo)) {
           lc->scr = scrambler_new(algo);
           lc->cw_len = (int)scrambler_cw_len(algo);
         } else {
-          log_line(TOOL_NAME ": unrecognized scrambling_mode 0x%02x", psi_scrambling_mode(lc->psi));
+          log_code("DE400194", TOOL_NAME ": unrecognized scrambling_mode 0x%02x", psi_scrambling_mode(lc->psi));
           lc->fatal = 1;
           return 1;
         }

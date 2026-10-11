@@ -7,7 +7,7 @@
 
 srtsrc_t *srtsrc_open(const srtsrc_cfg_t *cfg) {
   (void)cfg;
-  log_line("srt: this build has no libsrt support, srt:// input unavailable");
+  log_code("LA700132", "srt: this build has no libsrt support, srt:// input unavailable");
   return NULL;
 }
 

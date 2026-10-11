@@ -34,7 +34,7 @@ static int tcp_connect(const char *host, unsigned port, net_err_reason_t *reason
   /* clear O_NONBLOCK: raw_recv/raw_send_all expect a blocking socket paced by SO_RCVTIMEO */
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
-    log_line("httpclient: fcntl O_NONBLOCK: %s", strerror(errno));
+    log_code("LE500144", "httpclient: fcntl O_NONBLOCK: %s", strerror(errno));
     if (reason_out) *reason_out = NET_ERR_OTHER;
     close(fd);
     return -1;
@@ -61,7 +61,7 @@ ssize_t raw_recv(struct http *h, void *buf, size_t cap, net_err_reason_t *reason
         continue;
       }
       if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
-      log_line("recv: %s", strerror(errno));
+      log_code("LE500145", "recv: %s", strerror(errno));
       if (reason_out) *reason_out = NET_ERR_READ;
       return -1;
     }
@@ -78,13 +78,13 @@ static int raw_send_all(struct http *h, const char *buf, size_t n) {
     ssize_t w = h->tls ? tls_write(h->tls, buf, n) : send(h->fd, buf, n, MSG_NOSIGNAL);
     if (w < 0) {
       if (!h->tls && (errno == EINTR)) continue;
-      log_line("send: %s", h->tls ? "tls write failed" : strerror(errno));
+      log_code("LE100126", "send: %s", h->tls ? "tls write failed" : strerror(errno));
       return -1;
     }
     if (w == 0) {
       struct pollfd pfd = {.fd = h->fd, .events = POLLIN | POLLOUT, .revents = 0};
       if (poll(&pfd, 1, HTTP_HEADER_TIMEOUT_MS) <= 0) {
-        log_line("send: timed out waiting for socket readiness");
+        log_code("LE600129", "send: timed out waiting for socket readiness");
         return -1;
       }
       continue;
@@ -126,7 +126,7 @@ int try_parse_response(struct http *h, size_t *gotp, net_err_reason_t *reason_ou
 
   if (icy == -2) return 0;
   if (icy < 0) {
-    log_line("http: response headers too large");
+    log_code("LE600126", "http: response headers too large");
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
@@ -136,7 +136,7 @@ int try_parse_response(struct http *h, size_t *gotp, net_err_reason_t *reason_ou
   (void)msg_len;
   if (pret == -2) return 0;
   if (pret == -1) {
-    log_line("http: malformed response status line/headers");
+    log_code("LE400177", "http: malformed response status line/headers");
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
@@ -144,7 +144,7 @@ int try_parse_response(struct http *h, size_t *gotp, net_err_reason_t *reason_ou
   h->status = status;
   h->minor_version = minor_version;
   if (num_headers > HTTP_HDR_MAX) {
-    log_line("http: response has more than %d headers, dropping rest", HTTP_HDR_MAX);
+    log_code("LW400178", "http: response has more than %d headers, dropping rest", HTTP_HDR_MAX);
     num_headers = HTTP_HDR_MAX;
   }
   for (size_t i = 0; i < num_headers; i++) {
@@ -172,7 +172,7 @@ int try_parse_response(struct http *h, size_t *gotp, net_err_reason_t *reason_ou
       h->has_content_length = 1;
       h->content_length = v;
     } else {
-      log_line("http: malformed content-length '%s'", cl);
+      log_code("LE400179", "http: malformed content-length '%s'", cl);
       if (reason_out) *reason_out = NET_ERR_FORMAT;
       return -1;
     }
@@ -196,7 +196,7 @@ int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out) {
   const char *te = http_header(h, "transfer-encoding");
   if (!te) return 0;
   if (!transfer_encoding_is_chunked(te)) {
-    log_line("http: unsupported transfer-encoding: %s", te);
+    log_code("LW400180", "http: unsupported transfer-encoding: %s", te);
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
@@ -230,7 +230,7 @@ int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *
 
   rl = snprintf(buf, cap, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\n%sConnection: close\r\n\r\n", url->path, hostport, user_agent, hdrline);
   if (rl < 0 || rl >= (int)cap) {
-    log_line("http request too long");
+    log_code("LE000310", "http request too long");
     return -1;
   }
   return rl;
@@ -325,18 +325,18 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
     ssize_t n;
     int pr;
     if (remain <= 0) {
-      log_line("http: timed out waiting for response headers");
+      log_code("LE600130", "http: timed out waiting for response headers");
       if (reason_out) *reason_out = NET_ERR_TIMEOUT;
       goto fail;
     }
     set_rcvtimeo(h->fd, remain);
     n = raw_recv(h, h->hold + got, sizeof h->hold - got, reason_out);
     if (n < 0) {
-      log_line("http: connection closed while reading headers");
+      log_code("LE600127", "http: connection closed while reading headers");
       goto fail;
     }
     if (n == 0) {
-      log_line("http: timed out waiting for response headers");
+      log_code("LE600130", "http: timed out waiting for response headers");
       if (reason_out) *reason_out = NET_ERR_TIMEOUT;
       goto fail;
     }
@@ -350,7 +350,7 @@ static struct http *fetch_once(const http_url_t *url, const char *user_agent, in
   }
   set_rcvtimeo(h->fd, (double)HTTP_HEADER_TIMEOUT_MS / 1000.0);
   if (!have) {
-    log_line("http: response headers too large");
+    log_code("LE600126", "http: response headers too large");
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     goto fail;
   }
@@ -368,7 +368,7 @@ fail:
 static int resolve_redirect(struct http *h, http_url_t *next, net_err_reason_t *reason_out) {
   const char *loc = http_header(h, "location");
   if (!loc || resolve_location(next, loc) != 0) {
-    log_line("http: redirect without usable Location");
+    log_code("LE600124", "http: redirect without usable Location");
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
@@ -393,14 +393,14 @@ http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure,
     }
     if (h->status == 304) return h; /* not-modified: caller checks http_status(), body is empty */
     if (h->status < 200 || h->status >= 300) {
-      log_line("http %d fetching %s%s", h->status, h->url.host, h->url.path);
+      log_code("LE600125", "http %d fetching %s%s", h->status, h->url.host, h->url.path);
       http_close(h);
       if (reason_out) *reason_out = NET_ERR_HTTP;
       return NULL;
     }
     return h;
   }
-  log_line("http: too many redirects");
+  log_code("LE600123", "http: too many redirects");
   if (reason_out) *reason_out = NET_ERR_HTTP;
   return NULL;
 }

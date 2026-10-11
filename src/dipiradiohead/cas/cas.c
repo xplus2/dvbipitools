@@ -48,11 +48,11 @@ cas_t *cas_start(const config_t *cfg, const unsigned *audio_pids, size_t n_audio
   cas_t *c;
   cas_group_cfg_t gcfg;
   if (n_audio_pids == 0) {
-    log_line("cas: no audio pids to scramble");
+    log_code("RA300158", "cas: no audio pids to scramble");
     return NULL;
   }
   if (n_audio_pids > CAS_CORE_MAX_PIDS) {
-    log_line("cas: %zu audio pids exceeds the %d cas can scramble in one session", n_audio_pids, CAS_CORE_MAX_PIDS);
+    log_code("RS300159", "cas: %zu audio pids exceeds the %d cas can scramble in one session", n_audio_pids, CAS_CORE_MAX_PIDS);
     return NULL;
   }
 

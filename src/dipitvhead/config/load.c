@@ -104,14 +104,14 @@ typedef struct {
   int fatal;
 } report_t;
 
-static void warn_report(void *ud, int fatal, const char *msg) {
+static void warn_report(void *ud, int fatal, const char *code, const char *msg) {
   report_t *r = ud;
   r->fatal += fatal;
-  yamlcfg_warn(r->y, "%s", msg);
+  yamlcfg_warn(r->y, code, "%s", msg);
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
-  if (cond) yamlcfg_warn(y, "%s", msg);
+static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
+  if (cond) yamlcfg_warn(y, code, "%s", msg);
 }
 
 int tvh_cfg_test(const char *path, int strict) {
@@ -121,8 +121,8 @@ int tvh_cfg_test(const char *path, int strict) {
   int fatal;
   tvh_cfg_defaults(&cfg);
   if (yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg, tvh_item_hook) != YAMLCFG_LOADED) return -1;
-  warn_if(&y, cfg.n_inputs == 0, "input not set (required unless given on the command line)");
-  warn_if(&y, !cfg.mcast_port && cfg.n_rist == 0 && cfg.n_srt == 0, "mcast or rist not set (one is required unless given on the command line)");
+  warn_if(&y, cfg.n_inputs == 0, "TA000363", "input not set (required unless given on the command line)");
+  warn_if(&y, !cfg.mcast_port && cfg.n_rist == 0 && cfg.n_srt == 0, "TA000513", "mcast or rist not set (one is required unless given on the command line)");
   fatal = tvh_cfg_check(&cfg, 1, warn_report, &r);
   if (fatal > r.fatal) y.warnings += (unsigned)(fatal - r.fatal);
   return yamlcfg_report(&y);

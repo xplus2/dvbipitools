@@ -157,7 +157,7 @@ void mp4push_init(int max_clients) {
   if (n > MP4PUSH_MAX_SUBS) n = MP4PUSH_MAX_SUBS;
   g_subs = calloc((size_t)n, sizeof *g_subs);
   if (!g_subs) {
-    log_line(TOOL_NAME ": out of memory sizing mp4push subscriber table (%d entries)", n);
+    log_code("YS500215", TOOL_NAME ": out of memory sizing mp4push subscriber table (%d entries)", n);
     return;
   }
   g_subs_n = n;

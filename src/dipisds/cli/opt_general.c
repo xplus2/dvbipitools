@@ -41,14 +41,14 @@ args_status_t sds_opt_general(sds_opt_t *p, int c) {
       break;
     case 'L':
       if (strlen(optarg) != 3) {
-        argerr("invalid -L lang: %s (3-letter ISO 639-2 code)", optarg);
+        argerr("AS000194", "invalid -L lang: %s (3-letter ISO 639-2 code)", optarg);
         return ARGS_ERR;
       }
       memcpy(cfg->lang, optarg, 3);
       break;
     case 'm':
       if (sds_mcast_parse(optarg, cfg)) {
-        argerr("invalid -m group:port: %s", optarg);
+        argerr("AS000103", "invalid -m group:port: %s", optarg);
         return ARGS_ERR;
       }
       cfg->fl.have_mcast = 1;
@@ -58,14 +58,14 @@ args_status_t sds_opt_general(sds_opt_t *p, int c) {
       break;
     case OPT_DSCP:
       if (net_dscp_parse(optarg, &cfg->dscp)) {
-        argerr("invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
+        argerr("AS000106", "invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
         return ARGS_ERR;
       }
       break;
     case 't': {
       unsigned v;
       if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
-        argerr("invalid -t seconds: %s", optarg);
+        argerr("AS000104", "invalid -t seconds: %s", optarg);
         return ARGS_ERR;
       }
       cfg->fl.t_value = v;
@@ -79,7 +79,7 @@ args_status_t sds_opt_general(sds_opt_t *p, int c) {
       static const enum_map_t map[] = {{"m3u", OUT_M3U}, {"csv", OUT_CSV}, {"xspf", OUT_XSPF}, {"xml", OUT_XML}, {"null", OUT_NULL}};
       int v;
       if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-        argerr("invalid --format: %s (m3u|csv|xspf|xml|null)", optarg);
+        argerr("AS000195", "invalid --format: %s (m3u|csv|xspf|xml|null)", optarg);
         return ARGS_ERR;
       }
       cfg->format = (out_fmt_t)v;
@@ -95,7 +95,7 @@ args_status_t sds_opt_general(sds_opt_t *p, int c) {
     case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {
-        argerr("invalid --color: %s (auto|always|never)", optarg);
+        argerr("AS000105", "invalid --color: %s (auto|always|never)", optarg);
         return ARGS_ERR;
       }
       cfg->color_mode = v;

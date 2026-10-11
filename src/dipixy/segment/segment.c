@@ -30,7 +30,7 @@ void hls_seg_init(int max_channels) {
   if (n > HLS_MAX_STORES) n = HLS_MAX_STORES;
   g_stores = calloc((size_t)n, sizeof *g_stores);
   if (!g_stores) {
-    log_line(TOOL_NAME ": out of memory sizing segmenter table (%d entries)", n);
+    log_code("YS500218", TOOL_NAME ": out of memory sizing segmenter table (%d entries)", n);
     return;
   }
   g_stores_n = n;
@@ -220,7 +220,7 @@ static void seg_reclaim_retired(void) {
 static void seg_retire(hls_seg_ctx_t *s) {
   seg_retiree_t *n = malloc(sizeof *n);
   if (!n) {
-    log_line(TOOL_NAME ": segmenter retire alloc failed, leaking segmenter");
+    log_code("YE500219", TOOL_NAME ": segmenter retire alloc failed, leaking segmenter");
     return;
   }
   qsbr_mark(g_seg_qsbr, n->mark);

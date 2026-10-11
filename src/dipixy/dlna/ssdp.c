@@ -228,7 +228,7 @@ static void *ssdp_thread_fn(void *arg) {
   double next_announce;
   recv_m = mcast_open(AF_INET, SSDP_ADDR, SSDP_PORT, a->cfg->ssdp_iface, SSDP_RECV_TIMEOUT_MS);
   if (!recv_m) {
-    log_line(TOOL_NAME ": ssdp: cannot join " SSDP_ADDR ":%d, DLNA discovery disabled", SSDP_PORT);
+    log_code("YA500203", TOOL_NAME ": ssdp: cannot join " SSDP_ADDR ":%d, DLNA discovery disabled", SSDP_PORT);
     return NULL;
   }
   fd = mcast_fd(recv_m);
@@ -253,7 +253,7 @@ static void *ssdp_thread_fn(void *arg) {
       buf[n] = '\0';
       ssdp_handle_msearch(fd, buf, (struct sockaddr *)&peer, peerlen, a->cfg, a->uuid);
     } else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-      log_line(TOOL_NAME ": ssdp: recv error: %s", strerror(errno));
+      log_code("YE500204", TOOL_NAME ": ssdp: recv error: %s", strerror(errno));
       break;
     }
   }
@@ -267,14 +267,14 @@ void ssdp_start(const config_t *cfg) {
   if (!cfg->enable_dlna) return;
   g_send = mcast_open_send(AF_INET, SSDP_ADDR, SSDP_PORT, cfg->ssdp_iface, cfg->ssdp_ttl);
   if (!g_send) {
-    log_line(TOOL_NAME ": ssdp: cannot open send socket, DLNA discovery disabled");
+    log_code("YA500205", TOOL_NAME ": ssdp: cannot open send socket, DLNA discovery disabled");
     return;
   }
   g_ssdp_arg.cfg = cfg;
   ssdp_device_uuid(cfg, g_ssdp_arg.uuid);
   g_running = 1;
   if (pthread_create(&g_thread, NULL, ssdp_thread_fn, &g_ssdp_arg) != 0) {
-    log_line(TOOL_NAME ": ssdp: cannot start thread, DLNA discovery disabled");
+    log_code("YA500206", TOOL_NAME ": ssdp: cannot start thread, DLNA discovery disabled");
     g_running = 0;
     mcast_close(g_send);
     g_send = NULL;

@@ -332,8 +332,8 @@ int dscr_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
-  if (cond) yamlcfg_warn(y, "%s", msg);
+static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
+  if (cond) yamlcfg_warn(y, code, "%s", msg);
 }
 
 static int count_kind(const config_t *cfg, out_kind_t k) {
@@ -361,26 +361,26 @@ int dscr_cfg_test(const char *path, int strict) {
   n_rtmps = count_kind(&cfg, OUT_RTMPS);
   n_rtmp = count_kind(&cfg, OUT_RTMP) + n_rtmps;
   n_srt = count_kind(&cfg, OUT_SRT);
-  warn_if(&y, !cfg.have_input, "input not set (required unless given on the command line)");
-  warn_if(&y, !cfg.n_out, "output not set (required unless given on the command line)");
-  warn_if(&y, (cfg.format == FMT_MKV || cfg.format == FMT_MKA) && cfg.n_out && n_file != 1, "format mkv/mka requires exactly one file output target (plus optional rtmp(s) targets)");
-  warn_if(&y, cfg.insecure_tls && !n_rtmps && !cfg.unicast_emm_uri, "insecure needs unicast-emm or an rtmps:// output target");
-  warn_if(&y, cfg.strip_lcevc && cfg.format == FMT_TS && !n_rtmp, "strip-lcevc has no effect without format mkv/mka or an rtmp(s):// output target");
-  warn_if(&y, cfg.biss2_sw_given && cfg.biss2_esw_given, "biss2.sw and biss2.esw are mutually exclusive");
-  warn_if(&y, cfg.biss2_esw_given && !cfg.biss2_id_given, "biss2.esw requires biss2.id");
-  warn_if(&y, cfg.biss2_id_given && !cfg.biss2_esw_given, "biss2.id requires biss2.esw");
-  warn_if(&y, cfg.biss1_sw_given && (cfg.biss2_sw_given || cfg.biss2_esw_given), "biss1.sw is mutually exclusive with biss2.sw/biss2.esw");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
-  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
-  warn_if(&y, cfg.profile_given && cfg.have_input && cfg.input.kind != INPUT_RIST, "rist.profile needs input rist://");
-  warn_if(&y, cfg.rist_key_size && cfg.have_input && cfg.input.kind != INPUT_RIST, "rist.encryption-type needs input rist://");
-  warn_if(&y, cfg.rist_key_size && cfg.have_input && cfg.input.kind == INPUT_RIST && !cfg.rist_profile_main, "rist.encryption-type requires rist.profile main");
-  warn_if(&y, cfg.srt_passphrase_in[0] && (strlen(cfg.srt_passphrase_in) < 10 || strlen(cfg.srt_passphrase_in) > 79), "srt.passphrase-in must be 10..79 characters");
-  warn_if(&y, cfg.srt_pbkeylen_in && !cfg.srt_passphrase_in[0], "srt.pbkeylen-in requires srt.passphrase-in");
-  warn_if(&y, cfg.have_input && cfg.input.kind != INPUT_SRT && (cfg.srt_passphrase_in[0] || cfg.srt_pbkeylen_in || cfg.srt_streamid_in[0] || cfg.srt_packetfilter_in[0] || cfg.srt_latency_in_ms), "srt.*-in settings need input srt://");
-  warn_if(&y, cfg.srt_passphrase[0] && (strlen(cfg.srt_passphrase) < 10 || strlen(cfg.srt_passphrase) > 79), "srt.passphrase must be 10..79 characters");
-  warn_if(&y, cfg.srt_pbkeylen && !cfg.srt_passphrase[0], "srt.pbkeylen requires srt.passphrase");
-  warn_if(&y, cfg.n_out && !n_srt && (cfg.srt_passphrase[0] || cfg.srt_pbkeylen || cfg.srt_streamid[0] || cfg.srt_packetfilter[0] || cfg.srt_latency_ms), "srt.* settings need an srt:// output target");
+  warn_if(&y, !cfg.have_input, "DA000363", "input not set (required unless given on the command line)");
+  warn_if(&y, !cfg.n_out, "DA000364", "output not set (required unless given on the command line)");
+  warn_if(&y, (cfg.format == FMT_MKV || cfg.format == FMT_MKA) && cfg.n_out && n_file != 1, "DA000365", "format mkv/mka requires exactly one file output target (plus optional rtmp(s) targets)");
+  warn_if(&y, cfg.insecure_tls && !n_rtmps && !cfg.unicast_emm_uri, "DA000366", "insecure needs unicast-emm or an rtmps:// output target");
+  warn_if(&y, cfg.strip_lcevc && cfg.format == FMT_TS && !n_rtmp, "DA000367", "strip-lcevc has no effect without format mkv/mka or an rtmp(s):// output target");
+  warn_if(&y, cfg.biss2_sw_given && cfg.biss2_esw_given, "DA000368", "biss2.sw and biss2.esw are mutually exclusive");
+  warn_if(&y, cfg.biss2_esw_given && !cfg.biss2_id_given, "DA000369", "biss2.esw requires biss2.id");
+  warn_if(&y, cfg.biss2_id_given && !cfg.biss2_esw_given, "DA000370", "biss2.id requires biss2.esw");
+  warn_if(&y, cfg.biss1_sw_given && (cfg.biss2_sw_given || cfg.biss2_esw_given), "DA000371", "biss1.sw is mutually exclusive with biss2.sw/biss2.esw");
+  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "DA000120", "metrics.sock and metrics.interval require metrics.id");
+  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "DA000161", "metrics.inspect-ts requires metrics.id");
+  warn_if(&y, cfg.profile_given && cfg.have_input && cfg.input.kind != INPUT_RIST, "DA000372", "rist.profile needs input rist://");
+  warn_if(&y, cfg.rist_key_size && cfg.have_input && cfg.input.kind != INPUT_RIST, "DA000373", "rist.encryption-type needs input rist://");
+  warn_if(&y, cfg.rist_key_size && cfg.have_input && cfg.input.kind == INPUT_RIST && !cfg.rist_profile_main, "DA000374", "rist.encryption-type requires rist.profile main");
+  warn_if(&y, cfg.srt_passphrase_in[0] && (strlen(cfg.srt_passphrase_in) < 10 || strlen(cfg.srt_passphrase_in) > 79), "DA000375", "srt.passphrase-in must be 10..79 characters");
+  warn_if(&y, cfg.srt_pbkeylen_in && !cfg.srt_passphrase_in[0], "DA000376", "srt.pbkeylen-in requires srt.passphrase-in");
+  warn_if(&y, cfg.have_input && cfg.input.kind != INPUT_SRT && (cfg.srt_passphrase_in[0] || cfg.srt_pbkeylen_in || cfg.srt_streamid_in[0] || cfg.srt_packetfilter_in[0] || cfg.srt_latency_in_ms), "DA000377", "srt.*-in settings need input srt://");
+  warn_if(&y, cfg.srt_passphrase[0] && (strlen(cfg.srt_passphrase) < 10 || strlen(cfg.srt_passphrase) > 79), "DA000378", "srt.passphrase must be 10..79 characters");
+  warn_if(&y, cfg.srt_pbkeylen && !cfg.srt_passphrase[0], "DA000379", "srt.pbkeylen requires srt.passphrase");
+  warn_if(&y, cfg.n_out && !n_srt && (cfg.srt_passphrase[0] || cfg.srt_pbkeylen || cfg.srt_streamid[0] || cfg.srt_packetfilter[0] || cfg.srt_latency_ms), "DA000380", "srt.* settings need an srt:// output target");
   yamlcfg_strpool_free(cfg.str_pool);
   return yamlcfg_report(&y);
 }

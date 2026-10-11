@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
   if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
   dev = device_state_new(cfg.key_path, cfg.cw_len, cfg.serial, cfg.caid);
   if (!dev) {
-    fprintf(stderr, "%s: cannot load RSA private key from -k %s\n", TOOL_NAME, cfg.key_path);
+    log_code("3S300105", "%s: cannot load RSA private key from -k %s", TOOL_NAME, cfg.key_path);
     return 1;
   }
 
@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
   signals_install();
   srv = cs378x_server_start(&srv_cfg, cam378_ecm_cb, cam378_emm_cb, dev);
   if (!srv) {
-    fprintf(stderr, "%s: failed to start cs378x listener on %s port %u\n", TOOL_NAME, cfg.bind, cfg.port);
+    log_code("3S500108", "%s: failed to start cs378x listener on %s port %u", TOOL_NAME, cfg.bind, cfg.port);
     device_state_free(dev);
     return 1;
   }

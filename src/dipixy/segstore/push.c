@@ -14,7 +14,7 @@ int hls_set_init_segment_at(hls_store_t *s, codec_t video_codec, const uint8_t *
   hls_snapshot_t *ns;
   uint8_t *nd;
   if (size > HLS_INIT_SEG_MAX) {
-    log_line("hls_set_init_segment: %zu exceeds HLS_INIT_SEG_MAX %d", size, HLS_INIT_SEG_MAX);
+    log_code("YE400204", "hls_set_init_segment: %zu exceeds HLS_INIT_SEG_MAX %d", size, HLS_INIT_SEG_MAX);
     return -1;
   }
   pthread_mutex_lock(store_lock(s));

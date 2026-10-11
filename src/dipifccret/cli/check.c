@@ -9,23 +9,23 @@
 
 args_status_t fccret_cli_check(config_t *cfg) {
   if (!cfg->range_count) {
-    argerr("missing -g range");
+    argerr("FS000428", "missing -g range");
     return ARGS_ERR;
   }
   if (!cfg->listen_port) {
-    argerr("missing -l listen");
+    argerr("FS000429", "missing -l listen");
     return ARGS_ERR;
   }
   if (!cfg->iface) {
-    argerr("missing -I iface");
+    argerr("FS000430", "missing -I iface");
     return ARGS_ERR;
   }
   if (cfg->no_ret && cfg->no_fcc) {
-    argerr("--no-ret and --no-fcc together leave nothing to run");
+    argerr("FS000431", "--no-ret and --no-fcc together leave nothing to run");
     return ARGS_ERR;
   }
   if (cfg->rsi_mc_ret && (cfg->no_mc_ret || cfg->no_ret)) {
-    argerr("--rsi-mc-ret requires RET and MC RET (--no-ret/--no-mc-ret not given)");
+    argerr("FS000432", "--rsi-mc-ret requires RET and MC RET (--no-ret/--no-mc-ret not given)");
     return ARGS_ERR;
   }
   if (cfg->workers == 0) {

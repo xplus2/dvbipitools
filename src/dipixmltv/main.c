@@ -31,7 +31,7 @@ static void write_tva_xml(FILE *out, bcg_doc_t *doc, const mapping_t *map, int v
     }
   }
   tva_xml_write(out, doc);
-  if (verbose) log_line("%d channels, %d programmes read", doc->channel_count, doc->programme_count);
+  if (verbose) log_code("XD000258", "%d channels, %d programmes read", doc->channel_count, doc->programme_count);
 }
 
 typedef struct {
@@ -86,7 +86,7 @@ static void apply_revmap(bcg_doc_t *doc, const revmap_t *rev) {
 static void write_xmltv(FILE *out, bcg_doc_t *doc, int have_rev, const revmap_t *rev, int verbose) {
   if (have_rev) apply_revmap(doc, rev);
   xmltv_write(out, doc, TOOL_NAME);
-  if (verbose) log_line("%d channels, %d programmes read", doc->channel_count, doc->programme_count);
+  if (verbose) log_code("XD000258", "%d channels, %d programmes read", doc->channel_count, doc->programme_count);
 }
 
 int main(int argc, char **argv) {
@@ -98,19 +98,19 @@ int main(int argc, char **argv) {
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
   in = fileutil_open_std(cfg.input_path, "r");
   if (!in) {
-    fprintf(stderr, TOOL_NAME ": cannot open %s\n", cfg.input_path);
+    log_code("XS000100", TOOL_NAME ": cannot open %s", cfg.input_path);
     return 1;
   }
   out = fileutil_open_std(cfg.output_path, "w");
   if (!out) {
-    fprintf(stderr, TOOL_NAME ": cannot open %s\n", cfg.output_path);
+    log_code("XS100104", TOOL_NAME ": cannot open %s", cfg.output_path);
     if (in != stdin) fclose(in);
     return 1;
   }
   if (cfg.suggest_scan_path) {
     FILE *scan = fopen(cfg.suggest_scan_path, "r");
     if (!scan) {
-      fprintf(stderr, TOOL_NAME ": cannot open %s\n", cfg.suggest_scan_path);
+      log_code("XS000100", TOOL_NAME ": cannot open %s", cfg.suggest_scan_path);
       rc = 1;
     } else {
       rc = suggest_map(in, scan, out) ? 1 : 0;
@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
     }
     if (in != stdin) fclose(in);
     if (out != stdout && fclose(out) && rc == 0) {
-      fprintf(stderr, TOOL_NAME ": error writing %s\n", cfg.output_path);
+      log_code("XE100102", TOOL_NAME ": error writing %s", cfg.output_path);
       rc = 1;
     }
     return rc;
@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
   bcg_doc_free(&doc);
   if (in != stdin) fclose(in);
   if (out != stdout && fclose(out) && rc == 0) {
-    fprintf(stderr, TOOL_NAME ": error writing %s\n", cfg.output_path);
+    log_code("XE100102", TOOL_NAME ": error writing %s", cfg.output_path);
     rc = 1;
   }
   return rc;

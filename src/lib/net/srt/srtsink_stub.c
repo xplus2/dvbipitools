@@ -8,7 +8,7 @@
 /* built without libsrt: srt:// output always fails cleanly */
 srtsink_t *srtsink_open(const srtsink_cfg_t *cfg) {
   (void)cfg;
-  log_line("srt: this build has no libsrt support, srt:// output unavailable");
+  log_code("LA700131", "srt: this build has no libsrt support, srt:// output unavailable");
   return NULL;
 }
 

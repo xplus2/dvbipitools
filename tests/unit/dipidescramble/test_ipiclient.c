@@ -30,7 +30,7 @@ static size_t put_unit(unsigned char *out, const unsigned char *emm, size_t emm_
 }
 
 START_TEST(ipiclient_poll_completes_for_body_and_feeds_units) {
-  unsigned port;
+  unsigned port = 0;
   int listen_fd = make_listener(&port);
   pthread_t th;
   server_arg_t sarg;
@@ -105,7 +105,7 @@ START_TEST(ipiclient_poll_completes_for_body_and_feeds_units) {
 END_TEST
 
 START_TEST(ipiclient_poll_completes_for_not_modified) {
-  unsigned port;
+  unsigned port = 0;
   int listen_fd = make_listener(&port);
   pthread_t th;
   server_arg_t sarg;

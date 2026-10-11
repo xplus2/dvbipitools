@@ -248,7 +248,7 @@ static void add_track(mkv_t *m, const psi_es_t *es, int psi_idx) {
   t->cls = es->cls;
   t->psi_idx = psi_idx;
   memcpy(t->lang, es->lang, sizeof t->lang);
-  if (pes_track(m->pes, t->pid)) log_line("mkv: pes tracker full, pid 0x%04x not reassembled", t->pid);
+  if (pes_track(m->pes, t->pid)) log_code("LW400166", "mkv: pes tracker full, pid 0x%04x not reassembled", t->pid);
   m->ntrk++;
 }
 
@@ -260,7 +260,7 @@ void setup(mkv_t *m) {
     for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {
       if (es[k].cls != PID_VIDEO) continue;
       if (es[k].codec != CODEC_H264 && es[k].codec != CODEC_HEVC && es[k].codec != CODEC_VVC && es[k].codec != CODEC_AV1 && es[k].codec != CODEC_MPEG2V) {
-        log_line("mkv=no_vc(%s)", codec_name(es[k].codec));
+        log_code("LW400167", "mkv=no_vc(%s)", codec_name(es[k].codec));
         continue;
       }
       add_track(m, &es[k], 0);
@@ -272,7 +272,7 @@ void setup(mkv_t *m) {
       if (es[k].cls != PID_AUDIO) continue;
       if (!m->opts->audio_all && es[k].audio_index != (int)m->opts->audio_track) continue;
       if (!audio_supported(es[k].codec)) {
-        log_line("mkv=no_ac(%s)", codec_name(es[k].codec));
+        log_code("LW400168", "mkv=no_ac(%s)", codec_name(es[k].codec));
         continue;
       }
       add_track(m, &es[k], p);
@@ -293,10 +293,10 @@ void setup(mkv_t *m) {
       memcpy(t->lang, es[k].ttx_lang, sizeof t->lang);
       bufcpy(t->codecid, sizeof t->codecid, "S_TEXT/UTF8");
       t->hdr_parsed = 1; /* no setup data */
-      log_line("mkv=txtsub(%u=%s)", es[k].ttx_page, es[k].ttx_lang);
+      log_code("LW400169", "mkv=txtsub(%u=%s)", es[k].ttx_page, es[k].ttx_lang);
       break;
     }
   }
-  if (!m->ntrk) log_line("mkv=no_mux");
+  if (!m->ntrk) log_code("LW400170", "mkv=no_mux");
   m->setup = 1;
 }

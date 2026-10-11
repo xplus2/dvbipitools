@@ -7,7 +7,7 @@
 tls_server_ctx_t *tls_server_ctx_new(const char *cert_path, const char *key_path) {
   (void)cert_path;
   (void)key_path;
-  log_line("tls: this build has no TLS support, cannot serve https");
+  log_code("LA300140", "tls: this build has no TLS support, cannot serve https");
   return NULL;
 }
 

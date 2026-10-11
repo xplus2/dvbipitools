@@ -35,11 +35,11 @@ int dixy_basic_auth_parse(const char *flag, const char *val, char *out, size_t o
   char b64[192];
   size_t n;
   if (!colon || colon == val) {
-    argerr("invalid %s: %s (need user:password)", flag, val);
+    argerr("YS000618", "invalid %s: %s (need user:password)", flag, val);
     return -1;
   }
   if (strlen(val) >= ARGS_AUTH_CREDS_MAX) {
-    argerr("%s credentials too long: %s", flag, val);
+    argerr("YS000619", "%s credentials too long: %s", flag, val);
     return -1;
   }
   base64_encode(val, strlen(val), b64);

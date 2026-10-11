@@ -28,7 +28,7 @@ void hls_store_init(int max_channels) {
   g_store_locks = calloc((size_t)n, sizeof *g_store_locks);
   g_slot_state = calloc((size_t)n, sizeof *g_slot_state);
   if (!g_stores || !g_store_locks || !g_slot_state) {
-    log_line(TOOL_NAME ": out of memory sizing store table (%d entries)", n);
+    log_code("YS500221", TOOL_NAME ": out of memory sizing store table (%d entries)", n);
     free(g_stores);
     free(g_store_locks);
     free(g_slot_state);
@@ -118,7 +118,7 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
   if (!atomic_compare_exchange_strong_explicit(slot_state(s), &expected, STORE_CLOSING, memory_order_acq_rel, memory_order_relaxed)) return;
   node = malloc(sizeof *node);
   if (!node) {
-    log_line(TOOL_NAME ": hls: close retire alloc failed, store stays open");
+    log_code("YE500222", TOOL_NAME ": hls: close retire alloc failed, store stays open");
     atomic_store_explicit(slot_state(s), STORE_OPEN, memory_order_release);
     return;
   }

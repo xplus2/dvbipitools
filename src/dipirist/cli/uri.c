@@ -29,7 +29,7 @@ int rist_parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *co
 
 #ifdef DIPIRIST_LIBRIST_IPV6_WARN
     if (uri[7 + has_at] == '[')
-      log_line("warning: this librist build (<=0.2.20) has known IPv6 handling bugs, %s may crash it", uri);
+      log_code("VA700106", "warning: this librist build (<=0.2.20) has known IPv6 handling bugs, %s may crash it", uri);
 #endif
     if (e->n_rist >= DIPIRIST_MAX_PEERS) return -1;
     if (strlen(uri) >= sizeof e->rist_uri[0]) return -1;

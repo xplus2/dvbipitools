@@ -122,11 +122,11 @@ int cwenc_hkdf_sha256(const unsigned char *ikm, size_t ikm_len, const unsigned c
 int cwenc_config_validate(const cwenc_config_t *cfg, int cw_len) {
   if (cfg->algo == CWENC_ALGO_OFF) return 0;
   if (cfg->algo != CWENC_ALGO_DES56 && cfg->aes_mode == CWENC_AES_MODE_ECB && cw_len == 8) {
-    log_line("cw_encryption: aes_mode=ecb is invalid with cw_len=8 (AES has no 8-byte block mode)");
+    log_code("LS000286", "cw_encryption: aes_mode=ecb is invalid with cw_len=8 (AES has no 8-byte block mode)");
     return -1;
   }
   if (!cfg->key_list_a_loaded && !cfg->key_list_b_loaded && cfg->fixed_key_len == 0) {
-    log_line("cw_encryption: no fixed_key configured and no key list loaded");
+    log_code("LS000287", "cw_encryption: no fixed_key configured and no key list loaded");
     return -1;
   }
   return 0;

@@ -74,7 +74,7 @@ args_status_t tvh_opt_cas(tvh_opt_t *p, int c) {
     case OPT_CAS_PIDS:
       cfg->any_cas_flag = 1;
       if (tvh_cfg_cas_pids(cfg, optarg)) {
-        argerr("invalid --cas-pids: %s", optarg);
+        argerr("TS000602", "invalid --cas-pids: %s", optarg);
         return ARGS_ERR;
       }
       break;

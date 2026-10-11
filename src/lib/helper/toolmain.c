@@ -16,7 +16,7 @@ int toolmain_daemonize(int daemonize, const char *tool_name) {
   if (!daemonize)
     return 0;
   if (daemon(1, 1) != 0) {
-    log_line("%s: daemonize failed: %s", tool_name, strerror(errno));
+    log_code("LS500142", "%s: daemonize failed: %s", tool_name, strerror(errno));
     return -1;
   }
   return 0;

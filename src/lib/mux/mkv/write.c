@@ -19,7 +19,7 @@ void wfd(mkv_t *m, const void *p, size_t n) {
     if (w < 0) {
       if (errno == EINTR)
         continue;
-      log_line("mkv write: %s", strerror(errno));
+      log_code("LE100123", "mkv write: %s", strerror(errno));
       m->err = 1;
       return;
     }
@@ -227,7 +227,7 @@ static void write_head(mkv_t *m) {
 
 static void patch(mkv_t *m, const void *p, size_t n, uint64_t pos) {
   if (!m->err && pwrite(m->fd, p, n, (off_t)pos) != (ssize_t)n) {
-    log_line("mkv patch: %s", strerror(errno));
+    log_code("LE100124", "mkv patch: %s", strerror(errno));
     m->err = 1;
   }
 }

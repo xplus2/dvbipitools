@@ -80,7 +80,7 @@ static int representation_cb(const char *tag, const char *blk_end, void *vctx) {
   memset(r, 0, sizeof *r);
   st = *ctx->inherited;
   if (xml_attr_chk(tag, blk_end, "id", r->id, sizeof r->id, &cut) == 0 && cut)
-    log_line("mpd: Representation id truncated to %zu bytes", strlen(r->id));
+    log_code("LW400142", "mpd: Representation id truncated to %zu bytes", strlen(r->id));
   if (xml_attr(tag, blk_end, "bandwidth", v, sizeof v) == 0) r->bandwidth = (unsigned)strtoul(v, NULL, 10);
   if (xml_attr(tag, blk_end, "width", v, sizeof v) == 0) r->width = (unsigned)strtoul(v, NULL, 10);
   if (xml_attr(tag, blk_end, "height", v, sizeof v) == 0) r->height = (unsigned)strtoul(v, NULL, 10);

@@ -20,13 +20,13 @@ args_status_t dscr_opt_net(dscr_opt_t *p, int c) {
   switch (c) {
     case OPT_PROFILE:
       if (dscr_cfg_profile(cfg, optarg)) {
-        argerr("invalid --rist-profile: %s (simple|main)", optarg);
+        argerr("DS000357", "invalid --rist-profile: %s (simple|main)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_ENCRYPTION_TYPE:
       if (argutil_rist_key_size(optarg, &cfg->rist_key_size)) {
-        argerr("invalid --rist-encryption-type: %s (128|256)", optarg);
+        argerr("DS000358", "invalid --rist-encryption-type: %s (128|256)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -38,7 +38,7 @@ args_status_t dscr_opt_net(dscr_opt_t *p, int c) {
       char *end;
       unsigned long v = strtoul(optarg, &end, 10);
       if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
-        argerr("invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
+        argerr("DS000359", "invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
         return ARGS_ERR;
       }
       cfg->srt_pbkeylen_in = (int)v;
@@ -55,7 +55,7 @@ args_status_t dscr_opt_net(dscr_opt_t *p, int c) {
     case OPT_SRT_LATENCY_IN: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 60000, &v)) {
-        argerr("invalid --srt-latency-in: %s (1..60000 ms)", optarg);
+        argerr("DS000360", "invalid --srt-latency-in: %s (1..60000 ms)", optarg);
         return ARGS_ERR;
       }
       cfg->srt_latency_in_ms = v;
@@ -69,7 +69,7 @@ args_status_t dscr_opt_net(dscr_opt_t *p, int c) {
       char *end;
       unsigned long v = strtoul(optarg, &end, 10);
       if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
-        argerr("invalid --srt-pbkeylen: %s (16|24|32)", optarg);
+        argerr("DS000361", "invalid --srt-pbkeylen: %s (16|24|32)", optarg);
         return ARGS_ERR;
       }
       cfg->srt_pbkeylen = (int)v;
@@ -86,7 +86,7 @@ args_status_t dscr_opt_net(dscr_opt_t *p, int c) {
     case OPT_SRT_LATENCY: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 60000, &v)) {
-        argerr("invalid --srt-latency: %s (1..60000 ms)", optarg);
+        argerr("DS000362", "invalid --srt-latency: %s (1..60000 ms)", optarg);
         return ARGS_ERR;
       }
       cfg->srt_latency_ms = v;

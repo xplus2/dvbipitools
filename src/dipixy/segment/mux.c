@@ -118,7 +118,7 @@ void try_create_fmux(hls_seg_ctx_t *s) {
   if (!s->fmp4.fmux) return;
   outlen = fmp4_init_segment(s->fmp4.fmux, &out);
   if (outlen && (!s->store || hls_set_init_segment_at(s->store, s->demux.video_codec, out, outlen) < 0))
-    log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_set_init_segment failed, init segment lost");
+    log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700144", "hls: hls_set_init_segment failed, init segment lost");
 }
 
 static void fmp4_close_fragment(hls_seg_ctx_t *s, double pt) {
@@ -129,11 +129,11 @@ static void fmp4_close_fragment(hls_seg_ctx_t *s, double pt) {
   if (pt > 0.0) {
     double chunk_dur = (double)(s->fmp4.pend_ts_ms - s->fmp4.fmp4_frag_start_ts_ms) / 1000.0;
     if (!s->store || hls_push_part_at(s->store, out, outlen, chunk_dur, s->fmp4.fmp4_frag_key) < 0)
-      log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_part failed, fmp4 chunk lost");
+      log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700145", "hls: hls_push_part failed, fmp4 chunk lost");
     if (s->fmp4.pend_ends_seg && (!s->store || hls_push_segment_ll_at(s->store, s->fmp4.pend_elapsed) < 0))
-      log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment_ll failed, fmp4 segment lost");
+      log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700146", "hls: hls_push_segment_ll failed, fmp4 segment lost");
   } else if (!s->store || hls_push_segment_at(s->store, out, outlen, s->fmp4.pend_elapsed) < 0) {
-    log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment failed, fmp4 segment lost");
+    log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700147", "hls: hls_push_segment failed, fmp4 segment lost");
   }
 }
 
@@ -193,7 +193,7 @@ void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, int32_t cts_ticks, in
     fmp4_segment_add_sample(s->fmp4.fmux, &samp);
   }
   if (buf_reserve(&s->fmp4.pend_data, &s->fmp4.pend_cap, s->video.nal_scratch_len) < 0) {
-    log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "hls: buf_reserve failed, fmp4 access unit dropped");
+    log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "YW500216", "hls: buf_reserve failed, fmp4 access unit dropped");
     return;
   }
   memcpy(s->fmp4.pend_data, s->video.nal_scratch, s->video.nal_scratch_len);
@@ -229,7 +229,7 @@ void fmp4_feed_lcevc_au(hls_seg_ctx_t *s, int64_t ts_ms, const unsigned char *da
     fmp4_segment_add_sample(s->fmp4.fmux, &samp);
   }
   if (buf_reserve(&s->lcevc_track.pend_data, &s->lcevc_track.pend_cap, len) < 0) {
-    log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "hls: buf_reserve failed, lcevc au dropped");
+    log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "YW500217", "hls: buf_reserve failed, lcevc au dropped");
     return;
   }
   memcpy(s->lcevc_track.pend_data, data, len);

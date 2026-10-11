@@ -23,7 +23,7 @@ args_status_t rist_opt_rist(rist_opt_t *p, int c) {
       static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
       int v;
       if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-        argerr("invalid --profile: %s (simple|main)", optarg);
+        argerr("VS000151", "invalid --profile: %s (simple|main)", optarg);
         return ARGS_ERR;
       }
       cfg->profile = (rist_profile_sel_t)v;
@@ -35,7 +35,7 @@ args_status_t rist_opt_rist(rist_opt_t *p, int c) {
       break;
     case OPT_ENCRYPTION_TYPE:
       if (argutil_rist_key_size(optarg, &cfg->key_size)) {
-        argerr("invalid --encryption-type: %s (128|256)", optarg);
+        argerr("VS000152", "invalid --encryption-type: %s (128|256)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -45,19 +45,19 @@ args_status_t rist_opt_rist(rist_opt_t *p, int c) {
       break;
     case OPT_BUFFER:
       if (argutil_uint_range(optarg, 1, 60000, &cfg->buffer_ms)) {
-        argerr("invalid --buffer: %s (1..60000 ms)", optarg);
+        argerr("VS000153", "invalid --buffer: %s (1..60000 ms)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_AL_FEC:
       if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
-        argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
+        argerr("VS000154", "invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_AL_FEC_PORT:
       if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
-        argerr("invalid --al-fec-port: %s", optarg);
+        argerr("VS000155", "invalid --al-fec-port: %s", optarg);
         return ARGS_ERR;
       }
       break;

@@ -26,7 +26,7 @@ static int assign_missing_sids(config_t *cfg) {
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
     if (cfg->inputs[i].sid == 0) continue;
     if (is_sid_used(used, n_used, cfg->inputs[i].sid)) {
-      argerr("duplicate --sid %u", cfg->inputs[i].sid);
+      argerr("RS000464", "duplicate --sid %u", cfg->inputs[i].sid);
       return -1;
     }
     used[n_used++] = cfg->inputs[i].sid;
@@ -52,79 +52,79 @@ args_status_t rdh_cli_check(config_t *cfg, const rdh_opt_t *p) {
   any_cas_flag = any_cas_flag || cfg->any_cas_flag;
   have_secret = have_secret || cfg->rist_secret[0];
   if (cfg->n_inputs == 0) {
-    argerr("missing -i input");
+    argerr("RS000110", "missing -i input");
     return ARGS_ERR;
   }
   if (!have_mcast && cfg->n_rist == 0 && cfg->n_srt == 0) {
-    argerr("need -m output multicast or at least one -R peer");
+    argerr("RS000465", "need -m output multicast or at least one -R peer");
     return ARGS_ERR;
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
   if (argutil_metrics_inspect_ts_validate(TOOL_NAME, cfg->metrics_id, cfg->metrics_inspect_ts)) return ARGS_ERR;
   if (cfg->metrics_n_known_pids && cfg->metrics_inspect_ts != METRICS_INSPECT_TS_FULL) {
-    argutil_err(TOOL_NAME, "--metrics-inspect-ts-pids requires --metrics-inspect-ts full");
+    argutil_err(TOOL_NAME, "RS000336", "--metrics-inspect-ts-pids requires --metrics-inspect-ts full");
     return ARGS_ERR;
   }
   if (cfg->al_fec_l && !cfg->al_fec_port) {
-    argerr("--al-fec requires --al-fec-port");
+    argerr("RS000145", "--al-fec requires --al-fec-port");
     return ARGS_ERR;
   }
   if (!cfg->al_fec_l && cfg->al_fec_port)
-    log_line(TOOL_NAME ": --al-fec-port has no effect without --al-fec");
+    log_code("RA000146", TOOL_NAME ": --al-fec-port has no effect without --al-fec");
   if (cfg->al_fec_l && !cfg->rtp) {
-    argerr("--al-fec requires -r/--rtp output");
+    argerr("RS000466", "--al-fec requires -r/--rtp output");
     return ARGS_ERR;
   }
   if (cfg->al_fec_l && !cfg->mcast_port)
-    log_line(TOOL_NAME ": --al-fec has no effect without -m");
+    log_code("RA000467", TOOL_NAME ": --al-fec has no effect without -m");
   if (profile_arg) {
     static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
     int v;
     if (map_lookup(map, sizeof map / sizeof map[0], profile_arg, &v)) {
-      argerr("invalid --rist-profile: %s (simple|main)", profile_arg);
+      argerr("RS000357", "invalid --rist-profile: %s (simple|main)", profile_arg);
       return ARGS_ERR;
     }
     cfg->rist_profile = (rist_profile_sel_t)v;
   }
   if (cfg->n_rist == 0 && (profile_arg || cfg->rist_profile_given || have_secret || cfg->rist_key_size || cfg->rist_cname[0] || cfg->rist_buffer_ms))
-    log_line(TOOL_NAME ": --rist-profile/--rist-secret/--rist-encryption-type/--rist-cname/--rist-buffer have no effect without -R");
+    log_code("RA000468", TOOL_NAME ": --rist-profile/--rist-secret/--rist-encryption-type/--rist-cname/--rist-buffer have no effect without -R");
   if (cfg->n_rist > 0 && have_secret && cfg->rist_profile != RIST_PROF_MAIN) {
-    argerr("--rist-secret requires --rist-profile main");
+    argerr("RS000469", "--rist-secret requires --rist-profile main");
     return ARGS_ERR;
   }
   if (cfg->n_rist > 0 && cfg->rist_key_size && cfg->rist_profile != RIST_PROF_MAIN) {
-    argerr("--rist-encryption-type requires --rist-profile main");
+    argerr("RS000339", "--rist-encryption-type requires --rist-profile main");
     return ARGS_ERR;
   }
   if (srt_group_mode_arg) {
     static const enum_map_t map[] = {{"broadcast", SRT_BOND_BROADCAST}, {"backup", SRT_BOND_BACKUP}};
     int v;
     if (map_lookup(map, sizeof map / sizeof map[0], srt_group_mode_arg, &v)) {
-      argerr("invalid --srt-group-mode: %s (broadcast|backup)", srt_group_mode_arg);
+      argerr("RS000470", "invalid --srt-group-mode: %s (broadcast|backup)", srt_group_mode_arg);
       return ARGS_ERR;
     }
     cfg->srt_group_mode = (srt_bond_mode_t)v;
   }
   if (cfg->n_srt > 1 && cfg->srt_group_mode == SRT_BOND_NONE) {
-    argerr("bonding several -R srt:// peers requires --srt-group-mode");
+    argerr("RS000471", "bonding several -R srt:// peers requires --srt-group-mode");
     return ARGS_ERR;
   }
   if (cfg->n_srt == 1 && cfg->srt_group_mode != SRT_BOND_NONE) {
-    argerr("--srt-group-mode has no effect with a single -R srt:// peer");
+    argerr("RS000472", "--srt-group-mode has no effect with a single -R srt:// peer");
     return ARGS_ERR;
   }
   if (cfg->n_srt == 0 && (srt_group_mode_arg || cfg->srt_group_mode != SRT_BOND_NONE || cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
-    log_line(TOOL_NAME ": --srt-* has no effect without an -R srt:// peer");
+    log_code("RA000473", TOOL_NAME ": --srt-* has no effect without an -R srt:// peer");
   if (cfg->srt_passphrase[0] && (strlen(cfg->srt_passphrase) < 10 || strlen(cfg->srt_passphrase) > 79)) {
-    argerr("--srt-passphrase must be 10..79 characters");
+    argerr("RS000474", "--srt-passphrase must be 10..79 characters");
     return ARGS_ERR;
   }
   if (cfg->srt_pbkeylen && !cfg->srt_passphrase[0]) {
-    argerr("--srt-pbkeylen requires --srt-passphrase");
+    argerr("RS000342", "--srt-pbkeylen requires --srt-passphrase");
     return ARGS_ERR;
   }
   if (any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE) {
-    argerr("--cas-* options require --cas-algo");
+    argerr("RS000475", "--cas-* options require --cas-algo");
     return ARGS_ERR;
   }
   if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,

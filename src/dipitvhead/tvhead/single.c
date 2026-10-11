@@ -26,7 +26,7 @@ static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi
 
   out->pacer = bitrate_pacer_new(cfg->bitrate_kbps ? (double)cfg->bitrate_kbps * 1000.0 : 0.0, cfg->stuff, cfg->burst_limit);
   if (!out->pacer) {
-    log_line("bitrate pacer setup failed");
+    log_code("TS500194", "bitrate pacer setup failed");
     remux_free(rx);
     return;
   }
@@ -34,12 +34,12 @@ static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi
   if (cas_wanted) {
     cas = tvhead_single_cas_start(cfg, psi, rx);
     if (cas) remux_set_cas(rx, cas);
-    else log_line("cas setup failed");
+    else log_code("TS300168", "cas setup failed");
   }
   if (!cas_wanted || cas) {
     print_discovered(psi);
     remux_set_timemap(rx, tm);
-    if (cfg->pcr_mode == PCR_MODE_REGENERATE && remux_set_hold(rx, out_pcr_clock, out_pcr_latch, out, cfg->pcr_lead_ms)) log_line("hold-back queue setup failed");
+    if (cfg->pcr_mode == PCR_MODE_REGENERATE && remux_set_hold(rx, out_pcr_clock, out_pcr_latch, out, cfg->pcr_lead_ms)) log_code("TS500198", "hold-back queue setup failed");
     out_pcr_pid_set(out, 0, remux_pcr_pid_out(rx));
     run_output(src, rx, out, cfg, cas, mx, im_p, tsm_p, insp);
     remux_release(rx, mono_seconds(), packet_cb, out, 1, tsm_p);
@@ -102,7 +102,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
         rc = 1;
         break;
       }
-      log_line("input error, retrying in %lds", cfg->error_retry_s);
+      log_code("TW000615", "input error, retrying in %lds", cfg->error_retry_s);
       sleep_interruptible(cfg->error_retry_s);
       continue;
     }
@@ -128,14 +128,14 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       out_program_pids(0, &pids);
       rx = remux_new(cfg, &cfg->inputs[0], psi, &pids, 1);
       if (!rx) {
-        log_line("remux setup failed");
+        log_code("TS500199", "remux setup failed");
       } else {
         remux_set_psi_versions(rx, &psiv);
         remux_set_cc_offsets(rx, &ccm);
         run_single_input(cfg, src, psi, &out, rx, &tm, mx, im_p, tsm_p, insp_in);
       }
     } else if (r == 0) {
-      log_line("no live PMT found within %.0fs (use -p to select one, or check the source)", DISCOVERY_TIMEOUT_S);
+      log_code("TW000616", "no live PMT found within %.0fs (use -p to select one, or check the source)", DISCOVERY_TIMEOUT_S);
     }
     psi_free(psi);
     tvsrc_close(src);
@@ -145,7 +145,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       rc = 1;
       break;
     }
-    log_line("retrying in %lds", cfg->error_retry_s);
+    log_code("TW000617", "retrying in %lds", cfg->error_retry_s);
     sleep_interruptible(cfg->error_retry_s);
   }
 

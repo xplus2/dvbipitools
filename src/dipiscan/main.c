@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
   if (cfg.out_path && strcmp(cfg.out_path, "-") != 0) {
     out = fopen(cfg.out_path, "w");
     if (!out) {
-      log_line("open %s: %s", cfg.out_path, strerror(errno));
+      log_code("SS100108", "open %s: %s", cfg.out_path, strerror(errno));
       return 1;
     }
   } else {
@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
   if (out != stdout) {
     int write_failed = ferror(out);
     if ((fclose(out) || write_failed) && rc == 0) {
-      log_line("error writing %s", cfg.out_path);
+      log_code("SE100102", "error writing %s", cfg.out_path);
       rc = 1;
     }
   }

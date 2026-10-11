@@ -49,7 +49,7 @@ int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_le
     ecm_cw_combo_t combos[ECM_PROFILE_CW_MAX];
     int combo_count = 0;
     if (ecm_profile_decrypt_cw(&d->profile, cw_len, sk_copy, ecm + 5, ecm_len - 5, cp_number, ecm_pid, combos, &combo_count) != 0) {
-      log_line(TOOL_NAME ": ecm_profile: decrypt or integrity check failed");
+      log_code("DE300147", TOOL_NAME ": ecm_profile: decrypt or integrity check failed");
       secure_zero(sk_copy, sizeof sk_copy);
       return -1;
     }

@@ -37,7 +37,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         static const enum_map_t map[] = {{"xml", FMT_XML}, {"bim", FMT_BIM}};
         int v;
         if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-          argerr("invalid -f format: %s (xml|bim)", optarg);
+          argerr("BS000121", "invalid -f format: %s (xml|bim)", optarg);
           return ARGS_ERR;
         }
         cfg->format = (input_fmt_t)v;
@@ -50,7 +50,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
-          argerr("invalid --color: %s (auto|always|never)", optarg);
+          argerr("BS000105", "invalid --color: %s (auto|always|never)", optarg);
           return ARGS_ERR;
         }
         cfg->color_mode = v;
@@ -64,13 +64,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
   }
   if (optind < argc) {
-    argerr("unexpected argument: %s", argv[optind]);
+    argerr("BS000107", "unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
   if (!cfg->input_path) cfg->input_path = "-";
   if (!cfg->output_path) cfg->output_path = "-";
   if (!have_format) {
-    argerr("missing -f format (xml|bim)");
+    argerr("BS000122", "missing -f format (xml|bim)");
     return ARGS_ERR;
   }
   return ARGS_OK;

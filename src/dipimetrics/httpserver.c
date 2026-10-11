@@ -31,7 +31,7 @@ int http_listen(int family, const char *addr, unsigned port) {
 
   fd = socket(family, SOCK_STREAM, 0);
   if (fd < 0) {
-    log_line("dipimetrics: socket() failed: %s", strerror(errno));
+    log_code("MS500109", "dipimetrics: socket() failed: %s", strerror(errno));
     return -1;
   }
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
@@ -42,7 +42,7 @@ int http_listen(int family, const char *addr, unsigned port) {
     a->sin6_family = AF_INET6;
     a->sin6_port = htons((unsigned short)port);
     if (inet_pton(AF_INET6, addr, &a->sin6_addr) != 1) {
-      log_line("dipimetrics: invalid listen address %s", addr);
+      log_code("MS000138", "dipimetrics: invalid listen address %s", addr);
       close(fd);
       return -1;
     }
@@ -52,7 +52,7 @@ int http_listen(int family, const char *addr, unsigned port) {
     a->sin_family = AF_INET;
     a->sin_port = htons((unsigned short)port);
     if (inet_pton(AF_INET, addr, &a->sin_addr) != 1) {
-      log_line("dipimetrics: invalid listen address %s", addr);
+      log_code("MS000138", "dipimetrics: invalid listen address %s", addr);
       close(fd);
       return -1;
     }
@@ -60,18 +60,18 @@ int http_listen(int family, const char *addr, unsigned port) {
   }
 
   if (bind(fd, (struct sockaddr *)&ss, sslen) < 0) {
-    log_line("dipimetrics: bind %s:%u failed: %s", addr, port, strerror(errno));
+    log_code("MS500110", "dipimetrics: bind %s:%u failed: %s", addr, port, strerror(errno));
     close(fd);
     return -1;
   }
   if (listen(fd, HTTP_MAX_CONNS) < 0) {
-    log_line("dipimetrics: listen failed: %s", strerror(errno));
+    log_code("MS500111", "dipimetrics: listen failed: %s", strerror(errno));
     close(fd);
     return -1;
   }
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-    log_line("dipimetrics: fcntl O_NONBLOCK: %s", strerror(errno));
+    log_code("MS500106", "dipimetrics: fcntl O_NONBLOCK: %s", strerror(errno));
     close(fd);
     return -1;
   }
@@ -391,7 +391,7 @@ static void conn_try_parse_and_respond(http_conn_t *c, store_t *st, double now_m
       build_metrics_response(c, st, now_mono);
     }
   } else {
-    if (verbose && method[0]) log_line("dipimetrics: 404 %s %s", method, path);
+    if (verbose && method[0]) log_code("MD700104", "dipimetrics: 404 %s %s", method, path);
     st->stats.http_requests_404++;
     build_404_response(c);
   }

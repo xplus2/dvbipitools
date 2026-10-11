@@ -85,7 +85,7 @@ static bool csa2_dl_ensure(void) {
   }
 
   if (!csa2_dl_ok)
-    log_line("csa2: libdvbcsa not available at runtime (%s), CSA2 scrambling unavailable", dlerror());
+    log_code("LA300143", "csa2: libdvbcsa not available at runtime (%s), CSA2 scrambling unavailable", dlerror());
 
   atomic_store_explicit(&csa2_dl_ready, true, memory_order_release);
   return csa2_dl_ok;

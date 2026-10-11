@@ -84,7 +84,7 @@ int cas_tcp_dial(const _Atomic int *stop, const char *host, unsigned port, unsig
   hints.ai_socktype = SOCK_STREAM;
   e = getaddrinfo(host, portstr, &hints, &res);
   if (e) {
-    log_line("%s: resolve %s: %s", log_tag, host, gai_strerror(e));
+    log_code("LE600104", "%s: resolve %s: %s", log_tag, host, gai_strerror(e));
     return -1;
   }
   for (const struct addrinfo *ai = res; ai; ai = ai->ai_next) {
@@ -93,7 +93,7 @@ int cas_tcp_dial(const _Atomic int *stop, const char *host, unsigned port, unsig
   }
   freeaddrinfo(res);
   if (fd < 0) {
-    if (!cas_dial_stopping(stop)) log_line("%s: connect %s:%u: %s", log_tag, host, port, strerror(save_errno));
+    if (!cas_dial_stopping(stop)) log_code("LE600105", "%s: connect %s:%u: %s", log_tag, host, port, strerror(save_errno));
     return -1;
   }
   return fd;

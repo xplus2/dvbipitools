@@ -61,7 +61,7 @@ tssink_t *tssink_open(const tssink_cfg_t *cfg) {
     case TSSINK_FILE:
       s->fd = open(cfg->file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
       if (s->fd < 0) {
-        log_line("open %s: %s", cfg->file_path, strerror(errno));
+        log_code("LS100108", "open %s: %s", cfg->file_path, strerror(errno));
         goto fail;
       }
       break;
@@ -81,7 +81,7 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
     ssize_t w = write(fd, p, n);
     if (w < 0) {
       if (errno == EINTR) continue;
-      log_line("w:%s", strerror(errno));
+      log_code("LE100132", "w:%s", strerror(errno));
       return -1;
     }
     p += w;

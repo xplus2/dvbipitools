@@ -268,7 +268,7 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
     if (ctx.in) inspect_rx_ns(s, ctx.in);
     if (ctx.in ? tspack_feed_sync(&pz, buf, (size_t)n, stream_cb_inspect, &ctx, tsinspect_sync(ctx.in)) : tspack_feed(&pz, buf, (size_t)n, stream_cb, &ctx)) {
       if (ctx.bad)
-        log_line_ansi("audio track \e[0;31m%u\e[0;33m not found (\e[0;33m%d\e[0;33m present)", cfg->audio_track, psi_audio_count(ts_filter_psi(ctx.f)));
+        log_code_ansi("CW000573", "audio track \e[0;31m%u\e[0;33m not found (\e[0;33m%d\e[0;33m present)", cfg->audio_track, psi_audio_count(ts_filter_psi(ctx.f)));
       rc = 1;
       break;
     }
@@ -306,29 +306,29 @@ int resolve_pmt_selection(const config_t *cfg, src_t *s, unsigned *pmt_pid, unsi
   *pmt_pid = 0;
   *n_all_pids = 0;
   if (cfg->format == FMT_RAW) {
-    if (cfg->pmt_sel != PMT_SEL_AUTO) log_line(TOOL_NAME ": -p has no effect with -f raw");
+    if (cfg->pmt_sel != PMT_SEL_AUTO) log_code("CA000574", TOOL_NAME ": -p has no effect with -f raw");
     return 0;
   }
 
   probe = mpts_probe_run(s->t, MPTS_NAME_WAIT_MS);
   if (probe.kind == MPTS_PROBE_FAIL) {
-    log_line(TOOL_NAME ": no PAT received, giving up");
+    log_code("CE000423", TOOL_NAME ": no PAT received, giving up");
     return 1;
   }
   if (probe.kind == MPTS_PROBE_SPTS) {
     if (cfg->pmt_sel != PMT_SEL_AUTO)
-      log_line(TOOL_NAME ": -p ignored, single-program source");
+      log_code("CA000424", TOOL_NAME ": -p ignored, single-program source");
     return 0;
   }
 
   if (cfg->pmt_sel == PMT_SEL_AUTO) {
     mpts_probe_print_programs(TOOL_NAME, &probe);
-    log_line(TOOL_NAME ": MPTS source - pick one with -p <pid>, or -p all");
+    log_code("CS000575", TOOL_NAME ": MPTS source - pick one with -p <pid>, or -p all");
     return 1;
   }
   if (cfg->pmt_sel == PMT_SEL_ALL) {
     if (cfg->format == FMT_MKV || cfg->format == FMT_MP4 || cfg_has_rtmp(cfg)) {
-      log_line(TOOL_NAME ": -f mkv/mp4/-o rtmp:// can't hold multiple programs, pick one with -p <pid>");
+      log_code("CS000576", TOOL_NAME ": -f mkv/mp4/-o rtmp:// can't hold multiple programs, pick one with -p <pid>");
       mpts_probe_print_programs(TOOL_NAME, &probe);
       return 1;
     }
@@ -340,7 +340,7 @@ int resolve_pmt_selection(const config_t *cfg, src_t *s, unsigned *pmt_pid, unsi
       *pmt_pid = cfg->pmt_pid;
       return 0;
     }
-  log_line(TOOL_NAME ": -p 0x%04x not found in this MPTS", cfg->pmt_pid);
+  log_code("CS000427", TOOL_NAME ": -p 0x%04x not found in this MPTS", cfg->pmt_pid);
   mpts_probe_print_programs(TOOL_NAME, &probe);
   return 1;
 }

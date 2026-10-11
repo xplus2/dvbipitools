@@ -13,7 +13,7 @@ int rec_parse_pbkeylen_opt(const char *val, int *out, const char *optname) {
   char *end;
   unsigned long v = strtoul(val, &end, 10);
   if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
-    argerr("invalid %s: %s (16|24|32)", optname, val);
+    argerr("CS000559", "invalid %s: %s (16|24|32)", optname, val);
     return -1;
   }
   *out = (int)v;
@@ -22,11 +22,11 @@ int rec_parse_pbkeylen_opt(const char *val, int *out, const char *optname) {
 
 int rec_validate_srt_passphrase(const char *passphrase, int pbkeylen, const char *suffix) {
   if (passphrase[0] && (strlen(passphrase) < 10 || strlen(passphrase) > 79)) {
-    argerr("--srt-passphrase%s must be 10..79 characters", suffix);
+    argerr("CS000560", "--srt-passphrase%s must be 10..79 characters", suffix);
     return -1;
   }
   if (pbkeylen && !passphrase[0]) {
-    argerr("--srt-pbkeylen%s requires --srt-passphrase%s", suffix, suffix);
+    argerr("CS000561", "--srt-pbkeylen%s requires --srt-passphrase%s", suffix, suffix);
     return -1;
   }
   return 0;

@@ -67,7 +67,7 @@ capture_ctx_t *capture_open_srt(const char *host, unsigned port) {
   cfg.srt_port = port;
   c = tssrc_ctx_new(keydup, &cfg, NULL);
   if (!c) {
-    log_line(TOOL_NAME ": srt source %s:%u: connect failed, source left unavailable", host, port);
+    log_code("YE600156", TOOL_NAME ": srt source %s:%u: connect failed, source left unavailable", host, port);
     return NULL;
   }
 
@@ -94,7 +94,7 @@ capture_ctx_t *capture_open_http_static(const char *url, int insecure_tls) {
   net_err_reason_t reason;
   char *keydup;
   if (http_url_parse(url, &hu)) {
-    log_line(TOOL_NAME ": http source %s: invalid URL, source left unavailable", url);
+    log_code("YE000674", TOOL_NAME ": http source %s: invalid URL, source left unavailable", url);
     return NULL;
   }
 
@@ -115,7 +115,7 @@ capture_ctx_t *capture_open_http_static(const char *url, int insecure_tls) {
   cfg.insecure_tls = insecure_tls;
   c = tssrc_ctx_new(keydup, &cfg, &reason);
   if (!c) {
-    log_line(TOOL_NAME ": http source %s: %s, source left unavailable", url, net_err_reason_name(reason));
+    log_code("YE600157", TOOL_NAME ": http source %s: %s, source left unavailable", url, net_err_reason_name(reason));
     return NULL;
   }
 
@@ -148,7 +148,7 @@ int capture_rist_init(const char *rist_uri) {
   cfg.rist_uri = rist_uri;
   c = tssrc_ctx_new(NULL, &cfg, &reason);
   if (!c) {
-    log_line(TOOL_NAME ": --rist %s: %s", rist_uri, net_err_reason_name(reason));
+    log_code("YE000675", TOOL_NAME ": --rist %s: %s", rist_uri, net_err_reason_name(reason));
     return -1;
   }
   pthread_mutex_lock(&g_lock);
@@ -171,7 +171,7 @@ int capture_stdin_init(void) {
   cfg.kind = TSSRC_STDIN;
   c = tssrc_ctx_new(NULL, &cfg, &reason);
   if (!c) {
-    log_line(TOOL_NAME ": -i -: %s", net_err_reason_name(reason));
+    log_code("YE000676", TOOL_NAME ": -i -: %s", net_err_reason_name(reason));
     return -1;
   }
 

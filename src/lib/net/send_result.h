@@ -11,7 +11,7 @@ static inline void note_send_result(int ok, int *had_error, unsigned long long *
   if (!ok) {
     (*errors)++;
     if (!*had_error) {
-      log_line("%s output: send failed, will keep retrying", label);
+      log_code("LW100130", "%s output: send failed, will keep retrying", label);
       *had_error = 1;
     }
   } else if (*had_error) {

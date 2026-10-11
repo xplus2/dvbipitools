@@ -30,7 +30,7 @@ int revmap_load(const char *path, revmap_t *m) {
 
   memset(m, 0, sizeof *m);
   if (!f) {
-    fprintf(stderr, TOOL_NAME ": cannot open reverse map file %s\n", path);
+    log_code("XS000261", TOOL_NAME ": cannot open reverse map file %s", path);
     return -1;
   }
   while (fgets(line, sizeof line, f)) {
@@ -40,7 +40,7 @@ int revmap_load(const char *path, revmap_t *m) {
     chomp(line);
     if (!line[0] || line[0] == '#') continue;
     if (split_first1(line, &uri, &id)) {
-      fprintf(stderr, TOOL_NAME ": reverse map line %d: expected uri,id\n", lineno);
+      log_code("XS400124", TOOL_NAME ": reverse map line %d: expected uri,id", lineno);
       fclose(f);
       revmap_free(m);
       return -1;

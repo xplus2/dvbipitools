@@ -49,9 +49,15 @@ int metrics_cfg_auth(const char *val, char *out, size_t outsz, char *err, size_t
   return 0;
 }
 
-const char *metrics_cfg_conflict(const config_t *cfg) {
-  if (cfg->tls_cert && !cfg->tls_key) return "tls cert given without tls key";
-  if (cfg->tls_key && !cfg->tls_cert) return "tls key given without tls cert";
+const char *metrics_cfg_conflict(const config_t *cfg, const char **code) {
+  if (cfg->tls_cert && !cfg->tls_key) {
+    *code = "MS000001";
+    return "tls cert given without tls key";
+  }
+  if (cfg->tls_key && !cfg->tls_cert) {
+    *code = "MS000002";
+    return "tls key given without tls cert";
+  }
   return NULL;
 }
 
@@ -161,10 +167,11 @@ int metrics_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   config_t cfg;
   const char *conflict;
+  const char *code;
 
   metrics_cfg_defaults(&cfg);
   if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
-  conflict = metrics_cfg_conflict(&cfg);
-  if (conflict) yamlcfg_warn(&y, "%s", conflict);
+  conflict = metrics_cfg_conflict(&cfg, &code);
+  if (conflict) yamlcfg_warn(&y, code, "%s", conflict);
   return yamlcfg_report(&y);
 }

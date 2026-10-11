@@ -68,7 +68,7 @@ void hls_live_emit(hls_live_t *h, const unsigned char *data, size_t len) {
   size_t n = len < room ? len : room;
   memcpy(h->out_buf + h->out_len, data, n);
   h->out_len += n;
-  if (room < len) log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS output buffer full, dropped bytes\e[0m", h->idx, h->label ? h->label : "?");
+  if (room < len) log_code_ansi("LW100122", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS output buffer full, dropped bytes\e[0m", h->idx, h->label ? h->label : "?");
 }
 
 hls_live_t *hls_live_new(const http_url_t *playlist_url, const char *user_agent, int insecure, unsigned idx, const char *label, const hls_insp_t *si, hls_segment_cb cb, void *cb_ctx) {
@@ -199,7 +199,7 @@ static int handle_playlist_done(hls_live_t *h, net_err_reason_t *reason_out) {
     bufcpy(h->etag, sizeof h->etag, etag);
   h->pl = *h->parse_scratch;
   if (h->have_sequence && h->next_seq > h->pl.media_sequence + h->pl.n_segments) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS media sequence reset, rejoining\e[0m", h->idx, h->label ? h->label : "?");
+    log_code_ansi("LW000306", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS media sequence reset, rejoining\e[0m", h->idx, h->label ? h->label : "?");
     h->have_sequence = 0;
   }
   if (!h->have_sequence) {
@@ -211,7 +211,7 @@ static int handle_playlist_done(hls_live_t *h, net_err_reason_t *reason_out) {
     }
     h->have_sequence = 1;
   } else if (h->next_seq < h->pl.media_sequence) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS segment gap, skipping ahead\e[0m", h->idx, h->label ? h->label : "?");
+    log_code_ansi("LW000307", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS segment gap, skipping ahead\e[0m", h->idx, h->label ? h->label : "?");
     h->next_seq = h->pl.media_sequence;
   }
   h->pending_idx = (unsigned)(h->next_seq - h->pl.media_sequence);
@@ -227,7 +227,7 @@ static int handle_key_done(hls_live_t *h, net_err_reason_t *reason_out) {
   h->fetch = NULL;
   h->phase = HLS_LIVE_IDLE;
   if (len != HLS_KEY_LEN) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS key fetch returned %zu bytes, expected %d\e[0m", h->idx, h->label ? h->label : "?", len, HLS_KEY_LEN);
+    log_code_ansi("LE300133", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS key fetch returned %zu bytes, expected %d\e[0m", h->idx, h->label ? h->label : "?", len, HLS_KEY_LEN);
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
@@ -244,7 +244,7 @@ static int handle_init_done(hls_live_t *h, net_err_reason_t *reason_out) {
   h->fetch = NULL;
   h->phase = HLS_LIVE_IDLE;
   if (!len || !h->init_cb(h->init_ctx, h, h->segment_buf, len)) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mHLS init segment unusable\e[0m", h->idx, h->label ? h->label : "?");
+    log_code_ansi("LE400155", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mHLS init segment unusable\e[0m", h->idx, h->label ? h->label : "?");
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
@@ -274,7 +274,7 @@ static int handle_segment_done(hls_live_t *h) {
   h->fetch = NULL;
   h->phase = HLS_LIVE_IDLE;
   if (h->pl.segments[h->pending_idx].key && segment_decrypt(h, &len)) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS segment decrypt failed, skipped\e[0m", h->idx, h->label ? h->label : "?");
+    log_code_ansi("LW300134", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS segment decrypt failed, skipped\e[0m", h->idx, h->label ? h->label : "?");
     h->pending_idx++;
     h->next_seq++;
     return 1;

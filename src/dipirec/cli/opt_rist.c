@@ -18,7 +18,7 @@ args_status_t rec_opt_rist(rec_opt_t *p, int c) {
   switch (c) {
     case OPT_PROFILE:
       if (rec_cfg_profile(cfg, optarg, 0)) {
-        argerr("invalid --rist-profile: %s (simple|main)", optarg);
+        argerr("CS000357", "invalid --rist-profile: %s (simple|main)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -29,13 +29,13 @@ args_status_t rec_opt_rist(rec_opt_t *p, int c) {
       break;
     case OPT_ENCRYPTION_TYPE:
       if (argutil_rist_key_size(optarg, &cfg->rist_key_size)) {
-        argerr("invalid --rist-encryption-type: %s (128|256)", optarg);
+        argerr("CS000358", "invalid --rist-encryption-type: %s (128|256)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_ENCRYPTION_TYPE_IN:
       if (argutil_rist_key_size(optarg, &cfg->rist_key_size_in)) {
-        argerr("invalid --rist-encryption-type-in: %s (128|256)", optarg);
+        argerr("CS000552", "invalid --rist-encryption-type-in: %s (128|256)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -46,14 +46,14 @@ args_status_t rec_opt_rist(rec_opt_t *p, int c) {
       break;
     case OPT_BUFFER:
       if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->rist_buffer_ms)) {
-        argerr("invalid --rist-buffer: %s (ms)", optarg);
+        argerr("CS000511", "invalid --rist-buffer: %s (ms)", optarg);
         return ARGS_ERR;
       }
       cfg->fl.have_buffer = 1;
       break;
     case OPT_PROFILE_IN:
       if (rec_cfg_profile(cfg, optarg, 1)) {
-        argerr("invalid --rist-profile-in: %s (simple|main)", optarg);
+        argerr("CS000553", "invalid --rist-profile-in: %s (simple|main)", optarg);
         return ARGS_ERR;
       }
       break;

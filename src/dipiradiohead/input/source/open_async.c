@@ -36,7 +36,7 @@ static int so_start_fetch(source_open_t *o, net_err_reason_t *reason_out) {
   http_url_t u;
 
   if (http_url_parse(o->cur_uri, &u)) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31minvalid uri\e[0m: %s", o->idx, o->label ? o->label : "?", o->cur_uri);
+    log_code_ansi("RE000524", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31minvalid uri\e[0m: %s", o->idx, o->label ? o->label : "?", o->cur_uri);
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
@@ -80,7 +80,7 @@ source_open_state_t source_open_async_step(source_open_t *o, net_err_reason_t *r
   char next[2048];
   http_t *h;
   if (mono_seconds() - o->started > SRC_OPEN_TIMEOUT_S) {
-    log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mopen timed out\e[0m after %.0fs", o->idx, o->label ? o->label : "?", SRC_OPEN_TIMEOUT_S);
+    log_code_ansi("RE600149", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mopen timed out\e[0m after %.0fs", o->idx, o->label ? o->label : "?", SRC_OPEN_TIMEOUT_S);
     if (reason_out) *reason_out = NET_ERR_TIMEOUT;
     return SOURCE_OPEN_ERROR;
   }
@@ -104,7 +104,7 @@ source_open_state_t source_open_async_step(source_open_t *o, net_err_reason_t *r
     n = http_read(o->h, o->sniff + o->sniff_got, sizeof o->sniff - o->sniff_got, reason_out);
     if (n < 0) {
       if (o->sniff_got > 0) break; /* connection close after a full small (e.g. playlist) body is not an error */
-      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mempty response\e[0m from %s", o->idx, o->label ? o->label : "?", o->cur_uri);
+      log_code_ansi("RE000525", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mempty response\e[0m from %s", o->idx, o->label ? o->label : "?", o->cur_uri);
       http_close(o->h);
       o->h = NULL;
       return SOURCE_OPEN_ERROR;
@@ -130,7 +130,7 @@ source_open_state_t source_open_async_step(source_open_t *o, net_err_reason_t *r
     o->h = NULL;
     o->hops++;
     if (o->hops >= SRC_MAX_HOPS) {
-      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mtoo many playlist redirects\e[0m", o->idx, o->label ? o->label : "?");
+      log_code_ansi("RW000526", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mtoo many playlist redirects\e[0m", o->idx, o->label ? o->label : "?");
       if (reason_out) *reason_out = NET_ERR_FORMAT;
       return SOURCE_OPEN_ERROR;
     }

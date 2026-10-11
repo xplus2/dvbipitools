@@ -73,7 +73,7 @@ int discover_step(discover_state_t *ds, tvsrc_t *src, const dipitvhead_input_t *
         break;
       }
     if (!found) {
-      log_line("-p 0x%x not present in PAT", input->pmt_pid);
+      log_code("TE000611", "-p 0x%x not present in PAT", input->pmt_pid);
       return -1;
     }
     ds->checked_pmt_pid = 1;

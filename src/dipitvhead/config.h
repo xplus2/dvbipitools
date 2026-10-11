@@ -10,7 +10,7 @@
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipitvhead.yaml"
 
-typedef void (*tvh_report_fn)(void *ud, int fatal, const char *msg);
+typedef void (*tvh_report_fn)(void *ud, int fatal, const char *code, const char *msg);
 
 void tvh_cfg_defaults(config_t *cfg);
 

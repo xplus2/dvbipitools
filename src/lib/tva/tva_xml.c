@@ -293,7 +293,7 @@ static int service_name_cb(const char *tag, const char *blk_end, void *ctx) {
   char name[BCG_ID_LEN];
   int cut = 0;
   if (xml_span_text_chk(tag, blk_end, name, sizeof name, &cut) == 0) {
-    if (cut) log_line("bcg: <Name> text truncated to %zu bytes", strlen(name));
+    if (cut) log_code("LW400186", "bcg: <Name> text truncated to %zu bytes", strlen(name));
     bcg_channel_add_name(c, name);
   }
   return 0;
@@ -315,7 +315,7 @@ static int service_url_cb(const char *tag, const char *blk_end, void *vctx) {
   if (xml_tag_attr(tag, blk_end, "name", kind, sizeof kind) || xml_span_text_chk(tag, blk_end, text, sizeof text, &cut)) return 0;
   if (!u->have_iptv && !strcmp(kind, "IPTV")) {
     u->have_iptv = 1;
-    if (cut) log_line("bcg: <ServiceURL> text truncated to %zu bytes", strlen(text));
+    if (cut) log_code("LW400187", "bcg: <ServiceURL> text truncated to %zu bytes", strlen(text));
     bufcpy(u->c->uri, sizeof u->c->uri, text);
   } else if (!u->have_dtt && !strcmp(kind, "DTT")) {
     u->have_dtt = 1;

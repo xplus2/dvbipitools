@@ -39,7 +39,7 @@ static void publish_ecm(ecmg_client_t *c, int slot, const unsigned char *dg, siz
 
 static void log_ecm_wait_failed(ecmg_client_t *c, unsigned short cp_number) {
   if (!ecmg_stopping(c))
-    log_line("ecmg: no ECM_response for CP %u", cp_number);
+    log_code("LW600111", "ecmg: no ECM_response for CP %u", cp_number);
 }
 
 static void publish_ecm_response(ecmg_client_t *c, unsigned short cp_number, const unsigned char *payload, unsigned short payload_len) {
@@ -71,7 +71,7 @@ typedef struct {
 
 static int session_send(const ecmg_session_t *s, const unsigned char *msg, size_t len) {
   if (!len || simulcrypt_send_all(s->fd, msg, len, ECMG_HANDSHAKE_TIMEOUT_MS) < 0) {
-    log_line("ecmg: reply send failed");
+    log_code("LE100118", "ecmg: reply send failed");
     return -1;
   }
   return 0;
@@ -83,7 +83,7 @@ static int session_tick(ecmg_session_t *s) {
   int64_t now = now_ms();
   if (s->test_deadline) {
     if (now < s->test_deadline) return 0;
-    log_line("ecmg: no channel_status reply to channel_test");
+    log_code("LW600112", "ecmg: no channel_status reply to channel_test");
     return -1;
   }
   if (now < s->next_test_at) return 0;
@@ -109,7 +109,7 @@ static int session_handle(ecmg_session_t *s, const simulcrypt_hdr_t *hdr, const 
     case ECMG_MSG_STREAM_ERROR: {
       unsigned short err = 0;
       ecmg_find_error_status(payload, hdr->payload_len, &err);
-      log_line("ecmg: async error 0x%04x, error_status=0x%04x", hdr->type, err);
+      log_code("LE600113", "ecmg: async error 0x%04x, error_status=0x%04x", hdr->type, err);
       return -1;
     }
     default:
@@ -157,18 +157,18 @@ static int run_cp_loop(ecmg_client_t *c, int fd, unsigned char version, unsigned
       cp_number++;
       atomic_fetch_add_explicit(&c->cryptoperiod_transitions_total, 1, memory_order_relaxed);
       if (c->cfg.cw_source.get_cw && fill_hist_from_source(c, hist, cp_number, lead_cw, cw_per_msg) < 0) {
-        log_line("ecmg: CW source failed for CP %u", cp_number);
+        log_code("LE300132", "ecmg: CW source failed for CP %u", cp_number);
         return -1;
       }
       len = ecmg_build_cw_provision(msg, sizeof msg, version, cp_number, hist, c->cw_len, lead_cw, cw_per_msg, &c->cwenc_ctx);
       if (!len) {
-        log_line("ecmg: failed to build CW_provision");
+        log_code("LE400126", "ecmg: failed to build CW_provision");
         return -1;
       }
       atomic_store_explicit(&c->cw_published_at, cur, memory_order_relaxed);
 
       if (simulcrypt_send_all(fd, msg, len, ECMG_HANDSHAKE_TIMEOUT_MS) < 0) {
-        log_line("ecmg: CW_provision send failed");
+        log_code("LE100119", "ecmg: CW_provision send failed");
         atomic_fetch_add_explicit(&c->ecm_errors_total, 1, memory_order_relaxed);
         return -1;
       }
@@ -182,7 +182,7 @@ static int run_cp_loop(ecmg_client_t *c, int fd, unsigned char version, unsigned
       } else {
         unsigned short err = 0;
         ecmg_find_error_status(payload, hdr.payload_len, &err);
-        log_line("ecmg: CW_provision rejected, reply=0x%04x error_status=0x%04x", hdr.type, err);
+        log_code("LE600114", "ecmg: CW_provision rejected, reply=0x%04x error_status=0x%04x", hdr.type, err);
         atomic_fetch_add_explicit(&c->ecm_errors_total, 1, memory_order_relaxed);
         return -1;
       }
@@ -193,7 +193,7 @@ static int run_cp_loop(ecmg_client_t *c, int fd, unsigned char version, unsigned
       const unsigned char *payload;
       int rc = simulcrypt_reader_poll(&rd, fd, ECMG_POLL_INTERVAL_MS, &hdr, &payload);
       if (rc < 0) {
-        log_line("ecmg: connection lost");
+        log_code("LW600115", "ecmg: connection lost");
         return -1;
       }
       if (rc == 1 && session_handle(&sess, &hdr, payload) < 0)

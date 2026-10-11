@@ -99,10 +99,10 @@ static const struct option longopts[] = {
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
-static void report_cli(void *ud, int fatal, const char *msg) {
+static void report_cli(void *ud, int fatal, const char *code, const char *msg) {
   (void)ud;
-  if (fatal) argerr("%s", msg);
-  else       log_line(TOOL_NAME ": %s", msg);
+  if (fatal) argerr("TS000584", code, "%s", msg);
+  else       log_code(code, TOOL_NAME ": %s", msg);
 }
 
 static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
@@ -165,7 +165,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     if (st != ARGS_OK) return st;
   }
   if (optind < argc) {
-    argerr("unexpected argument: %s", argv[optind]);
+    argerr("TS000107", "unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
   if (tvh_cfg_check(cfg, 0, report_cli, NULL)) return ARGS_ERR;

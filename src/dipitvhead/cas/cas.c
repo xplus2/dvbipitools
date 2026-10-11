@@ -67,7 +67,7 @@ static void pcr_sample(cas_t *c, uint64_t pcr27) {
     if (cas_pcr_plausible(c->last_pcr27, pcr27, wall_delta_s, &pcr_delta_s)) {
       deliver_clock_tick(c, (unsigned long)(pcr_delta_s * 1000.0 + 0.5));
     } else {
-      log_line(TOOL_NAME ": cas: PCR discontinuity on pid 0x%x, resyncing", c->pcr_out_pid);
+      log_code("TW400199", TOOL_NAME ": cas: PCR discontinuity on pid 0x%x, resyncing", c->pcr_out_pid);
     }
   }
   c->last_pcr27 = pcr27;
@@ -76,7 +76,7 @@ static void pcr_sample(cas_t *c, uint64_t pcr27) {
 
 static void add_pid(unsigned *pids, size_t *count, size_t cap, unsigned pid) {
   if (*count >= cap) {
-    log_line(TOOL_NAME ": cas: pid 0x%x dropped, already at the %zu pid cap", pid, cap);
+    log_code("TW700141", TOOL_NAME ": cas: pid 0x%x dropped, already at the %zu pid cap", pid, cap);
     return;
   }
   for (size_t i = 0; i < *count; i++) {
@@ -143,7 +143,7 @@ cas_t *cas_start(const config_t *cfg, const psi_t *psi, const out_es_t *es, int 
     cas_biss_cfg_t bc = biss_cfg_of(cfg);
     size_t pid_count = cas_resolve_pids(cfg, es, es_count, pids, CAS_CORE_MAX_PIDS);
     if (pid_count == 0) {
-      log_line(TOOL_NAME ": biss: --cas-pids resolved to no pids, nothing to scramble");
+      log_code("TA000577", TOOL_NAME ": biss: --cas-pids resolved to no pids, nothing to scramble");
       return NULL;
     }
     c = calloc(1, sizeof *c);
@@ -160,7 +160,7 @@ cas_t *cas_start(const config_t *cfg, const psi_t *psi, const out_es_t *es, int 
     cas_biss_ca_cfg_t bc = biss_ca_cfg_of(cfg);
     size_t pid_count = cas_resolve_pids(cfg, es, es_count, pids, CAS_CORE_MAX_PIDS);
     if (pid_count == 0) {
-      log_line(TOOL_NAME ": biss-ca: --cas-pids resolved to no pids, nothing to scramble");
+      log_code("TA000578", TOOL_NAME ": biss-ca: --cas-pids resolved to no pids, nothing to scramble");
       return NULL;
     }
     c = calloc(1, sizeof *c);
@@ -174,7 +174,7 @@ cas_t *cas_start(const config_t *cfg, const psi_t *psi, const out_es_t *es, int 
   }
 
   if (psi_pcr_pid(psi) == 0x1FFF) {
-    log_line(TOOL_NAME ": cas: source declares no PCR_PID, cannot drive crypto-period timing");
+    log_code("TA000579", TOOL_NAME ": cas: source declares no PCR_PID, cannot drive crypto-period timing");
     return NULL;
   }
   c = calloc(1, sizeof *c);
@@ -183,7 +183,7 @@ cas_t *cas_start(const config_t *cfg, const psi_t *psi, const out_es_t *es, int 
   fill_group_cfg(cfg, &gcfg);
   gcfg.pid_count = cas_resolve_pids(cfg, es, es_count, gcfg.pids, CAS_CORE_MAX_PIDS);
   if (gcfg.pid_count == 0) {
-    log_line(TOOL_NAME ": cas: --cas-pids resolved to no pids, nothing to scramble");
+    log_code("TA000580", TOOL_NAME ": cas: --cas-pids resolved to no pids, nothing to scramble");
     free(c);
     return NULL;
   }
@@ -205,7 +205,7 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
     cas_biss_cfg_t bc = biss_cfg_of(cfg);
     size_t pid_count = cas_resolve_pids_multi(cfg, es_lists, es_counts, n_programs, pids, CAS_CORE_MAX_PIDS);
     if (pid_count == 0) {
-      log_line(TOOL_NAME ": biss: --cas-pids resolved to no pids across any program, nothing to scramble");
+      log_code("TA000581", TOOL_NAME ": biss: --cas-pids resolved to no pids across any program, nothing to scramble");
       return NULL;
     }
     c = calloc(1, sizeof *c);
@@ -222,7 +222,7 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
     cas_biss_ca_cfg_t bc = biss_ca_cfg_of(cfg);
     size_t pid_count = cas_resolve_pids_multi(cfg, es_lists, es_counts, n_programs, pids, CAS_CORE_MAX_PIDS);
     if (pid_count == 0) {
-      log_line(TOOL_NAME ": biss-ca: --cas-pids resolved to no pids across any program, nothing to scramble");
+      log_code("TA000582", TOOL_NAME ": biss-ca: --cas-pids resolved to no pids across any program, nothing to scramble");
       return NULL;
     }
     c = calloc(1, sizeof *c);
@@ -241,7 +241,7 @@ cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, con
   fill_group_cfg(cfg, &gcfg);
   gcfg.pid_count = cas_resolve_pids_multi(cfg, es_lists, es_counts, n_programs, gcfg.pids, CAS_CORE_MAX_PIDS);
   if (gcfg.pid_count == 0) {
-    log_line(TOOL_NAME ": cas: --cas-pids resolved to no pids across any program, nothing to scramble");
+    log_code("TA000583", TOOL_NAME ": cas: --cas-pids resolved to no pids across any program, nothing to scramble");
     free(c);
     return NULL;
   }

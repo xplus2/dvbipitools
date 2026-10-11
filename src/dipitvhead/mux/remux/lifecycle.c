@@ -105,7 +105,7 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
       if (r->scte[i]) scte35stamp_init(r->scte[i]);
     }
   }
-  if (dropped) log_line("program %u: ES cap (%d) reached, dropping %d stream%s", r->src_service_id, OUT_PROGRAM_ES_CAP, dropped, dropped == 1 ? "" : "s");
+  if (dropped) log_code("TW700143", "program %u: ES cap (%d) reached, dropping %d stream%s", r->src_service_id, OUT_PROGRAM_ES_CAP, dropped, dropped == 1 ? "" : "s");
   resolve_sdt(r, psi);
   resolve_nit(r, psi);
   r->send_ait = r->input.hbbtv_url != NULL;
@@ -113,7 +113,7 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
     r->ait_pmt_entry_len = aitbuild_pmt_entry(r->pids.ait_pid, r->ait_pmt_entry, sizeof r->ait_pmt_entry);
     r->ait_section_len = aitbuild_ait(0, r->input.hbbtv_org_id, r->input.hbbtv_app_id, r->input.hbbtv_url, r->ait_section, sizeof r->ait_section);
     r->send_ait = r->ait_pmt_entry_len && r->ait_section_len;
-    if (!r->send_ait) log_line("--hbbtv: AIT build failed (url too long?)");
+    if (!r->send_ait) log_code("TE400200", "--hbbtv: AIT build failed (url too long?)");
   }
   pmt_sec = psi_pmt_section(psi, &r->src_pmt_len);
   if (pmt_sec && r->src_pmt_len <= sizeof r->src_pmt) {
@@ -264,7 +264,7 @@ static void cas_add_new_streams(remux_t *r, const out_es_t *neu, int n) {
   if (!na) return;
   np = cas_resolve_pids(&r->cfg, added, na, pids, CAS_CORE_MAX_PIDS);
   failed = np ? cas_add_pids(r->cas, pids, np) : 0;
-  if (failed) log_line("program %u: cas pid set full, %zu new stream%s go out unscrambled", r->src_service_id, failed, failed == 1 ? "" : "s");
+  if (failed) log_code("TW300165", "program %u: cas pid set full, %zu new stream%s go out unscrambled", r->src_service_id, failed, failed == 1 ? "" : "s");
 }
 
 static void remap_es(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm) {
@@ -279,7 +279,7 @@ static void remap_es(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
     r->reconnect_wanted = 1;
     return;
   }
-  if (dropped) log_line("program %u: ES cap (%d) reached, dropping %d stream%s", r->src_service_id, OUT_PROGRAM_ES_CAP, dropped, dropped == 1 ? "" : "s");
+  if (dropped) log_code("TW700143", "program %u: ES cap (%d) reached, dropping %d stream%s", r->src_service_id, OUT_PROGRAM_ES_CAP, dropped, dropped == 1 ? "" : "s");
   remux_release(r, now, cb, ctx, 0, tsm);
   for (int j = 0; j < r->es_count; j++) {
     int kept = 0;

@@ -215,13 +215,13 @@ static int track_cb(const char *tag, const char *blk_end, void *ctx) {
   if (xml_elem_text_chk(tag, blk_end, "location", uri, sizeof uri, &cut))
     return 0; /* no location: skip track, not a parse failure */
   if (cut) {
-    log_line("playlist: skipping track, location longer than %zu bytes", sizeof uri - 1);
+    log_code("LW000304", "playlist: skipping track, location longer than %zu bytes", sizeof uri - 1);
     return 0;
   }
   if (xml_elem_text_chk(tag, blk_end, "title", name, sizeof name, &cut))
     name[0] = '\0';
   else if (cut)
-    log_line("playlist: title truncated to %zu bytes", strlen(name));
+    log_code("LW000305", "playlist: title truncated to %zu bytes", strlen(name));
 
   slot = list_append(pl);
   if (!slot)

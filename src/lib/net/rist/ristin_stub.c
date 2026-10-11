@@ -7,7 +7,7 @@
 
 ristin_t *ristin_open(const ristin_cfg_t *cfg) {
   (void)cfg;
-  log_line("rist: this build has no librist support, rist:// input unavailable");
+  log_code("LA700129", "rist: this build has no librist support, rist:// input unavailable");
   return NULL;
 }
 

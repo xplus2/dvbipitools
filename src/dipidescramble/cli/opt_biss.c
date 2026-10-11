@@ -22,28 +22,28 @@ args_status_t dscr_opt_biss(dscr_opt_t *p, int c) {
   switch (c) {
     case OPT_BISS2_SW:
       if (biss_parse_hex16(optarg, cfg->biss2_sw)) {
-        argerr("invalid --biss2-sw: %s (32 hex chars)", optarg);
+        argerr("DS000344", "invalid --biss2-sw: %s (32 hex chars)", optarg);
         return ARGS_ERR;
       }
       cfg->biss2_sw_given = 1;
       break;
     case OPT_BISS2_ESW:
       if (biss_parse_hex16(optarg, cfg->biss2_esw)) {
-        argerr("invalid --biss2-esw: %s (32 hex chars)", optarg);
+        argerr("DS000345", "invalid --biss2-esw: %s (32 hex chars)", optarg);
         return ARGS_ERR;
       }
       cfg->biss2_esw_given = 1;
       break;
     case OPT_BISS2_ID:
       if (biss_parse_hex16(optarg, cfg->biss2_id)) {
-        argerr("invalid --biss2-id: %s (32 hex chars)", optarg);
+        argerr("DS000346", "invalid --biss2-id: %s (32 hex chars)", optarg);
         return ARGS_ERR;
       }
       cfg->biss2_id_given = 1;
       break;
     case OPT_BISS1_SW:
       if (biss1_parse_sw(optarg, cfg->biss1_sw)) {
-        argerr("invalid --biss1-sw: %s (12 hex chars)", optarg);
+        argerr("DS000347", "invalid --biss1-sw: %s (12 hex chars)", optarg);
         return ARGS_ERR;
       }
       cfg->biss1_sw_given = 1;
@@ -54,7 +54,7 @@ args_status_t dscr_opt_biss(dscr_opt_t *p, int c) {
         p->cli_ca_key = 1;
       }
       if (cfg->n_biss2_ca_key >= DIPIDESCRAMBLE_MAX_CA_KEYS) {
-        argerr("too many --biss2-ca-key (max %d)", DIPIDESCRAMBLE_MAX_CA_KEYS);
+        argerr("DS000348", "too many --biss2-ca-key (max %d)", DIPIDESCRAMBLE_MAX_CA_KEYS);
         return ARGS_ERR;
       }
       cfg->biss2_ca_key[cfg->n_biss2_ca_key++] = optarg;

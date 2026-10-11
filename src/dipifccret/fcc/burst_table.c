@@ -188,7 +188,7 @@ burst_slot_t *burst_table_claim(burst_table_t *t, const struct sockaddr *addr, s
   s = claim_locked(t, st, addr, addrlen, fd, b);
   pthread_mutex_unlock(&st->lock);
   if (!s)
-    log_line(TOOL_NAME ": max-bursts (%zu) reached, rejecting new burst session", t->cap);
+    log_code("FW700136", TOOL_NAME ": max-bursts (%zu) reached, rejecting new burst session", t->cap);
   return s;
 }
 
@@ -234,7 +234,7 @@ int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t a
     return 1;
   }
 
-  log_line(TOOL_NAME ": max-bursts (%zu) reached, rejecting new burst session", t->cap);
+  log_code("FW700136", TOOL_NAME ": max-bursts (%zu) reached, rejecting new burst session", t->cap);
   return -1;
 }
 

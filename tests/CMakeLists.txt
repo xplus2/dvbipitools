@@ -66,6 +66,12 @@ dvbipitools_add_unit_test(lib_helper_toolmain
     ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
+dvbipitools_add_unit_test(lib_helper_log
+    unit/lib/helper/test_log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
+
 dvbipitools_add_unit_test(lib_demux_rtcp
     unit/lib/demux/test_rtcp.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c
@@ -1616,7 +1622,8 @@ dvbipitools_add_unit_test(dipixmltv_args
 dvbipitools_add_unit_test(dipixmltv_revmap
     unit/dipixmltv/test_revmap.c
     ${CMAKE_SOURCE_DIR}/src/dipixmltv/revmap.c
-    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(dipixmltv_suggest
     unit/dipixmltv/test_suggest.c

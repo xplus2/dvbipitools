@@ -471,8 +471,8 @@ int dixy_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
-  if (cond) yamlcfg_warn(y, "%s", msg);
+static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
+  if (cond) yamlcfg_warn(y, code, "%s", msg);
 }
 
 int dixy_cfg_test(const char *path, int strict) {
@@ -487,16 +487,16 @@ int dixy_cfg_test(const char *path, int strict) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }
-  warn_if(&y, cfg.tls_cert && !cfg.tls_key, "tls.cert given without tls.key");
-  warn_if(&y, cfg.tls_key && !cfg.tls_cert, "tls.key given without tls.cert");
-  warn_if(&y, cfg.hls_part_size >= cfg.segment_size, "hls.part-size must be smaller than segment-size");
-  warn_if(&y, cfg.dash_part_size >= cfg.segment_size, "dash.part-size must be smaller than segment-size");
-  warn_if(&y, (double)cfg.ssdp_max_age_s < 2.0 * cfg.ssdp_interval_s, "ssdp.max-age must be at least 2x ssdp.interval");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
-  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
-  warn_if(&y, cfg.enable_dlna && cfg.no_spts, "enable-dlna requires spts in format");
-  warn_if(&y, cfg.enable_dlna && cfg.no_rawaudio, "enable-dlna requires rawaudio in format");
-  warn_if(&y, cfg.enable_dlna && !cfg.dlna_host_opt && cfg.listen.scope == LISTEN_ANY, "enable-dlna needs dlna.host or a concrete listen address, not 'all'");
+  warn_if(&y, cfg.tls_cert && !cfg.tls_key, "YA000659", "tls.cert given without tls.key");
+  warn_if(&y, cfg.tls_key && !cfg.tls_cert, "YA000660", "tls.key given without tls.cert");
+  warn_if(&y, cfg.hls_part_size >= cfg.segment_size, "YA000661", "hls.part-size must be smaller than segment-size");
+  warn_if(&y, cfg.dash_part_size >= cfg.segment_size, "YA000662", "dash.part-size must be smaller than segment-size");
+  warn_if(&y, (double)cfg.ssdp_max_age_s < 2.0 * cfg.ssdp_interval_s, "YA000663", "ssdp.max-age must be at least 2x ssdp.interval");
+  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "YA000120", "metrics.sock and metrics.interval require metrics.id");
+  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "YA000161", "metrics.inspect-ts requires metrics.id");
+  warn_if(&y, cfg.enable_dlna && cfg.no_spts, "YA000664", "enable-dlna requires spts in format");
+  warn_if(&y, cfg.enable_dlna && cfg.no_rawaudio, "YA000665", "enable-dlna requires rawaudio in format");
+  warn_if(&y, cfg.enable_dlna && !cfg.dlna_host_opt && cfg.listen.scope == LISTEN_ANY, "YA000666", "enable-dlna needs dlna.host or a concrete listen address, not 'all'");
   rc = yamlcfg_report(&y);
   args_free(&cfg);
   yamlcfg_strpool_free(cfg.str_pool);

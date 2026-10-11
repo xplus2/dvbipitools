@@ -210,7 +210,7 @@ void conn_free(conn_t *c) {
     t_conn_retiring[t_conn_retiring_n].c = c;
     t_conn_retiring_n++;
   } else {
-    log_line(TOOL_NAME ": conn retire queue full, leaking one conn_t");
+    log_code("YW500208", TOOL_NAME ": conn retire queue full, leaking one conn_t");
   }
 }
 
@@ -240,7 +240,7 @@ int conn_table_init(int maxfd) {
   if (maxfd > CONN_TABLE_MAX) maxfd = CONN_TABLE_MAX;
   g_fd_conn = calloc((size_t)maxfd, sizeof *g_fd_conn);
   if (!g_fd_conn) {
-    log_line(TOOL_NAME ": out of memory sizing conn table (%d entries), fd tracking disabled", maxfd);
+    log_code("YA500209", TOOL_NAME ": out of memory sizing conn table (%d entries), fd tracking disabled", maxfd);
     return 0;
   }
   g_fd_conn_max = maxfd;
@@ -250,7 +250,7 @@ int conn_table_init(int maxfd) {
 /* only if RLIMIT_NOFILE exceeds CONN_TABLE_MAX. accept path refuses such fds. logged once */
 static void conn_table_overflow_log(int fd) {
   if (!atomic_exchange_explicit(&g_fd_conn_overflow_logged, 1, memory_order_relaxed))
-    log_line(TOOL_NAME ": conn table overflow, fd %d exceeds table size %d, conn_publish/conn_for_fd no-op past this point", fd, g_fd_conn_max);
+    log_code("YE500210", TOOL_NAME ": conn table overflow, fd %d exceeds table size %d, conn_publish/conn_for_fd no-op past this point", fd, g_fd_conn_max);
 }
 
 int conn_fd_trackable(int fd) {

@@ -70,7 +70,7 @@ static void ts_part_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts_ms, size_t au_o
   }
 
   if (au_off > s->part.part_start_off && (!s->store || hls_push_part_at(s->store, s->buf + s->part.part_start_off, au_off - s->part.part_start_off, part_elapsed, s->part.part_key) < 0))
-    log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_part failed, part lost");
+    log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700148", "hls: hls_push_part failed, part lost");
   s->part.part_start_off = will_trim ? 0 : au_off;
   s->part.part_start_ts_ms = ts_ms;
   s->part.part_key = new_part_key;
@@ -114,10 +114,10 @@ void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, 
   if (s->container == SEG_CONTAINER_TS) {
     if (pt > 0.0) {
       if (!s->store || hls_push_segment_ll_at(s->store, elapsed) < 0)
-        log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment_ll failed, segment lost");
+        log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700149", "hls: hls_push_segment_ll failed, segment lost");
     } else {
       if (!s->store || hls_push_segment_at(s->store, s->buf, cut_off, elapsed) < 0)
-        log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "hls: hls_push_segment failed, segment lost");
+        log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700150", "hls: hls_push_segment failed, segment lost");
       if (s->video.boot_left > 0) s->video.boot_left--;
     }
   }

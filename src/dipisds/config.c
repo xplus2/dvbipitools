@@ -355,8 +355,8 @@ int sds_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
-  if (cond) yamlcfg_warn(y, "%s", msg);
+static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
+  if (cond) yamlcfg_warn(y, code, "%s", msg);
 }
 
 static void check_conflicts(yamlcfg_t *y, const config_t *cfg) {
@@ -365,25 +365,25 @@ static void check_conflicts(yamlcfg_t *y, const config_t *cfg) {
 
   int is_xml = cfg->input_path && strlen(cfg->input_path) > 4 && !strcmp(cfg->input_path + strlen(cfg->input_path) - 4, ".xml");
 
-  warn_if(y, !fl->have_a && !fl->have_l, "neither announce nor listen set (required unless given on the command line)");
-  warn_if(y, !fl->have_mcast, "mcast not set (required unless given on the command line)");
-  warn_if(y, fl->have_a && !fl->have_l && !cfg->input_path, "input not set (required for announce unless given on the command line)");
-  warn_if(y, fl->have_a && !fl->have_l && cfg->input_path && !is_xml && !cfg->provider, "provider not set (required for a non-.xml input unless given on the command line)");
-  warn_if(y, fl->have_a && !fl->have_l && cfg->input_path && !is_xml && !cfg->offering, "offering not set (required for a non-.xml input unless given on the command line)");
-  warn_if(y, fl->have_a && fl->have_l, "announce and listen are mutually exclusive");
-  warn_if(y, fl->have_l && !fl->have_a && announce_only, "ret, fcc, al-fec, metrics id, packages, cells, rms and fus are announce-only");
-  warn_if(y, cfg->rms_enabled && cfg->fus_enabled, "rms and fus are mutually exclusive");
-  warn_if(y, cfg->rms_enabled && !cfg->rms_location, "rms.name requires rms.location");
-  warn_if(y, !cfg->rms_enabled && (fl->have_rms_lang || cfg->rms_location || cfg->rms_logo), "rms.lang, rms.location and rms.logo require rms.name");
-  warn_if(y, cfg->fus_enabled && !fl->have_fus_id, "fus.name requires fus.id");
-  warn_if(y, !cfg->fus_enabled && (fl->have_fus_lang || fl->have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo), "fus.lang, fus.id, fus.announce and fus.logo require fus.name");
-  warn_if(y, !cfg->ret_enabled && (fl->have_ret_rtx_time || fl->have_ret_rtx_pt || cfg->ret_mc || fl->have_ret_mc_port || cfg->ret_rsi_mc_ret),"ret.* settings require ret.addr");
-  warn_if(y, cfg->ret_rsi_mc_ret && !cfg->ret_mc, "ret.rsi-mc-ret requires ret.mc");
-  warn_if(y, !cfg->fcc_enabled && (fl->have_fcc_rtx_time || fl->have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || fl->have_fcc_resolve_max_channels), "fcc.* settings require fcc.addr");
-  warn_if(y, !cfg->al_fec_enabled && fl->have_al_fec_pt, "al-fec.pt requires al-fec.addr");
-  warn_if(y, (cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id, "metrics.sock and metrics.interval require metrics.id");
+  warn_if(y, !fl->have_a && !fl->have_l, "AA000114", "neither announce nor listen set (required unless given on the command line)");
+  warn_if(y, !fl->have_mcast, "AA000115", "mcast not set (required unless given on the command line)");
+  warn_if(y, fl->have_a && !fl->have_l && !cfg->input_path, "AA000116", "input not set (required for announce unless given on the command line)");
+  warn_if(y, fl->have_a && !fl->have_l && cfg->input_path && !is_xml && !cfg->provider, "AA000211", "provider not set (required for a non-.xml input unless given on the command line)");
+  warn_if(y, fl->have_a && !fl->have_l && cfg->input_path && !is_xml && !cfg->offering, "AA000212", "offering not set (required for a non-.xml input unless given on the command line)");
+  warn_if(y, fl->have_a && fl->have_l, "AA000118", "announce and listen are mutually exclusive");
+  warn_if(y, fl->have_l && !fl->have_a && announce_only, "AA000213", "ret, fcc, al-fec, metrics id, packages, cells, rms and fus are announce-only");
+  warn_if(y, cfg->rms_enabled && cfg->fus_enabled, "AA000214", "rms and fus are mutually exclusive");
+  warn_if(y, cfg->rms_enabled && !cfg->rms_location, "AA000215", "rms.name requires rms.location");
+  warn_if(y, !cfg->rms_enabled && (fl->have_rms_lang || cfg->rms_location || cfg->rms_logo), "AA000216", "rms.lang, rms.location and rms.logo require rms.name");
+  warn_if(y, cfg->fus_enabled && !fl->have_fus_id, "AA000217", "fus.name requires fus.id");
+  warn_if(y, !cfg->fus_enabled && (fl->have_fus_lang || fl->have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo), "AA000218", "fus.lang, fus.id, fus.announce and fus.logo require fus.name");
+  warn_if(y, !cfg->ret_enabled && (fl->have_ret_rtx_time || fl->have_ret_rtx_pt || cfg->ret_mc || fl->have_ret_mc_port || cfg->ret_rsi_mc_ret),"AA000219", "ret.* settings require ret.addr");
+  warn_if(y, cfg->ret_rsi_mc_ret && !cfg->ret_mc, "AA000220", "ret.rsi-mc-ret requires ret.mc");
+  warn_if(y, !cfg->fcc_enabled && (fl->have_fcc_rtx_time || fl->have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || fl->have_fcc_resolve_max_channels), "AA000221", "fcc.* settings require fcc.addr");
+  warn_if(y, !cfg->al_fec_enabled && fl->have_al_fec_pt, "AA000222", "al-fec.pt requires al-fec.addr");
+  warn_if(y, (cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id, "AA000120", "metrics.sock and metrics.interval require metrics.id");
   warn_if(y, cfg->input_path && strlen(cfg->input_path) > 4 && !strcmp(cfg->input_path + strlen(cfg->input_path) - 4, ".xml") &&
-    (cfg->ret_enabled || cfg->fcc_enabled || cfg->al_fec_enabled || cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled), "ret, fcc, al-fec, packages, cells, rms and fus have no effect with a raw .xml input");
+    (cfg->ret_enabled || cfg->fcc_enabled || cfg->al_fec_enabled || cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled), "AA000223", "ret, fcc, al-fec, packages, cells, rms and fus have no effect with a raw .xml input");
 }
 
 int sds_cfg_test(const char *path, int strict) {

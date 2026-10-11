@@ -70,11 +70,11 @@ int rist_listen_ports_usable(const char *uri, int rtcp_port) {
 
   if (!split_listen_uri(uri, host, sizeof host, &port)) return 1; /* let librist report it */
   if (!udp_port_bindable(host, port)) {
-    log_line("rist: UDP port %u already in use", port);
+    log_code("LE500156", "rist: UDP port %u already in use", port);
     return 0;
   }
   if (rtcp_port && !udp_port_bindable(host, port + 1u)) {
-    log_line("rist: UDP port %u (RTCP of %u) already in use", port + 1u, port);
+    log_code("LE500157", "rist: UDP port %u (RTCP of %u) already in use", port + 1u, port);
     return 0;
   }
   return 1;
@@ -85,7 +85,7 @@ int rist_add_peer(struct rist_ctx *ctx, const char *peer_uri, const char *secret
   struct rist_peer *peer;
 
   if (rist_parse_address2(peer_uri, &pc) != 0 || !pc) {
-    log_line("rist: invalid peer url: %s", peer_uri);
+    log_code("LE000140", "rist: invalid peer url: %s", peer_uri);
     if (pc) rist_peer_config_free2(&pc);
     return -1;
   }
@@ -102,7 +102,7 @@ int rist_add_peer(struct rist_ctx *ctx, const char *peer_uri, const char *secret
     return -1;
   }
   if (rist_peer_create(ctx, &peer, pc) != 0) {
-    log_line("rist: failed to add peer: %s", peer_uri);
+    log_code("LE600102", "rist: failed to add peer: %s", peer_uri);
     rist_peer_config_free2(&pc);
     return -1;
   }

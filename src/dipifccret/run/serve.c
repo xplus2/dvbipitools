@@ -62,7 +62,7 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   cache_cap = cfg->no_fcc ? 0 : cache_cap_from_gop_ms(cfg->gop_cap_ms);
   channels = channel_table_new(max_channels, ring_slots, cache_cap);
   if (!channels) {
-    fprintf(stderr, "%s: out of memory allocating channel table\n", TOOL_NAME);
+    log_code("FS500181", "%s: out of memory allocating channel table", TOOL_NAME);
     rc = 1;
     goto cleanup;
   }
@@ -70,18 +70,18 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   if (!cfg->no_ret && !cfg->no_mc_ret) {
     mt = mcsend_table_new(max_channels, cfg->iface, MC_SEND_TTL);
     if (!mt) {
-      fprintf(stderr, "%s: out of memory allocating MC RET session table\n", TOOL_NAME);
+      log_code("FS500182", "%s: out of memory allocating MC RET session table", TOOL_NAME);
       rc = 1;
       goto cleanup;
     }
   }
   if (!cfg->no_ret && !cfg->no_rsi) {
     if (cfg->listen_family == AF_INET6) {
-      log_line(TOOL_NAME ": RSI self-announcement needs an IPv4 -l address (F.5.3 IPv6 unicast feedback is not supported in DVB), disabling it");
+      log_code("FA700140", TOOL_NAME ": RSI self-announcement needs an IPv4 -l address (F.5.3 IPv6 unicast feedback is not supported in DVB), disabling it");
     } else if (!cfg->rsi_mc_ret) {
       rsi_mt = mcsend_table_new(max_channels, cfg->iface, MC_SEND_TTL);
       if (!rsi_mt) {
-        fprintf(stderr, "%s: out of memory allocating RSI announcement table\n", TOOL_NAME);
+        log_code("FS500183", "%s: out of memory allocating RSI announcement table", TOOL_NAME);
         rc = 1;
         goto cleanup;
       }
@@ -90,30 +90,30 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   if (!cfg->no_fcc) {
     bursts = burst_table_new(cfg->max_bursts);
     if (!bursts) {
-      fprintf(stderr, "%s: out of memory allocating burst table\n", TOOL_NAME);
+      log_code("FS500184", "%s: out of memory allocating burst table", TOOL_NAME);
       rc = 1;
       goto cleanup;
     }
     if (cfg->fcc_client_rate) {
       fcc_limiter = ratelimit_new(FCC_LIMIT_SLOTS);
       if (!fcc_limiter) {
-        fprintf(stderr, "%s: out of memory allocating FCC rate limiter\n", TOOL_NAME);
+        log_code("FS500185", "%s: out of memory allocating FCC rate limiter", TOOL_NAME);
         rc = 1;
         goto cleanup;
       }
     }
     if (cfg->fcc_client_range_count == 0)
-      log_line(TOOL_NAME ": --fcc-client-range not set, any source address can request FCC bursts, set it on exposed networks");
+      log_code("FA000462", TOOL_NAME ": --fcc-client-range not set, any source address can request FCC bursts, set it on exposed networks");
   }
 
   cap = open_capture(cfg, errbuf, sizeof errbuf);
   if (!cap) {
-    fprintf(stderr, "%s: %s\n", TOOL_NAME, errbuf);
+    log_code("FS500186", "%s: %s", TOOL_NAME, errbuf);
     rc = 1;
     goto cleanup;
   }
   if (capture_drop_privileges(cfg->user) != 0) {
-    fprintf(stderr, "%s: failed to drop privileges to -u %s\n", TOOL_NAME, cfg->user);
+    log_code("FS300157", "%s: failed to drop privileges to -u %s", TOOL_NAME, cfg->user);
     rc = 1;
     goto cleanup;
   }
@@ -122,12 +122,12 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
     ret_send_ctx.mt = mt;
     ret = ret_ctx_new(channels, cfg->rtx_pt, cfg->max_ret_clients, ret_send_mc_impl, ret_send_unicast_impl, &ret_send_ctx);
     if (!ret) {
-      fprintf(stderr, "%s: out of memory creating ret context\n", TOOL_NAME);
+      log_code("FS500187", "%s: out of memory creating ret context", TOOL_NAME);
       rc = 1;
       goto cleanup;
     }
     if (ret_ctx_set_limits(ret, cfg->ret_client_rate, cfg->ret_mc_dedup_ms) != 0) {
-      fprintf(stderr, "%s: out of memory allocating RET rate limiter\n", TOOL_NAME);
+      log_code("FS500188", "%s: out of memory allocating RET rate limiter", TOOL_NAME);
       rc = 1;
       goto cleanup;
     }
@@ -165,7 +165,7 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
 
   pool = listen_pool_start(cfg->listen_family, cfg->listen_addr, cfg->listen_port, cfg->workers, listen_cb, &dispatch_ctx);
   if (!pool) {
-    fprintf(stderr, "%s: failed to start listen workers on %s:%u\n", TOOL_NAME, cfg->listen_addr, cfg->listen_port);
+    log_code("FS500189", "%s: failed to start listen workers on %s:%u", TOOL_NAME, cfg->listen_addr, cfg->listen_port);
     rc = 1;
     goto cleanup;
   }
@@ -174,7 +174,7 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   if (cfg->fcc_resolve_by_port) {
     resolve_pool = listen_multi_start(cfg->listen_family, cfg->listen_addr, resolve_base_port, max_channels, listen_resolve_cb, &dispatch_ctx);
     if (!resolve_pool) {
-      fprintf(stderr, "%s: failed to start FCC resolve-by-port sockets at %s:%u..%u\n", TOOL_NAME, cfg->listen_addr, resolve_base_port, resolve_base_port + (unsigned)max_channels - 1);
+      log_code("FS500190", "%s: failed to start FCC resolve-by-port sockets at %s:%u..%u", TOOL_NAME, cfg->listen_addr, resolve_base_port, resolve_base_port + (unsigned)max_channels - 1);
       rc = 1;
       goto cleanup;
     }
@@ -183,7 +183,7 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   if (bursts) {
     pacer_ctx = (pacer_ctx_t){.bursts = bursts, .duration_cap_ms = cfg->duration_cap_ms, .cpuaff = &cfg->cpu_affinity, .cpu_idx = cpu_next++};
     if (pthread_create(&pacer_thread, NULL, pacer_main, &pacer_ctx) != 0) {
-      fprintf(stderr, "%s: failed to start burst pacing thread\n", TOOL_NAME);
+      log_code("FS500191", "%s: failed to start burst pacing thread", TOOL_NAME);
       rc = 1;
       goto cleanup;
     }
@@ -205,12 +205,12 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
       .cpu_idx = cpu_next++,
     };
     if (inet_pton(AF_INET, cfg->listen_addr, rsi_ctx.addr) != 1) {
-      fprintf(stderr, "%s: failed to parse -l address for RSI announcement\n", TOOL_NAME);
+      log_code("FS000463", "%s: failed to parse -l address for RSI announcement", TOOL_NAME);
       rc = 1;
       goto cleanup;
     }
     if (pthread_create(&rsi_thread, NULL, rsi_pacer_main, &rsi_ctx) != 0) {
-      fprintf(stderr, "%s: failed to start RSI announcement thread\n", TOOL_NAME);
+      log_code("FS500192", "%s: failed to start RSI announcement thread", TOOL_NAME);
       rc = 1;
       goto cleanup;
     }
@@ -220,7 +220,7 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   if (metrics_exporter_enabled(mx)) {
     metrics_ctx = (metrics_ctx_t){.mx = mx, .channels = channels, .ret = ret, .bursts = bursts};
     if (pthread_create(&metrics_thread, NULL, metrics_thread_main, &metrics_ctx) != 0) {
-      fprintf(stderr, "%s: failed to start metrics thread\n", TOOL_NAME);
+      log_code("FS500193", "%s: failed to start metrics thread", TOOL_NAME);
       rc = 1;
       goto cleanup;
     }

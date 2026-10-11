@@ -14,6 +14,6 @@ int rtmp_auth_adobe_response(const char *user, const char *password, const char 
   (void)challenge2_cap;
   (void)response_out;
   (void)response_cap;
-  log_line("rtmp: authmod=adobe needs OpenSSL, built without it, credentials ignored");
+  log_code("LA300135", "rtmp: authmod=adobe needs OpenSSL, built without it, credentials ignored");
   return -1;
 }

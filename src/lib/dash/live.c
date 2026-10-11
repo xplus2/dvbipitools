@@ -61,7 +61,7 @@ void dash_live_emit(dash_live_t *h, const unsigned char *data, size_t len) {
   size_t n = len < room ? len : room;
   memcpy(h->out_buf + h->out_len, data, n);
   h->out_len += n;
-  if (room < len) log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mDASH output buffer full, dropped bytes\e[0m", h->idx, h->label ? h->label : "?");
+  if (room < len) log_code_ansi("LW100121", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mDASH output buffer full, dropped bytes\e[0m", h->idx, h->label ? h->label : "?");
 }
 
 dash_live_t *dash_live_new(const http_url_t *mpd_url, const char *user_agent, int insecure, unsigned idx, const char *label, unsigned adaptation_set_index, const dash_insp_t *si, dash_segment_cb cb, void *cb_ctx) {

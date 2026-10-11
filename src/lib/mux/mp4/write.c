@@ -16,7 +16,7 @@ void p4_wfd(mp4_t *m, const void *p, size_t n) {
     ssize_t w = write(m->fd, b, n);
     if (w < 0) {
       if (errno == EINTR) continue;
-      log_line("mp4 write: %s", strerror(errno));
+      log_code("LE100125", "mp4 write: %s", strerror(errno));
       m->err = 1;
       return;
     }

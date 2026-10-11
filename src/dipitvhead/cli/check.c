@@ -33,59 +33,59 @@ int tvh_cfg_check(const config_t *cfg, int partial, tvh_report_fn rep, void *ud)
   unsigned n_rist_in = 0;
   size_t pwlen = strlen(cfg->srt_passphrase);
   char msg[192];
-#define FATAL(...) do { snprintf(msg, sizeof msg, __VA_ARGS__); rep(ud, 1, msg); fatal++; } while (0)
-#define NOTE(...) do { snprintf(msg, sizeof msg, __VA_ARGS__); rep(ud, 0, msg); } while (0)
+#define FATAL(code, ...) do { snprintf(msg, sizeof msg, __VA_ARGS__); rep(ud, 1, code, msg); fatal++; } while (0)
+#define NOTE(code, ...) do { snprintf(msg, sizeof msg, __VA_ARGS__); rep(ud, 0, code, msg); } while (0)
 
-  if (!partial && cfg->n_inputs == 0) FATAL("missing -i input");
+  if (!partial && cfg->n_inputs == 0) FATAL("TS000110", "missing -i input");
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
     if (cfg->inputs[i].input.kind == SRC_RIST) n_rist_in++;
   }
-  if (n_rist_in > 1) FATAL("at most one -i rist:// input: librist isn't safe with more than one context per process");
-  if (n_rist_in && cfg->n_rist) FATAL("-i rist:// and -R rist:// cannot combine: librist isn't safe with more than one context per process");
-  if (!partial && !cfg->mcast_port && cfg->n_rist == 0 && cfg->n_srt == 0) FATAL("need -m output multicast or at least one -R peer");
-  if ((cfg->stuff || cfg->burst_limit) && !cfg->bitrate_kbps) FATAL("-S/--stuff and -B/--burst-limit need -b/--bitrate");
-  if (cfg->pcr_mode == PCR_MODE_REGENERATE && (!cfg->bitrate_kbps || !cfg->stuff)) FATAL("--pcr-mode regenerate needs -b/--bitrate and -S/--stuff");
+  if (n_rist_in > 1) FATAL("TS000585", "at most one -i rist:// input: librist isn't safe with more than one context per process");
+  if (n_rist_in && cfg->n_rist) FATAL("TS000586", "-i rist:// and -R rist:// cannot combine: librist isn't safe with more than one context per process");
+  if (!partial && !cfg->mcast_port && cfg->n_rist == 0 && cfg->n_srt == 0) FATAL("TS000465", "need -m output multicast or at least one -R peer");
+  if ((cfg->stuff || cfg->burst_limit) && !cfg->bitrate_kbps) FATAL("TS000587", "-S/--stuff and -B/--burst-limit need -b/--bitrate");
+  if (cfg->pcr_mode == PCR_MODE_REGENERATE && (!cfg->bitrate_kbps || !cfg->stuff)) FATAL("TS000588", "--pcr-mode regenerate needs -b/--bitrate and -S/--stuff");
   if (cfg->pcr_mode == PCR_MODE_REGENERATE && cfg->bitrate_kbps && cfg->stuff && !cfg->burst_limit)
-    NOTE("--pcr-mode regenerate without -B/--burst-limit: output can run ahead of the PCR timeline");
-  if (cfg->pcr_lead_ms_given && cfg->pcr_mode != PCR_MODE_REGENERATE) FATAL("--pcr-lead-ms needs --pcr-mode regenerate");
-  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) FATAL("--metrics/--metrics-interval require --metrics-id");
-  if (cfg->metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg->metrics_id) FATAL("--metrics-inspect-ts requires --metrics-id");
-  if (cfg->metrics_n_known_pids && cfg->metrics_inspect_ts != METRICS_INSPECT_TS_FULL) FATAL("--metrics-inspect-ts-pids requires --metrics-inspect-ts full");
-  if (cfg->al_fec_l && !cfg->al_fec_port) FATAL("--al-fec requires --al-fec-port");
-  if (!cfg->al_fec_l && cfg->al_fec_port) NOTE("--al-fec-port has no effect without --al-fec");
-  if (cfg->al_fec_l && !cfg->rtp) FATAL("--al-fec requires RTP output, not -u/--udp");
-  if (cfg->al_fec_l && !cfg->mcast_port) NOTE("--al-fec has no effect without -m");
+    NOTE("TA000589", "--pcr-mode regenerate without -B/--burst-limit: output can run ahead of the PCR timeline");
+  if (cfg->pcr_lead_ms_given && cfg->pcr_mode != PCR_MODE_REGENERATE) FATAL("TS000590", "--pcr-lead-ms needs --pcr-mode regenerate");
+  if ((cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id) FATAL("TS000591", "--metrics/--metrics-interval require --metrics-id");
+  if (cfg->metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg->metrics_id) FATAL("TS000592", "--metrics-inspect-ts requires --metrics-id");
+  if (cfg->metrics_n_known_pids && cfg->metrics_inspect_ts != METRICS_INSPECT_TS_FULL) FATAL("TS000336", "--metrics-inspect-ts-pids requires --metrics-inspect-ts full");
+  if (cfg->al_fec_l && !cfg->al_fec_port) FATAL("TS000145", "--al-fec requires --al-fec-port");
+  if (!cfg->al_fec_l && cfg->al_fec_port) NOTE("TA000146", "--al-fec-port has no effect without --al-fec");
+  if (cfg->al_fec_l && !cfg->rtp) FATAL("TS000593", "--al-fec requires RTP output, not -u/--udp");
+  if (cfg->al_fec_l && !cfg->mcast_port) NOTE("TA000467", "--al-fec has no effect without -m");
   if (cfg->n_rist == 0 && (cfg->rist_profile_given || cfg->rist_secret[0] || cfg->rist_key_size || cfg->rist_cname[0] || cfg->rist_buffer_ms))
-    NOTE("--rist-profile/--rist-secret/--rist-encryption-type/--rist-cname/--rist-buffer have no effect without -R");
-  if (cfg->n_rist > 0 && cfg->rist_secret[0] && cfg->rist_profile != RIST_PROF_MAIN) FATAL("--rist-secret requires --rist-profile main");
-  if (cfg->n_rist > 0 && cfg->rist_key_size && cfg->rist_profile != RIST_PROF_MAIN) FATAL("--rist-encryption-type requires --rist-profile main");
-  if (cfg->n_srt > 1 && cfg->srt_group_mode == SRT_BOND_NONE) FATAL("bonding several -R srt:// peers requires --srt-group-mode");
-  if (cfg->n_srt == 1 && cfg->srt_group_mode != SRT_BOND_NONE) FATAL("--srt-group-mode has no effect with a single -R srt:// peer");
+    NOTE("TA000468", "--rist-profile/--rist-secret/--rist-encryption-type/--rist-cname/--rist-buffer have no effect without -R");
+  if (cfg->n_rist > 0 && cfg->rist_secret[0] && cfg->rist_profile != RIST_PROF_MAIN) FATAL("TS000469", "--rist-secret requires --rist-profile main");
+  if (cfg->n_rist > 0 && cfg->rist_key_size && cfg->rist_profile != RIST_PROF_MAIN) FATAL("TS000339", "--rist-encryption-type requires --rist-profile main");
+  if (cfg->n_srt > 1 && cfg->srt_group_mode == SRT_BOND_NONE) FATAL("TS000471", "bonding several -R srt:// peers requires --srt-group-mode");
+  if (cfg->n_srt == 1 && cfg->srt_group_mode != SRT_BOND_NONE) FATAL("TS000472", "--srt-group-mode has no effect with a single -R srt:// peer");
   if (cfg->n_srt == 0 && (cfg->srt_group_mode != SRT_BOND_NONE || cfg->srt_passphrase[0] || cfg->srt_pbkeylen ||
                           cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
-    NOTE("--srt-* has no effect without an -R srt:// peer");
-  if (pwlen && (pwlen < 10 || pwlen > 79)) FATAL("--srt-passphrase must be 10..79 characters");
-  if (cfg->srt_pbkeylen && !pwlen) FATAL("--srt-pbkeylen requires --srt-passphrase");
+    NOTE("TA000473", "--srt-* has no effect without an -R srt:// peer");
+  if (pwlen && (pwlen < 10 || pwlen > 79)) FATAL("TS000474", "--srt-passphrase must be 10..79 characters");
+  if (cfg->srt_pbkeylen && !pwlen) FATAL("TS000342", "--srt-pbkeylen requires --srt-passphrase");
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
     const dipitvhead_input_t *in = &cfg->inputs[i];
     size_t inlen = strlen(in->srt_passphrase_in);
-    if (inlen && (inlen < 10 || inlen > 79)) FATAL("--srt-passphrase-in must be 10..79 characters");
-    if (in->srt_pbkeylen_in && !inlen) FATAL("--srt-pbkeylen-in requires --srt-passphrase-in");
+    if (inlen && (inlen < 10 || inlen > 79)) FATAL("TS000594", "--srt-passphrase-in must be 10..79 characters");
+    if (in->srt_pbkeylen_in && !inlen) FATAL("TS000340", "--srt-pbkeylen-in requires --srt-passphrase-in");
     if (in->input.kind != SRC_SRT && (inlen || in->srt_pbkeylen_in || in->srt_streamid_in[0] || in->srt_packetfilter_in[0] || in->srt_latency_in_ms))
-      NOTE("--srt-*-in has no effect, that -i isn't srt://");
-    if (in->rist_key_size_in && in->input.kind != SRC_RIST) NOTE("--rist-encryption-type-in has no effect, that -i isn't rist://");
-    if (in->rist_key_size_in && in->input.kind == SRC_RIST && !in->rist_profile_main) FATAL("--rist-encryption-type-in requires --rist-profile-in main");
+      NOTE("TA000595", "--srt-*-in has no effect, that -i isn't srt://");
+    if (in->rist_key_size_in && in->input.kind != SRC_RIST) NOTE("TA000596", "--rist-encryption-type-in has no effect, that -i isn't rist://");
+    if (in->rist_key_size_in && in->input.kind == SRC_RIST && !in->rist_profile_main) FATAL("TS000542", "--rist-encryption-type-in requires --rist-profile-in main");
     if (in->jitter_ms && in->input.kind != SRC_RTP && in->input.kind != SRC_UDP && in->input.kind != SRC_RIST && in->input.kind != SRC_SRT)
-      NOTE("--jitter-ms has no effect, that -i isn't rtp/udp/rist/srt");
-    if (in->hbbtv_url && (!in->hbbtv_org_id || !in->hbbtv_app_id)) FATAL("--hbbtv requires --hbbtv-org-id and --hbbtv-app-id");
-    if ((in->hbbtv_org_id || in->hbbtv_app_id) && !in->hbbtv_url) FATAL("--hbbtv-org-id/--hbbtv-app-id need --hbbtv");
+      NOTE("TA000597", "--jitter-ms has no effect, that -i isn't rtp/udp/rist/srt");
+    if (in->hbbtv_url && (!in->hbbtv_org_id || !in->hbbtv_app_id)) FATAL("TS000598", "--hbbtv requires --hbbtv-org-id and --hbbtv-app-id");
+    if ((in->hbbtv_org_id || in->hbbtv_app_id) && !in->hbbtv_url) FATAL("TS000599", "--hbbtv-org-id/--hbbtv-app-id need --hbbtv");
   }
   if (cfg->any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE && !cfg->biss2_enabled && !cfg->biss1_enabled && !cfg->biss2_ca_enabled)
-    FATAL("--cas-* options require --cas-algo (or --cas-pids alone under --biss2-sw/--biss1-sw/--biss2-ca-receivers)");
+    FATAL("TS000600", "--cas-* options require --cas-algo (or --cas-pids alone under --biss2-sw/--biss1-sw/--biss2-ca-receivers)");
   if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
     cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms}) != 0)
     fatal++;
-  if (has_duplicate_sid(cfg)) FATAL("duplicate --sid");
+  if (has_duplicate_sid(cfg)) FATAL("TS000601", "duplicate --sid");
 #undef FATAL
 #undef NOTE
   return fatal;
@@ -105,7 +105,7 @@ void tvh_finalize(config_t *cfg) {
   if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss1_enabled || cfg->biss2_enabled || cfg->biss2_ca_enabled) {
     for (unsigned i = 0; i < cfg->n_inputs; i++) {
       if (!(cfg->inputs[i].strip_mask & TVSTRIP_ECM)) {
-        log_line(TOOL_NAME ": source CA/ECM passthrough disabled: --cas-algo/--biss* already scrambling this mux");
+        log_code("TS300164", TOOL_NAME ": source CA/ECM passthrough disabled: --cas-algo/--biss* already scrambling this mux");
         break;
       }
     }

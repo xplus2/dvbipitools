@@ -75,7 +75,7 @@ int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reas
   hints.ai_socktype = SOCK_STREAM;
   e = getaddrinfo(host, portstr, &hints, &res);
   if (e) {
-    log_line("resolve %s: %s", host, gai_strerror(e));
+    log_code("LE600131", "resolve %s: %s", host, gai_strerror(e));
     set_reason(reason_out, NET_ERR_DNS);
     return -1;
   }
@@ -110,7 +110,7 @@ int netconnect_tcp(const char *host, unsigned port, int timeout_ms, net_err_reas
   }
   freeaddrinfo(res);
   if (fd < 0) {
-    if (!signal_stop_requested()) log_line("connect %s:%u: %s", host, port, strerror(save_errno));
+    if (!signal_stop_requested()) log_code("LE600128", "connect %s:%u: %s", host, port, strerror(save_errno));
     set_reason(reason_out, (save_errno == ETIMEDOUT) ? NET_ERR_TIMEOUT : NET_ERR_CONNECT);
     return -1;
   }
@@ -167,14 +167,14 @@ int netconnect_tcp_start(const char *host, unsigned port, netconnect_pending_t *
   hints.ai_socktype = SOCK_STREAM;
   e = getaddrinfo(host, portstr, &hints, &res);
   if (e) {
-    log_line("resolve %s: %s", host, gai_strerror(e));
+    log_code("LE600131", "resolve %s: %s", host, gai_strerror(e));
     set_reason(reason_out, NET_ERR_DNS);
     return -1;
   }
   fd = try_addrs(res, &used, &save_errno);
   if (fd < 0) {
     freeaddrinfo(res);
-    log_line("connect %s:%u: %s", host, port, strerror(save_errno));
+    log_code("LE600128", "connect %s:%u: %s", host, port, strerror(save_errno));
     set_reason(reason_out, NET_ERR_CONNECT);
     return -1;
   }

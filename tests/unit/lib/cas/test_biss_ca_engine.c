@@ -24,7 +24,7 @@ static void noop_emit(void *ctx, const unsigned char pkt[188]) {
 
 static void write_receiver_keypair(const char *dir, const char *name, const char *priv_path) {
   char path[512];
-  char cmd[1400];
+  char cmd[2048];
   snprintf(path, sizeof path, "%s/%s", dir, name);
   snprintf(cmd, sizeof cmd, "openssl genrsa -out %s 2048 2>/dev/null && openssl rsa -in %s -pubout -out %s 2>/dev/null", priv_path, priv_path, path);
   ck_assert_int_eq(system(cmd), 0);

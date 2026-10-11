@@ -25,7 +25,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       int v;
       p->any_cas_flag = 1;
       if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-        argerr("invalid --cas-algo: %s (cissa|csa2|csa1)", optarg);
+        argerr("RS000476", "invalid --cas-algo: %s (cissa|csa2|csa1)", optarg);
         return ARGS_ERR;
       }
       cfg->cas_algo = (cas_algo_t)v;
@@ -39,7 +39,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
         p->cli_vendors = 1;
       }
       if (cfg->n_cas_vendors >= ARGS_MAX_CAS_VENDORS) {
-        argerr("too many --cas-ecmg vendors (max %d)", ARGS_MAX_CAS_VENDORS);
+        argerr("RS000477", "too many --cas-ecmg vendors (max %d)", ARGS_MAX_CAS_VENDORS);
         return ARGS_ERR;
       }
       vend = &cfg->cas_vendors[cfg->n_cas_vendors];
@@ -48,7 +48,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       vend->emmg_port = 8002;
       vend->emm_pid = 0x0021;
       if (cas_endpoint_parse(optarg, vend->ecmg_host, sizeof vend->ecmg_host, &vend->ecmg_port)) {
-        argerr("invalid --cas-ecmg endpoint: %s", optarg);
+        argerr("RS000478", "invalid --cas-ecmg endpoint: %s", optarg);
         return ARGS_ERR;
       }
       cfg->n_cas_vendors++;
@@ -59,7 +59,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (cas_version_parse(optarg, &vend->ecmg_version)) {
-        argerr("invalid --cas-ecmg-version: %s (2|3)", optarg);
+        argerr("RS000479", "invalid --cas-ecmg-version: %s (2|3)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -69,7 +69,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (cas_super_id_parse(optarg, &vend->super_cas_id)) {
-        argerr("invalid --cas-super-id: %s", optarg);
+        argerr("RS000480", "invalid --cas-super-id: %s", optarg);
         return ARGS_ERR;
       }
       break;
@@ -79,7 +79,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (rdh_id_parse(optarg, &vend->ecm_id)) {
-        argerr("invalid --cas-ecm-id: %s (1..65535)", optarg);
+        argerr("RS000481", "invalid --cas-ecm-id: %s (1..65535)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -89,7 +89,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (rdh_pid_parse(optarg, &vend->ecm_pid)) {
-        argerr("invalid --cas-ecm-pid: %s (0x0001..0x1FFE)", optarg);
+        argerr("RS000482", "invalid --cas-ecm-pid: %s (0x0001..0x1FFE)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -100,7 +100,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (cas_vendor_set_emmg_listen(vend, optarg, lerr, sizeof lerr)) {
-        argerr("--cas-emmg-listen: %s", lerr);
+        argerr("RS000483", "--cas-emmg-listen: %s", lerr);
         return ARGS_ERR;
       }
       break;
@@ -110,7 +110,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (cas_endpoint_parse(optarg, vend->emmg_reverse_host, sizeof vend->emmg_reverse_host, &vend->emmg_reverse_port)) {
-        argerr("invalid --cas-emmg-reverse endpoint: %s", optarg);
+        argerr("RS000484", "invalid --cas-emmg-reverse endpoint: %s", optarg);
         return ARGS_ERR;
       }
       break;
@@ -120,7 +120,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (cas_version_parse(optarg, &vend->emmg_version)) {
-        argerr("invalid --cas-emmg-version: %s (2|3)", optarg);
+        argerr("RS000485", "invalid --cas-emmg-version: %s (2|3)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -131,7 +131,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (argutil_uint_range(optarg, 1, EMMG_MAX_CONNS_CEILING, &v)) {
-        argerr("invalid --cas-emmg-max-conns: %s (1..%u)", optarg, EMMG_MAX_CONNS_CEILING);
+        argerr("RS000486", "invalid --cas-emmg-max-conns: %s (1..%u)", optarg, EMMG_MAX_CONNS_CEILING);
         return ARGS_ERR;
       }
       vend->emmg_max_conns = v;
@@ -142,7 +142,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (rdh_pid_parse(optarg, &vend->emm_pid)) {
-        argerr("invalid --cas-emm-pid: %s (0x0001..0x1FFE)", optarg);
+        argerr("RS000487", "invalid --cas-emm-pid: %s (0x0001..0x1FFE)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -151,7 +151,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       unsigned v;
       p->any_cas_flag = 1;
       if (argutil_uint_range(optarg, 1, 86400000, &v)) {
-        argerr("invalid --cas-cp-duration: %s (ms, 1..86400000)", optarg);
+        argerr("RS000488", "invalid --cas-cp-duration: %s (ms, 1..86400000)", optarg);
         return ARGS_ERR;
       }
       cfg->cas_cp_duration_ms = v;
@@ -164,7 +164,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-        argerr("invalid --cas-resilience: %s (frozen|cycling|silent)", optarg);
+        argerr("RS000489", "invalid --cas-resilience: %s (frozen|cycling|silent)", optarg);
         return ARGS_ERR;
       }
       vend->resilience = (cas_outage_mode_t)v;
@@ -182,7 +182,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (strcmp(optarg, "des56") && strcmp(optarg, "aes128") && strcmp(optarg, "aes256")) {
-        argerr("invalid --cas-cwenc-algo: %s (des56|aes128|aes256)", optarg);
+        argerr("RS000490", "invalid --cas-cwenc-algo: %s (des56|aes128|aes256)", optarg);
         return ARGS_ERR;
       }
       bufcpy(vend->cwenc_algorithm, sizeof vend->cwenc_algorithm, optarg);
@@ -193,7 +193,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       p->any_cas_flag = 1;
       if (!vend) return ARGS_ERR;
       if (strcmp(optarg, "stream") && strcmp(optarg, "ecb")) {
-        argerr("invalid --cas-cwenc-aes-mode: %s (stream|ecb)", optarg);
+        argerr("RS000491", "invalid --cas-cwenc-aes-mode: %s (stream|ecb)", optarg);
         return ARGS_ERR;
       }
       bufcpy(vend->cwenc_aes_mode, sizeof vend->cwenc_aes_mode, optarg);
@@ -229,21 +229,21 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       break;
     case OPT_BISS2_SW:
       if (biss_parse_hex16(optarg, cfg->biss2_sw)) {
-        argerr("invalid --biss2-sw: %s (32 hex chars)", optarg);
+        argerr("RS000344", "invalid --biss2-sw: %s (32 hex chars)", optarg);
         return ARGS_ERR;
       }
       cfg->biss2_enabled = 1;
       break;
     case OPT_BISS2_EMIT_ESW:
       if (biss_parse_hex16(optarg, cfg->biss2_esw_id)) {
-        argerr("invalid --biss2-emit-esw: %s (32 hex chars)", optarg);
+        argerr("RS000492", "invalid --biss2-emit-esw: %s (32 hex chars)", optarg);
         return ARGS_ERR;
       }
       cfg->biss2_emit_esw = 1;
       break;
     case OPT_BISS1_SW:
       if (biss1_parse_sw(optarg, cfg->biss1_cw)) {
-        argerr("invalid --biss1-sw: %s (12 hex chars)", optarg);
+        argerr("RS000347", "invalid --biss1-sw: %s (12 hex chars)", optarg);
         return ARGS_ERR;
       }
       cfg->biss1_enabled = 1;
@@ -256,7 +256,7 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       char *end;
       unsigned long v = strtoul(optarg, &end, 0);
       if (*end != '\0' || v > 0xFFFFUL) {
-        argerr("invalid --biss2-ca-session-id: %s (16 bit, dec or 0x-hex)", optarg);
+        argerr("RS000493", "invalid --biss2-ca-session-id: %s (16 bit, dec or 0x-hex)", optarg);
         return ARGS_ERR;
       }
       cfg->biss2_ca_session_id = (unsigned)v;

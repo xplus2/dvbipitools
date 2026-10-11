@@ -811,7 +811,7 @@ static void drive_unicast(loop_ctx_t *lc, int max_iters) {
 
 START_TEST(unicast_emm_fetch_feeds_the_cache_and_marks_it_dirty) {
   cls_t c;
-  unsigned port;
+  unsigned port = 0;
   int listen_fd = make_listener(&port);
   pthread_t th;
   server_arg_t sarg;
@@ -870,7 +870,7 @@ END_TEST
 
 START_TEST(unicast_emm_fetch_without_a_response_stays_pending) {
   cls_t c;
-  unsigned port;
+  unsigned port = 0;
   int listen_fd = make_listener(&port);
   char uri[96];
   int i;

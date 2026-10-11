@@ -47,7 +47,7 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   if (!tk->progs[i].psi) {
     tk->progs[i].psi = psi_new();
     if (!tk->progs[i].psi) {
-      log_line_ansi("input \e[1;30m%u\e[0m: \e[0;31mout of memory allocating psi state, retrying next poll\e[0m", i);
+      log_code_ansi("TW500195", "input \e[1;30m%u\e[0m: \e[0;31mout of memory allocating psi state, retrying next poll\e[0m", i);
       return;
     }
     {
@@ -63,7 +63,7 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   r = discover_step(&tk->progs[i].ds, src, &tk->cfg->inputs[i], tk->progs[i].psi, tk->metrics_on ? &tk->input_stats[i] : NULL);
   if (r == 0 && mono_seconds() - tk->progs[i].discover_start < DISCOVERY_TIMEOUT_S) return;
   if (r <= 0) {
-    if (r == 0) log_line_ansi("input \e[1;30m%u\e[0m: \e[0;31mno live PMT found within %.0fs\e[0m", i, DISCOVERY_TIMEOUT_S);
+    if (r == 0) log_code_ansi("TW000614", "input \e[1;30m%u\e[0m: \e[0;31mno live PMT found within %.0fs\e[0m", i, DISCOVERY_TIMEOUT_S);
     program_reset(&tk->progs[i]);
     retryset_mark_down(tk->rs, i, tk->now_t);
     if (tk->metrics_on) tk->input_stats[i].up = 0;
@@ -75,7 +75,7 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   print_discovered(tk->progs[i].psi);
   tk->progs[i].rx = remux_new(tk->cfg, &tk->cfg->inputs[i], tk->progs[i].psi, &pids, 0);
   if (!tk->progs[i].rx) {
-    log_line_ansi("input \e[1;30m%u\e[0m: \e[0;31mremux setup failed\e[0m", i);
+    log_code_ansi("TE500196", "input \e[1;30m%u\e[0m: \e[0;31mremux setup failed\e[0m", i);
     psi_free(tk->progs[i].psi);
     tk->progs[i].psi = NULL;
     retryset_mark_down(tk->rs, i, tk->now_t);
@@ -88,7 +88,7 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   remux_set_psi_versions(tk->progs[i].rx, &tk->psiv[i]);
   remux_set_cc_offsets(tk->progs[i].rx, &tk->ccm[i]);
   if (tk->cfg->pcr_mode == PCR_MODE_REGENERATE && remux_set_hold(tk->progs[i].rx, out_pcr_clock, out_pcr_latch, tk->out, tk->cfg->pcr_lead_ms))
-    log_line_ansi("input \e[1;30m%u\e[0m: hold-back queue setup failed", i);
+    log_code_ansi("TE500197", "input \e[1;30m%u\e[0m: hold-back queue setup failed", i);
   out_pcr_pid_set(tk->out, i, remux_pcr_pid_out(tk->progs[i].rx));
   /* psi outlives rx: es[].src points into it, both freed together in program_reset() */
   mpts_set_program(tk->mpts, i, tk->progs[i].rx);
@@ -135,7 +135,7 @@ void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   else tspack_feed(&tk->progs[i].pz, bl->buf + bl->off, chunk, remux_cb, &fc);
   bl->off += chunk;
   if (remux_reconnect_wanted(tk->progs[i].rx)) {
-    log_line_ansi("input \e[1;30m%u\e[0m: source PMT changed incompatibly, reconnecting", i);
+    log_code_ansi("TW600151", "input \e[1;30m%u\e[0m: source PMT changed incompatibly, reconnecting", i);
     mpts_set_program(tk->mpts, i, NULL);
     remux_release(tk->progs[i].rx, tk->now, packet_cb, tk->out, 1, tk->tsm);
     out_pcr_pid_set(tk->out, i, 0);

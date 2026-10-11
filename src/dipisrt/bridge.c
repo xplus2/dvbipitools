@@ -97,7 +97,8 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     srtout_service(srt, &st);
     if (insp) tsinspect_tick(insp, mono_seconds());
     if (st.connected != was_connected) {
-      log_line(st.connected ? "srt output: connected" : "srt output: link down, reconnecting");
+      if (st.connected) log_line("srt output: connected");
+      else              log_code("HW600103", "srt output: link down, reconnecting");
       was_connected = st.connected;
     }
 
@@ -106,7 +107,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     pr = poll(pfd, nfds, DIPISRT_SENDER_POLL_MS);
     if (pr < 0) {
       if (errno == EINTR) continue;
-      log_line("srt output: poll failed: %s", strerror(errno));
+      log_code("HE500115", "srt output: poll failed: %s", strerror(errno));
       rc = 1;
       break;
     }

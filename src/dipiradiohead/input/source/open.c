@@ -104,7 +104,7 @@ static void hls_segment_feed(void *ctx, hls_live_t *h, const unsigned char *data
       break;
     case HLS_SEG_UNKNOWN:
       if (!s->hls_warned) {
-        log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mHLS segment format not recognized, skipped\e[0m", s->idx, s->label ? s->label : "?");
+        log_code_ansi("RW400198", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mHLS segment format not recognized, skipped\e[0m", s->idx, s->label ? s->label : "?");
         s->hls_warned = 1;
       }
       break;
@@ -150,7 +150,7 @@ source_t *source_open(const char *uri, unsigned idx, const char *label, int inse
     ssize_t got;
     char next[2048];
     if (http_url_parse(cur_uri, &u)) {
-      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31minvalid uri\e[0m: %s", idx, label ? label : "?", cur_uri);
+      log_code_ansi("RE000524", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31minvalid uri\e[0m: %s", idx, label ? label : "?", cur_uri);
       if (reason_out) *reason_out = NET_ERR_FORMAT;
       return NULL;
     }
@@ -159,7 +159,7 @@ source_t *source_open(const char *uri, unsigned idx, const char *label, int inse
     if (reason_out) *reason_out = NET_ERR_TIMEOUT; /* default if sniff_fill stalls out without a harder error */
     got = sniff_fill(h, sniff, sizeof sniff, reason_out);
     if (got <= 0) {
-      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mempty response\e[0m from %s", idx, label ? label : "?", cur_uri);
+      log_code_ansi("RE000525", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mempty response\e[0m from %s", idx, label ? label : "?", cur_uri);
       http_close(h);
       return NULL;
     }
@@ -179,7 +179,7 @@ source_t *source_open(const char *uri, unsigned idx, const char *label, int inse
     if (reason_out) *reason_out = NET_ERR_OTHER; /* build_source() only fails on allocation */
     return build_source(h, idx, label, sniff, (size_t)got, cb, ctx);
   }
-  log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mtoo many playlist redirects\e[0m", idx, label ? label : "?");
+  log_code_ansi("RW000526", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mtoo many playlist redirects\e[0m", idx, label ? label : "?");
   if (reason_out) *reason_out = NET_ERR_FORMAT;
   return NULL;
 }

@@ -30,12 +30,12 @@ void publish_datagram_cb(const unsigned char *data, unsigned short len, void *us
   emmg_server_t *s = user;
   size_t idx;
   if (len > EMMG_MAX_DATAGRAM_LEN) {
-    log_throttled(&s->oversized_throttle, LOG_THROTTLE_WINDOW_S, "emmg: dropping oversized EMM datagram");
+    log_throttled(&s->oversized_throttle, LOG_THROTTLE_WINDOW_S, "LW400127", "emmg: dropping oversized EMM datagram");
     atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
     return;
   }
   if (!is_one_section(data, len)) {
-    log_throttled(&s->malformed_throttle, LOG_THROTTLE_WINDOW_S, "emmg: dropping datagram that is not a well-formed section");
+    log_throttled(&s->malformed_throttle, LOG_THROTTLE_WINDOW_S, "LW400128", "emmg: dropping datagram that is not a well-formed section");
     atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
     return;
   }
@@ -43,7 +43,7 @@ void publish_datagram_cb(const unsigned char *data, unsigned short len, void *us
   if (atomic_load_explicit(&s->queue_len, memory_order_relaxed) == EMMG_QUEUE_CAP) {
     s->queue_head = (s->queue_head + 1) % EMMG_QUEUE_CAP;
     atomic_fetch_sub_explicit(&s->queue_len, 1, memory_order_relaxed);
-    log_throttled(&s->queue_full_throttle, LOG_THROTTLE_WINDOW_S, "emmg: EMM queue full, dropping oldest datagram");
+    log_throttled(&s->queue_full_throttle, LOG_THROTTLE_WINDOW_S, "LW700114", "emmg: EMM queue full, dropping oldest datagram");
     atomic_fetch_add_explicit(&s->emm_dropped, 1, memory_order_relaxed);
   }
   idx = (s->queue_head + atomic_load_explicit(&s->queue_len, memory_order_relaxed)) % EMMG_QUEUE_CAP;
@@ -126,7 +126,7 @@ static int socket_wildcard(unsigned port, struct sockaddr_storage *ss, socklen_t
     struct sockaddr_in *a4 = (struct sockaddr_in *)ss;
     fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
-      log_line("emmg: socket: %s", strerror(errno));
+      log_code("LS500124", "emmg: socket: %s", strerror(errno));
       return -1;
     }
     a4->sin_family = AF_INET;
@@ -134,7 +134,7 @@ static int socket_wildcard(unsigned port, struct sockaddr_storage *ss, socklen_t
     a4->sin_port = htons((unsigned short)port);
     *sslen = sizeof *a4;
   } else {
-    log_line("emmg: socket: %s", strerror(errno));
+    log_code("LS500124", "emmg: socket: %s", strerror(errno));
     return -1;
   }
   return fd;
@@ -153,12 +153,12 @@ static int socket_host(const char *host, unsigned port, struct sockaddr_storage 
   snprintf(portstr, sizeof portstr, "%u", port);
   rc = getaddrinfo(host, portstr, &hints, &res);
   if (rc != 0) {
-    log_line("emmg: listen address %s: %s", host, gai_strerror(rc));
+    log_code("LS000293", "emmg: listen address %s: %s", host, gai_strerror(rc));
     return -1;
   }
   fd = socket(res->ai_family, SOCK_STREAM, 0);
   if (fd < 0) {
-    log_line("emmg: socket: %s", strerror(errno));
+    log_code("LS500124", "emmg: socket: %s", strerror(errno));
   } else {
     memcpy(ss, res->ai_addr, res->ai_addrlen);
     *sslen = res->ai_addrlen;
@@ -181,18 +181,18 @@ static int tcp_listen(const char *host, unsigned port) {
     return -1;
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
   if (bind(fd, (struct sockaddr *)&ss, sslen) < 0) {
-    log_line("emmg: bind %s:%u: %s", named ? host : "*", port, strerror(errno));
+    log_code("LS500125", "emmg: bind %s:%u: %s", named ? host : "*", port, strerror(errno));
     close(fd);
     return -1;
   }
   if (listen(fd, 8) < 0) {
-    log_line("emmg: listen: %s", strerror(errno));
+    log_code("LS500126", "emmg: listen: %s", strerror(errno));
     close(fd);
     return -1;
   }
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-    log_line("emmg: fcntl O_NONBLOCK: %s", strerror(errno));
+    log_code("LS500127", "emmg: fcntl O_NONBLOCK: %s", strerror(errno));
     close(fd);
     return -1;
   }
@@ -223,7 +223,7 @@ emmg_server_t *emmg_server_start(const emmg_server_cfg_t *cfg) {
   }
   pthread_mutex_init(&s->queue_lock, NULL);
   if (pthread_create(&s->accept_thread, NULL, s->dial_mode ? dial_main : accept_main, s) != 0) {
-    log_line("emmg: pthread_create: %s", strerror(errno));
+    log_code("LS500128", "emmg: pthread_create: %s", strerror(errno));
     if (s->listen_fd >= 0)
       close(s->listen_fd);
     pthread_mutex_destroy(&s->queue_lock);

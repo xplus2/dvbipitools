@@ -134,7 +134,7 @@ void tssrc_jitter_free(tssrc_t *s) {
   if (!s->jb) return;
   jitbuf_stats(s->jb, &st);
   if (st.reordered || st.lost || st.late || st.dup || st.resync || st.dropped)
-    log_line("jitter buffer: reordered %llu lost %llu late %llu dup %llu resync %llu dropped %llu", (unsigned long long)st.reordered,
+    log_code("LW700134", "jitter buffer: reordered %llu lost %llu late %llu dup %llu resync %llu dropped %llu", (unsigned long long)st.reordered,
              (unsigned long long)st.lost, (unsigned long long)st.late, (unsigned long long)st.dup, (unsigned long long)st.resync,
              (unsigned long long)st.dropped);
   jitbuf_free(s->jb);

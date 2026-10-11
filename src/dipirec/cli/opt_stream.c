@@ -18,7 +18,7 @@ args_status_t rec_opt_stream(rec_opt_t *p, int c) {
   switch (c) {
     case OPT_RET:
       if (argutil_addrport_parse(optarg, &cfg->ret.family, cfg->ret.addr, sizeof cfg->ret.addr, &cfg->ret.port)) {
-        argerr("invalid --ret addr:port: %s", optarg);
+        argerr("CS000554", "invalid --ret addr:port: %s", optarg);
         return ARGS_ERR;
       }
       cfg->ret.enabled = 1;
@@ -28,14 +28,14 @@ args_status_t rec_opt_stream(rec_opt_t *p, int c) {
       break;
     case OPT_RET_MC_PORT:
       if (argutil_uint_range(optarg, 1, 65535, &cfg->ret.mc_port)) {
-        argerr("invalid --ret-mc-port: %s", optarg);
+        argerr("CS000199", "invalid --ret-mc-port: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_RET_PT: {
       unsigned v;
       if (argutil_uint_range(optarg, 0, 127, &v)) {
-        argerr("invalid --ret-pt: %s (0..127)", optarg);
+        argerr("CS000555", "invalid --ret-pt: %s (0..127)", optarg);
         return ARGS_ERR;
       }
       cfg->ret.rtx_pt = (unsigned char)v;
@@ -43,13 +43,13 @@ args_status_t rec_opt_stream(rec_opt_t *p, int c) {
     }
     case OPT_RET_WAIT:
       if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->ret.wait_ms)) {
-        argerr("invalid --ret-wait: %s (ms)", optarg);
+        argerr("CS000556", "invalid --ret-wait: %s (ms)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_STRIP:
       if (rec_cfg_strip(cfg, optarg)) {
-        argerr("invalid --strip: %s (comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT,LCEVC, or \"none\")", optarg);
+        argerr("CS000557", "invalid --strip: %s (comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT,LCEVC, or \"none\")", optarg);
         return ARGS_ERR;
       }
       break;
@@ -62,7 +62,7 @@ args_status_t rec_opt_stream(rec_opt_t *p, int c) {
     case OPT_TTL: {
       unsigned v;
       if (argutil_uint_range(optarg, 0, 255, &v)) {
-        argerr("invalid --ttl: %s (0..255)", optarg);
+        argerr("CS000558", "invalid --ttl: %s (0..255)", optarg);
         return ARGS_ERR;
       }
       cfg->out_ttl = (int)v;
@@ -70,13 +70,13 @@ args_status_t rec_opt_stream(rec_opt_t *p, int c) {
     }
     case OPT_AL_FEC:
       if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
-        argerr("invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
+        argerr("CS000154", "invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_AL_FEC_PORT:
       if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
-        argerr("invalid --al-fec-port: %s", optarg);
+        argerr("CS000155", "invalid --al-fec-port: %s", optarg);
         return ARGS_ERR;
       }
       break;

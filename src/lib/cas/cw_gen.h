@@ -17,9 +17,8 @@ static inline int cw_gen(unsigned char *out, size_t len, const char *tag) {
   while (got < len) {
     ssize_t n = getrandom(out + got, len - got, 0);
     if (n < 0) {
-      if (errno == EINTR)
-        continue;
-      log_line("%s: getrandom: %s", tag, strerror(errno));
+      if (errno == EINTR) continue;
+      log_code("LE500121", "%s: getrandom: %s", tag, strerror(errno));
       return -1;
     }
     got += (size_t)n;

@@ -159,7 +159,7 @@ int load_doc(const config_t *cfg, bcg_doc_t *out) {
 
   in = strcmp(cfg->input_path, "-") ? fopen(cfg->input_path, "r") : stdin;
   if (!in) {
-    log_line("cannot open %s", cfg->input_path);
+    log_code("GE000100", "cannot open %s", cfg->input_path);
     return -1;
   }
   bcg_doc_init(out);
@@ -191,7 +191,7 @@ int load_doc(const config_t *cfg, bcg_doc_t *out) {
 static void reload_doc(const config_t *cfg, bcg_doc_t *doc, bcg_metrics_t *bm, int metrics_on) {
   bcg_doc_t reloaded;
   if (load_doc(cfg, &reloaded)) {
-    log_line("reload failed, keeping previous guide");
+    log_code("GW000101", "reload failed, keeping previous guide");
     if (!metrics_on) return;
     bm->sources_up = 0;
     bm->source_errors_total[NET_ERR_FORMAT]++;
@@ -300,7 +300,7 @@ static int bcg_announce_cycle(void *ctx_, mcast_t *m, unsigned cycle) {
   publish_document(m, &bw, &sw, &ctx->ver, ctx->cfg->compress, &ctx->bm, ctx->metrics_on);
   bitwriter_free(&bw);
   strrepo_writer_free(&sw);
-  if (ctx->cfg->verbose) log_line("cycle %u sent, %d fragments", cycle, nfuu);
+  if (ctx->cfg->verbose) log_code("GD100100", "cycle %u sent, %d fragments", cycle, nfuu);
   emit_metrics(ctx->mx, mono_seconds(), &ctx->doc, &windowed, &ctx->bm, sched_start, sched_end, have_sched);
   bcg_doc_free(&windowed);
   return 0;

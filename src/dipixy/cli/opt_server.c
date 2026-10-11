@@ -22,14 +22,14 @@ args_status_t dixy_opt_server(dixy_opt_t *p, int c) {
       break;
     case 'l':
       if (dixy_cfg_listen(&cfg->listen, optarg)) {
-        argerr("invalid -l/--listen address: %s", optarg);
+        argerr("YS000644", "invalid -l/--listen address: %s", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
       break;
     case 'L':
       if (dixy_cfg_listen(&cfg->listen_tls, optarg)) {
-        argerr("invalid -L/--listen-tls address: %s", optarg);
+        argerr("YS000645", "invalid -L/--listen-tls address: %s", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -42,14 +42,14 @@ args_status_t dixy_opt_server(dixy_opt_t *p, int c) {
       break;
     case 'j':
       if (dixy_cfg_workers(&cfg->workers_spec, optarg)) {
-        argerr("invalid -j/--workers: %s (-1/-2/-3, or a positive count)", optarg);
+        argerr("YS000646", "invalid -j/--workers: %s (-1/-2/-3, or a positive count)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
       break;
     case OPT_CPU_AFFINITY:
       if (cpuaff_parse(&cfg->cpu_affinity, optarg)) {
-        argerr("invalid --cpu-affinity: %s (off, auto, or list like 2-5,8)", optarg);
+        argerr("YS000455", "invalid --cpu-affinity: %s (off, auto, or list like 2-5,8)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -57,7 +57,7 @@ args_status_t dixy_opt_server(dixy_opt_t *p, int c) {
     case OPT_MAX_CLIENTS: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 65536, &v)) {
-        argerr("invalid --max-clients: %s (1..65536)", optarg);
+        argerr("YS000647", "invalid --max-clients: %s (1..65536)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -67,7 +67,7 @@ args_status_t dixy_opt_server(dixy_opt_t *p, int c) {
     case OPT_MAX_CHANNELS: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 1024, &v)) {
-        argerr("invalid --max-channels: %s (1..1024)", optarg);
+        argerr("YS000648", "invalid --max-channels: %s (1..1024)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -77,7 +77,7 @@ args_status_t dixy_opt_server(dixy_opt_t *p, int c) {
     case OPT_IDLE_TIMEOUT: {
       unsigned v;
       if (argutil_uint_range(optarg, 0, 86400, &v)) {
-        argerr("invalid --idle-timeout: %s (seconds, 0..86400, 0 = off)", optarg);
+        argerr("YS000649", "invalid --idle-timeout: %s (seconds, 0..86400, 0 = off)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -87,7 +87,7 @@ args_status_t dixy_opt_server(dixy_opt_t *p, int c) {
     case OPT_CAPTURE_RING_SIZE: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-        argerr("invalid --capture-ring-size: %s (KiB, min 1)", optarg);
+        argerr("YS000650", "invalid --capture-ring-size: %s (KiB, min 1)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -98,7 +98,7 @@ args_status_t dixy_opt_server(dixy_opt_t *p, int c) {
       char *end;
       double v = strtod(optarg, &end);
       if (*end != '\0' || !isfinite(v) || v < 0.0 || v > 1e9) {
-        argerr("invalid --ts-startup-timeout: %s (seconds, 0=off)", optarg);
+        argerr("YS000651", "invalid --ts-startup-timeout: %s (seconds, 0=off)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }

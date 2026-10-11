@@ -10,11 +10,11 @@
 
 static args_status_t validate_mode_mcast(const config_t *cfg, const args_flags_t *fl) {
   if (fl->have_a == fl->have_l) {
-    argerr("exactly one of -a/--announce or -l/--listen is required");
+    argerr("AS000108", "exactly one of -a/--announce or -l/--listen is required");
     return ARGS_ERR;
   }
   if (!fl->have_mcast) {
-    argerr("missing -m multicast group:port");
+    argerr("AS000109", "missing -m multicast group:port");
     return ARGS_ERR;
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
@@ -23,16 +23,16 @@ static args_status_t validate_mode_mcast(const config_t *cfg, const args_flags_t
 
 static args_status_t validate_announce_input(config_t *cfg, const args_flags_t *fl) {
   if (!cfg->input_path) {
-    argerr("missing -i input");
+    argerr("AS000110", "missing -i input");
     return ARGS_ERR;
   }
   if (!sds_has_suffix(cfg->input_path, ".xml")) {
     if (!cfg->provider) {
-      argerr("missing -p provider (required unless -i is .xml)");
+      argerr("AS000176", "missing -p provider (required unless -i is .xml)");
       return ARGS_ERR;
     }
     if (!cfg->offering) {
-      argerr("missing -O offering (required unless -i is .xml)");
+      argerr("AS000177", "missing -O offering (required unless -i is .xml)");
       return ARGS_ERR;
     }
   }
@@ -43,15 +43,15 @@ static args_status_t validate_announce_input(config_t *cfg, const args_flags_t *
 
 static args_status_t validate_announce_ret(config_t *cfg, const args_flags_t *fl) {
   if (cfg->ret_enabled && sds_has_suffix(cfg->input_path, ".xml")) {
-    argerr("--ret-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
+    argerr("AS000178", "--ret-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
     return ARGS_ERR;
   }
   if (!cfg->ret_enabled && (fl->have_ret_rtx_time || fl->have_ret_rtx_pt || cfg->ret_mc || fl->have_ret_mc_port || cfg->ret_rsi_mc_ret)) {
-    argerr("--ret-rtx-time/--ret-rtx-pt/--ret-mc/--ret-mc-port/--ret-rsi-mc-ret require --ret-addr");
+    argerr("AS000179", "--ret-rtx-time/--ret-rtx-pt/--ret-mc/--ret-mc-port/--ret-rsi-mc-ret require --ret-addr");
     return ARGS_ERR;
   }
   if (cfg->ret_rsi_mc_ret && !cfg->ret_mc) {
-    argerr("--ret-rsi-mc-ret requires --ret-mc");
+    argerr("AS000180", "--ret-rsi-mc-ret requires --ret-mc");
     return ARGS_ERR;
   }
   if (cfg->ret_enabled) {
@@ -63,11 +63,11 @@ static args_status_t validate_announce_ret(config_t *cfg, const args_flags_t *fl
 
 static args_status_t validate_announce_fcc(config_t *cfg, const args_flags_t *fl) {
   if (cfg->fcc_enabled && sds_has_suffix(cfg->input_path, ".xml")) {
-    argerr("--fcc-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
+    argerr("AS000181", "--fcc-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
     return ARGS_ERR;
   }
   if (!cfg->fcc_enabled && (fl->have_fcc_rtx_time || fl->have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || fl->have_fcc_resolve_max_channels)) {
-    argerr("--fcc-rtx-time/--fcc-rtx-pt/--fcc-resolve-* require --fcc-addr");
+    argerr("AS000182", "--fcc-rtx-time/--fcc-rtx-pt/--fcc-resolve-* require --fcc-addr");
     return ARGS_ERR;
   }
   if (cfg->fcc_enabled) {
@@ -80,11 +80,11 @@ static args_status_t validate_announce_fcc(config_t *cfg, const args_flags_t *fl
 
 static args_status_t validate_announce_al_fec(config_t *cfg, const args_flags_t *fl) {
   if (cfg->al_fec_enabled && sds_has_suffix(cfg->input_path, ".xml")) {
-    argerr("--al-fec-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
+    argerr("AS000183", "--al-fec-addr has no effect with a raw .xml -i input (that path is sent through unparsed)");
     return ARGS_ERR;
   }
   if (!cfg->al_fec_enabled && fl->have_al_fec_pt) {
-    argerr("--al-fec-pt requires --al-fec-addr");
+    argerr("AS000184", "--al-fec-pt requires --al-fec-addr");
     return ARGS_ERR;
   }
   if (cfg->al_fec_enabled && !fl->have_al_fec_pt) cfg->al_fec_pt = 96;
@@ -93,31 +93,31 @@ static args_status_t validate_announce_al_fec(config_t *cfg, const args_flags_t 
 
 static args_status_t validate_announce_rms_fus(config_t *cfg, const args_flags_t *fl) {
   if ((cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled) && sds_has_suffix(cfg->input_path, ".xml")) {
-    argerr("--packages/--cells/--rms-name/--fus-name have no effect with a raw .xml -i input (that path is sent through unparsed)");
+    argerr("AS000185", "--packages/--cells/--rms-name/--fus-name have no effect with a raw .xml -i input (that path is sent through unparsed)");
     return ARGS_ERR;
   }
   if (cfg->rms_enabled && cfg->fus_enabled) {
-    argerr("--rms-name and --fus-name are mutually exclusive (RMSFUSDiscovery carries one or the other, never both)");
+    argerr("AS000186", "--rms-name and --fus-name are mutually exclusive (RMSFUSDiscovery carries one or the other, never both)");
     return ARGS_ERR;
   }
   if (!cfg->rms_enabled && (fl->have_rms_lang || cfg->rms_location || cfg->rms_logo)) {
-    argerr("--rms-lang/--rms-location/--rms-logo require --rms-name");
+    argerr("AS000187", "--rms-lang/--rms-location/--rms-logo require --rms-name");
     return ARGS_ERR;
   }
   if (cfg->rms_enabled) {
     if (!cfg->rms_location) {
-      argerr("--rms-name requires --rms-location");
+      argerr("AS000188", "--rms-name requires --rms-location");
       return ARGS_ERR;
     }
     if (!fl->have_rms_lang) memcpy(cfg->rms_lang, "deu", 3);
   }
   if (!cfg->fus_enabled && (fl->have_fus_lang || fl->have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo)) {
-    argerr("--fus-lang/--fus-id/--fus-announce/--fus-logo require --fus-name");
+    argerr("AS000189", "--fus-lang/--fus-id/--fus-announce/--fus-logo require --fus-name");
     return ARGS_ERR;
   }
   if (cfg->fus_enabled) {
     if (!fl->have_fus_id) {
-      argerr("--fus-name requires --fus-id");
+      argerr("AS000190", "--fus-name requires --fus-id");
       return ARGS_ERR;
     }
     if (!fl->have_fus_lang) memcpy(cfg->fus_lang, "deu", 3);
@@ -127,20 +127,20 @@ static args_status_t validate_announce_rms_fus(config_t *cfg, const args_flags_t
 
 static args_status_t validate_listen(config_t *cfg, const args_flags_t *fl) {
   if (cfg->ret_enabled || fl->have_ret_rtx_time || fl->have_ret_rtx_pt || cfg->ret_mc || fl->have_ret_mc_port || cfg->ret_rsi_mc_ret) {
-    argerr("--ret-* options are announce-only");
+    argerr("AS000191", "--ret-* options are announce-only");
     return ARGS_ERR;
   }
   if (cfg->fcc_enabled || fl->have_fcc_rtx_time || fl->have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || fl->have_fcc_resolve_max_channels) {
-    argerr("--fcc-* options are announce-only");
+    argerr("AS000192", "--fcc-* options are announce-only");
     return ARGS_ERR;
   }
   if (cfg->metrics_id) {
-    argerr("--metrics-id is announce-only");
+    argerr("AS000112", "--metrics-id is announce-only");
     return ARGS_ERR;
   }
   if (cfg->packages_path || cfg->cells_path || cfg->rms_enabled || fl->have_rms_lang || cfg->rms_location || cfg->rms_logo ||
       cfg->fus_enabled || fl->have_fus_lang || fl->have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo) {
-    argerr("--packages/--cells/--rms-*/--fus-* options are announce-only");
+    argerr("AS000193", "--packages/--cells/--rms-*/--fus-* options are announce-only");
     return ARGS_ERR;
   }
   if (!cfg->output_path) cfg->output_path = "-";

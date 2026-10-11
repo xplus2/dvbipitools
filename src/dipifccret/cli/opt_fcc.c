@@ -23,13 +23,13 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
       break;
     case 'B':
       if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->buffer_ms)) {
-        argerr("invalid -B buffer: %s (ms)", optarg);
+        argerr("FS000433", "invalid -B buffer: %s (ms)", optarg);
         return ARGS_ERR;
       }
       break;
     case 'F':
       if (argutil_uint_range(optarg, 0, 65535, &cfg->ff_port)) {
-        argerr("invalid -F ff-port: %s", optarg);
+        argerr("FS000434", "invalid -F ff-port: %s", optarg);
         return ARGS_ERR;
       }
       break;
@@ -39,7 +39,7 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
     case OPT_MAX_RET_CLIENTS: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-        argerr("invalid --max-ret-clients: %s", optarg);
+        argerr("FS000435", "invalid --max-ret-clients: %s", optarg);
         return ARGS_ERR;
       }
       cfg->max_ret_clients = (size_t)v;
@@ -47,19 +47,19 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
     }
     case OPT_RET_CLIENT_IDLE_TIMEOUT:
       if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->ret_client_idle_timeout_s)) {
-        argerr("invalid --ret-client-idle-timeout: %s (s)", optarg);
+        argerr("FS000436", "invalid --ret-client-idle-timeout: %s (s)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_RET_CLIENT_RATE:
       if (argutil_uint_range(optarg, 0, RATE_MAX, &cfg->ret_client_rate)) {
-        argerr("invalid --ret-client-rate: %s (packets/s, 0 = unlimited)", optarg);
+        argerr("FS000437", "invalid --ret-client-rate: %s (packets/s, 0 = unlimited)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_RET_MC_DEDUP:
       if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->ret_mc_dedup_ms)) {
-        argerr("invalid --ret-mc-dedup: %s (ms, 0 = off)", optarg);
+        argerr("FS000438", "invalid --ret-mc-dedup: %s (ms, 0 = off)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -68,7 +68,7 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
       break;
     case OPT_RSI_INTERVAL:
       if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->rsi_interval_s)) {
-        argerr("invalid --rsi-interval: %s (s)", optarg);
+        argerr("FS000439", "invalid --rsi-interval: %s (s)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -77,7 +77,7 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
       break;
     case OPT_RSI_HOSTNAME:
       if (strlen(optarg) >= sizeof cfg->rsi_hostname) {
-        argerr("--rsi-hostname too long: %s", optarg);
+        argerr("FS000440", "--rsi-hostname too long: %s", optarg);
         return ARGS_ERR;
       }
       bufcpy(cfg->rsi_hostname, sizeof cfg->rsi_hostname, optarg);
@@ -87,14 +87,14 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
       break;
     case 'G':
       if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->gop_cap_ms)) {
-        argerr("invalid -G gop-cap: %s (ms)", optarg);
+        argerr("FS000441", "invalid -G gop-cap: %s (ms)", optarg);
         return ARGS_ERR;
       }
       break;
     case 'C': {
       unsigned v;
       if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-        argerr("invalid -C max-bursts: %s", optarg);
+        argerr("FS000442", "invalid -C max-bursts: %s", optarg);
         return ARGS_ERR;
       }
       cfg->max_bursts = (size_t)v;
@@ -104,7 +104,7 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
       char *end;
       double v = strtod(optarg, &end);
       if (*end != '\0' || v <= 1.0) {
-        argerr("invalid -X burst-multiplier: %s (must be > 1.0)", optarg);
+        argerr("FS000443", "invalid -X burst-multiplier: %s (must be > 1.0)", optarg);
         return ARGS_ERR;
       }
       cfg->burst_multiplier = v;
@@ -112,13 +112,13 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
     }
     case 'D':
       if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->duration_cap_ms)) {
-        argerr("invalid -D burst-duration-cap: %s (ms)", optarg);
+        argerr("FS000444", "invalid -D burst-duration-cap: %s (ms)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_MAX_BUFFER_FILL_BOUND:
       if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->max_buffer_fill_bound_ms)) {
-        argerr("invalid --max-buffer-fill-bound: %s (ms, 0 = no bound)", optarg);
+        argerr("FS000445", "invalid --max-buffer-fill-bound: %s (ms, 0 = no bound)", optarg);
         return ARGS_ERR;
       }
       break;
@@ -127,31 +127,31 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
       break;
     case OPT_FCC_RESOLVE_BASE_PORT:
       if (argutil_uint_range(optarg, 0, 65535, &cfg->fcc_resolve_base_port)) {
-        argerr("invalid --fcc-resolve-base-port: %s", optarg);
+        argerr("FS000205", "invalid --fcc-resolve-base-port: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_CONGESTION_NACK_THRESHOLD:
       if (argutil_uint_range(optarg, 0, UINT_MAX, &cfg->congestion_nack_threshold)) {
-        argerr("invalid --congestion-nack-threshold: %s (0 = disabled)", optarg);
+        argerr("FS000446", "invalid --congestion-nack-threshold: %s (0 = disabled)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_FCC_RANGE:
       if (fccret_cfg_fcc_range(cfg, optarg)) {
-        argerr("invalid --fcc-range: %s", optarg);
+        argerr("FS000447", "invalid --fcc-range: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_FCC_CLIENT_RANGE:
       if (fccret_cfg_fcc_client_range(cfg, optarg)) {
-        argerr("invalid --fcc-client-range: %s", optarg);
+        argerr("FS000448", "invalid --fcc-client-range: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_FCC_CLIENT_RATE:
       if (argutil_uint_range(optarg, 0, RATE_MAX, &cfg->fcc_client_rate)) {
-        argerr("invalid --fcc-client-rate: %s (requests/s, 0 = unlimited)", optarg);
+        argerr("FS000449", "invalid --fcc-client-rate: %s (requests/s, 0 = unlimited)", optarg);
         return ARGS_ERR;
       }
       break;

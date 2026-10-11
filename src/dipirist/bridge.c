@@ -27,8 +27,9 @@ enum rist_profile profile_of(rist_profile_sel_t p) {
 
 static int rist_log_cb(void *arg, enum rist_log_level level, const char *msg) {
   (void)arg;
-  (void)level;
-  log_line("rist: %s", msg);
+  if (level <= RIST_LOG_ERROR)     log_code("VE700010", "rist: %s", msg);
+  else if (level <= RIST_LOG_WARN) log_code("VW700010", "rist: %s", msg);
+  else                             log_code("VD700010", "rist: %s", msg);
   return 0;
 }
 
@@ -71,7 +72,7 @@ static int add_peers(struct rist_ctx *ctx, const endpoint_t *e, const config_t *
     struct rist_peer_config *pc = NULL;
     struct rist_peer *peer;
     if (rist_parse_address2(e->rist_uri[i], &pc) != 0 || !pc) {
-      log_line("rist: invalid peer url: %s", e->rist_uri[i]);
+      log_code("VS000140", "rist: invalid peer url: %s", e->rist_uri[i]);
       if (pc) rist_peer_config_free2(&pc);
       return -1;
     }
@@ -88,7 +89,7 @@ static int add_peers(struct rist_ctx *ctx, const endpoint_t *e, const config_t *
       pc->recovery_length_max = cfg->buffer_ms;
     }
     if (rist_peer_create(ctx, &peer, pc) != 0) {
-      log_line("rist: failed to add peer: %s", e->rist_uri[i]);
+      log_code("VS600102", "rist: failed to add peer: %s", e->rist_uri[i]);
       rist_peer_config_free2(&pc);
       return -1;
     }
@@ -154,7 +155,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     }
     if (ristout_write(rist, buf, (size_t)n) < 0) {
       if (!rist_had_error) {
-        log_line("rist output: write failed, will keep retrying");
+        log_code("VW100107", "rist output: write failed, will keep retrying");
         rist_had_error = 1;
       }
     } else if (rist_had_error) {
@@ -173,7 +174,7 @@ static struct rist_ctx *receiver_start(const config_t *cfg, metrics_exporter_t *
   struct rist_ctx *ctx;
 
   if (rist_receiver_create(&ctx, profile_of(cfg->profile), log_settings) != 0) {
-    log_line("rist: receiver create failed");
+    log_code("VS500113", "rist: receiver create failed");
     return NULL;
   }
   if (add_peers(ctx, &cfg->in, cfg) || rist_start(ctx) != 0) {

@@ -107,7 +107,8 @@ void tvhead_srt_service(out_ctx_t *o) {
   if (!o->srt) return;
   srtsink_service(o->srt, &st);
   if (st.connected != o->srt_connected) {
-    log_line("srt output: %s", st.connected ? "connected" : "link down, reconnecting");
+    if (st.connected) log_line("srt output: connected");
+    else              log_code("TW600103", "srt output: link down, reconnecting");
     o->srt_connected = st.connected;
   }
 }
@@ -393,12 +394,12 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
         else tspack_feed(&pz, buf, (size_t)n, remux_cb, &fc);
       }
       if (remux_reconnect_wanted(rx)) {
-        log_line("source PMT changed incompatibly, reconnecting");
+        log_code("TW600152", "source PMT changed incompatibly, reconnecting");
         cas_flush(cas, packet_cb, out);
         return -1;
       }
       if (cas && cas_failed(cas)) {
-        log_line("cas: fatal error, stopping");
+        log_code("TE300167", "cas: fatal error, stopping");
         cas_flush(cas, packet_cb, out);
         return -1;
       }

@@ -11,11 +11,12 @@
 
 static void srt_log_cb(void *opaque, int level, const char *file, int line, const char *area, const char *message) {
   (void)opaque;
-  (void)level;
   (void)file;
   (void)line;
   (void)area;
-  log_line("srt: %s", message);
+  if (level <= LOG_ERR)          log_code("LE700011", "srt: %s", message);
+  else if (level <= LOG_WARNING) log_code("LW700011", "srt: %s", message);
+  else                           log_code("LD700011", "srt: %s", message);
 }
 
 void srtcommon_open_logging(int verbose) {
@@ -52,7 +53,7 @@ int srtcommon_apply_opts(SRTSOCKET s, const srtcommon_opts_t *o, int is_group, i
   return 0;
 
 fail:
-  log_line("srt: setsockopt failed: %s", srt_getlasterror_str());
+  log_code("LE500158", "srt: setsockopt failed: %s", srt_getlasterror_str());
   return -1;
 }
 
@@ -68,7 +69,7 @@ int srtcommon_resolve(const char *host, unsigned port, struct sockaddr_storage *
   uint_to_str(portbuf, port);
   rc = getaddrinfo(host, portbuf, &hints, &res);
   if (rc != 0) {
-    log_line("srt: address resolve failed for %s:%u: %s", host, port, gai_strerror(rc));
+    log_code("LE600135", "srt: address resolve failed for %s:%u: %s", host, port, gai_strerror(rc));
     return -1;
   }
   memcpy(ss, res->ai_addr, res->ai_addrlen);

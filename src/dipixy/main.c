@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
   htdocs_template_init(&cfg);
   channels = channels_build(&cfg);
   if (!channels) {
-    log_line(TOOL_NAME ": out of mem building channel lists");
+    log_code("YS500207", TOOL_NAME ": out of mem building channel lists");
     args_free(&cfg);
     return 1;
   }

@@ -218,7 +218,7 @@ static void add_track(mp4_t *m, const psi_es_t *es, int psi_idx) {
   t->cls = es->cls;
   t->psi_idx = psi_idx;
   memcpy(t->lang, es->lang, sizeof t->lang);
-  if (pes_track(m->pes, t->pid)) log_line("mp4: pes tracker full, pid 0x%04x not reassembled", t->pid);
+  if (pes_track(m->pes, t->pid)) log_code("LW400171", "mp4: pes tracker full, pid 0x%04x not reassembled", t->pid);
   m->ntrk++;
 }
 
@@ -231,7 +231,7 @@ void p4_setup(mp4_t *m) {
     for (k = 0; k < c && m->ntrk < MP4_MAX_TRACKS; k++) {
       if (es[k].cls != PID_VIDEO) continue;
       if (!video_supported(es[k].codec)) {
-        log_line("mp4=no_vc(%s)", codec_name(es[k].codec));
+        log_code("LW400172", "mp4=no_vc(%s)", codec_name(es[k].codec));
         continue;
       }
       add_track(m, &es[k], 0);
@@ -243,7 +243,7 @@ void p4_setup(mp4_t *m) {
       if (es[k].cls != PID_AUDIO) continue;
       if (!m->opts->audio_all && es[k].audio_index != (int)m->opts->audio_track) continue;
       if (!audio_supported(es[k].codec)) {
-        log_line("mp4=no_ac(%s)", codec_name(es[k].codec));
+        log_code("LW400173", "mp4=no_ac(%s)", codec_name(es[k].codec));
         continue;
       }
       add_track(m, &es[k], p);
@@ -263,10 +263,10 @@ void p4_setup(mp4_t *m) {
       }
       memcpy(t->lang, es[k].ttx_lang, sizeof t->lang);
       t->hdr_parsed = 1;
-      log_line("mp4=txtsub(%u=%s)", es[k].ttx_page, es[k].ttx_lang);
+      log_code("LW400174", "mp4=txtsub(%u=%s)", es[k].ttx_page, es[k].ttx_lang);
       break;
     }
   }
-  if (!m->ntrk) log_line("mp4=no_mux");
+  if (!m->ntrk) log_code("LW400175", "mp4=no_mux");
   m->setup = 1;
 }

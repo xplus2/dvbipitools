@@ -98,7 +98,7 @@ void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
       if (t_h3_udp6 >= 0) rl->L[rl->nL++] = (reactor_listener){t_h3_udp6, 0, RL_H3_UDP};
     }
     if (h3_steer_end(t_h3_udp4, t_h3_udp6) != 0)
-      log_line("http3: reuseport steering unavailable, conn migration will only work with -j 1");
+      log_code("YA500211", "http3: reuseport steering unavailable, conn migration will only work with -j 1");
   }
 #endif
 

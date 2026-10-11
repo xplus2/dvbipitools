@@ -140,7 +140,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     if (st != ARGS_OK) return st;
   }
   if (optind < argc) {
-    argerr("unexpected argument: %s", argv[optind]);
+    argerr("YS000107", "unexpected argument: %s", argv[optind]);
     args_free(cfg);
     return ARGS_ERR;
   }

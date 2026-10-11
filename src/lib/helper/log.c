@@ -14,7 +14,7 @@ static void stamp(char *ts, size_t n) {
   time_t now = time(NULL);
   struct tm tm;
   gmtime_r(&now, &tm);
-  strftime(ts, n, "%Y-%m-%d %H:%M:%S", &tm);
+  strftime(ts, n, "%Y%m%d %H%M%S", &tm);
 }
 
 int log_stderr_is_tty(void) {
@@ -92,18 +92,33 @@ static void strip_ansi(char *s) {
   *w = '\0';
 }
 
-void log_line(const char *fmt, ...) {
+static void emit(const char *code, const char *msg) {
   char ts[20];
+  stamp(ts, sizeof ts);
+  long pid = (long)getpid();
+  if (code) fprintf(stderr, "%s %ld [%s] %s\n", ts, pid, code, msg);
+  else      fprintf(stderr, "%s %ld %s\n", ts, pid, msg);
+}
+
+void log_line(const char *fmt, ...) {
   char msg[4096];
   va_list ap;
-  stamp(ts, sizeof ts);
   va_start(ap, fmt);
   vsnprintf(msg, sizeof msg, fmt, ap);
   va_end(ap);
-  fprintf(stderr, "%s %s\n", ts, msg);
+  emit(NULL, msg);
 }
 
-void log_throttled(log_throttle_t *t, int window_s, const char *fmt, ...) {
+void log_code(const char *code, const char *fmt, ...) {
+  char msg[4096];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(msg, sizeof msg, fmt, ap);
+  va_end(ap);
+  emit(code, msg);
+}
+
+void log_throttled(log_throttle_t *t, int window_s, const char *code, const char *fmt, ...) {
   struct timespec now;
   long long now_ms;
   long long next;
@@ -127,18 +142,29 @@ void log_throttled(log_throttle_t *t, int window_s, const char *fmt, ...) {
   vsnprintf(msg, sizeof msg, fmt, ap);
   va_end(ap);
   suppressed = atomic_exchange_explicit(&t->suppressed, 0, memory_order_relaxed);
-  if (suppressed) log_line("%s (%lu more in %ds)", msg, suppressed, window_s);
-  else            log_line("%s", msg);
+  if (suppressed) log_code(code, "%s (%lu more in %ds)", msg, suppressed, window_s);
+  else            log_code(code, "%s", msg);
+}
+
+static void vemit_ansi(const char *code, const char *fmt, va_list ap) __attribute__((format(printf, 2, 0)));
+
+static void vemit_ansi(const char *code, const char *fmt, va_list ap) {
+  char msg[4096];
+  vsnprintf(msg, sizeof msg, fmt, ap);
+  if (!log_colors_enabled()) strip_ansi(msg);
+  emit(code, msg);
 }
 
 void log_line_ansi(const char *fmt, ...) {
-  char ts[20];
-  char msg[4096];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf(msg, sizeof msg, fmt, ap);
+  vemit_ansi(NULL, fmt, ap);
   va_end(ap);
-  if (!log_colors_enabled()) strip_ansi(msg);
-  stamp(ts, sizeof ts);
-  fprintf(stderr, "%s %s\n", ts, msg);
+}
+
+void log_code_ansi(const char *code, const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vemit_ansi(code, fmt, ap);
+  va_end(ap);
 }

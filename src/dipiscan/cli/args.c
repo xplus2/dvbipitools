@@ -67,19 +67,19 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     switch (c) {
       case 'm':
         if (scan_mcast_range_parse(optarg, &cfg->family, cfg->start, cfg->end, &cfg->total)) {
-          argerr("invalid -m address: %s (addr, addr/prefixlen, or startaddr-stopaddr)", optarg);
+          argerr("SS000164", "invalid -m address: %s (addr, addr/prefixlen, or startaddr-stopaddr)", optarg);
           return ARGS_ERR;
         }
         break;
       case 'p':
         if (scan_port_range_parse(optarg, &cfg->port_lo, &cfg->port_hi)) {
-          argerr("invalid -p port range: %s", optarg);
+          argerr("SS000165", "invalid -p port range: %s", optarg);
           return ARGS_ERR;
         }
         break;
       case 'f':
         if (scan_fmt_from_name(optarg, &cfg->format)) {
-          argerr("invalid -f format: %s (m3u|csv|xspf|xml|null)", optarg);
+          argerr("SS000166", "invalid -f format: %s (m3u|csv|xspf|xml|null)", optarg);
           return ARGS_ERR;
         }
         break;
@@ -92,7 +92,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 't': {
         unsigned v;
         if (argutil_uint_range(optarg, 1, 3600, &v)) {
-          argerr("invalid -t timeout: %s (1..3600 seconds)", optarg);
+          argerr("SS000167", "invalid -t timeout: %s (1..3600 seconds)", optarg);
           return ARGS_ERR;
         }
         cfg->timeout_ms = (int)(v * 1000);
@@ -101,7 +101,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'j': {
         unsigned v;
         if (argutil_uint_range(optarg, 1, DIPISCAN_MAX_JETS, &v)) {
-          argerr("invalid -j jets: %s (1..%d)", optarg, DIPISCAN_MAX_JETS);
+          argerr("SS000168", "invalid -j jets: %s (1..%d)", optarg, DIPISCAN_MAX_JETS);
           return ARGS_ERR;
         }
         cfg->jets = v;
@@ -112,14 +112,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 'u':
         if (scan_http_proxy_parse(optarg, cfg)) {
-          argerr("invalid -u http-proxy address: %s", optarg);
+          argerr("SS000169", "invalid -u http-proxy address: %s", optarg);
           return ARGS_ERR;
         }
         cfg->http_proxy = 1;
         break;
       case 'x':
         if (scan_http_path_tmpl_valid(optarg)) {
-          argerr("invalid -x path template: %s (%%g, %%p, %%%% only)", optarg);
+          argerr("SS000170", "invalid -x path template: %s (%%g, %%p, %%%% only)", optarg);
           return ARGS_ERR;
         }
         cfg->http_path_tmpl = optarg;
@@ -133,7 +133,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
-          argerr("invalid --color: %s (auto|always|never)", optarg);
+          argerr("SS000105", "invalid --color: %s (auto|always|never)", optarg);
           return ARGS_ERR;
         }
         cfg->color_mode = v;
@@ -151,13 +151,13 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
   }
   if (optind < argc) {
-    argerr("unexpected argument: %s", argv[optind]);
+    argerr("SS000107", "unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
   if (cfg->format == OUT_XML && !cfg->provider) {
-    argerr("missing -P provider (required for -f xml)");
+    argerr("SS000171", "missing -P provider (required for -f xml)");
     return ARGS_ERR;
   }
-  if (cfg->http_path_tmpl && !cfg->http_proxy) log_line(TOOL_NAME ": --http-path needs -u/--http-proxy");
+  if (cfg->http_path_tmpl && !cfg->http_proxy) log_code("SS000172", TOOL_NAME ": --http-path needs -u/--http-proxy");
   return ARGS_OK;
 }

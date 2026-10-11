@@ -117,7 +117,7 @@ ipiclient_poll_state_t ipiclient_poll_step(ipiclient_poll_t *p) {
   char etag[IPICLIENT_ETAG_MAX];
 
   if (mono_seconds() > p->deadline) {
-    log_line(TOOL_NAME ": -u/--unicast-emm fetch timed out");
+    log_code("DE600146", TOOL_NAME ": -u/--unicast-emm fetch timed out");
     return IPICLIENT_POLL_ERROR;
   }
   st = http_fetch_step(p->f, NULL);
@@ -132,7 +132,7 @@ ipiclient_poll_state_t ipiclient_poll_step(ipiclient_poll_t *p) {
   p->f = NULL;
   if (status == 304) return IPICLIENT_POLL_DONE;
   if (etag[0]) bufcpy(p->c->etag, sizeof p->c->etag, etag);
-  if (truncated) log_line(TOOL_NAME ": -u/--unicast-emm response too large, truncated");
+  if (truncated) log_code("DW600147", TOOL_NAME ": -u/--unicast-emm response too large, truncated");
   return IPICLIENT_POLL_DONE;
 }
 

@@ -54,7 +54,7 @@ static void retire_page(htdocs_page_t *p) {
     g_retiring[g_retiring_n].p = p;
     g_retiring_n++;
   } else {
-    log_line(TOOL_NAME ": --status-tpl reload queue full, leaking one old page");
+    log_code("YW500200", TOOL_NAME ": --status-tpl reload queue full, leaking one old page");
   }
 }
 
@@ -81,7 +81,7 @@ void htdocs_template_init(const config_t *cfg) {
     return;
   g_path = cfg->status_template;
   if (load_file(g_path, &buf, &len)) {
-    log_line(TOOL_NAME ": --status-tpl %s: cannot read, using built-in page", g_path);
+    log_code("YW000667", TOOL_NAME ": --status-tpl %s: cannot read, using built-in page", g_path);
     return;
   }
   p = malloc(sizeof *p);
@@ -102,13 +102,13 @@ void htdocs_template_reload_check(void) {
   if (!g_path || !signal_template_reload_requested())
     return;
   if (load_file(g_path, &buf, &len)) {
-    log_line(TOOL_NAME ": --status-tpl %s: reload failed, keeping previous content", g_path);
+    log_code("YW000668", TOOL_NAME ": --status-tpl %s: reload failed, keeping previous content", g_path);
     return;
   }
   p = malloc(sizeof *p);
   if (!p) {
     free(buf);
-    log_line(TOOL_NAME ": --status-tpl %s: reload failed (OOM), keeping previous content", g_path);
+    log_code("YW500201", TOOL_NAME ": --status-tpl %s: reload failed (OOM), keeping previous content", g_path);
     return;
   }
   p->buf = buf;

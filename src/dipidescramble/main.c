@@ -121,7 +121,7 @@ int main(int argc, char **argv) {
 
   src = tssrc_open(&tc, NULL);
   if (!src) {
-    log_line(TOOL_NAME ": cannot open -i %s", in_desc);
+    log_code("DS000420", TOOL_NAME ": cannot open -i %s", in_desc);
     goto cleanup;
   }
 
@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
     else
       lc.mkv = mkv_new(mkv_fd, &mkv_opts, cfg.format == FMT_MKV, &lc.mkv_bytes, NULL, 0);
     if (!lc.mkv) {
-      log_line(TOOL_NAME ": cannot start mkv/mka mux");
+      log_code("DS500172", TOOL_NAME ": cannot start mkv/mka mux");
       goto cleanup;
     }
   }
@@ -153,7 +153,7 @@ int main(int argc, char **argv) {
     flv_opts.strip_lcevc = cfg.strip_lcevc;
     lc.flv = flv_new(&flv_opts, pmt_pid, rtmp_fanout_cb, &lc, NULL);
     if (!lc.flv) {
-      log_line(TOOL_NAME ": cannot start flv mux");
+      log_code("DS500173", TOOL_NAME ": cannot start flv mux");
       goto cleanup;
     }
   }

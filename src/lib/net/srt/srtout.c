@@ -77,7 +77,7 @@ static SRTSOCKET open_single(const srtout_cfg_t *cfg) {
 
   s = srt_create_socket();
   if (s == SRT_INVALID_SOCK) {
-    log_line("srt: socket create failed: %s", srt_getlasterror_str());
+    log_code("LE500159", "srt: socket create failed: %s", srt_getlasterror_str());
     return SRT_INVALID_SOCK;
   }
   if (srtcommon_apply_opts(s, &cfg->opts, 0, SRTO_SNDTIMEO, SRTOUT_SNDTIMEO_MS) ||
@@ -87,7 +87,7 @@ static SRTSOCKET open_single(const srtout_cfg_t *cfg) {
   }
   if (cfg->rendezvous) {
     if (!cfg->local_host) {
-      log_line("srt: rendezvous requires a local bind address");
+      log_code("LE000321", "srt: rendezvous requires a local bind address");
       srt_close(s);
       return SRT_INVALID_SOCK;
     }
@@ -97,12 +97,12 @@ static SRTSOCKET open_single(const srtout_cfg_t *cfg) {
     }
     if (srt_rendezvous(s, (struct sockaddr *)&local, local_len, (struct sockaddr *)&remote, remote_len) != 0 &&
         srt_getlasterror(NULL) != SRT_EASYNCSND) {
-      log_line("srt: rendezvous failed: %s", srt_getlasterror_str());
+      log_code("LE600136", "srt: rendezvous failed: %s", srt_getlasterror_str());
       srt_close(s);
       return SRT_INVALID_SOCK;
     }
   } else if (srt_connect(s, (struct sockaddr *)&remote, remote_len) != 0 && srt_getlasterror(NULL) != SRT_EASYNCSND) {
-    log_line("srt: connect failed: %s", srt_getlasterror_str());
+    log_code("LE600137", "srt: connect failed: %s", srt_getlasterror_str());
     srt_close(s);
     return SRT_INVALID_SOCK;
   }
@@ -117,7 +117,7 @@ static SRTSOCKET open_group(const srtout_cfg_t *cfg) {
 
   g = srt_create_group(type);
   if (g == SRT_INVALID_SOCK) {
-    log_line("srt: group create failed: %s", srt_getlasterror_str());
+    log_code("LE500164", "srt: group create failed: %s", srt_getlasterror_str());
     return SRT_INVALID_SOCK;
   }
   if (srtcommon_apply_opts(g, &cfg->opts, 1, SRTO_SNDTIMEO, SRTOUT_SNDTIMEO_MS) ||
@@ -130,7 +130,7 @@ static SRTSOCKET open_group(const srtout_cfg_t *cfg) {
     return SRT_INVALID_SOCK;
   }
   if (srt_connect_group(g, gc, cfg->npeers) == SRT_ERROR && srt_getlasterror(NULL) != SRT_EASYNCSND) {
-    log_line("srt: group connect failed: %s", srt_getlasterror_str());
+    log_code("LE600139", "srt: group connect failed: %s", srt_getlasterror_str());
     srt_close(g);
     return SRT_INVALID_SOCK;
   }
@@ -146,7 +146,7 @@ static int start_connect(srtout_t *r) {
   if (s == SRT_INVALID_SOCK)
     return -1;
   if (srt_epoll_add_usock(r->eid, s, &events) != 0) {
-    log_line("srt: epoll add failed: %s", srt_getlasterror_str());
+    log_code("LE500161", "srt: epoll add failed: %s", srt_getlasterror_str());
     srt_close(s);
     return -1;
   }
@@ -158,7 +158,7 @@ static int start_connect(srtout_t *r) {
 /* srt_close() deregisters socket from r->eid itself: explicit remove_usock first would race it
    + log spurious internal SRT error */
 static void teardown_for_reconnect(srtout_t *r, const char *why) {
-  log_line("srt: %s, reconnecting", why);
+  log_code("LW600145", "srt: %s, reconnecting", why);
   srt_close(r->sock);
   r->sock = SRT_INVALID_SOCK;
   r->connected = 0;
@@ -181,7 +181,7 @@ static void enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
     r->pending_count--;
     r->queue_dropped++;
     if (!r->drop_logged) {
-      log_line("srt output: send queue full, dropping oldest queued chunk");
+      log_code("LW100131", "srt output: send queue full, dropping oldest queued chunk");
       r->drop_logged = 1;
     }
   } else {
@@ -268,7 +268,7 @@ static void resize_pending(srtout_t *r, int new_cap) {
   new_pending = malloc((size_t)new_cap * SRTOUT_PLSIZE);
   new_len = malloc((size_t)new_cap * sizeof *new_len);
   if (!new_pending || !new_len) {
-    log_line("srt output: pending buffer resize to %d chunks failed, keeping %d", new_cap, r->pending_cap);
+    log_code("LE500167", "srt output: pending buffer resize to %d chunks failed, keeping %d", new_cap, r->pending_cap);
     free(new_pending);
     free(new_len);
     return;
@@ -308,20 +308,20 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
   sbuf_t pl;
 
   if (cfg->npeers <= 0 || cfg->npeers > SRTCOMMON_MAX_PEERS) {
-    log_line("srt: invalid peer count %d", cfg->npeers);
+    log_code("LE000322", "srt: invalid peer count %d", cfg->npeers);
     return NULL;
   }
   if (cfg->group_mode == SRTGROUP_NONE && cfg->npeers != 1) {
-    log_line("srt: plain connection needs exactly one peer, got %d", cfg->npeers);
+    log_code("LE000323", "srt: plain connection needs exactly one peer, got %d", cfg->npeers);
     return NULL;
   }
   if (cfg->group_mode != SRTGROUP_NONE && cfg->rendezvous) {
-    log_line("srt: rendezvous cannot be combined with bonded groups");
+    log_code("LW000324", "srt: rendezvous cannot be combined with bonded groups");
     return NULL;
   }
 
   if (srt_startup() == SRT_ERROR) {
-    log_line("srt: startup failed: %s", srt_getlasterror_str());
+    log_code("LE500166", "srt: startup failed: %s", srt_getlasterror_str());
     return NULL;
   }
   srtcommon_open_logging(cfg->verbose);
@@ -334,7 +334,7 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
   r->sock = SRT_INVALID_SOCK;
   r->eid = srt_epoll_create();
   if (r->eid == SRT_ERROR) {
-    log_line("srt: epoll create failed: %s", srt_getlasterror_str());
+    log_code("LE500160", "srt: epoll create failed: %s", srt_getlasterror_str());
     free(r);
     srt_cleanup();
     return NULL;

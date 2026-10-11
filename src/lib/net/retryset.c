@@ -41,7 +41,7 @@ retryset_t *retryset_new(unsigned n, void *const *slot_ctxs, const char *const *
   rs->retry_interval_s = error_retry_s;
   if (rs->retry_interval_s <= 0 && n > 1) {
     rs->retry_interval_s = RETRYSET_DEFAULT_RETRY_S;
-    log_line("multi-input: no -e given, defaulting to %lds per-input retry", rs->retry_interval_s);
+    log_code("LA000314", "multi-input: no -e given, defaulting to %lds per-input retry", rs->retry_interval_s);
   }
   for (unsigned i = 0; i < n; i++) {
     retryset_slot_t *sl = &rs->slots[i];
@@ -109,14 +109,14 @@ static time_t next_retry_deadline(const retryset_t *rs, time_t now) {
   return rs->retry_interval_s > 0 ? now + rs->retry_interval_s : RETRYSET_NEVER;
 }
 
-static void log_slot(unsigned idx, const char *label, const char *fmt, ...) {
+static void log_slot(unsigned idx, const char *label, const char *code, const char *fmt, ...) {
   char msg[128];
   va_list ap;
   va_start(ap, fmt);
   vsnprintf(msg, sizeof msg, fmt, ap);
   va_end(ap);
-  if (label) log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): %s", idx, label, msg);
-  else log_line_ansi("input \e[1;30m%u\e[0m: \e[1;30m%s\e[0m", idx, msg);
+  if (label) log_code_ansi(code, "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): %s", idx, label, msg);
+  else log_code_ansi(code, "input \e[1;30m%u\e[0m: \e[1;30m%s\e[0m", idx, msg);
 }
 
 void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
@@ -131,7 +131,7 @@ void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
           sl->result = rs->ops->open_take(sl->opening);
           sl->opening = NULL;
           sl->state = RETRYSET_CONNECTED;
-          log_slot(idx, sl->label, "connected");
+          log_slot(idx, sl->label, NULL, "connected");
           return;
         case RETRYSET_OPEN_ERROR:
           break;
@@ -141,9 +141,9 @@ void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
       sl->state = RETRYSET_DOWN;
       sl->retry_deadline = next_retry_deadline(rs, now);
       if (sl->retry_deadline != RETRYSET_NEVER)
-        log_slot(idx, sl->label, "connect failed, retrying in %lds", rs->retry_interval_s);
+        log_slot(idx, sl->label, "LW600132", "connect failed, retrying in %lds", rs->retry_interval_s);
       else
-        log_slot(idx, sl->label, "connect failed, not retrying");
+        log_slot(idx, sl->label, "LW600133", "connect failed, not retrying");
       return;
     }
     case RETRYSET_CONNECTED:
@@ -170,7 +170,7 @@ void retryset_mark_down(retryset_t *rs, unsigned idx, time_t now) {
   sl->state = RETRYSET_DOWN;
   sl->retry_deadline = next_retry_deadline(rs, now);
   if (sl->retry_deadline != RETRYSET_NEVER)
-    log_slot(idx, sl->label, "read error, retrying in %lds", rs->retry_interval_s);
+    log_slot(idx, sl->label, "LW000315", "read error, retrying in %lds", rs->retry_interval_s);
   else
-    log_slot(idx, sl->label, "read error, not retrying");
+    log_slot(idx, sl->label, "LW000316", "read error, not retrying");
 }

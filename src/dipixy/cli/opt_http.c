@@ -26,7 +26,7 @@ args_status_t dixy_opt_http(dixy_opt_t *p, int c) {
     case OPT_H3_ALTSVC_PORT: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 65535, &v)) {
-        argerr("invalid --h3-altsvc-port: %s (1..65535)", optarg);
+        argerr("YS000636", "invalid --h3-altsvc-port: %s (1..65535)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -36,7 +36,7 @@ args_status_t dixy_opt_http(dixy_opt_t *p, int c) {
     case OPT_H3_MAX_STREAMS: {
       unsigned v;
       if (argutil_uint_range(optarg, 4, 1000, &v)) {
-        argerr("invalid --h3-max-streams: %s (4..1000)", optarg);
+        argerr("YS000637", "invalid --h3-max-streams: %s (4..1000)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -46,7 +46,7 @@ args_status_t dixy_opt_http(dixy_opt_t *p, int c) {
     case OPT_H3_MAX_CONNS: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 65536, &v)) {
-        argerr("invalid --h3-max-conns: %s (1..65536)", optarg);
+        argerr("YS000638", "invalid --h3-max-conns: %s (1..65536)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -56,7 +56,7 @@ args_status_t dixy_opt_http(dixy_opt_t *p, int c) {
     case OPT_H3_IDLE_TIMEOUT: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 86400, &v)) {
-        argerr("invalid --h3-idle-timeout: %s (seconds, 1..86400)", optarg);
+        argerr("YS000639", "invalid --h3-idle-timeout: %s (seconds, 1..86400)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -66,7 +66,7 @@ args_status_t dixy_opt_http(dixy_opt_t *p, int c) {
     case OPT_H3_RETRY: {
       char err[96];
       if (dixy_cfg_set_h3_retry(cfg, optarg, err, sizeof err)) {
-        argerr("invalid --h3-retry: %s", err);
+        argerr("YS000640", "invalid --h3-retry: %s", err);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -75,7 +75,7 @@ args_status_t dixy_opt_http(dixy_opt_t *p, int c) {
     case OPT_H3_MAX_UDP_PAYLOAD: {
       unsigned v;
       if (argutil_uint_range(optarg, 1200, 65507, &v)) {
-        argerr("invalid --h3-max-udp-payload: %s (1200..65507)", optarg);
+        argerr("YS000641", "invalid --h3-max-udp-payload: %s (1200..65507)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -85,7 +85,7 @@ args_status_t dixy_opt_http(dixy_opt_t *p, int c) {
     case OPT_H3_WINDOW: {
       unsigned v;
       if (argutil_uint_range(optarg, 16, 1048576, &v)) {
-        argerr("invalid --h3-window: %s (KiB, 16..1048576)", optarg);
+        argerr("YS000642", "invalid --h3-window: %s (KiB, 16..1048576)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -95,7 +95,7 @@ args_status_t dixy_opt_http(dixy_opt_t *p, int c) {
     case OPT_H3_CC: {
       char err[96];
       if (dixy_cfg_set_h3_cc(cfg, optarg, err, sizeof err)) {
-        argerr("invalid --h3-cc: %s", err);
+        argerr("YS000643", "invalid --h3-cc: %s", err);
         args_free(cfg);
         return ARGS_ERR;
       }

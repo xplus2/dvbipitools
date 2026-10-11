@@ -183,11 +183,11 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   workers = reactor_resolve_workers(cfg->workers_spec, (int)sysconf(_SC_NPROCESSORS_ONLN));
   if (workers < 1) workers = 1;
   if (workers > REACTOR_MAX_WORKERS) {
-    log_line(TOOL_NAME ": -j resolves to %d workers, exceeds max supported %d", workers, REACTOR_MAX_WORKERS);
+    log_code("YS000669", TOOL_NAME ": -j resolves to %d workers, exceeds max supported %d", workers, REACTOR_MAX_WORKERS);
     return -1;
   }
   if (cfg->cpu_affinity.mode == CPUAFF_LIST && cfg->cpu_affinity.n < (unsigned)workers)
-    log_line(TOOL_NAME ": --cpu-affinity lists %u cpus for %d workers, rest float", cfg->cpu_affinity.n, workers);
+    log_code("YA000670", TOOL_NAME ": --cpu-affinity lists %u cpus for %d workers, rest float", cfg->cpu_affinity.n, workers);
 #ifdef HAVE_HTTP3
   h3_set_limits(cfg->h3_max_streams, cfg->h3_max_conns, cfg->h3_idle_s);
   h3_set_transport(cfg->h3_max_udp, cfg->h3_window_kib, cfg->h3_cc);
@@ -196,7 +196,7 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
 
   tls_set_http2_enabled(!cfg->no_http2);
   if (tlscert_find(cfg->tls_cert, cfg->tls_key, &cert_path, &key_path)) {
-    if (tls_init(cert_path, key_path, conn_cap)) log_line(TOOL_NAME ": TLS init failed, --listen-tls not bound");
+    if (tls_init(cert_path, key_path, conn_cap)) log_code("YA300170", TOOL_NAME ": TLS init failed, --listen-tls not bound");
 
 #ifdef HAVE_HTTP3
     if (!cfg->no_http3) {
@@ -208,7 +208,7 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
       if (h3_ready()) altsvc_set(cfg->h3_altsvc_port ? cfg->h3_altsvc_port : cfg->listen_tls.port);
     }
 #endif
-  } else log_line(TOOL_NAME ": no usable TLS certificate found, --listen-tls not bound");
+  } else log_code("YA300171", TOOL_NAME ": no usable TLS certificate found, --listen-tls not bound");
 
   __atomic_store_n(&g_workers, workers, __ATOMIC_RELAXED);
   tls_gc_init(workers);

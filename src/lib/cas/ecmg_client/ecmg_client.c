@@ -92,7 +92,7 @@ ecmg_client_t *ecmg_client_start(const ecmg_client_cfg_t *cfg, const atomic_ulon
   c->lookahead_margin_packets = lookahead_margin_packets;
   pthread_mutex_init(&c->ecm_lock, NULL);
   if (pthread_create(&c->thread, NULL, ecmg_client_main, c) != 0) {
-    log_line("ecmg: pthread_create: %s", strerror(errno));
+    log_code("LS500123", "ecmg: pthread_create: %s", strerror(errno));
     pthread_mutex_destroy(&c->ecm_lock);
     free(c);
     return NULL;

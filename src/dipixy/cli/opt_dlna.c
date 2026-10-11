@@ -21,7 +21,7 @@ args_status_t dixy_opt_dlna(dixy_opt_t *p, int c) {
       char *end;
       double v = strtod(optarg, &end);
       if (*end != '\0' || !isfinite(v) || v <= 0.0 || v > 1e9) {
-        argerr("invalid --sds-timeout: %s (seconds, > 0)", optarg);
+        argerr("YS000628", "invalid --sds-timeout: %s (seconds, > 0)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -32,7 +32,7 @@ args_status_t dixy_opt_dlna(dixy_opt_t *p, int c) {
       char *end;
       double v = strtod(optarg, &end);
       if (*end != '\0' || !isfinite(v) || v <= 0.0 || v > 1e9) {
-        argerr("invalid --sds-refresh-interval: %s (seconds, > 0)", optarg);
+        argerr("YS000629", "invalid --sds-refresh-interval: %s (seconds, > 0)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -42,7 +42,7 @@ args_status_t dixy_opt_dlna(dixy_opt_t *p, int c) {
     case OPT_SSDP_TTL: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 255, &v)) {
-        argerr("invalid --ssdp-ttl: %s (1..255)", optarg);
+        argerr("YS000630", "invalid --ssdp-ttl: %s (1..255)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -56,7 +56,7 @@ args_status_t dixy_opt_dlna(dixy_opt_t *p, int c) {
       char *end;
       double v = strtod(optarg, &end);
       if (*end != '\0' || !isfinite(v) || v <= 0.0 || v > 1e9) {
-        argerr("invalid --ssdp-interval: %s (seconds, > 0)", optarg);
+        argerr("YS000631", "invalid --ssdp-interval: %s (seconds, > 0)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -66,7 +66,7 @@ args_status_t dixy_opt_dlna(dixy_opt_t *p, int c) {
     case OPT_SSDP_MAX_AGE: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-        argerr("invalid --ssdp-max-age: %s (seconds, > 0)", optarg);
+        argerr("YS000632", "invalid --ssdp-max-age: %s (seconds, > 0)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }

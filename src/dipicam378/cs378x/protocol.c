@@ -70,13 +70,13 @@ static void finalize_and_send(cs378x_server_t *s, int fd, const unsigned char co
   body[7] = (unsigned char)crc;
 
   if (cs378x_aes128_ecb(s->aes_key, body, total, 1) != 0) {
-    log_line(TOOL_NAME ": encrypt failed building %s", what_for);
+    log_code("3E300100", TOOL_NAME ": encrypt failed building %s", what_for);
     return;
   }
   memcpy(frame, conn_ucrc, 4);
   memcpy(frame + 4, body, total);
   if (send_all(fd, frame, 4 + total, &s->stop) < 0)
-    log_line(TOOL_NAME ": send %s failed: %s", what_for, strerror(errno));
+    log_code("3E100106", TOOL_NAME ": send %s failed: %s", what_for, strerror(errno));
 }
 
 /* body decrypted in place, mutated into CMD01 answer. conn_ucrc echoed verbatim */
@@ -124,7 +124,7 @@ void handle_ecm(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], un
   prid = ((unsigned)body[12] << 24) | ((unsigned)body[13] << 16) | ((unsigned)body[14] << 8) | body[15];
 
   if (s->verbose)
-    log_line(TOOL_NAME ": ECM request srvid=%04X caid=%04X prid=%08X len=%zu", srvid, caid, prid, buflen);
+    log_code("3D300101", TOOL_NAME ": ECM request srvid=%04X caid=%04X prid=%08X len=%zu", srvid, caid, prid, buflen);
   atomic_fetch_add_explicit(&s->ecm_total, 1, memory_order_relaxed);
 
   rc = s->ecm_cb ? s->ecm_cb(body + 20, buflen, srvid, caid, prid, cw, s->user) : -1;
@@ -134,12 +134,12 @@ void handle_ecm(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], un
   }
   atomic_fetch_add_explicit(&s->ecm_errors_total, 1, memory_order_relaxed);
   if (rc == -2) {
-    log_line(TOOL_NAME ": caid %04X not supported, sending CMD08 for srvid=%04X", caid, srvid);
+    log_code("3W000131", TOOL_NAME ": caid %04X not supported, sending CMD08 for srvid=%04X", caid, srvid);
     send_cmd08(s, fd, conn_ucrc, body);
     return;
   }
   if (s->verbose)
-    log_line(TOOL_NAME ": no CW available yet, dropping request");
+    log_code("3D700103", TOOL_NAME ": no CW available yet, dropping request");
 }
 
 void handle_emm(cs378x_server_t *s, unsigned char *body, size_t buflen) {
@@ -149,7 +149,7 @@ void handle_emm(cs378x_server_t *s, unsigned char *body, size_t buflen) {
   provid = ((unsigned)body[12] << 24) | ((unsigned)body[13] << 16) | ((unsigned)body[14] << 8) | body[15];
 
   if (s->verbose)
-    log_line(TOOL_NAME ": EMM caid=%04X provid=%08X len=%zu", caid, provid, buflen);
+    log_code("3D300102", TOOL_NAME ": EMM caid=%04X provid=%08X len=%zu", caid, provid, buflen);
   atomic_fetch_add_explicit(&s->emm_total, 1, memory_order_relaxed);
 
   if (s->emm_cb)

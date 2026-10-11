@@ -92,7 +92,7 @@ static void adts_to_ts(hls_ts_passthrough_t *p, const unsigned char *d, size_t l
     off += flen;
   }
   if (!emitted && !p->warned) {
-    log_line_ansi("\e[0;31mHLS packed audio is not ADTS AAC, skipped\e[0m");
+    log_code_ansi("LW700124", "\e[0;31mHLS packed audio is not ADTS AAC, skipped\e[0m");
     p->warned = 1;
   }
 }
@@ -111,7 +111,7 @@ void hls_ts_passthrough_feed(void *ctx, hls_live_t *h, const unsigned char *data
   case HLS_SEG_FMP4:
   case HLS_SEG_UNKNOWN:
     if (!p->warned) {
-      log_line_ansi("\e[0;31mHLS segment format not supported, skipped\e[0m");
+      log_code_ansi("LW400156", "\e[0;31mHLS segment format not supported, skipped\e[0m");
       p->warned = 1;
     }
     break;

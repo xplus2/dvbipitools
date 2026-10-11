@@ -236,94 +236,94 @@ int cas_set_biss2_ca_session_id(unsigned *dst, int *given, const char *val, char
   return 0;
 }
 
-static void args_err(const char *tool, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+static void args_err(const char *tool, const char *code, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
 
-static void args_err(const char *tool, const char *fmt, ...) {
+static void args_err(const char *tool, const char *code, const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  argutil_verr(tool, fmt, ap);
+  argutil_verr(tool, code, fmt, ap);
   va_end(ap);
 }
 
 int cas_args_validate(const char *tool_name, const cas_args_t *a) {
   if (a->biss2_enabled && (a->cas_algo != CAS_ALGO_NONE || a->n_vendors > 0)) {
-    args_err(tool_name, "--biss2-sw is mutually exclusive with --cas-algo/--cas-ecmg");
+    args_err(tool_name, "LS000268", "--biss2-sw is mutually exclusive with --cas-algo/--cas-ecmg");
     return -1;
   }
   if (a->biss1_enabled && (a->cas_algo != CAS_ALGO_NONE || a->n_vendors > 0)) {
-    args_err(tool_name, "--biss1-sw is mutually exclusive with --cas-algo/--cas-ecmg");
+    args_err(tool_name, "LS000269", "--biss1-sw is mutually exclusive with --cas-algo/--cas-ecmg");
     return -1;
   }
   if (a->biss2_ca_enabled && (a->cas_algo != CAS_ALGO_NONE || a->n_vendors > 0)) {
-    args_err(tool_name, "--biss2-ca-receivers is mutually exclusive with --cas-algo/--cas-ecmg");
+    args_err(tool_name, "LS000270", "--biss2-ca-receivers is mutually exclusive with --cas-algo/--cas-ecmg");
     return -1;
   }
   if (a->biss2_enabled && a->biss1_enabled) {
-    args_err(tool_name, "--biss2-sw and --biss1-sw are mutually exclusive");
+    args_err(tool_name, "LS000271", "--biss2-sw and --biss1-sw are mutually exclusive");
     return -1;
   }
   if (a->biss2_ca_enabled && (a->biss2_enabled || a->biss1_enabled)) {
-    args_err(tool_name, "--biss2-ca-receivers is mutually exclusive with --biss2-sw/--biss1-sw");
+    args_err(tool_name, "LS000272", "--biss2-ca-receivers is mutually exclusive with --biss2-sw/--biss1-sw");
     return -1;
   }
   if (a->biss2_emit_esw && !a->biss2_enabled) {
-    args_err(tool_name, "--biss2-emit-esw requires --biss2-sw");
+    args_err(tool_name, "LS000273", "--biss2-emit-esw requires --biss2-sw");
     return -1;
   }
   if (a->biss2_ca_session_id_given && !a->biss2_ca_enabled) {
-    args_err(tool_name, "--biss2-ca-session-id requires --biss2-ca-receivers");
+    args_err(tool_name, "LS000274", "--biss2-ca-session-id requires --biss2-ca-receivers");
     return -1;
   }
   if (a->biss2_ca_enabled && a->cas_cp_duration_ms < 1000) {
-    args_err(tool_name, "--biss2-ca-receivers needs --cas-cp-duration >= 1000 (Tech 3292-s1 T_ECM_change_min)");
+    args_err(tool_name, "LS000275", "--biss2-ca-receivers needs --cas-cp-duration >= 1000 (Tech 3292-s1 T_ECM_change_min)");
     return -1;
   }
   if (a->cas_algo == CAS_ALGO_NONE)
     return 0;
   if (a->n_vendors == 0) {
-    args_err(tool_name, "--cas-algo requires --cas-ecmg");
+    args_err(tool_name, "LS000276", "--cas-algo requires --cas-ecmg");
     return -1;
   }
   size_t cwenc_cw_len = scrambler_cw_len(a->cas_algo == CAS_ALGO_CISSA ? SCRAMBLE_ALGO_CISSA : SCRAMBLE_ALGO_CSA2);
   for (unsigned vi = 0; vi < a->n_vendors; vi++) {
     const cas_vendor_t *v = &a->vendors[vi];
     if (!v->super_cas_id) {
-      args_err(tool_name, "--cas-ecmg %s:%u requires --cas-super-id", v->ecmg_host, v->ecmg_port);
+      args_err(tool_name, "LS000277", "--cas-ecmg %s:%u requires --cas-super-id", v->ecmg_host, v->ecmg_port);
       return -1;
     }
     if (!v->ecm_id) {
-      args_err(tool_name, "--cas-ecmg %s:%u requires --cas-ecm-id", v->ecmg_host, v->ecmg_port);
+      args_err(tool_name, "LS000278", "--cas-ecmg %s:%u requires --cas-ecm-id", v->ecmg_host, v->ecmg_port);
       return -1;
     }
     if (v->ecm_pid == v->emm_pid) {
-      args_err(tool_name, "--cas-ecm-pid and --cas-emm-pid must differ (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
+      args_err(tool_name, "LS000279", "--cas-ecm-pid and --cas-emm-pid must differ (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
       return -1;
     }
     if (v->emmg_reverse_host[0] && v->emmg_listen_given) {
-      args_err(tool_name, "--cas-emmg-reverse is mutually exclusive with --cas-emmg-listen (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
+      args_err(tool_name, "LS000280", "--cas-emmg-reverse is mutually exclusive with --cas-emmg-listen (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
       return -1;
     }
     if (v->emmg_reverse_host[0] && v->emmg_max_conns) {
-      args_err(tool_name, "--cas-emmg-reverse is mutually exclusive with --cas-emmg-max-conns (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
+      args_err(tool_name, "LS000281", "--cas-emmg-reverse is mutually exclusive with --cas-emmg-max-conns (--cas-ecmg %s:%u)", v->ecmg_host, v->ecmg_port);
       return -1;
     }
     if (v->cwenc_algorithm[0]) {
       cwenc_config_t cwenc_cfg;
       if (cwenc_config_init(&cwenc_cfg, v->cwenc_algorithm, v->cwenc_aes_mode, v->cwenc_fixed_key_hex, v->cwenc_key_list_a_path, v->cwenc_key_list_b_path) != 0 ||
           cwenc_config_validate(&cwenc_cfg, (int)cwenc_cw_len) != 0) {
-        args_err(tool_name, "--cas-ecmg %s:%u: invalid --cas-cwenc-* configuration", v->ecmg_host, v->ecmg_port);
+        args_err(tool_name, "LS000282", "--cas-ecmg %s:%u: invalid --cas-cwenc-* configuration", v->ecmg_host, v->ecmg_port);
         return -1;
       }
     }
     for (unsigned vj = vi + 1; vj < a->n_vendors; vj++) {
       const cas_vendor_t *o = &a->vendors[vj];
       if (v->ecm_pid == o->ecm_pid || v->ecm_pid == o->emm_pid || v->emm_pid == o->ecm_pid || v->emm_pid == o->emm_pid) {
-        args_err(tool_name, "--cas-ecm-pid/--cas-emm-pid collide across --cas-ecmg vendors");
+        args_err(tool_name, "LS000283", "--cas-ecm-pid/--cas-emm-pid collide across --cas-ecmg vendors");
         return -1;
       }
       if (!v->emmg_reverse_host[0] && !o->emmg_reverse_host[0] && v->emmg_port == o->emmg_port &&
           (!v->emmg_listen_host[0] || !o->emmg_listen_host[0] || !strcmp(v->emmg_listen_host, o->emmg_listen_host))) {
-        args_err(tool_name, "--cas-emmg-listen port %u used by more than one --cas-ecmg vendor (each needs its own EMMG listener)", v->emmg_port);
+        args_err(tool_name, "LS000284", "--cas-emmg-listen port %u used by more than one --cas-ecmg vendor (each needs its own EMMG listener)", v->emmg_port);
         return -1;
       }
     }

@@ -60,7 +60,7 @@ static void list_from_playlist(channel_list_t *l, const playlist_list_t *pl, int
 void build_from_m3u(channel_list_t *l, const char *path, int insecure_tls) {
   playlist_list_t *pl = playlist_in_parse_m3u(path);
   if (!pl) {
-    log_line(TOOL_NAME ": --m3u %s: cannot open/parse, list left empty", path);
+    log_code("YW000677", TOOL_NAME ": --m3u %s: cannot open/parse, list left empty", path);
     return;
   }
   list_from_playlist(l, pl, insecure_tls);
@@ -70,7 +70,7 @@ void build_from_m3u(channel_list_t *l, const char *path, int insecure_tls) {
 void build_from_xspf(channel_list_t *l, const char *path, int insecure_tls) {
   playlist_list_t *pl = playlist_in_parse_xspf(path);
   if (!pl) {
-    log_line(TOOL_NAME ": --xspf %s: cannot open/parse, list left empty", path);
+    log_code("YW000678", TOOL_NAME ": --xspf %s: cannot open/parse, list left empty", path);
     return;
   }
   list_from_playlist(l, pl, insecure_tls);
@@ -80,7 +80,7 @@ void build_from_xspf(channel_list_t *l, const char *path, int insecure_tls) {
 void build_from_csv(channel_list_t *l, const char *path, int insecure_tls) {
   playlist_list_t *pl = playlist_in_parse_csv(path);
   if (!pl) {
-    log_line(TOOL_NAME ": --csv %s: cannot open, list left empty", path);
+    log_code("YW000679", TOOL_NAME ": --csv %s: cannot open, list left empty", path);
     return;
   }
   list_from_playlist(l, pl, insecure_tls);
@@ -120,19 +120,19 @@ void build_from_xml(channel_list_t *l, const char *path) {
   sds_service_t entries[SDS_MAX_SERVICES];
   int count;
   if (!f) {
-    log_line(TOOL_NAME ": --xml %s: cannot open, list left empty", path);
+    log_code("YW000680", TOOL_NAME ": --xml %s: cannot open, list left empty", path);
     return;
   }
   if (read_all(f, &xml, &len)) {
     fclose(f);
-    log_line(TOOL_NAME ": --xml %s: cannot read, list left empty", path);
+    log_code("YW000681", TOOL_NAME ": --xml %s: cannot read, list left empty", path);
     return;
   }
   fclose(f);
   count = sds_parse_broadcast(xml, entries, SDS_MAX_SERVICES, NULL);
   append_sds_entries(l, entries, count);
   free(xml);
-  if (count == 0) log_line(TOOL_NAME ": --xml %s: no services found, list left empty", path);
+  if (count == 0) log_code("YW000682", TOOL_NAME ": --xml %s: no services found, list left empty", path);
 }
 
 void build_from_http(channel_list_t *l, const char *url, int insecure_tls) {
@@ -170,7 +170,7 @@ void channels_join_all(channel_list_t *l, const config_t *cfg) {
     if (route_resolve_channel_uri(it->uri, &family, addr, sizeof addr, src, sizeof src, &port, &rtp)) continue;
     it->static_ctx = capture_open(family, addr, src, port, cfg->iface, rtp, it->has_ret && !cfg->no_ret ? &it->ret : NULL,
       it->has_fcc && !cfg->no_fcc ? &it->fcc : NULL, it->has_fec && !cfg->no_al_fec ? &it->fec : NULL, cfg->al_fec_l, cfg->al_fec_d);
-    if (!it->static_ctx) log_line(TOOL_NAME ": --join-all: %s unreachable, left unjoined", it->uri);
+    if (!it->static_ctx) log_code("YW600158", TOOL_NAME ": --join-all: %s unreachable, left unjoined", it->uri);
   }
 }
 
@@ -186,12 +186,12 @@ void build_from_sds(channel_list_t *l, const char *addrport, const char *iface, 
   double deadline;
   int total = 0;
   if (argutil_addrport_parse(addrport, &family, group, sizeof group, &port)) {
-    log_line(TOOL_NAME ": --sds %s: invalid address, list left empty", addrport);
+    log_code("YE000683", TOOL_NAME ": --sds %s: invalid address, list left empty", addrport);
     return;
   }
   m = mcast_open(family, group, port, iface, 500);
   if (!m) {
-    log_line(TOOL_NAME ": --sds %s: cannot join, list left empty", addrport);
+    log_code("YW500223", TOOL_NAME ": --sds %s: cannot join, list left empty", addrport);
     return;
   }
   r = dvbstp_reasm_new();
@@ -218,5 +218,5 @@ void build_from_sds(channel_list_t *l, const char *addrport, const char *iface, 
   }
   dvbstp_reasm_free(r);
   mcast_close(m);
-  if (total == 0) log_line(TOOL_NAME ": --sds %s: no services discovered in %.0fs", addrport, timeout_s);
+  if (total == 0) log_code("YW600159", TOOL_NAME ": --sds %s: no services discovered in %.0fs", addrport, timeout_s);
 }

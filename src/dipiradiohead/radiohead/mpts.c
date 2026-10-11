@@ -114,7 +114,7 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
     if (tk->metas[i].dirty) {
       int accepted = tspacketizer_set_metadata(tk->tsps[i], tk->metas[i].artist, tk->metas[i].title);
       tk->metas[i].dirty = 0;
-      if (accepted) log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): now playing: \e[0;36m%s%s%s\e[0m", i, inputset_service_name(tk->is, i), tk->metas[i].artist, (tk->metas[i].artist[0] && tk->metas[i].title[0]) ? " - " : "", tk->metas[i].title);
+      if (accepted) log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): now: \e[0;36m%s%s%s\e[0m", i, inputset_service_name(tk->is, i), tk->metas[i].artist, (tk->metas[i].artist[0] && tk->metas[i].title[0]) ? " - " : "", tk->metas[i].title);
     }
     pts = timeline_pts(tk->timeline[i]);
     timeline_add(&tk->timeline[i], f.samples, f.sample_rate);
@@ -194,7 +194,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     for (unsigned i = 0; i < n; i++) audio_pids[i] = inputset_audio_pid(is, i);
     cas = cas_start(cfg, audio_pids, n);
     if (!cas) {
-      log_line_ansi("cas: \e[0;31mfailed to start\e[0m");
+      log_code_ansi("RS300161", "cas: \e[0;31mfailed to start\e[0m");
       rc = 1;
       goto done;
     }
@@ -292,7 +292,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     if (cas) {
       cas_clock_tick(cas, (uint64_t)(now * 90000.0));
       if (cas_failed(cas)) {
-        log_line("cas: \e[0;31mfatal, stopping\e[0m");
+        log_code("RE300162", "cas: \e[0;31mfatal, stopping\e[0m");
         rc = 1;
         goto done;
       }

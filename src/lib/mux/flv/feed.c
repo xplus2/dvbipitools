@@ -162,30 +162,30 @@ void flv_setup(flv_t *f) {
   for (k = 0; k < c && !f->have_v; k++) {
     if (es[k].cls != PID_VIDEO) continue;
     if (!video_supported(es[k].codec)) {
-      log_line("flv=no_vc(%s)", codec_name(es[k].codec));
+      log_code("LW400162", "flv=no_vc(%s)", codec_name(es[k].codec));
       continue;
     }
     memset(&f->vtrk, 0, sizeof f->vtrk);
     f->vtrk.pid = es[k].pid;
     f->vtrk.cls = PID_VIDEO;
     f->vtrk.es.codec = es[k].codec;
-    if (pes_track(f->pes, f->vtrk.pid)) log_line("flv: pes tracker full, pid 0x%04x not reassembled", f->vtrk.pid);
+    if (pes_track(f->pes, f->vtrk.pid)) log_code("LW400163", "flv: pes tracker full, pid 0x%04x not reassembled", f->vtrk.pid);
     f->have_v = 1;
   }
   for (k = 0; k < c && !f->have_a; k++) {
     if (es[k].cls != PID_AUDIO) continue;
     if (f->opts->audio_track && es[k].audio_index != (int)f->opts->audio_track) continue;
     if (!audio_supported(es[k].codec)) {
-      log_line("flv=no_ac(%s)", codec_name(es[k].codec));
+      log_code("LW400164", "flv=no_ac(%s)", codec_name(es[k].codec));
       continue;
     }
     memset(&f->atrk, 0, sizeof f->atrk);
     f->atrk.pid = es[k].pid;
     f->atrk.cls = PID_AUDIO;
     f->atrk.es.codec = es[k].codec;
-    if (pes_track(f->pes, f->atrk.pid)) log_line("flv: pes tracker full, pid 0x%04x not reassembled", f->atrk.pid);
+    if (pes_track(f->pes, f->atrk.pid)) log_code("LW400163", "flv: pes tracker full, pid 0x%04x not reassembled", f->atrk.pid);
     f->have_a = 1;
   }
-  if (!f->have_v && !f->have_a) log_line("flv=no_mux");
+  if (!f->have_v && !f->have_a) log_code("LW400165", "flv=no_mux");
   f->setup = 1;
 }

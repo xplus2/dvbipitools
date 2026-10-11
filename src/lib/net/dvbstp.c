@@ -158,7 +158,7 @@ void dvbstp_reasm_free(dvbstp_reasm_t *r) {
 /* first malformed/oversized packet after a healthy run. re-armed at accepted pkg */
 static void log_malformed_once(dvbstp_reasm_t *r, const char *reason) {
   if (r->malformed_logged) return;
-  log_line("dvbstp: rejecting malformed packet (%s)", reason);
+  log_code("LW400176", "dvbstp: rejecting malformed packet (%s)", reason);
   r->malformed_logged = 1;
 }
 
@@ -238,7 +238,7 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
       s = &r->slots[r->next_evict];
       r->next_evict = (r->next_evict + 1) % REASM_SLOTS;
       if (!r->slots_full_logged) {
-        log_line("dvbstp: reassembly slots full (%d), evicting in-progress payload_id=0x%02x segment_id=%u", REASM_SLOTS, s->payload_id, s->segment_id);
+        log_code("LW700128", "dvbstp: reassembly slots full (%d), evicting in-progress payload_id=0x%02x segment_id=%u", REASM_SLOTS, s->payload_id, s->segment_id);
         r->slots_full_logged = 1;
       }
     }

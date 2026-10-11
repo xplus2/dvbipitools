@@ -9,7 +9,7 @@ int biss_esw_encrypt(const unsigned char id[BISS_KEY_LEN], const unsigned char s
   (void)id;
   (void)sw;
   (void)esw_out;
-  log_line("biss: this build has no OpenSSL, BISS Mode E (ESW) unavailable");
+  log_code("LA300125", "biss: this build has no OpenSSL, BISS Mode E (ESW) unavailable");
   return -1;
 }
 
@@ -17,6 +17,6 @@ int biss_esw_decrypt(const unsigned char id[BISS_KEY_LEN], const unsigned char e
   (void)id;
   (void)esw;
   (void)sw_out;
-  log_line("biss: this build has no OpenSSL, BISS Mode E (ESW) unavailable");
+  log_code("LA300125", "biss: this build has no OpenSSL, BISS Mode E (ESW) unavailable");
   return -1;
 }

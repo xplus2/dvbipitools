@@ -38,7 +38,7 @@ int mapping_load(const char *path, mapping_t *m) {
 
   memset(m, 0, sizeof *m);
   if (!f) {
-    log_line("mapping: cannot open %s", path);
+    log_code("LE000326", "mapping: cannot open %s", path);
     return -1;
   }
   while (fgets(line, sizeof line, f)) {
@@ -52,13 +52,13 @@ int mapping_load(const char *path, mapping_t *m) {
     if (!line[0] || line[0] == '#')
       continue;
     if (split_last4(line, &id, &uri, &tsid_s, &onid_s, &sid_s)) {
-      log_line("mapping: line %d: expected id,uri,tsid,onid,sid", lineno);
+      log_code("LE000327", "mapping: line %d: expected id,uri,tsid,onid,sid", lineno);
       fclose(f);
       mapping_free(m);
       return -1;
     }
     if (argutil_uint_range(tsid_s, 0, 0xFFFF, &tsid) || argutil_uint_range(onid_s, 0, 0xFFFF, &onid) || argutil_uint_range(sid_s, 0, 0xFFFF, &sid)) {
-      log_line("mapping: line %d: bad tsid/onid/sid", lineno);
+      log_code("LE400185", "mapping: line %d: bad tsid/onid/sid", lineno);
       fclose(f);
       mapping_free(m);
       return -1;

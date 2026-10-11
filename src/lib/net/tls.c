@@ -18,9 +18,9 @@ void tls_log_ssl_error(const char *what) {
   char buf[256];
   if (e) {
     ERR_error_string_n(e, buf, sizeof buf);
-    log_line("%s: %s", what, buf);
+    log_code("LE700133", "%s: %s", what, buf);
   } else {
-    log_line("%s: unknown TLS error", what);
+    log_code("LE300136", "%s: unknown TLS error", what);
   }
 }
 
@@ -117,7 +117,7 @@ tls_t *tls_connect(int fd, const char *host, int insecure) {
   tls_t *t = tls_setup(fd, host, insecure);
   if (!t) return NULL;
   if (SSL_connect(t->ssl) != 1) {
-    log_line("tls handshake with %s failed", host);
+    log_code("LE300137", "tls handshake with %s failed", host);
     tls_log_ssl_error("SSL_connect");
     SSL_free(t->ssl);
     free(t);
@@ -140,7 +140,7 @@ tls_handshake_status_t tls_handshake_step(tls_t *t) {
     case SSL_ERROR_WANT_WRITE: return TLS_HANDSHAKE_WANT_WRITE;
     default: break;
   }
-  log_line("tls handshake failed");
+  log_code("LE300138", "tls handshake failed");
   tls_log_ssl_error("SSL_connect");
   return TLS_HANDSHAKE_ERROR;
 }

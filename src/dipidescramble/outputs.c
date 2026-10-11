@@ -16,7 +16,7 @@ static int open_output(const char *path) {
   int fd;
   if (strcmp(path, "-") == 0) return STDOUT_FILENO;
   fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0640);
-  if (fd < 0) log_line(TOOL_NAME ": cannot open -o %s: %s", path, strerror(errno));
+  if (fd < 0) log_code("DS100136", TOOL_NAME ": cannot open -o %s: %s", path, strerror(errno));
   return fd;
 }
 

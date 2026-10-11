@@ -28,7 +28,7 @@ int wrapper_parse(const unsigned char *data, size_t len, unsigned char **out, si
   if (len < 1)
     return -1;
   if (data[0] != WRAPPER_METHOD_NONE) {
-    log_line("dipibcg: no zlib support, cannot decompress received container");
+    log_code("GE400100", "dipibcg: no zlib support, cannot decompress received container");
     return -1;
   }
   body_len = len - 1;

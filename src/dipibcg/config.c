@@ -148,8 +148,8 @@ int bcg_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
-  if (cond) yamlcfg_warn(y, "%s", msg);
+static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
+  if (cond) yamlcfg_warn(y, code, "%s", msg);
 }
 
 int bcg_cfg_test(const char *path, int strict) {
@@ -162,13 +162,13 @@ int bcg_cfg_test(const char *path, int strict) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }
-  warn_if(&y, !fl->have_a && !fl->have_l, "neither announce nor listen set (required unless given on the command line)");
-  warn_if(&y, !fl->have_mcast, "mcast not set (required unless given on the command line)");
-  warn_if(&y, fl->have_a && !fl->have_l && !cfg.input_path, "input not set (required for announce unless given on the command line)");
-  warn_if(&y, fl->have_a && !fl->have_l && !cfg.map_path, "map not set (required for announce unless given on the command line)");
-  warn_if(&y, fl->have_a && fl->have_l, "announce and listen are mutually exclusive");
-  warn_if(&y, fl->have_l && !fl->have_a && (cfg.metrics_id || cfg.compress), "metrics.id and compress are announce-only");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
+  warn_if(&y, !fl->have_a && !fl->have_l, "GA000114", "neither announce nor listen set (required unless given on the command line)");
+  warn_if(&y, !fl->have_mcast, "GA000115", "mcast not set (required unless given on the command line)");
+  warn_if(&y, fl->have_a && !fl->have_l && !cfg.input_path, "GA000116", "input not set (required for announce unless given on the command line)");
+  warn_if(&y, fl->have_a && !fl->have_l && !cfg.map_path, "GA000117", "map not set (required for announce unless given on the command line)");
+  warn_if(&y, fl->have_a && fl->have_l, "GA000118", "announce and listen are mutually exclusive");
+  warn_if(&y, fl->have_l && !fl->have_a && (cfg.metrics_id || cfg.compress), "GA000119", "metrics.id and compress are announce-only");
+  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "GA000120", "metrics.sock and metrics.interval require metrics.id");
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);
   return rc;

@@ -26,7 +26,7 @@ args_status_t srt_opt_general(srt_opt_t *p, int c) {
         p->cli_in = 1;
       }
       if (srt_parse_endpoint_uri(optarg, &cfg->in, 0, &cfg->n_in)) {
-        argerr("invalid -i: %s", optarg);
+        argerr("HS000149", "invalid -i: %s", optarg);
         return ARGS_ERR;
       }
       break;
@@ -37,7 +37,7 @@ args_status_t srt_opt_general(srt_opt_t *p, int c) {
         p->cli_out = 1;
       }
       if (srt_parse_endpoint_uri(optarg, &cfg->out, 1, &cfg->n_out)) {
-        argerr("invalid -o: %s", optarg);
+        argerr("HS000150", "invalid -o: %s", optarg);
         return ARGS_ERR;
       }
       break;
@@ -50,7 +50,7 @@ args_status_t srt_opt_general(srt_opt_t *p, int c) {
     case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {
-        argerr("invalid --color: %s (auto|always|never)", optarg);
+        argerr("HS000105", "invalid --color: %s (auto|always|never)", optarg);
         return ARGS_ERR;
       }
       cfg->color_mode = v;

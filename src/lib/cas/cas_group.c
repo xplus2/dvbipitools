@@ -169,7 +169,7 @@ static void cas_lazy_start(cas_group_t *g) {
     ecfg.cw_source.ctx = &v->cw_ctx;
     v->ecmg = ecmg_client_start(&ecfg, &g->cp_clock_ms, g->cfg.cp_duration_ms, g->lookahead_ms);
     if (!v->ecmg) {
-      log_line("cas_group: ECMG client %zu failed to start", i);
+      log_code("LS500119", "cas_group: ECMG client %zu failed to start", i);
       g->fatal = 1;
       continue;
     }
@@ -182,7 +182,7 @@ static void cas_lazy_start(cas_group_t *g) {
     mcfg.dial_port = vc->emmg_reverse_port;
     v->emmg = emmg_server_start(&mcfg);
     if (!v->emmg) {
-      log_line("cas_group: EMMG server %zu failed to start", i);
+      log_code("LS500120", "cas_group: EMMG server %zu failed to start", i);
       g->fatal = 1;
     }
   }
@@ -193,7 +193,7 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
   unsigned lm;
 
   if (!cfg || cfg->vendor_count > CAS_GROUP_MAX_VENDORS || cfg->pid_count > CAS_CORE_MAX_PIDS || !cfg->cp_duration_ms) {
-    log_line("cas_group: invalid configuration");
+    log_code("LS000285", "cas_group: invalid configuration");
     return NULL;
   }
   g = calloc(1, sizeof *g);
@@ -241,7 +241,7 @@ int cas_group_failed(cas_group_t *g) { return g->fatal; }
 void cas_group_tick_alive(cas_group_t *g) {
   if (!g->have_clock && !g->fatal && mono() >= g->clock_wait_deadline) {
     g->fatal = 1;
-    log_line("cas_group: no clock activity observed within %.0fs, giving up", CAS_CORE_CLOCK_DETECT_TIMEOUT_S);
+    log_code("LE700112", "cas_group: no clock activity observed within %.0fs, giving up", CAS_CORE_CLOCK_DETECT_TIMEOUT_S);
   }
 }
 

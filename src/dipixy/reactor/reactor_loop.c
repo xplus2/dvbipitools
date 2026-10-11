@@ -245,7 +245,10 @@ void *pump_thread(void *arg) {
         tls_ctx_gc_sweep();
         last_maint = now;
       }
-      if (signal_tls_reload_requested()) log_line(TOOL_NAME ": SIGUSR1: TLS cert reload %s", reload_tls() == 0 ? "ok" : "failed");
+      if (signal_tls_reload_requested()) {
+        if (reload_tls() == 0) log_line(TOOL_NAME ": SIGUSR1: TLS cert reload ok");
+        else                   log_code("YW300106", TOOL_NAME ": SIGUSR1: TLS cert reload failed");
+      }
       dipixy_metrics_push(reactor_metrics());
     }
     if (!drained) {

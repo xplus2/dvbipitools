@@ -17,7 +17,7 @@
 static int basic_auth_parse(const char *val, char *out, size_t outsz) {
   char err[64];
   if (metrics_cfg_auth(val, out, outsz, err, sizeof err)) {
-    argerr("invalid --auth: %s", err);
+    argerr("MS000134", "invalid --auth: %s", err);
     return -1;
   }
   return 0;
@@ -62,6 +62,7 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   const char *conflict;
+  const char *conflict_code;
   int configtest = 0;
   int strict = 0;
   args_status_t st;
@@ -82,14 +83,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 'l':
         if (argutil_addrport_parse(optarg, &cfg->family, cfg->listen_addr, sizeof cfg->listen_addr, &cfg->listen_port)) {
-          argerr("invalid -l addr:port: %s", optarg);
+          argerr("MS000135", "invalid -l addr:port: %s", optarg);
           return ARGS_ERR;
         }
         break;
       case 'e': {
         unsigned v;
         if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-          argerr("invalid -e expiry seconds: %s", optarg);
+          argerr("MS000136", "invalid -e expiry seconds: %s", optarg);
           return ARGS_ERR;
         }
         cfg->expiry_s = v;
@@ -113,7 +114,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case OPT_COLOR: {
         log_color_t v;
         if (log_color_from_string(optarg, &v)) {
-          argerr("invalid --color: %s (auto|always|never)", optarg);
+          argerr("MS000105", "invalid --color: %s (auto|always|never)", optarg);
           return ARGS_ERR;
         }
         cfg->color_mode = v;
@@ -128,12 +129,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
   }
   if (optind < argc) {
-    argerr("unexpected argument: %s", argv[optind]);
+    argerr("MS000107", "unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  conflict = metrics_cfg_conflict(cfg);
+  conflict = metrics_cfg_conflict(cfg, &conflict_code);
   if (conflict) {
-    argerr("%s", conflict);
+    argerr("MS000137", conflict_code, "%s", conflict);
     return ARGS_ERR;
   }
   return ARGS_OK;

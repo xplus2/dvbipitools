@@ -71,7 +71,7 @@ void snap_retire_async(hls_snapshot_t *snap) {
   if (!snap) return;
   node = malloc(sizeof *node);
   if (!node) {
-    log_line(TOOL_NAME ": hls: snapshot retire alloc failed, leaking snapshot");
+    log_code("YE500220", TOOL_NAME ": hls: snapshot retire alloc failed, leaking snapshot");
     return;
   }
   node->idx = -1;

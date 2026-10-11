@@ -27,7 +27,7 @@ args_status_t rdh_opt_general(rdh_opt_t *p, int c) {
         p->cli_inputs = 1;
       }
       if (cfg->n_inputs >= RADIOHEAD_MAX_INPUTS) {
-        argerr("too many -i inputs (max %d)", RADIOHEAD_MAX_INPUTS);
+        argerr("RS000494", "too many -i inputs (max %d)", RADIOHEAD_MAX_INPUTS);
         return ARGS_ERR;
       }
       memset(&cfg->inputs[cfg->n_inputs], 0, sizeof cfg->inputs[0]);
@@ -36,7 +36,7 @@ args_status_t rdh_opt_general(rdh_opt_t *p, int c) {
       break;
     case 'm':
       if (rdh_mcast_parse(optarg, cfg)) {
-        argerr("invalid -m group:port: %s", optarg);
+        argerr("RS000103", "invalid -m group:port: %s", optarg);
         return ARGS_ERR;
       }
       p->have_mcast = 1;
@@ -50,7 +50,7 @@ args_status_t rdh_opt_general(rdh_opt_t *p, int c) {
     case 'T': {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 255, &v)) {
-        argerr("invalid -T ttl: %s (1..255)", optarg);
+        argerr("RS000495", "invalid -T ttl: %s (1..255)", optarg);
         return ARGS_ERR;
       }
       cfg->ttl = v;
@@ -62,7 +62,7 @@ args_status_t rdh_opt_general(rdh_opt_t *p, int c) {
       break;
     case 's':
       if (!p->cli_inputs) {
-        argerr("--sdt/-s must follow -i");
+        argerr("RS000496", "--sdt/-s must follow -i");
         return ARGS_ERR;
       }
       if (argutil_bufcpy_opt(TOOL_NAME, cfg->inputs[cfg->n_inputs - 1].sdt_text, sizeof cfg->inputs[0].sdt_text, optarg, "-s sdt-text"))
@@ -70,7 +70,7 @@ args_status_t rdh_opt_general(rdh_opt_t *p, int c) {
       break;
     case OPT_PROVIDER:
       if (!p->cli_inputs) {
-        argerr("--provider must follow -i");
+        argerr("RS000497", "--provider must follow -i");
         return ARGS_ERR;
       }
       if (argutil_bufcpy_opt(TOOL_NAME, cfg->inputs[cfg->n_inputs - 1].provider_text, sizeof cfg->inputs[0].provider_text, optarg, "--provider text"))
@@ -83,7 +83,7 @@ args_status_t rdh_opt_general(rdh_opt_t *p, int c) {
     case 'e': {
       unsigned v;
       if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
-        argerr("invalid -e seconds: %s", optarg);
+        argerr("RS000498", "invalid -e seconds: %s", optarg);
         return ARGS_ERR;
       }
       cfg->error_retry_s = v;
@@ -94,40 +94,40 @@ args_status_t rdh_opt_general(rdh_opt_t *p, int c) {
       break;
     case OPT_TSID:
       if (rdh_id_parse(optarg, &cfg->tsid)) {
-        argerr("invalid --tsid: %s (1..65535)", optarg);
+        argerr("RS000499", "invalid --tsid: %s (1..65535)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_ONID:
       if (rdh_id_parse(optarg, &cfg->onid)) {
-        argerr("invalid --onid: %s (1..65535)", optarg);
+        argerr("RS000500", "invalid --onid: %s (1..65535)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_SID:
       if (!p->cli_inputs) {
-        argerr("--sid must follow -i");
+        argerr("RS000501", "--sid must follow -i");
         return ARGS_ERR;
       }
       if (rdh_id_parse(optarg, &cfg->inputs[cfg->n_inputs - 1].sid)) {
-        argerr("invalid --sid: %s (1..65535)", optarg);
+        argerr("RS000502", "invalid --sid: %s (1..65535)", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_JITTER_MS:
       if (!p->cli_inputs) {
-        argerr("--jitter-ms must follow -i");
+        argerr("RS000503", "--jitter-ms must follow -i");
         return ARGS_ERR;
       }
       if (argutil_uint_range(optarg, 1, RADIOHEAD_MAX_JITTER_MS, &cfg->inputs[cfg->n_inputs - 1].jitter_ms)) {
-        argerr("invalid --jitter-ms: %s (1..%d ms)", optarg, RADIOHEAD_MAX_JITTER_MS);
+        argerr("RS000504", "invalid --jitter-ms: %s (1..%d ms)", optarg, RADIOHEAD_MAX_JITTER_MS);
         return ARGS_ERR;
       }
       break;
     case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {
-        argerr("invalid --color: %s (auto|always|never)", optarg);
+        argerr("RS000105", "invalid --color: %s (auto|always|never)", optarg);
         return ARGS_ERR;
       }
       cfg->color_mode = v;

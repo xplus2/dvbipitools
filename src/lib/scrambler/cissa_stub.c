@@ -8,7 +8,7 @@
 /* built without OpenSSL: CISSA scrambling always fails to even acquire a key */
 cissa_key_t *cissa_key_new(const unsigned char cw[CISSA_CW_LEN]) {
   (void)cw;
-  log_line("cissa: this build has no OpenSSL, CISSA scrambling unavailable");
+  log_code("LA300142", "cissa: this build has no OpenSSL, CISSA scrambling unavailable");
   return NULL;
 }
 

@@ -110,7 +110,7 @@ static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_ru
   c->qctx.queue_metrics = metrics_queue_level(cfg->metrics_inspect_ts);
   c->out.pacer = bitrate_pacer_new(cfg->bitrate_kbps ? (double)cfg->bitrate_kbps * 1000.0 : 0.0, cfg->stuff, cfg->burst_limit);
   if (!c->out.pacer) {
-    log_line("bitrate pacer setup failed");
+    log_code("TS500194", "bitrate pacer setup failed");
     c->rc = 1;
     return -1;
   }
@@ -118,7 +118,7 @@ static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_ru
   if (c->cas_wanted && !c->cas_needs_discovery) {
     c->cas = cas_start_multi(cfg, NULL, NULL, 0);
     if (!c->cas) {
-      log_line("cas: failed to start");
+      log_code("TS300163", "cas: failed to start");
       c->rc = 1;
       return -1;
     }
@@ -249,7 +249,7 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     if (c->cas) {
       cas_wall_tick(c->cas, now);
       if (cas_failed(c->cas)) {
-        log_line("cas: fatal error, stopping");
+        log_code("TE300167", "cas: fatal error, stopping");
         c->rc = 1;
         return;
       }

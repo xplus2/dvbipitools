@@ -90,7 +90,7 @@ static void append(stream_t *s, const unsigned char *d, size_t n) {
     memcpy(s->buf + s->len, d, n);
     s->len += n;
   } else {
-    log_throttled(&s->drop_throttle, LOG_THROTTLE_WINDOW_S, "pes: sgrow failed, pid %u payload bytes dropped", s->pid);
+    log_throttled(&s->drop_throttle, LOG_THROTTLE_WINDOW_S, "LW500137", "pes: sgrow failed, pid %u payload bytes dropped", s->pid);
   }
 }
 

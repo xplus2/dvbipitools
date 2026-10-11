@@ -8,8 +8,8 @@
 #include <stddef.h>
 
 /* tool prefixed stderr line: "<tool>: <fmt>\n" */
-void argutil_verr(const char *tool, const char *fmt, va_list ap) __attribute__((format(printf, 2, 0)));
-void argutil_err(const char *tool, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+void argutil_verr(const char *tool, const char *code, const char *fmt, va_list ap) __attribute__((format(printf, 3, 0)));
+void argutil_err(const char *tool, const char *code, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
 
 /* port 1..65535, digits only */
 int argutil_port_parse(const char *p, unsigned *out);

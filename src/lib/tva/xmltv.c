@@ -17,7 +17,7 @@ static int display_name_cb(const char *tag, const char *blk_end, void *ctx) {
   char name[BCG_ID_LEN];
   int cut = 0;
   if (xml_span_text_chk(tag, blk_end, name, sizeof name, &cut) == 0) {
-    if (cut) log_line("bcg: <display-name> text truncated to %zu bytes", strlen(name));
+    if (cut) log_code("LW400188", "bcg: <display-name> text truncated to %zu bytes", strlen(name));
     bcg_channel_add_name(c, name);
   }
   return 0;
@@ -31,9 +31,9 @@ static void fill_programme_details(bcg_programme_t *pr, const char *tag, const c
     int rc = xmltv_time_to_iso8601(stop, pr->stop, sizeof pr->stop);
     if (rc < 0) {
       pr->stop[0] = '\0';
-      log_line("xmltv: ignoring bad stop time: %s", stop);
+      log_code("LW400189", "xmltv: ignoring bad stop time: %s", stop);
     } else if (rc > 0) {
-      log_line("xmltv: unknown time zone in stop time, no offset applied: %s", stop);
+      log_code("LW400190", "xmltv: unknown time zone in stop time, no offset applied: %s", stop);
     }
   }
   if (bcg_elem_text(tag, blk_end, "title", pr->title, sizeof pr->title))
@@ -65,15 +65,15 @@ static int programme_cb(const char *tag, const char *blk_end, void *ctx) {
   char start_iso[BCG_TIME_LEN];
   int rc;
   if (xml_tag_attr(tag, blk_end, "start", start, sizeof start) != 0 || bcg_tag_attr(tag, blk_end, "channel", channel, sizeof channel) != 0) {
-    log_line("xmltv: skipping programme without start or channel attribute");
+    log_code("LW400191", "xmltv: skipping programme without start or channel attribute");
     return 0;
   }
   rc = xmltv_time_to_iso8601(start, start_iso, sizeof start_iso);
   if (rc < 0) {
-    log_line("xmltv: skipping programme, bad start time: %s", start);
+    log_code("LW400192", "xmltv: skipping programme, bad start time: %s", start);
     return 0;
   }
-  if (rc > 0) log_line("xmltv: unknown time zone in start time, no offset applied: %s", start);
+  if (rc > 0) log_code("LW400193", "xmltv: unknown time zone in start time, no offset applied: %s", start);
   pr = bcg_add_programme(doc);
   if (!pr) return -1;
   bufcpy(pr->channel_id, sizeof pr->channel_id, channel);
@@ -89,7 +89,7 @@ int xmltv_read(FILE *f, bcg_doc_t *doc) {
   int rc;
 
   if (read_all(f, &buf, &len)) {
-    log_line("xmltv: out of memory reading xmltv");
+    log_code("LE500170", "xmltv: out of memory reading xmltv");
     return -1;
   }
   end = buf + len;

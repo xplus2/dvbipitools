@@ -9,7 +9,7 @@ int cwenc_des_ecb_encrypt(const unsigned char key[CWENC_DES_KEY_LEN], const unsi
   (void)pt;
   (void)pt_len;
   (void)out;
-  log_line("cw_encryption: this build has no OpenSSL, CW_encryption unavailable");
+  log_code("LA300131", "cw_encryption: this build has no OpenSSL, CW_encryption unavailable");
   return -1;
 }
 
@@ -43,7 +43,7 @@ int cwenc_hkdf_sha256(const unsigned char *ikm, size_t ikm_len, const unsigned c
 int cwenc_config_validate(const cwenc_config_t *cfg, int cw_len) {
   (void)cw_len;
   if (cfg->algo == CWENC_ALGO_OFF) return 0;
-  log_line("cw_encryption: this build has no OpenSSL, CW_encryption unavailable");
+  log_code("LA300131", "cw_encryption: this build has no OpenSSL, CW_encryption unavailable");
   return -1;
 }
 

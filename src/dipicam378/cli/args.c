@@ -79,7 +79,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case 'p':
         if (argutil_port_parse(optarg, &cfg->port)) {
-          argerr("invalid -p port: %s", optarg);
+          argerr("3S000125", "invalid -p port: %s", optarg);
           return ARGS_ERR;
         }
         break;
@@ -96,7 +96,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       }
       case OPT_CAID:
         if (cam378_cfg_caid(optarg, &cfg->caid)) {
-          argerr("invalid --caid: %s", optarg);
+          argerr("3S000126", "invalid --caid: %s", optarg);
           return ARGS_ERR;
         }
         break;
@@ -106,7 +106,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         else if (!strcmp(optarg, "cissa"))
           cfg->cw_len = 16;
         else {
-          argerr("invalid --algo: %s (cissa|csa2)", optarg);
+          argerr("3S000127", "invalid --algo: %s (cissa|csa2)", optarg);
           return ARGS_ERR;
         }
         break;
@@ -120,7 +120,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         {
           log_color_t v;
           if (log_color_from_string(optarg, &v)) {
-            argerr("invalid --color: %s (auto|always|never)", optarg);
+            argerr("3S000105", "invalid --color: %s (auto|always|never)", optarg);
             return ARGS_ERR;
           }
           cfg->color_mode = v;
@@ -147,11 +147,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     }
   }
   if (optind < argc) {
-    argerr("unexpected argument: %s", argv[optind]);
+    argerr("3S000107", "unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
   if (!cfg->key_path) {
-    argerr("missing -k device key");
+    argerr("3S000128", "missing -k device key");
     return ARGS_ERR;
   }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;

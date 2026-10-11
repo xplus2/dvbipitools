@@ -72,14 +72,14 @@ int cpuaff_pin(const cpuaff_t *a, unsigned idx, const char *what) {
 
   if (!a || a->mode == CPUAFF_OFF) return 0;
   if (sched_getaffinity(0, sizeof allowed, &allowed)) {
-    log_line("cpu-affinity: %s: sched_getaffinity: %s", what, strerror(errno));
+    log_code("LE500168", "cpu-affinity: %s: sched_getaffinity: %s", what, strerror(errno));
     return -1;
   }
   if (a->mode == CPUAFF_LIST) {
     if (idx >= a->n) return 1;
     cpu = a->cpus[idx];
     if (!CPU_ISSET(cpu, &allowed)) {
-      log_line("cpu-affinity: %s: cpu %u not in allowed set", what, cpu);
+      log_code("LW000325", "cpu-affinity: %s: cpu %u not in allowed set", what, cpu);
       return -1;
     }
   } else {
@@ -96,7 +96,7 @@ int cpuaff_pin(const cpuaff_t *a, unsigned idx, const char *what) {
   CPU_ZERO(&one);
   CPU_SET(cpu, &one);
   if (sched_setaffinity(0, sizeof one, &one)) {
-    log_line("cpu-affinity: %s: cpu %u: %s", what, cpu, strerror(errno));
+    log_code("LE500169", "cpu-affinity: %s: cpu %u: %s", what, cpu, strerror(errno));
     return -1;
   }
   return 0;

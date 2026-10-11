@@ -13,7 +13,7 @@ void ts_push_h2_enqueue(int sub_idx, const uint8_t *pkt, size_t len) {
   s = &g_ts_subs[sub_idx];
   if (!byte_ring_write(&s->h2_ring, pkt, len)) {
     ts_push_note_enqueue(&s->h2_ring, 0);
-    log_throttled(&s->ring_drop_throttle, LOG_THROTTLE_WINDOW_S, "ts_push: h2 ring full, dropping packet");
+    log_throttled(&s->ring_drop_throttle, LOG_THROTTLE_WINDOW_S, "YW700151", "ts_push: h2 ring full, dropping packet");
     return;
   }
   ts_push_note_enqueue(&s->h2_ring, 1);
@@ -29,7 +29,7 @@ void ts_push_h3_enqueue(int sub_idx, const uint8_t *pkt, size_t len) {
   s = &g_ts_subs[sub_idx];
   if (!byte_ring_write(&s->h3_ring, pkt, len)) {
     ts_push_note_enqueue(&s->h3_ring, 0);
-    log_throttled(&s->ring_drop_throttle, LOG_THROTTLE_WINDOW_S, "ts_push: h3 ring full, dropping packet");
+    log_throttled(&s->ring_drop_throttle, LOG_THROTTLE_WINDOW_S, "YW700152", "ts_push: h3 ring full, dropping packet");
     return;
   }
   ts_push_note_enqueue(&s->h3_ring, 1);

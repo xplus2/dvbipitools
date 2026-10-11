@@ -113,17 +113,17 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
 
   if (len > METRICS_MAX_SNAPSHOT_BYTES) {
     st->stats.snapshots_rejected_malformed++;
-    if (verbose) log_line("dipimetrics: rejected malformed snapshot (%zu bytes)", len);
+    if (verbose) log_code("LD400157", "dipimetrics: rejected malformed snapshot (%zu bytes)", len);
     return;
   }
   if (len >= 1 && buf[0] != METRICS_PROTO_V1 && buf[0] != METRICS_PROTO_VERSION) {
     st->stats.snapshots_rejected_version++;
-    if (verbose) log_line("dipimetrics: rejected snapshot with unsupported protocol version %u", (unsigned)buf[0]);
+    if (verbose) log_code("LD400158", "dipimetrics: rejected snapshot with unsupported protocol version %u", (unsigned)buf[0]);
     return;
   }
   if (metrics_reader_init(&r, buf, len, &hdr)) {
     st->stats.snapshots_rejected_malformed++;
-    if (verbose) log_line("dipimetrics: rejected malformed snapshot (%zu bytes)", len);
+    if (verbose) log_code("LD400157", "dipimetrics: rejected malformed snapshot (%zu bytes)", len);
     return;
   }
   body = buf + METRICS_HDR_LEN;
@@ -135,7 +135,7 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
     if ((same_live && hdr.sequence <= slot->sequence) || (same_stage && hdr.sequence <= slot->stage_sequence)) {
       st->stats.snapshots_rejected_stale++;
       if (verbose)
-        log_line("dipimetrics: dropped stale snapshot for %s/%s (seq %llu)", metrics_component_name(hdr.component), hdr.metrics_id, (unsigned long long)hdr.sequence);
+        log_code("LD000308", "dipimetrics: dropped stale snapshot for %s/%s (seq %llu)", metrics_component_name(hdr.component), hdr.metrics_id, (unsigned long long)hdr.sequence);
       return;
     }
     if (!slot) {
@@ -143,7 +143,7 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
       if (!slot) {
         st->stats.snapshots_rejected_full++;
         if (verbose)
-          log_line("dipimetrics: dropped snapshot from new instance %s/%s, store full (%d slots)", metrics_component_name(hdr.component), hdr.metrics_id, STORE_MAX_INSTANCES);
+          log_code("LD700126", "dipimetrics: dropped snapshot from new instance %s/%s, store full (%d slots)", metrics_component_name(hdr.component), hdr.metrics_id, STORE_MAX_INSTANCES);
         return;
       }
       slot->used = 1;
@@ -161,7 +161,7 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
       release_if_empty(slot);
     }
     st->stats.parts_orphaned++;
-    if (verbose) log_line("dipimetrics: dropped orphan part %u for %s/%s", (unsigned)hdr.part, metrics_component_name(hdr.component), hdr.metrics_id);
+    if (verbose) log_code("LD400159", "dipimetrics: dropped orphan part %u for %s/%s", (unsigned)hdr.part, metrics_component_name(hdr.component), hdr.metrics_id);
     return;
   }
 
@@ -169,14 +169,14 @@ void store_ingest(store_t *st, const unsigned char *buf, size_t len, double now_
     discard_stage(slot, &st->stats, 0);
     release_if_empty(slot);
     st->stats.snapshots_rejected_malformed++;
-    if (verbose) log_line("dipimetrics: rejected malformed snapshot part for %s/%s", metrics_component_name(hdr.component), hdr.metrics_id);
+    if (verbose) log_code("LD400160", "dipimetrics: rejected malformed snapshot part for %s/%s", metrics_component_name(hdr.component), hdr.metrics_id);
     return;
   }
   if (slot->stage.len + body_len > STORE_MAX_BLOB_BYTES || blob_append(&slot->stage, body, body_len)) {
     discard_stage(slot, &st->stats, 0);
     release_if_empty(slot);
     st->stats.snapshots_rejected_toolarge++;
-    if (verbose) log_line("dipimetrics: dropped oversized snapshot for %s/%s", metrics_component_name(hdr.component), hdr.metrics_id);
+    if (verbose) log_code("LD400161", "dipimetrics: dropped oversized snapshot for %s/%s", metrics_component_name(hdr.component), hdr.metrics_id);
     return;
   }
   slot->stage_next = (unsigned)hdr.part + 1;

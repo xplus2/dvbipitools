@@ -100,7 +100,7 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *
 
   out_pkt = s->container == SEG_CONTAINER_TS ? pidlock_rewrite_pmt(s->demux.psi, &s->filter, &s->cc_pmt, pkt, pid, pmt_rw, pmt_pkt) : pkt;
   if (buf_reserve(&s->buf, &s->cap, s->len + 188) < 0) {
-    log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "hls: buf_reserve failed, ts packet dropped");
+    log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "YW500214", "hls: buf_reserve failed, ts packet dropped");
     return;
   }
   memcpy(s->buf + s->len, out_pkt, 188);

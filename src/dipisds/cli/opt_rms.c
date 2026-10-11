@@ -39,7 +39,7 @@ args_status_t sds_opt_rms(sds_opt_t *p, int c) {
       break;
     case OPT_RMS_LANG:
       if (strlen(optarg) != 3) {
-        argerr("invalid --rms-lang: %s (3-letter ISO 639-2 code)", optarg);
+        argerr("AS000207", "invalid --rms-lang: %s (3-letter ISO 639-2 code)", optarg);
         return ARGS_ERR;
       }
       memcpy(cfg->rms_lang, optarg, 3);
@@ -57,7 +57,7 @@ args_status_t sds_opt_rms(sds_opt_t *p, int c) {
       break;
     case OPT_FUS_LANG:
       if (strlen(optarg) != 3) {
-        argerr("invalid --fus-lang: %s (3-letter ISO 639-2 code)", optarg);
+        argerr("AS000208", "invalid --fus-lang: %s (3-letter ISO 639-2 code)", optarg);
         return ARGS_ERR;
       }
       memcpy(cfg->fus_lang, optarg, 3);
@@ -67,7 +67,7 @@ args_status_t sds_opt_rms(sds_opt_t *p, int c) {
       char *end;
       unsigned long v = strtoul(optarg, &end, 10);
       if (*end != '\0') {
-        argerr("invalid --fus-id: %s", optarg);
+        argerr("AS000209", "invalid --fus-id: %s", optarg);
         return ARGS_ERR;
       }
       cfg->fus_id = v;
@@ -76,7 +76,7 @@ args_status_t sds_opt_rms(sds_opt_t *p, int c) {
     }
     case OPT_FUS_ANNOUNCE:
       if (sds_ret_addr_parse(optarg, cfg->fus_announce_addr, sizeof cfg->fus_announce_addr, &cfg->fus_announce_port)) {
-        argerr("invalid --fus-announce: %s", optarg);
+        argerr("AS000210", "invalid --fus-announce: %s", optarg);
         return ARGS_ERR;
       }
       break;

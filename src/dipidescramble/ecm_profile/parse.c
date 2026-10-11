@@ -54,7 +54,7 @@ static int parse_bool(const char *s, int *out) {
 }
 
 static int profile_err(const char *field, const char *val) {
-  log_line(TOOL_NAME ": --ecm-profile: invalid value for %s: %s", field, val);
+  log_code("DS000381", TOOL_NAME ": --ecm-profile: invalid value for %s: %s", field, val);
   return -1;
 }
 
@@ -214,7 +214,7 @@ int ecm_profile_parse(const char *spec, ecm_profile_t *out) {
   char *pair;
 
   if (strlen(spec) >= sizeof buf) {
-    log_line(TOOL_NAME ": --ecm-profile: spec too long (max %zu bytes)", sizeof buf - 1);
+    log_code("DS000382", TOOL_NAME ": --ecm-profile: spec too long (max %zu bytes)", sizeof buf - 1);
     return -1;
   }
   memset(out, 0, sizeof *out);
@@ -240,7 +240,7 @@ int ecm_profile_parse(const char *spec, ecm_profile_t *out) {
     char *val;
     const ecm_field_setter_t *found = NULL;
     if (!eq) {
-      log_line(TOOL_NAME ": --ecm-profile: malformed field %s (expected key=value)", pair);
+      log_code("DS000383", TOOL_NAME ": --ecm-profile: malformed field %s (expected key=value)", pair);
       return -1;
     }
     *eq = 0;
@@ -254,7 +254,7 @@ int ecm_profile_parse(const char *spec, ecm_profile_t *out) {
       }
     }
     if (!found) {
-      log_line(TOOL_NAME ": --ecm-profile: unknown field %s", key);
+      log_code("DS000384", TOOL_NAME ": --ecm-profile: unknown field %s", key);
       return -1;
     }
     if (found->set(out, val) != 0) return profile_err(key, val);

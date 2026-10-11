@@ -155,7 +155,7 @@ static ret_client_t *open_ret(const sds_ret_t *ret, int family, const char *grou
   rc.source_port = port;
   rc.iface_in = iface;
   r = ret_client_open(&rc);
-  if (!r) log_line(TOOL_NAME ": ret server %s:%u unreachable", ret->addr, ret->port);
+  if (!r) log_code("YA600153", TOOL_NAME ": ret server %s:%u unreachable", ret->addr, ret->port);
   return r;
 }
 
@@ -167,7 +167,7 @@ static void open_fec(capture_ctx_t *c, const sds_fec_t *fec, unsigned al_fec_l, 
     if (c->fec_m) mcast_close(c->fec_m);
     c->fec_m = NULL;
     c->fec_dec = NULL;
-    log_line(TOOL_NAME ": al-fec repair stream %s:%u unreachable", fec->addr, fec->port);
+    log_code("YA600154", TOOL_NAME ": al-fec repair stream %s:%u unreachable", fec->addr, fec->port);
   }
 }
 
@@ -180,7 +180,7 @@ static fcc_client_t *open_fcc(const sds_fcc_t *fcc) {
   fc.port = fcc->port;
   fc.rtx_pt = fcc->rtx_pt;
   f = fcc_client_open(&fc);
-  if (!f) log_line(TOOL_NAME ": fcc server %s:%u unreachable", fcc->addr, fcc->port);
+  if (!f) log_code("YA600155", TOOL_NAME ": fcc server %s:%u unreachable", fcc->addr, fcc->port);
   return f;
 }
 

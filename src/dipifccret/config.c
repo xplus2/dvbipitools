@@ -280,8 +280,8 @@ int fccret_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *msg) {
-  if (cond) yamlcfg_warn(y, "%s", msg);
+static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
+  if (cond) yamlcfg_warn(y, code, "%s", msg);
 }
 
 int fccret_cfg_test(const char *path, int strict) {
@@ -294,13 +294,13 @@ int fccret_cfg_test(const char *path, int strict) {
     return -1;
   }
 
-  warn_if(&y, !cfg.range_count, "range not set (required unless given on the command line)");
-  warn_if(&y, !cfg.listen_port, "listen not set (required unless given on the command line)");
-  warn_if(&y, !cfg.iface, "iface not set (required unless given on the command line)");
-  warn_if(&y, cfg.no_ret && cfg.no_fcc, "no-ret and no-fcc together leave nothing to run");
-  warn_if(&y, cfg.rsi_mc_ret && (cfg.no_mc_ret || cfg.no_ret), "rsi.mc-ret requires RET and MC RET (no-ret/no-mc-ret not set)");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "metrics.sock and metrics.interval require metrics.id");
-  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "metrics.inspect-ts requires metrics.id");
+  warn_if(&y, !cfg.range_count, "FA000456", "range not set (required unless given on the command line)");
+  warn_if(&y, !cfg.listen_port, "FA000457", "listen not set (required unless given on the command line)");
+  warn_if(&y, !cfg.iface, "FA000458", "iface not set (required unless given on the command line)");
+  warn_if(&y, cfg.no_ret && cfg.no_fcc, "FA000459", "no-ret and no-fcc together leave nothing to run");
+  warn_if(&y, cfg.rsi_mc_ret && (cfg.no_mc_ret || cfg.no_ret), "FA000460", "rsi.mc-ret requires RET and MC RET (no-ret/no-mc-ret not set)");
+  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "FA000120", "metrics.sock and metrics.interval require metrics.id");
+  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "FA000161", "metrics.inspect-ts requires metrics.id");
   yamlcfg_strpool_free(cfg.str_pool);
   return yamlcfg_report(&y);
 }

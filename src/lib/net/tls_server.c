@@ -30,7 +30,7 @@ static SSL_CTX *build_ctx(const char *cert_path, const char *key_path) {
   }
   if (SSL_CTX_use_certificate_chain_file(ctx, cert_path) != 1 || SSL_CTX_use_PrivateKey_file(ctx, key_path, SSL_FILETYPE_PEM) != 1 ||
       SSL_CTX_check_private_key(ctx) != 1) {
-    log_line("tls: failed to load cert %s / key %s", cert_path, key_path);
+    log_code("LS300139", "tls: failed to load cert %s / key %s", cert_path, key_path);
     tls_log_ssl_error("cert/key load");
     SSL_CTX_free(ctx);
     return NULL;
@@ -96,7 +96,7 @@ tls_handshake_status_t tls_server_handshake_step(const tls_t *t) {
   err = SSL_get_error(t->ssl, r);
   if (err == SSL_ERROR_WANT_READ) return TLS_HANDSHAKE_WANT_READ;
   if (err == SSL_ERROR_WANT_WRITE) return TLS_HANDSHAKE_WANT_WRITE;
-  log_line("tls handshake failed");
+  log_code("LW300138", "tls handshake failed");
   tls_log_ssl_error("SSL_accept");
   return TLS_HANDSHAKE_ERROR;
 }

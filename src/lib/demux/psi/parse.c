@@ -52,7 +52,7 @@ static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
       c->multi_count++;
     }
   } else if (!c->pmt_cand_overflow_logged) {
-    log_line("%s: more than %d PMT candidates, dropping the rest", psi_tag(c), PSI_MAX_PROGRAMS);
+    log_code("LW400143", "%s: more than %d PMT candidates, dropping the rest", psi_tag(c), PSI_MAX_PROGRAMS);
     c->pmt_cand_overflow_logged = 1;
   }
 }
@@ -63,7 +63,7 @@ void parse_pat(psi_t *c) {
   size_t end;
   const char *fault = section_fault(c, PSI_OBS_PAT, b, n, 12, 0x00);
   if (fault) {
-    log_throttled(&c->pat_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: PAT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
+    log_throttled(&c->pat_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400144", "%s: PAT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
   obs_version(c, PSI_OBS_PAT, b, NULL);
@@ -85,7 +85,7 @@ void parse_pat(psi_t *c) {
       c->pat_programs[c->pat_program_count].pmt_pid = pid;
       c->pat_program_count++;
     } else if (!c->pat_program_overflow_logged) {
-      log_line("%s: PAT has more than %d programs, dropping the rest", psi_tag(c), PSI_MAX_PROGRAMS);
+      log_code("LW400145", "%s: PAT has more than %d programs, dropping the rest", psi_tag(c), PSI_MAX_PROGRAMS);
       c->pat_program_overflow_logged = 1;
     }
     if (c->pmt_locked && !c->multi_mode) continue;
@@ -136,7 +136,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n) {
   const unsigned char *ca;
   const char *fault = section_fault(c, PSI_OBS_PMT, b, n, 16, 0x02);
   if (fault) {
-    log_throttled(&c->pmt_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: PMT section dropped: %s (pid 0x%04x, program %u, table_id 0x%02x, len %zu)", psi_tag(c), fault, cand->pmt_pid, cand->program_number, b[0], n);
+    log_throttled(&c->pmt_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400146", "%s: PMT section dropped: %s (pid 0x%04x, program %u, table_id 0x%02x, len %zu)", psi_tag(c), fault, cand->pmt_pid, cand->program_number, b[0], n);
     return 0;
   }
   prog = ((unsigned)b[3] << 8) | b[4];
@@ -193,7 +193,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n) {
   }
   if (c->es_count >= PSI_MAX_ES && i + 5 <= end) {
     if (!c->es_overflow_logged) {
-      log_line("%s: PMT for program %u has more than %d ES entries, dropping the rest", psi_tag(c), prog, PSI_MAX_ES);
+      log_code("LW400147", "%s: PMT for program %u has more than %d ES entries, dropping the rest", psi_tag(c), prog, PSI_MAX_ES);
       c->es_overflow_logged = 1;
     }
   } else {
@@ -236,7 +236,7 @@ void parse_sdt(psi_t *c) {
   size_t end;
   const char *fault = section_fault(c, PSI_OBS_SDT, b, n, 12, 0x42);
   if (fault) {
-    log_throttled(&c->sdt_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: SDT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
+    log_throttled(&c->sdt_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400148", "%s: SDT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
   obs_version(c, PSI_OBS_SDT, b, NULL);
@@ -266,13 +266,13 @@ void parse_nit(psi_t *c) {
   const unsigned char *nn;
   const char *fault = section_fault(c, PSI_OBS_NIT, b, n, 12, 0x40);
   if (fault) {
-    log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: NIT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
+    log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400149", "%s: NIT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
   obs_version(c, PSI_OBS_NIT, b, NULL);
   ndl = tspack_length12(b + 8);
   if (10 + ndl > n) {
-    log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: NIT network descriptor loop overruns section, dropped", psi_tag(c));
+    log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400150", "%s: NIT network descriptor loop overruns section, dropped", psi_tag(c));
     return;
   }
   nn = find_desc(b + 10, ndl, 0x40, &l);
@@ -289,7 +289,7 @@ void parse_cat(psi_t *c) {
   const unsigned char *ca;
   const char *fault = section_fault(c, PSI_OBS_CAT, b, n, 12, 0x01);
   if (fault) {
-    log_throttled(&c->cat_drop_throttle, LOG_THROTTLE_WINDOW_S, "%s: CAT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
+    log_throttled(&c->cat_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400151", "%s: CAT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
   obs_version(c, PSI_OBS_CAT, b, NULL);

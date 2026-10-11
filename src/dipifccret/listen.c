@@ -49,7 +49,7 @@ static void drain_socket(int fd, unsigned char *buf, size_t buflen, const char *
         return;
       if (errno == EINTR)
         continue;
-      log_line(TOOL_NAME ": %s: %s", log_tag, strerror(errno));
+      log_code("FS500175", TOOL_NAME ": %s: %s", log_tag, strerror(errno));
       return;
     }
     if (recv_cb)
@@ -81,7 +81,7 @@ static int bind_dgram(int fd, int family, const char *addr, unsigned port) {
   struct sockaddr_storage ss;
   socklen_t sslen;
   if (netaddr_fill(family, addr, port, &ss, &sslen)) {
-    log_line(TOOL_NAME ": bad listen address: %s", addr);
+    log_code("FS000461", TOOL_NAME ": bad listen address: %s", addr);
     errno = EINVAL; /* inet_pton() never sets errno, give caller's strerror() a real value */
     return -1;
   }
@@ -93,21 +93,21 @@ static int open_reuseport_socket(int family, const char *addr, unsigned port) {
 
   fd = socket(family, SOCK_DGRAM, 0);
   if (fd < 0) {
-    log_line(TOOL_NAME ": socket: %s", strerror(errno));
+    log_code("FS500103", TOOL_NAME ": socket: %s", strerror(errno));
     return -1;
   }
   if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof on) < 0) {
-    log_line(TOOL_NAME ": SO_REUSEPORT: %s", strerror(errno));
+    log_code("FS500176", TOOL_NAME ": SO_REUSEPORT: %s", strerror(errno));
     close(fd);
     return -1;
   }
   if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) { /* required: drain loop below relies on EAGAIN to stop */
-    log_line(TOOL_NAME ": fcntl O_NONBLOCK: %s", strerror(errno));
+    log_code("FS500106", TOOL_NAME ": fcntl O_NONBLOCK: %s", strerror(errno));
     close(fd);
     return -1;
   }
   if (bind_dgram(fd, family, addr, port) < 0) {
-    log_line(TOOL_NAME ": bind: %s", strerror(errno));
+    log_code("FS500148", TOOL_NAME ": bind: %s", strerror(errno));
     close(fd);
     return -1;
   }
@@ -137,14 +137,14 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
     if (fd < 0) goto fail;
     epfd = epoll_create1(0);
     if (epfd < 0) {
-      log_line(TOOL_NAME ": epoll_create1: %s", strerror(errno));
+      log_code("FS500177", TOOL_NAME ": epoll_create1: %s", strerror(errno));
       close(fd);
       goto fail;
     }
     ev.events = EPOLLIN;
     ev.data.fd = fd;
     if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) < 0) {
-      log_line(TOOL_NAME ": epoll_ctl: %s", strerror(errno));
+      log_code("FS500178", TOOL_NAME ": epoll_ctl: %s", strerror(errno));
       close(epfd);
       close(fd);
       goto fail;
@@ -162,11 +162,11 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
       if (epoll_ctl(epfd, EPOLL_CTL_ADD, wfd, &wev) == 0)
         w->has_wake = 1;
       else
-        log_line(TOOL_NAME ": epoll_ctl (wake fd): %s, falling back to bounded poll", strerror(errno));
+        log_code("FA500179", TOOL_NAME ": epoll_ctl (wake fd): %s, falling back to bounded poll", strerror(errno));
     }
     rc = pthread_create(&w->thread, NULL, worker_main, w);
     if (rc != 0) {
-      log_line(TOOL_NAME ": pthread_create: %s", strerror(rc));
+      log_code("FS500102", TOOL_NAME ": pthread_create: %s", strerror(rc));
       close(epfd);
       close(fd);
       goto fail;
@@ -266,7 +266,7 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
 
   p->epfd = epoll_create1(0);
   if (p->epfd < 0) {
-    log_line(TOOL_NAME ": epoll_create1: %s", strerror(errno));
+    log_code("FS500177", TOOL_NAME ": epoll_create1: %s", strerror(errno));
     free(p->fds);
     free(p);
     return NULL;
@@ -279,7 +279,7 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
     ev.events = EPOLLIN;
     ev.data.u64 = i;
     if (epoll_ctl(p->epfd, EPOLL_CTL_ADD, fd, &ev) < 0) {
-      log_line(TOOL_NAME ": epoll_ctl: %s", strerror(errno));
+      log_code("FS500178", TOOL_NAME ": epoll_ctl: %s", strerror(errno));
       close(fd);
       goto fail;
     }
@@ -294,12 +294,12 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
     if (epoll_ctl(p->epfd, EPOLL_CTL_ADD, wfd, &wev) == 0)
       p->has_wake = 1;
     else
-      log_line(TOOL_NAME ": epoll_ctl (wake fd): %s, falling back to bounded poll", strerror(errno));
+      log_code("FA500179", TOOL_NAME ": epoll_ctl (wake fd): %s, falling back to bounded poll", strerror(errno));
   }
 
   rc = pthread_create(&p->thread, NULL, multi_worker_main, p);
   if (rc != 0) {
-    log_line(TOOL_NAME ": pthread_create: %s", strerror(rc));
+    log_code("FS500102", TOOL_NAME ": pthread_create: %s", strerror(rc));
     goto fail;
   }
   return p;

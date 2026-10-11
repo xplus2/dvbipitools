@@ -412,7 +412,7 @@ void p4_checkpoint(mp4_t *m) {
     return;
   }
   if (!fits_region(&top)) {
-    log_line("mp4: index outgrew reserved region, no further crash checkpoints");
+    log_code("LW700127", "mp4: index outgrew reserved region, no further crash checkpoints");
     m->ckpt_full = 1;
   } else {
     write_region(m, &top);

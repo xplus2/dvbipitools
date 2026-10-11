@@ -156,7 +156,7 @@ static void feed_pmt_pid(psi_t *c, unsigned pid, const unsigned char *pkt, const
     pmt_cand_t *cand;
     if (a->expect && a->buf[0] != 0x02) { /* ECM etc sharing the PMT pid */
       if (!lead->foreign_logged) {
-        log_line("%s: non-PMT sections on PMT pid 0x%04x (table_id 0x%02x), ignoring", psi_tag(c), pid, a->buf[0]);
+        log_code("LW400152", "%s: non-PMT sections on PMT pid 0x%04x (table_id 0x%02x), ignoring", psi_tag(c), pid, a->buf[0]);
         lead->foreign_logged = 1;
       }
       continue;

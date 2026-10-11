@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "lib/helper/log.h"
 #include "version.h"
 
 int dipibcg_main(int argc, char **argv);
@@ -108,31 +109,31 @@ static int install_applets(const char *argv0, const char *dir, int hard) {
   int failed = 0;
 
   if (stat(dir, &st) != 0) {
-    fprintf(stderr, "dvbipitools: %s: %s\n", dir, strerror(errno));
+    log_code("IS500116", "dvbipitools: %s: %s", dir, strerror(errno));
     return 1;
   }
   if (!S_ISDIR(st.st_mode)) {
-    fprintf(stderr, "dvbipitools: %s: not a directory\n", dir);
+    log_code("IS000262", "dvbipitools: %s: not a directory", dir);
     return 1;
   }
   if (resolve_self(argv0, self, sizeof(self)) != 0) {
-    fprintf(stderr, "dvbipitools: cannot resolve own path, '%s' is not absolute\n", argv0);
+    log_code("IS500117", "dvbipitools: cannot resolve own path, '%s' is not absolute", argv0);
     return 1;
   }
   for (size_t i = 0; i < N_APPLETS; i++) {
     int n = snprintf(path, sizeof(path), "%s/%s", dir, APPLETS[i].full_name);
     if (n < 0 || (size_t)n >= sizeof(path)) {
-      fprintf(stderr, "dvbipitools: %s/%s: path too long\n", dir, APPLETS[i].full_name);
+      log_code("IS000263", "dvbipitools: path too long: %s/%s", dir, APPLETS[i].full_name);
       failed = 1;
       continue;
     }
     if ((hard ? link(self, path) : symlink(self, path)) == 0)
       continue;
     if (errno == EEXIST) {
-      fprintf(stderr, "dvbipitools: %s: exists, skipped\n", path);
+      log_code("IA700110", "dvbipitools: %s: exists, skipped", path);
       continue;
     }
-    fprintf(stderr, "dvbipitools: %s: %s\n", path, strerror(errno));
+    log_code("IS500118", "dvbipitools: %s: %s", path, strerror(errno));
     if (errno == EXDEV) return 1;
     failed = 1;
   }
@@ -147,7 +148,7 @@ static int run_option(const char *base, int argc, char **argv) {
   int hard;
   if (strcmp(argv[1], "--list") == 0) {
     if (argc != 2) {
-      fprintf(stderr, "usage: %s --list\n", base);
+      log_code("IS000264", "usage: %s --list", base);
       return 2;
     }
     list_applets();
@@ -155,7 +156,7 @@ static int run_option(const char *base, int argc, char **argv) {
   }
   hard = argc == 4 && strcmp(argv[2], "-h") == 0;
   if (argc != 3 && !hard) {
-    fprintf(stderr, "usage: %s --install [-h] DIR\n", base);
+    log_code("IS000265", "usage: %s --install [-h] DIR", base);
     return 2;
   }
   return install_applets(argv[0], argv[argc - 1], hard);
@@ -209,12 +210,12 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "--list") == 0 || strcmp(argv[1], "--install") == 0) return run_option(base, argc, argv);
     applet = find_by_full_or_short_name(argv[1]);
     if (applet) return applet->main_fn(argc - 1, argv + 1);
-    fprintf(stderr, "%s: no applet named '%s'\n\n", base, argv[1]);
+    log_code("IS000266", "%s: no applet named '%s'", base, argv[1]);
     print_help(base);
     return 2;
   }
 
-  fprintf(stderr, "%s: not invoked under a known name\n\n", base);
+  log_code("IS000267", "%s: not invoked under a known name", base);
   print_help(base);
   return 2;
 }

@@ -90,7 +90,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     if (st != ARGS_OK) return st;
   }
   if (optind < argc) {
-    argerr("unexpected argument: %s", argv[optind]);
+    argerr("HS000107", "unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
   return srt_cli_check(cfg);

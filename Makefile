@@ -1811,7 +1811,7 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 dvbipitools: $(DVBIPITOOLS_OBJS)
 	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) -o $@
 
-UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
+UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild lib_demux_fmp4_box lib_demux_fmp4_track lib_demux_fmp4_sample lib_mux_esbuild lib_mux_esbuild_pes lib_mux_esbuild_pmtbuild lib_mux_esbuild_remux \
@@ -3339,6 +3339,13 @@ lib_helper_toolmain_SRCS := \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/log.c
 
+lib_helper_log_BIN := tests/unit/lib/helper/test_log
+lib_helper_log_SRCS := \
+	tests/unit/lib/helper/test_log.c \
+	src/lib/helper/log.c \
+	src/lib/helper/argutil.c \
+	src/lib/sys/ioutil.c
+
 lib_demux_rtcp_BIN := tests/unit/lib/demux/test_rtcp
 lib_demux_rtcp_SRCS := \
 	tests/unit/lib/demux/test_rtcp.c \
@@ -3988,7 +3995,8 @@ dipixmltv_revmap_BIN := tests/unit/dipixmltv/test_revmap
 dipixmltv_revmap_SRCS := \
 	tests/unit/dipixmltv/test_revmap.c \
 	src/dipixmltv/revmap.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
 
 dipixmltv_suggest_BIN := tests/unit/dipixmltv/test_suggest
 dipixmltv_suggest_SRCS := \

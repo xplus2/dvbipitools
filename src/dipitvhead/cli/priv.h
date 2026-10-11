@@ -86,7 +86,7 @@
 #define REQUIRE_INPUT(opt) \
   do { \
     if (!in) { \
-      argerr(opt " must follow -i"); \
+      argerr("TS000608", opt " must follow -i"); \
       return ARGS_ERR; \
     } \
   } while (0)
@@ -94,7 +94,7 @@
 #define CAS_VENDOR(opt) \
   do { \
     if (!vd) { \
-      argerr(opt " must follow --cas-ecmg"); \
+      argerr("TS000609", opt " must follow --cas-ecmg"); \
       return ARGS_ERR; \
     } \
   } while (0)
@@ -102,7 +102,7 @@
 #define CHECK(call, opt) \
   do { \
     if (call) { \
-      argerr(opt ": %s", err); \
+      argerr("TS000610", opt ": %s", err); \
       return ARGS_ERR; \
     } \
   } while (0)

@@ -12,7 +12,7 @@ int announce_driver_run(const announce_driver_t *d) {
 
   m = mcast_open_send(d->family, d->mcast_group, d->mcast_port, d->iface, 0);
   if (!m) {
-    log_line("cannot open %s:%u for sending", d->mcast_group, d->mcast_port);
+    log_code("LS500143", "cannot open %s:%u for sending", d->mcast_group, d->mcast_port);
     d->cleanup(d->ctx);
     return 1;
   }

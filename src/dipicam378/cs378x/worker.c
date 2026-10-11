@@ -34,7 +34,7 @@ static void log_unknown_command(const unsigned char *body, size_t buflen, int sl
     hex[i * 3 + 2] = ' ';
   }
   hex[dumplen * 3] = '\0';
-  log_line(TOOL_NAME ": unknown command %d, len=%zu, bytes=%s(slot %d)", body[0], buflen, hex, slot);
+  log_code("3W000132", TOOL_NAME ": unknown command %d, len=%zu, bytes=%s(slot %d)", body[0], buflen, hex, slot);
 }
 
 /* read n bytes, honoring stop flag and deadline (mono_seconds). 1 ok, 0 stopped, -1 closed/error, -2 deadline */
@@ -73,7 +73,7 @@ static int read_exact(int fd, unsigned char *buf, size_t n, const atomic_int *st
 typedef enum { FRAME_OK, FRAME_STOP, FRAME_AUTH_FAIL, FRAME_TIMEOUT } frame_status_t;
 
 static frame_status_t frame_timeout(int slot, int authed) {
-  log_line(TOOL_NAME ": %s timeout, closing (slot %d)", authed ? "idle" : "authentication", slot);
+  log_code("3W600100", TOOL_NAME ": %s timeout, closing (slot %d)", authed ? "idle" : "authentication", slot);
   return FRAME_TIMEOUT;
 }
 
@@ -92,14 +92,14 @@ static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned 
 
   if (!*have_ucrc) {
     if (s->check_ucrc && memcmp(buf, s->expected_ucrc, 4) != 0) {
-      log_line(TOOL_NAME ": username mismatch, closing (slot %d)", slot);
+      log_code("3W300103", TOOL_NAME ": username mismatch, closing (slot %d)", slot);
       atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_USER], 1, memory_order_relaxed);
       return FRAME_AUTH_FAIL;
     }
     memcpy(conn_ucrc, buf, 4);
     *have_ucrc = 1;
   } else if (memcmp(buf, conn_ucrc, 4) != 0) {
-    log_line(TOOL_NAME ": connection id changed mid-stream, closing (slot %d)", slot);
+    log_code("3W400107", TOOL_NAME ": connection id changed mid-stream, closing (slot %d)", slot);
     atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_CONNID], 1, memory_order_relaxed);
     return FRAME_AUTH_FAIL;
   }
@@ -112,7 +112,7 @@ static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned 
 
   total = cs378x_frame_boundary(20 + buflen);
   if (total > CS378X_BUF_CAP - 4) {
-    log_line(TOOL_NAME ": oversized request (%zu), closing (slot %d)", total, slot);
+    log_code("3W400108", TOOL_NAME ": oversized request (%zu), closing (slot %d)", total, slot);
     atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_OVERSIZED], 1, memory_order_relaxed);
     return FRAME_AUTH_FAIL;
   }
@@ -125,7 +125,7 @@ static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned 
   }
 
   if (cs378x_crc32(body + 20, buflen) != (((uint32_t)body[4] << 24) | ((uint32_t)body[5] << 16) | ((uint32_t)body[6] << 8) | body[7])) {
-    log_line(TOOL_NAME ": checksum error, wrong password? (slot %d)", slot);
+    log_code("3W300104", TOOL_NAME ": checksum error, wrong password? (slot %d)", slot);
     atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_CHECKSUM], 1, memory_order_relaxed);
     return FRAME_AUTH_FAIL;
   }
@@ -204,12 +204,12 @@ int tcp_listen(const char *bind_addr, unsigned port) {
   snprintf(portstr, sizeof portstr, "%u", port);
   rc = getaddrinfo(bind_addr, portstr, &hints, &ai);
   if (rc != 0) {
-    log_line(TOOL_NAME ": bind address %s: %s", bind_addr, gai_strerror(rc));
+    log_code("3S000133", TOOL_NAME ": bind address %s: %s", bind_addr, gai_strerror(rc));
     return -1;
   }
   fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
   if (fd < 0) {
-    log_line(TOOL_NAME ": socket: %s", strerror(errno));
+    log_code("3S500103", TOOL_NAME ": socket: %s", strerror(errno));
     freeaddrinfo(ai);
     return -1;
   }
@@ -218,18 +218,18 @@ int tcp_listen(const char *bind_addr, unsigned port) {
   rc = bind(fd, ai->ai_addr, ai->ai_addrlen);
   freeaddrinfo(ai);
   if (rc < 0) {
-    log_line(TOOL_NAME ": bind %s port %u: %s", bind_addr, port, strerror(errno));
+    log_code("3S500104", TOOL_NAME ": bind %s port %u: %s", bind_addr, port, strerror(errno));
     close(fd);
     return -1;
   }
   if (listen(fd, 8) < 0) {
-    log_line(TOOL_NAME ": listen: %s", strerror(errno));
+    log_code("3S500105", TOOL_NAME ": listen: %s", strerror(errno));
     close(fd);
     return -1;
   }
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-    log_line(TOOL_NAME ": fcntl O_NONBLOCK: %s", strerror(errno));
+    log_code("3S500106", TOOL_NAME ": fcntl O_NONBLOCK: %s", strerror(errno));
     close(fd);
     return -1;
   }
@@ -265,7 +265,7 @@ void *accept_main(void *arg) {
     fd = accept(s->listen_fd, NULL, NULL);
     if (fd < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) continue;
-      log_line(TOOL_NAME ": accept: %s", strerror(errno));
+      log_code("3E500107", TOOL_NAME ": accept: %s", strerror(errno));
       continue;
     }
 
@@ -278,7 +278,7 @@ void *accept_main(void *arg) {
       }
     }
     if (slot < 0) {
-      log_line(TOOL_NAME ": connection limit (%d) reached, rejecting", CS378X_MAX_CONNS);
+      log_code("3W600101", TOOL_NAME ": connection limit (%d) reached, rejecting", CS378X_MAX_CONNS);
       close(fd);
       continue;
     }
@@ -290,7 +290,7 @@ void *accept_main(void *arg) {
     wa->slot = slot;
     atomic_store_explicit(&s->worker_fd[slot], fd, memory_order_release);
     if (pthread_create(&th, NULL, worker_main, wa) != 0) {
-      log_line(TOOL_NAME ": pthread_create: %s", strerror(errno));
+      log_code("3E500102", TOOL_NAME ": pthread_create: %s", strerror(errno));
       close(fd);
       atomic_store_explicit(&s->worker_fd[slot], -1, memory_order_release);
       atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);

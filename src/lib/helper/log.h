@@ -9,8 +9,11 @@
 /* timestamped line (ISO UTC, no 'T') to stderr */
 void log_line(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
+void log_code(const char *code, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+
 /* same; ANSI stripped unless terminal wants colour */
 void log_line_ansi(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void log_code_ansi(const char *code, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
 typedef enum { LOG_COLOR_AUTO, LOG_COLOR_ALWAYS, LOG_COLOR_NEVER } log_color_t;
 
@@ -34,7 +37,7 @@ typedef struct {
 
 #define LOG_THROTTLE_WINDOW_S 5
 
-void log_throttled(log_throttle_t *t, int window_s, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+void log_throttled(log_throttle_t *t, int window_s, const char *code, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
 
 /* for log_line_ansi payloads */
 #define LOG_RESET  "\033[0m"

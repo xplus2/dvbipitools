@@ -119,18 +119,18 @@ static int load_csv(FILE *f, input_t *in) {
     if (!line[0]) continue;
     nf = csv_split(line, fields, 5);
     if (nf < 2) {
-      log_line("line %d: expected name,uri", lineno);
+      log_code("AE000224", "line %d: expected name,uri", lineno);
       return -1;
     }
     if (idx >= SDS_MAX_SERVICES) {
-      log_line("too many entries (max %d)", SDS_MAX_SERVICES);
+      log_code("AE000225", "too many entries (max %d)", SDS_MAX_SERVICES);
       return -1;
     }
     s = &in->services[idx];
     memset(s, 0, sizeof *s);
     bufcpy(s->name, sizeof s->name, fields[0]);
     if (parse_mcast_uri(fields[1], s)) {
-      log_line("line %d: bad uri: %s", lineno, fields[1]);
+      log_code("AE400110", "line %d: bad uri: %s", lineno, fields[1]);
       return -1;
     }
     s->tsid = nf > 2 ? (unsigned)strtoul(fields[2], NULL, 10) : 1;
@@ -156,7 +156,7 @@ static int load_m3u(FILE *f, input_t *in) {
       char *comma = strrchr(line, ',');
       char tmp[32];
       if (!comma) {
-        log_line("malformed #EXTINF line: %s", line);
+        log_code("AE400111", "malformed #EXTINF line: %s", line);
         return -1;
       }
       bufcpy(pending_name, sizeof pending_name, comma + 1);
@@ -173,14 +173,14 @@ static int load_m3u(FILE *f, input_t *in) {
     }
     if (line[0] == '#' || !have_pending) continue;
     if (idx >= SDS_MAX_SERVICES) {
-      log_line("too many entries (max %d)", SDS_MAX_SERVICES);
+      log_code("AE000225", "too many entries (max %d)", SDS_MAX_SERVICES);
       return -1;
     }
     s = &in->services[idx];
     memset(s, 0, sizeof *s);
     bufcpy(s->name, sizeof s->name, pending_name);
     if (parse_mcast_uri(line, s)) {
-      log_line("bad uri: %s", line);
+      log_code("AE400112", "bad uri: %s", line);
       return -1;
     }
     s->tsid = pending_tsid;
@@ -207,11 +207,11 @@ static int xspf_track_cb(const char *tag, const char *end, void *vctx) {
   sds_service_t *s;
 
   if (c->idx >= SDS_MAX_SERVICES) {
-    log_line("too many entries (max %d)", SDS_MAX_SERVICES);
+    log_code("AE000225", "too many entries (max %d)", SDS_MAX_SERVICES);
     return -1;
   }
   if (xml_elem_text(tag, end, "location", loc, sizeof loc)) {
-    log_line("xspf track missing <location>");
+    log_code("AE000226", "xspf track missing <location>");
     return -1;
   }
   if (xml_elem_text(tag, end, "title", title, sizeof title)) title[0] = '\0';
@@ -220,7 +220,7 @@ static int xspf_track_cb(const char *tag, const char *end, void *vctx) {
   memset(s, 0, sizeof *s);
   bufcpy(s->name, sizeof s->name, title);
   if (parse_mcast_uri(loc, s)) {
-    log_line("bad uri: %s", loc);
+    log_code("AE400112", "bad uri: %s", loc);
     return -1;
   }
   s->tsid = xml_attr(tag, end, "tsid", tmp, sizeof tmp) == 0 ? (unsigned)strtoul(tmp, NULL, 10) : 1;
@@ -253,7 +253,7 @@ int input_load(const char *path, input_t *in) {
     };
     size_t i;
     if (read_whole_file(path, &buf, &len)) {
-      log_line("cannot read %s", path);
+      log_code("AE000227", "cannot read %s", path);
       return -1;
     }
     for (i = 0; i < sizeof root_tags / sizeof root_tags[0]; i++) {
@@ -263,7 +263,7 @@ int input_load(const char *path, input_t *in) {
       }
     }
     if (i == sizeof root_tags / sizeof root_tags[0]) {
-      log_line("%s: no recognized SD&S root element", path);
+      log_code("AE400113", "%s: no recognized SD&S root element", path);
       free(buf);
       return -1;
     }
@@ -279,7 +279,7 @@ int input_load(const char *path, input_t *in) {
     size_t len;
     int rc;
     if (read_whole_file(path, &buf, &len)) {
-      log_line("cannot read %s", path);
+      log_code("AE000227", "cannot read %s", path);
       return -1;
     }
     rc = load_xspf(in, buf);
@@ -291,13 +291,13 @@ int input_load(const char *path, input_t *in) {
     FILE *f = fopen(path, "r");
     int rc;
     if (!f) {
-      log_line("cannot open %s", path);
+      log_code("AE000100", "cannot open %s", path);
       return -1;
     }
     if (!strcmp(sfx, ".csv")) rc = load_csv(f, in);
     else if (!strcmp(sfx, ".m3u")) rc = load_m3u(f, in);
     else {
-      log_line("%s: unrecognized suffix, expected .csv/.m3u/.xspf/.xml", path);
+      log_code("AE400114", "%s: unrecognized suffix, expected .csv/.m3u/.xspf/.xml", path);
       rc = -1;
     }
     fclose(f);
@@ -316,7 +316,7 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
   int idx = 0, lineno = 0;
 
   if (!f) {
-    log_line("cannot open %s", path);
+    log_code("AE000100", "cannot open %s", path);
     return -1;
   }
   while (fgets(line, sizeof line, f)) {
@@ -329,23 +329,23 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
     if (!line[0]) continue;
     nf = csv_split(line, fields, 5);
     if (nf < 5) {
-      log_line("%s: line %d: expected id,name,lang,visible,svc1|svc2|...", path, lineno);
+      log_code("AE400115", "%s: line %d: expected id,name,lang,visible,svc1|svc2|...", path, lineno);
       goto fail;
     }
     if (idx >= max) {
-      log_line("%s: too many packages (max %d)", path, max);
+      log_code("AE000228", "%s: too many packages (max %d)", path, max);
       goto fail;
     }
     pkg = &out[idx];
     memset(pkg, 0, sizeof *pkg);
     pkg->id = (unsigned)strtoul(fields[0], &end, 10);
     if (*end != '\0') {
-      log_line("%s: line %d: bad package id: %s", path, lineno, fields[0]);
+      log_code("AE400116", "%s: line %d: bad package id: %s", path, lineno, fields[0]);
       goto fail;
     }
     bufcpy(pkg->name, sizeof pkg->name, fields[1]);
     if (strlen(fields[2]) != 3) {
-      log_line("%s: line %d: bad lang: %s", path, lineno, fields[2]);
+      log_code("AE400117", "%s: line %d: bad lang: %s", path, lineno, fields[2]);
       goto fail;
     }
     memcpy(pkg->lang, fields[2], 3);
@@ -353,7 +353,7 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
     svc = strtok_r(fields[4], "|", &svc_save);
     while (svc) {
       if (pkg->service_count >= SDS_MAX_PKG_SERVICES) {
-        log_line("%s: line %d: too many services in package (max %d)", path, lineno, SDS_MAX_PKG_SERVICES);
+        log_code("AE000229", "%s: line %d: too many services in package (max %d)", path, lineno, SDS_MAX_PKG_SERVICES);
         goto fail;
       }
       bufcpy(pkg->service_names[pkg->service_count], sizeof pkg->service_names[0], svc);
@@ -361,7 +361,7 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
       svc = strtok_r(NULL, "|", &svc_save);
     }
     if (pkg->service_count == 0) {
-      log_line("%s: line %d: package has no services", path, lineno);
+      log_code("AE400118", "%s: line %d: package has no services", path, lineno);
       goto fail;
     }
     idx++;
@@ -381,7 +381,7 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
   int idx = 0, lineno = 0;
 
   if (!f) {
-    log_line("cannot open %s", path);
+    log_code("AE000100", "cannot open %s", path);
     return -1;
   }
   while (fgets(line, sizeof line, f)) {
@@ -391,20 +391,20 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
     chomp(line);
     if (!line[0]) continue;
     if (idx >= max) {
-      log_line("%s: too many cells (max %d)", path, max);
+      log_code("AE000230", "%s: too many cells (max %d)", path, max);
       goto fail;
     }
     cell = &out[idx];
     memset(cell, 0, sizeof *cell);
     tok = strtok_r(line, ",", &tok_save);
     if (!tok) {
-      log_line("%s: line %d: expected id,country,type:value,...", path, lineno);
+      log_code("AE400119", "%s: line %d: expected id,country,type:value,...", path, lineno);
       goto fail;
     }
     bufcpy(cell->id, sizeof cell->id, tok);
     tok = strtok_r(NULL, ",", &tok_save);
     if (!tok || strlen(tok) != 2) {
-      log_line("%s: line %d: bad country code: %s", path, lineno, tok ? tok : "(missing)");
+      log_code("AE400120", "%s: line %d: bad country code: %s", path, lineno, tok ? tok : "(missing)");
       goto fail;
     }
     bufcpy(cell->country, sizeof cell->country, tok);
@@ -412,24 +412,24 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
       char *colon = strchr(tok, ':');
       char *end;
       if (!colon) {
-        log_line("%s: line %d: bad CA entry: %s", path, lineno, tok);
+        log_code("AE400121", "%s: line %d: bad CA entry: %s", path, lineno, tok);
         goto fail;
       }
       if (cell->ca_depth >= SDS_MAX_CA_DEPTH) {
-        log_line("%s: line %d: too many CA entries (max %d)", path, lineno, SDS_MAX_CA_DEPTH);
+        log_code("AE000231", "%s: line %d: too many CA entries (max %d)", path, lineno, SDS_MAX_CA_DEPTH);
         goto fail;
       }
       *colon = '\0';
       cell->ca[cell->ca_depth].type = (unsigned)strtoul(tok, &end, 10);
       if (*end != '\0') {
-        log_line("%s: line %d: bad CA type: %s", path, lineno, tok);
+        log_code("AE400122", "%s: line %d: bad CA type: %s", path, lineno, tok);
         goto fail;
       }
       bufcpy(cell->ca[cell->ca_depth].value, sizeof cell->ca[cell->ca_depth].value, colon + 1);
       cell->ca_depth++;
     }
     if (cell->ca_depth == 0) {
-      log_line("%s: line %d: cell has no CA entries", path, lineno);
+      log_code("AE400123", "%s: line %d: cell has no CA entries", path, lineno);
       goto fail;
     }
     idx++;

@@ -117,7 +117,7 @@ int open_output(const char *path) {
   int fd;
   if (strcmp(path, "-") == 0) return STDOUT_FILENO;
   fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0640);
-  if (fd < 0) log_line("open %s: %s", path, strerror(errno));
+  if (fd < 0) log_code("CS100108", "open %s: %s", path, strerror(errno));
   return fd;
 }
 
@@ -126,7 +126,7 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
     ssize_t w = write(fd, p, n);
     if (w < 0) {
       if (errno == EINTR) continue;
-      log_line("w:%s", strerror(errno));
+      log_code("CE100139", "w:%s", strerror(errno));
       return -1;
     }
     p += w;
@@ -201,7 +201,7 @@ void note_send_result(int ok, int *had_error, uint64_t *errors_total, const char
   if (!ok) {
     (*errors_total)++;
     if (!*had_error) {
-      log_line("%s output: write failed, will keep retrying", label);
+      log_code("CW100140", "%s output: write failed, will keep retrying", label);
       *had_error = 1;
     }
   } else if (*had_error) {
@@ -242,7 +242,8 @@ void sinks_service_srt(out_sink_t *sinks, int n_sinks) {
     if (!sinks[i].srt) continue;
     srtsink_service(sinks[i].srt, &st);
     if (st.connected != sinks[i].srt_connected) {
-      log_line("srt[%d] output: %s", i, st.connected ? "connected" : "link down, reconnecting");
+      if (st.connected) log_line("srt[%d] output: connected", i);
+      else              log_code("CW600148", "srt[%d] output: link down, reconnecting", i);
       sinks[i].srt_connected = st.connected;
     }
   }

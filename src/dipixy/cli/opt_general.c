@@ -42,7 +42,7 @@ args_status_t dixy_opt_general(dixy_opt_t *p, int c) {
         p->cli_input = 1;
       }
       if (dixy_cfg_add_input(cfg, optarg, err, sizeof err)) {
-        argerr("-i %s: %s", optarg, err);
+        argerr("YS000633", "-i %s: %s", optarg, err);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -51,7 +51,7 @@ args_status_t dixy_opt_general(dixy_opt_t *p, int c) {
     case 'n': {
       char err[200];
       if (dixy_cfg_set_name(cfg, optarg, err, sizeof err)) {
-        argerr("-n/--name %s: %s", optarg, err);
+        argerr("YS000634", "-n/--name %s: %s", optarg, err);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -60,7 +60,7 @@ args_status_t dixy_opt_general(dixy_opt_t *p, int c) {
     case OPT_MEDIA_TYPE: {
       char err[200];
       if (dixy_cfg_set_media_type(cfg, optarg, err, sizeof err)) {
-        argerr("--media-type %s: %s", optarg, err);
+        argerr("YS000635", "--media-type %s: %s", optarg, err);
         args_free(cfg);
         return ARGS_ERR;
       }
@@ -81,7 +81,7 @@ args_status_t dixy_opt_general(dixy_opt_t *p, int c) {
     case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {
-        argerr("invalid --color: %s (auto|always|never)", optarg);
+        argerr("YS000105", "invalid --color: %s (auto|always|never)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }

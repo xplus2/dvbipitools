@@ -25,7 +25,7 @@
 void write_csvmap(const char *path, const bcg_doc_t *doc) {
   FILE *f = fopen(path, "w");
   if (!f) {
-    log_line("cannot open %s for writing", path);
+    log_code("GS100101", "cannot open %s for writing", path);
     return;
   }
   for (int i = 0; i < doc->channel_count; i++) {
@@ -33,7 +33,7 @@ void write_csvmap(const char *path, const bcg_doc_t *doc) {
     if (!c->uri[0]) continue;
     fprintf(f, "%s,%s,%u,%u,%u\n", c->id, c->uri, c->tsid, c->onid, c->sid);
   }
-  if (fclose(f)) log_line("error writing %s", path);
+  if (fclose(f)) log_code("GE100102", "error writing %s", path);
 }
 
 int listen_run(const config_t *cfg) {
@@ -52,12 +52,12 @@ int listen_run(const config_t *cfg) {
   mcast_describe(cfg, mcast, sizeof mcast);
   m = mcast_open(cfg->family, cfg->mcast_group, cfg->mcast_port, cfg->iface, 500);
   if (!m) {
-    log_line("cannot join %s", mcast);
+    log_code("GS500100", "cannot join %s", mcast);
     return 1;
   }
   r = dvbstp_reasm_new();
   if (!r) {
-    log_line("out of memory");
+    log_code("GS500101", "out of memory");
     mcast_close(m);
     return 1;
   }
@@ -107,19 +107,19 @@ int listen_run(const config_t *cfg) {
     doc = candidate;
     have_doc = 1;
     captures++;
-    if (cfg->verbose) log_line("segment %u: %d channels, %d programmes, %d fragments", segments, doc.channel_count, doc.programme_count, nfuu);
+    if (cfg->verbose) log_code("GD700100", "segment %u: %d channels, %d programmes, %d fragments", segments, doc.channel_count, doc.programme_count, nfuu);
   }
 
   int write_failed = 0;
   if (have_doc) {
     FILE *f = fileutil_open_std(cfg->output_path, "w");
     if (!f) {
-      log_line("cannot open %s for writing", cfg->output_path);
+      log_code("GE100101", "cannot open %s for writing", cfg->output_path);
       write_failed = 1;
     } else {
       xmltv_write(f, &doc, TOOL_NAME);
       if (f != stdout && fclose(f)) {
-        log_line("error writing %s", cfg->output_path);
+        log_code("GE100102", "error writing %s", cfg->output_path);
         write_failed = 1;
       }
     }

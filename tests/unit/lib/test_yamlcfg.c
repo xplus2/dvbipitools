@@ -697,8 +697,8 @@ START_TEST(warn_counts_and_report_reflects_mode) {
   tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, 0, "count: 1\n", NULL), YAMLCFG_LOADED);
   ck_assert_int_eq(yamlcfg_report(&y), 0);
-  yamlcfg_warn(&y, "custom %d", 1);
-  yamlcfg_warn(&y, "custom %d", 2);
+  yamlcfg_warn(&y, "LA700002", "custom %d", 1);
+  yamlcfg_warn(&y, "LA700002", "custom %d", 2);
   ck_assert_uint_eq(y.warnings, 2u);
   ck_assert_int_eq(yamlcfg_report(&y), 0);
   y.strict = 1;
