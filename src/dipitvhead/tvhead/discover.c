@@ -24,24 +24,24 @@ static int psi_cb_inspect(void *v, const unsigned char *pkt) {
   return 0;
 }
 
-static void print_program_list(const psi_t *psi) {
+static void print_program_list(const psi_t *psi, unsigned idx) {
   int n;
   const psi_program_t *p = psi_pat_programs(psi, &n);
-  log_line("PAT: %d program(s) found", n);
-  for (int i = 0; i < n; i++) log_line("  program %u, PMT pid 0x%x", p[i].program_number, p[i].pmt_pid);
+  log_line_ansi("input \e[1;30m%u\e[0m: PAT: %d program(s) found", idx, n);
+  for (int i = 0; i < n; i++) log_line_ansi("  program \e[1;33m%u\e[0m, PMT \e[0;36m0x%x\e[0m", p[i].program_number, p[i].pmt_pid);
 }
 
-void print_discovered(const psi_t *psi) {
+void print_discovered(const psi_t *psi, unsigned idx) {
   int n, i;
   const psi_es_t *es = psi_es(psi, &n);
-  log_line_ansi("locked: program \e[0;33m%u\e[0m (PMT pid 0x%x, PCR pid 0x%x)", psi_program_number(psi), psi_pmt_pid(psi), psi_pcr_pid(psi));
+  log_line_ansi("input \e[1;30m%u\e[0m: \e[1;32mlocked\e[0m: program \e[0;33m%u\e[0m (PMT \e[0;36m0x%x\e[0m, PCR \e[0;36m0x%x\e[0m)", idx, psi_program_number(psi), psi_pmt_pid(psi), psi_pcr_pid(psi));
   for (i = 0; i < n; i++) {
     const psi_es_t *e = &es[i];
-    if (e->lang[0]) log_line("  pid 0x%x: %s (%s) lang=%s", e->pid, pid_class_name(e->cls), codec_name(e->codec), e->lang);
-    else            log_line("  pid 0x%x: %s (%s)", e->pid, pid_class_name(e->cls), codec_name(e->codec));
+    if (e->lang[0]) log_line_ansi("  pid \e[0;36m0x%x\e[0m: %s (%s) lang=\e[1;30m%s\e[0m", e->pid, pid_class_name(e->cls), codec_name(e->codec), e->lang);
+    else            log_line_ansi("  pid \e[0;36m0x%x\e[0m: %s (%s)", e->pid, pid_class_name(e->cls), codec_name(e->codec));
   }
-  if (*psi_service_name(psi)) log_line("  SDT: service=\"%s\" provider=\"%s\"", psi_service_name(psi), psi_provider_name(psi));
-  if (*psi_network_name(psi)) log_line("  NIT: network=\"%s\"", psi_network_name(psi));
+  if (*psi_service_name(psi)) log_line_ansi("  SDT: service=\"\e[0;33m%s\e[0m\" provider=\"\e[0;33m%s\e[0m\"", psi_service_name(psi), psi_provider_name(psi));
+  if (*psi_network_name(psi)) log_line_ansi("  NIT: network=\"\e[0;33m%s\e[0m\"", psi_network_name(psi));
 }
 
 /* one non-blocking increment of discovery. 1 ready, 0 still pending, -1 hard error or -p pid
@@ -61,7 +61,7 @@ int discover_step(discover_state_t *ds, tvsrc_t *src, const dipitvhead_input_t *
     tspack_feed_sync(&ds->pz, buf, (size_t)n, psi_cb_inspect, &df, tsinspect_sync(ds->insp));
   } else if (n > 0) tspack_feed(&ds->pz, buf, (size_t)n, psi_cb, psi);
   if (psi_have_pat(psi) && !ds->listed) {
-    print_program_list(psi);
+    print_program_list(psi, ds->idx);
     ds->listed = 1;
   }
   if (input->pmt_pid && ds->listed && !ds->checked_pmt_pid) {

@@ -634,6 +634,7 @@ ffmpeg -i <source> -c:v libx264 -c:a aac -f mpegts - | dipitvhead -i - -m 239.5.
   -i http://radio.example.org/music.m3u \
   -i http://radio.example.com/mp3
 # let dipitvhead fill the mux (dipiradiohead's PMT PIDs are assigned in order of definition)
+# note on the IRD source: restricting it to a PMT like "-p 0x61" gets rid of ghost PAT refs in the output
 ./dipitvhead -m 239.1.1.1:5000 -O enx00deadbeef01 -n "LookMomICanDoBroadcasting" --default-provider "FrankenMux" \
   -i rtp://239.2.3.1:5001 -I enx00deadbeef00 --sdt 'MC TV 1' \
   -i rtp://239.2.3.2:5001 -I enx00deadbeef00 --sdt 'MC TV 2' \
@@ -643,7 +644,7 @@ ffmpeg -i <source> -c:v libx264 -c:a aac -f mpegts - | dipitvhead -i - -m 239.5.
   -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1001 --sdt 'radiohead 2' \
   -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1002 --sdt 'radiohead 3' \
   -i udp://239.1.2.0:5001 -I enx00deadbeef02 -p 0x1003 --sdt 'radiohead 4'
-# VLC test (use Playback->Program for MPTS program selection) - enx00deadbeef01 will not be the same as above, but
-# should be in the same network as dipitvhead's enx00deadbeef01
+# VLC test (use Playback->Program for MPTS program selection) - enx00deadbeef01 on the playback host 
+# will not be the same as above, but should be in the same network as dipitvhead's host's enx00deadbeef01
 vlc --miface enx00deadbeef01 rtp://@239.1.1.1:5000
 ```

@@ -30,6 +30,7 @@
 typedef struct {
   tspack_t pz;
   int listed, checked_pmt_pid;
+  unsigned idx; /* input number for log lines */
   tsinspect_t *insp;
 } discover_state_t;
 
@@ -78,7 +79,7 @@ typedef struct {
 } feed_ctx_t;
 
 /* discover.c */
-void print_discovered(const psi_t *psi);
+void print_discovered(const psi_t *psi, unsigned idx);
 int discover_step(discover_state_t *ds, tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_metrics_t *im);
 int discover(tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_metrics_t *im);
 int discover_insp(tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_metrics_t *im, tsinspect_t *insp);

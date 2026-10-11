@@ -60,6 +60,7 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
     if (tk->cfg->inputs[i].pmt_pid) psi_select_pmt_pid(tk->progs[i].psi, tk->cfg->inputs[i].pmt_pid);
   }
   tk->progs[i].ds.insp = tk->insp ? tk->insp[i] : NULL;
+  tk->progs[i].ds.idx = i;
   r = discover_step(&tk->progs[i].ds, src, &tk->cfg->inputs[i], tk->progs[i].psi, tk->metrics_on ? &tk->input_stats[i] : NULL);
   if (r == 0 && mono_seconds() - tk->progs[i].discover_start < DISCOVERY_TIMEOUT_S) return;
   if (r <= 0) {
@@ -71,8 +72,7 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   }
 
   out_program_pids(i, &pids);
-  log_line_ansi("input \e[1;30m%u\e[0m:", i);
-  print_discovered(tk->progs[i].psi);
+  print_discovered(tk->progs[i].psi, i);
   tk->progs[i].rx = remux_new(tk->cfg, &tk->cfg->inputs[i], tk->progs[i].psi, &pids, 0);
   if (!tk->progs[i].rx) {
     log_code_ansi("TE500196", "input \e[1;30m%u\e[0m: \e[0;31mremux setup failed\e[0m", i);

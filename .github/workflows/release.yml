@@ -53,7 +53,7 @@ jobs:
             platform: linux/riscv64
     runs-on: ${{ matrix.runner }}
     steps:
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3 # v3.0.0
       if: matrix.platform
     - name: build in container
@@ -76,7 +76,7 @@ jobs:
             dpkg-buildpackage -us -uc -b
           '
         mv "$PARENT"/*.deb .
-    - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: deb-${{ matrix.arch }}
         path: '*.deb'
@@ -107,7 +107,7 @@ jobs:
             mesoncpu: aarch64
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: build dependencies (ubuntu ports arch)
       if: matrix.container == ''
@@ -248,7 +248,7 @@ jobs:
         [ -f build/src/dipisrt/dipisrt ] && install -m 0755 build/src/dipisrt/dipisrt "${STAGING}/usr/bin/"
         mkdir -p dist
         ipk/build-ipk.sh "${STAGING}" "${{ matrix.opkgarch }}" "${VERSION}" "dist/dvbipitools_${VERSION}_${{ matrix.opkgarch }}.ipk"
-    - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ipk-${{ matrix.opkgarch }}
         path: dist/*.ipk
@@ -291,7 +291,7 @@ jobs:
             mesoncpu: riscv64
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: build dependencies
       run: |
         sudo apt-get update
@@ -416,7 +416,7 @@ jobs:
         [ -f build/src/dipisrt/dipisrt ] && install -m 0755 build/src/dipisrt/dipisrt "${PKGDIR}/"
         (cd "${PKGDIR}" && sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
-    - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: tarball-${{ matrix.arch }}
         path: dvbipitools-*.tar.gz
@@ -427,7 +427,7 @@ jobs:
     permissions:
       contents: write
     steps:
-    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       with:
         merge-multiple: true
         path: dist

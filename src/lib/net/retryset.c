@@ -116,7 +116,7 @@ static void log_slot(unsigned idx, const char *label, const char *code, const ch
   vsnprintf(msg, sizeof msg, fmt, ap);
   va_end(ap);
   if (label) log_code_ansi(code, "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): %s", idx, label, msg);
-  else log_code_ansi(code, "input \e[1;30m%u\e[0m: \e[1;30m%s\e[0m", idx, msg);
+  else log_code_ansi(code, "input \e[1;30m%u\e[0m: \e[1;33m%s\e[0m", idx, msg);
 }
 
 void retryset_service(retryset_t *rs, unsigned idx, time_t now) {

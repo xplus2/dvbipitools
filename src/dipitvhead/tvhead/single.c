@@ -37,7 +37,7 @@ static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi
     else log_code("TS300168", "cas setup failed");
   }
   if (!cas_wanted || cas) {
-    print_discovered(psi);
+    print_discovered(psi, 0);
     remux_set_timemap(rx, tm);
     if (cfg->pcr_mode == PCR_MODE_REGENERATE && remux_set_hold(rx, out_pcr_clock, out_pcr_latch, out, cfg->pcr_lead_ms)) log_code("TS500198", "hold-back queue setup failed");
     out_pcr_pid_set(out, 0, remux_pcr_pid_out(rx));

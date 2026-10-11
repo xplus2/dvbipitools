@@ -1,4 +1,5 @@
 dvbipitools (2.5.1-1) unstable; urgency=medium
+  * error codes
   * libs
     + UAF/DF in net/ts/open_async (asan)
     + librist crashes if the RTCP sibling port (++data) is taken (but data isn't)

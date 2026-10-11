@@ -24,7 +24,7 @@ jobs:
             tsan: ON
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: dependencies
         run: |
           sudo apt-get update
@@ -44,7 +44,7 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: dependencies
         run: |
           sudo apt-get update
@@ -90,7 +90,7 @@ jobs:
           tail -n 4 coverage/src-novendor.txt
       - name: upload coverage
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-report
           path: coverage
@@ -99,7 +99,7 @@ jobs:
   bonding-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: dependencies
         run: |
           sudo apt-get update
@@ -135,7 +135,7 @@ jobs:
           echo "found_any=$([ -n "$(ls -A bonding-diagnostics)" ] && echo true || echo false)" >> "$GITHUB_ENV"
       - name: upload failure diagnostics
         if: always() && env.found_any == 'true'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bonding-failure-diagnostics
           path: bonding-diagnostics
@@ -184,7 +184,7 @@ jobs:
   static-analysis:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: dependencies
         run: |
           sudo apt-get update
@@ -197,7 +197,7 @@ jobs:
             2>&1 | tee cppcheck-report.txt
       - name: upload report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cppcheck-report
           path: cppcheck-report.txt
@@ -205,7 +205,7 @@ jobs:
   fuzz-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: dependencies
         run: |
           sudo apt-get update
@@ -246,7 +246,7 @@ jobs:
           exit $fail
       - name: upload crashes
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuzz-smoke-crashes
           path: afl-out/*/default/crashes
