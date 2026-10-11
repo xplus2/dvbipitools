@@ -4,6 +4,7 @@
 #define _GNU_SOURCE /* memmem */
 
 #include <check.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -186,6 +187,50 @@ START_TEST(llhls_part_roundtrip) {
 }
 END_TEST
 
+START_TEST(llhls_part_with_matching_etag_is_not_modified) {
+  pid_filter_t f;
+  hls_resp_t r;
+  char etag[48];
+  const uint8_t part[64] = {0x47};
+  no_filter(&f);
+  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
+  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5);
+  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "seg0.0.ts", 0, NULL, &r), 1);
+  ck_assert_int_eq(r.status, 200);
+  ck_assert_int_ne(r.etag[0], '\0');
+  snprintf(etag, sizeof etag, "%s", r.etag);
+  hls_resp_body_release(r.body, r.zc);
+
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "seg0.0.ts", 0, etag, &r), 1);
+  ck_assert_int_eq(r.status, 304);
+  ck_assert_ptr_null(r.body);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "seg0.0.ts", 0, "stale", &r), 1);
+  ck_assert_int_eq(r.status, 200);
+  hls_resp_body_release(r.body, r.zc);
+}
+END_TEST
+
+START_TEST(llhls_lcevc_all_playlist_becomes_a_master_once_pids_are_known) {
+  pid_filter_t f;
+  hls_resp_t r;
+  const uint8_t part[64] = {0x47};
+  const unsigned pids[2] = {101, 102};
+  static const lcevc_select_t all = {LCEVC_SEL_ALL, 0, 0};
+  no_filter(&f);
+  hls_store_open(CTX_A, &f, 0, &all, 2.0, 6, SEG_CONTAINER_TS);
+  hls_llhls_enable(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, 0.5);
+  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_set_lcevc_pids(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, pids, 2), 0);
+
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &all, "index_ll.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(r.status, 200);
+  ck_assert(memmem(r.body, r.body_len, "EXT-X-STREAM-INF", 16) != NULL);
+  ck_assert(memmem(r.body, r.body_len, "GROUP-ID=\"lcevc\"", 16) != NULL);
+  hls_resp_body_release(r.body, r.zc);
+}
+END_TEST
+
 START_TEST(llhls_finalized_segment_part_still_served) {
   pid_filter_t f;
   hls_resp_t r;
@@ -335,6 +380,74 @@ START_TEST(av1_ts_container_playlist_uses_version_7) {
 }
 END_TEST
 
+typedef struct {
+  const char *name;
+  codec_t vcodec;
+  uint8_t init[48];
+  size_t init_len;
+  const char *want_v;
+  const char *want_a;
+} codec_case_t;
+
+static const codec_case_t codec_cases[] = {
+    {"hevc", CODEC_HEVC, {0}, 8, "hvc1.1.6.L93.B0", ""},
+    {"vvc", CODEC_VVC, {0}, 8, "vvc1.1.L1.CQ", ""},
+    {"av1 without box", CODEC_AV1, {0}, 8, "av01.0.04M.08", ""},
+    {"av1 10 bit high tier", CODEC_AV1, {0, 0, 'a', 'v', '1', 'C', 0, 0x28, 0xC0}, 9, "av01.1.08H.10", ""},
+    {"av1 12 bit", CODEC_AV1, {0, 0, 'a', 'v', '1', 'C', 0, 0x4D, 0x20}, 9, "av01.2.13M.12", ""},
+    {"avc without box", CODEC_H264, {0}, 8, "avc1.640028", ""},
+    {"avc with box", CODEC_H264, {0, 'a', 'v', 'c', 'C', 1, 0x4D, 0x40, 0x1F}, 9, "avc1.4d401f", ""},
+    {"ac-3", CODEC_H264, {'a', 'c', '-', '3'}, 4, "avc1.640028", "ac-3"},
+    {"ec-3", CODEC_H264, {'e', 'c', '-', '3'}, 4, "avc1.640028", "ec-3"},
+    {"opus", CODEC_H264, {'O', 'p', 'u', 's'}, 4, "avc1.640028", "opus"},
+    {"dts core", CODEC_H264, {'d', 't', 's', 'c'}, 4, "avc1.640028", "dtsc"},
+    {"dts hd", CODEC_H264, {'d', 't', 's', 'h'}, 4, "avc1.640028", "dtsh"},
+    {"dts express", CODEC_H264, {'d', 't', 's', 'e'}, 4, "avc1.640028", "dtse"},
+    {"dts lossless", CODEC_H264, {'d', 't', 's', 'l'}, 4, "avc1.640028", "dtsl"},
+    {"truehd", CODEC_H264, {'m', 'l', 'p', 'a'}, 4, "avc1.640028", "mlpa"},
+    {"ac-4", CODEC_H264, {'d', 'a', 'c', '4', 0x01, 0x40}, 6, "avc1.640028", "ac-4.05.00.00"},
+    {"aac lc", CODEC_H264, {'e', 's', 'd', 's', [15] = 0x40, [30] = 0x10}, 32, "avc1.640028", "mp4a.40.2"},
+    {"esds non-aac", CODEC_H264, {'e', 's', 'd', 's', [15] = 0x6B, [30] = 0x10}, 32, "avc1.640028", "mp4a.6B"},
+    {"esds truncated", CODEC_H264, {'e', 's', 'd', 's', [15] = 0x40}, 20, "avc1.640028", ""},
+    {"ac-4 truncated", CODEC_H264, {'d', 'a', 'c', '4', 0x01}, 5, "avc1.640028", ""},
+};
+
+START_TEST(dash_compute_codecs_covers_every_codec_family) {
+  const codec_case_t *cc = &codec_cases[_i];
+  char vcodec[32];
+  char acodec[32];
+
+  dash_compute_codecs(cc->init, cc->init_len, cc->vcodec, vcodec, sizeof vcodec, acodec, sizeof acodec);
+  ck_assert_msg(!strcmp(vcodec, cc->want_v), "%s: video '%s' want '%s'", cc->name, vcodec, cc->want_v);
+  ck_assert_msg(!strcmp(acodec, cc->want_a), "%s: audio '%s' want '%s'", cc->name, acodec, cc->want_a);
+}
+END_TEST
+
+START_TEST(lldash_manifest_advertises_chunked_availability_and_utc_timing) {
+  pid_filter_t f;
+  hls_resp_t r;
+  const uint8_t chunk[64] = {0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p'};
+  no_filter(&f);
+  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
+  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
+  hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, chunk, sizeof chunk, 0.5, 1);
+  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5), 0);
+
+  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 1, "http://t.example/?a=<b>&c=\"d\"'e", 0, &r), 1);
+  ck_assert_int_eq(r.status, 200);
+  ck_assert(memmem(r.body, r.body_len, "availabilityTimeOffset=\"1.500\"", 29) != NULL);
+  ck_assert(memmem(r.body, r.body_len, "availabilityTimeComplete=\"false\"", 31) != NULL);
+  ck_assert(memmem(r.body, r.body_len, "<UTCTiming", 10) != NULL);
+  ck_assert(memmem(r.body, r.body_len, "a=&lt;b&gt;&amp;c=&quot;d&quot;&apos;e", 36) != NULL);
+  hls_resp_body_release(r.body, r.zc);
+
+  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://t.example/", 0, &r), 1);
+  ck_assert(memmem(r.body, r.body_len, "availabilityTimeOffset", 22) == NULL);
+  ck_assert(memmem(r.body, r.body_len, "<UTCTiming", 10) == NULL);
+  hls_resp_body_release(r.body, r.zc);
+}
+END_TEST
+
 START_TEST(dash_compute_codecs_av01_string) {
   static const uint8_t init[] = {0, 0, 0, 0, 'a', 'v', '1', 'C', 0x81, 0x00, 0x0C, 0x00};
   char vcodec[32];
@@ -402,6 +515,8 @@ static Suite *hls_suite(void) {
   tcase_add_test(tc, distinct_ctx_get_distinct_stores);
   tcase_add_test(tc, fmp4_init_segment_roundtrip);
   tcase_add_test(tc, llhls_part_roundtrip);
+  tcase_add_test(tc, llhls_part_with_matching_etag_is_not_modified);
+  tcase_add_test(tc, llhls_lcevc_all_playlist_becomes_a_master_once_pids_are_known);
   tcase_add_test(tc, llhls_finalized_segment_part_still_served);
   tcase_add_test(tc, dash_manifest_and_segment_roundtrip);
   tcase_add_test(tc, store_ready_reflects_pushed_segments);
@@ -409,6 +524,8 @@ static Suite *hls_suite(void) {
   tcase_add_test(tc, seg_pool_cap_and_trim_idle_do_not_crash);
   tcase_add_test(tc, av1_ts_container_playlist_uses_version_7);
   tcase_add_test(tc, dash_compute_codecs_av01_string);
+  tcase_add_loop_test(tc, dash_compute_codecs_covers_every_codec_family, 0, (int)(sizeof codec_cases / sizeof codec_cases[0]));
+  tcase_add_test(tc, lldash_manifest_advertises_chunked_availability_and_utc_timing);
   tcase_add_test(tc, async_retire_oom_keeps_the_snapshot_alive);
   tcase_add_test(tc, async_retire_defers_free_to_the_sweep);
   tcase_add_test(tc, store_close_oom_leaves_the_store_open);

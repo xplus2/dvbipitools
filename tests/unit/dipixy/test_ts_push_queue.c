@@ -9,6 +9,8 @@
 #include <unistd.h>
 
 #include "dipixy/segment/pidlock.h"
+#include "lib/demux/crc32.h"
+#include "lib/demux/psi/psi.h"
 #include "dipixy/ts/ts_push_int.h"
 
 void capture_close(capture_ctx_t *ctx) { (void)ctx; }
@@ -32,10 +34,15 @@ void ws_clients_add_bytes(int handle, size_t n) {
   (void)n;
 }
 
+static int g_pidlock_allow;
+static int g_pidlock_snapshots;
+static int g_pidlock_lcevc_applies;
+
 void pidlock_snapshot(const psi_t *psi, unsigned *allowed, int *n_allowed, int cap) {
   (void)psi;
   (void)allowed;
   (void)cap;
+  g_pidlock_snapshots++;
   *n_allowed = 0;
 }
 
@@ -43,7 +50,7 @@ int pidlock_allowed(const unsigned *allowed, int n_allowed, unsigned pid) {
   (void)allowed;
   (void)n_allowed;
   (void)pid;
-  return 0;
+  return g_pidlock_allow;
 }
 
 void pidlock_apply_lcevc(const lcevc_select_t *lcevc, pid_filter_t *filter, const unsigned *pids, int count) {
@@ -51,6 +58,7 @@ void pidlock_apply_lcevc(const lcevc_select_t *lcevc, pid_filter_t *filter, cons
   (void)filter;
   (void)pids;
   (void)count;
+  g_pidlock_lcevc_applies++;
 }
 
 const unsigned char *pidlock_rewrite_pmt(const psi_t *tp, const pid_filter_t *filter, unsigned char *cc_pmt,
@@ -565,6 +573,187 @@ START_TEST(active_count_tracks_the_counter) {
 }
 END_TEST
 
+#define FEED_PMT_PID 0x100
+#define FEED_VIDEO_PID 0x101
+
+static int g_feed_ctx_marker;
+#define FEED_CTX ((capture_ctx_t *)&g_feed_ctx_marker)
+
+static size_t feed_section(unsigned char *out, unsigned table_id, const unsigned char *body, size_t n) {
+  size_t len = n + 4;
+  uint32_t crc;
+
+  out[0] = (unsigned char)table_id;
+  out[1] = (unsigned char)(0xB0 | ((len >> 8) & 0x0F));
+  out[2] = (unsigned char)len;
+  memcpy(out + 3, body, n);
+  crc = crc32_mpeg(out, 3 + n);
+  for (int i = 0; i < 4; i++) out[3 + n + i] = (unsigned char)(crc >> (24 - 8 * i));
+  return 3 + n + 4;
+}
+
+static void feed_psi_packet(unsigned pid, const unsigned char *sec, size_t slen) {
+  unsigned char pkt[188];
+
+  pkt[0] = 0x47;
+  pkt[1] = (unsigned char)(0x40 | (pid >> 8));
+  pkt[2] = (unsigned char)pid;
+  pkt[3] = 0x10;
+  pkt[4] = 0x00;
+  memcpy(pkt + 5, sec, slen);
+  memset(pkt + 5 + slen, 0xFF, sizeof pkt - 5 - slen);
+  ts_push_feed_pkt(FEED_CTX, pkt);
+}
+
+static void feed_pat_and_pmt(void) {
+  unsigned char body[32];
+  unsigned char sec[64];
+  size_t n = 0;
+
+  body[n++] = 0x00;
+  body[n++] = 0x01;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = 0x01;
+  body[n++] = 0xE0 | (FEED_PMT_PID >> 8);
+  body[n++] = (unsigned char)FEED_PMT_PID;
+  feed_psi_packet(0x0000, sec, feed_section(sec, 0x00, body, n));
+
+  n = 0;
+  body[n++] = 0x00;
+  body[n++] = 0x01;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = 0xE0 | (FEED_VIDEO_PID >> 8);
+  body[n++] = (unsigned char)FEED_VIDEO_PID;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  body[n++] = 0x1B;
+  body[n++] = 0xE0 | (FEED_VIDEO_PID >> 8);
+  body[n++] = (unsigned char)FEED_VIDEO_PID;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  feed_psi_packet(FEED_PMT_PID, sec, feed_section(sec, 0x02, body, n));
+}
+
+static void feed_video_packet(void) {
+  unsigned char pkt[188];
+
+  memset(pkt, 0xAB, sizeof pkt);
+  pkt[0] = 0x47;
+  pkt[1] = FEED_VIDEO_PID >> 8;
+  pkt[2] = FEED_VIDEO_PID & 0xFF;
+  pkt[3] = 0x10;
+  ts_push_feed_pkt(FEED_CTX, pkt);
+}
+
+static ts_sub_t *feed_sub(conn_proto_t proto, int spts) {
+  ts_sub_t *s = attached_sub(0, proto, 3, 0);
+
+  atomic_store(&s->ctx, FEED_CTX);
+  atomic_store(&s->ctx_next, -1);
+  atomic_store(capture_ts_push_head_ptr(FEED_CTX), 0);
+  s->spts = spts;
+  s->spts_locked = 0;
+  s->spts_n_allowed = 0;
+  s->spts_psi = spts ? psi_new() : NULL;
+  s->lcevc_locked = 0;
+  s->filter_psi = NULL;
+  memset(&s->filter, 0, sizeof s->filter);
+  g_pidlock_allow = 0;
+  g_pidlock_snapshots = 0;
+  g_pidlock_lcevc_applies = 0;
+  return s;
+}
+
+START_TEST(spts_feed_drops_everything_until_the_program_locks) {
+  ts_sub_t *a;
+  uint8_t sink[4096];
+
+  ts_push_init(0, 4);
+  a = feed_sub(CONN_PROTO_H1, 1);
+  g_pidlock_allow = 1;
+  feed_video_packet();
+  ck_assert_int_eq(a->spts_locked, 0);
+  ck_assert_uint_eq(byte_ring_read(&a->pkt_ring, sink, sizeof sink), 0u);
+  psi_free(a->spts_psi);
+  a->spts_psi = NULL;
+}
+END_TEST
+
+START_TEST(spts_feed_locks_on_pat_pmt_and_admits_the_locked_program) {
+  ts_sub_t *a;
+  uint8_t sink[4096];
+
+  ts_push_init(0, 4);
+  a = feed_sub(CONN_PROTO_H1, 1);
+  feed_pat_and_pmt();
+  ck_assert_int_eq(a->spts_locked, 1);
+  ck_assert_int_eq(a->lcevc_locked, 1);
+  ck_assert_int_eq(g_pidlock_snapshots, 1);
+  ck_assert_int_eq(g_pidlock_lcevc_applies, 1);
+
+  g_pidlock_allow = 0;
+  feed_video_packet();
+  ck_assert_uint_eq(byte_ring_read(&a->pkt_ring, sink, sizeof sink), 0u);
+
+  g_pidlock_allow = 1;
+  feed_video_packet();
+  ck_assert_uint_eq(byte_ring_read(&a->pkt_ring, sink, sizeof sink), 188u);
+  psi_free(a->spts_psi);
+  a->spts_psi = NULL;
+}
+END_TEST
+
+START_TEST(feed_delivers_to_the_ring_of_the_subscriber_protocol) {
+  static const conn_proto_t protos[] = {CONN_PROTO_H1, CONN_PROTO_H2, CONN_PROTO_H3};
+  conn_proto_t proto = protos[_i];
+  ts_sub_t *a;
+  byte_ring_t *ring;
+  uint8_t sink[4096];
+
+  ts_push_init(0, 4);
+  a = feed_sub(proto, 0);
+  ring = proto == CONN_PROTO_H1 ? &a->pkt_ring : proto == CONN_PROTO_H2 ? &a->h2_ring : &a->h3_ring;
+  feed_video_packet();
+  ck_assert_uint_eq(byte_ring_read(ring, sink, sizeof sink), 188u);
+  ck_assert_uint_eq(sink[0], 0x47u);
+}
+END_TEST
+
+START_TEST(feed_ignores_subscribers_of_unknown_protocol) {
+  ts_sub_t *a;
+  uint8_t sink[4096];
+
+  ts_push_init(0, 4);
+  a = feed_sub((conn_proto_t)99, 0);
+  feed_video_packet();
+  ck_assert_uint_eq(byte_ring_read(&a->pkt_ring, sink, sizeof sink), 0u);
+  ck_assert_uint_eq(byte_ring_read(&a->h2_ring, sink, sizeof sink), 0u);
+  ck_assert_uint_eq(byte_ring_read(&a->h3_ring, sink, sizeof sink), 0u);
+}
+END_TEST
+
+START_TEST(rawaudio_emit_delivers_to_the_ring_of_the_subscriber_protocol) {
+  static const conn_proto_t protos[] = {CONN_PROTO_H1, CONN_PROTO_H2, CONN_PROTO_H3, (conn_proto_t)99};
+  conn_proto_t proto = protos[_i];
+  static const uint8_t payload[] = "audio";
+  ts_sub_t *a;
+  byte_ring_t *ring;
+  uint8_t sink[64];
+  size_t want = proto == (conn_proto_t)99 ? 0 : sizeof payload;
+
+  ts_push_init(0, 4);
+  a = attached_sub(0, proto, 3, 0);
+  ring = proto == CONN_PROTO_H2 ? &a->h2_ring : proto == CONN_PROTO_H3 ? &a->h3_ring : &a->pkt_ring;
+  ts_push_rawaudio_emit(a, payload, sizeof payload);
+  ck_assert_uint_eq(byte_ring_read(ring, sink, sizeof sink), want);
+}
+END_TEST
+
 static Suite *ts_push_queue_suite(void) {
   Suite *s = suite_create("dipixy_ts_push_queue");
   TCase *tc = tcase_create("core");
@@ -590,6 +779,11 @@ static Suite *ts_push_queue_suite(void) {
   tcase_add_loop_test(tc, h2_h3_enqueue_fill_their_own_ring_and_wake_the_reactor, 0, 2);
   tcase_add_loop_test(tc, h2_h3_enqueue_drops_on_a_full_ring_and_ignores_bad_input, 0, 2);
   tcase_add_test(tc, active_count_tracks_the_counter);
+  tcase_add_test(tc, spts_feed_drops_everything_until_the_program_locks);
+  tcase_add_test(tc, spts_feed_locks_on_pat_pmt_and_admits_the_locked_program);
+  tcase_add_loop_test(tc, feed_delivers_to_the_ring_of_the_subscriber_protocol, 0, 3);
+  tcase_add_test(tc, feed_ignores_subscribers_of_unknown_protocol);
+  tcase_add_loop_test(tc, rawaudio_emit_delivers_to_the_ring_of_the_subscriber_protocol, 0, 4);
   suite_add_tcase(s, tc);
   return s;
 }

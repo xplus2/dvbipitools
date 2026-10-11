@@ -86,7 +86,8 @@ typedef struct conn_t {
   time_t last_active;
   size_t req_bytes; /* request bytes consumed from in.buf, incl trailing blank line. reactor_keepalive() preserves pipelined bytes past it */
   _Alignas(64) _Atomic unsigned char want_write; /* EPOLLOUT currently armed for this fd */
-  unsigned char dead;                      /* backpressure tripped: owner must close */
+  unsigned char dead;                      /* backpressure tripped or torn down: owner must close */
+  unsigned char torn_down;                 /* conn_claim_teardown() won, guarded by out_lock */
   _Atomic unsigned char read_done;         /* recv()==0: blocks EPOLLIN re-arm */
   _Atomic unsigned char close_requested;   /* other thread asked owner to close: flush, then teardown */
   int epfd;
@@ -127,15 +128,16 @@ void conn_zc_drain(conn_t *c);
 /* EPOLLIN, +EPOLLOUT if want_out. return value: epoll_ctl's result */
 int conn_epoll_mod(conn_t *c, int epfd, int want_out);
 
-/* claims teardown of c under out_lock: 1 if this call set dead (caller proceeds), 0=sth else already
-   did (caller returns, no-op). must run first on conn/stream/ws/tspush close.
+/* claims teardown of c under out_lock: 1 if this call won (caller proceeds), 0=sth else already
+   did (caller returns, no-op). backpressure doesn't block. must run first on conn/stream/ws/tspush close.
    races a live broadcaster's epoll_ctl safely, no-op double teardown */
 static inline int conn_claim_teardown(conn_t *c) {
   pthread_mutex_lock(&c->out_lock);
-  if (c->dead) {
+  if (c->torn_down) {
     pthread_mutex_unlock(&c->out_lock);
     return 0;
   }
+  c->torn_down = 1;
   c->dead = 1;
   pthread_mutex_unlock(&c->out_lock);
   return 1;

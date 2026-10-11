@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "lib/config/yamlcfg.h"
+#include "lib/helper/log.h"
 
 #include "dipixy/cli/args.h"
 
@@ -1563,6 +1564,158 @@ START_TEST(inspect_ts_from_yaml) {
 }
 END_TEST
 
+START_TEST(out_of_range_option_values_are_rejected) {
+  static const char *const cases[][2] = {
+      {"-L", "bogus"},
+      {"--max-channels", "0"},
+      {"--max-channels", "1025"},
+      {"--idle-timeout", "86401"},
+      {"--capture-ring-size", "0"},
+      {"--ts-startup-timeout", "-1"},
+      {"--ts-startup-timeout", "abc"},
+      {"--sds-refresh-interval", "0"},
+      {"--sds-refresh-interval", "x"},
+      {"--ssdp-interval", "0"},
+      {"--ssdp-max-age", "0"},
+      {"--ssdp-max-age", "1"},
+      {"--hls-seg-pool", "0"},
+      {"--dash-utc-url", "placeholder"},
+  };
+  char longurl[300];
+
+  memset(longurl, 'u', sizeof longurl);
+  longurl[sizeof longurl - 1] = '\0';
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+    const char *val = cases[i][1];
+    char *argv[] = {"dipixy", (char *)cases[i][0], (char *)val, NULL};
+    config_t cfg = {0};
+    if (!strcmp(cases[i][0], "--dash-utc-url"))
+      argv[2] = longurl;
+    ck_assert_msg(args_parse(ARGC(argv), argv, &cfg) == ARGS_ERR, "%s %s accepted", argv[1], argv[2]);
+    yamlcfg_strpool_free(cfg.str_pool);
+  }
+}
+END_TEST
+
+START_TEST(server_limits_are_recorded) {
+  char *argv[] = {"dipixy", "--max-channels", "64", "--idle-timeout", "0", "--capture-ring-size", "512", "--ts-startup-timeout", "0", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.max_channels, 64);
+  ck_assert_uint_eq(cfg.idle_timeout_s, 0u);
+  ck_assert_uint_eq(cfg.capture_ring_kib, 512u);
+  ck_assert_double_eq_tol(cfg.ts_startup_timeout_s, 0.0, 1e-9);
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(sds_and_ssdp_timing_is_recorded) {
+  char *argv[] = {"dipixy", "--sds-timeout", "7", "--sds-refresh-interval", "45", "--ssdp-interval", "10", "--ssdp-max-age", "30", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_double_eq_tol(cfg.sds_timeout_s, 7.0, 1e-9);
+  ck_assert_double_eq_tol(cfg.sds_refresh_interval_s, 45.0, 1e-9);
+  ck_assert_double_eq_tol(cfg.ssdp_interval_s, 10.0, 1e-9);
+  ck_assert_uint_eq(cfg.ssdp_max_age_s, 30u);
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(stream_and_status_options_are_recorded) {
+  char *argv[] = {"dipixy", "--hls-seg-pool", "16", "--dash-utc-url", "http://time.example/utc", "--status-tpl", "/srv/status.html", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.hls_seg_pool, 16);
+  ck_assert_str_eq(cfg.dash_utc_url, "http://time.example/utc");
+  ck_assert_str_eq(cfg.status_template, "/srv/status.html");
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(disable_flags_are_recorded) {
+  char *argv[] = {"dipixy", "--no-lcevc", "--no-fcc", "--no-ret", "--no-al-fec", "--no-http2", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.no_lcevc, 1);
+  ck_assert_int_eq(cfg.no_fcc, 1);
+  ck_assert_int_eq(cfg.no_ret, 1);
+  ck_assert_int_eq(cfg.no_al_fec, 1);
+  ck_assert_int_eq(cfg.no_http2, 1);
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(general_flags_are_recorded) {
+  char *argv[] = {"dipixy", "-k", "-v", "--color", "always", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.insecure_tls, 1);
+  ck_assert_int_eq(cfg.verbose, 1);
+  ck_assert_int_eq(cfg.color_mode, LOG_COLOR_ALWAYS);
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(unknown_option_is_rejected) {
+  char *argv[] = {"dipixy", "--no-such-option", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(overlong_credentials_are_rejected) {
+  char creds[200];
+  char *argv[] = {"dipixy", "--auth", creds, NULL};
+  char *margv[] = {"dipixy", "--metrics-auth", creds, NULL};
+  config_t cfg = {0};
+
+  memset(creds, 'p', sizeof creds);
+  creds[0] = 'u';
+  creds[1] = ':';
+  creds[sizeof creds - 1] = '\0';
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(margv), margv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(ssdp_max_age_below_twice_interval_is_rejected) {
+  char *argv[] = {"dipixy", "--ssdp-interval", "10", "--ssdp-max-age", "15", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(enable_dlna_falls_back_to_concrete_v6_listen) {
+  char *argv[] = {"dipixy", "-l", "[2001:db8::1]:9080", "--enable-dlna", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.dlna_host, "[2001:db8::1]:9080");
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(enable_dlna_rejects_overlong_host) {
+  char host[200];
+  char *argv[] = {"dipixy", "--enable-dlna", "--dlna-host", host, NULL};
+  config_t cfg = {0};
+  memset(host, 'h', sizeof host);
+  host[sizeof host - 1] = '\0';
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipixy_args");
   TCase *tc = tcase_create("core");
@@ -1711,6 +1864,17 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, inspect_ts_requires_metrics_id);
   tcase_add_test(tc, inspect_ts_rejects_unknown_level);
   tcase_add_test(tc, inspect_ts_from_yaml);
+  tcase_add_test(tc, out_of_range_option_values_are_rejected);
+  tcase_add_test(tc, server_limits_are_recorded);
+  tcase_add_test(tc, sds_and_ssdp_timing_is_recorded);
+  tcase_add_test(tc, stream_and_status_options_are_recorded);
+  tcase_add_test(tc, disable_flags_are_recorded);
+  tcase_add_test(tc, general_flags_are_recorded);
+  tcase_add_test(tc, unknown_option_is_rejected);
+  tcase_add_test(tc, overlong_credentials_are_rejected);
+  tcase_add_test(tc, ssdp_max_age_below_twice_interval_is_rejected);
+  tcase_add_test(tc, enable_dlna_falls_back_to_concrete_v6_listen);
+  tcase_add_test(tc, enable_dlna_rejects_overlong_host);
   suite_add_tcase(s, tc);
   return s;
 }

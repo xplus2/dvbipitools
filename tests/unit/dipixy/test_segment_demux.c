@@ -104,6 +104,29 @@ START_TEST(fragmented_containers_also_lock_the_audio_track) {
 }
 END_TEST
 
+static const struct {
+  unsigned stream_type;
+  codec_t codec;
+} audio_stream_types[] = {
+    {0x03, CODEC_MP2A},
+    {0x11, CODEC_AAC_LATM},
+    {0x81, CODEC_AC3},
+    {0x87, CODEC_EAC3},
+};
+
+START_TEST(fragmented_containers_lock_every_supported_audio_codec) {
+  const unsigned es[2][2] = {{ST_H264, VIDEO_PID}, {audio_stream_types[_i].stream_type, AUDIO_PID}};
+  seg_t g;
+  pid_filter_t none = {0};
+
+  seg_open(&g, &none, SEG_CONTAINER_FMP4);
+  feed_programme(&g, es, 2);
+  ck_assert_int_eq(g.s->demux.audio_pid_known, 1);
+  ck_assert_int_eq(g.s->demux.audio_codec, audio_stream_types[_i].codec);
+  seg_close(&g);
+}
+END_TEST
+
 START_TEST(only_the_locked_programs_pids_are_buffered) {
   seg_t g;
   pid_filter_t none = {0};
@@ -414,6 +437,7 @@ static Suite *demux_suite(void) {
   tcase_set_timeout(tc, 30);
   tcase_add_test(tc, program_lock_picks_pids_and_drops_the_probe_phase);
   tcase_add_test(tc, fragmented_containers_also_lock_the_audio_track);
+  tcase_add_loop_test(tc, fragmented_containers_lock_every_supported_audio_codec, 0, 4);
   tcase_add_test(tc, only_the_locked_programs_pids_are_buffered);
   tcase_add_test(tc, excluded_pids_never_reach_discovery_or_the_buffer);
   tcase_add_test(tc, program_without_video_never_locks);

@@ -416,7 +416,8 @@ typedef enum { BODY_FRAMING_OK, BODY_FRAMING_BAD, BODY_FRAMING_UNSUPPORTED } bod
 
 /* strict: single all-digit Content-Length, no Transfer-Encoding. else BAD (TE+CL) or UNSUPPORTED (TE) */
 static body_framing_t request_body_len(const struct phr_header *headers, size_t num_headers, size_t *body_len) {
-  int have_cl = 0, have_te = 0;
+  int have_cl = 0;
+  int have_te = 0;
   *body_len = 0;
   for (size_t i = 0; i < num_headers; i++) {
     const struct phr_header *h = &headers[i];

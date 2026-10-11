@@ -988,6 +988,13 @@ dvbipitools_add_unit_test(lib_net_tls_server_stub
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_server_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
+dvbipitools_add_unit_test(lib_scrambler_stubs
+    unit/lib/scrambler/test_stubs.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
 find_package(OpenSSL)
 if (OpenSSL_FOUND)
     dvbipitools_add_unit_test(lib_scrambler_cissa
@@ -5384,6 +5391,10 @@ dvbipitools_add_unit_test(dipixy_conn
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_threadlocal_stub.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+
+dvbipitools_add_unit_test(dipixy_tls_stub
+    unit/dipixy/test_tls_stub.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tls_stub.c)
 
 dvbipitools_add_unit_test(dipixy_conn_concurrency
     unit/dipixy/test_conn_concurrency.c

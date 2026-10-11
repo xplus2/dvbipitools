@@ -372,10 +372,10 @@ int conn_queue_zc(conn_t *c, const void *data, size_t len, conn_zc_release_fn re
 /* credit overlap of completed range [lo,hi] (u32, wrapping) to each awaiting chunk */
 static void zc_credit(uint32_t lo, uint32_t hi, void *arg) {
   conn_t *c = arg;
-  int64_t len = (int64_t)(uint32_t)(hi - lo) + 1;
+  int64_t len = (int64_t)(hi - lo) + 1;
   for (int i = 0; i < c->zc_await_count; i++) {
     conn_zc_await_t *a = &c->zc_await[i];
-    int64_t start = (int32_t)(uint32_t)(lo - a->id_lo); /* relative to chunk start, may be negative */
+    int64_t start = (int32_t)(lo - a->id_lo); /* relative to chunk start, may be negative */
     int64_t from = start > 0 ? start : 0;
     int64_t to = start + len < (int64_t)a->ids ? start + len : (int64_t)a->ids;
     if (to > from) a->done += (uint32_t)(to - from);

@@ -20,7 +20,9 @@
 #define RECV_BUF 65536
 
 typedef struct {
-  unsigned payload_id, segment_id, version;
+  unsigned payload_id;
+  unsigned segment_id;
+  unsigned version;
   sds_service_t *entries; /* NULL for xml output */
   int count;
   unsigned char *xml; /* NULL unless xml output */
@@ -77,7 +79,8 @@ int listen_run(const config_t *cfg) {
   dvbstp_reasm_t *r;
   listen_seg_t segs[LISTEN_SEEN_MAX];
   int seg_count = 0;
-  unsigned received = 0, total_services = 0;
+  unsigned received = 0;
+  unsigned total_services = 0;
   double deadline;
 
   mcast_describe(cfg, mcast, sizeof mcast);
@@ -116,7 +119,9 @@ int listen_run(const config_t *cfg) {
 
     {
       sds_service_t entries[SDS_MAX_SERVICES];
-      int count, truncated, stored;
+      int count;
+      int truncated;
+      int stored;
       count = sds_parse_broadcast((const char *)data, entries, SDS_MAX_SERVICES, &truncated);
       stored = cfg->format == OUT_XML ? seg_store(segs, &seg_count, &hdr, NULL, count, data, len)
                                       : seg_store(segs, &seg_count, &hdr, entries, count, NULL, 0);

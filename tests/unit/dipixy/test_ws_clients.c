@@ -5,7 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 
+#include "dipixy/ws/ws_broadcast.h"
 #include "dipixy/ws/ws_clients.h"
 #include "dipixy/ws/ws_clients_int.h"
 
@@ -289,6 +292,30 @@ START_TEST(removed_slots_are_rehashed_and_survivors_still_resolve) {
 }
 END_TEST
 
+START_TEST(rehash_keeps_every_survivor_resolvable) {
+  enum { N = 8 };
+  char ip[N][16];
+  client_info_t info[N];
+  int h[N];
+
+  ws_clients_init(N);
+  for (int i = 0; i < N; i++) {
+    snprintf(ip[i], sizeof ip[i], "10.8.0.%d", i + 1);
+    info[i] = make_info(ip[i]);
+    h[i] = ws_clients_touch(&info[i]);
+    ck_assert_int_ge(h[i], 0);
+  }
+  for (int i = 0; i < N / 2; i++) ws_clients_remove(h[i]);
+  for (int i = 0; i < g_stripe_count; i++) {
+    pthread_mutex_lock(&g_stripes[i].lock);
+    stripe_rehash_if_needed(&g_stripes[i]);
+    pthread_mutex_unlock(&g_stripes[i].lock);
+  }
+  for (int i = N / 2; i < N; i++) ck_assert_int_eq(ws_clients_touch(&info[i]), h[i]);
+  for (int i = 0; i < N / 2; i++) ck_assert_int_ge(ws_clients_touch(&info[i]), 0);
+}
+END_TEST
+
 START_TEST(remove_and_add_bytes_ignore_out_of_range_handles) {
   client_info_t info = make_info("10.0.0.1");
   int h;
@@ -299,6 +326,156 @@ START_TEST(remove_and_add_bytes_ignore_out_of_range_handles) {
   ws_clients_remove(1000);
   ws_clients_add_bytes(1000, 5);
   ck_assert_int_eq(ws_clients_touch(&info), h);
+}
+END_TEST
+
+static uint8_t g_sink_buf[16384];
+static size_t g_sink_len;
+
+static void capture_sink(void *ctx, const uint8_t *frame, size_t frame_len) {
+  (void)ctx;
+  if (g_sink_len + frame_len > sizeof g_sink_buf) return;
+  memcpy(g_sink_buf + g_sink_len, frame, frame_len);
+  g_sink_len += frame_len;
+}
+
+static int sink_has(const char *needle) {
+  return memmem(g_sink_buf, g_sink_len, needle, strlen(needle)) != NULL;
+}
+
+static void sink_attach(void) {
+  g_sink_len = 0;
+  ws_broadcast_register(capture_sink, NULL);
+}
+
+static int slot_of_pull_client(void) {
+  for (int i = 0; i < g_clients_cap; i++)
+    if (g_clients[i].used && !g_clients[i].persistent) return i;
+  return -1;
+}
+
+START_TEST(every_route_format_has_a_json_name) {
+  static const struct {
+    route_fmt_t fmt;
+    const char *name;
+  } fmts[] = {
+      {ROUTE_FMT_TS, "\"fmt\":\"ts\""},
+      {ROUTE_FMT_SPTS, "\"fmt\":\"spts\""},
+      {ROUTE_FMT_HLS, "\"fmt\":\"hls\""},
+      {ROUTE_FMT_HLS_FMP4, "\"fmt\":\"hls-fmp4\""},
+      {ROUTE_FMT_LLHLS, "\"fmt\":\"llhls\""},
+      {ROUTE_FMT_DASH, "\"fmt\":\"dash\""},
+      {ROUTE_FMT_LLDASH, "\"fmt\":\"lldash\""},
+      {ROUTE_FMT_RAWAUDIO, "\"fmt\":\"rawaudio\""},
+      {ROUTE_FMT_MP4, "\"fmt\":\"mp4\""},
+  };
+  size_t n = sizeof fmts / sizeof fmts[0];
+  char *snap = NULL;
+
+  ws_clients_init((int)n);
+  for (size_t i = 0; i < n; i++) {
+    client_info_t info = make_info("10.1.0.1");
+    info.fmt = fmts[i].fmt;
+    ck_assert_int_ge(ws_clients_add_persistent(&info), 0);
+  }
+  ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);
+  for (size_t i = 0; i < n; i++)
+    ck_assert_msg(strstr(snap, fmts[i].name) != NULL, "missing %s", fmts[i].name);
+}
+END_TEST
+
+START_TEST(add_and_remove_are_published_to_sinks) {
+  client_info_t info = make_info("10.2.0.1");
+  int h;
+
+  ws_clients_init(4);
+  sink_attach();
+  h = ws_clients_add_persistent(&info);
+  ck_assert_int_ge(h, 0);
+  ck_assert(sink_has("\"type\":\"clients.add\""));
+  ck_assert(sink_has("10.2.0.1"));
+
+  g_sink_len = 0;
+  ws_clients_remove(h);
+  ck_assert(sink_has("\"type\":\"clients.remove\""));
+}
+END_TEST
+
+START_TEST(tick_reports_rate_for_active_clients) {
+  client_info_t info = make_info("10.3.0.1");
+  struct timespec ts = {0, 20 * 1000 * 1000};
+  int h;
+
+  ws_clients_init(4);
+  h = ws_clients_add_persistent(&info);
+  ck_assert_int_ge(h, 0);
+  sink_attach();
+
+  ws_clients_tick();
+  ck_assert(sink_has("\"type\":\"clients.tick\""));
+
+  g_sink_len = 0;
+  ws_clients_add_bytes(h, 1000000);
+  nanosleep(&ts, NULL);
+  ws_clients_tick();
+  ck_assert(sink_has("\"type\":\"clients.tick\""));
+  ck_assert(sink_has("\"mbps\":"));
+  ck_assert(!sink_has("\"mbps\":0.000"));
+}
+END_TEST
+
+START_TEST(tick_expires_idle_pull_clients) {
+  client_info_t info = make_info("10.4.0.1");
+  char *snap = NULL;
+  char want[32];
+  int idx;
+
+  ws_clients_init(4);
+  ck_assert_int_ge(ws_clients_touch(&info), 0);
+  idx = slot_of_pull_client();
+  ck_assert_int_ge(idx, 0);
+  g_clients[idx].last_seen = time(NULL) - 3600;
+  sink_attach();
+
+  ws_clients_tick();
+  ck_assert(sink_has("\"type\":\"clients.remove_many\""));
+  snprintf(want, sizeof want, "\"ids\":[%d]", idx);
+  ck_assert(sink_has(want));
+  ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);
+  ck_assert(strstr(snap, "10.4.0.1") == NULL);
+}
+END_TEST
+
+START_TEST(tick_keeps_persistent_clients_however_idle) {
+  client_info_t info = make_info("10.5.0.1");
+  char *snap = NULL;
+  int h;
+
+  ws_clients_init(4);
+  h = ws_clients_add_persistent(&info);
+  ck_assert_int_ge(h, 0);
+  g_clients[h & 0xFFFFF].last_seen = time(NULL) - 3600;
+
+  ws_clients_tick();
+  ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);
+  ck_assert(strstr(snap, "10.5.0.1") != NULL);
+}
+END_TEST
+
+START_TEST(tick_without_sinks_still_expires_idle_clients) {
+  client_info_t info = make_info("10.6.0.1");
+  char *snap = NULL;
+  int idx;
+
+  ws_clients_init(4);
+  ck_assert_int_ge(ws_clients_touch(&info), 0);
+  idx = slot_of_pull_client();
+  ck_assert_int_ge(idx, 0);
+  g_clients[idx].last_seen = time(NULL) - 3600;
+
+  ws_clients_tick();
+  ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);
+  ck_assert(strstr(snap, "10.6.0.1") == NULL);
 }
 END_TEST
 
@@ -318,7 +495,14 @@ static Suite *ws_clients_suite(void) {
   tcase_add_test(tc, persistent_clients_are_never_matched_by_touch);
   tcase_add_test(tc, persistent_registrations_fill_up_and_release_slots);
   tcase_add_test(tc, removed_slots_are_rehashed_and_survivors_still_resolve);
+  tcase_add_test(tc, rehash_keeps_every_survivor_resolvable);
   tcase_add_test(tc, remove_and_add_bytes_ignore_out_of_range_handles);
+  tcase_add_test(tc, every_route_format_has_a_json_name);
+  tcase_add_test(tc, add_and_remove_are_published_to_sinks);
+  tcase_add_test(tc, tick_reports_rate_for_active_clients);
+  tcase_add_test(tc, tick_expires_idle_pull_clients);
+  tcase_add_test(tc, tick_keeps_persistent_clients_however_idle);
+  tcase_add_test(tc, tick_without_sinks_still_expires_idle_clients);
   suite_add_tcase(s, tc);
   return s;
 }

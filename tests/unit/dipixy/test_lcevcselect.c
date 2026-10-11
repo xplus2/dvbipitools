@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <string.h>
 #include <stdlib.h>
 
 #include "dipixy/ts/lcevcselect.h"
@@ -175,6 +176,29 @@ START_TEST(equal_treats_all_as_distinct_from_full) {
 }
 END_TEST
 
+START_TEST(format_names_every_mode) {
+  static const struct {
+    lcevc_select_t sel;
+    const char *want;
+  } cases[] = {
+      {{LCEVC_SEL_BASE, 0, 0}, "base"},
+      {{LCEVC_SEL_ALL, 0, 0}, "all"},
+      {{LCEVC_SEL_N, 2, 0}, "2"},
+      {{LCEVC_SEL_N, 4096, 1}, "4096"},
+      {{LCEVC_SEL_FULL, 0, 0}, ""},
+  };
+  char buf[16];
+
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+    memset(buf, 'x', sizeof buf);
+    lcevc_select_format(&cases[i].sel, buf, sizeof buf);
+    ck_assert_str_eq(buf, cases[i].want);
+  }
+  lcevc_select_format(&cases[0].sel, buf, 0);
+  ck_assert_int_eq(buf[0], '\0');
+}
+END_TEST
+
 static Suite *lcevcselect_suite(void) {
   Suite *s = suite_create("dipixy_lcevcselect");
   TCase *tc = tcase_create("core");
@@ -200,6 +224,7 @@ static Suite *lcevcselect_suite(void) {
   tcase_add_test(tc, equal_rejects_same_n_different_form);
   tcase_add_test(tc, equal_rejects_different_mode_even_with_same_n);
   tcase_add_test(tc, equal_treats_all_as_distinct_from_full);
+  tcase_add_test(tc, format_names_every_mode);
   suite_add_tcase(s, tc);
   return s;
 }

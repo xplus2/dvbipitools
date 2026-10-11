@@ -1815,7 +1815,7 @@ UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_sys_signal lib
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild lib_demux_fmp4_box lib_demux_fmp4_track lib_demux_fmp4_sample lib_mux_esbuild lib_mux_esbuild_pes lib_mux_esbuild_pmtbuild lib_mux_esbuild_remux \
-	lib_net_netconnect lib_net_tssink lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_httpclient_fetch lib_net_httpclient_headers lib_net_httpclient_redirect lib_net_tssource_async lib_net_tssource_http_dispatch lib_net_tssource_dash_fmp4 lib_net_tssource_file lib_net_retryset lib_net_tls_server_stub dipitvhead_mpts dipitvhead_retryset_adapter dipitvhead_single lib_net_dvbstp \
+	lib_net_netconnect lib_net_tssink lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_httpclient_fetch lib_net_httpclient_headers lib_net_httpclient_redirect lib_net_tssource_async lib_net_tssource_http_dispatch lib_net_tssource_dash_fmp4 lib_net_tssource_file lib_net_retryset lib_net_tls_server_stub lib_scrambler_stubs dipitvhead_mpts dipitvhead_retryset_adapter dipitvhead_single lib_net_dvbstp \
 	lib_mux_mpts \
 	lib_cas_cas_group \
 	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec \
@@ -6031,6 +6031,14 @@ lib_net_tls_server_stub_SRCS := \
 	src/lib/net/tls_server_stub.c \
 	src/lib/helper/log.c
 
+lib_scrambler_stubs_BIN := tests/unit/lib/scrambler/test_stubs
+lib_scrambler_stubs_SRCS := \
+	tests/unit/lib/scrambler/test_stubs.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/helper/log.c
+
 lib_net_dvbstp_BIN := tests/unit/lib/net/test_dvbstp
 lib_net_dvbstp_SRCS := \
 	tests/unit/lib/net/test_dvbstp.c \
@@ -6703,7 +6711,7 @@ dipifccret_e2e_SRCS := \
 dipifccret_e2e_EXTRA_CFLAGS := -pthread
 dipifccret_e2e_EXTRA_LDFLAGS := -pthread -latomic
 
-UNIT_TESTS += dipixy_args dipixy_config dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_status dipixy_htdocs dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_ssdp dipixy_conn dipixy_conn_concurrency dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_segstore_reclaim dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_config dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_status dipixy_htdocs dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_ssdp dipixy_conn dipixy_conn_concurrency dipixy_tls_stub dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_segstore_reclaim dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
@@ -7356,6 +7364,11 @@ dipixy_conn_SRCS := \
 	src/dipixy/reactor/reactor_threadlocal_stub.c \
 	src/dipixy/reactor/qsbr.c \
 	src/lib/helper/log.c
+
+dipixy_tls_stub_BIN := tests/unit/dipixy/test_tls_stub
+dipixy_tls_stub_SRCS := \
+	tests/unit/dipixy/test_tls_stub.c \
+	src/dipixy/reactor/reactor_tls_stub.c
 
 dipixy_conn_concurrency_BIN := tests/unit/dipixy/test_conn_concurrency
 dipixy_conn_concurrency_SRCS := \

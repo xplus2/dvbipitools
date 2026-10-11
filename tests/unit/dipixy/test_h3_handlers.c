@@ -542,8 +542,11 @@ static void pes_packet(unsigned char pkt[TS_PKT], unsigned pid, unsigned cc, con
 }
 
 static void feed_rawaudio_psi(capture_ctx_t *ctx, unsigned pmt_pid, unsigned pid1, unsigned pid2) {
-  unsigned char body[24], sec[48], pkt[TS_PKT];
-  size_t n = 0, slen;
+  unsigned char body[24];
+  unsigned char sec[48];
+  unsigned char pkt[TS_PKT];
+  size_t n = 0;
+  size_t slen;
   const unsigned es[2] = {pid1, pid2};
 
   body[n++] = 0x00;
@@ -595,7 +598,7 @@ static int subscribe_rawaudio_excluding(capture_ctx_t *ctx, unsigned pmt_pid, un
 static void clobber_stack(void) {
   volatile unsigned char junk[4096];
 
-  memset((void *)junk, 0xA5, sizeof junk);
+  for (size_t i = 0; i < sizeof junk; i++) junk[i] = 0xA5;
 }
 
 START_TEST(rawaudio_subscription_keeps_its_own_pid_filter) {

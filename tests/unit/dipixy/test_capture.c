@@ -348,6 +348,173 @@ START_TEST(stdin_source_is_shared_once_initialised) {
 }
 END_TEST
 
+START_TEST(reader_that_falls_behind_loses_the_oldest_bytes) {
+  enum { DGRAM = 1316, SENDS = 6 };
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.5", 15805, NULL, 1);
+  capture_ctx_t *cap;
+  capture_reader_t *r;
+  unsigned char dgram[DGRAM], out[4 * DGRAM];
+  size_t n;
+
+  capture_set_ring_cap(2 * DGRAM);
+  cap = capture_open(AF_INET, "239.8.8.5", NULL, 15805, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ck_assert_ptr_nonnull(send);
+  ck_assert_ptr_nonnull(cap);
+  r = capture_reader_open(cap);
+  ck_assert_ptr_nonnull(r);
+
+  for (int i = 0; i < SENDS; i++) {
+    for (size_t k = 0; k < sizeof dgram; k += 188) make_ts_packet(dgram + k, (unsigned char)(i + 1));
+    ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), DGRAM);
+    usleep(2000);
+  }
+  for (int i = 0; i < 40; i++) {
+    capture_service(cap);
+    usleep(2000);
+  }
+  n = capture_reader_read(r, out, sizeof out);
+  ck_assert_uint_eq(n, (size_t)(2 * DGRAM));
+  ck_assert_uint_gt(capture_reader_dropped(r), 0u);
+  ck_assert_uint_eq(out[2], (unsigned char)(SENDS - 1));
+  ck_assert_uint_eq(out[DGRAM + 2], (unsigned char)SENDS);
+
+  capture_reader_close(r);
+  mcast_close(send);
+  capture_close(cap);
+}
+END_TEST
+
+START_TEST(datagram_larger_than_the_ring_keeps_only_its_tail) {
+  enum { DGRAM = 1316, RING = 564 };
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.6", 15806, NULL, 1);
+  capture_ctx_t *cap;
+  capture_reader_t *r;
+  unsigned char dgram[DGRAM], out[2 * DGRAM];
+
+  capture_set_ring_cap(RING);
+  cap = capture_open(AF_INET, "239.8.8.6", NULL, 15806, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ck_assert_ptr_nonnull(send);
+  ck_assert_ptr_nonnull(cap);
+  r = capture_reader_open(cap);
+  for (size_t i = 0; i < sizeof dgram; i++) dgram[i] = (unsigned char)i;
+  ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), DGRAM);
+
+  ck_assert_uint_eq(drain(cap, r, out, sizeof out), (size_t)RING);
+  ck_assert_int_eq(memcmp(out, dgram + DGRAM - RING, RING), 0);
+
+  capture_reader_close(r);
+  mcast_close(send);
+  capture_close(cap);
+}
+END_TEST
+
+typedef struct {
+  int listen_fd;
+  size_t chunk;
+  size_t total;
+} chunked_server_t;
+
+static void *chunked_stream_server_thread(void *arg) {
+  chunked_server_t *s = arg;
+  static const char resp[] = "HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\n\r\n";
+  unsigned char body[188 * 4];
+  int fd = accept(s->listen_fd, NULL, NULL);
+
+  if (fd < 0) return NULL;
+  for (size_t k = 0; k < sizeof body; k += 188) make_ts_packet(body + k, (unsigned char)(k / 188));
+  send(fd, resp, sizeof resp - 1, MSG_NOSIGNAL);
+  for (size_t off = 0; off < s->total; off += s->chunk) {
+    size_t n = s->total - off < s->chunk ? s->total - off : s->chunk;
+
+    send(fd, body + off, n, MSG_NOSIGNAL);
+    usleep(20000);
+  }
+  usleep(500000);
+  close(fd);
+  return NULL;
+}
+
+typedef struct {
+  unsigned count;
+  unsigned char marks[8];
+} sink_count_t;
+
+static void count_sink(void *user, const unsigned char *pkt) {
+  sink_count_t *c = user;
+
+  if (c->count < sizeof c->marks) c->marks[c->count] = pkt[2];
+  c->count++;
+}
+
+START_TEST(http_stream_reassembles_packets_split_across_reads) {
+  struct sockaddr_in addr;
+  socklen_t addrlen = sizeof addr;
+  int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+  pthread_t tid;
+  chunked_server_t srv;
+  sink_count_t got;
+  char url[64];
+  capture_ctx_t *cap;
+
+  ck_assert_int_ge(listen_fd, 0);
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ck_assert_int_eq(bind(listen_fd, (struct sockaddr *)&addr, sizeof addr), 0);
+  ck_assert_int_eq(listen(listen_fd, 1), 0);
+  ck_assert_int_eq(getsockname(listen_fd, (struct sockaddr *)&addr, &addrlen), 0);
+  snprintf(url, sizeof url, "http://127.0.0.1:%u/stream", (unsigned)ntohs(addr.sin_port));
+  srv.listen_fd = listen_fd;
+  srv.chunk = 100;
+  srv.total = 188 * 3 + 50;
+  ck_assert_int_eq(pthread_create(&tid, NULL, chunked_stream_server_thread, &srv), 0);
+
+  memset(&got, 0, sizeof got);
+  cap = capture_open_http_static(url, 0);
+  ck_assert_ptr_nonnull(cap);
+  for (int i = 0; i < 100 && got.count < 3; i++) {
+    capture_drain(cap, count_sink, &got);
+    usleep(10000);
+  }
+  ck_assert_uint_eq(got.count, 3u);
+  ck_assert_uint_eq(got.marks[0], 0u);
+  ck_assert_uint_eq(got.marks[1], 1u);
+  ck_assert_uint_eq(got.marks[2], 2u);
+
+  capture_close(cap);
+  pthread_join(tid, NULL);
+  close(listen_fd);
+}
+END_TEST
+
+START_TEST(rtp_source_drain_unwraps_and_skips_non_rtp_datagrams) {
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.7", 15807, NULL, 1);
+  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.7", NULL, 15807, NULL, 1, NULL, NULL, NULL, 0, 0);
+  unsigned char junk[188];
+  unsigned char rtp[12 + 188];
+  sink_count_t got;
+
+  ck_assert_ptr_nonnull(send);
+  ck_assert_ptr_nonnull(cap);
+  make_ts_packet(junk, 1);
+  ck_assert_int_eq(mcast_send(send, junk, sizeof junk), (int)sizeof junk);
+  make_rtp_header(rtp);
+  make_ts_packet(rtp + 12, 5);
+  ck_assert_int_eq(mcast_send(send, rtp, sizeof rtp), (int)sizeof rtp);
+
+  memset(&got, 0, sizeof got);
+  for (int i = 0; i < 40 && got.count < 1; i++) {
+    capture_drain(cap, count_sink, &got);
+    usleep(5000);
+  }
+  ck_assert_uint_eq(got.count, 1u);
+  ck_assert_uint_eq(got.marks[0], 5u);
+
+  mcast_close(send);
+  capture_close(cap);
+}
+END_TEST
+
 static Suite *capture_suite(void) {
   Suite *s = suite_create("dipixy_capture");
   TCase *tc = tcase_create("core");
@@ -363,6 +530,10 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, srt_open_to_a_closed_port_fails);
   tcase_add_test(tc, rist_source_is_optional);
   tcase_add_test(tc, stdin_source_is_shared_once_initialised);
+  tcase_add_test(tc, reader_that_falls_behind_loses_the_oldest_bytes);
+  tcase_add_test(tc, datagram_larger_than_the_ring_keeps_only_its_tail);
+  tcase_add_test(tc, http_stream_reassembles_packets_split_across_reads);
+  tcase_add_test(tc, rtp_source_drain_unwraps_and_skips_non_rtp_datagrams);
   suite_add_tcase(s, tc);
   return s;
 }

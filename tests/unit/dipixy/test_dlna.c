@@ -484,6 +484,155 @@ START_TEST(list_direct_children_item_title_uses_index_and_channel_name) {
 }
 END_TEST
 
+START_TEST(keep_multicast_rtp_item_keeps_ssm_source) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+  char path[160], *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  write_temp_file(path, "m3u", "#EXTINF:-1,SSM Channel\nrtp://10.9.9.9@239.1.1.1:5000\n");
+  ch = build_single_list(&cfg, &src, SRC_M3U, path);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+  cfg.dlna_keep_multicast = 1;
+
+  ck_assert_int_eq(browse(&cfg, ch, "L1I1", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "rtp://10.9.9.9@239.1.1.1:5000"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(item_metadata_carries_the_channel_icon) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+  char path[160], *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  write_temp_file(path, "m3u", "#EXTINF:-1 tvg-logo=\"http://img.example/a.png?x=1&y=2\",Icon Channel\nrtp://@239.1.1.1:5000\n");
+  ch = build_single_list(&cfg, &src, SRC_M3U, path);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "L1I1", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "albumArtURI"));
+  ck_assert_ptr_nonnull(strstr(out, "http://img.example/a.png?x=1&amp;amp;y=2"));
+
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(unnamed_http_source_metadata_uses_ordinal_title) {
+  config_t cfg;
+  source_def_t sources[1];
+  channels_t *ch;
+  char *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  ch = channels_build(&cfg);
+  ck_assert_ptr_nonnull(ch);
+  memset(sources, 0, sizeof sources);
+  sources[0].kind = SRC_HTTP;
+  sources[0].value = "http://example.invalid/list.m3u";
+  sources[0].ordinal = 1;
+  sources[0].media_type = MEDIA_TV;
+  cfg.sources = sources;
+  cfg.n_sources = 1;
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  ck_assert_int_eq(browse(&cfg, ch, "H1", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "#1 "));
+
+  channels_free(ch);
+}
+END_TEST
+
+typedef struct {
+  const char *objid;
+  int want_status;
+} direct_case_t;
+
+START_TEST(direct_children_of_leaf_objects_are_empty_and_unknown_ids_fail) {
+  static const direct_case_t cases[] = {
+      {"stdin", 200}, {"rist", 200}, {"H2", 200}, {"L1I1", 200},
+      {"H1", 0}, {"H9", 0}, {"L9", 0}, {"L2", 0}, {"L1I99", 0}, {"L9I1", 0},
+  };
+  config_t cfg;
+  source_def_t src;
+  source_def_t sources[2];
+  channels_t *ch;
+  char path[160];
+  char *out;
+  size_t out_len;
+  const direct_case_t *dc = &cases[_i];
+
+  memset(&cfg, 0, sizeof cfg);
+  write_temp_file(path, "m3u", "#EXTINF:-1,RTP Channel\nrtp://@239.1.1.1:5000\n");
+  ch = build_single_list(&cfg, &src, SRC_M3U, path);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  memset(sources, 0, sizeof sources);
+  sources[0] = src;
+  sources[1].kind = SRC_HTTP;
+  sources[1].value = "http://example.invalid/list.m3u";
+  sources[1].ordinal = 2;
+  cfg.sources = sources;
+  cfg.n_sources = 2;
+  cfg.stdin_ordinal = 3;
+  cfg.stdin_name = "S";
+  cfg.rist_ordinal = 4;
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+
+  if (dc->want_status == 200) {
+    ck_assert_int_eq(browse(&cfg, ch, dc->objid, "BrowseDirectChildren", &out, &out_len), 200);
+    ck_assert_ptr_nonnull(strstr(out, "NumberReturned"));
+  } else {
+    ck_assert_int_ne(browse(&cfg, ch, dc->objid, "BrowseMetadata", &out, &out_len), 200);
+  }
+
+  channels_free(ch);
+}
+END_TEST
+
+typedef struct {
+  const char *service;
+  const char *action;
+  const char *want;
+} soap_case_t;
+
+START_TEST(simple_soap_actions_answer_and_unknown_ones_fault) {
+  static const soap_case_t cases[] = {
+      {"cd", "GetSearchCapabilities", "GetSearchCapabilitiesResponse"},
+      {"cd", "GetSortCapabilities", "GetSortCapabilitiesResponse"},
+      {"cd", "GetSystemUpdateID", "GetSystemUpdateIDResponse"},
+      {"cm", "GetProtocolInfo", "GetProtocolInfoResponse"},
+      {"cm", "GetCurrentConnectionIDs", "GetCurrentConnectionIDsResponse"},
+      {"cm", "GetCurrentConnectionInfo", "GetCurrentConnectionInfoResponse"},
+      {"cd", "NoSuchAction", "<errorCode>401</errorCode>"},
+      {"cm", "NoSuchAction", "<errorCode>401</errorCode>"},
+      {"xx", "Browse", "<errorCode>401</errorCode>"},
+  };
+  const soap_case_t *sc = &cases[_i];
+  config_t cfg;
+  char *out = NULL;
+  size_t out_len = 0;
+  int status;
+
+  memset(&cfg, 0, sizeof cfg);
+  status = dlna_handle_control(&cfg, NULL, sc->service, sc->action, "", 0, &out, &out_len);
+  ck_assert_int_eq(status, strstr(sc->want, "errorCode") ? 500 : 200);
+  ck_assert_ptr_nonnull(out);
+  ck_assert_msg(strstr(out, sc->want) != NULL, "%s/%s: %s", sc->service, sc->action, out);
+}
+END_TEST
+
 static Suite *dlna_suite(void) {
   Suite *s = suite_create("dipixy_dlna");
   TCase *tc = tcase_create("core");
@@ -506,6 +655,11 @@ static Suite *dlna_suite(void) {
   tcase_add_test(tc, list_source_metadata_unnamed_uses_kind_fallback_title);
   tcase_add_test(tc, item_metadata_title_uses_index_and_channel_name);
   tcase_add_test(tc, list_direct_children_item_title_uses_index_and_channel_name);
+  tcase_add_test(tc, keep_multicast_rtp_item_keeps_ssm_source);
+  tcase_add_test(tc, item_metadata_carries_the_channel_icon);
+  tcase_add_test(tc, unnamed_http_source_metadata_uses_ordinal_title);
+  tcase_add_loop_test(tc, direct_children_of_leaf_objects_are_empty_and_unknown_ids_fail, 0, 10);
+  tcase_add_loop_test(tc, simple_soap_actions_answer_and_unknown_ones_fault, 0, 9);
   suite_add_tcase(s, tc);
   return s;
 }

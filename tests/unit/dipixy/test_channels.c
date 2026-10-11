@@ -750,6 +750,63 @@ START_TEST(reload_replaces_the_list_only_with_a_non_empty_result) {
 }
 END_TEST
 
+static void write_sds_xml(const char *path, const char *const *names, size_t n) {
+  sds_service_t svcs[4];
+  unsigned char buf[4096];
+  size_t len;
+  FILE *f;
+
+  ck_assert_uint_le(n, 4);
+  memset(svcs, 0, sizeof svcs);
+  for (size_t i = 0; i < n; i++) {
+    bufcpy(svcs[i].name, sizeof svcs[i].name, names[i]);
+    bufcpy(svcs[i].address, sizeof svcs[i].address, "239.1.1.1");
+    svcs[i].port = (unsigned)(5000 + i);
+    svcs[i].rtp = 1;
+  }
+  len = sds_build_broadcast("example.invalid", 1, svcs, (int)n, NULL, NULL, NULL, buf, sizeof buf);
+  ck_assert_uint_gt(len, 0u);
+  f = fopen(path, "wb");
+  ck_assert_ptr_nonnull(f);
+  ck_assert_uint_eq(fwrite(buf, 1, len, f), len);
+  fclose(f);
+}
+
+START_TEST(reload_rebuilds_a_sds_xml_list_from_the_file) {
+  static const char *const two[] = {"One", "Two"};
+  static const char *const three[] = {"One", "Two", "Three"};
+  char path[160];
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+
+  write_temp_file(path, "");
+  write_sds_xml(path, two, 2);
+  ch = build_one_source(SRC_XML, path, 0, 0.0, &cfg, &src);
+  ck_assert_ptr_nonnull(ch);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 2);
+
+  write_sds_xml(path, three, 3);
+  channels_reload_all(ch, &cfg);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 3);
+  unlink(path);
+  channels_free(ch);
+}
+END_TEST
+
+START_TEST(reload_keeps_the_list_of_a_silent_sds_source) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch = build_one_source(SRC_SDS, "239.255.255.250:3937", 0, 0.2, &cfg, &src);
+
+  ck_assert_ptr_nonnull(ch);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 0);
+  channels_reload_all(ch, &cfg);
+  ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 0);
+  channels_free(ch);
+}
+END_TEST
+
 START_TEST(refresh_thread_starts_only_with_sources_and_stops_cleanly) {
   config_t cfg;
   source_def_t src;
@@ -796,6 +853,8 @@ static Suite *channels_suite(void) {
   tcase_add_test(tc, join_all_keeps_every_item_whether_or_not_it_can_be_joined);
   tcase_add_loop_test(tc, reload_replaces_the_list_only_with_a_non_empty_result, 0, 2);
   tcase_add_test(tc, refresh_thread_starts_only_with_sources_and_stops_cleanly);
+  tcase_add_test(tc, reload_rebuilds_a_sds_xml_list_from_the_file);
+  tcase_add_test(tc, reload_keeps_the_list_of_a_silent_sds_source);
   suite_add_tcase(s, tc);
   return s;
 }

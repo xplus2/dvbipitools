@@ -136,10 +136,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     args_status_t st;
     if (c == 'c' || c == OPT_CONFIG_STRICT || c == OPT_CONFIGTEST) continue;
-    if (c == 'h') {
-      dixy_print_help();
-      return ARGS_HELP;
-    }
     st = dispatch(&p, c);
     if (st != ARGS_OK) return st;
   }

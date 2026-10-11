@@ -1,6 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#define _GNU_SOURCE /* memmem */
+
 #include <check.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -11,6 +13,8 @@
 #include <unistd.h>
 
 #include "dipixy/dash/lldash.h"
+#include "dipixy/reactor/conn.h"
+#include "dipixy/reactor/internal.h"
 #include "dipixy/segstore_int.h"
 #include "dipixy/ts/pidfilter.h"
 #ifdef HAVE_HTTP2
@@ -485,6 +489,98 @@ START_TEST(ring_peek_and_advance_consume_a_part) {
 }
 END_TEST
 
+static int out_has(const conn_t *c, const void *needle, size_t n) {
+  return memmem(c->out.buf + c->out.off, c->out.len - c->out.off, needle, n) != NULL;
+}
+
+static conn_t *plain_conn(int peer_and_fd[2]) {
+  static config_t cfg;
+  conn_t *c;
+
+  reactor_set_context(&cfg, NULL, NULL);
+  ck_assert_int_eq(socketpair(AF_UNIX, SOCK_STREAM, 0, peer_and_fd), 0);
+  conn_table_init(peer_and_fd[1] + 64);
+  c = conn_new(peer_and_fd[0], NULL);
+  ck_assert_ptr_nonnull(c);
+  c->epfd = -1;
+  return c;
+}
+
+START_TEST(try_attach_streams_chunked_framing_to_the_connection) {
+  static const char hdr_ka[] = "Connection: keep-alive\r\n";
+  pid_filter_t f;
+  int sv[2];
+  conn_t *c;
+  int slot;
+
+  open_store(0, SEG_CONTAINER_FMP4, 1);
+  no_filter(&f);
+  c = plain_conn(sv);
+  conn_publish(c);
+
+  ck_assert_int_eq(dash_lldash_try_attach(c, CTX, &f, 0, &full, "bogus.txt", 1, NULL, -1), 0);
+  ck_assert_int_eq(dash_lldash_try_attach(c, CTX, &f, 0, &full, SEG_NAME_0, 1, "http://o.example", -1), 1);
+  slot = c->slot;
+  ck_assert_int_ge(slot, 0);
+  ck_assert_int_eq(c->next_state, CONN_NEXT_DASHCHUNK);
+  ck_assert_int_eq(c->keep_alive, 1);
+  ck_assert(out_has(c, "Transfer-Encoding: chunked\r\n", 28));
+  ck_assert(out_has(c, hdr_ka, sizeof hdr_ka - 1));
+  ck_assert(out_has(c, "Access-Control-Allow-Origin", 27));
+
+  push_part(0);
+  ck_assert(out_has(c, "\r\n40\r\n", 6) || out_has(c, "40\r\n", 4));
+  ck_assert(out_has(c, part_data, sizeof part_data));
+  ck_assert_int_eq(dash_lldash_sub_finalized(slot), 0);
+
+  push_segment(0);
+  ck_assert(out_has(c, "0\r\n\r\n", 5));
+  ck_assert_int_eq(dash_lldash_sub_finalized(slot), 1);
+
+  dash_lldash_sub_close(slot);
+  conn_unpublish(c);
+  conn_free(c);
+  close(sv[0]);
+  close(sv[1]);
+}
+END_TEST
+
+START_TEST(try_attach_without_keep_alive_announces_close) {
+  pid_filter_t f;
+  int sv[2];
+  conn_t *c;
+
+  open_store(0, SEG_CONTAINER_FMP4, 1);
+  no_filter(&f);
+  c = plain_conn(sv);
+  ck_assert_int_eq(dash_lldash_try_attach(c, CTX, &f, 0, &full, SEG_NAME_0, 0, NULL, -1), 1);
+  ck_assert_int_eq(c->keep_alive, 0);
+  ck_assert(out_has(c, "Connection: close\r\n", 19));
+  dash_lldash_sub_close(c->slot);
+  conn_free(c);
+  close(sv[0]);
+  close(sv[1]);
+}
+END_TEST
+
+START_TEST(oversized_part_flags_the_ring_as_errored) {
+  enum { BIG = 3 << 16 };
+  pid_filter_t f;
+  uint8_t *big = calloc(1, BIG);
+  int idx;
+
+  ck_assert_ptr_nonnull(big);
+  open_store(0, SEG_CONTAINER_FMP4, 1);
+  idx = subscribe(0, SEG_NAME_0, CONN_PROTO_H2);
+  ck_assert_int_ge(idx, 0);
+  no_filter(&f);
+  hls_push_part(CTX, &f, 0, &full, SEG_CONTAINER_FMP4, big, BIG, 0.1, 1);
+  free(big);
+  ck_assert_int_eq(dash_lldash_ring_errored(idx), 1);
+  ck_assert_int_eq(dash_lldash_ring_pending(idx), 0);
+}
+END_TEST
+
 static Suite *lldash_suite(void) {
   Suite *s = suite_create("dipixy_lldash");
   TCase *tc = tcase_create("core");
@@ -510,6 +606,9 @@ static Suite *lldash_suite(void) {
   tcase_add_test(tc, tid_chain_out_of_range_is_a_noop);
   tcase_add_test(tc, store_closing_races_in_flight_chunk_push);
   tcase_add_test(tc, store_close_races_segment_and_part_pushes);
+  tcase_add_test(tc, try_attach_streams_chunked_framing_to_the_connection);
+  tcase_add_test(tc, try_attach_without_keep_alive_announces_close);
+  tcase_add_test(tc, oversized_part_flags_the_ring_as_errored);
 #ifdef HAVE_HTTP2
   tcase_add_test(tc, tid_chain_wakes_only_owned_live_subscribers);
 #endif

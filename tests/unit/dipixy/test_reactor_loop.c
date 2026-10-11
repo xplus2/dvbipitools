@@ -258,6 +258,143 @@ START_TEST(error_events_without_a_socket_error_fall_through_to_the_state_handler
 }
 END_TEST
 
+static conn_t *dashchunk_conn(loop_t *l, int sv[2], int slot, int keep_alive) {
+  conn_t *c;
+
+  loop_open(l);
+  pair(sv);
+  c = add_conn(l, sv[0], CONN_READING, 0);
+  reactor_dashchunk_begin(l->epfd, c);
+  c->slot = slot;
+  c->keep_alive = keep_alive;
+  return c;
+}
+
+START_TEST(dashchunk_begin_publishes_the_connection_and_close_releases_it) {
+  loop_t l;
+  int sv[2];
+  conn_t *c = dashchunk_conn(&l, sv, 0, 1);
+
+  ck_assert_int_eq(c->state, CONN_DASHCHUNK);
+  ck_assert_int_eq(c->epfd, l.epfd);
+  ck_assert_ptr_eq(conn_for_fd(sv[0]), c);
+  reactor_dashchunk_close(l.epfd, c);
+  ck_assert_int_eq(fd_is_open(sv[0]), 0);
+  ck_assert_ptr_null(conn_for_fd(sv[0]));
+  close(sv[1]);
+  loop_close(&l);
+}
+END_TEST
+
+START_TEST(dashchunk_flush_waits_for_the_segment_to_finalize) {
+  loop_t l;
+  int sv[2];
+  conn_t *c = dashchunk_conn(&l, sv, 0, 1);
+  char buf[16] = {0};
+
+  ck_assert_int_eq(conn_queue(c, "chunk", 5), 0);
+  reactor_dashchunk_flush(l.epfd, c);
+  ck_assert_int_eq((int)read(sv[1], buf, sizeof buf), 5);
+  ck_assert_int_eq(c->state, CONN_DASHCHUNK);
+  ck_assert_int_eq(fd_is_open(sv[0]), 1);
+  reactor_dashchunk_close(l.epfd, c);
+  close(sv[1]);
+  loop_close(&l);
+}
+END_TEST
+
+START_TEST(dashchunk_flush_keeps_the_connection_after_finalize_when_keep_alive) {
+  loop_t l;
+  int sv[2];
+  conn_t *c = dashchunk_conn(&l, sv, -1, 1);
+
+  reactor_dashchunk_flush(l.epfd, c);
+  ck_assert_int_ne(c->state, CONN_DASHCHUNK);
+  ck_assert_int_eq(fd_is_open(sv[0]), 1);
+  ck_assert_ptr_null(conn_for_fd(sv[0]));
+  reactor_close(l.epfd, c);
+  close(sv[1]);
+  loop_close(&l);
+}
+END_TEST
+
+START_TEST(dashchunk_flush_closes_after_finalize_without_keep_alive) {
+  loop_t l;
+  int sv[2];
+  conn_t *c = dashchunk_conn(&l, sv, -1, 0);
+
+  reactor_dashchunk_flush(l.epfd, c);
+  ck_assert_int_eq(fd_is_open(sv[0]), 0);
+  close(sv[1]);
+  loop_close(&l);
+}
+END_TEST
+
+START_TEST(dashchunk_flush_closes_after_finalize_when_close_was_requested) {
+  loop_t l;
+  int sv[2];
+  conn_t *c = dashchunk_conn(&l, sv, -1, 1);
+
+  c->close_after_flush = 1;
+  reactor_dashchunk_flush(l.epfd, c);
+  ck_assert_int_eq(fd_is_open(sv[0]), 0);
+  close(sv[1]);
+  loop_close(&l);
+}
+END_TEST
+
+START_TEST(dashchunk_flush_of_a_dead_connection_tears_it_down) {
+  loop_t l;
+  int sv[2];
+  conn_t *c = dashchunk_conn(&l, sv, 0, 1);
+
+  c->dead = 1;
+  reactor_dashchunk_flush(l.epfd, c);
+  ck_assert_int_eq(fd_is_open(sv[0]), 0);
+  ck_assert_ptr_null(conn_for_fd(sv[0]));
+  close(sv[1]);
+  loop_close(&l);
+}
+END_TEST
+
+START_TEST(dashchunk_flush_returns_while_output_is_still_blocked) {
+  enum { BIG = 8 * 1024 * 1024 };
+  loop_t l;
+  int sv[2];
+  conn_t *c = dashchunk_conn(&l, sv, -1, 0);
+  char *big = calloc(1, BIG);
+
+  ck_assert_ptr_nonnull(big);
+  ck_assert_int_eq(conn_queue(c, big, BIG), 0);
+  free(big);
+  reactor_dashchunk_flush(l.epfd, c);
+  ck_assert_int_eq(fd_is_open(sv[0]), 1);
+  ck_assert_int_eq(c->state, CONN_DASHCHUNK);
+  reactor_dashchunk_close(l.epfd, c);
+  close(sv[1]);
+  loop_close(&l);
+}
+END_TEST
+
+START_TEST(dashchunk_readable_discards_input_and_survives_half_close) {
+  loop_t l;
+  int sv[2];
+  conn_t *c = dashchunk_conn(&l, sv, 0, 1);
+
+  ck_assert_int_eq((int)write(sv[1], "ignored", 7), 7);
+  feed_event(&l, c, EPOLLIN);
+  ck_assert_int_eq(fd_is_open(sv[0]), 1);
+  ck_assert_int_eq(c->state, CONN_DASHCHUNK);
+
+  close(sv[1]);
+  feed_event(&l, c, EPOLLIN);
+  ck_assert_int_eq(fd_is_open(sv[0]), 1);
+  ck_assert_int_eq(atomic_load(&c->read_done), 1);
+  reactor_dashchunk_close(l.epfd, c);
+  loop_close(&l);
+}
+END_TEST
+
 static Suite *loop_suite(void) {
   Suite *s = suite_create("dipixy_reactor_loop");
   TCase *tc = tcase_create("core");
@@ -269,6 +406,14 @@ static Suite *loop_suite(void) {
   tcase_add_test(tc, parked_blocking_reload_connections_ignore_socket_events);
   tcase_add_test(tc, writing_connections_flush_their_queue_and_close_when_asked);
   tcase_add_test(tc, error_events_without_a_socket_error_fall_through_to_the_state_handler);
+  tcase_add_test(tc, dashchunk_begin_publishes_the_connection_and_close_releases_it);
+  tcase_add_test(tc, dashchunk_flush_waits_for_the_segment_to_finalize);
+  tcase_add_test(tc, dashchunk_flush_keeps_the_connection_after_finalize_when_keep_alive);
+  tcase_add_test(tc, dashchunk_flush_closes_after_finalize_without_keep_alive);
+  tcase_add_test(tc, dashchunk_flush_closes_after_finalize_when_close_was_requested);
+  tcase_add_test(tc, dashchunk_flush_of_a_dead_connection_tears_it_down);
+  tcase_add_test(tc, dashchunk_flush_returns_while_output_is_still_blocked);
+  tcase_add_test(tc, dashchunk_readable_discards_input_and_survives_half_close);
   suite_add_tcase(s, tc);
   return s;
 }
