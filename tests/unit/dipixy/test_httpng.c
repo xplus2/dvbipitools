@@ -269,14 +269,14 @@ START_TEST(route_without_source_is_404) {
 }
 END_TEST
 
-START_TEST(route_with_full_client_table_is_501) {
+START_TEST(route_with_full_client_table_is_503) {
   const route_case_t *rc = &setup_cases[_i];
 
   open_stdin_source();
   occupy_client_table();
   run(rc->fn, &(call_t){.path = rc->path});
   ck_assert_int_eq(g_fake.n_status, 1);
-  ck_assert_str_eq(g_fake.status, "501");
+  ck_assert_str_eq(g_fake.status, "503");
   ck_assert_int_eq(g_fake.n_hls, 0);
   ck_assert_int_eq(g_fake.n_cold, 0);
 }
@@ -313,12 +313,12 @@ START_TEST(ts_route_hands_the_subscription_to_the_protocol) {
 }
 END_TEST
 
-START_TEST(ts_route_dispatch_refusal_is_501_and_frees_the_slot) {
+START_TEST(ts_route_dispatch_refusal_is_503_and_frees_the_slot) {
   open_stdin_source();
   g_fake.tspush_ret = 0;
   run(dispatch_ts_route, &(call_t){.path = "/stdin/ts"});
   ck_assert_int_eq(g_fake.n_tspush, 1);
-  ck_assert_str_eq(g_fake.status, "501");
+  ck_assert_str_eq(g_fake.status, "503");
   capture_flush_deferred_quiescent();
   run(dispatch_ts_route, &(call_t){.path = "/stdin/ts"});
   ck_assert_int_eq(g_fake.n_tspush, 2);
@@ -326,12 +326,12 @@ START_TEST(ts_route_dispatch_refusal_is_501_and_frees_the_slot) {
 }
 END_TEST
 
-START_TEST(ts_route_with_full_client_table_is_501_without_dispatch) {
+START_TEST(ts_route_with_full_client_table_is_503_without_dispatch) {
   open_stdin_source();
   occupy_client_table();
   run(dispatch_ts_route, &(call_t){.path = "/stdin/ts"});
   ck_assert_int_eq(g_fake.n_tspush, 0);
-  ck_assert_str_eq(g_fake.status, "501");
+  ck_assert_str_eq(g_fake.status, "503");
 }
 END_TEST
 
@@ -345,12 +345,12 @@ typedef struct {
 } park_case_t;
 
 static const park_case_t park_cases[] = {
-  {"/stdin/hls", HLS_COLD_HLS, SEG_CONTAINER_TS, "index.m3u8", 0, 4000},
-  {"/stdin/hls-fmp4", HLS_COLD_HLS, SEG_CONTAINER_FMP4, "index.m3u8", 0, 4000},
-  {"/stdin/llhls", HLS_COLD_LLHLS, SEG_CONTAINER_TS, "index_ll.m3u8", 0, 4000},
-  {"/stdin/dash", HLS_COLD_DASH, SEG_CONTAINER_FMP4, "manifest.mpd", 0, 4000},
-  {"/stdin/lldash", HLS_COLD_DASH, SEG_CONTAINER_FMP4, "manifest.mpd", 1, 4000},
-  {"/stdin/mp4", HLS_COLD_MP4, SEG_CONTAINER_FMP4, "", 0, 4000},
+  {"/stdin/hls", HLS_COLD_HLS, SEG_CONTAINER_TS, "index.m3u8", 0, 14000},
+  {"/stdin/hls-fmp4", HLS_COLD_HLS, SEG_CONTAINER_FMP4, "index.m3u8", 0, 14000},
+  {"/stdin/llhls", HLS_COLD_LLHLS, SEG_CONTAINER_TS, "index_ll.m3u8", 0, 14000},
+  {"/stdin/dash", HLS_COLD_DASH, SEG_CONTAINER_FMP4, "manifest.mpd", 0, 14000},
+  {"/stdin/lldash", HLS_COLD_DASH, SEG_CONTAINER_FMP4, "manifest.mpd", 1, 14000},
+  {"/stdin/mp4", HLS_COLD_MP4, SEG_CONTAINER_FMP4, "", 0, 14000},
 };
 
 static void (*route_fn_for(const char *path))(httpng_req_t *) {
@@ -536,7 +536,7 @@ START_TEST(mp4_route_hands_the_subscription_to_the_protocol) {
 }
 END_TEST
 
-START_TEST(mp4_route_dispatch_refusal_is_501_and_frees_the_slot) {
+START_TEST(mp4_route_dispatch_refusal_is_503_and_frees_the_slot) {
   int refused;
 
   open_stdin_source();
@@ -546,7 +546,7 @@ START_TEST(mp4_route_dispatch_refusal_is_501_and_frees_the_slot) {
   g_fake.mp4push_ret = 0;
   run(dispatch_mp4_route, &(call_t){.path = "/stdin/mp4"});
   ck_assert_int_eq(g_fake.n_mp4push, 1);
-  ck_assert_str_eq(g_fake.status, "501");
+  ck_assert_str_eq(g_fake.status, "503");
   refused = g_fake.mp4push_sub;
   capture_flush_deferred_quiescent();
   g_fake.mp4push_ret = 1;
@@ -563,12 +563,12 @@ static Suite *httpng_suite(void) {
   tcase_set_timeout(tc, 20);
   tcase_add_checked_fixture(tc, setup, NULL);
   tcase_add_loop_test(tc, route_without_source_is_404, 0, SETUP_CASES);
-  tcase_add_loop_test(tc, route_with_full_client_table_is_501, 0, SETUP_CASES);
+  tcase_add_loop_test(tc, route_with_full_client_table_is_503, 0, SETUP_CASES);
   tcase_add_test(tc, ts_route_refused_by_admission_is_503);
   tcase_add_test(tc, ts_route_without_source_is_404);
   tcase_add_test(tc, ts_route_hands_the_subscription_to_the_protocol);
-  tcase_add_test(tc, ts_route_dispatch_refusal_is_501_and_frees_the_slot);
-  tcase_add_test(tc, ts_route_with_full_client_table_is_501_without_dispatch);
+  tcase_add_test(tc, ts_route_dispatch_refusal_is_503_and_frees_the_slot);
+  tcase_add_test(tc, ts_route_with_full_client_table_is_503_without_dispatch);
   tcase_add_loop_test(tc, cold_index_is_parked_with_its_request, 0, (int)(sizeof park_cases / sizeof park_cases[0]));
   tcase_add_test(tc, cold_index_with_full_waiter_table_falls_through_to_render);
   tcase_add_test(tc, hls_ready_index_renders_without_parking);
@@ -579,7 +579,7 @@ static Suite *httpng_suite(void) {
   tcase_add_loop_test(tc, dash_segment_request_prefers_progressive_delivery, 0, (int)(sizeof dashseg_cases / sizeof dashseg_cases[0]));
   tcase_add_test(tc, dash_refused_progressive_delivery_releases_the_subscription);
   tcase_add_test(tc, mp4_route_hands_the_subscription_to_the_protocol);
-  tcase_add_test(tc, mp4_route_dispatch_refusal_is_501_and_frees_the_slot);
+  tcase_add_test(tc, mp4_route_dispatch_refusal_is_503_and_frees_the_slot);
   suite_add_tcase(s, tc);
   return s;
 }

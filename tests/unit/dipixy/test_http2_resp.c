@@ -102,6 +102,20 @@ START_TEST(status_codes_map_to_the_supported_set) {
 }
 END_TEST
 
+START_TEST(service_unavailable_carries_retry_after) {
+  rig_t r;
+  int32_t sid;
+
+  rig_open(&r);
+  sid = open_stream(&r);
+  h2_submit_resp(r.h2, sid, 503, NULL, NULL, 0, NULL, 0, NULL);
+  settle(&r);
+  ck_assert_int_eq(h2c_stream_for(&r.cl, sid)->status, 503);
+  ck_assert_str_eq(client_resp_header_value(h2c_stream_for(&r.cl, sid), "retry-after"), "5");
+  rig_close(&r);
+}
+END_TEST
+
 START_TEST(oversized_etag_is_clamped_to_the_header_buffer) {
   rig_t r;
   int32_t sid;
@@ -197,7 +211,7 @@ static const cold_case_t cold_cases[] = {
     {HLS_COLD_HLS, "index.m3u8", 404},
     {HLS_COLD_LLHLS, "index_ll.m3u8", 404},
     {HLS_COLD_DASH, "manifest.mpd", 404},
-    {HLS_COLD_MP4, "", 501},
+    {HLS_COLD_MP4, "", 503},
 };
 
 static capture_ctx_t *open_cold_ctx(void) {
@@ -224,6 +238,7 @@ START_TEST(cold_waiter_is_answered_when_its_deadline_passes) {
   h2_hls_cold_flush_waiters();
   rig_exchange(&r);
   ck_assert_int_eq(h2c_stream_for(&r.cl, sid)->status, cc->expect_status);
+  if (cc->expect_status == 503) ck_assert_str_eq(client_resp_header_value(h2c_stream_for(&r.cl, sid), "retry-after"), "5");
   h2_hls_cold_flush_waiters();
   rig_close(&r);
   capture_close(ctx);
@@ -430,6 +445,7 @@ START_TEST(websocket_table_full_answers_service_unavailable) {
   rig_exchange(&r);
   for (int i = 0; i < H2_WS_MAX; i++) ck_assert_int_eq(h2c_stream_for(&r.cl, sids[i])->status, 200);
   ck_assert_int_eq(h2c_stream_for(&r.cl, sids[H2_WS_MAX])->status, 503);
+  ck_assert_str_eq(client_resp_header_value(h2c_stream_for(&r.cl, sids[H2_WS_MAX]), "retry-after"), "5");
   rig_close(&r);
 }
 END_TEST
@@ -483,6 +499,7 @@ static Suite *resp_suite(void) {
   tcase_add_test(tc, large_body_is_streamed_across_flow_control_windows);
   tcase_add_test(tc, bodyless_response_ends_with_the_headers);
   tcase_add_loop_test(tc, status_codes_map_to_the_supported_set, 0, (int)(sizeof status_cases / sizeof status_cases[0]));
+  tcase_add_test(tc, service_unavailable_carries_retry_after);
   tcase_add_test(tc, oversized_etag_is_clamped_to_the_header_buffer);
   tcase_add_test(tc, empty_etag_is_omitted);
   tcase_add_loop_test(tc, cors_allowlist_echoes_only_listed_origins, 0, (int)(sizeof cors_cases / sizeof cors_cases[0]));

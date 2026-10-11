@@ -41,8 +41,10 @@ static void h3_hls_cold_finish(hls_waiter_t *w) {
     int sub = mp4push_subscribe(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, CONN_PROTO_H3);
     if (sub < 0 || !h3_mp4push_dispatch(conn, r, sub, w->ws_handle)) {
       if (sub >= 0) mp4push_sub_close(sub);
-      h3_respond_status(conn, w->stream_id, "501");
+      h3_respond_status(conn, w->stream_id, "503");
     }
+  } else if (!hls_cold_ready(w)) {
+    h3_respond_status(conn, w->stream_id, hls_cold_expired_status(w) == 503 ? "503" : "404");
   } else {
     handled = httpng_hls_cold_render(w->kind, w->container, w->want_ll, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, &resp);
     if (!handled) {

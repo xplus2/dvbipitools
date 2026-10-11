@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -184,7 +185,6 @@ conn_t *conn_new(int fd, void *ssl) {
   c->epfd = -1;
   c->reactor_tid = -1;
   c->last_active = time(NULL);
-  c->zc_confirmed_id = -1;
   if (buf_ensure(&c->in, CONN_BUF_INITIAL) < 0 || buf_ensure(&c->out, CONN_BUF_INITIAL) < 0) {
     free(c->in.buf);
     free(c->out.buf);
@@ -224,7 +224,12 @@ static atomic_int g_fd_conn_overflow_logged = 0;
 #define CONN_TABLE_FLOOR 64
 
 int conn_table_capacity(int max_clients) {
+  struct rlimit rl;
   int n = (max_clients > 0 ? max_clients : 0) + CONN_TABLE_HEADROOM;
+  if (getrlimit(RLIMIT_NOFILE, &rl) == 0) { /* idle conns bypass max_clients: any fd below limit must fit */
+    long lim = rl.rlim_cur == RLIM_INFINITY || rl.rlim_cur > CONN_TABLE_MAX ? CONN_TABLE_MAX : (long)rl.rlim_cur;
+    if (lim > n) n = (int)lim;
+  }
   if (n < CONN_TABLE_FLOOR) n = CONN_TABLE_FLOOR;
   if (n > CONN_TABLE_MAX) n = CONN_TABLE_MAX;
   return n;
@@ -242,10 +247,14 @@ int conn_table_init(int maxfd) {
   return 0;
 }
 
-/* shouldn't happen: table sized off max_clients + headroom. logged once, not per fd */
+/* only if RLIMIT_NOFILE exceeds CONN_TABLE_MAX. accept path refuses such fds. logged once */
 static void conn_table_overflow_log(int fd) {
   if (!atomic_exchange_explicit(&g_fd_conn_overflow_logged, 1, memory_order_relaxed))
     log_line(TOOL_NAME ": conn table overflow, fd %d exceeds table size %d, conn_publish/conn_for_fd no-op past this point", fd, g_fd_conn_max);
+}
+
+int conn_fd_trackable(int fd) {
+  return g_fd_conn_max && fd >= 0 && fd < g_fd_conn_max;
 }
 
 void conn_publish(conn_t *c) {
@@ -273,8 +282,7 @@ conn_t *conn_for_fd(int fd) {
 
 void conn_request_close(conn_t *c) {
   pthread_mutex_lock(&c->out_lock);
-  c->close_after_flush = 1;
-  c->requested_close = 1;
+  atomic_store_explicit(&c->close_requested, 1, memory_order_release);
   if (c->epfd >= 0 && !atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) { /* wake owner: flush, tear down */
     struct epoll_event ev;
     memset(&ev, 0, sizeof(ev));
@@ -353,7 +361,7 @@ int conn_queue_zc(conn_t *c, const void *data, size_t len, conn_zc_release_fn re
   c->zc.len = len;
   c->zc.off = 0;
   c->zc.any_zc = 0;
-  c->zc.last_zc_id = -1;
+  c->zc.zc_ids = 0;
   c->zc.release = release;
   c->zc.release_arg = release_arg;
   c->zc.active = 1;
@@ -361,13 +369,24 @@ int conn_queue_zc(conn_t *c, const void *data, size_t len, conn_zc_release_fn re
   return 0;
 }
 
+/* credit overlap of completed range [lo,hi] (u32, wrapping) to each awaiting chunk */
+static void zc_credit(uint32_t lo, uint32_t hi, void *arg) {
+  conn_t *c = arg;
+  int64_t len = (int64_t)(uint32_t)(hi - lo) + 1;
+  for (int i = 0; i < c->zc_await_count; i++) {
+    conn_zc_await_t *a = &c->zc_await[i];
+    int64_t start = (int32_t)(uint32_t)(lo - a->id_lo); /* relative to chunk start, may be negative */
+    int64_t from = start > 0 ? start : 0;
+    int64_t to = start + len < (int64_t)a->ids ? start + len : (int64_t)a->ids;
+    if (to > from) a->done += (uint32_t)(to - from);
+  }
+}
+
 void conn_zc_drain(conn_t *c) {
-  int hi = -1;
-  if (!tls_zc_drain(c->fd, &hi)) return;
-  if (hi > c->zc_confirmed_id) c->zc_confirmed_id = hi;
+  if (!tls_zc_drain(c->fd, zc_credit, c)) return;
   int w = 0;
   for (int i = 0; i < c->zc_await_count; i++) {
-    if (c->zc_await[i].zc_id_hi <= c->zc_confirmed_id) c->zc_await[i].release(c->zc_await[i].release_arg);
+    if (c->zc_await[i].done >= c->zc_await[i].ids) c->zc_await[i].release(c->zc_await[i].release_arg);
     else c->zc_await[w++] = c->zc_await[i];
   }
   c->zc_await_count = w;
@@ -427,14 +446,17 @@ int conn_flush(conn_t *c, int epfd) {
       c->zc.off += (size_t)n;
       if (used_zc) {
         c->zc.any_zc = 1;
-        c->zc.last_zc_id = c->zc_next_id++;
+        if (c->zc.zc_ids++ == 0) c->zc.first_zc_id = c->zc_next_id;
+        c->zc_next_id++;
       }
       if (c->zc.off < c->zc.len) continue;
       /* fully handed off: release now if never pinned, else await confirm */
       if (!c->zc.any_zc) {
         c->zc.release(c->zc.release_arg);
       } else {
-        c->zc_await[c->zc_await_count].zc_id_hi = c->zc.last_zc_id;
+        c->zc_await[c->zc_await_count].id_lo = c->zc.first_zc_id;
+        c->zc_await[c->zc_await_count].ids = c->zc.zc_ids;
+        c->zc_await[c->zc_await_count].done = 0;
         c->zc_await[c->zc_await_count].release = c->zc.release;
         c->zc_await[c->zc_await_count].release_arg = c->zc.release_arg;
         c->zc_await_count++;

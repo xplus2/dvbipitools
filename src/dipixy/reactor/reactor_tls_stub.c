@@ -67,11 +67,10 @@ ssize_t tls_net_send_zc(int fd, const void *buf, size_t len, int *used_zc) {
   return r;
 }
 
-int tls_zc_drain(int fd, int *hi_out) {
+int tls_zc_drain(int fd, void (*cb)(uint32_t lo, uint32_t hi, void *arg), void *arg) {
   char cbuf[128];
   struct msghdr msg;
   int found = 0;
-  *hi_out = -1;
   for (;;) {
     memset(&msg, 0, sizeof msg);
     msg.msg_control = cbuf;
@@ -83,7 +82,7 @@ int tls_zc_drain(int fd, int *hi_out) {
       const struct sock_extended_err *serr = (const struct sock_extended_err *)CMSG_DATA(cm);
       if (serr->ee_errno != 0 || serr->ee_origin != SO_EE_ORIGIN_ZEROCOPY) continue;
       found = 1;
-      if ((int)serr->ee_data > *hi_out) *hi_out = (int)serr->ee_data;
+      cb(serr->ee_info, serr->ee_data, arg);
     }
   }
   return found;

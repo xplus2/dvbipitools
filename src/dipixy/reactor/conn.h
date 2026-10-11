@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <time.h>
 
 /* reactor conn lifecycle states */
@@ -44,12 +45,15 @@ typedef struct {
   void *release_arg;
   int active;
   int any_zc;      /* 1 if any byte of this chunk went via MSG_ZEROCOPY */
-  int last_zc_id;  /* highest zc id used by this chunk, -1 = none yet */
+  uint32_t first_zc_id; /* valid if zc_ids > 0 */
+  uint32_t zc_ids;      /* zc sends used by this chunk, ids contiguous */
 } conn_zc_t;
 
 /* sent, awaiting errqueue confirm */
 typedef struct {
-  int zc_id_hi;
+  uint32_t id_lo;
+  uint32_t ids;  /* total ids owned */
+  uint32_t done; /* ids confirmed so far, completions arrive in any order */
   conn_zc_release_fn release;
   void *release_arg;
 } conn_zc_await_t;
@@ -73,7 +77,6 @@ typedef struct conn_t {
      must not share a word with want_write/dead below */
   unsigned close_after_flush : 1; /* handler "closed": reactor closes on drain */
   unsigned next_state : 3;
-  unsigned requested_close : 1;   /* other thread asked owner to close: flush, then quiet teardown (no slot/room cleanup, requester already did it) */
   unsigned keep_alive : 1;        /* after flush: recycle for next HTTP/1.1 request */
   int slot;                       /* owning user[] slot, or 0 if none */
   int reactor_tid;                /* owning reactor thread index (-1 until published as WS/STREAM) */
@@ -85,14 +88,14 @@ typedef struct conn_t {
   _Alignas(64) _Atomic unsigned char want_write; /* EPOLLOUT currently armed for this fd */
   unsigned char dead;                      /* backpressure tripped: owner must close */
   _Atomic unsigned char read_done;         /* recv()==0: blocks EPOLLIN re-arm */
+  _Atomic unsigned char close_requested;   /* other thread asked owner to close: flush, then teardown */
   int epfd;
   pthread_mutex_t out_lock;
   /* MSG_ZEROCOPY state, owner-thread-only */
   conn_zc_t zc;
   conn_zc_await_t zc_await[CONN_ZC_AWAIT_MAX];
   int zc_await_count;
-  int zc_next_id;      /* shadows kernel per-fd zc send count */
-  int zc_confirmed_id; /* highest confirmed zc id, -1 = none */
+  uint32_t zc_next_id; /* shadows kernel per-fd zc send count, wraps like it */
 } conn_t;
 
 enum {
@@ -118,7 +121,7 @@ int conn_queue_zc(conn_t *c, const void *data, size_t len, conn_zc_release_fn re
 /* arms EPOLLOUT on epfd if socket blocks with data pending, disarms once drained */
 int conn_flush(conn_t *c, int epfd);
 
-/* drains errqueue, releases matured zc_await[]. no-op without zerocopy */
+/* drains errqueue, releases fully confirmed zc_await[]. no-op without zerocopy */
 void conn_zc_drain(conn_t *c);
 
 /* EPOLLIN, +EPOLLOUT if want_out. return value: epoll_ctl's result */
@@ -140,11 +143,13 @@ static inline int conn_claim_teardown(conn_t *c) {
 
 int conn_in_reserve(conn_t *c, size_t need);
 
-/* not RLIMIT_NOFILE-sized, see reactor_raise_nofile_limit(). headroom for non-stream conns (status/ws/dlna) */
+/* max(max_clients + headroom, RLIMIT_NOFILE soft) capped at CONN_TABLE_MAX. call after reactor_raise_nofile_limit() */
 int conn_table_capacity(int max_clients);
 
 /* call once before reactor threads run. no-op if already sized or calloc fails */
 int conn_table_init(int maxfd);
+/* fd fits table. accept path closes fds that do not */
+int conn_fd_trackable(int fd);
 /* owning reactor thread calls conn_publish/conn_unpublish.
    conn_for_fd() safe from any thread (single-writer, atomic ptr) */
 void conn_publish(conn_t *c);

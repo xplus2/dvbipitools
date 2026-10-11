@@ -143,8 +143,10 @@ void h2_flush_tx(h2_conn_t *conn, conn_t *c) {
 }
 
 static void h2_respond_status(h2_conn_t *conn, int32_t stream_id, const char *status) {
-  nghttp2_nv nva[2] = {{(uint8_t *)":status", (uint8_t *)status, 7, strlen(status), NGHTTP2_NV_FLAG_NONE}};
-  size_t nvlen = h2_nv_altsvc(nva, 1);
+  nghttp2_nv nva[3] = {{(uint8_t *)":status", (uint8_t *)status, 7, strlen(status), NGHTTP2_NV_FLAG_NONE}};
+  size_t nvlen = 1;
+  if (!strcmp(status, "503")) nva[nvlen++] = (nghttp2_nv)MAKE_NV_LIT("retry-after", REACTOR_RETRY_AFTER_S);
+  nvlen = h2_nv_altsvc(nva, nvlen);
   nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, NULL);
 }
 

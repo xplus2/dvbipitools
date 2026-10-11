@@ -52,6 +52,10 @@ static char tls_pending_marker;
 /* accept finish: sockopts, conn_new, client_ip, epoll add. shared by io_uring + accept4() paths */
 static void reactor_accept_setup(int epfd, const reactor_listener *L, int fd, const struct sockaddr_storage *saddr) {
   __atomic_add_fetch(&g_connections_total, 1, __ATOMIC_RELAXED);
+  if (!conn_fd_trackable(fd)) {
+    close(fd);
+    return;
+  }
   int nd = 1;
   setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nd, sizeof(nd));
   if (L->is_tls && tls_accept(fd) < 0) { /* SSL setup, lazy handshake */

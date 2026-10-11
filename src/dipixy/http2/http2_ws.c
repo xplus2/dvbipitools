@@ -94,8 +94,9 @@ void h2_ws_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id) {
       break;
     }
   if (slot < 0) {
-    nghttp2_nv err[] = {{(uint8_t *)":status", (uint8_t *)"503", 7, 3, NGHTTP2_NV_FLAG_NONE}};
-    nghttp2_submit_response(conn->ng, stream_id, err, 1, NULL);
+    nghttp2_nv err[] = {{(uint8_t *)":status", (uint8_t *)"503", 7, 3, NGHTTP2_NV_FLAG_NONE},
+                        MAKE_NV_LIT("retry-after", REACTOR_RETRY_AFTER_S)};
+    nghttp2_submit_response(conn->ng, stream_id, err, 2, NULL);
     return;
   }
 

@@ -11,8 +11,9 @@
 #include <string.h>
 
 void h3_respond_status(h3_conn_t *c, int64_t sid, const char *status) {
-  nghttp3_nv nva[] = {{(uint8_t *)":status", (uint8_t *)status, 7, strlen(status), NGHTTP3_NV_FLAG_NONE}};
-  nghttp3_conn_submit_response(c->h3conn, sid, nva, 1, NULL);
+  nghttp3_nv nva[] = {{(uint8_t *)":status", (uint8_t *)status, 7, strlen(status), NGHTTP3_NV_FLAG_NONE},
+                      {(uint8_t *)"retry-after", (uint8_t *)REACTOR_RETRY_AFTER_S, 11, sizeof REACTOR_RETRY_AFTER_S - 1, NGHTTP3_NV_FLAG_NONE}};
+  nghttp3_conn_submit_response(c->h3conn, sid, nva, strcmp(status, "503") ? 1 : 2, NULL);
 }
 
 void h3_respond_401(h3_conn_t *c, int64_t sid) {
@@ -44,7 +45,7 @@ void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_t
   size_t len_n;
   size_t etag_n;
   char etag_buf[56];
-  nghttp3_nv nva[6];
+  nghttp3_nv nva[7];
   size_t nvlen = 0;
   nghttp3_data_reader dr;
   int cors_vary;
@@ -63,6 +64,8 @@ void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_t
     nva[nvlen++] = (nghttp3_nv){(uint8_t *)"access-control-allow-origin", (uint8_t *)cors_val, 27, strlen(cors_val),NGHTTP3_NV_FLAG_NONE};
     if (cors_vary) nva[nvlen++] = (nghttp3_nv){(uint8_t *)"vary", (uint8_t *)"Origin", 4, 6, NGHTTP3_NV_FLAG_NONE};
   }
+  if (status == 503)
+    nva[nvlen++] = (nghttp3_nv){(uint8_t *)"retry-after", (uint8_t *)REACTOR_RETRY_AFTER_S, 11, sizeof REACTOR_RETRY_AFTER_S - 1, NGHTTP3_NV_FLAG_NONE};
   if (!body) {
     nghttp3_conn_submit_response(c->h3conn, r->stream_id, nva, nvlen, NULL);
     return;

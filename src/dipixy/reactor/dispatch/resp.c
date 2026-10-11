@@ -16,6 +16,7 @@ const char RESP_404[] = "404 Not Found";
 const char RESP_405[] = "405 Method Not Allowed";
 const char RESP_431[] = "431 Request Header Fields Too Large";
 const char RESP_501[] = "501 Not Implemented";
+const char RESP_503[] = "503 Service Unavailable";
 const char RESP_504[] = "504 Gateway Timeout";
 
 void respond_status(conn_t *c, const char *status, int keep_alive) {
@@ -27,6 +28,7 @@ void respond_status(conn_t *c, const char *status, int keep_alive) {
   sbuf_add(&b, "\r\nConnection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");
   sbuf_add(&b, "\r\nContent-Length: 0\r\n");
+  if (status == RESP_503) sbuf_add(&b, "Retry-After: " REACTOR_RETRY_AFTER_S "\r\n");
   sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
   sbuf_add(&b, "\r\n");
   conn_queue(c, hdr, b.len);

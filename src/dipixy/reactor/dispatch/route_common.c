@@ -11,8 +11,8 @@ route_setup_status_t route_setup(const route_t *rt, unsigned *list_num, const pi
   out->ws_handle = ws_clients_touch(cinfo);
   if (out->ws_handle < 0) {
     capture_close(out->ctx);
-    return ROUTE_SETUP_501;
+    return ROUTE_SETUP_503;
   }
-  if (!hls_seg_touch(out->ctx, filter, pmt_pid, lcevc, seg_target, max_segs, container, part_target)) return ROUTE_SETUP_501;
+  if (!hls_seg_touch(out->ctx, filter, pmt_pid, lcevc, seg_target, max_segs, container, part_target)) return ROUTE_SETUP_503;
   return ROUTE_SETUP_OK;
 }

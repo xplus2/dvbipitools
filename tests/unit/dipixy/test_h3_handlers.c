@@ -4,7 +4,9 @@
 #include "h3_rig.h"
 #include "resp_cases.h"
 #include "dipixy/segment/segment.h"
+#include "dipixy/ts/pidfilter.h"
 #include "dipixy/ts/ts_push.h"
+#include "lib/demux/crc32.h"
 #include "dipixy/ws/ws_broadcast.h"
 #include "dipixy/ws/ws_clients.h"
 #include "dipixy/ws/ws_frame.h"
@@ -22,6 +24,7 @@ static const char *park_path(void) {
 }
 #define WS_PATH "/ui/ws/"
 #define SETTLE_MS 100
+#define COLD_WAIT_MS 12000
 #define COLD_WAITERS_MAX 64
 #define LLHLS_WAITERS_MAX 8
 #define TS_PKT 188
@@ -168,7 +171,7 @@ static const cold_case_t cold_cases[] = {
     {"hls", 404},
     {"llhls", 404},
     {"dash", 404},
-    {"mp4", 501},
+    {"mp4", 503},
 };
 
 START_TEST(cold_waiter_is_answered_when_its_deadline_passes) {
@@ -181,10 +184,42 @@ START_TEST(cold_waiter_is_answered_when_its_deadline_passes) {
   snprintf(path, sizeof path, "/udp/%s:%u/%s", PARK_GROUP, PARK_PORT, cc->route);
   sid = parked_request(&h, path);
   ck_assert_int_eq(h3r_resp_for(&h, sid)->status, 0);
-  h3_hls_cold_flush_waiters();
+  for (int waited = 0; waited < COLD_WAIT_MS && !h3r_cond_ended(&h, &sid); waited += SETTLE_MS) {
+    h3_hls_cold_flush_waiters();
+    (void)h3r_pump_timed(&h, h3r_cond_ended, &sid, SETTLE_MS);
+  }
   ck_assert_int_eq(h3r_wait_response(&h, sid), 1);
   ck_assert_int_eq(h3r_resp_for(&h, sid)->status, cc->expect_status);
+  if (cc->expect_status == 503) ck_assert_str_eq(client_resp_header_value(h3r_resp_for(&h, sid), "retry-after"), "5");
   h3_hls_cold_flush_waiters();
+  h3r_close(&h);
+}
+END_TEST
+
+START_TEST(cold_waiter_on_warming_store_expires_as_retryable_503) {
+  h3rig_t h;
+  int64_t sid;
+  capture_ctx_t *ctx;
+  pid_filter_t filter = {0};
+  lcevc_select_t lcevc = {0};
+
+  h3r_open(&h);
+  ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ck_assert_ptr_nonnull(ctx);
+  hls_store_init(4);
+  hls_store_open(ctx, &filter, 0, &lcevc, 3.0, 4, SEG_CONTAINER_TS);
+  sid = parked_request(&h, PARK_PATH);
+  {
+    hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 0, -1};
+
+    ck_assert_int_eq(h3_hls_cold_try_park(server_conn(), sid, &req), 1);
+  }
+  h3_hls_cold_flush_waiters();
+  ck_assert_int_eq(h3r_wait_response(&h, sid), 1);
+  ck_assert_int_eq(h3r_resp_for(&h, sid)->status, 503);
+  ck_assert_str_eq(client_resp_header_value(h3r_resp_for(&h, sid), "retry-after"), "5");
+  hls_store_close(ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS);
+  capture_close(ctx);
   h3r_close(&h);
 }
 END_TEST
@@ -470,6 +505,142 @@ START_TEST(ts_push_streams_deliver_ring_data_and_release_the_subscription) {
 }
 END_TEST
 
+static size_t psi_section(unsigned char *out, unsigned table_id, const unsigned char *body, size_t n) {
+  size_t len = n + 4;
+  uint32_t crc;
+
+  out[0] = (unsigned char)table_id;
+  out[1] = (unsigned char)(0xB0 | ((len >> 8) & 0x0F));
+  out[2] = (unsigned char)len;
+  memcpy(out + 3, body, n);
+  crc = crc32_mpeg(out, 3 + n);
+  for (int i = 0; i < 4; i++) out[3 + n + i] = (unsigned char)(crc >> (24 - 8 * i));
+  return 3 + n + 4;
+}
+
+static void psi_packet(unsigned char pkt[TS_PKT], unsigned pid, const unsigned char *sec, size_t slen) {
+  pkt[0] = 0x47;
+  pkt[1] = (unsigned char)(0x40 | (pid >> 8));
+  pkt[2] = (unsigned char)pid;
+  pkt[3] = 0x10;
+  pkt[4] = 0x00;
+  memcpy(pkt + 5, sec, slen);
+  memset(pkt + 5 + slen, 0xFF, TS_PKT - 5 - slen);
+}
+
+static void pes_packet(unsigned char pkt[TS_PKT], unsigned pid, unsigned cc, const char *payload) {
+  static const unsigned char hdr[9] = {0x00, 0x00, 0x01, 0xC0, 0x00, 0x00, 0x80, 0x00, 0x00};
+  size_t n = strlen(payload);
+
+  pkt[0] = 0x47;
+  pkt[1] = (unsigned char)(0x40 | (pid >> 8));
+  pkt[2] = (unsigned char)pid;
+  pkt[3] = (unsigned char)(0x10 | (cc & 0x0F));
+  memcpy(pkt + 4, hdr, sizeof hdr);
+  memcpy(pkt + 4 + sizeof hdr, payload, n);
+  memset(pkt + 4 + sizeof hdr + n, 0xFF, TS_PKT - 4 - sizeof hdr - n);
+}
+
+static void feed_rawaudio_psi(capture_ctx_t *ctx, unsigned pmt_pid, unsigned pid1, unsigned pid2) {
+  unsigned char body[24], sec[48], pkt[TS_PKT];
+  size_t n = 0, slen;
+  const unsigned es[2] = {pid1, pid2};
+
+  body[n++] = 0x00;
+  body[n++] = 0x01;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = 0x01;
+  body[n++] = (unsigned char)(0xE0 | (pmt_pid >> 8));
+  body[n++] = (unsigned char)pmt_pid;
+  slen = psi_section(sec, 0x00, body, n);
+  psi_packet(pkt, 0x0000, sec, slen);
+  ts_push_feed_pkt(ctx, pkt);
+
+  n = 0;
+  body[n++] = 0x00;
+  body[n++] = 0x01;
+  body[n++] = 0xC1;
+  body[n++] = 0x00;
+  body[n++] = 0x00;
+  body[n++] = 0xE0 | (pid1 >> 8);
+  body[n++] = (unsigned char)pid1;
+  body[n++] = 0xF0;
+  body[n++] = 0x00;
+  for (int i = 0; i < 2; i++) {
+    body[n++] = 0x03;
+    body[n++] = (unsigned char)(0xE0 | (es[i] >> 8));
+    body[n++] = (unsigned char)es[i];
+    body[n++] = 0xF0;
+    body[n++] = 0x00;
+  }
+  slen = psi_section(sec, 0x02, body, n);
+  psi_packet(pkt, pmt_pid, sec, slen);
+  ts_push_feed_pkt(ctx, pkt);
+}
+
+/* filter dies with this frame, as in the request dispatcher */
+static int subscribe_rawaudio_excluding(capture_ctx_t *ctx, unsigned pmt_pid, unsigned excluded_pid) {
+  pid_filter_t filter = {0};
+  lcevc_select_t lcevc = {0};
+  client_info_t info;
+
+  memset(&info, 0, sizeof info);
+  pid_filter_add(&filter, excluded_pid);
+  return ts_push_subscribe(ctx, &filter, CONN_PROTO_H3, -1, pmt_pid, 0, 1, &info, &lcevc);
+}
+
+static void clobber_stack(void) {
+  volatile unsigned char junk[4096];
+
+  memset((void *)junk, 0xA5, sizeof junk);
+}
+
+START_TEST(rawaudio_subscription_keeps_its_own_pid_filter) {
+  h3rig_t h;
+  int64_t sid;
+  h3_conn_t *c;
+  capture_ctx_t *ctx;
+  unsigned char pkt[TS_PKT];
+  client_resp_t *st;
+  int sub;
+
+  h3r_open(&h);
+  ts_push_init(1, 8);
+  ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ck_assert_ptr_nonnull(ctx);
+  sid = parked_request(&h, PARK_PATH);
+  c = server_conn();
+  sub = subscribe_rawaudio_excluding(ctx, 0x100, 0x101);
+  ck_assert_int_ge(sub, 0);
+  clobber_stack();
+  ck_assert_int_eq(h3_tspush_dispatch(c, find_req(c, sid), sub), 1);
+  flush_server(&h);
+  (void)h3r_pump_timed(&h, cond_never, NULL, SETTLE_MS);
+  st = h3r_resp_for(&h, sid);
+
+  feed_rawaudio_psi(ctx, 0x100, 0x101, 0x102);
+  pes_packet(pkt, 0x101, 0, "XX");
+  ts_push_feed_pkt(ctx, pkt);
+  pes_packet(pkt, 0x102, 0, "YYY");
+  ts_push_feed_pkt(ctx, pkt);
+  pes_packet(pkt, 0x102, 1, "Q");
+  ts_push_feed_pkt(ctx, pkt);
+  h3_tspush_wake(sub);
+  (void)h3r_pump_timed(&h, cond_never, NULL, SETTLE_MS);
+  ck_assert_uint_gt(st->total_bytes, 3u);
+  ck_assert_mem_eq(st->body, "YYY", 3);
+
+  ck_assert_int_eq(ngtcp2_conn_shutdown_stream(h.qc, 0, sid, NGHTTP3_H3_REQUEST_CANCELLED), 0);
+  (void)h3r_pump_timed(&h, cond_never, NULL, SETTLE_MS);
+  capture_flush_deferred_quiescent();
+  capture_close(ctx);
+  h3r_close(&h);
+}
+END_TEST
+
 static void setup_registries(void) {
   ws_clients_init(8);
   hls_seg_init(8);
@@ -487,6 +658,7 @@ static Suite *handlers_suite(void) {
   tcase_add_test(tc, oversized_etag_is_clamped_to_the_header_buffer);
   tcase_add_loop_test(tc, cors_allowlist_echoes_only_listed_origins, 0, (int)(sizeof cors_cases / sizeof cors_cases[0]));
   tcase_add_loop_test(tc, cold_waiter_is_answered_when_its_deadline_passes, 0, (int)(sizeof cold_cases / sizeof cold_cases[0]));
+  tcase_add_test(tc, cold_waiter_on_warming_store_expires_as_retryable_503);
   tcase_add_test(tc, cold_waiter_table_fills_and_releases_by_stream_and_connection);
   tcase_add_test(tc, llhls_waiter_is_answered_when_its_deadline_passes);
   tcase_add_test(tc, llhls_waiter_table_fills_and_releases_by_stream_and_connection);
@@ -500,6 +672,7 @@ static Suite *handlers_suite(void) {
   tcase_add_test(tc, websocket_stream_close_releases_the_sink);
   tcase_add_test(tc, connection_teardown_releases_open_websockets);
   tcase_add_test(tc, ts_push_streams_deliver_ring_data_and_release_the_subscription);
+  tcase_add_test(tc, rawaudio_subscription_keeps_its_own_pid_filter);
   suite_add_tcase(s, tc);
   return s;
 }

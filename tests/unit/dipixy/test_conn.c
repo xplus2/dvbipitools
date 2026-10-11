@@ -33,7 +33,8 @@ START_TEST(new_plain_conn_has_reading_state) {
   ck_assert_int_eq(c->slot, 0);
   ck_assert_int_eq(c->epfd, -1);
   ck_assert_int_eq(c->reactor_tid, -1);
-  ck_assert_int_eq(c->zc_confirmed_id, -1);
+  ck_assert_uint_eq(c->zc_next_id, 0);
+  ck_assert_int_eq(c->zc_await_count, 0);
   conn_free(c);
 }
 END_TEST
@@ -303,11 +304,11 @@ START_TEST(table_uninitialized_for_fd_is_null) {
 }
 END_TEST
 
-START_TEST(request_close_without_epfd_just_sets_flags) {
+START_TEST(request_close_without_epfd_just_sets_flag) {
   conn_t *c = conn_new(-1, NULL);
   conn_request_close(c);
-  ck_assert_int_eq(c->close_after_flush, 1);
-  ck_assert_int_eq(c->requested_close, 1);
+  ck_assert_int_eq(c->close_requested, 1);
+  ck_assert_int_eq(c->close_after_flush, 0); /* owner-only bit untouched */
   ck_assert_int_eq(c->want_write, 0); /* epfd < 0: no epoll touched */
   conn_free(c);
 }
@@ -356,7 +357,7 @@ START_TEST(request_close_twice_skips_second_epoll_ctl) {
   epoll_ctl(epfd, EPOLL_CTL_DEL, c->fd, NULL);
   conn_request_close(c); /* already armed: must not touch epoll_ctl */
   ck_assert_int_eq(c->want_write, 1);
-  ck_assert_int_eq(c->close_after_flush, 1);
+  ck_assert_int_eq(c->close_requested, 1);
 
   close(fds[0]);
   close(fds[1]);
@@ -426,7 +427,7 @@ static Suite *conn_suite(void) {
   tcase_add_test(tc, table_lifecycle_publish_unpublish);
   tcase_add_test(tc, table_ignores_out_of_range_fd);
   tcase_add_test(tc, table_uninitialized_for_fd_is_null);
-  tcase_add_test(tc, request_close_without_epfd_just_sets_flags);
+  tcase_add_test(tc, request_close_without_epfd_just_sets_flag);
   tcase_add_test(tc, request_close_with_epfd_arms_epollout);
   tcase_add_test(tc, request_close_twice_skips_second_epoll_ctl);
   tcase_add_test(tc, send_buffered_queues_both_chunks);

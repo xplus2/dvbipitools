@@ -33,6 +33,9 @@
 /* threads[] sized to this in reactor_run, -j past it fails at startup */
 #define REACTOR_MAX_WORKERS 256
 
+/* Retry-After secs on 503 cap refusals */
+#define REACTOR_RETRY_AFTER_S "5"
+
 extern long g_connections_total;
 extern _Thread_local int t_reactor_tid;
 extern _Thread_local int t_reactor_epfd;
@@ -217,6 +220,18 @@ static inline int llhls_ready_part(const hls_waiter_t *w) {
 
 static inline int hls_cold_ready(const hls_waiter_t *w) {
   return w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container);
+}
+
+/* keyframe wait + one segment cut: up to GOP + segment_size, GOP unknown */
+#define HLS_COLD_GOP_ALLOWANCE_MS 10000
+
+static inline int hls_cold_timeout_ms(double segment_size) {
+  return (int)(segment_size * 2000.0) + HLS_COLD_GOP_ALLOWANCE_MS;
+}
+
+/* park expired unready: 503 (retry) while store warms up, 404 no source */
+static inline int hls_cold_expired_status(const hls_waiter_t *w) {
+  return hls_store_find(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container) ? 503 : 404;
 }
 
 /* 1 parked (caller stops touching conn/stream), 0 table full */

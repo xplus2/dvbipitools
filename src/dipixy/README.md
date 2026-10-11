@@ -7,6 +7,10 @@ MPEG-DASH (regular and CMAF Low-Latency), progressive HTTP/TS and progressive MP
 
 Optionally, it's also a DLNA MediaServer for your home network to consume streams without an additional Set-Top-Box.
 
+> Warning: Like `udpxy`, this tools allows users to specify sources in the request URI **by default**.
+> For a publicly reachable installation, consider setting the `--no-url-(rtp|udp|srt)` flags
+> (especially `--no-url-srt`, since it's not limited to multicast addresses).
+
 ## Usage
 ```sh
 dipixy [-l addr:port] [-i source ...] [options]

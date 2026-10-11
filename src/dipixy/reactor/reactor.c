@@ -112,7 +112,7 @@ void reactor_flush_or_close(int epfd, conn_t *c, void (*close_fn)(int, conn_t *)
   int rc;
   pthread_mutex_lock(&c->out_lock);
   dead = c->dead;
-  caf = c->close_after_flush;
+  caf = c->close_after_flush || atomic_load_explicit(&c->close_requested, memory_order_acquire);
   pthread_mutex_unlock(&c->out_lock);
   rc = dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);
   if (rc == CONN_FLUSH_ERROR || (rc == CONN_FLUSH_DONE && caf)) close_fn(epfd, c);

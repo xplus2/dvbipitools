@@ -42,7 +42,7 @@ void reactor_dashchunk_flush(int epfd, conn_t *c) {
   int rc;
   pthread_mutex_lock(&c->out_lock);
   dead = c->dead;
-  close_after = c->close_after_flush;
+  close_after = c->close_after_flush || atomic_load_explicit(&c->close_requested, memory_order_acquire);
   keep = c->keep_alive;
   pthread_mutex_unlock(&c->out_lock);
   rc = dead ? CONN_FLUSH_ERROR : conn_flush(c, epfd);

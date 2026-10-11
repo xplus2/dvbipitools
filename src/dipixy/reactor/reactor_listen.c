@@ -149,7 +149,7 @@ void reactor_teardown_listeners(const reactor_listeners_t *rl, int tid) {
 #endif
 }
 
-/* RLIMIT_NOFILE soft->hard, accept() only. table sizing: conn_table_capacity() */
+/* RLIMIT_NOFILE soft->hard, accept() only. sizes conn table via conn_table_capacity() */
 void reactor_raise_nofile_limit(void) {
   struct rlimit rl;
   if (getrlimit(RLIMIT_NOFILE, &rl) != 0) return;

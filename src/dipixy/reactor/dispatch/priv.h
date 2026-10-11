@@ -14,6 +14,7 @@ extern const char RESP_404[];
 extern const char RESP_405[];
 extern const char RESP_431[];
 extern const char RESP_501[];
+extern const char RESP_503[];
 extern const char RESP_504[];
 
 /* resp.c */

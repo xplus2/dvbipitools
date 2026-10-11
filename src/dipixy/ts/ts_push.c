@@ -240,7 +240,7 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto
   }
 
   if (rawaudio) {
-    rawaudio_demux = rawaudio_demux_new(pmt_pid, ts_push_pid_excluded, filter, ts_push_rawaudio_emit, s);
+    rawaudio_demux = rawaudio_demux_new(pmt_pid, ts_push_pid_excluded, &s->filter, ts_push_rawaudio_emit, s);
     if (!rawaudio_demux) goto fail_slot;
   }
   ws_handle = ws_clients_add_persistent(info);

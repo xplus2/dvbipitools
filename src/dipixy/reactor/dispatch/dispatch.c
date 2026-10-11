@@ -37,22 +37,14 @@ static http_method_t parse_http_method(const char *method, size_t method_len) {
   return HTTP_METHOD_OTHER;
 }
 
-static void dispatch_dlna_subprotocol(int epfd, conn_t *c, const char *path, http_method_t method_kind, const struct phr_header *headers, size_t num_headers, int keep_alive) {
+static void dispatch_dlna_subprotocol(int epfd, conn_t *c, const char *path, http_method_t method_kind, const struct phr_header *headers, size_t num_headers, size_t body_len, int keep_alive) {
   if (!reactor_cfg()->enable_dlna) {
     respond_status(c, RESP_404, keep_alive);
   } else {
     switch (method_kind) {
       case HTTP_METHOD_POST:
         if (!strcmp(path, "/dlna/cd_control") || !strcmp(path, "/dlna/cm_control")) {
-          char clbuf[16];
-          size_t body_len = 0;
-          if (find_header(headers, num_headers, "Content-Length", clbuf, sizeof clbuf)) {
-            char *end;
-            unsigned long cl = strtoul(clbuf, &end, 10);
-            if (*end == '\0') body_len = (size_t)cl;
-          }
-          serve_dlna_control(c, !strcmp(path, "/dlna/cd_control") ? "cd" : "cm", headers, num_headers, (char *)c->in.buf + c->req_bytes, body_len, keep_alive);
-          c->req_bytes += body_len;
+          serve_dlna_control(c, !strcmp(path, "/dlna/cd_control") ? "cd" : "cm", headers, num_headers, (char *)c->in.buf + c->req_bytes - body_len, body_len, keep_alive);
         } else {
           respond_status(c, RESP_405, keep_alive);
         }
@@ -153,7 +145,7 @@ static route_result_t dispatch_route_ts(conn_t *c, const route_t *rt, const pid_
   sub = ts_push_subscribe(ctx, filter, CONN_PROTO_H1, c->fd, tp_pmt_pid, spts, rawaudio, &cinfo, lcevc);
   if (sub < 0) {
     capture_close(ctx);
-    respond_status(c, RESP_501, keep_alive);
+    respond_status(c, RESP_503, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
   c->slot = sub;
@@ -177,13 +169,13 @@ static route_result_t dispatch_route_hls(conn_t *c, const route_t *rt, const pid
     respond_status(c, RESP_404, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
-  if (st == ROUTE_SETUP_501) {
-    respond_status(c, RESP_501, keep_alive);
+  if (st == ROUTE_SETUP_503) {
+    respond_status(c, RESP_503, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
   if (!strcmp(rt->hls_file, "index.m3u8") && !hls_store_ready(rs.ctx, filter, pmt_pid, lcevc, container) &&
       hls_cold_try_park(c, &(hls_cold_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, HLS_COLD_HLS, container, 0, is_head, keep_alive, origin_hdr,
-        (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle})) {
+        hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle})) {
     c->state = CONN_DISPATCH;
     return ROUTE_RESULT_PARKED;
   }
@@ -210,12 +202,12 @@ static route_result_t dispatch_route_llhls(conn_t *c, const route_t *rt, const p
     respond_status(c, RESP_404, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
-  if (st == ROUTE_SETUP_501) {
-    respond_status(c, RESP_501, keep_alive);
+  if (st == ROUTE_SETUP_503) {
+    respond_status(c, RESP_503, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
   if (!strcmp(rt->hls_file, "index_ll.m3u8") && !hls_ll_store_ready(rs.ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_TS) && hls_cold_try_park(c, &(hls_cold_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, HLS_COLD_LLHLS, SEG_CONTAINER_TS, 0, is_head, keep_alive, origin_hdr,
-      (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle})) {
+      hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle})) {
     c->state = CONN_DISPATCH;
     return ROUTE_RESULT_PARKED;
   }
@@ -247,8 +239,8 @@ static route_result_t dispatch_route_dash(conn_t *c, const route_t *rt, const pi
     respond_status(c, RESP_404, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
-  if (st == ROUTE_SETUP_501) {
-    respond_status(c, RESP_501, keep_alive);
+  if (st == ROUTE_SETUP_503) {
+    respond_status(c, RESP_503, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
   if (strcmp(rt->hls_file, "manifest.mpd") != 0) {
@@ -261,7 +253,7 @@ static route_result_t dispatch_route_dash(conn_t *c, const route_t *rt, const pi
     return ROUTE_RESULT_FINISH;
   }
   if (!hls_store_ready(rs.ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4) &&
-      hls_cold_try_park(c, &(hls_cold_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, HLS_COLD_DASH, SEG_CONTAINER_FMP4, want_ll, is_head, keep_alive, origin_hdr, (int)(reactor_cfg()->segment_size * 2000.0), rs.ws_handle})) {
+      hls_cold_try_park(c, &(hls_cold_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, HLS_COLD_DASH, SEG_CONTAINER_FMP4, want_ll, is_head, keep_alive, origin_hdr, hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle})) {
     c->state = CONN_DISPATCH;
     return ROUTE_RESULT_PARKED;
   }
@@ -293,26 +285,26 @@ static route_result_t dispatch_route_mp4(conn_t *c, const route_t *rt, const pid
   wsh = ws_clients_touch(&cinfo);
   if (wsh < 0) {
     capture_close(ctx);
-    respond_status(c, RESP_501, keep_alive);
+    respond_status(c, RESP_503, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
   if (!hls_seg_touch(ctx, filter, pmt_pid, lcevc, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_FMP4, 0.0)) {
-    respond_status(c, RESP_501, keep_alive);
+    respond_status(c, RESP_503, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
   if (!hls_store_ready(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4) &&
-      hls_cold_try_park(c, &(hls_cold_park_req_t){ctx, filter, pmt_pid, lcevc, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, is_head, keep_alive, origin_hdr, (int)(reactor_cfg()->segment_size * 2000.0), wsh})) {
+      hls_cold_try_park(c, &(hls_cold_park_req_t){ctx, filter, pmt_pid, lcevc, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, is_head, keep_alive, origin_hdr, hls_cold_timeout_ms(reactor_cfg()->segment_size), wsh})) {
     c->state = CONN_DISPATCH;
     return ROUTE_RESULT_PARKED;
   }
   if (!mp4push_try_attach(c, ctx, filter, pmt_pid, lcevc, wsh)) {
-    respond_status(c, RESP_501, keep_alive);
+    respond_status(c, RESP_503, keep_alive);
   }
   return ROUTE_RESULT_FINISH;
 }
 
 /* dispatche request from c->in: parse reqln */
-static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t method_len, const char *path_in, size_t path_len, int minor_version, const struct phr_header *headers, size_t num_headers, size_t header_bytes) {
+static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t method_len, const char *path_in, size_t path_len, int minor_version, const struct phr_header *headers, size_t num_headers, size_t header_bytes, size_t body_len) {
   char *path;
   char *qmark;
   const char *query;
@@ -329,11 +321,12 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
   int is_head;
   int keep_alive;
   const char *want_auth;
-  c->req_bytes = header_bytes;
+  c->req_bytes = header_bytes + body_len;
   dipixy_metrics_note_request();
   path = (char *)path_in;
   path[path_len] = '\0';
   keep_alive = wants_keepalive(minor_version, headers, num_headers);
+  if (atomic_load_explicit(&c->read_done, memory_order_relaxed) && c->in.len <= c->req_bytes) keep_alive = 0; /* FIN seen, nothing pipelined */
   if_none_match = NULL;
   if (find_header(headers, num_headers, "If-None-Match", inm_buf, sizeof inm_buf)) {
     strip_etag_quotes(inm_buf);
@@ -354,7 +347,7 @@ static void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t met
   }
 
   if (method_kind == HTTP_METHOD_POST || method_kind == HTTP_METHOD_SUBSCRIBE || method_kind == HTTP_METHOD_UNSUBSCRIBE) {
-    dispatch_dlna_subprotocol(epfd, c, path, method_kind, headers, num_headers, keep_alive);
+    dispatch_dlna_subprotocol(epfd, c, path, method_kind, headers, num_headers, body_len, keep_alive);
     return;
   }
 
@@ -419,23 +412,44 @@ finish:
 
 #define REACTOR_MAX_HEADERS 100
 
-void reactor_read(int epfd, conn_t *c) {
+typedef enum { BODY_FRAMING_OK, BODY_FRAMING_BAD, BODY_FRAMING_UNSUPPORTED } body_framing_t;
+
+/* strict: single all-digit Content-Length, no Transfer-Encoding. else BAD (TE+CL) or UNSUPPORTED (TE) */
+static body_framing_t request_body_len(const struct phr_header *headers, size_t num_headers, size_t *body_len) {
+  int have_cl = 0, have_te = 0;
+  *body_len = 0;
+  for (size_t i = 0; i < num_headers; i++) {
+    const struct phr_header *h = &headers[i];
+    if (h->name_len == 17 && !strncasecmp(h->name, "Transfer-Encoding", 17)) {
+      have_te = 1;
+    } else if (h->name_len == 14 && !strncasecmp(h->name, "Content-Length", 14)) {
+      size_t v = 0;
+      if (have_cl || h->value_len == 0 || h->value_len > 9) return BODY_FRAMING_BAD;
+      for (size_t k = 0; k < h->value_len; k++) {
+        if (h->value[k] < '0' || h->value[k] > '9') return BODY_FRAMING_BAD;
+        v = v * 10 + (size_t)(h->value[k] - '0');
+      }
+      have_cl = 1;
+      *body_len = v;
+    }
+  }
+  if (have_te) return have_cl ? BODY_FRAMING_BAD : BODY_FRAMING_UNSUPPORTED;
+  return BODY_FRAMING_OK;
+}
+
+static void reactor_read_once(int epfd, conn_t *c) {
   const char *method, *path;
   size_t method_len, path_len;
   int minor_version;
   struct phr_header headers[REACTOR_MAX_HEADERS];
   size_t num_headers;
   int pret;
-  char clbuf[16];
+  size_t body_len;
+  body_framing_t framing;
   for (;;) {
     size_t room;
     ssize_t n;
-    if (c->in.len >= REACTOR_MAX_REQ - 1) {
-      respond_status(c, RESP_431, 0);
-      c->state = CONN_WRITING;
-      reactor_finish(epfd, c);
-      return;
-    }
+    if (c->in.len >= REACTOR_MAX_REQ - 1) break; /* full: parse first, 431 only if incomplete */
     if (conn_in_reserve(c, 4096 + 1) < 0) { /* +1: room for NUL after fill */
       reactor_close(epfd, c);
       return;
@@ -447,8 +461,8 @@ void reactor_read(int epfd, conn_t *c) {
       continue;
     }
     if (n == 0) {
-      reactor_close(epfd, c);
-      return;
+      atomic_store_explicit(&c->read_done, 1, memory_order_relaxed); /* half-close: serve what is buffered */
+      break;
     }
     if (errno == EAGAIN || errno == EWOULDBLOCK) break;
     reactor_close(epfd, c);
@@ -459,7 +473,14 @@ void reactor_read(int epfd, conn_t *c) {
   num_headers = REACTOR_MAX_HEADERS;
   pret = phr_parse_request((const char *)c->in.buf, c->in.len, &method, &method_len, &path, &path_len, &minor_version, headers, &num_headers, 0);
   if (pret == -2) {
-    reactor_arm(epfd, c, t_tls_want_write);
+    if (c->in.len >= REACTOR_MAX_REQ - 1) {
+      respond_status(c, RESP_431, 0);
+      c->state = CONN_WRITING;
+      reactor_finish(epfd, c);
+      return;
+    }
+    if (atomic_load_explicit(&c->read_done, memory_order_relaxed)) reactor_close(epfd, c);
+    else reactor_arm(epfd, c, t_tls_want_write);
     return;
   }
   if (pret == -1) {
@@ -468,24 +489,48 @@ void reactor_read(int epfd, conn_t *c) {
     reactor_finish(epfd, c);
     return;
   }
-  if (find_header(headers, num_headers, "Content-Length", clbuf, sizeof clbuf)) {
-    char *end;
-    unsigned long cl = strtoul(clbuf, &end, 10);
-    if (*end == '\0' && cl > 0) {
-      size_t need = (size_t)pret + (size_t)cl;
-      if (need > REACTOR_MAX_REQ - 1) {
-        respond_status(c, RESP_400, 0);
-        c->state = CONN_WRITING;
-        reactor_finish(epfd, c);
-        return;
-      }
-      if (c->in.len < need) {
-        reactor_arm(epfd, c, t_tls_want_write);
-        return;
-      }
+  framing = request_body_len(headers, num_headers, &body_len);
+  if (framing != BODY_FRAMING_OK) {
+    respond_status(c, framing == BODY_FRAMING_BAD ? RESP_400 : RESP_501, 0);
+    c->state = CONN_WRITING;
+    reactor_finish(epfd, c);
+    return;
+  }
+  if (body_len > 0) {
+    size_t need = (size_t)pret + body_len;
+    if (need > REACTOR_MAX_REQ - 1) {
+      respond_status(c, RESP_400, 0);
+      c->state = CONN_WRITING;
+      reactor_finish(epfd, c);
+      return;
+    }
+    if (c->in.len < need) {
+      if (atomic_load_explicit(&c->read_done, memory_order_relaxed)) reactor_close(epfd, c);
+      else reactor_arm(epfd, c, t_tls_want_write);
+      return;
     }
   }
-  reactor_dispatch(epfd, c, method, method_len, path, path_len, minor_version, headers, num_headers, (size_t)pret);
+  reactor_dispatch(epfd, c, method, method_len, path, path_len, minor_version, headers, num_headers, (size_t)pret, body_len);
+}
+
+static _Thread_local conn_t *t_read_conn;
+static _Thread_local conn_t *t_read_again;
+static _Thread_local int t_read_iters;
+
+#define REACTOR_PIPELINE_BURST 32
+
+void reactor_read(int epfd, conn_t *c) {
+  conn_t *outer = t_read_conn;
+  int outer_iters = t_read_iters;
+  t_read_conn = c;
+  t_read_iters = 0;
+  do {
+    t_read_again = NULL;
+    reactor_read_once(epfd, c);
+  } while (t_read_again == c); /* set by keepalive as last act, c alive */
+  t_read_again = NULL;
+  t_read_conn = outer;
+  t_read_iters = outer_iters;
 }
 
 void reactor_keepalive(int epfd, conn_t *c) {
@@ -498,5 +543,10 @@ void reactor_keepalive(int epfd, conn_t *c) {
   c->keep_alive = 0;
   c->state = CONN_READING;
   reactor_arm(epfd, c, 0);
-  if (leftover) reactor_read(epfd, c); /* pipelined buffered B, dispatch without waiting for other sock reads */
+  if (!leftover) return;
+  /* pipelined buffered B, dispatch without waiting for other sock reads. loop in reactor_read, no recursion */
+  if (t_read_conn == c) {
+    if (++t_read_iters < REACTOR_PIPELINE_BURST) t_read_again = c;
+    else reactor_arm(epfd, c, 1); /* yield: EPOLLOUT wakes reactor_read for buffered requests */
+  } else reactor_read(epfd, c);
 }

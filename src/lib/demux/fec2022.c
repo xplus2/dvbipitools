@@ -259,7 +259,7 @@ int fec2022_dec_source(fec2022_dec_t *dec, const unsigned char *pkt, size_t len)
     memcpy(dec->slot_pkt + si * FEC2022_MAX_PKT, pkt, len);
     cs->real_count++;
   }
-  if (cs->real_count == dec->d)
+  if (cs->real_count == dec->d || (cs->repair_seen && cs->real_count == dec->d - 1))
     resolve_column(dec, c);
   else
     release_pending(dec);

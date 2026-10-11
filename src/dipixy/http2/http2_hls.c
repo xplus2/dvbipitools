@@ -64,7 +64,7 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
   char etag_buf[56];
   size_t len_n;
   size_t etag_n;
-  nghttp2_nv nva[7];
+  nghttp2_nv nva[8];
   size_t nvlen = 0;
   nghttp2_data_provider dp;
   h2_body_src_t *src;
@@ -84,6 +84,7 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
     nva[nvlen++] = (nghttp2_nv){(uint8_t *)"access-control-allow-origin", (uint8_t *)cors_val, 27, strlen(cors_val),NGHTTP2_NV_FLAG_NONE};
     if (cors_vary) nva[nvlen++] = (nghttp2_nv){(uint8_t *)"vary", (uint8_t *)"Origin", 4, 6, NGHTTP2_NV_FLAG_NONE};
   }
+  if (status == 503) nva[nvlen++] = (nghttp2_nv)MAKE_NV_LIT("retry-after", REACTOR_RETRY_AFTER_S);
   nvlen = h2_nv_altsvc(nva, nvlen);
   if (!body) {
     nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, NULL);
@@ -166,8 +167,10 @@ static void h2_hls_cold_finish(hls_waiter_t *w) {
     int sub = mp4push_subscribe(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, CONN_PROTO_H2);
     if (sub < 0 || !h2_mp4push_dispatch(conn, conn->c, (int32_t)w->stream_id, sub, w->ws_handle)) {
       if (sub >= 0) mp4push_sub_close(sub);
-      h2_submit_resp(conn, (int32_t)w->stream_id, 501, NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);
+      h2_submit_resp(conn, (int32_t)w->stream_id, 503, NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);
     }
+  } else if (!hls_cold_ready(w)) {
+    h2_submit_resp(conn, (int32_t)w->stream_id, hls_cold_expired_status(w), NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);
   } else {
     handled = httpng_hls_cold_render(w->kind, w->container, w->want_ll, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, &resp);
     if (!handled) {

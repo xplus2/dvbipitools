@@ -64,6 +64,9 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + UAF on snap/segmenter retire under OOM
     + qsbr: pad per-worker epochs to cache lines
     + fix memory ordering on arm64 in qsbr_worker_online
+    + fixed rawaudio freed memory read
+    + fixed idle client pool starvation
+    + 503 Retry-After when appropriate
   * dipimetrics
     + better concurrency handling (>8 conns)
     + stricter OpenMetrics 1.0.0 response

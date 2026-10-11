@@ -80,6 +80,67 @@ START_TEST(oversized_request_body_is_400) {
 }
 END_TEST
 
+static size_t count_responses(const char *reply) {
+  size_t n = 0;
+  for (const char *p = reply; (p = strstr(p, "HTTP/1.1 ")) != NULL; p += 9) n++;
+  return n;
+}
+
+START_TEST(get_body_is_not_parsed_as_next_request) {
+  run_t r;
+  char reply[REPLY_MAX];
+
+  run_start(&r, 0, NO_ARGS);
+  raw_exchange(r.port,
+               "GET /index.html HTTP/1.1\r\nHost: x\r\nContent-Length: 40\r\n\r\nGET /index.html HTTP/1.1\r\nHost: x\r\n\r\n"
+               "GET /index.html HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n",
+               reply, sizeof reply);
+  ck_assert_uint_eq(count_responses(reply), 2);
+  run_stop(&r);
+}
+END_TEST
+
+START_TEST(transfer_encoding_is_501) {
+  run_t r;
+  char reply[REPLY_MAX];
+
+  run_start(&r, 0, NO_ARGS);
+  raw_exchange(r.port, "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n", reply, sizeof reply);
+  ck_assert(has_status(reply, "501"));
+  run_stop(&r);
+}
+END_TEST
+
+START_TEST(transfer_encoding_with_content_length_is_400) {
+  run_t r;
+  char reply[REPLY_MAX];
+
+  run_start(&r, 0, NO_ARGS);
+  raw_exchange(r.port, "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\nContent-Length: 5\r\n\r\n0\r\n\r\n", reply, sizeof reply);
+  ck_assert(has_status(reply, "400"));
+  run_stop(&r);
+}
+END_TEST
+
+START_TEST(bad_content_length_is_400) {
+  static const char *const reqs[] = {
+      "GET / HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\nabcde",
+      "GET / HTTP/1.1\r\nHost: x\r\nContent-Length: +5\r\n\r\nabcde",
+      "GET / HTTP/1.1\r\nHost: x\r\nContent-Length: -1\r\n\r\n",
+      "GET / HTTP/1.1\r\nHost: x\r\nContent-Length: \r\n\r\n",
+  };
+  run_t r;
+  char reply[REPLY_MAX];
+
+  run_start(&r, 0, NO_ARGS);
+  for (size_t i = 0; i < sizeof reqs / sizeof reqs[0]; i++) {
+    raw_exchange(r.port, reqs[i], reply, sizeof reply);
+    ck_assert_msg(has_status(reply, "400"), "case %zu", i);
+  }
+  run_stop(&r);
+}
+END_TEST
+
 START_TEST(head_requests_get_headers_only) {
   run_t r;
   char reply[REPLY_MAX];
@@ -390,6 +451,10 @@ static Suite *routes_suite(void) {
   tcase_add_test(tc, malformed_request_is_400);
   tcase_add_test(tc, oversized_request_headers_are_431);
   tcase_add_test(tc, oversized_request_body_is_400);
+  tcase_add_test(tc, get_body_is_not_parsed_as_next_request);
+  tcase_add_test(tc, transfer_encoding_is_501);
+  tcase_add_test(tc, transfer_encoding_with_content_length_is_400);
+  tcase_add_test(tc, bad_content_length_is_400);
   tcase_add_test(tc, head_requests_get_headers_only);
   tcase_add_test(tc, status_script_is_json);
   tcase_add_test(tc, metrics_are_off_by_default);

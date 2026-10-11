@@ -6,6 +6,7 @@
 
 #include <signal.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -44,8 +45,8 @@ ssize_t tls_net_send(int fd, const void *buf, size_t len);
 ssize_t tls_net_recv(int fd, void *buf, size_t len);
 /* MSG_ZEROCOPY send, falls back to plain send() on EINVAL/ENOBUFS. used_zc: 1 if zerocopy hit */
 ssize_t tls_net_send_zc(int fd, const void *buf, size_t len, int *used_zc);
-/* drains MSG_ERRQUEUE, hi_out = highest confirmed zc id. 1 if any found */
-int tls_zc_drain(int fd, int *hi_out);
+/* drains MSG_ERRQUEUE, cb(lo, hi, arg) per completed inclusive u32 id range, any order. 1 if any found */
+int tls_zc_drain(int fd, void (*cb)(uint32_t lo, uint32_t hi, void *arg), void *arg);
 int tls_is_tls(int fd);
 int tls_client_cert_verified(int fd);
 /* CN of verified client cert into buf, empty string if none */

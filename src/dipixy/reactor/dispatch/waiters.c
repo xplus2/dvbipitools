@@ -57,9 +57,15 @@ static void hls_cold_finish(hls_waiter_t *w) {
   conn_t *c = w->owner;
   int served;
   size_t bytes = 0;
+  if (w->kind != HLS_COLD_MP4 && !hls_cold_ready(w)) {
+    respond_status(c, hls_cold_expired_status(w) == 503 ? RESP_503 : RESP_404, w->keep_alive);
+    c->state = CONN_WRITING;
+    reactor_finish(t_reactor_epfd, c);
+    return;
+  }
   switch (w->kind) {
     case HLS_COLD_MP4:
-      if (!mp4push_try_attach(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->ws_handle)) respond_status(c, RESP_501, w->keep_alive);
+      if (!mp4push_try_attach(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->ws_handle)) respond_status(c, RESP_503, w->keep_alive);
       break;
     case HLS_COLD_LLHLS:
       served = hls_serve_ll(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, w->keep_alive, NULL, w->origin[0] ? w->origin : NULL, &bytes);
@@ -140,7 +146,7 @@ static void ts_cold_finish(ts_cold_waiter_t *w) {
     sub = ts_push_subscribe(w->cap_ctx, &w->filter, CONN_PROTO_H1, c->fd, w->tp_pmt_pid, w->spts, w->rawaudio, &cinfo, &w->lcevc);
     if (sub < 0) {
       capture_close(w->cap_ctx);
-      respond_status(c, RESP_501, w->keep_alive);
+      respond_status(c, RESP_503, w->keep_alive);
     } else {
       c->slot = sub;
       conn_queue(c, header, header_len);
