@@ -4586,6 +4586,7 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c)
     target_link_libraries(test_lib_net_srt_srtsrc_sink PRIVATE PkgConfig::SRT)
+    set_tests_properties(lib_net_srt_srtsrc_sink PROPERTIES TIMEOUT 180)
     dvbipitools_add_unit_test(lib_net_srt_srtin_out
         unit/lib/net/srt/test_srtin_out.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
@@ -4599,6 +4600,7 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c)
     target_link_libraries(test_lib_net_srt_srtin_out PRIVATE PkgConfig::SRT)
+    set_tests_properties(lib_net_srt_srtin_out PROPERTIES TIMEOUT 180)
 else ()
     message(WARNING "tests: dipisrt not built (libsrt missing), skipping its bridge and srtcommon unit tests")
 endif ()

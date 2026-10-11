@@ -216,25 +216,31 @@ START_TEST(websocket_text_commands_are_answered_and_reloads_are_accepted) {
 }
 END_TEST
 
+static void drain(int fd) {
+  char buf[64];
+  ssize_t n;
+
+  do {
+    n = recv(fd, buf, sizeof buf, 0);
+  } while (n > 0);
+}
+
 START_TEST(websocket_protocol_violations_and_hangups_close_the_connection) {
   static const uint8_t unmasked_text[] = {0x81, 0x02, 'h', 'i'};
   static const uint8_t reserved_opcode[] = {0x83, 0x80, 0x00, 0x00, 0x00, 0x00};
   run_t r;
-  char buf[64];
   int fd;
 
   run_start(&r, 0, NULL);
 
   fd = ws_open(r.port);
   ck_assert_int_eq((int)write(fd, unmasked_text, sizeof unmasked_text), (int)sizeof unmasked_text);
-  while (recv(fd, buf, sizeof buf, 0) > 0) {
-  }
+  drain(fd);
   close(fd);
 
   fd = ws_open(r.port);
   ck_assert_int_eq((int)write(fd, reserved_opcode, sizeof reserved_opcode), (int)sizeof reserved_opcode);
-  while (recv(fd, buf, sizeof buf, 0) > 0) {
-  }
+  drain(fd);
   close(fd);
 
   fd = ws_open(r.port);

@@ -38,7 +38,8 @@ static int tcp_pair(int fds[2]) {
 
 struct zc_acc {
   unsigned calls;
-  uint32_t lo, hi;
+  uint32_t lo;
+  uint32_t hi;
 };
 
 static void zc_cb(uint32_t lo, uint32_t hi, void *arg) {
@@ -108,7 +109,9 @@ START_TEST(plain_send_recv_and_close) {
 END_TEST
 
 START_TEST(zerocopy_send_delivers_and_completion_drains) {
-  int fds[2], one = 1, used = -1;
+  int fds[2];
+  int one = 1;
+  int used = -1;
   char out[64];
   struct zc_acc acc;
   struct pollfd p;

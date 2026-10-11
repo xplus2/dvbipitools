@@ -94,6 +94,14 @@ static int pump_until_connected(srtout_t *out, pthread_t th, opener_t *o) {
   return 0;
 }
 
+static void require_out(srtout_t *out, opener_t *o, pthread_t th) {
+  if (!out) {
+    atomic_store(&o->stop, 1);
+    pthread_join(th, NULL);
+  }
+  ck_assert_ptr_nonnull(out);
+}
+
 static void exchange_payload(srtout_t *out, srtin_t *in) {
   unsigned char payload[CHUNKS * CHUNK_BYTES];
   unsigned char rx[CHUNKS * CHUNK_BYTES];
@@ -157,7 +165,7 @@ START_TEST(listener_receives_what_the_sender_writes) {
   oc.queue_metrics = SRT_QUEUE_METRICS_FULL;
   oc.safety_mult = 99;
   out = srtout_open(&oc);
-  ck_assert_ptr_nonnull(out);
+  require_out(out, &o, th);
   ck_assert_int_eq(pump_until_connected(out, th, &o), 1);
   ck_assert_ptr_nonnull(o.in);
   exchange_payload(out, o.in);
@@ -188,7 +196,7 @@ START_TEST(rendezvous_pair_links_up) {
   oc.local_host = "127.0.0.1";
   oc.local_port = port_b;
   out = srtout_open(&oc);
-  ck_assert_ptr_nonnull(out);
+  require_out(out, &o, th);
   ck_assert_int_eq(pump_until_connected(out, th, &o), 1);
   exchange_payload(out, o.in);
   srtout_close(out);
@@ -213,7 +221,7 @@ START_TEST(mismatched_passphrases_never_link) {
   out_cfg(&oc, port);
   oc.opts.passphrase = "fedcba9876543210";
   out = srtout_open(&oc);
-  ck_assert_ptr_nonnull(out);
+  require_out(out, &o, th);
   memset(&st, 0, sizeof st);
   deadline = now_seconds() + 2.0;
   while (now_seconds() < deadline) {
@@ -368,7 +376,7 @@ START_TEST(a_dead_peer_makes_the_receiver_fail_and_the_sender_reconnect) {
   out_cfg(&oc, port);
   oc.opts.latency_ms = 50;
   out = srtout_open(&oc);
-  ck_assert_ptr_nonnull(out);
+  require_out(out, &o, th);
   ck_assert_int_eq(pump_until_connected(out, th, &o), 1);
 
   srtin_close(o.in);
@@ -410,7 +418,7 @@ START_TEST(the_listener_reaccepts_after_the_sender_vanishes) {
   usleep(100000);
   out_cfg(&oc, port);
   out = srtout_open(&oc);
-  ck_assert_ptr_nonnull(out);
+  require_out(out, &o, th);
   ck_assert_int_eq(pump_until_connected(out, th, &o), 1);
   ck_assert_int_eq(srtin_read(o.in, buf, sizeof buf, &reconnected), 0);
   srtout_close(out);
@@ -442,7 +450,7 @@ static Suite *srtin_out_suite(void) {
   Suite *s = suite_create("lib_net_srt_srtin_out");
   TCase *tc = tcase_create("core");
 
-  tcase_set_timeout(tc, 90);
+  tcase_set_timeout(tc, 60);
   tcase_add_loop_test(tc, listener_receives_what_the_sender_writes, 0, 2);
   tcase_add_test(tc, rendezvous_pair_links_up);
   tcase_add_test(tc, mismatched_passphrases_never_link);

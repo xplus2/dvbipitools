@@ -3,6 +3,7 @@
 
 #include "jsonbuf.h"
 
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,36 @@
 #include "../sys/ioutil.h"
 
 #define JBUF_SHRINK_RATIO 2
+#define JBUF_OWN_MAX 16
+
+static _Thread_local struct {
+  jbuf_t *slot[JBUF_OWN_MAX];
+  int n;
+} t_own;
+static pthread_key_t g_own_key;
+static pthread_once_t g_own_once = PTHREAD_ONCE_INIT;
+
+static void own_release(void *p) {
+  (void)p;
+  for (int i = 0; i < t_own.n; i++) {
+    free(t_own.slot[i]->buf);
+    t_own.slot[i]->buf = NULL;
+    t_own.slot[i]->len = 0;
+    t_own.slot[i]->cap = 0;
+  }
+  t_own.n = 0;
+}
+
+static void own_key_init(void) { pthread_key_create(&g_own_key, own_release); }
+
+void jbuf_thread_own(jbuf_t *j) {
+  for (int i = 0; i < t_own.n; i++)
+    if (t_own.slot[i] == j) return;
+  if (t_own.n >= JBUF_OWN_MAX) return;
+  pthread_once(&g_own_once, own_key_init);
+  pthread_setspecific(g_own_key, &t_own);
+  t_own.slot[t_own.n++] = j;
+}
 
 void jbuf_reset(jbuf_t *j) {
   size_t need = j->len + 1;

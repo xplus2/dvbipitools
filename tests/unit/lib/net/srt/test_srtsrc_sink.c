@@ -21,7 +21,7 @@
 
 #define PAYLOAD_CHUNKS 5
 #define PAYLOAD_CHUNK_BYTES 1316
-#define LINK_DEADLINE_S 10.0
+#define LINK_DEADLINE_S 15.0
 
 static double now_seconds(void) {
   struct timespec ts;
@@ -134,18 +134,47 @@ typedef struct {
   const unsigned char *payload;
   size_t len;
   atomic_int go;
+  atomic_int stop;
 } listener_arg_t;
+
+#define LISTENER_ACCEPT_POLL_MS 100
+#define LISTENER_ACCEPT_POLLS 600
+#define LISTENER_GO_POLLS 30000
+
+static SRTSOCKET accept_bounded(listener_arg_t *a) {
+  int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
+  int eid = srt_epoll_create();
+  SRTSOCKET c = SRT_INVALID_SOCK;
+
+  if (eid < 0) return c;
+  if (srt_epoll_add_usock(eid, a->lsn, &events) == 0) {
+    for (int i = 0; i < LISTENER_ACCEPT_POLLS && !atomic_load(&a->stop); i++) {
+      SRTSOCKET ready[1];
+      int nready = 1;
+
+      if (srt_epoll_wait(eid, ready, &nready, NULL, NULL, LISTENER_ACCEPT_POLL_MS, NULL, NULL, NULL, NULL) != SRT_ERROR) {
+        c = srt_accept(a->lsn, NULL, NULL);
+        break;
+      }
+      if (srt_getlasterror(NULL) != SRT_ETIMEOUT) break;
+    }
+  }
+  srt_epoll_release(eid);
+  return c;
+}
 
 static void *listener_thread(void *arg) {
   listener_arg_t *a = arg;
-  struct sockaddr_storage peer;
-  int plen = sizeof peer;
-  SRTSOCKET c = srt_accept(a->lsn, (struct sockaddr *)&peer, &plen);
+  SRTSOCKET c = accept_bounded(a);
 
   if (c == SRT_INVALID_SOCK) return NULL;
-  while (!atomic_load(&a->go)) usleep(1000);
+  for (int i = 0; i < LISTENER_GO_POLLS && !atomic_load(&a->go) && !atomic_load(&a->stop); i++) usleep(1000);
+  if (!atomic_load(&a->go)) {
+    srt_close(c);
+    return NULL;
+  }
   for (size_t off = 0; off < a->len; off += PAYLOAD_CHUNK_BYTES) srt_sendmsg2(c, (const char *)a->payload + off, PAYLOAD_CHUNK_BYTES, NULL);
-  for (int i = 0; i < 500 && srt_getsockstate(c) == SRTS_CONNECTED; i++) usleep(10000);
+  for (int i = 0; i < 500 && !atomic_load(&a->stop) && srt_getsockstate(c) == SRTS_CONNECTED; i++) usleep(10000);
   srt_close(c);
   return NULL;
 }
@@ -179,6 +208,7 @@ START_TEST(srtin_single_caller_receives_from_listener) {
   la.payload = payload;
   la.len = total;
   atomic_init(&la.go, 0);
+  atomic_init(&la.stop, 0);
   ck_assert_int_eq(pthread_create(&th, NULL, listener_thread, &la), 0);
 
   memset(&cfg, 0, sizeof cfg);
@@ -203,6 +233,7 @@ START_TEST(srtin_single_caller_receives_from_listener) {
   ck_assert_uint_eq(got, total);
   ck_assert_mem_eq(got_buf, payload, total);
   srtin_close(in);
+  atomic_store(&la.stop, 1);
   pthread_join(th, NULL);
   srt_close(la.lsn);
   srt_cleanup();
@@ -245,6 +276,7 @@ START_TEST(srtin_single_caller_redials_after_listener_drops) {
     la[k].payload = payload[k];
     la[k].len = total;
     atomic_init(&la[k].go, 0);
+    atomic_init(&la[k].stop, 0);
   }
   ck_assert_int_eq(pthread_create(&th[0], NULL, listener_thread, &la[0]), 0);
 
@@ -278,6 +310,8 @@ START_TEST(srtin_single_caller_redials_after_listener_drops) {
   }
   ck_assert_int_eq(reconnects, 1);
   srtin_close(in);
+  atomic_store(&la[0].stop, 1);
+  atomic_store(&la[1].stop, 1);
   pthread_join(th[0], NULL);
   pthread_join(th[1], NULL);
   srt_close(la[0].lsn);

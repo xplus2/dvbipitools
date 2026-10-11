@@ -70,6 +70,7 @@ void publish_client_event(const char *type, int id) {
   ws_client_snapshot_t snap;
   static _Thread_local jbuf_t j;
   if (!ws_broadcast_has_sinks()) return;
+  jbuf_thread_own(&j);
   if (strcmp(type, "clients.remove") == 0) {
     jbuf_reset(&j);
     jbuf_str(&j, "{\"type\":\"clients.remove\",\"id\":");
@@ -87,6 +88,7 @@ void publish_client_event(const char *type, int id) {
 void publish_client_event_snap(const char *type, int id, const ws_client_snapshot_t *snap) {
   static _Thread_local jbuf_t j;
   if (!ws_broadcast_has_sinks()) return;
+  jbuf_thread_own(&j);
   jbuf_reset(&j);
   jbuf_str(&j, "{\"type\":\"");
   jbuf_str(&j, type);

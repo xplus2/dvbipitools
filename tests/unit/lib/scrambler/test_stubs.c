@@ -45,7 +45,8 @@ START_TEST(csa2_key_new_fails) {
 END_TEST
 
 START_TEST(csa2_block_ops_leave_data_untouched) {
-  unsigned char buf[32], ref[32];
+  unsigned char buf[32];
+  unsigned char ref[32];
   memset(buf, 0x5A, sizeof buf);
   memcpy(ref, buf, sizeof ref);
   csa2_encrypt_block(NULL, buf, sizeof buf);
@@ -56,7 +57,8 @@ START_TEST(csa2_block_ops_leave_data_untouched) {
 END_TEST
 
 START_TEST(csa2_batch_reports_no_capacity_and_leaves_data_untouched) {
-  unsigned char buf[32], ref[32];
+  unsigned char buf[32];
+  unsigned char ref[32];
   csa2_batch_entry_t e = {buf, sizeof buf};
   memset(buf, 0x5A, sizeof buf);
   memcpy(ref, buf, sizeof ref);

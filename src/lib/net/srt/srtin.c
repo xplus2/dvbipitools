@@ -346,7 +346,7 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
 
   /* mid-reconnect: one attempt per call, returns like a timeout. caller's loop drives retry cadence, !internal */
   if (r->sock == SRT_INVALID_SOCK) {
-    if (signal_stop_requested()) return 0;
+    if (stop_wanted(&r->cfg)) return 0;
     if (!reconnect_once(r)) return 0;
     *reconnected_out = 1;
     return 0;

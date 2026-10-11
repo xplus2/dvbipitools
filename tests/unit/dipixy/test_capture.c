@@ -353,7 +353,8 @@ START_TEST(reader_that_falls_behind_loses_the_oldest_bytes) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.5", 15805, NULL, 1);
   capture_ctx_t *cap;
   capture_reader_t *r;
-  unsigned char dgram[DGRAM], out[4 * DGRAM];
+  unsigned char dgram[DGRAM];
+  unsigned char out[4 * DGRAM];
   size_t n;
 
   capture_set_ring_cap(2 * DGRAM);
@@ -389,7 +390,8 @@ START_TEST(datagram_larger_than_the_ring_keeps_only_its_tail) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.6", 15806, NULL, 1);
   capture_ctx_t *cap;
   capture_reader_t *r;
-  unsigned char dgram[DGRAM], out[2 * DGRAM];
+  unsigned char dgram[DGRAM];
+  unsigned char out[2 * DGRAM];
 
   capture_set_ring_cap(RING);
   cap = capture_open(AF_INET, "239.8.8.6", NULL, 15806, NULL, 0, NULL, NULL, NULL, 0, 0);
@@ -415,7 +417,7 @@ typedef struct {
 } chunked_server_t;
 
 static void *chunked_stream_server_thread(void *arg) {
-  chunked_server_t *s = arg;
+  const chunked_server_t *s = arg;
   static const char resp[] = "HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\n\r\n";
   unsigned char body[188 * 4];
   int fd = accept(s->listen_fd, NULL, NULL);

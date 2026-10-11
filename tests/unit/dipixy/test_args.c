@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -1586,9 +1587,12 @@ START_TEST(out_of_range_option_values_are_rejected) {
   memset(longurl, 'u', sizeof longurl);
   longurl[sizeof longurl - 1] = '\0';
   for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
-    const char *val = cases[i][1];
-    char *argv[] = {"dipixy", (char *)cases[i][0], (char *)val, NULL};
+    char flag[64];
+    char val[64];
+    char *argv[] = {"dipixy", flag, val, NULL};
     config_t cfg = {0};
+    snprintf(flag, sizeof flag, "%s", cases[i][0]);
+    snprintf(val, sizeof val, "%s", cases[i][1]);
     if (!strcmp(cases[i][0], "--dash-utc-url"))
       argv[2] = longurl;
     ck_assert_msg(args_parse(ARGC(argv), argv, &cfg) == ARGS_ERR, "%s %s accepted", argv[1], argv[2]);

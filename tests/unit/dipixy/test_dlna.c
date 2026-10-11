@@ -49,7 +49,8 @@ START_TEST(keep_multicast_off_uses_http_proxy_for_rtp_item) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -74,7 +75,8 @@ START_TEST(keep_multicast_rewrites_rtp_item_to_dvb_igmp) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -99,7 +101,8 @@ START_TEST(keep_multicast_rewrites_udp_item_to_dvb_igmp) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -123,7 +126,8 @@ START_TEST(keep_multicast_rewrites_ipv6_rtp_item_to_dvb_mld) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -147,7 +151,8 @@ START_TEST(keep_multicast_leaves_unicast_srt_item_on_http_proxy) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -172,7 +177,8 @@ START_TEST(keep_multicast_direct_children_mixes_mcast_and_unicast_res) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -488,7 +494,8 @@ START_TEST(keep_multicast_rtp_item_keeps_ssm_source) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
@@ -510,7 +517,8 @@ START_TEST(item_metadata_carries_the_channel_icon) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  char path[160], *out;
+  char path[160];
+  char *out;
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);

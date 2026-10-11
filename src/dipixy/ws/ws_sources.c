@@ -51,6 +51,7 @@ int ws_sources_build_snapshot(const config_t *cfg, const channels_t *channels, c
   static _Thread_local jbuf_t j;
   int si;
   int max_ord;
+  jbuf_thread_own(&j);
 
   jbuf_reset(&j);
   max_ord = cfg->stdin_ordinal;
@@ -84,6 +85,7 @@ int ws_sources_build_snapshot(const config_t *cfg, const channels_t *channels, c
 
 int ws_sources_build_update(const channels_t *channels, const source_def_t *src, unsigned list_num, char **out) {
   static _Thread_local jbuf_t j;
+  jbuf_thread_own(&j);
   jbuf_reset(&j);
   jbuf_str(&j, "{");
   jbuf_key(&j, "type");

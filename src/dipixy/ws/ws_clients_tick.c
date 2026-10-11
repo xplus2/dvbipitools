@@ -93,6 +93,7 @@ int ws_clients_build_snapshot(char **out) {
   static _Thread_local jbuf_t j;
   ws_client_snapshot_t snap;
   int n = 0;
+  jbuf_thread_own(&j);
   jbuf_reset(&j);
   jbuf_str(&j, "{\"type\":\"clients.snapshot\",\"clients\":[");
   pthread_mutex_lock(&g_clients_mtx);

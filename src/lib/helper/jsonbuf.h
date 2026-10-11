@@ -14,6 +14,8 @@ typedef struct {
   int failed;
 } jbuf_t;
 
+void jbuf_thread_own(jbuf_t *j);
+
 /* clears for reuse, shrinks first if cap far exceeds last len */
 void jbuf_reset(jbuf_t *j);
 

@@ -708,6 +708,12 @@ START_TEST(spts_feed_locks_on_pat_pmt_and_admits_the_locked_program) {
 }
 END_TEST
 
+static byte_ring_t *sub_ring(ts_sub_t *a, conn_proto_t proto) {
+  if (proto == CONN_PROTO_H2) return &a->h2_ring;
+  if (proto == CONN_PROTO_H3) return &a->h3_ring;
+  return &a->pkt_ring;
+}
+
 START_TEST(feed_delivers_to_the_ring_of_the_subscriber_protocol) {
   static const conn_proto_t protos[] = {CONN_PROTO_H1, CONN_PROTO_H2, CONN_PROTO_H3};
   conn_proto_t proto = protos[_i];
@@ -717,7 +723,7 @@ START_TEST(feed_delivers_to_the_ring_of_the_subscriber_protocol) {
 
   ts_push_init(0, 4);
   a = feed_sub(proto, 0);
-  ring = proto == CONN_PROTO_H1 ? &a->pkt_ring : proto == CONN_PROTO_H2 ? &a->h2_ring : &a->h3_ring;
+  ring = sub_ring(a, proto);
   feed_video_packet();
   ck_assert_uint_eq(byte_ring_read(ring, sink, sizeof sink), 188u);
   ck_assert_uint_eq(sink[0], 0x47u);
@@ -748,7 +754,7 @@ START_TEST(rawaudio_emit_delivers_to_the_ring_of_the_subscriber_protocol) {
 
   ts_push_init(0, 4);
   a = attached_sub(0, proto, 3, 0);
-  ring = proto == CONN_PROTO_H2 ? &a->h2_ring : proto == CONN_PROTO_H3 ? &a->h3_ring : &a->pkt_ring;
+  ring = sub_ring(a, proto);
   ts_push_rawaudio_emit(a, payload, sizeof payload);
   ck_assert_uint_eq(byte_ring_read(ring, sink, sizeof sink), want);
 }
