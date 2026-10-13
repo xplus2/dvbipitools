@@ -7,8 +7,13 @@
 #include <stddef.h>
 #include <stdio.h>
 
-/* &<>"' -> entities */
+/* &<>"' -> entities. chars not allowed in XML 1.0 (controls but tab/LF/CR, U+FFFE/FFFF) dropped */
 void xml_escape(FILE *f, const char *s);
+
+/* *buf (malloc'd, NUL-terminated, *len bytes) from encoding declared in XML declaration to UTF-8, replaced in place.
+   enc (if enccap) gets declared name, empty if none. no declaration or UTF-8/ASCII: untouched.
+   0 ok, -1 unsupported encoding or invalid input, -2 out of memory */
+int xml_to_utf8(char **buf, size_t *len, char *enc, size_t enccap);
 
 /* name="v" or name='v' (spaces around '=' ok, prefix ignored), first start tag in [s,end) having it. value decoded.
    0 ok, -1 not found */
@@ -34,6 +39,10 @@ int xml_elem_text(const char *s, const char *end, const char *tag, char *out, si
    untouched on -1 */
 int xml_elem_text_chk(const char *s, const char *end, const char *tag, char *out, size_t outcap, int *truncated);
 
+/* as xml_elem_text into a malloc'd string, never truncated (decoded text is never longer than its span).
+   0 ok (caller frees *out), -1 as xml_elem_text, -2 out of memory. *out untouched on failure */
+int xml_elem_text_dup(const char *s, const char *end, const char *tag, char **out);
+
 /* element span: tag at start tag '<', end at close tag '<' or at '/' of "/>" if empty */
 typedef struct {
   const char *tag;
@@ -55,5 +64,8 @@ typedef int (*xml_block_cb)(const char *tag, const char *blk_end, void *ctx);
 /* elements name (prefix ignored) in [buf,end), in order, same-name nesting skipped.
    0 ok, even with no matches or a truncated trailing element. -1 if cb returned -1 */
 int for_each_xml_elem(const char *buf, const char *end, const char *name, xml_block_cb cb, void *ctx);
+
+/* same; *unclosed (if non-NULL, set only then) = start of the element without end tag, scan stops there */
+int for_each_xml_elem_chk(const char *buf, const char *end, const char *name, xml_block_cb cb, void *ctx, const char **unclosed);
 
 #endif

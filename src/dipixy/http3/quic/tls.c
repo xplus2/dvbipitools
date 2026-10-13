@@ -7,12 +7,16 @@
 #include "../http3_int.h"
 
 #include "lib/helper/log.h"
+#include "../../reactor/reactor_tls.h"
 
 #include <arpa/inet.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
-SSL_CTX *g_h3_ssl_ctx = NULL;
+_Atomic(SSL_CTX *) g_h3_ssl_ctx = NULL;
+static char g_h3_cert[512];
+static char g_h3_key[512];
 
 _Thread_local struct sockaddr_storage t_h3_udp4_local;
 _Thread_local socklen_t t_h3_udp4_local_len;
@@ -28,21 +32,42 @@ static int h3_alpn_select_cb(SSL *ssl, const unsigned char **out, unsigned char 
   return SSL_TLSEXT_ERR_ALERT_FATAL;
 }
 
+static SSL_CTX *h3_build_ctx(const char *cert_path, const char *key_path) {
+  SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
+  if (!ctx) return NULL;
+  SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION);
+  SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
+  SSL_CTX_set_mode(ctx, SSL_MODE_RELEASE_BUFFERS);
+  SSL_CTX_set_alpn_select_cb(ctx, h3_alpn_select_cb, NULL);
+  if (SSL_CTX_use_certificate_chain_file(ctx, cert_path) != 1 || SSL_CTX_use_PrivateKey_file(ctx, key_path, SSL_FILETYPE_PEM) != 1) {
+    SSL_CTX_free(ctx);
+    return NULL;
+  }
+  return ctx;
+}
+
 void h3_init(const char *cert_path, const char *key_path) {
+  SSL_CTX *ctx;
   ngtcp2_crypto_ossl_init();
   if (h3_stateless_init() != 0) return;
-  g_h3_ssl_ctx = SSL_CTX_new(TLS_server_method());
-  if (!g_h3_ssl_ctx) return;
-  SSL_CTX_set_min_proto_version(g_h3_ssl_ctx, TLS1_3_VERSION);
-  SSL_CTX_set_max_proto_version(g_h3_ssl_ctx, TLS1_3_VERSION);
-  SSL_CTX_set_mode(g_h3_ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
-  SSL_CTX_set_alpn_select_cb(g_h3_ssl_ctx, h3_alpn_select_cb, NULL);
-  if (SSL_CTX_use_certificate_chain_file(g_h3_ssl_ctx, cert_path) != 1 || SSL_CTX_use_PrivateKey_file(g_h3_ssl_ctx, key_path, SSL_FILETYPE_PEM) != 1) {
-    SSL_CTX_free(g_h3_ssl_ctx);
-    g_h3_ssl_ctx = NULL;
-    return;
-  }
+  ctx = h3_build_ctx(cert_path, key_path);
+  if (!ctx) return;
+  snprintf(g_h3_cert, sizeof g_h3_cert, "%s", cert_path);
+  snprintf(g_h3_key, sizeof g_h3_key, "%s", key_path);
+  g_h3_ssl_ctx = ctx;
   log_line("http3: quic context ready");
+}
+
+/* new conns pick up fresh ctx, live conns keep theirs (SSL holds a ref) */
+int h3_reload(void) {
+  SSL_CTX *fresh, *old;
+  if (!g_h3_ssl_ctx) return -1;
+  fresh = h3_build_ctx(g_h3_cert, g_h3_key);
+  if (!fresh) return -1;
+  old = g_h3_ssl_ctx;
+  g_h3_ssl_ctx = fresh;
+  tls_ctx_retire(old);
+  return 0;
 }
 
 int h3_ready(void) {
@@ -82,6 +107,7 @@ int h3_create_udp_sock(int port, const char *host) {
     return -1;
   }
   h3_udp_gso_probe(sock);
+  h3_udp_pktinfo(sock, AF_INET);
   memset(&t_h3_udp4_local, 0, sizeof t_h3_udp4_local);
   memcpy(&t_h3_udp4_local, &saddr, sizeof saddr);
   t_h3_udp4_local_len = sizeof saddr;
@@ -114,6 +140,7 @@ int h3_create_udp_sock6(int port, const char *host6) {
     return -1;
   }
   h3_udp_gso_probe(sock);
+  h3_udp_pktinfo(sock, AF_INET6);
   memset(&t_h3_udp6_local, 0, sizeof t_h3_udp6_local);
   memcpy(&t_h3_udp6_local, &saddr6, sizeof saddr6);
   t_h3_udp6_local_len = sizeof saddr6;

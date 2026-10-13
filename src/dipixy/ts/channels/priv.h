@@ -9,6 +9,7 @@
 /* channels.c */
 void wait_readers_quiescent(void);
 void channel_list_build_index(channel_list_t *l);
+int channel_uri_is_static(const char *uri);
 
 /* build.c */
 void build_from_m3u(channel_list_t *l, const char *path, int insecure_tls);

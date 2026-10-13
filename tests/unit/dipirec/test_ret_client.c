@@ -318,7 +318,7 @@ END_TEST
 #define HOLD_CAP 1500
 #define GAP_MAX 32
 #define OUTQ_SLOTS (GAP_MAX + 1)
-#define OUTQ_CAP 65536
+#define OUTQ_CAP 9216
 static void feed(ret_client_t *r, uint32_t ssrc, uint16_t seq, size_t len, unsigned char fill) {
   static unsigned char payload[OUTQ_CAP + 16];
   rtp_hdr_t h = make_hdr(ssrc, seq);
@@ -396,9 +396,11 @@ START_TEST(gap_window_grows_to_the_cap_then_flushes) {
 }
 END_TEST
 
-START_TEST(disjoint_packet_abandons_gap_and_opens_a_new_one) {
+START_TEST(second_loss_inside_window_keeps_first_gap_open) {
   ret_client_t *r = open_client(5000);
   mcast_t *main_ = open_scratch_main();
+  unsigned char rtx[256];
+  size_t rtxlen;
   char log[LOG_CAPTURE_BUF];
 
   ck_assert_ptr_nonnull(r);
@@ -409,13 +411,96 @@ START_TEST(disjoint_packet_abandons_gap_and_opens_a_new_one) {
   feed(r, 0x53, 12, 2, 12);
   feed(r, 0x53, 20, 2, 20);
   log_capture_end(log, sizeof log);
+  ck_assert_int_eq(log_count_of(log, "abandoned"), 0);
+  ck_assert_int_eq(read_quiet(r, main_, rtx, sizeof rtx), 0);
+
+  rtxlen = build_repair(0x53, 11, 2, 11, rtx, sizeof rtx);
+  ret_client_on_repair(r, rtx, rtxlen, mono_seconds());
+  expect_pop(r, main_, 2, 11);
+  expect_pop(r, main_, 2, 12);
+  for (unsigned seq = 13; seq < 20; seq++) {
+    rtxlen = build_repair(0x53, (uint16_t)seq, 2, (unsigned char)seq, rtx, sizeof rtx);
+    ret_client_on_repair(r, rtx, rtxlen, mono_seconds());
+  }
+  for (unsigned seq = 13; seq < 20; seq++)
+    expect_pop(r, main_, 2, (unsigned char)seq);
+  expect_pop(r, main_, 2, 20);
+  ret_client_close(r);
+  mcast_close(main_);
+}
+END_TEST
+
+START_TEST(packet_beyond_window_abandons_gap_and_opens_a_new_one) {
+  ret_client_t *r = open_client(5000);
+  mcast_t *main_ = open_scratch_main();
+  char log[LOG_CAPTURE_BUF];
+
+  ck_assert_ptr_nonnull(r);
+  ck_assert_ptr_nonnull(main_);
+  feed(r, 0x55, 10, 2, 10);
+  expect_pop(r, main_, 2, 10);
+  log_capture_begin();
+  feed(r, 0x55, 12, 2, 12);
+  feed(r, 0x55, 12 + GAP_MAX, 2, 99);
+  log_capture_end(log, sizeof log);
 
   ck_assert_int_eq(log_count_of(log, "seq 11 lost, gap abandoned"), 1);
   expect_pop(r, main_, 2, 12);
   ret_client_flush_ready(r, mono_seconds() + 10.0);
-  expect_pop(r, main_, 2, 20);
+  expect_pop(r, main_, 2, 99);
   ret_client_close(r);
   mcast_close(main_);
+}
+END_TEST
+
+START_TEST(nack_is_retried_until_repaired_or_deadline) {
+  int listener = socket(AF_INET, SOCK_DGRAM, 0);
+  struct sockaddr_in addr;
+  ret_client_t *r;
+  mcast_t *main_ = open_scratch_main();
+  unsigned char rbuf[256];
+  rtp_hdr_t h;
+  ssize_t n;
+  double now = mono_seconds();
+  socklen_t alen = sizeof addr;
+  struct timeval tv = {0, 100000};
+
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+  ck_assert_int_ge(listener, 0);
+  ck_assert_int_eq(bind(listener, (struct sockaddr *)&addr, sizeof addr), 0);
+  ck_assert_int_eq(getsockname(listener, (struct sockaddr *)&addr, &alen), 0);
+  setsockopt(listener, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  ck_assert_ptr_nonnull(main_);
+  r = open_client_at(ntohs(addr.sin_port), 300);
+  ck_assert_ptr_nonnull(r);
+
+  h = make_hdr(0xF1F1, 100);
+  ret_client_on_original(r, &h, (const unsigned char *)"x", 1, now);
+  h = make_hdr(0xF1F1, 102);
+  ret_client_on_original(r, &h, (const unsigned char *)"y", 1, now);
+  ck_assert_int_gt(recv(listener, rbuf, sizeof rbuf, 0), 0); /* initial */
+
+  ret_client_flush_ready(r, now + 0.05); /* before first retry */
+  ck_assert_int_lt(recv(listener, rbuf, sizeof rbuf, MSG_DONTWAIT), 0);
+  ret_client_flush_ready(r, now + 0.11); /* first retry due at 0.1 */
+  n = recv(listener, rbuf, sizeof rbuf, 0);
+  ck_assert_int_gt(n, 0);
+  g_nack_count = 0;
+  rtcp_parse(rbuf, (size_t)n, &(rtcp_cbs_t){.nack_cb = nack_cb});
+  ck_assert_int_eq(g_nack_count, 1);
+  ck_assert_uint_eq(g_last_nack.entry[0].pid, 101u);
+  ret_client_flush_ready(r, now + 0.12); /* not due again yet */
+  ck_assert_int_lt(recv(listener, rbuf, sizeof rbuf, MSG_DONTWAIT), 0);
+  ret_client_flush_ready(r, now + 0.25);
+  ck_assert_int_gt(recv(listener, rbuf, sizeof rbuf, 0), 0);
+  ret_client_flush_ready(r, now + 0.31); /* deadline passed, gap closed, no retry */
+  ck_assert_int_lt(recv(listener, rbuf, sizeof rbuf, MSG_DONTWAIT), 0);
+
+  ret_client_close(r);
+  mcast_close(main_);
+  close(listener);
 }
 END_TEST
 
@@ -563,7 +648,7 @@ START_TEST(read_waits_for_gap_deadline_then_releases_held_packet) {
   }
   dt = mono_seconds() - t0;
   ck_assert_double_ge(dt, 0.015);
-  ck_assert_int_le(calls, 5);
+  ck_assert_int_le(calls, 8); /* retries and ICMP errors from the unbound NACK port wake early */
   ret_client_close(r);
   mcast_close(main_);
 }
@@ -780,7 +865,9 @@ static Suite *ret_client_suite(void) {
   tcase_add_test(tc, a_gap_sends_a_real_nack_on_the_wire);
   tcase_add_test(tc, oversized_hold_payload_ends_gap_logs_once_and_rearms);
   tcase_add_test(tc, gap_window_grows_to_the_cap_then_flushes);
-  tcase_add_test(tc, disjoint_packet_abandons_gap_and_opens_a_new_one);
+  tcase_add_test(tc, second_loss_inside_window_keeps_first_gap_open);
+  tcase_add_test(tc, packet_beyond_window_abandons_gap_and_opens_a_new_one);
+  tcase_add_test(tc, nack_is_retried_until_repaired_or_deadline);
   tcase_add_test(tc, stale_and_duplicate_packets_during_a_gap_are_ignored);
   tcase_add_test(tc, oversized_repair_payload_is_dropped_logged_once_and_rearmed);
   tcase_add_test(tc, repair_for_other_ssrc_stale_osn_or_filled_slot_is_ignored);

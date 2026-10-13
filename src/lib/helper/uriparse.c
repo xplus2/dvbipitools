@@ -5,6 +5,7 @@
 
 #include <arpa/inet.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "argutil.h"
@@ -88,4 +89,26 @@ int uriparse_rtmp_or_file(const char *uri, char *rtmp_buf, size_t rtmp_cap, char
   if (strlen(uri) >= file_cap) return -1;
   bufcpy(file_buf, file_cap, uri);
   return 0;
+}
+
+/* drops userinfo, query, fragment. empty userinfo ("rtp://@host") kept */
+char *uriparse_redact_dup(const char *uri) {
+  size_t len = strlen(uri);
+  char *out = malloc(len + 1);
+  const char *auth, *end, *at, *cut;
+  size_t n;
+  if (!out) return NULL;
+  memcpy(out, uri, len + 1);
+  auth = strstr(out, "://");
+  if (!auth) return out;
+  auth += 3;
+  end = auth + strcspn(auth, "/?#");
+  at = memchr(auth, '@', (size_t)(end - auth));
+  if (at && at > auth) {
+    n = strlen(at + 1) + 1;
+    memmove((char *)auth, at + 1, n);
+  }
+  cut = out + strcspn(out, "?#");
+  *(char *)cut = '\0';
+  return out;
 }

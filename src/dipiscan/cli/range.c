@@ -39,11 +39,7 @@ void args_range_describe(const config_t *cfg, char *buf, size_t n) {
   snprintf(buf, n, "%s-%s", lo, hi);
 }
 
-/* cap on swept addresses: do not sweep millions of candidates */
-#define MAX_SWEEP_HOSTBITS 20
-#define MAX_SWEEP_ADDRS (1u << MAX_SWEEP_HOSTBITS)
-
-/* end-start, capped. -1 if end<start or range exceeds cap */
+/* end-start, capped. -1 if end<start, RANGE_TOO_LARGE if over cap */
 static int addr_diff_capped(const unsigned char *start, const unsigned char *end, int alen, unsigned cap, unsigned *out) {
   unsigned char diff[16] = {0};
   int borrow = 0;
@@ -60,11 +56,11 @@ static int addr_diff_capped(const unsigned char *start, const unsigned char *end
   }
   if (borrow) return -1;
   for (int i = 0; i < alen - 4; i++) {
-    if (diff[i]) return -1;
+    if (diff[i]) return RANGE_TOO_LARGE;
   }
   val = 0;
   for (int i = alen >= 4 ? alen - 4 : 0; i < alen; i++) val = (val << 8) | diff[i];
-  if (val > cap) return -1;
+  if (val > cap) return RANGE_TOO_LARGE;
   *out = val;
   return 0;
 }
@@ -90,7 +86,7 @@ static int cidr_parse(const char *addrs, const char *prefixs, int *family, unsig
   maxprefix = alen * 8;
   if (prefix > maxprefix) return -1;
   hostbits = maxprefix - (int)prefix;
-  if (hostbits > MAX_SWEEP_HOSTBITS) return -1;
+  if (hostbits > MAX_SWEEP_HOSTBITS) return RANGE_TOO_LARGE;
   memcpy(net, addr, (size_t)alen);
   memcpy(top, addr, (size_t)alen);
   bit = 0;
@@ -121,11 +117,13 @@ static int range_parse(const char *los, const char *his, int *family, unsigned c
   unsigned char lo[16];
   unsigned char hi[16];
   unsigned diff;
+  int rc;
   if (base_parse(los, &fam_lo, lo) || base_parse(his, &fam_hi, hi)) return -1;
   if (fam_lo != fam_hi) return -1;
   alen = (fam_lo == AF_INET6) ? 16 : 4;
   if (memcmp(lo, hi, (size_t)alen) > 0) return -1;
-  if (addr_diff_capped(lo, hi, alen, MAX_SWEEP_ADDRS - 1u, &diff)) return -1;
+  rc = addr_diff_capped(lo, hi, alen, MAX_SWEEP_ADDRS - 1u, &diff);
+  if (rc) return rc;
   *family = fam_lo;
   memcpy(start, lo, 16);
   memcpy(end, hi, 16);

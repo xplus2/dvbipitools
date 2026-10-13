@@ -20,6 +20,7 @@ typedef struct {
   const char *local_host;       /* NULL = wildcard. required when rendezvous set */
   unsigned local_port;          /* 0 = ephemeral; rendezvous wants a fixed port */
   srtcommon_opts_t opts;
+  unsigned connect_timeout_ms;  /* caller connect only. 0 = 3000 */
   int verbose;                  /* gates libsrt's own NOTICE/DEBUG logging */
   metrics_exporter_t *mx;       /* NULL = no stats push */
   const char *tool_version;     /* required if mx set */

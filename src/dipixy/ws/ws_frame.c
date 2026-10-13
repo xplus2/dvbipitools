@@ -34,6 +34,11 @@ void ws_parser_free(ws_parser_t *p) {
 }
 
 int ws_parser_feed(ws_parser_t *p, const uint8_t *data, size_t len) {
+  if (p->off) {
+    memmove(p->buf, p->buf + p->off, p->len - p->off);
+    p->len -= p->off;
+    p->off = 0;
+  }
   if (buf_reserve(&p->buf, &p->cap, p->len + len))
     return -1;
   memcpy(p->buf + p->len, data, len);
@@ -42,8 +47,8 @@ int ws_parser_feed(ws_parser_t *p, const uint8_t *data, size_t len) {
 }
 
 static void consume(ws_parser_t *p, size_t n) {
-  memmove(p->buf, p->buf + n, p->len - n);
-  p->len -= n;
+  p->off += n;
+  if (p->off == p->len) p->off = p->len = 0;
 }
 
 static void ws_unmask(uint8_t *dst, const uint8_t *body, const uint8_t *mask, size_t n) {
@@ -71,21 +76,23 @@ int ws_parser_next(ws_parser_t *p, int *opcode, const uint8_t **payload, size_t 
     uint64_t plen64;
     const uint8_t *mask;
     const uint8_t *body;
-    if (p->len < 2) return 0;
-    if (p->buf[0] & 0x70) return -1; /* RSV1-3: no extension negotiated, RFC6455 SS5.2 */
-    fin = (p->buf[0] & 0x80) != 0;
-    op = p->buf[0] & 0x0f;
-    masked = (p->buf[1] & 0x80) != 0;
-    plen64 = p->buf[1] & 0x7f;
+    const uint8_t *b = p->buf + p->off;
+    size_t avail = p->len - p->off;
+    if (avail < 2) return 0;
+    if (b[0] & 0x70) return -1; /* RSV1-3: no extension negotiated, RFC6455 SS5.2 */
+    fin = (b[0] & 0x80) != 0;
+    op = b[0] & 0x0f;
+    masked = (b[1] & 0x80) != 0;
+    plen64 = b[1] & 0x7f;
     hdr = 2;
     if (plen64 == 126) {
-      if (p->len < 4) return 0;
-      plen64 = ((uint64_t)p->buf[2] << 8) | p->buf[3];
+      if (avail < 4) return 0;
+      plen64 = ((uint64_t)b[2] << 8) | b[3];
       hdr = 4;
     } else if (plen64 == 127) {
-      if (p->len < 10) return 0;
+      if (avail < 10) return 0;
       plen64 = 0;
-      for (size_t i = 0; i < 8; i++) plen64 = (plen64 << 8) | p->buf[2 + i];
+      for (size_t i = 0; i < 8; i++) plen64 = (plen64 << 8) | b[2 + i];
       hdr = 10;
     }
 
@@ -93,9 +100,9 @@ int ws_parser_next(ws_parser_t *p, int *opcode, const uint8_t **payload, size_t 
     if ((op == WS_OP_CLOSE || op == WS_OP_PING || op == WS_OP_PONG) && (plen64 > 125 || !fin)) return -1;
     if (plen64 > WS_MAX_MESSAGE_LEN) return -1;
     need = hdr + 4 + (size_t)plen64;
-    if (p->len < need) return 0;
-    mask = p->buf + hdr;
-    body = p->buf + hdr + 4;
+    if (avail < need) return 0;
+    mask = b + hdr;
+    body = b + hdr + 4;
     if (op == WS_OP_CLOSE || op == WS_OP_PING || op == WS_OP_PONG) {
       ws_unmask(p->ctrl_payload, body, mask, (size_t)plen64);
       p->ctrl_payload_len = (size_t)plen64;

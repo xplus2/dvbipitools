@@ -21,6 +21,7 @@ typedef struct {
   const char *stream_name;
   const char *user;     /* NULL/empty: no auth attempted */
   const char *password; /* ignored if user is empty */
+  const char *auth_query; /* from rtmp_auth_carry of failed session, NULL/empty: none */
   rtmp_write_cb write_cb;
   rtmp_ready_cb ready_cb;
   rtmp_error_cb error_cb;
@@ -29,6 +30,9 @@ typedef struct {
 
 rtmp_t *rtmp_new(const rtmp_cfg_t *cfg);
 void rtmp_free(rtmp_t *r);
+
+/* server closes after needauth: 1 + query for next session's cfg, else 0 */
+int rtmp_auth_carry(const rtmp_t *r, char *out, size_t cap);
 
 void rtmp_start(rtmp_t *r); /* emits C0+C1 */
 

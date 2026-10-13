@@ -202,8 +202,8 @@ void resp_set(hls_resp_t *out, int status, const char *content_type, const char 
   memcpy(out->body, body, body_len);
 }
 
-/* seg_buf-backed body: ref instead of copy. below HLS_ZC_MIN_LEN, falls back to resp_set() */
-void resp_set_zc(hls_resp_t *out, int status, const char *content_type, const char *etag, uint8_t *body, size_t body_len, int is_head) {
+/* body slice of seg_buf owner: ref instead of copy. below HLS_ZC_MIN_LEN, falls back to resp_set() */
+void resp_set_zc(hls_resp_t *out, int status, const char *content_type, const char *etag, uint8_t *owner, uint8_t *body, size_t body_len, int is_head) {
   if (!body || is_head || body_len < HLS_ZC_MIN_LEN) {
     resp_set(out, status, content_type, etag, body, body_len, is_head);
     return;
@@ -213,7 +213,8 @@ void resp_set_zc(hls_resp_t *out, int status, const char *content_type, const ch
   if (etag) bufcpy(out->etag, sizeof out->etag, etag);
   else out->etag[0] = '\0';
 
-  seg_buf_ref(body);
+  seg_buf_ref(owner);
+  out->owner = owner;
   out->body = body;
   out->body_len = body_len;
   out->zc = 1;
@@ -234,8 +235,8 @@ void resp_set_zc_cached(hls_resp_t *out, int status, const char *content_type, c
   out->zc = 2;
 }
 
-void hls_resp_body_release(uint8_t *body, int zc) {
-  if (zc == 1) seg_buf_unref(body);
+void hls_resp_body_release(uint8_t *body, uint8_t *owner, int zc) {
+  if (zc == 1) seg_buf_unref(owner);
   else if (zc == 2) cached_text_unref((const char *)body);
   else free(body);
 }

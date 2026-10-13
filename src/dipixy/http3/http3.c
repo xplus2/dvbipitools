@@ -20,14 +20,28 @@ void h3_thread_cleanup(void) {
   h3_udp_free();
 }
 
-static void handle_dgram(int udp_fd, const h3_rx_t *rx, const struct sockaddr_storage *local, socklen_t local_len, h3_conn_t **touched, int *ntouched) {
+/* base (bound addr + port) with address the client targeted */
+static void dgram_local(const h3_rx_t *rx, const struct sockaddr_storage *base, struct sockaddr_storage *out) {
+  *out = *base;
+  if (rx->locallen == 0 || rx->local.ss_family != base->ss_family) return;
+  if (base->ss_family == AF_INET) {
+    ((struct sockaddr_in *)out)->sin_addr = ((const struct sockaddr_in *)&rx->local)->sin_addr;
+  } else {
+    ((struct sockaddr_in6 *)out)->sin6_addr = ((const struct sockaddr_in6 *)&rx->local)->sin6_addr;
+    ((struct sockaddr_in6 *)out)->sin6_scope_id = ((const struct sockaddr_in6 *)&rx->local)->sin6_scope_id;
+  }
+}
+
+static void handle_dgram(int udp_fd, const h3_rx_t *rx, const struct sockaddr_storage *base, socklen_t local_len, h3_conn_t **touched, int *ntouched) {
+  struct sockaddr_storage local;
+  dgram_local(rx, base, &local);
   const struct sockaddr *peer = (const struct sockaddr *)&rx->peer;
   h3_conn_t *c = find_conn(rx->data, rx->len);
   if (!c) {
     ngtcp2_pkt_hd hd;
     h3_admit_t ai;
-    if (!h3_stateless_admit(udp_fd, rx->data, rx->len, peer, rx->peerlen, t_h3_active_cnt, g_h3_max_conns, &hd, &ai)) return;
-    c = h3conn_new(rx->data, rx->len, peer, rx->peerlen, (const struct sockaddr *)local, local_len, &ai);
+    if (!h3_stateless_admit(udp_fd, rx->data, rx->len, peer, rx->peerlen, &local, t_h3_active_cnt, g_h3_max_conns, &hd, &ai)) return;
+    c = h3conn_new(rx->data, rx->len, peer, rx->peerlen, (const struct sockaddr *)&local, local_len, &ai);
     if (!c) return;
   }
   /* ts sampled after conn: h3conn_new() seeds ngtcp2 initial_ts, read_pkt ts >= that (ngtcp2 monotonic) */
@@ -35,7 +49,7 @@ static void handle_dgram(int udp_fd, const h3_rx_t *rx, const struct sockaddr_st
   c->last_rx = ts;
   ngtcp2_path_storage ps;
   ngtcp2_path_storage_zero(&ps);
-  ngtcp2_addr_init(&ps.path.local, (const struct sockaddr *)local, local_len);
+  ngtcp2_addr_init(&ps.path.local, (const struct sockaddr *)&local, local_len);
   ngtcp2_addr_init(&ps.path.remote, peer, rx->peerlen);
   ngtcp2_pkt_info pi = {0};
   if (ngtcp2_conn_read_pkt_versioned(c->qconn, &ps.path, NGTCP2_PKT_INFO_VERSION, &pi, rx->data, rx->len, ts) < 0) c->done = 1;

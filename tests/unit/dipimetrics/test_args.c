@@ -113,6 +113,22 @@ START_TEST(auth_rejects_missing_colon) {
 }
 END_TEST
 
+START_TEST(empty_sock_path_is_rejected) {
+  char *argv[] = {"dipimetrics", "-S", "", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(empty_tls_paths_are_rejected) {
+  char *cert[] = {"dipimetrics", "--tls-cert", "", "--tls-key", "k", NULL};
+  char *key[] = {"dipimetrics", "--tls-cert", "c", "--tls-key", "", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(cert), cert, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(key), key, &cfg), ARGS_ERR);
+}
+END_TEST
+
 START_TEST(invalid_color_mode_is_rejected) {
   char *argv[] = {"dipimetrics", "--color", "sometimes", NULL};
   config_t cfg;
@@ -289,6 +305,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, auth_defaults_to_off);
   tcase_add_test(tc, auth_encodes_user_password);
   tcase_add_test(tc, auth_rejects_missing_colon);
+  tcase_add_test(tc, empty_sock_path_is_rejected);
+  tcase_add_test(tc, empty_tls_paths_are_rejected);
   tcase_add_test(tc, invalid_color_mode_is_rejected);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
   tcase_add_test(tc, help_returns_help_status);

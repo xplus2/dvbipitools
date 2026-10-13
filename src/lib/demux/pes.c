@@ -14,6 +14,7 @@ typedef struct {
   unsigned pid;
   int used;
   int started;
+  int hdr; /* header bytes still buffered in buf */
   int has_pts;
   int has_dts;
   uint64_t pts;
@@ -79,9 +80,10 @@ static int sgrow(stream_t *s, size_t need) {
 }
 
 static void deliver(pes_t *p, stream_t *s) {
-  if (s->started && s->len)
+  if (s->started && !s->hdr && s->len)
     p->cb(p->ctx, s->pid, s->has_pts, s->pts, s->has_dts, s->dts, s->buf, s->len);
   s->started = 0;
+  s->hdr = 0;
   s->len = 0;
 }
 
@@ -92,6 +94,32 @@ static void append(stream_t *s, const unsigned char *d, size_t n) {
   } else {
     log_throttled(&s->drop_throttle, LOG_THROTTLE_WINDOW_S, "LW500137", "pes: sgrow failed, pid %u payload bytes dropped", s->pid);
   }
+}
+
+static void parse_hdr(stream_t *s) {
+  const unsigned char *b = s->buf;
+  size_t need;
+
+  if (s->len >= 3 && (b[0] || b[1] || b[2] != 1)) {
+    s->started = 0;
+    s->hdr = 0;
+    s->len = 0;
+    return;
+  }
+  if (s->len < 9)
+    return;
+  need = 9 + (size_t)b[8];
+  if (s->len < need)
+    return;
+  s->has_pts = (b[7] & 0x80) && b[8] >= 5;
+  s->has_dts = (b[7] & 0xC0) == 0xC0 && b[8] >= 10;
+  if (s->has_pts)
+    s->pts = read_pts(b + 9);
+  if (s->has_dts)
+    s->dts = read_pts(b + 14);
+  s->len -= need;
+  memmove(s->buf, s->buf + need, s->len);
+  s->hdr = 0;
 }
 
 void pes_feed(pes_t *p, const unsigned char *pkt) {
@@ -111,24 +139,20 @@ void pes_feed(pes_t *p, const unsigned char *pkt) {
     return;
 
   if (pusi) {
-    unsigned hdrlen;
-    size_t es;
     deliver(p, s);
-    if (plen < 9 || pl[0] || pl[1] || pl[2] != 1) /* need 00 00 01 */
-      return;
-    hdrlen = pl[8];
-    es = 9 + (size_t)hdrlen;
-    s->has_pts = (pl[7] & 0x80) ? 1 : 0;
-    s->has_dts = (pl[7] & 0xC0) == 0xC0 && plen >= 19 ? 1 : 0;
-    if (s->has_pts)
-      s->pts = read_pts(pl + 9);
-    if (s->has_dts)
-      s->dts = read_pts(pl + 14);
+    s->has_pts = 0;
+    s->has_dts = 0;
     s->started = 1;
-    if (es < plen)
-      append(s, pl + es, plen - es);
+    s->hdr = 1;
+    append(s, pl, plen);
+    if (s->len)
+      parse_hdr(s);
+    else
+      s->started = 0;
   } else if (s->started) {
     append(s, pl, plen);
+    if (s->hdr)
+      parse_hdr(s);
   }
 }
 
@@ -140,7 +164,7 @@ void pes_flush(pes_t *p) {
 #define PTS_MOD 0x200000000ULL  /* 2^33: PTS clock period */
 #define PTS_HALF 0x100000000ULL /* 2^32: wrap/backstep threshold */
 
-int64_t pts_unwrap(pts_unwrap_t *st, uint64_t raw) {
+int64_t pts_unwrap_ticks(pts_unwrap_t *st, uint64_t raw) {
   uint64_t d;
   int64_t diff;
 
@@ -155,7 +179,11 @@ int64_t pts_unwrap(pts_unwrap_t *st, uint64_t raw) {
     st->pts_ext = (uint64_t)((int64_t)st->pts_ext + diff);
     st->last_raw = raw;
   }
-  return (int64_t)(st->pts_ext / 90);
+  return (int64_t)st->pts_ext;
+}
+
+int64_t pts_unwrap(pts_unwrap_t *st, uint64_t raw) {
+  return pts_unwrap_ticks(st, raw) / 90;
 }
 
 static int disc_near(int64_t raw, int64_t shift, int64_t ref) {

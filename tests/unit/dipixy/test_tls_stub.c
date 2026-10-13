@@ -61,9 +61,7 @@ START_TEST(lifecycle_calls_are_inert) {
 }
 END_TEST
 
-START_TEST(listen_and_handshake_entry_points_fail) {
-  ck_assert_int_eq(tls_create_listen_sock(8443, "127.0.0.1"), -1);
-  ck_assert_int_eq(tls_create_listen_sock6(8443, "::1"), -1);
+START_TEST(handshake_entry_points_fail) {
   ck_assert_int_eq(tls_accept(3), -1);
   ck_assert_int_eq(tls_handshake(3), -1);
 }
@@ -163,7 +161,7 @@ static Suite *tls_stub_suite(void) {
   Suite *s = suite_create("dipixy_tls_stub");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, lifecycle_calls_are_inert);
-  tcase_add_test(tc, listen_and_handshake_entry_points_fail);
+  tcase_add_test(tc, handshake_entry_points_fail);
   tcase_add_test(tc, connection_queries_report_plain);
   tcase_add_test(tc, cert_info_is_empty);
   tcase_add_test(tc, plain_send_recv_and_close);

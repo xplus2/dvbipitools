@@ -26,7 +26,36 @@ void capture_set_ring_cap(size_t bytes);
    source: SSM source, NULL or "" = ASM. rtp: nonzero unwraps RTP before buffer. ret/fcc: NULL = none */
 capture_ctx_t *capture_open(int family, const char *group, const char *source, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d);
 
+/* last ref: unlink, free deferred past pump quiesc. */
 void capture_close(capture_ctx_t *ctx);
+
+typedef struct capture_open_job capture_open_job_t;
+
+/* reactor_run() only, after capture_pump_set_thread_count(). wake(tid): job with that wake_tid done, lifecycle thread context.
+   -1: no thread, close/open stay synchronous */
+int capture_lifecycle_start(void (*wake)(int tid));
+
+/* reactor_run() only, after pump threads joined */
+void capture_lifecycle_stop(void);
+
+/* capture_open() dedup, never blocks. ref++ or NULL */
+capture_ctx_t *capture_try_ref(int family, const char *group, const char *source, unsigned port, const char *iface);
+capture_ctx_t *capture_try_ref_srt(const char *host, unsigned port);
+
+/* 1: lifecycle thread accepts jobs. 0: caller must open in sync */
+int capture_lifecycle_active(void);
+
+/* capture_open()/capture_open_srt() on lifecycle thread, params copied. NULL: not queued (queue full, bad params, or lifecycle inactive) */
+capture_open_job_t *capture_open_async(int wake_tid, int family, const char *group, const char *source, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d);
+capture_open_job_t *capture_open_srt_async(int wake_tid, const char *host, unsigned port);
+
+int capture_open_job_done(const capture_open_job_t *job);
+
+/* done jobs only. owned ref, NULL: failed. frees job */
+capture_ctx_t *capture_open_job_take(capture_open_job_t *job);
+
+/* any state. frees job, closes result when ready */
+void capture_open_job_cancel(capture_open_job_t *job);
 
 extern _Thread_local int t_pump_tid;
 

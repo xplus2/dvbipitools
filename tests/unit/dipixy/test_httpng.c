@@ -8,6 +8,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "dipixy/core/htdocs.h"
+#include "dipixy/dlna/gena.h"
 #include "dipixy/dash/lldash.h"
 #include "dipixy/httpng/httpng.h"
 #include "dipixy/segment/mp4push.h"
@@ -50,6 +52,19 @@ typedef struct {
   llhls_park_req_t llhls;
   char llhls_file[64];
   int n_admission;
+  int n_tspush_raw;
+  int n_ts_cold;
+  int ts_cold_ret;
+  ts_cold_park_req_t ts_cold;
+  int n_content;
+  int content_status;
+  char content_type[64];
+  size_t content_len;
+  int content_has_body;
+  size_t content_nextra;
+  char content_sid[64];
+  int n_ws;
+  int n_401;
 } fake_t;
 
 static fake_t g_fake;
@@ -65,6 +80,31 @@ static void fake_status(void *conn, void *req, const char *status) {
 static void fake_401(void *conn, void *req) {
   (void)conn;
   (void)req;
+  g_fake.n_401++;
+}
+
+static void fake_content(void *conn, void *req, int status, const char *ctype, const httpng_hdr_t *extra, size_t nextra, uint8_t *body, size_t len, const char *origin) {
+  (void)conn;
+  (void)req;
+  (void)origin;
+  g_fake.n_content++;
+  g_fake.content_status = status;
+  snprintf(g_fake.content_type, sizeof g_fake.content_type, "%s", ctype ? ctype : "");
+  g_fake.content_len = len;
+  g_fake.content_has_body = body != NULL;
+  g_fake.content_nextra = nextra;
+  g_fake.content_sid[0] = '\0';
+  for (size_t i = 0; i < nextra; i++)
+    if (!strcmp(extra[i].name, "sid")) snprintf(g_fake.content_sid, sizeof g_fake.content_sid, "%s", extra[i].value);
+  free(body);
+}
+
+static int fake_ts_cold(void *conn, void *req, const ts_cold_park_req_t *pr) {
+  (void)conn;
+  (void)req;
+  g_fake.n_ts_cold++;
+  g_fake.ts_cold = *pr;
+  return g_fake.ts_cold_ret;
 }
 
 static void fake_hls(void *conn, void *req, int handled, const hls_resp_t *resp, const char *origin) {
@@ -74,12 +114,13 @@ static void fake_hls(void *conn, void *req, int handled, const hls_resp_t *resp,
   g_fake.n_hls++;
   g_fake.hls_handled = handled;
   g_fake.hls_status = handled ? resp->status : 0;
-  if (handled) hls_resp_body_release(resp->body, resp->zc);
+  if (handled) hls_resp_body_release(resp->body, resp->owner, resp->zc);
 }
 
 static void fake_ws(void *conn, void *req) {
   (void)conn;
   (void)req;
+  g_fake.n_ws++;
 }
 
 static int fake_admission(void *conn) {
@@ -88,10 +129,11 @@ static int fake_admission(void *conn) {
   return g_fake.admission;
 }
 
-static int fake_tspush(void *conn, void *req, int sub) {
+static int fake_tspush(void *conn, void *req, int sub, int rawaudio) {
   (void)conn;
   (void)req;
   g_fake.n_tspush++;
+  g_fake.n_tspush_raw += rawaudio;
   g_fake.tspush_sub = sub;
   return g_fake.tspush_ret;
 }
@@ -144,6 +186,8 @@ static const httpng_ops_t g_ops = {
   .mp4push_dispatch = fake_mp4push,
   .hls_cold_try_park = fake_cold,
   .llhls_try_park = fake_llhls,
+  .ts_cold_try_park = fake_ts_cold,
+  .respond_content = fake_content,
 };
 
 typedef struct {
@@ -198,6 +242,7 @@ static void setup(void) {
   g_cfg.hls_part_size = PART_TARGET;
   g_cfg.dash_part_size = PART_TARGET;
   reactor_set_context(&g_cfg, NULL, NULL);
+  htdocs_template_init(&g_cfg);
   ws_clients_init(CLIENT_SLOTS);
   hls_store_init(8);
   hls_seg_init(8);
@@ -247,6 +292,10 @@ typedef struct {
   void (*fn)(httpng_req_t *);
   const char *path;
 } route_case_t;
+
+static void teardown(void) {
+  gena_stop();
+}
 
 static const route_case_t setup_cases[] = {
   {dispatch_hls_route, "/stdin/hls"},
@@ -514,6 +563,7 @@ START_TEST(dash_refused_progressive_delivery_releases_the_subscription) {
   run(dispatch_dash_route, &(call_t){.path = "/stdin/dseg2000.m4s"});
   ck_assert_int_eq(g_fake.n_dashchunk, 1);
   refused = g_fake.dashchunk_sub;
+  capture_flush_deferred_quiescent();
   g_fake.dashchunk_ret = 1;
   run(dispatch_dash_route, &(call_t){.path = "/stdin/dseg2000.m4s"});
   ck_assert_int_eq(g_fake.n_dashchunk, 2);
@@ -556,12 +606,219 @@ START_TEST(mp4_route_dispatch_refusal_is_503_and_frees_the_slot) {
 }
 END_TEST
 
+START_TEST(rawaudio_route_subscribes_with_the_rawaudio_flag) {
+  open_stdin_source();
+  run(dispatch_ts_route, &(call_t){.path = "/stdin/rawaudio"});
+  ck_assert_int_eq(g_fake.n_tspush, 1);
+  ck_assert_int_eq(g_fake.n_tspush_raw, 1);
+  ck_assert_int_eq(g_fake.n_status, 0);
+}
+END_TEST
+
+START_TEST(ts_head_answers_headers_only) {
+  open_stdin_source();
+  run(dispatch_ts_route, &(call_t){.path = "/stdin/ts", .is_head = 1});
+  ck_assert_int_eq(g_fake.n_content, 1);
+  ck_assert_int_eq(g_fake.content_status, 200);
+  ck_assert_str_eq(g_fake.content_type, "video/mp2t");
+  ck_assert_int_eq((int)(g_fake.content_len == HTTPNG_NO_LENGTH), 1);
+  ck_assert_int_eq(g_fake.content_has_body, 0);
+  ck_assert_int_eq(g_fake.n_tspush, 0);
+}
+END_TEST
+
+START_TEST(rawaudio_head_is_audio_mpeg) {
+  open_stdin_source();
+  run(dispatch_ts_route, &(call_t){.path = "/stdin/rawaudio", .is_head = 1});
+  ck_assert_str_eq(g_fake.content_type, "audio/mpeg");
+}
+END_TEST
+
+START_TEST(ts_without_traffic_parks_when_startup_timeout_is_set) {
+  open_stdin_source();
+  g_cfg.ts_startup_timeout_s = 2.0;
+  g_fake.ts_cold_ret = 1;
+  run(dispatch_ts_route, &(call_t){.path = "/stdin/spts"});
+  ck_assert_int_eq(g_fake.n_ts_cold, 1);
+  ck_assert_int_eq(g_fake.ts_cold.spts, 1);
+  ck_assert_int_eq(g_fake.ts_cold.rawaudio, 0);
+  ck_assert_int_eq(g_fake.ts_cold.timeout_ms, 2000);
+  ck_assert_int_eq(g_fake.n_tspush, 0);
+  capture_close(g_fake.ts_cold.cap_ctx);
+}
+END_TEST
+
+START_TEST(ts_park_refusal_streams_immediately) {
+  open_stdin_source();
+  g_cfg.ts_startup_timeout_s = 2.0;
+  g_fake.ts_cold_ret = 0;
+  run(dispatch_ts_route, &(call_t){.path = "/stdin/ts"});
+  ck_assert_int_eq(g_fake.n_ts_cold, 1);
+  ck_assert_int_eq(g_fake.n_tspush, 1);
+}
+END_TEST
+
+static void dispatch_gena(const char *method, const char *path, const char *sid, const char *nt, const char *callback, const char *authz, const char *protocol) {
+  char pathbuf[128];
+  char method_buf[16];
+  httpng_req_hdrs_t hdrs;
+
+  snprintf(pathbuf, sizeof pathbuf, "%s", path);
+  snprintf(method_buf, sizeof method_buf, "%s", method);
+  memset(&hdrs, 0, sizeof hdrs);
+  hdrs.method = method_buf;
+  hdrs.path = pathbuf;
+  hdrs.inm = "";
+  hdrs.origin = "";
+  hdrs.authz = authz;
+  hdrs.protocol = protocol;
+  hdrs.host = "";
+  hdrs.soapaction = "";
+  hdrs.sid = sid;
+  hdrs.nt = nt;
+  hdrs.callback = callback;
+  httpng_dispatch(&g_ops, FAKE_CONN, FAKE_REQ, &hdrs, "192.0.2.1", -1);
+}
+
+static void dispatch_request(const char *method, const char *path, const char *authz, const char *protocol) {
+  dispatch_gena(method, path, "", "", "", authz, protocol);
+}
+
+START_TEST(index_page_is_served) {
+  static const char *const paths[] = {"/", "/index.html"};
+
+  dispatch_request("GET", paths[_i], "", "");
+  ck_assert_int_eq(g_fake.n_content, 1);
+  ck_assert_int_eq(g_fake.content_status, 200);
+  ck_assert_str_eq(g_fake.content_type, "text/html; charset=utf-8");
+  ck_assert_int_eq(g_fake.content_has_body, 1);
+}
+END_TEST
+
+START_TEST(index_page_head_has_length_but_no_body) {
+  dispatch_request("HEAD", "/", "", "");
+  ck_assert_int_eq(g_fake.n_content, 1);
+  ck_assert_int_gt((int)g_fake.content_len, 0);
+  ck_assert_int_eq(g_fake.content_has_body, 0);
+}
+END_TEST
+
+START_TEST(index_page_is_404_without_status_ui) {
+  g_cfg.no_status = 1;
+  dispatch_request("GET", "/", "", "");
+  ck_assert_str_eq(g_fake.status, "404");
+  ck_assert_int_eq(g_fake.n_content, 0);
+}
+END_TEST
+
+START_TEST(status_json_is_served) {
+  dispatch_request("GET", "/ui/status.js", "", "");
+  ck_assert_int_eq(g_fake.n_content, 1);
+  ck_assert_str_eq(g_fake.content_type, "application/json");
+  ck_assert_int_eq(g_fake.content_has_body, 1);
+}
+END_TEST
+
+START_TEST(ui_paths_require_the_configured_credential) {
+  snprintf(g_cfg.http_auth, sizeof g_cfg.http_auth, "%s", "Basic dTpw");
+  dispatch_request("GET", "/", "", "");
+  ck_assert_int_eq(g_fake.n_401, 1);
+  ck_assert_int_eq(g_fake.n_content, 0);
+  dispatch_request("GET", "/", "Basic dTpw", "");
+  ck_assert_int_eq(g_fake.n_content, 1);
+}
+END_TEST
+
+START_TEST(websocket_connect_accepts_both_ui_ws_spellings) {
+  static const char *const paths[] = {"/ui/ws/", "/ui/ws"};
+
+  dispatch_request("CONNECT", paths[_i], "", "websocket");
+  ck_assert_int_eq(g_fake.n_ws, 1);
+  ck_assert_int_eq(g_fake.n_status, 0);
+}
+END_TEST
+
+START_TEST(websocket_connect_elsewhere_is_404) {
+  dispatch_request("CONNECT", "/ui/other", "", "websocket");
+  ck_assert_int_eq(g_fake.n_ws, 0);
+  ck_assert_str_eq(g_fake.status, "404");
+}
+END_TEST
+
+START_TEST(dlna_descriptors_are_served_when_enabled) {
+  g_cfg.enable_dlna = 1;
+  dispatch_request("GET", "/dlna/cd_scpd.xml", "", "");
+  ck_assert_int_eq(g_fake.n_content, 1);
+  ck_assert_str_eq(g_fake.content_type, "text/xml; charset=utf-8");
+  ck_assert_int_eq(g_fake.content_has_body, 1);
+}
+END_TEST
+
+START_TEST(dlna_descriptors_are_404_when_disabled) {
+  dispatch_request("GET", "/dlna/cd_scpd.xml", "", "");
+  ck_assert_int_eq(g_fake.n_content, 0);
+  ck_assert_str_eq(g_fake.status, "404");
+}
+END_TEST
+
+START_TEST(dlna_methods_without_dlna_are_405) {
+  static const char *const methods[] = {"POST", "SUBSCRIBE", "UNSUBSCRIBE"};
+
+  dispatch_request(methods[_i], "/dlna/cd_control", "", "");
+  ck_assert_str_eq(g_fake.status, "405");
+}
+END_TEST
+
+START_TEST(dlna_wrong_path_is_405) {
+  g_cfg.enable_dlna = 1;
+  dispatch_request("POST", "/dlna/nope", "", "");
+  ck_assert_str_eq(g_fake.status, "405");
+}
+END_TEST
+
+START_TEST(dlna_subscribe_returns_sid_and_timeout) {
+  g_cfg.enable_dlna = 1;
+  dispatch_gena("SUBSCRIBE", "/dlna/cd_event", "", "upnp:event", "<http://192.0.2.1:9/ev>", "", "");
+  ck_assert_int_eq(g_fake.n_content, 1);
+  ck_assert_int_eq(g_fake.content_status, 200);
+  ck_assert_int_eq((int)g_fake.content_nextra, 2);
+}
+END_TEST
+
+START_TEST(dlna_unsubscribe_is_empty_200) {
+  g_cfg.enable_dlna = 1;
+  char sid[sizeof g_fake.content_sid];
+
+  dispatch_gena("SUBSCRIBE", "/dlna/cm_event", "", "upnp:event", "<http://192.0.2.1:9/ev>", "", "");
+  ck_assert_int_eq(g_fake.n_content, 1);
+  snprintf(sid, sizeof sid, "%s", g_fake.content_sid);
+  ck_assert_str_ne(sid, "");
+  dispatch_gena("UNSUBSCRIBE", "/dlna/cm_event", sid, "", "", "", "");
+  ck_assert_int_eq(g_fake.n_content, 2);
+  ck_assert_int_eq(g_fake.content_status, 200);
+  ck_assert_int_eq((int)g_fake.content_len, 0);
+}
+END_TEST
+
+START_TEST(dlna_control_without_soapaction_is_400) {
+  g_cfg.enable_dlna = 1;
+  dispatch_request("POST", "/dlna/cd_control", "", "");
+  ck_assert_str_eq(g_fake.status, "400");
+}
+END_TEST
+
+START_TEST(unknown_method_is_405) {
+  dispatch_request("PUT", "/stdin/ts", "", "");
+  ck_assert_str_eq(g_fake.status, "405");
+}
+END_TEST
+
 static Suite *httpng_suite(void) {
   Suite *s = suite_create("dipixy_httpng");
   TCase *tc = tcase_create("routes");
 
   tcase_set_timeout(tc, 20);
-  tcase_add_checked_fixture(tc, setup, NULL);
+  tcase_add_checked_fixture(tc, setup, teardown);
   tcase_add_loop_test(tc, route_without_source_is_404, 0, SETUP_CASES);
   tcase_add_loop_test(tc, route_with_full_client_table_is_503, 0, SETUP_CASES);
   tcase_add_test(tc, ts_route_refused_by_admission_is_503);
@@ -580,6 +837,26 @@ static Suite *httpng_suite(void) {
   tcase_add_test(tc, dash_refused_progressive_delivery_releases_the_subscription);
   tcase_add_test(tc, mp4_route_hands_the_subscription_to_the_protocol);
   tcase_add_test(tc, mp4_route_dispatch_refusal_is_503_and_frees_the_slot);
+  tcase_add_test(tc, rawaudio_route_subscribes_with_the_rawaudio_flag);
+  tcase_add_test(tc, ts_head_answers_headers_only);
+  tcase_add_test(tc, rawaudio_head_is_audio_mpeg);
+  tcase_add_test(tc, ts_without_traffic_parks_when_startup_timeout_is_set);
+  tcase_add_test(tc, ts_park_refusal_streams_immediately);
+  tcase_add_loop_test(tc, index_page_is_served, 0, 2);
+  tcase_add_test(tc, index_page_head_has_length_but_no_body);
+  tcase_add_test(tc, index_page_is_404_without_status_ui);
+  tcase_add_test(tc, status_json_is_served);
+  tcase_add_test(tc, ui_paths_require_the_configured_credential);
+  tcase_add_loop_test(tc, websocket_connect_accepts_both_ui_ws_spellings, 0, 2);
+  tcase_add_test(tc, websocket_connect_elsewhere_is_404);
+  tcase_add_test(tc, dlna_descriptors_are_served_when_enabled);
+  tcase_add_test(tc, dlna_descriptors_are_404_when_disabled);
+  tcase_add_loop_test(tc, dlna_methods_without_dlna_are_405, 0, 3);
+  tcase_add_test(tc, dlna_wrong_path_is_405);
+  tcase_add_test(tc, dlna_subscribe_returns_sid_and_timeout);
+  tcase_add_test(tc, dlna_unsubscribe_is_empty_200);
+  tcase_add_test(tc, dlna_control_without_soapaction_is_400);
+  tcase_add_test(tc, unknown_method_is_405);
   suite_add_tcase(s, tc);
   return s;
 }

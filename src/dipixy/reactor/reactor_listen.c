@@ -17,7 +17,9 @@
 #include "lib/helper/log.h"
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netinet/in.h>
+#include <stdatomic.h>
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
@@ -26,6 +28,13 @@
 #include <unistd.h>
 
 #define CONN_TABLE_FALLBACK 65536
+
+/* closes fd, keeps errno of the failed call */
+static int listen_fail(int fd, int err) {
+  close(fd);
+  errno = err;
+  return -1;
+}
 
 /* SO_REUSEPORT: every worker thread binds its own socket to shared port, kernel load-balances accept() */
 static int create_listen_sock(int family, const char *addr, listen_scope_t scope, unsigned port) {
@@ -40,14 +49,8 @@ static int create_listen_sock(int family, const char *addr, listen_scope_t scope
     memset(&sa, 0, sizeof sa);
     sa.sin_family = AF_INET;
     sa.sin_port = htons((uint16_t)port);
-    if (inet_pton(AF_INET, addr, &sa.sin_addr) != 1) {
-      close(fd);
-      return -1;
-    }
-    if (bind(fd, (struct sockaddr *)&sa, sizeof sa) || listen(fd, 4096)) {
-      close(fd);
-      return -1;
-    }
+    if (inet_pton(AF_INET, addr, &sa.sin_addr) != 1) return listen_fail(fd, EINVAL);
+    if (bind(fd, (struct sockaddr *)&sa, sizeof sa) || listen(fd, 4096)) return listen_fail(fd, errno);
   } else {
     struct sockaddr_in6 sa;
     memset(&sa, 0, sizeof sa);
@@ -57,13 +60,9 @@ static int create_listen_sock(int family, const char *addr, listen_scope_t scope
       sa.sin6_addr = in6addr_any;
       { int no = 0; setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof no); }
     } else if (inet_pton(AF_INET6, addr, &sa.sin6_addr) != 1) {
-      close(fd);
-      return -1;
+      return listen_fail(fd, EINVAL);
     }
-    if (bind(fd, (struct sockaddr *)&sa, sizeof sa) || listen(fd, 4096)) {
-      close(fd);
-      return -1;
-    }
+    if (bind(fd, (struct sockaddr *)&sa, sizeof sa) || listen(fd, 4096)) return listen_fail(fd, errno);
   }
   return fd;
 }
@@ -73,17 +72,27 @@ static int create_listen_sock_for_spec(const listen_spec_t *spec) {
   return create_listen_sock(family, spec->addr, spec->scope, spec->port);
 }
 
-void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
+/* 0 ok. -1: logged once per process, caller aborts start */
+static int add_tcp_listener(reactor_listeners_t *rl, const listen_spec_t *spec, int is_tls, int tid) {
+  static atomic_flag logged = ATOMIC_FLAG_INIT;
+  int fd = create_listen_sock_for_spec(spec);
+  if (fd >= 0) {
+    rl->L[rl->nL++] = (reactor_listener){fd, is_tls, RL_ACCEPT};
+    return 0;
+  }
+  if (!atomic_flag_test_and_set(&logged))
+    log_code("YE500236", TOOL_NAME ": cannot listen on %s:%u%s (worker %d): %s",
+             spec->scope == LISTEN_ANY ? "all" : spec->addr, spec->port, is_tls ? " (tls)" : "", tid, strerror(errno));
+  return -1;
+}
+
+int reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
   struct epoll_event ev;
-  int fd;
+  int rc = 0;
   rl->nL = 0;
 
-  fd = create_listen_sock_for_spec(&reactor_cfg()->listen);
-  if (fd >= 0) rl->L[rl->nL++] = (reactor_listener){fd, 0, RL_ACCEPT};
-  if (tls_is_running()) {
-    fd = create_listen_sock_for_spec(&reactor_cfg()->listen_tls);
-    if (fd >= 0) rl->L[rl->nL++] = (reactor_listener){fd, 1, RL_ACCEPT};
-  }
+  if (add_tcp_listener(rl, &reactor_cfg()->listen, 0, tid)) rc = -1;
+  if (tls_is_running() && add_tcp_listener(rl, &reactor_cfg()->listen_tls, 1, tid)) rc = -1;
 
 #ifdef HAVE_HTTP3
   if (!reactor_cfg()->no_http3) {
@@ -92,10 +101,12 @@ void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
     if (lt->scope != LISTEN_V6) {
       t_h3_udp4 = h3_create_udp_sock((int)lt->port, lt->scope == LISTEN_ANY ? "0.0.0.0" : lt->addr);
       if (t_h3_udp4 >= 0) rl->L[rl->nL++] = (reactor_listener){t_h3_udp4, 0, RL_H3_UDP};
+      else if (tid == 0 && h3_ready()) log_code("YW500227", TOOL_NAME ": http3: udp4 bind failed, no HTTP/3 over IPv4");
     }
     if (lt->scope != LISTEN_V4) {
       t_h3_udp6 = h3_create_udp_sock6((int)lt->port, lt->scope == LISTEN_ANY ? "::" : lt->addr);
       if (t_h3_udp6 >= 0) rl->L[rl->nL++] = (reactor_listener){t_h3_udp6, 0, RL_H3_UDP};
+      else if (tid == 0 && h3_ready()) log_code("YW500228", TOOL_NAME ": http3: udp6 bind failed, no HTTP/3 over IPv6");
     }
     if (h3_steer_end(t_h3_udp4, t_h3_udp6) != 0)
       log_code("YA500211", "http3: reuseport steering unavailable, conn migration will only work with -j 1");
@@ -126,21 +137,12 @@ void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
     ev.data.ptr = &rl->L[i];
     epoll_ctl(epfd, EPOLL_CTL_ADD, rl->L[i].fd, &ev);
   }
+  return rc;
 }
 
-void reactor_teardown_listeners(const reactor_listeners_t *rl, int tid) {
-  if (rl->tspush_efd >= 0) {
-    ts_push_register_reactor_efd(tid, -1);
-    close(rl->tspush_efd);
-  }
-  if (rl->dashchunk_efd >= 0) {
-    dash_lldash_register_reactor_efd(tid, -1);
-    close(rl->dashchunk_efd);
-  }
-  if (rl->mp4push_efd >= 0) {
-    mp4push_register_reactor_efd(tid, -1);
-    close(rl->mp4push_efd);
-  }
+void reactor_teardown_listeners(const reactor_listeners_t *rl) {
+  reactor_accept_fini();
+  /* wake eventfds closed by reactor_run after pump join */
   for (int i = 0; i < rl->nL; i++) {
     if (rl->L[i].kind == RL_ACCEPT || rl->L[i].kind == RL_H3_UDP) close(rl->L[i].fd);
   }

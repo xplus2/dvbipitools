@@ -6,11 +6,13 @@
 #include <pthread.h>
 #include <string.h>
 
-void snapshot_ll_playlist(const hls_snapshot_t *s, ll_playlist_snap_t *snap) {
+void snapshot_ll_playlist(const hls_snapshot_t *s, const lcevc_select_t *lcevc, ll_playlist_snap_t *snap) {
   int i;
+  lcevc_select_format(lcevc, snap->lcevc, sizeof snap->lcevc);
   snap->td = hls_target_duration(s);
   snap->part_target = s->part_target;
   snap->oldest_seq = s->oldest_seq;
+  snap->disc_seq = s->epoch;
   snap->hb_ms = (int)(s->part_target * 3000.0);
   snap->seg_count = s->count;
   for (i = 0; i < s->count; i++) {
@@ -18,6 +20,8 @@ void snapshot_ll_playlist(const hls_snapshot_t *s, ll_playlist_snap_t *snap) {
     ll_seg_snap_t *ss = &snap->segs[i];
     ss->seq = seg->seq;
     ss->duration = seg->duration;
+    ss->disc = seg->disc;
+    snap->disc_seq -= seg->disc;
     ss->part_count = seg->parts.count;
     for (int p = 0; p < seg->parts.count; p++) {
       ss->part_duration[p] = seg->parts.duration[p];
@@ -29,31 +33,38 @@ void snapshot_ll_playlist(const hls_snapshot_t *s, ll_playlist_snap_t *snap) {
     snap->live_duration[i] = s->live_parts.duration[i];
     snap->live_independent[i] = s->live_parts.independent[i];
   }
+  snap->live_disc = s->live_parts.count > 0 && s->disc_pending;
+  snap->disc_seq -= snap->live_disc;
   snap->live_msn = s->live_msn;
 }
 
-static char *write_part_line(char *mp, double duration, uint32_t seq, int part, int independent) {
+static char *write_part_line(char *mp, const char *lcevc, double duration, uint32_t seq, int part, int independent) {
   mp = WRITE_LIT(mp, "#EXT-X-PART:DURATION=");
   mp = write_fixed3(mp, duration);
   mp = WRITE_LIT(mp, ",URI=\"seg");
   mp = write_u32(mp, seq, 5);
   *mp++ = '.';
   mp = write_u32(mp, (uint32_t)part, 0);
-  mp = WRITE_LIT(mp, ".ts\"");
+  mp = WRITE_LIT(mp, ".ts");
+  mp = write_lcevc_arg(mp, lcevc, '?');
+  *mp++ = '"';
   if (independent) mp = WRITE_LIT(mp, ",INDEPENDENT=YES");
   *mp++ = '\n';
   return mp;
 }
 
-static char *write_extinf_line(char *mp, double duration, uint32_t seq) {
+static char *write_extinf_line(char *mp, const char *lcevc, double duration, uint32_t seq) {
   mp = WRITE_LIT(mp, "#EXTINF:");
   mp = write_fixed3(mp, duration);
   mp = WRITE_LIT(mp, ",\nseg");
   mp = write_u32(mp, seq, 5);
-  return WRITE_LIT(mp, ".ts\n");
+  mp = WRITE_LIT(mp, ".ts");
+  mp = write_lcevc_arg(mp, lcevc, '?');
+  *mp++ = '\n';
+  return mp;
 }
 
-/* no lock held. returns bytes written */
+/* no lock held. returns bytes written. parts only for newest 3 target durations */
 size_t format_ll_playlist(const ll_playlist_snap_t *snap, char *m3u8, size_t cap) {
   char *mp = m3u8;
   const char *end = m3u8 + cap;
@@ -68,26 +79,48 @@ size_t format_ll_playlist(const ll_playlist_snap_t *snap, char *m3u8, size_t cap
   mp = WRITE_LIT(mp, "\n#EXT-X-MEDIA-SEQUENCE:");
   mp = write_u32(mp, snap->oldest_seq, 0);
   *mp++ = '\n';
+  if (snap->disc_seq) {
+    mp = WRITE_LIT(mp, "#EXT-X-DISCONTINUITY-SEQUENCE:");
+    mp = write_u32(mp, snap->disc_seq, 0);
+    *mp++ = '\n';
+  }
+
+  double newer = 0.0;
+  int first_parts = snap->seg_count;
+  for (i = snap->seg_count - 1; i >= 0 && newer < 3.0 * snap->td; i--) {
+    first_parts = i;
+    newer += snap->segs[i].duration;
+  }
 
   for (i = 0; i < snap->seg_count; i++) {
     const ll_seg_snap_t *ss = &snap->segs[i];
-    for (int p = 0; p < ss->part_count; p++) {
+    if (ss->disc) {
+      if ((size_t)(end - mp) < 32) goto done;
+      mp = WRITE_LIT(mp, "#EXT-X-DISCONTINUITY\n");
+    }
+    for (int p = 0; i >= first_parts && p < ss->part_count; p++) {
       if ((size_t)(end - mp) < 128) goto done;
-      mp = write_part_line(mp, ss->part_duration[p], ss->seq, p, ss->part_independent[p]);
+      mp = write_part_line(mp, snap->lcevc, ss->part_duration[p], ss->seq, p, ss->part_independent[p]);
     }
     if ((size_t)(end - mp) < 64) goto done;
-    mp = write_extinf_line(mp, ss->duration, ss->seq);
+    mp = write_extinf_line(mp, snap->lcevc, ss->duration, ss->seq);
+  }
+  if (snap->live_disc) {
+    if ((size_t)(end - mp) < 128) goto done;
+    mp = WRITE_LIT(mp, "#EXT-X-DISCONTINUITY\n");
   }
   for (i = 0; i < snap->live_count; i++) {
     if ((size_t)(end - mp) < 128) goto done;
-    mp = write_part_line(mp, snap->live_duration[i], snap->live_msn, i, snap->live_independent[i]);
+    mp = write_part_line(mp, snap->lcevc, snap->live_duration[i], snap->live_msn, i, snap->live_independent[i]);
   }
   if ((size_t)(end - mp) >= 96) {
     mp = WRITE_LIT(mp, "#EXT-X-PRELOAD-HINT:TYPE=PART,URI=\"seg");
     mp = write_u32(mp, snap->live_msn, 5);
     *mp++ = '.';
     mp = write_u32(mp, (uint32_t)snap->live_count, 0);
-    mp = WRITE_LIT(mp, ".ts\"\n");
+    mp = WRITE_LIT(mp, ".ts");
+    mp = write_lcevc_arg(mp, snap->lcevc, '?');
+    mp = WRITE_LIT(mp, "\"\n");
   }
 done:
   return (size_t)(mp - m3u8);

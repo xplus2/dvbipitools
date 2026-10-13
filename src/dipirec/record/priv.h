@@ -32,6 +32,8 @@ typedef struct {
 int src_open(const config_t *cfg, src_t *s);
 /* TS bytes, RTP stripped. >0 len, 0 timeout, -1 end */
 ssize_t src_read(src_t *s, unsigned char *buf, size_t cap);
+/* as src_read(). reason set on -1: NET_ERR_EOF is a clean end */
+ssize_t src_read_reason(src_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason);
 void src_close(src_t *s);
 
 /* 1: src_read() likely has data. 0: nothing this tick. -1: fatal poll
@@ -50,8 +52,9 @@ typedef struct {
   srtsink_t *srt;   /* NULL unless -o srt:// */
   int net_had_error;  /* edge-log gate, net send failure never stops recording */
   int rist_had_error; /* edge-log gate, rist write failure never stops recording */
+  int srt_had_error;  /* edge-log gate, srt send failure/drop never stops recording */
   int srt_connected;  /* edge-log gate for connect/link-down transitions */
-  uint64_t errors_total; /* metrics: cumulative write failures, net/rist only */
+  uint64_t errors_total; /* metrics: cumulative write failures, net/rist/srt only */
 } out_sink_t;
 
 int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o);

@@ -110,11 +110,41 @@ void jbuf_fixed3(jbuf_t *j, double v) {
   jbuf_raw(j, buf, 3);
 }
 
+/* length of valid UTF-8 sequence at s (2..4), 0 if invalid. rejects overlong, surrogates, > U+10FFFF */
+static size_t utf8_seq_len(const unsigned char *s) {
+  unsigned char c = s[0];
+  if (c >= 0xC2 && c <= 0xDF) return (s[1] & 0xC0) == 0x80 ? 2 : 0;
+  if (c >= 0xE0 && c <= 0xEF) {
+    if ((s[1] & 0xC0) != 0x80 || (s[2] & 0xC0) != 0x80) return 0;
+    if (c == 0xE0 && s[1] < 0xA0) return 0;
+    if (c == 0xED && s[1] > 0x9F) return 0;
+    return 3;
+  }
+  if (c >= 0xF0 && c <= 0xF4) {
+    if ((s[1] & 0xC0) != 0x80 || (s[2] & 0xC0) != 0x80 || (s[3] & 0xC0) != 0x80) return 0;
+    if (c == 0xF0 && s[1] < 0x90) return 0;
+    if (c == 0xF4 && s[1] > 0x8F) return 0;
+    return 4;
+  }
+  return 0;
+}
+
 void jbuf_json_string(jbuf_t *j, const char *s) {
   const char *run = s;
   jbuf_str(j, "\"");
   for (; *s; s++) {
     unsigned char c = (unsigned char)*s;
+    if (c >= 0x80) {
+      size_t n = utf8_seq_len((const unsigned char *)s);
+      if (n) {
+        s += n - 1;
+        continue;
+      }
+      if (s > run) jbuf_raw(j, run, (size_t)(s - run));
+      jbuf_str(j, "\\ufffd");
+      run = s + 1;
+      continue;
+    }
     if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t' || c < 0x20) {
       if (s > run) jbuf_raw(j, run, (size_t)(s - run));
       if (c == '"' || c == '\\') {

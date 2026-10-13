@@ -23,8 +23,8 @@ static int display_name_cb(const char *tag, const char *blk_end, void *ctx) {
   return 0;
 }
 
-/* fills remaining programme fields (stop/title/desc/category) once start parsed ok */
-static void fill_programme_details(bcg_programme_t *pr, const char *tag, const char *blk_end) {
+/* fills remaining programme fields (stop/title/desc/category) once start parsed ok. 0 ok, -1 OOM */
+static int fill_programme_details(bcg_programme_t *pr, const char *tag, const char *blk_end) {
   char stop[BCG_TIME_LEN];
   pr->stop[0] = '\0';
   if (xml_tag_attr(tag, blk_end, "stop", stop, sizeof stop) == 0) {
@@ -36,12 +36,10 @@ static void fill_programme_details(bcg_programme_t *pr, const char *tag, const c
       log_code("LW400190", "xmltv: unknown time zone in stop time, no offset applied: %s", stop);
     }
   }
-  if (bcg_elem_text(tag, blk_end, "title", pr->title, sizeof pr->title))
-    pr->title[0] = '\0';
-  if (bcg_elem_text(tag, blk_end, "desc", pr->desc, sizeof pr->desc))
-    pr->desc[0] = '\0';
-  if (bcg_elem_text(tag, blk_end, "category", pr->category, sizeof pr->category))
-    pr->category[0] = '\0';
+  if (bcg_elem_text(tag, blk_end, "title", &pr->title) || bcg_elem_text(tag, blk_end, "desc", &pr->desc) ||
+      bcg_elem_text(tag, blk_end, "category", &pr->category))
+    return -1;
+  return 0;
 }
 
 static int channel_cb(const char *tag, const char *blk_end, void *ctx) {
@@ -78,23 +76,41 @@ static int programme_cb(const char *tag, const char *blk_end, void *ctx) {
   if (!pr) return -1;
   bufcpy(pr->channel_id, sizeof pr->channel_id, channel);
   bufcpy(pr->start, sizeof pr->start, start_iso);
-  fill_programme_details(pr, tag, blk_end);
-  return 0;
+  return fill_programme_details(pr, tag, blk_end);
+}
+
+static void warn_unclosed(const char *buf, const char *at, const char *name) {
+  unsigned long line = 1;
+  for (const char *p = buf; p < at; p++)
+    if (*p == '\n') line++;
+  log_code("LW400225", "xmltv: <%s> at line %lu has no end tag, rest of file ignored", name, line);
 }
 
 int xmltv_read(FILE *f, bcg_doc_t *doc) {
   char *buf;
   size_t len;
   const char *end;
+  const char *bad = NULL;
+  char enc[64];
   int rc;
 
   if (read_all(f, &buf, &len)) {
     log_code("LE500170", "xmltv: out of memory reading xmltv");
     return -1;
   }
+  rc = xml_to_utf8(&buf, &len, enc, sizeof enc);
+  if (rc) {
+    if (rc == -2) log_code("LE500170", "xmltv: out of memory reading xmltv");
+    else log_code("LE500225", "xmltv: cannot convert encoding %s to UTF-8", enc);
+    free(buf);
+    return -1;
+  }
   end = buf + len;
-  rc = for_each_xml_elem(buf, end, "channel", channel_cb, doc);
-  if (rc == 0) rc = for_each_xml_elem(buf, end, "programme", programme_cb, doc);
+  rc = for_each_xml_elem_chk(buf, end, "channel", channel_cb, doc, &bad);
+  if (bad) warn_unclosed(buf, bad, "channel");
+  bad = NULL;
+  if (rc == 0) rc = for_each_xml_elem_chk(buf, end, "programme", programme_cb, doc, &bad);
+  if (bad) warn_unclosed(buf, bad, "programme");
   free(buf);
   return rc;
 }
@@ -124,21 +140,24 @@ void xmltv_write(FILE *f, const bcg_doc_t *doc, const char *generator_name) {
     const bcg_programme_t *pr = &doc->programmes[i];
     char start[BCG_TIME_LEN];
     char stop[BCG_TIME_LEN];
-    if (iso8601_to_xmltv_time(pr->start, start, sizeof start)) continue;
+    if (iso8601_to_xmltv_time(pr->start, start, sizeof start)) {
+      log_code("LW400214", "xmltv: skipping programme, bad start time: %s", pr->start);
+      continue;
+    }
     fprintf(f, "  <programme start=\"%s\"", start);
     if (pr->stop[0] && iso8601_to_xmltv_time(pr->stop, stop, sizeof stop) == 0) fprintf(f, " stop=\"%s\"", stop);
     fputs(" channel=\"", f);
     xml_escape(f, pr->channel_id);
     fputs("\">\n", f);
     fputs("    <title>", f);
-    xml_escape(f, pr->title[0] ? pr->title : "(untitled)");
+    xml_escape(f, pr->title ? pr->title : "(untitled)");
     fputs("</title>\n", f);
-    if (pr->desc[0]) {
+    if (pr->desc) {
       fputs("    <desc>", f);
       xml_escape(f, pr->desc);
       fputs("</desc>\n", f);
     }
-    if (pr->category[0]) {
+    if (pr->category) {
       fputs("    <category>", f);
       xml_escape(f, pr->category);
       fputs("</category>\n", f);

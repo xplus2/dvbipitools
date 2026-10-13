@@ -14,6 +14,13 @@
 #include "priv.h"
 #include "../filter/ts.h"
 
+/* total += v * mul, -1 on overflow */
+static int dur_add(long *total, long v, long mul) {
+  if (v > (LONG_MAX - *total) / mul) return -1;
+  *total += v * mul;
+  return 0;
+}
+
 long duration_parse(const char *s) {
   if (!s || !*s) return -1;
   if (strchr(s, ':')) {
@@ -23,6 +30,7 @@ long duration_parse(const char *s) {
     long h = 0;
     long m = 0;
     long sec;
+    long total = 0;
     for (;;) {
       char *end;
       long v;
@@ -43,8 +51,8 @@ long duration_parse(const char *s) {
       sec = parts[2];
     } else return -1;
     if (sec > 59 || (n == 3 && m > 59)) return -1;
-    h = h * 3600 + m * 60 + sec;
-    return h > 0 ? h : -1;
+    if (dur_add(&total, h, 3600) || dur_add(&total, m, 60) || dur_add(&total, sec, 1)) return -1;
+    return total > 0 ? total : -1;
   }
 
   if (strpbrk(s, "hms")) {
@@ -59,9 +67,9 @@ long duration_parse(const char *s) {
       v = strtol(p, &end, 10);
       if (v < 0) return -1;
       switch (*end) {
-        case 'h':        rank = 1;        total += v * 3600;   break;
-        case 'm':        rank = 2;        total += v * 60;     break;
-        case 's':        rank = 3;        total += v;          break;
+        case 'h':        rank = 1;        if (dur_add(&total, v, 3600)) return -1;   break;
+        case 'm':        rank = 2;        if (dur_add(&total, v, 60)) return -1;     break;
+        case 's':        rank = 3;        if (dur_add(&total, v, 1)) return -1;      break;
         default:         return -1;
       }
       if (rank <= last) return -1; /* bad order or duplicate */

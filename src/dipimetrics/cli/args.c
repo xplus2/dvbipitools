@@ -79,6 +79,10 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
       case 'S':
+        if (!*optarg) {
+          argerr("MS000715", "empty -S path");
+          return ARGS_ERR;
+        }
         cfg->sock_path = optarg;
         break;
       case 'l':
@@ -97,13 +101,22 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       }
       case OPT_TLS_CERT:
+        if (!*optarg) {
+          argerr("MS000716", "empty --tls-cert path");
+          return ARGS_ERR;
+        }
         cfg->tls_cert = optarg;
         break;
       case OPT_TLS_KEY:
+        if (!*optarg) {
+          argerr("MS000717", "empty --tls-key path");
+          return ARGS_ERR;
+        }
         cfg->tls_key = optarg;
         break;
       case OPT_AUTH:
         if (basic_auth_parse(optarg, cfg->http_auth, sizeof cfg->http_auth)) return ARGS_ERR;
+        log_code("MA300172", "--auth is visible in the process list, use 'auth' in the config file");
         break;
       case 'v':
         cfg->verbose = 1;
@@ -134,7 +147,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   conflict = metrics_cfg_conflict(cfg, &conflict_code);
   if (conflict) {
-    argerr("MS000137", conflict_code, "%s", conflict);
+    argerr(conflict_code, "%s", conflict);
     return ARGS_ERR;
   }
   return ARGS_OK;

@@ -142,10 +142,10 @@ END_TEST
 START_TEST(fec2022_drops_double_loss_in_one_column) {
   fec2022_enc_t *e = fec2022_enc_new(L, D, 96);
   fec2022_dec_t *dc = fec2022_dec_new(L, D);
-  unsigned char src[N + L][200];
-  unsigned char repair[N + L][FEC2022_MAX_REPAIR];
-  size_t repair_len[N + L];
-  unsigned char out[(N + L) * FEC2022_MAX_PKT];
+  unsigned char src[2 * N][200];
+  unsigned char repair[2 * N][FEC2022_MAX_REPAIR];
+  size_t repair_len[2 * N];
+  unsigned char out[(2 * N) * FEC2022_MAX_PKT];
   size_t off;
   unsigned col = 1;
   uint16_t drop_a = (uint16_t)(col + 0u * L);
@@ -155,18 +155,18 @@ START_TEST(fec2022_drops_double_loss_in_one_column) {
   ck_assert_ptr_nonnull(dc);
 
   /* forces the flush isolated tests need */
-  for (unsigned i = 0; i < N + L; i++) {
+  for (unsigned i = 0; i < 2 * N; i++) {
     build_source(src[i], (uint16_t)i, 1000 + i, (unsigned char)i);
     repair_len[i] = fec2022_enc_feed(e, src[i], 200, 5000 + i, repair[i], sizeof repair[i]);
   }
-  for (unsigned i = 0; i < N + L; i++) {
+  for (unsigned i = 0; i < 2 * N; i++) {
     if (i != drop_a && i != drop_b)
       fec2022_dec_source(dc, src[i], 200);
     if (repair_len[i] > 0)
       fec2022_dec_repair(dc, repair[i], repair_len[i]);
   }
   off = drain_all(dc, out, sizeof out);
-  ck_assert_uint_eq(off, (size_t)(N - 2) * 200);
+  ck_assert_uint_eq(off, (size_t)(2 * N - 2) * 200);
   fec2022_enc_free(e);
   fec2022_dec_free(dc);
 }
@@ -343,12 +343,28 @@ START_TEST(fec2022_dec_resynchronises_when_the_stream_restarts) {
     fec2022_dec_source(dc, g_restart.src[i], PKT_LEN);
   }
   got = drain_all(dc, out, sizeof out);
-  ck_assert_uint_ge(got, (size_t)N * PKT_LEN);
+  ck_assert_uint_eq(got, (size_t)2 * N * PKT_LEN);
   fec2022_dec_free(dc);
 }
 END_TEST
 
-START_TEST(fec2022_dec_drops_released_packets_while_the_ready_queue_is_full) {
+START_TEST(fec2022_dec_resynchronises_after_ssrc_change) {
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  unsigned char out[3 * N * FEC2022_MAX_PKT];
+  size_t got;
+
+  make_stream(&g_stream, 100, N);
+  make_stream(&g_restart, 100, N);
+  for (unsigned i = 0; i < N; i++) g_restart.src[i][8] = 0x77;
+  for (unsigned i = 0; i < N; i++) fec2022_dec_source(dc, g_stream.src[i], PKT_LEN);
+  for (unsigned i = 0; i < N; i++) fec2022_dec_source(dc, g_restart.src[i], PKT_LEN);
+  got = drain_all(dc, out, sizeof out);
+  ck_assert_uint_eq(got, (size_t)2 * N * PKT_LEN);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
+START_TEST(fec2022_dec_keeps_released_packets_until_drained) {
   fec2022_dec_t *dc = fec2022_dec_new(L, D);
   unsigned char out[3 * N * FEC2022_MAX_PKT];
   size_t got;
@@ -359,8 +375,108 @@ START_TEST(fec2022_dec_drops_released_packets_while_the_ready_queue_is_full) {
     if (g_stream.repair_len[i]) fec2022_dec_repair(dc, g_stream.repair[i], g_stream.repair_len[i]);
   }
   got = drain_all(dc, out, sizeof out);
-  ck_assert_uint_gt(got, 0u);
-  ck_assert_uint_le(got, (size_t)N * PKT_LEN);
+  ck_assert_uint_eq(got, (size_t)3 * N * PKT_LEN);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
+START_TEST(fec2022_dec_recovers_with_late_repair) {
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  unsigned char out[3 * N * FEC2022_MAX_PKT];
+  unsigned char lost[PKT_LEN];
+  size_t got = 0;
+  unsigned dropped = 6;
+  unsigned delay = 7;
+
+  make_stream(&g_stream, 0, 3 * N);
+  memcpy(lost, g_stream.src[dropped], sizeof lost);
+  for (unsigned i = 0; i < 3 * N + delay; i++) {
+    unsigned r = i - delay;
+    if (i < 3 * N && i != dropped) fec2022_dec_source(dc, g_stream.src[i], PKT_LEN);
+    if (i >= delay && g_stream.repair_len[r]) fec2022_dec_repair(dc, g_stream.repair[r], g_stream.repair_len[r]);
+    got += drain_all(dc, out + got, sizeof out - got);
+  }
+  ck_assert_uint_eq(got, (size_t)3 * N * PKT_LEN);
+  ck_assert_mem_eq(out + (size_t)dropped * PKT_LEN, lost, PKT_LEN);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
+START_TEST(fec2022_dec_recovers_when_repair_precedes_sources) {
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  unsigned char out[3 * N * FEC2022_MAX_PKT];
+  unsigned char lost[PKT_LEN];
+  size_t got = 0;
+  unsigned dropped = 6;
+
+  make_stream(&g_stream, 0, 3 * N);
+  memcpy(lost, g_stream.src[dropped], sizeof lost);
+  fec2022_dec_repair(dc, g_stream.repair[N - 1], g_stream.repair_len[N - 1]);
+  fec2022_dec_source(dc, g_stream.src[0], PKT_LEN);
+  for (unsigned r = 0; r < N; r++) {
+    if (g_stream.repair_len[r]) fec2022_dec_repair(dc, g_stream.repair[r], g_stream.repair_len[r]);
+  }
+  for (unsigned i = 1; i < 3 * N; i++) {
+    if (i != dropped) fec2022_dec_source(dc, g_stream.src[i], PKT_LEN);
+    if (i >= N && g_stream.repair_len[i]) fec2022_dec_repair(dc, g_stream.repair[i], g_stream.repair_len[i]);
+    got += drain_all(dc, out + got, sizeof out - got);
+  }
+  got += drain_all(dc, out + got, sizeof out - got);
+  ck_assert_uint_eq(got, (size_t)3 * N * PKT_LEN);
+  ck_assert_mem_eq(out + (size_t)dropped * PKT_LEN, lost, PKT_LEN);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
+START_TEST(fec2022_dec_recovers_packets_with_csrc) {
+  fec2022_enc_t *e = fec2022_enc_new(L, D, 96);
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  unsigned char src[N][208];
+  unsigned char repair[N][FEC2022_MAX_REPAIR];
+  size_t repair_len[N];
+  unsigned char out[N * FEC2022_MAX_PKT];
+  size_t got;
+  unsigned dropped = 6;
+
+  ck_assert_ptr_nonnull(e);
+  for (unsigned i = 0; i < N; i++) {
+    build_source(src[i], (uint16_t)i, 1000 + i, (unsigned char)(i + 3));
+    src[i][0] = 0x82;
+    memset(src[i] + 12, 0x11, 8);
+    memset(src[i] + 20, (int)(i + 3), 188);
+    repair_len[i] = fec2022_enc_feed(e, src[i], 208, 5000 + i, repair[i], sizeof repair[i]);
+  }
+  for (unsigned i = 0; i < N; i++) {
+    if (i != dropped) fec2022_dec_source(dc, src[i], 208);
+    if (repair_len[i]) fec2022_dec_repair(dc, repair[i], repair_len[i]);
+  }
+  got = drain_all(dc, out, sizeof out);
+  ck_assert_uint_eq(got, (size_t)N * 208);
+  ck_assert_mem_eq(out + (size_t)dropped * 208, src[dropped], 208);
+  fec2022_enc_free(e);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
+START_TEST(fec2022_dec_drops_recovery_with_oversized_length) {
+  fec2022_dec_t *dc = fec2022_dec_new(L, D);
+  unsigned char out[N * FEC2022_MAX_PKT];
+  size_t got;
+  unsigned dropped = 6;
+
+  make_stream(&g_stream, 0, N);
+  for (unsigned i = 0; i < N; i++) {
+    if (g_stream.repair_len[i]) {
+      g_stream.repair[i][12 + 2] = 0x07;
+      g_stream.repair[i][12 + 3] = 0xFF;
+    }
+  }
+  for (unsigned i = 0; i < N; i++) {
+    if (i != dropped) fec2022_dec_source(dc, g_stream.src[i], PKT_LEN);
+    if (g_stream.repair_len[i]) fec2022_dec_repair(dc, g_stream.repair[i], g_stream.repair_len[i]);
+  }
+  got = drain_all(dc, out, sizeof out);
+  ck_assert_uint_le(got, (size_t)(N - 1) * PKT_LEN);
   fec2022_dec_free(dc);
 }
 END_TEST
@@ -384,7 +500,12 @@ static Suite *fec2022_suite(void) {
   tcase_add_test(tc, fec2022_dec_ignores_duplicate_and_late_packets);
   tcase_add_test(tc, fec2022_dec_repair_ignores_malformed_and_foreign_geometry);
   tcase_add_test(tc, fec2022_dec_resynchronises_when_the_stream_restarts);
-  tcase_add_test(tc, fec2022_dec_drops_released_packets_while_the_ready_queue_is_full);
+  tcase_add_test(tc, fec2022_dec_resynchronises_after_ssrc_change);
+  tcase_add_test(tc, fec2022_dec_keeps_released_packets_until_drained);
+  tcase_add_test(tc, fec2022_dec_recovers_with_late_repair);
+  tcase_add_test(tc, fec2022_dec_recovers_when_repair_precedes_sources);
+  tcase_add_test(tc, fec2022_dec_recovers_packets_with_csrc);
+  tcase_add_test(tc, fec2022_dec_drops_recovery_with_oversized_length);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -95,7 +95,50 @@ START_TEST(dvb_datetime_encode_rejects_malformed_input) {
 }
 END_TEST
 
-START_TEST(dvb_controlledterm_round_trips_known_scheme) {
+static int decode_raw_datetime(uint64_t mjd, uint64_t ms) {
+  bitwriter_t bw;
+  bitreader_t br;
+  const unsigned char *data;
+  size_t len;
+  char out[32];
+  int rc;
+  bitwriter_init(&bw);
+  ck_assert_int_eq(bitwriter_put(&bw, 0, 2), 0);
+  ck_assert_int_eq(bitwriter_put(&bw, mjd, 32), 0);
+  ck_assert_int_eq(bitwriter_put(&bw, ms, 32), 0);
+  data = bitwriter_data(&bw, &len);
+  bitreader_init(&br, data, len);
+  rc = dvb_datetime_decode(&br, out, sizeof out);
+  bitwriter_free(&bw);
+  return rc;
+}
+
+START_TEST(dvb_datetime_decode_rejects_ms_out_of_day) {
+  ck_assert_int_eq(decode_raw_datetime(59198, 86399000ULL), 0);
+  ck_assert_int_eq(decode_raw_datetime(59198, 86400000ULL), -1);
+  ck_assert_int_eq(decode_raw_datetime(59198, 0xFFFFFFFFULL), -1);
+}
+END_TEST
+
+START_TEST(dvb_datetime_decode_rejects_mjd_out_of_range) {
+  ck_assert_int_eq(decode_raw_datetime(15078, 0), -1);
+  ck_assert_int_eq(decode_raw_datetime(15079, 0), 0);
+  ck_assert_int_eq(decode_raw_datetime(88127, 0), 0);
+  ck_assert_int_eq(decode_raw_datetime(88128, 0), -1);
+  ck_assert_int_eq(decode_raw_datetime(0xFFFFFFFFULL, 0), -1);
+}
+END_TEST
+
+START_TEST(dvb_datetime_encode_rejects_date_out_of_range) {
+  bitwriter_t bw;
+  bitwriter_init(&bw);
+  ck_assert_int_eq(dvb_datetime_encode(&bw, "1900-02-28T00:00:00Z"), -1);
+  ck_assert_int_eq(dvb_datetime_encode(&bw, "2100-03-01T00:00:00Z"), -1);
+  bitwriter_free(&bw);
+}
+END_TEST
+
+START_TEST(dvb_controlledterm_round_trips_dotted_term) {
   bitwriter_t bw;
   bitreader_t br;
   strrepo_writer_t sw;
@@ -106,15 +149,15 @@ START_TEST(dvb_controlledterm_round_trips_known_scheme) {
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
 
-  ck_assert_int_eq(dvb_controlledterm_encode(&bw, &sw, "urn:tva:metadata:cs:ContentCS:2004:123"), 0);
+  ck_assert_int_eq(dvb_controlledterm_encode(&bw, &sw, "urn:tva:metadata:cs:ContentCS:2011:3.1.1"), 0);
   bwdata = bitwriter_data(&bw, &bwlen);
   swdata = strrepo_writer_data(&sw, &swlen);
-  ck_assert_uint_eq(bwlen, 3u); /* encoding_flag+grouping_flag+scheme_id(7)=9 bits, + vluimsbf8(123)=8 bits -> 17 bits, 3 bytes */
+  ck_assert_uint_eq(bwlen, 1u); /* encoding_flag only */
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
 
   ck_assert_int_eq(dvb_controlledterm_decode(&br, &sr, out, sizeof out), 0);
-  ck_assert_str_eq(out, "urn:tva:metadata:cs:ContentCS:2004:123");
+  ck_assert_str_eq(out, "urn:tva:metadata:cs:ContentCS:2011:3.1.1");
 
   bitwriter_free(&bw);
   strrepo_writer_free(&sw);
@@ -146,6 +189,23 @@ START_TEST(dvb_controlledterm_round_trips_unknown_scheme_as_string) {
 }
 END_TEST
 
+START_TEST(dvb_controlledterm_decode_rejects_compact_form) {
+  bitreader_t br;
+  strrepo_reader_t sr;
+  strrepo_writer_t sw;
+  const unsigned char bits[] = {0x80};
+  const unsigned char *swdata;
+  size_t swlen;
+  char out[64];
+  strrepo_writer_init(&sw);
+  swdata = strrepo_writer_data(&sw, &swlen);
+  bitreader_init(&br, bits, sizeof bits);
+  ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
+  ck_assert_int_eq(dvb_controlledterm_decode(&br, &sr, out, sizeof out), -1);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
 static Suite *codec_suite(void) {
   Suite *s = suite_create("bim_codec");
   TCase *tc = tcase_create("core");
@@ -154,8 +214,12 @@ static Suite *codec_suite(void) {
   tcase_add_test(tc, dvb_datetime_round_trips_utc);
   tcase_add_test(tc, dvb_datetime_normalizes_offset_to_utc_across_midnight);
   tcase_add_test(tc, dvb_datetime_encode_rejects_malformed_input);
-  tcase_add_test(tc, dvb_controlledterm_round_trips_known_scheme);
+  tcase_add_test(tc, dvb_datetime_decode_rejects_ms_out_of_day);
+  tcase_add_test(tc, dvb_datetime_decode_rejects_mjd_out_of_range);
+  tcase_add_test(tc, dvb_datetime_encode_rejects_date_out_of_range);
+  tcase_add_test(tc, dvb_controlledterm_round_trips_dotted_term);
   tcase_add_test(tc, dvb_controlledterm_round_trips_unknown_scheme_as_string);
+  tcase_add_test(tc, dvb_controlledterm_decode_rejects_compact_form);
   suite_add_tcase(s, tc);
   return s;
 }

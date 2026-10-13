@@ -64,6 +64,7 @@ srtsrc_t *srtsrc_open(const srtsrc_cfg_t *cfg) {
   r->cfg.opts.streamid = r->streamid[0] ? r->streamid : NULL;
   r->cfg.opts.packetfilter = r->packetfilter[0] ? r->packetfilter : NULL;
   r->cfg.opts.latency_ms = cfg->latency_ms;
+  r->cfg.connect_timeout_ms = cfg->connect_timeout_ms;
   r->cfg.verbose = cfg->verbose;
   r->cfg.mx = cfg->mx;
   r->cfg.tool_version = cfg->tool_version;

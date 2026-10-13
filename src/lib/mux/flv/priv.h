@@ -18,10 +18,13 @@ typedef struct {
   unsigned pid;
   pid_class_t cls;
   int hdr_parsed;
-  int64_t ts_ms;
+  int64_t ts_ms;   /* video: DTS */
+  int64_t cts_ms;  /* video: PTS - DTS */
   int64_t step_ms; /* last video ts delta, expected-next hint */
   int ts_seen;
+  aclk_t aclk; /* audio */
   pts_unwrap_t pts;
+  pts_unwrap_t dts_uw;
   unsigned char *rem; /* audio: partial frame carry-over */
   size_t remlen;
   size_t remcap;

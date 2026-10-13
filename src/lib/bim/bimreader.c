@@ -3,6 +3,9 @@
 
 #include "bimreader.h"
 
+#define VLUIMSBF8_MAX_GROUPS 10
+#define VLUIMSBF4_MAX_GROUPS 16
+
 void bitreader_init(bitreader_t *br, const unsigned char *buf, size_t len) {
   br->buf = buf;
   br->len = len;
@@ -41,14 +44,17 @@ int bitreader_get_vluimsbf8(bitreader_t *br, uint64_t *out) {
   uint64_t v = 0;
   uint64_t cont;
   uint64_t group;
-  for (;;) {
+  for (int i = 0; i < VLUIMSBF8_MAX_GROUPS; i++) {
     if (bitreader_get(br, 1, &cont)) return -1;
     if (bitreader_get(br, 7, &group)) return -1;
+    if (v >> 57) return -1;
     v = (v << 7) | group;
-    if (!cont) break;
+    if (!cont) {
+      *out = v;
+      return 0;
+    }
   }
-  *out = v;
-  return 0;
+  return -1;
 }
 
 int bitreader_get_vluimsbf4(bitreader_t *br, uint64_t *out) {
@@ -57,7 +63,7 @@ int bitreader_get_vluimsbf4(bitreader_t *br, uint64_t *out) {
   uint64_t v;
   do {
     if (bitreader_get(br, 1, &bit)) return -1;
-    n++;
+    if (++n > VLUIMSBF4_MAX_GROUPS) return -1;
   } while (bit);
   if (bitreader_get(br, n * 4, &v)) return -1;
   *out = v;

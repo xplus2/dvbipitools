@@ -62,7 +62,7 @@ static void check_burst(void) {
   uint8_t buf[5 * 1000 + 400];
   h3_rx_t rx[H3_RX_BATCH];
   for (size_t i = 0; i < sizeof buf; i++) buf[i] = (uint8_t)(i / 100);
-  h3_udp_send(tx_fd, &dst, dstlen, buf, sizeof buf, 1000);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, 1000);
   ck_assert_int_eq(recv_all(rx, 6), 6);
   for (int i = 0; i < 6; i++) {
     size_t want = i < 5 ? 1000 : 400;
@@ -87,7 +87,7 @@ START_TEST(single_datagram_needs_no_gso) {
   uint8_t buf[300];
   h3_rx_t rx[H3_RX_BATCH];
   memset(buf, 7, sizeof buf);
-  h3_udp_send(tx_fd, &dst, dstlen, buf, sizeof buf, sizeof buf);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf);
   ck_assert_int_eq(recv_all(rx, 1), 1);
   ck_assert_uint_eq(rx[0].len, sizeof buf);
 }
@@ -98,7 +98,7 @@ START_TEST(recv_reports_sender) {
   h3_rx_t rx[H3_RX_BATCH];
   struct sockaddr_in me;
   socklen_t len = sizeof me;
-  h3_udp_send(tx_fd, &dst, dstlen, buf, sizeof buf, sizeof buf);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf);
   ck_assert_int_eq(recv_all(rx, 1), 1);
   ck_assert_int_eq(getsockname(tx_fd, (struct sockaddr *)&me, &len), 0);
   ck_assert_int_eq(rx[0].peer.ss_family, AF_INET);
@@ -116,7 +116,7 @@ START_TEST(recv_marks_oversized_datagram) {
   uint8_t big[PAYLOAD + 200];
   h3_rx_t rx[H3_RX_BATCH];
   memset(big, 1, sizeof big);
-  h3_udp_send(tx_fd, &dst, dstlen, big, sizeof big, sizeof big);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, big, sizeof big, sizeof big);
   ck_assert_int_eq(recv_all(rx, 1), 1);
   ck_assert_uint_eq(rx[0].len, 0);
 }
@@ -126,8 +126,71 @@ START_TEST(recv_batches_many_datagrams) {
   uint8_t buf[40];
   h3_rx_t rx[H3_RX_BATCH];
   memset(buf, 3, sizeof buf);
-  for (int i = 0; i < 20; i++) h3_udp_send(tx_fd, &dst, dstlen, buf, sizeof buf, sizeof buf);
+  for (int i = 0; i < 20; i++) h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf);
   ck_assert_int_eq(recv_all(rx, 20), 20);
+}
+END_TEST
+
+static int wild_sock(struct sockaddr_in *bound) {
+  struct sockaddr_in a;
+  socklen_t len = sizeof a;
+  int fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
+  memset(&a, 0, sizeof a);
+  a.sin_family = AF_INET;
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq(bind(fd, (struct sockaddr *)&a, sizeof a), 0);
+  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)bound, &len), 0);
+  return fd;
+}
+
+START_TEST(recv_reports_local_destination) {
+  struct sockaddr_in w, to;
+  struct sockaddr_storage d;
+  uint8_t buf[20] = {1};
+  h3_rx_t rx[H3_RX_BATCH];
+  int wfd = wild_sock(&w);
+  int saved = rx_fd;
+  ck_assert_int_eq(h3_udp_pktinfo(wfd, AF_INET), 0);
+  to = w;
+  inet_pton(AF_INET, "127.0.0.2", &to.sin_addr);
+  memcpy(&d, &to, sizeof to);
+  h3_udp_send(tx_fd, &d, sizeof to, NULL, buf, sizeof buf, sizeof buf);
+  rx_fd = wfd;
+  ck_assert_int_eq(recv_all(rx, 1), 1);
+  rx_fd = saved;
+  close(wfd);
+  ck_assert_uint_eq(rx[0].locallen, sizeof(struct sockaddr_in));
+  ck_assert_int_eq(rx[0].local.ss_family, AF_INET);
+  ck_assert_uint_eq(((struct sockaddr_in *)&rx[0].local)->sin_addr.s_addr, to.sin_addr.s_addr);
+}
+END_TEST
+
+START_TEST(recv_without_pktinfo_has_no_local) {
+  uint8_t buf[20] = {1};
+  h3_rx_t rx[H3_RX_BATCH];
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf);
+  ck_assert_int_eq(recv_all(rx, 1), 1);
+  ck_assert_uint_eq(rx[0].locallen, 0);
+}
+END_TEST
+
+START_TEST(send_uses_requested_source) {
+  struct sockaddr_in w, src;
+  struct sockaddr_storage s;
+  uint8_t buf[2500];
+  h3_rx_t rx[H3_RX_BATCH];
+  int wfd = wild_sock(&w);
+  memset(buf, 5, sizeof buf);
+  src = w;
+  inet_pton(AF_INET, "127.0.0.2", &src.sin_addr);
+  memcpy(&s, &src, sizeof src);
+  h3_udp_send(wfd, &dst, dstlen, &s, buf, sizeof buf, 1000);
+  close(wfd);
+  ck_assert_int_eq(recv_all(rx, 3), 3);
+  for (int i = 0; i < 3; i++) {
+    ck_assert_int_eq(rx[i].peer.ss_family, AF_INET);
+    ck_assert_uint_eq(((struct sockaddr_in *)&rx[i].peer)->sin_addr.s_addr, src.sin_addr.s_addr);
+  }
 }
 END_TEST
 
@@ -142,6 +205,9 @@ static Suite *h3_udp_suite(void) {
   tcase_add_test(tc, recv_on_empty_socket_returns_zero);
   tcase_add_test(tc, recv_marks_oversized_datagram);
   tcase_add_test(tc, recv_batches_many_datagrams);
+  tcase_add_test(tc, recv_reports_local_destination);
+  tcase_add_test(tc, recv_without_pktinfo_has_no_local);
+  tcase_add_test(tc, send_uses_requested_source);
   suite_add_tcase(s, tc);
   return s;
 }

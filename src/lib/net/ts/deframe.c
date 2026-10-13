@@ -137,10 +137,11 @@ ssize_t tssrc_deframe_read(tssrc_t *s, int fd, unsigned char *buf, size_t cap, n
 }
 
 ssize_t tssrc_rtp_strip(unsigned char *buf, size_t n) {
-  size_t off = rtp_payload_offset(buf, n);
+  size_t plen;
+  size_t off = rtp_ts_payload(buf, n, &plen);
   if (off) {
-    memmove(buf, buf + off, n - off);
-    n -= off;
+    memmove(buf, buf + off, plen);
+    n = plen;
   }
   return (ssize_t)n;
 }

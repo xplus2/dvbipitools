@@ -173,13 +173,16 @@ static void note_enqueue_hwm(srtout_t *r) {
   if (r->pending_count > r->pending_hwm) r->pending_hwm = r->pending_count;
 }
 
-static void enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
+/* 1 if oldest chunk was dropped */
+static int enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
   int tail;
+  int dropped = 0;
 
   if (r->pending_count == r->pending_cap) {
     r->pending_head = (r->pending_head + 1) % r->pending_cap;
     r->pending_count--;
     r->queue_dropped++;
+    dropped = 1;
     if (!r->drop_logged) {
       log_code("LW100131", "srt output: send queue full, dropping oldest queued chunk");
       r->drop_logged = 1;
@@ -192,6 +195,7 @@ static void enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
   r->pending_len[tail] = len;
   r->pending_count++;
   r->note_enqueue(r);
+  return dropped;
 }
 
 /* sends what it can without blocking. stops at first still-full result.
@@ -438,17 +442,22 @@ void srtout_service(srtout_t *r, srtout_status_t *out) {
   out->connected = r->connected;
 }
 
-void srtout_write(srtout_t *r, const unsigned char *buf, size_t n) {
+int srtout_write(srtout_t *r, const unsigned char *buf, size_t n) {
+  int rc = 0;
   r->bytes_since_check += n;
   for (size_t off = 0; off < n; off += (size_t)SRTOUT_PLSIZE) {
     size_t chunk = n - off < (size_t)SRTOUT_PLSIZE ? n - off : (size_t)SRTOUT_PLSIZE;
     if (r->pending_count == 0 && r->connected) {
       int sent = srt_sendmsg2(r->sock, (const char *)(buf + off), (int)chunk, NULL);
       if (sent != SRT_ERROR) continue;
-      if (srt_getlasterror(NULL) != SRT_EASYNCSND) teardown_for_reconnect(r, "write failed");
+      if (srt_getlasterror(NULL) != SRT_EASYNCSND) {
+        teardown_for_reconnect(r, "write failed");
+        rc = -1;
+      }
     }
-    enqueue_pending(r, buf + off, (int)chunk);
+    if (enqueue_pending(r, buf + off, (int)chunk)) rc = -1;
   }
+  return rc;
 }
 
 /* loop may exit before a just-started connect finishes: flush before teardown,

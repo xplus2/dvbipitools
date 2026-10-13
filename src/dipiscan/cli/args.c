@@ -53,6 +53,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int strict = 0;
   args_status_t pst;
   int c;
+  int rc;
 
   if (argc == 1 && !scan_cfg_default_exists()) return ARGS_NOARGS;
   pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
@@ -66,7 +67,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     switch (c) {
       case 'm':
-        if (scan_mcast_range_parse(optarg, &cfg->family, cfg->start, cfg->end, &cfg->total)) {
+        rc = scan_mcast_range_parse(optarg, &cfg->family, cfg->start, cfg->end, &cfg->total);
+        if (rc == RANGE_TOO_LARGE) {
+          argerr("SS000701", "-m range too large: %s (max %u addresses)", optarg, MAX_SWEEP_ADDRS);
+          return ARGS_ERR;
+        }
+        if (rc) {
           argerr("SS000164", "invalid -m address: %s (addr, addr/prefixlen, or startaddr-stopaddr)", optarg);
           return ARGS_ERR;
         }

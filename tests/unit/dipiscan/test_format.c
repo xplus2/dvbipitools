@@ -13,7 +13,7 @@ static FILE *open_capture(char **buf, size_t *len) {
   return open_memstream(buf, len);
 }
 
-START_TEST(format_m3u_writes_header_item_footer) {
+START_TEST(format_m3u_writes_header_and_item) {
   char *buf;
   size_t len;
   FILE *f = open_capture(&buf, &len);
@@ -26,7 +26,20 @@ START_TEST(format_m3u_writes_header_item_footer) {
   ck_assert_ptr_nonnull(strstr(buf, "#EXTM3U"));
   ck_assert_ptr_nonnull(strstr(buf, "tsid=\"1\" onid=\"2\" sid=\"101\",Channel One"));
   ck_assert_ptr_nonnull(strstr(buf, "rtp://239.1.1.1:5000"));
-  ck_assert_ptr_nonnull(strstr(buf, "#EXT-X-ENDLIST"));
+  ck_assert_ptr_eq(strstr(buf, "#EXT-X-ENDLIST"), NULL);
+  free(buf);
+}
+END_TEST
+
+START_TEST(format_m3u_drops_line_breaks_from_name) {
+  char *buf;
+  size_t len;
+  FILE *f = open_capture(&buf, &len);
+
+  format_item(f, OUT_M3U, "Bad\r\nName", "rtp://239.1.1.1:5000", AF_INET, "239.1.1.1", 5000, 1, 1, 2, 101);
+  fclose(f);
+
+  ck_assert_ptr_nonnull(strstr(buf, "sid=\"101\",BadName\nrtp://239.1.1.1:5000\n"));
   free(buf);
 }
 END_TEST
@@ -108,7 +121,8 @@ END_TEST
 static Suite *format_suite(void) {
   Suite *s = suite_create("dipiscan_format");
   TCase *tc = tcase_create("core");
-  tcase_add_test(tc, format_m3u_writes_header_item_footer);
+  tcase_add_test(tc, format_m3u_writes_header_and_item);
+  tcase_add_test(tc, format_m3u_drops_line_breaks_from_name);
   tcase_add_test(tc, format_csv_strips_commas_from_name);
   tcase_add_test(tc, format_xspf_escapes_and_wraps_playlist);
   tcase_add_test(tc, format_xml_produces_parseable_sds_broadcast_doc);

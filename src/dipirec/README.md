@@ -26,8 +26,10 @@ dipirec -i <uri> -o <target> [options]
 | `-I` | `--iface`                   | `<iface>`                   | kernel route                                |
 | `-O` | `--out-iface`               | `<iface>`                   | kernel route                                |
 |      | `--ttl`                     | `<n>`                       | kernel default (`1`)                        |
-|      | `--al-fec`                  | `<L>:<D>`                   | off (Annex E Layer 1 FEC, `-i`/`-o` rtp://) |
+|      | `--al-fec`                  | `<L>:<D>`                   | off (Annex E Layer 1 FEC, `-i` rtp://)      |
 |      | `--al-fec-port`             | `<port>`                    | required with `--al-fec`                    |
+|      | `--al-fec-out`              | `<L>:<D>`                   | off (Annex E Layer 1 FEC, `-o` rtp://)      |
+|      | `--al-fec-port-out`         | `<port>`                    | required with `--al-fec-out`                |
 | `-v` | `--verbose`                 |                             | off                                         |
 |      | `--sub-lead`                | `<ms>`                      | `1000`                                      |
 |      | `--color`                   | `auto\|always\|never`       | `auto`                                      |
@@ -154,6 +156,7 @@ jitter) resyncs instead of trying to sleep-catch-up.
      an SPTS (all formats, `-a`/`-s` included). Rejected if that pid isn't actually in the PAT.
   * `-p all` given: record every program at once.
     * `-f raw`/`-f ts`: forwarded unfiltered - with nothing selected there's nothing left to filter.
+      `-a`, `-s` and `--strip` are ignored with `-f ts`, and a warning says so.
     * `-f mka`: every program's audio becomes its own track (forces `-a all`, since a single `-a N` has no
       coherent meaning across differently-numbered programs), each track labeled with that program's own
       SDT name once it arrives.
@@ -331,8 +334,10 @@ Needed for a replay to cross a router - `1` won't leave the sending segment.
 
 ## Annex E Layer 1 FEC (`--al-fec`)
 
-`--al-fec <L>:<D>` sends (on `-o rtp://`) or expects (on `-i rtp://`) a parallel SMPTE 2022-1
-(ETSI TS 102 034 Annex E) repair stream on the same multicast group at `--al-fec-port`. 
+`--al-fec <L>:<D>` expects (on `-i rtp://`) a parallel SMPTE 2022-1
+(ETSI TS 102 034 Annex E) repair stream on the same multicast group at `--al-fec-port`.
+`--al-fec-out <L>:<D>` sends one (on `-o rtp://`) at `--al-fec-port-out`. Input and output are
+configured independently.
 Columns * rows <= 400, columns <= 40. Both ends need the same `<L>:<D>` and port. 
 Recovers at most one lost packet per column.
 

@@ -1,11 +1,11 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
 #include <stdio.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
@@ -90,7 +90,7 @@ static int apply_dscp(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_interval(void *c, const char *v, char *e, size_t n) {
-  return set_long(&((config_t *)c)->interval_s, v, 0, e, n);
+  return set_long(&((config_t *)c)->interval_s, v, 1, e, n);
 }
 
 static int apply_timeout(void *c, const char *v, char *e, size_t n) {
@@ -278,11 +278,8 @@ static int apply_fus_lang(void *c, const char *v, char *e, size_t n) {
 
 static int apply_fus_id(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  char *end;
   unsigned long id;
-  errno = 0;
-  id = strtoul(v, &end, 10);
-  if (!*v || *end || errno) {
+  if (parse_ulong(v, ULONG_MAX, &id)) {
     snprintf(e, n, "invalid '%s'", v);
     return -1;
   }
@@ -361,9 +358,9 @@ static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
 
 static void check_conflicts(yamlcfg_t *y, const config_t *cfg) {
   const args_flags_t *fl = &cfg->fl;
-  int announce_only = cfg->ret_enabled || cfg->fcc_enabled || cfg->al_fec_enabled || cfg->metrics_id || cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled || cfg->ret_mc || cfg->fcc_resolve_by_port;
+  int announce_only = sds_announce_only_set(cfg);
 
-  int is_xml = cfg->input_path && strlen(cfg->input_path) > 4 && !strcmp(cfg->input_path + strlen(cfg->input_path) - 4, ".xml");
+  int is_xml = cfg->input_path && strlen(cfg->input_path) > 4 && !strcasecmp(cfg->input_path + strlen(cfg->input_path) - 4, ".xml");
 
   warn_if(y, !fl->have_a && !fl->have_l, "AA000114", "neither announce nor listen set (required unless given on the command line)");
   warn_if(y, !fl->have_mcast, "AA000115", "mcast not set (required unless given on the command line)");
@@ -382,7 +379,7 @@ static void check_conflicts(yamlcfg_t *y, const config_t *cfg) {
   warn_if(y, !cfg->fcc_enabled && (fl->have_fcc_rtx_time || fl->have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || fl->have_fcc_resolve_max_channels), "AA000221", "fcc.* settings require fcc.addr");
   warn_if(y, !cfg->al_fec_enabled && fl->have_al_fec_pt, "AA000222", "al-fec.pt requires al-fec.addr");
   warn_if(y, (cfg->metrics_sock || cfg->metrics_interval_s) && !cfg->metrics_id, "AA000120", "metrics.sock and metrics.interval require metrics.id");
-  warn_if(y, cfg->input_path && strlen(cfg->input_path) > 4 && !strcmp(cfg->input_path + strlen(cfg->input_path) - 4, ".xml") &&
+  warn_if(y, cfg->input_path && strlen(cfg->input_path) > 4 && !strcasecmp(cfg->input_path + strlen(cfg->input_path) - 4, ".xml") &&
     (cfg->ret_enabled || cfg->fcc_enabled || cfg->al_fec_enabled || cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled), "AA000223", "ret, fcc, al-fec, packages, cells, rms and fus have no effect with a raw .xml input");
 }
 

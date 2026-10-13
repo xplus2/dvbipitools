@@ -1,9 +1,12 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdlib.h>
+
 #include "ws_sources.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/jsonbuf.h"
+#include "lib/helper/uriparse.h"
 
 typedef struct {
   jbuf_t *j;
@@ -18,7 +21,11 @@ static void emit_item_json(void *vctx, const channel_item_t *item) {
   jbuf_json_string(c->j, item->name);
   jbuf_str(c->j, ",");
   jbuf_key(c->j, "uri");
-  jbuf_json_string(c->j, item->uri);
+  {
+    char *safe = uriparse_redact_dup(item->uri);
+    jbuf_json_string(c->j, safe ? safe : "");
+    free(safe);
+  }
   jbuf_str(c->j, "}");
 }
 

@@ -19,9 +19,6 @@ typedef struct slot_retire_node {
 extern qsbr_domain_t *g_segstore_qsbr;
 extern _Atomic int *g_slot_state;
 
-int seg_pool_class_for(size_t size);
-size_t seg_pool_class_cap(int cls);
-
 hls_snapshot_t *snap_clone(const hls_snapshot_t *base);
 void snap_free(hls_snapshot_t *ns);
 

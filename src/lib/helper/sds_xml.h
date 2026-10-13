@@ -108,28 +108,28 @@ void sds_broadcast_open(FILE *f, const char *domain, unsigned version);
 void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec);
 void sds_broadcast_close(FILE *f);
 
-/* same document, single-shot into a memory buffer. 0 = didn't fit cap */
-size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned char *buf, size_t cap);
+/* same document, single-shot into a malloc'd NUL-terminated buffer, caller frees. 0 = failed */
+size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned char **out);
 
 /* payload 0x01. push_addr/push_port: this announcer's own delivery point. lang: ISO 639-2 for display_name.
-   extra_payload_ids: other PayloadIds sharing this push socket. 0 = didn't fit cap */
-size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, const unsigned *extra_payload_ids, int extra_count, unsigned char *buf, size_t cap);
+   extra_payload_ids: other PayloadIds sharing this push socket. 0 = failed. out as for broadcast */
+size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, const unsigned *extra_payload_ids, int extra_count, unsigned char **out);
 
 /* streaming PackageDiscovery (payload 0x05), one <Package> per item call. svcs/svc_count for DVBTriplet lookup */
 void sds_package_open(FILE *f, const char *domain, unsigned version);
 void sds_package_item(FILE *f, const sds_package_t *pkg, const sds_service_t *svcs, int svc_count);
 void sds_package_close(FILE *f);
-size_t sds_build_package(const char *domain, unsigned version, const sds_package_t *pkgs, int pkg_count, const sds_service_t *svcs, int svc_count, unsigned char *buf, size_t cap);
+size_t sds_build_package(const char *domain, unsigned version, const sds_package_t *pkgs, int pkg_count, const sds_service_t *svcs, int svc_count, unsigned char **out);
 
 /* streaming RegionalisationDiscovery (payload 0x07), one <Cell> per item call */
 void sds_regionalisation_open(FILE *f, const char *domain, unsigned version);
 void sds_regionalisation_item(FILE *f, const sds_cell_t *cell);
 void sds_regionalisation_close(FILE *f);
-size_t sds_build_regionalisation(const char *domain, unsigned version, const sds_cell_t *cells, int count, unsigned char *buf, size_t cap);
+size_t sds_build_regionalisation(const char *domain, unsigned version, const sds_cell_t *cells, int count, unsigned char **out);
 
 /* single-shot RMSFUSDiscovery (payload 0x08). exactly one of rms_count/fus_count nonzero: XSD choice,
-   FUSProvider+ or RMSProvider+, never both. 0 = didn't fit cap */
-size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *rms, int rms_count, const sds_fus_t *fus, int fus_count, unsigned char *buf, size_t cap);
+   FUSProvider+ or RMSProvider+, never both. 0 = failed. out as for broadcast */
+size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *rms, int rms_count, const sds_fus_t *fus, int fus_count, unsigned char **out);
 
 /* xml null-terminated. out[0..return) filled. tsid/onid default 1, sid defaults to 1-based index if absent.
    truncated NULL ok, else 1 if more entries existed past max */

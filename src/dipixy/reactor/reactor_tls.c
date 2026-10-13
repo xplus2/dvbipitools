@@ -2,14 +2,9 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #define _DEFAULT_SOURCE
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
 #include <unistd.h>
 
 #ifdef HAVE_HTTP2
@@ -20,6 +15,9 @@
 #include "lib/helper/log.h"
 
 #include "internal.h"
+#ifdef HAVE_HTTP3
+#include "../http3/http3.h"
+#endif
 #include "reactor_tls_int.h"
 #include "../version.h"
 
@@ -62,9 +60,18 @@ SSL_CTX *build_ssl_ctx(const char *cert_path, const char *key_path) {
   SSL_CTX_set_mode(ctx, SSL_MODE_RELEASE_BUFFERS);
   SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER);
 
-  SSL_CTX_set_cipher_list(ctx, "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:CHACHA20-POLY1305");
+  if (SSL_CTX_set_cipher_list(ctx,
+          "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+          "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:"
+          "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256") != 1) {
+    SSL_CTX_free(ctx);
+    return NULL;
+  }
 #ifdef TLS1_3_VERSION
-  SSL_CTX_set_ciphersuites(ctx, "TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256");
+  if (SSL_CTX_set_ciphersuites(ctx, "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256") != 1) {
+    SSL_CTX_free(ctx);
+    return NULL;
+  }
 #endif
   SSL_CTX_set_options(ctx, SSL_OP_NO_COMPRESSION | SSL_OP_CIPHER_SERVER_PREFERENCE | SSL_OP_NO_RENEGOTIATION);
   SSL_CTX_set1_groups_list(ctx, "X25519:P-256");
@@ -113,57 +120,6 @@ int tls_init(const char *cert_path, const char *key_path, int fd_table_cap) {
   g_ssl_ctx = ctx;
   log_line_ansi("tls: context ready fd_ssl=\e[0;37m%d\e[0m", g_tls_fd_max);
   return 0;
-}
-
-int tls_create_listen_sock(int port, const char *host) {
-  if (!g_ssl_ctx) return -1;
-  int sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-  if (sock < 0) return -1;
-
-  int opt = 1;
-  setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-  setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
-  int defer = 1;
-  setsockopt(sock, IPPROTO_TCP, TCP_DEFER_ACCEPT, &defer, sizeof(defer));
-  struct sockaddr_in saddr;
-  memset(&saddr, 0, sizeof(saddr));
-  saddr.sin_family = AF_INET;
-  saddr.sin_port = htons(port);
-  inet_pton(AF_INET, host, &saddr.sin_addr);
-  if (bind(sock, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {
-    close(sock);
-    return -1;
-  }
-  listen(sock, 65535);
-  return sock;
-}
-
-int tls_create_listen_sock6(int port, const char *host6) {
-  if (!g_ssl_ctx) return -1;
-  int sock = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-  if (sock < 0) return -1;
-
-  int opt = 1;
-  setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-  setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
-  setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt));
-  int defer = 1;
-  setsockopt(sock, IPPROTO_TCP, TCP_DEFER_ACCEPT, &defer, sizeof(defer));
-  struct sockaddr_in6 saddr6;
-  memset(&saddr6, 0, sizeof(saddr6));
-  saddr6.sin6_family = AF_INET6;
-  saddr6.sin6_port = htons(port);
-  if (!host6 || !host6[0] || strcmp(host6, "::") == 0)
-    saddr6.sin6_addr = in6addr_any;
-  else
-    inet_pton(AF_INET6, host6, &saddr6.sin6_addr);
-
-  if (bind(sock, (struct sockaddr *)&saddr6, sizeof(saddr6)) < 0) {
-    close(sock);
-    return -1;
-  }
-  listen(sock, 65535);
-  return sock;
 }
 
 int tls_is_running(void) { return (g_ssl_ctx != NULL); }
@@ -215,16 +171,9 @@ void tls_ctx_gc_sweep(void) {
   pthread_mutex_unlock(&g_ctx_retiring_lock);
 }
 
-/* builds fresh SSL_CTX, swaps it in. never mutates live ctx's cert store in
-   place: concurrent SSL_new() calls must see whole old/new ctx */
-int reload_tls(void) {
-  SSL_CTX *fresh, *old;
-  if (!g_ssl_ctx) return -1;
-  fresh = build_ssl_ctx(g_tls_cert, g_tls_key);
-  if (!fresh) return -1;
-  old = g_ssl_ctx;
-  g_ssl_ctx = fresh;
-  tls_ctx_gc_sweep();
+/* defers SSL_CTX_free until every worker passed a quiescent point:
+   a concurrent SSL_new() may still hold the pointer. swept by tls_ctx_gc_sweep() */
+void tls_ctx_retire(SSL_CTX *old) {
   pthread_mutex_lock(&g_ctx_retiring_lock);
   if (g_ctx_retiring_n < TLS_CTX_RETIRE_MAX) {
     qsbr_mark(reactor_qsbr(), g_ctx_retiring[g_ctx_retiring_n].mark);
@@ -234,5 +183,20 @@ int reload_tls(void) {
     log_code("YW500213", TOOL_NAME ": tls reload: retire queue full, leaking one SSL_CTX");
   }
   pthread_mutex_unlock(&g_ctx_retiring_lock);
+}
+
+/* builds fresh SSL_CTX, swaps it in. never mutates live ctx's cert store in place:
+   concurrent SSL_new() calls need to see whole old/new ctx */
+int reload_tls(void) {
+  SSL_CTX *fresh, *old;
+  if (!atomic_load_explicit(&g_ssl_ctx, memory_order_acquire)) return -1;
+  fresh = build_ssl_ctx(g_tls_cert, g_tls_key);
+  if (!fresh) return -1;
+  old = atomic_exchange_explicit(&g_ssl_ctx, fresh, memory_order_acq_rel);
+  tls_ctx_gc_sweep();
+  tls_ctx_retire(old);
+#ifdef HAVE_HTTP3
+  if (h3_ready() && h3_reload() != 0) return -1;
+#endif
   return 0;
 }

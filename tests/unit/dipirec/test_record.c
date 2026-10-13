@@ -990,6 +990,16 @@ START_TEST(run_raw_copies_a_file_byte_for_byte) {
 }
 END_TEST
 
+START_TEST(run_raw_input_error_fails_the_run) {
+  raw_run_t r;
+
+  raw_run_open(&r, RAW_PKTS);
+  close(tssrc_fd(r.src.t));
+  ck_assert_int_eq(run_raw(&r.src, &r.cfg, &r.sink, 1, &r.rf, &r.mx, &r.bytes, mono_seconds(), NULL, &r.ri), 1);
+  raw_run_close(&r);
+}
+END_TEST
+
 START_TEST(run_raw_verbose_run_still_copies_everything) {
   raw_run_t r;
   unsigned char *out = malloc((size_t)RAW_PKTS * 188 + 1);
@@ -1628,6 +1638,53 @@ START_TEST(resolve_pmt_selection_covers_the_source_and_option_matrix) {
 END_TEST
 
 typedef struct {
+  const char *audio;
+  const char *subs;
+  const char *strip;
+  const char *msg;
+} ignored_case_t;
+
+static const ignored_case_t ignored_cases[] = {
+  {"2", NULL, NULL, "-a ignored"},
+  {NULL, "strip", NULL, "-s ignored"},
+  {NULL, NULL, "EIT", "--strip ignored"},
+};
+
+START_TEST(resolve_pmt_selection_warns_on_options_ignored_by_all_ts) {
+  const ignored_case_t *c = &ignored_cases[_i];
+  config_t cfg;
+  src_t src;
+  char path[64];
+  char msg[2048];
+  unsigned pmt_pid;
+  unsigned all_pids[8];
+  int n_all;
+  int fd;
+
+  snprintf(path, sizeof path, "/tmp/dipirec_resolve_XXXXXX");
+  fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  close(fd);
+  fill_resolve_source(path, SRC_MPTS);
+  rec_cfg_defaults(&cfg);
+  ck_assert_int_eq(rec_cfg_set_in(&cfg, path), 0);
+  ck_assert_int_eq(rec_cfg_add_out(&cfg, "out.ts"), 0);
+  ck_assert_int_eq(rec_cfg_format(&cfg, "ts"), 0);
+  ck_assert_int_eq(rec_cfg_pmt(&cfg, "all"), 0);
+  if (c->audio) ck_assert_int_eq(rec_cfg_audio(&cfg, c->audio), 0);
+  if (c->subs) ck_assert_int_eq(rec_cfg_subs(&cfg, c->subs), 0);
+  if (c->strip) ck_assert_int_eq(rec_cfg_strip(&cfg, c->strip), 0);
+  ck_assert_int_eq(src_open(&cfg, &src), 0);
+  log_capture_begin();
+  ck_assert_int_eq(resolve_pmt_selection(&cfg, &src, &pmt_pid, all_pids, &n_all), 0);
+  log_capture_end(msg, sizeof msg);
+  ck_assert_ptr_nonnull(strstr(msg, c->msg));
+  src_close(&src);
+  unlink(path);
+}
+END_TEST
+
+typedef struct {
   const char *format;
   int aac_input;
 } record_case_t;
@@ -1835,10 +1892,12 @@ static Suite *record_suite(void) {
   tcase_add_test(tc, run_stream_all_programs_makes_one_track_per_program);
   tcase_add_test(tc, run_stream_feeds_flv_tags_to_the_rtmp_target);
   tcase_add_loop_test(tc, resolve_pmt_selection_covers_the_source_and_option_matrix, 0, (int)(sizeof resolve_cases / sizeof resolve_cases[0]));
+  tcase_add_loop_test(tc, resolve_pmt_selection_warns_on_options_ignored_by_all_ts, 0, (int)(sizeof ignored_cases / sizeof ignored_cases[0]));
   tcase_add_loop_test(tc, record_run_copies_a_file_to_a_file_in_every_format, 0, (int)(sizeof record_cases / sizeof record_cases[0]));
   tcase_add_loop_test(tc, record_run_open_failures_unwind_and_return_one, 0, FAIL_MPTS + 1);
   tcase_add_loop_test(tc, src_open_with_ret_wires_client_and_unwinds_on_failure, 0, (int)(sizeof ret_cases / sizeof ret_cases[0]));
   tcase_add_loop_test(tc, src_open_reads_http_and_reports_errors, 0, (int)(sizeof http_cases / sizeof http_cases[0]));
+  tcase_add_test(tc, run_raw_input_error_fails_the_run);
   tcase_add_test(tc, run_raw_with_an_inspector_sees_every_packet);
   tcase_add_test(tc, run_raw_pushes_metrics_while_copying);
   tcase_add_test(tc, run_stream_ts_with_inspectors_and_metrics);

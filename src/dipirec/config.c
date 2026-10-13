@@ -132,6 +132,19 @@ static int apply_al_fec_port(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->al_fec_port, v, 1, 65535, e, n);
 }
 
+static int apply_al_fec_out(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
+  if (fec2022_parse_ld(v, &cfg->al_fec_out_l, &cfg->al_fec_out_d)) {
+    snprintf(e, n, "invalid '%s' (want L:D, L*D<=400, L<=40)", v);
+    return -1;
+  }
+  return 0;
+}
+
+static int apply_al_fec_port_out(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_uint(&((config_t *)c)->al_fec_out_port, v, 1, 65535, e, n);
+}
+
 static int apply_profile(void *c, const char *v, char *e, size_t n) {
   if (rec_cfg_profile(c, v, 0)) {
     snprintf(e, n, "invalid '%s' (simple|main)", v);
@@ -351,6 +364,8 @@ static const yamlcfg_key_t keys[] = {
   {"ttl", apply_ttl, 0, 0},
   {"al-fec", apply_al_fec, 0, 0},
   {"al-fec-port", apply_al_fec_port, 0, 0},
+  {"al-fec-out", apply_al_fec_out, 0, 0},
+  {"al-fec-port-out", apply_al_fec_port_out, 0, 0},
   {"rist.profile", apply_profile, 0, 0},
   {"rist.secret", apply_secret, 0, 0},
   {"rist.encryption-type", apply_encryption_type, 0, 0},
@@ -441,6 +456,7 @@ int rec_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.rist_key_size && n_rist && cfg.rist_profile != RIST_PROF_MAIN, "CA000374", "rist.encryption-type requires rist.profile main");
   warn_if(&y, cfg.rist_key_size_in && fl->have_in && cfg.source.kind == URI_RIST && cfg.rist_profile_in != RIST_PROF_MAIN, "CA000571", "rist.encryption-type-in requires rist.profile-in main");
   warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "CA000162", "al-fec requires al-fec-port");
+  warn_if(&y, cfg.al_fec_out_l && !cfg.al_fec_out_port, "CA000707", "al-fec-out requires al-fec-port-out");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "CA000120", "metrics.sock and metrics.interval require metrics.id");
   warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "CA000161", "metrics.inspect-ts requires metrics.id");
   warn_if(&y, cfg.srt_passphrase_in[0] && (strlen(cfg.srt_passphrase_in) < 10 || strlen(cfg.srt_passphrase_in) > 79), "CA000375", "srt.passphrase-in must be 10..79 characters");

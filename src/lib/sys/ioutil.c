@@ -2,12 +2,14 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <ctype.h>
+#include <limits.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -22,12 +24,20 @@ uint32_t rand_seed32(void) {
 int read_all(FILE *f, char **out, size_t *out_len) {
   size_t cap = 65536;
   size_t len = 0;
-  char *buf = malloc(cap);
+  struct stat st;
+  char *buf;
+  if (fstat(fileno(f), &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0 && (uintmax_t)st.st_size < SIZE_MAX / 2 && (size_t)st.st_size + 2 > cap)
+    cap = (size_t)st.st_size + 2; /* room for NUL and EOF probe */
+  buf = malloc(cap);
   if (!buf) return -1;
   for (;;) {
-    size_t n;
-    if (len + 4096 + 1 > cap) {
+    size_t room, n;
+    if (len + 1 >= cap) {
       char *p;
+      if (cap > SIZE_MAX / 2) {
+        free(buf);
+        return -1;
+      }
       cap *= 2;
       p = realloc(buf, cap);
       if (!p) {
@@ -36,9 +46,10 @@ int read_all(FILE *f, char **out, size_t *out_len) {
       }
       buf = p;
     }
-    n = fread(buf + len, 1, 4096, f);
+    room = cap - len - 1;
+    n = fread(buf + len, 1, room, f);
     len += n;
-    if (n < 4096) {
+    if (n < room) {
       if (ferror(f)) {
         free(buf);
         return -1;
@@ -135,9 +146,34 @@ int all_digits(const char *s, int n) {
   return 1;
 }
 
+int parse_ulong(const char *s, unsigned long max, unsigned long *out) {
+  unsigned long v = 0;
+  if (!*s) return -1;
+  for (; *s; s++) {
+    unsigned d = (unsigned)(*s - '0');
+    if (d > 9 || v > (ULONG_MAX - d) / 10) return -1;
+    v = v * 10 + d;
+  }
+  if (v > max) return -1;
+  *out = v;
+  return 0;
+}
+
 void chomp(char *line) {
   size_t l = strlen(line);
   while (l && (line[l - 1] == '\n' || line[l - 1] == '\r')) line[--l] = '\0';
+}
+
+int read_line(FILE *f, char *buf, size_t cap) {
+  size_t l;
+  int c;
+  if (!fgets(buf, (int)cap, f)) return 0;
+  l = strlen(buf);
+  if ((l && buf[l - 1] == '\n') || l + 1 < cap) return 1;
+  c = fgetc(f);
+  if (c == EOF || c == '\n') return 1;
+  while (c != EOF && c != '\n') c = fgetc(f);
+  return -1;
 }
 
 size_t csv_split(char *line, char **fields, size_t max_fields) {
@@ -168,6 +204,12 @@ int iso8601_split(const char *in, iso8601_t *out) {
   out->s = (in[17] - '0') * 10 + (in[18] - '0');
   out->off_min = 0;
   tail = in + 19;
+  if (*tail == '.') {
+    const char *fe = tail + 1;
+    while (isdigit((unsigned char)*fe)) fe++;
+    if (fe == tail + 1) return -1;
+    tail = fe;
+  }
   if (*tail == 'Z') {
     out->offset_kind = ISO8601_OFF_Z;
     return 0;
@@ -260,6 +302,23 @@ void sbuf_add_hex2(sbuf_t *b, unsigned v) {
   sbuf_add(b, tmp);
 }
 
+void sbuf_add_hex(sbuf_t *b, unsigned v) {
+  static const char digits[] = "0123456789abcdef";
+  char tmp[9];
+  unsigned n = 0;
+  do {
+    tmp[n++] = digits[v & 0xf];
+    v >>= 4;
+  } while (v);
+  for (unsigned i = 0; i < n / 2; i++) {
+    char t = tmp[i];
+    tmp[i] = tmp[n - 1 - i];
+    tmp[n - 1 - i] = t;
+  }
+  tmp[n] = '\0';
+  sbuf_add(b, tmp);
+}
+
 void dstrbuf_init(dstrbuf_t *sb) {
   sb->cap = 8192;
   sb->len = 0;
@@ -331,4 +390,24 @@ void dstrbuf_appendf(dstrbuf_t *sb, const char *fmt, ...) {
     }
     sb->buf = p;
   }
+}
+
+void pct_encode_seg(const char *s, char *out, size_t outcap) {
+  static const char unreserved[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+  static const char hex[] = "0123456789ABCDEF";
+  size_t oi = 0;
+  if (!outcap) return;
+  for (; *s && oi + 1 < outcap; s++) {
+    if (strchr(unreserved, *s)) {
+      out[oi++] = *s;
+    } else {
+      unsigned char c = (unsigned char)*s;
+      if (oi + 4 > outcap) break;
+      out[oi] = '%';
+      out[oi + 1] = hex[c >> 4];
+      out[oi + 2] = hex[c & 0xF];
+      oi += 3;
+    }
+  }
+  out[oi] = '\0';
 }

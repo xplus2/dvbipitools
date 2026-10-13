@@ -17,6 +17,7 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "workers: -2\n", CFG_INT, workers_spec, -2, NULL),
   CFG_FIELD(config_t, "max-clients: 77\n", CFG_INT, max_clients, 77, NULL),
   CFG_FIELD(config_t, "max-channels: 66\n", CFG_INT, max_channels, 66, NULL),
+  CFG_FIELD(config_t, "max-variants: 5\n", CFG_INT, max_variants, 5, NULL),
   CFG_FIELD(config_t, "idle-timeout: 33\n", CFG_UINT, idle_timeout_s, 33, NULL),
   CFG_FIELD(config_t, "capture-ring-size: 8192\n", CFG_UINT, capture_ring_kib, 8192, NULL),
   CFG_FIELD(config_t, "ts:\n  startup-timeout: 7.5\n", CFG_DOUBLE, ts_startup_timeout_s, 7.5, NULL),
@@ -59,6 +60,7 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "al-fec: 5:4\n", CFG_UINT, al_fec_d, 4, NULL),
   CFG_FIELD(config_t, "auth: 'user:pass'\n", CFG_CHARARR, http_auth, 0, "Basic dXNlcjpwYXNz"),
   CFG_FIELD(config_t, "cors-origin: '*'\n", CFG_STRPTR, cors_origins, 0, "*"),
+  CFG_FIELD(config_t, "ws-allowed-hosts: 'a.lan,b.lan'\n", CFG_STRPTR, ws_allowed_hosts, 0, "a.lan,b.lan"),
   CFG_FIELD(config_t, "ssdp:\n  ttl: 9\n", CFG_INT, ssdp_ttl, 9, NULL),
   CFG_FIELD(config_t, "ssdp:\n  iface: eth9\n", CFG_STRPTR, ssdp_iface, 0, "eth9"),
   CFG_FIELD(config_t, "ssdp:\n  interval: 30\n", CFG_DOUBLE, ssdp_interval_s, 30, NULL),
@@ -89,8 +91,11 @@ static const bad_case_t bad_cases[] = {
   {"cpu-affinity: 5-2\n"},
   {"max-clients: 0\n"},
   {"max-channels: 2000\n"},
+  {"max-variants: 0\n"},
+  {"max-variants: 1025\n"},
   {"idle-timeout: 86401\n"},
   {"capture-ring-size: 0\n"},
+  {"capture-ring-size: 262145\n"},
   {"ts:\n  startup-timeout: -1\n"},
   {"join-all: maybe\n"},
   {"insecure: maybe\n"},
@@ -98,6 +103,7 @@ static const bad_case_t bad_cases[] = {
   {"sds:\n  refresh-interval: -1\n"},
   {"segment-size: 1\n"},
   {"segment-count: 2\n"},
+  {"segment-count: 11\n"},
   {"hls:\n  part-size: 0.01\n"},
   {"hls:\n  seg-pool: 0\n"},
   {"dash:\n  part-size: 9\n"},
@@ -290,11 +296,12 @@ START_TEST(defaults_are_the_documented_values) {
   dixy_cfg_defaults(&cfg);
   ck_assert_int_eq(cfg.max_clients, 256);
   ck_assert_int_eq(cfg.max_channels, 32);
+  ck_assert_int_eq(cfg.max_variants, 8);
   ck_assert_uint_eq(cfg.capture_ring_kib, 4096u);
   ck_assert_int_eq(cfg.segment_count, 4);
   ck_assert_int_eq(cfg.ssdp_ttl, 3);
   ck_assert_uint_eq(cfg.ssdp_max_age_s, 1800u);
-  ck_assert_str_eq(cfg.dash_utc_url, "http://time.akamai.com/?iso&ms");
+  ck_assert_str_eq(cfg.dash_utc_url, "");
 }
 END_TEST
 

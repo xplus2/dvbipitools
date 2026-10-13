@@ -7,7 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define FEC2022_MAX_PKT (12 + 7 * 188)
+/* RTP header + up to 15 CSRC + extension + 7 TS, MTU sized */
+#define FEC2022_MAX_PKT 1500
 #define FEC2022_MAX_REPAIR (12 + 16 + (FEC2022_MAX_PKT - 12))
 #define FEC2022_MAX_L 40
 #define FEC2022_MAX_LD 400

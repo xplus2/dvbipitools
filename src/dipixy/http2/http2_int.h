@@ -13,6 +13,7 @@
 #include "../altsvc.h"
 #include "../reactor/conn.h"
 #include "../reactor/internal.h"
+#include "../httpng/httpng.h"
 
 #include <nghttp2/nghttp2.h>
 
@@ -33,15 +34,25 @@
 #define H2_MP4PUSH_MAX 4 /* concurrent progressive-MP4 streams per H2 connection */
 #define H2_WS_MAX 4 /* concurrent WS streams per H2 connection */
 
-/* per-stream state: only method/path needed, dipixy has no req body or fancy headers */
+/* per-stream state: request line, few headers, POST body (DLNA control only) */
 typedef struct {
   int32_t id; /* 0 = slot unused */
   char method[16];
   char path[H2_PATH_MAX];
-  char inm[80]; /* if-none-match header value, empty if absent */
+  char inm[256]; /* if-none-match header value, empty if absent */
   char origin[128]; /* origin header value, empty if absent */
   char protocol[16]; /* :protocol pseudo-header, RFC8441 extended CONNECT */
   char authz[200]; /* authorization header value, empty if absent */
+  char host[128]; /* :authority or host value, empty if absent */
+  char soapaction[HTTPNG_SOAPACTION_MAX];
+  char sid[HTTPNG_SID_MAX];
+  char callback[HTTPNG_CALLBACK_MAX];
+  char nt[HTTPNG_NT_MAX];
+  char timeout[HTTPNG_TIMEOUT_MAX];
+  uint8_t *body; /* POST only, NUL-terminated, HTTPNG_BODY_MAX cap */
+  size_t body_len;
+  int body_wait; /* POST: dispatch deferred to END_STREAM */
+  int body_over; /* body exceeded cap */
   int dispatch_pending; /* complete request ready to route */
 } h2_stream_t;
 
@@ -77,6 +88,8 @@ typedef struct {
   size_t pending_len;
   size_t pending_cap;
   int inflight;
+  int dead;           /* under pending_lock: overflow or protocol error, reset pending */
+  int reset;          /* RST_STREAM submitted */
   uint8_t *send_data;
   size_t send_len;
   size_t send_off;
@@ -117,7 +130,15 @@ void h2_dispatch_stream(h2_conn_t *conn, conn_t *c, h2_stream_t *stream);
 
 /* from http2_tspush.c */
 void h2_tspush_on_stream_close(h2_conn_t *conn, int32_t stream_id);
-int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush_sub);
+int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush_sub, int rawaudio);
+int h2_ts_cold_try_park(h2_conn_t *conn, int32_t stream_id, const ts_cold_park_req_t *req);
+void h2_ts_cold_on_stream_close(const h2_conn_t *conn, int32_t stream_id);
+void h2_ts_cold_on_conn_close(const h2_conn_t *conn);
+int h2_open_try_park(h2_conn_t *conn, int32_t stream_id, capture_open_job_t *job);
+/* 1: stream_id waits for its open, request fields stay in the stream slot */
+int h2_open_parked(const h2_conn_t *conn, int32_t stream_id);
+void h2_open_on_stream_close(const h2_conn_t *conn, int32_t stream_id);
+void h2_open_on_conn_close(const h2_conn_t *conn);
 
 /* from http2_dashchunk.c */
 void h2_dashchunk_on_stream_close(h2_conn_t *conn, int32_t stream_id);
@@ -127,8 +148,10 @@ int h2_dashchunk_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int sub
 void h2_mp4push_on_stream_close(h2_conn_t *conn, int32_t stream_id);
 int h2_mp4push_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int sub_idx, int ws_handle);
 
-/* from http2_hls.c. body ownership transfers in: malloc'd or NULL, freed here or by drain callback */
-void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, int zc, const char *origin_hdr);
+/* from http2_hls.c. body+owner ownership transfers in, released per hls_resp_body_release() */
+void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, uint8_t *owner, int zc, const char *origin_hdr);
+void h2_submit_resp_ex(h2_conn_t *conn, int32_t stream_id, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, uint8_t *owner, int zc, const char *origin_hdr,
+  const httpng_hdr_t *extra, size_t nextra);
 
 /* from http2_hls.c: LL-HLS blocking-reload parking, mirrors dispatch.c's llhls_try_park() for H2 streams */
 int h2_llhls_try_park(h2_conn_t *conn, const conn_t *c, int32_t stream_id, const llhls_park_req_t *req);

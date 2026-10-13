@@ -170,6 +170,55 @@ START_TEST(mkv_pts_wraparound_is_rebased_not_dropped) {
 }
 END_TEST
 
+static int count_mem(const unsigned char *buf, size_t len, const char *pat) {
+  size_t pl = strlen(pat);
+  int n = 0;
+  for (const unsigned char *p = buf; (p = memmem(p, (size_t)(buf + len - p), pat, pl)); p++) n++;
+  return n;
+}
+
+START_TEST(mkv_pending_overflow_leaves_out_tracks_without_header) {
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mkv_opts_t cfg = base_cfg();
+  mkv_t *m;
+  unsigned char adts[256];
+  unsigned char pes[256];
+  unsigned char pkt[188];
+  unsigned char *buf;
+  long fsize;
+  FILE *f;
+
+  ck_assert_int_ge(fd, 0);
+  m = mkv_new(fd, &cfg, 0, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  feed_discovery_two_audio(m);
+  for (unsigned k = 0; k < 1100; k++) { /* pid 0x102 stays silent */
+    size_t alen = build_adts_frame(adts, 170);
+    size_t plen = build_pes_with_pts(pes, 90000u + k * 1920u, adts, alen);
+    wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+    mkv_feed(m, pkt);
+  }
+  ck_assert_int_eq(mkv_error(m), 0);
+  mkv_close(m);
+  close(fd);
+
+  f = fopen(path, "rb");
+  ck_assert_ptr_nonnull(f);
+  fseek(f, 0, SEEK_END);
+  fsize = ftell(f);
+  rewind(f);
+  buf = malloc((size_t)fsize);
+  ck_assert_ptr_nonnull(buf);
+  ck_assert_uint_eq(fread(buf, 1, (size_t)fsize, f), (size_t)fsize);
+  fclose(f);
+  ck_assert_int_eq(count_mem(buf, (size_t)fsize, "A_AAC"), 1);
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(mkv_writes_a_valid_container_for_audio_only) {
   char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
   int fd = mkstemp(path);
@@ -815,6 +864,7 @@ END_TEST
 static Suite *mkv_suite(void) {
   Suite *s = suite_create("mkv");
   TCase *tc = tcase_create("core");
+  tcase_add_test(tc, mkv_pending_overflow_leaves_out_tracks_without_header);
   tcase_add_test(tc, mkv_writes_a_valid_container_for_audio_only);
   tcase_add_test(tc, mkv_no_supported_tracks_writes_nothing_and_no_error);
   tcase_add_test(tc, mkv_clusters_are_written_live_and_close_adds_cues_and_duration);

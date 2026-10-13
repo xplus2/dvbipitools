@@ -6,6 +6,7 @@
 #include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -13,21 +14,45 @@
 #include "lib/helper/log.h"
 #include "lib/sys/signal.h"
 
+#include "../../dlna/gena.h"
 #include "../../version.h"
 #include "../../ws/ws_broadcast.h"
 #include "../../ws/ws_sources.h"
 
 static pthread_mutex_t g_reload_mtx = PTHREAD_MUTEX_INITIALIZER;
+static atomic_int g_reload_req;
 
 static void free_list_items(channel_list_t l) {
   for (int j = 0; j < l.count; j++) {
     free(l.items[j].name);
     free(l.items[j].uri);
     free(l.items[j].icon_uri);
-    if (l.items[j].static_ctx) capture_close(l.items[j].static_ctx);
+    if (l.items[j].join_ctx) capture_close(l.items[j].join_ctx);
   }
   free(l.items);
   free(l.name_order);
+}
+
+static uint64_t fnv_str(uint64_t h, const char *s) {
+  for (; s && *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211ull;
+  return (h ^ 0xff) * 1099511628211ull;
+}
+
+static uint64_t fnv_u(uint64_t h, unsigned v) {
+  for (int i = 0; i < 4; i++, v >>= 8) h = (h ^ (v & 0xff)) * 1099511628211ull;
+  return h;
+}
+
+/* content digest of fields DIDL is built from */
+static uint64_t list_digest(const channel_list_t *l) {
+  uint64_t h = fnv_u(14695981039346656037ull, (unsigned)l->count);
+  for (int i = 0; i < l->count; i++) {
+    const channel_item_t *it = &l->items[i];
+    h = fnv_str(fnv_str(fnv_str(h, it->name), it->uri), it->icon_uri);
+    h = fnv_u(fnv_u(fnv_u(h, it->tsid), it->onid), it->sid);
+    h = fnv_u(fnv_u(h, it->max_bitrate_kbps), it->content_nibble);
+  }
+  return h;
 }
 
 /* rebuilds src fresh, swaps atomically into ch->lists[idx] on non-empty result.
@@ -37,6 +62,7 @@ static void reload_one_list(channels_t *ch, int idx, const source_def_t *src, co
   channel_list_t *newl;
   channel_list_t *old;
   char *msg;
+  int changed;
   memset(&fresh, 0, sizeof fresh);
   switch (src->kind) {
     case SRC_SDS:
@@ -76,10 +102,12 @@ static void reload_one_list(channels_t *ch, int idx, const source_def_t *src, co
   atomic_store_explicit(&ch->lists[idx], newl, memory_order_release);
   wait_readers_quiescent();
   pthread_mutex_unlock(&g_reload_mtx);
+  changed = !old || list_digest(old) != list_digest(newl);
   if (old) {
     free_list_items(*old);
     free(old);
   }
+  if (changed) gena_notify_system_update();
   log_line(TOOL_NAME ": list %d reloaded, now %d channel%s", idx + 1, fresh.count, fresh.count == 1 ? "" : "s");
   if (!ws_sources_build_update(ch, src, (unsigned)(idx + 1), &msg)) ws_broadcast_publish(msg);
 }
@@ -88,6 +116,8 @@ typedef struct {
   channels_t *ch;
   const config_t *cfg;
 } refresh_arg_t;
+
+void channels_request_reload(void) { atomic_store_explicit(&g_reload_req, 1, memory_order_relaxed); }
 
 void channels_reload_all(channels_t *ch, const config_t *cfg) {
   for (int i = 0; i < cfg->n_sources; i++) reload_one_list(ch, cfg->sources[i].ordinal - 1, &cfg->sources[i], cfg);
@@ -101,7 +131,8 @@ static void *refresh_thread_fn(void *arg) {
   double next = mono_seconds() + a->cfg->sds_refresh_interval_s;
   int wfd = signal_wake_fd();
   while (g_refresh_running && !signal_stop_requested()) {
-    if (signal_reload_requested()) channels_reload_all(a->ch, a->cfg);
+    int sighup = signal_reload_requested();
+    if (atomic_exchange_explicit(&g_reload_req, 0, memory_order_relaxed) || sighup) channels_reload_all(a->ch, a->cfg);
     if (mono_seconds() >= next) {
       for (int i = 0; i < a->cfg->n_sources; i++) {
         if (a->cfg->sources[i].kind == SRC_SDS) reload_one_list(a->ch, a->cfg->sources[i].ordinal - 1, &a->cfg->sources[i], a->cfg);

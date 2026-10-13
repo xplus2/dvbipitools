@@ -69,10 +69,13 @@ typedef enum { CONN_PROTO_H1 = 1, CONN_PROTO_H2, CONN_PROTO_H3 } conn_proto_t;
 
 typedef struct conn_t {
   int fd;
+  _Atomic uint64_t gen; /* unique per conn_new, never 0. detects fd reuse */
   conn_state state;
   conn_buf in;
-  conn_buf out;
-  void *ssl;               /* SSL* when TLS, NULL for plain */
+  conn_buf out;                  /* producers append under out_lock */
+  conn_buf wire;                 /* owner-only: swapped from out, sent without lock */
+  _Atomic size_t wire_pending;   /* wire bytes unsent, for backpressure accounting */
+  void *ssl;              /* SSL* when TLS, NULL for plain */
   /* owner-thread bits: only owning reactor touches, never under out_lock.
      must not share a word with want_write/dead below */
   unsigned close_after_flush : 1; /* handler "closed": reactor closes on drain */
@@ -83,7 +86,7 @@ typedef struct conn_t {
   void *ws;                       /* ws_conn_state* once CONN_WS (reactor-owned) */
   void *h2;                       /* h2_conn_t* once CONN_H2 (reactor-owned) */
   char client_ip[64];             /* peer IP, restored into t_req per dispatch */
-  time_t last_active;
+  _Atomic time_t last_active;
   size_t req_bytes; /* request bytes consumed from in.buf, incl trailing blank line. reactor_keepalive() preserves pipelined bytes past it */
   _Alignas(64) _Atomic unsigned char want_write; /* EPOLLOUT currently armed for this fd */
   unsigned char dead;                      /* backpressure tripped or torn down: owner must close */
@@ -157,6 +160,10 @@ int conn_fd_trackable(int fd);
 void conn_publish(conn_t *c);
 void conn_unpublish(const conn_t *c);
 conn_t *conn_for_fd(int fd);
+/* NULL if fd now holds another conn than the one that had gen. for subs outliving conn teardown */
+conn_t *conn_for_fd_gen(int fd, uint64_t gen);
+/* gen of conn published on fd, 0 if none. owner thread only */
+uint64_t conn_gen_for_fd(int fd);
 
 /* callable from any thread. over backpressure cap marks conn dead, returns -1, else 0 */
 int conn_send_buffered(conn_t *c, const void *a, size_t alen, const void *b, size_t blen);

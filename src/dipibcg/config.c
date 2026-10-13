@@ -16,6 +16,7 @@ void bcg_cfg_defaults(config_t *cfg) {
   cfg->dscp = NET_DSCP_SIGNALLING;
   cfg->window_hours = 24;
   cfg->interval_s = 5;
+  cfg->refresh_cycles = 1;
   cfg->timeout_s = 35;
 }
 
@@ -71,8 +72,12 @@ static int apply_dscp(void *c, const char *v, char *e, size_t n) {
   return 0;
 }
 
+static int apply_refresh(void *c, const char *v, char *e, size_t n) {
+  return set_long(&((config_t *)c)->refresh_cycles, v, 1, e, n);
+}
+
 static int apply_interval(void *c, const char *v, char *e, size_t n) {
-  return set_long(&((config_t *)c)->interval_s, v, 0, e, n);
+  return set_long(&((config_t *)c)->interval_s, v, 1, e, n);
 }
 
 static int apply_timeout(void *c, const char *v, char *e, size_t n) {
@@ -129,6 +134,7 @@ static const yamlcfg_key_t keys[] = {
     {"iface", apply_iface, 0, 0},
     {"dscp", apply_dscp, 0, 0},
     {"interval", apply_interval, 0, 0},
+    {"refresh", apply_refresh, 0, 0},
     {"timeout", apply_timeout, 0, 0},
     {"output", apply_output, 0, 0},
     {"csv-map", apply_csv_map, 0, 0},
@@ -167,7 +173,7 @@ int bcg_cfg_test(const char *path, int strict) {
   warn_if(&y, fl->have_a && !fl->have_l && !cfg.input_path, "GA000116", "input not set (required for announce unless given on the command line)");
   warn_if(&y, fl->have_a && !fl->have_l && !cfg.map_path, "GA000117", "map not set (required for announce unless given on the command line)");
   warn_if(&y, fl->have_a && fl->have_l, "GA000118", "announce and listen are mutually exclusive");
-  warn_if(&y, fl->have_l && !fl->have_a && (cfg.metrics_id || cfg.compress), "GA000119", "metrics.id and compress are announce-only");
+  warn_if(&y, fl->have_l && !fl->have_a && (cfg.metrics_id || cfg.compress || cfg.refresh_cycles != 1), "GA000119", "metrics.id, compress and refresh are announce-only");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "GA000120", "metrics.sock and metrics.interval require metrics.id");
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);

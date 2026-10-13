@@ -7,7 +7,7 @@
 #include "http3_int.h"
 #include "lib/helper/byte_ring.h"
 
-/* data reader for TS push streams: drains per-subscriber SPSC ring */
+/* data reader for TS push streams: hands out per-subscriber SPSC ring bytes, released on ack */
 nghttp3_ssize h3_tspush_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud) {
   (void)h3;
   (void)sid;
@@ -29,16 +29,25 @@ nghttp3_ssize h3_tspush_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec,
   vec[0].base = (uint8_t *)p;
   vec[0].len = contig;
   *pflags = NGHTTP3_DATA_FLAG_NONE;
-  byte_ring_advance(&sub->h3_ring, contig);
+  byte_ring_hold(&sub->h3_ring, contig);
   return 1;
+}
+
+void h3_tspush_acked(const h3_req_t *r, size_t n) {
+  ts_sub_t *sub;
+  if (r->tspush_sub_idx < 0) return;
+  sub = &g_ts_subs[r->tspush_sub_idx];
+  if (atomic_load_explicit(&sub->alive, memory_order_acquire) != TS_SUB_ALIVE) return;
+  byte_ring_ack(&sub->h3_ring, n);
 }
 
 /* registers TS push stream, submits response. always 1 = dispatched (h3 has
    no separate slot table, unlike h2) */
-int h3_tspush_dispatch(h3_conn_t *c, h3_req_t *r, int sub) {
+int h3_tspush_dispatch(h3_conn_t *c, h3_req_t *r, int sub, int rawaudio) {
+  const char *ctype = rawaudio ? "audio/mpeg" : "video/mp2t";
   nghttp3_nv nva[] = {
       {(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP3_NV_FLAG_NONE},
-      {(uint8_t *)"content-type", (uint8_t *)"video/mp2t", 12, 10, NGHTTP3_NV_FLAG_NONE},
+      {(uint8_t *)"content-type", (uint8_t *)ctype, 12, strlen(ctype), NGHTTP3_NV_FLAG_NONE},
   };
   nghttp3_data_reader dr;
   g_ts_subs[sub].h3c = c;
@@ -60,6 +69,20 @@ void h3_tspush_wake(int sub_idx) {
   c = sub->h3c;
   if (!c || c->done) return;
   h3_push_resume(c, sub->h3_sid);
+}
+
+void h3_tspush_reset(int sub_idx) {
+  const ts_sub_t *sub;
+  h3_conn_t *c;
+  int fd;
+  if (sub_idx < 0 || sub_idx >= g_ts_subs_n) return;
+  sub = &g_ts_subs[sub_idx];
+  c = sub->h3c;
+  if (!c || c->done) return;
+  fd = c->local_addr.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4;
+  if (fd < 0) return;
+  ngtcp2_conn_shutdown_stream(c->qconn, 0, sub->h3_sid, NGHTTP3_H3_INTERNAL_ERROR);
+  flush_tx(c, fd);
 }
 
 #endif /* HAVE_HTTP3 */

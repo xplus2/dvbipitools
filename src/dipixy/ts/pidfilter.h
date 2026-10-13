@@ -27,8 +27,8 @@ void pid_filter_parse(const char *value, pid_filter_t *out);
    it. query NULL or no filter param: out left empty */
 void pid_filter_parse_query(const char *query, pid_filter_t *out);
 
-/* finds "key=" in query, copies value up to '&' or bufsz-1 into buf, NUL-terminates.
-   1 found, 0 not (buf untouched) */
+/* find "key=" in query, copies value up to '&' or bufsz-1 into buf, urldecoded, NUL-terminates.
+   malformed %XX kept. 1 found, 0 not (buf untouched) */
 int query_param_extract(const char *query, const char *key, char *buf, size_t bufsz);
 
 /* 1 if pid is in f (drop it), 0 otherwise */

@@ -136,6 +136,22 @@ START_TEST(query_matches_key_at_param_boundary_after_similar_prefix) {
 }
 END_TEST
 
+START_TEST(query_percent_decodes_value) {
+  pid_filter_t f;
+  pid_filter_parse_query("filter=0x100%2C0x101", &f);
+  ck_assert_int_eq(f.count, 2);
+  ck_assert_uint_eq(f.pids[0], 0x100u);
+  ck_assert_uint_eq(f.pids[1], 0x101u);
+}
+END_TEST
+
+START_TEST(query_keeps_malformed_escape_literal) {
+  char buf[16];
+  ck_assert_int_eq(query_param_extract("a=%zz%4", "a=", buf, sizeof buf), 1);
+  ck_assert_str_eq(buf, "%zz%4");
+}
+END_TEST
+
 START_TEST(add_inserts_sorted) {
   pid_filter_t f;
   pid_filter_parse("101", &f);
@@ -208,6 +224,8 @@ static Suite *pidfilter_suite(void) {
   tcase_add_test(tc, null_query_leaves_empty);
   tcase_add_test(tc, query_ignores_key_matching_inside_longer_key);
   tcase_add_test(tc, query_matches_key_at_param_boundary_after_similar_prefix);
+  tcase_add_test(tc, query_percent_decodes_value);
+  tcase_add_test(tc, query_keeps_malformed_escape_literal);
   tcase_add_test(tc, add_inserts_sorted);
   tcase_add_test(tc, add_ignores_duplicate);
   tcase_add_test(tc, add_inserts_into_middle_without_disturbing_neighbors);

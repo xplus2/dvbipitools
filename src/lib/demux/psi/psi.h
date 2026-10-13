@@ -125,6 +125,8 @@ double psi_pmt_oldest_seen(const psi_t *c);
 
 psi_t *psi_new(void);
 void psi_free(psi_t *c);
+/* back to psi_new() state, cheaper than free+new. drops label and observer */
+void psi_reset(psi_t *c);
 /* log: owner. NULL/empty resets */
 void psi_set_label(psi_t *c, const char *label);
 void psi_feed(psi_t *c, const unsigned char *pkt); /* one 188-byte packet */

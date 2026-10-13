@@ -41,17 +41,29 @@ static size_t build_ttx_pes(unsigned char *out, unsigned page, unsigned pkt, con
 
   out[n++] = 0x10;             /* data_identifier */
   out[n++] = 0x03;             /* data_unit_id: EBU teletext subtitle */
-  out[n++] = 0x2A;             /* data_unit_length = 42 */
+  out[n++] = 0x2C;             /* data_unit_length = 44 */
   out[n++] = 0xFF;             /* framing code, unused by the decoder */
   out[n++] = 0xFF;             /* reserved, unused */
-  out[n++] = rev8_local(hamm_raw(d0)); /* mpag byte 1 (magazine + pkt bit0) */
-  out[n++] = rev8_local(hamm_raw(d1)); /* mpag byte 2 (pkt bits 1-4) */
+  out[n++] = hamm_raw(d0); /* mpag byte 1 (magazine + pkt bit0) */
+  out[n++] = hamm_raw(d1); /* mpag byte 2 (pkt bits 1-4) */
   for (size_t i = 0; i < 40; i++) {
     unsigned char c = 0x20;
     if (i < tlen) c = (unsigned char)text[i];
     out[n++] = rev8_local(c);
   }
+  if (pkt == 0) { /* header: page units, tens hamming coded */
+    out[7] = hamm_raw(page % 10);
+    out[8] = hamm_raw((page / 10) % 10);
+  }
   return n;
+}
+
+/* serial mode: rows count only after a header of the wanted page */
+static void open_page(ttx_t *t, unsigned page) {
+  unsigned char pes[64];
+  size_t n = build_ttx_pes(pes, page, 0, "");
+
+  ttx_pes(t, 0, 0, pes, n);
 }
 
 static int g_calls;
@@ -65,6 +77,7 @@ static void capture_cb(void *ctx, const ttx_cue_t *cue) {
 
 START_TEST(ttx_decodes_one_row_and_emits_cue_on_flush) {
   ttx_t *t = ttx_new(777, "eng", 0, capture_cb, NULL);
+  open_page(t, 777);
   unsigned char pes[64];
   size_t n = build_ttx_pes(pes, 777, 1, "HELLO");
   g_calls = 0;
@@ -93,6 +106,7 @@ END_TEST
 
 START_TEST(ttx_skips_the_page_ident_row) {
   ttx_t *t = ttx_new(777, "eng", 0, capture_cb, NULL);
+  open_page(t, 777);
   unsigned char pes[64];
   /* ident rows start with the page number and are boundaries, not text */
   size_t n = build_ttx_pes(pes, 777, 0, "777 12:00:00");
@@ -106,6 +120,7 @@ END_TEST
 
 START_TEST(ttx_lead_ms_shifts_cue_times_earlier) {
   ttx_t *t = ttx_new(777, "eng", 300 /* lead_ms */, capture_cb, NULL);
+  open_page(t, 777);
   unsigned char pes[64];
   size_t n = build_ttx_pes(pes, 777, 1, "HELLO");
   g_calls = 0;
@@ -136,6 +151,7 @@ static void *ttx_new_from_thread(void *arg) {
   size_t n;
   ttx_t *t = ttx_new(777, "eng", 0, thread_capture_cb, c);
   if (!t) return (void *)(intptr_t)1;
+  open_page(t, 777);
   n = build_ttx_pes(pes, 777, 1, "HELLO");
   ttx_pes(t, 1, 0, pes, n);
   ttx_flush(t);
@@ -199,6 +215,7 @@ static const nat_case_t nat_cases[] = {
 START_TEST(ttx_maps_national_character_subsets_by_language) {
   const nat_case_t *c = &nat_cases[_i];
   ttx_t *t = ttx_new(777, c->lang, 0, log_cb, NULL);
+  open_page(t, 777);
 
   g_nlog = 0;
   feed_row(t, 777, "#$@[\\]^_`{|}~", 1000);
@@ -211,6 +228,7 @@ END_TEST
 
 START_TEST(ttx_turns_control_codes_into_spaces_and_trims_row_edges) {
   ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  open_page(t, 777);
 
   g_nlog = 0;
   feed_row(t, 777, "\x01  AB\x02" "CD   ", 1000);
@@ -223,6 +241,7 @@ END_TEST
 
 START_TEST(ttx_joins_rows_of_one_group_and_drops_repeated_rows) {
   ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  open_page(t, 777);
 
   g_nlog = 0;
   feed_row(t, 777, "FIRST", 1000);
@@ -238,6 +257,7 @@ END_TEST
 
 START_TEST(ttx_splits_groups_on_a_gap_and_ignores_carousel_repeats) {
   ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  open_page(t, 777);
 
   g_nlog = 0;
   feed_row(t, 777, "ONE", 1000);
@@ -257,6 +277,7 @@ END_TEST
 
 START_TEST(ttx_caps_long_cues_and_holds_short_ones_to_the_minimum) {
   ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  open_page(t, 777);
 
   g_nlog = 0;
   feed_row(t, 777, "LONG", 1000);
@@ -271,6 +292,7 @@ END_TEST
 
 START_TEST(ttx_clamps_a_lead_that_would_start_before_zero) {
   ttx_t *t = ttx_new(777, "eng", 2000, log_cb, NULL);
+  open_page(t, 777);
 
   g_nlog = 0;
   feed_row(t, 777, "EARLY", 1000);
@@ -284,6 +306,7 @@ END_TEST
 
 START_TEST(ttx_keeps_at_most_one_screen_of_rows_per_group) {
   ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  open_page(t, 777);
   char row[8];
   int lines = 1;
 
@@ -320,6 +343,7 @@ static const corrupt_case_t corrupt_cases[] = {
 START_TEST(ttx_ignores_malformed_data_units) {
   const corrupt_case_t *c = &corrupt_cases[_i];
   ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  open_page(t, 777);
   unsigned char pes[64];
   size_t n = build_ttx_pes(pes, 777, 1, "TEXT");
 
@@ -335,6 +359,7 @@ END_TEST
 
 START_TEST(ttx_survives_truncated_and_empty_input_and_missing_pts) {
   ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  open_page(t, 777);
   unsigned char pes[64];
   size_t n = build_ttx_pes(pes, 777, 1, "TEXT");
 
@@ -346,10 +371,49 @@ START_TEST(ttx_survives_truncated_and_empty_input_and_missing_pts) {
   ck_assert_int_eq(g_nlog, 0);
   ttx_free(t);
   t = ttx_new(777, "eng", 0, log_cb, NULL);
+  open_page(t, 777);
   ttx_pes(t, 0, 0, pes, n);
   ttx_flush(t);
   ck_assert_int_eq(g_nlog, 1);
   ck_assert_int_eq((int)g_log[0].start_ms, 0);
+  ttx_free(t);
+}
+END_TEST
+
+START_TEST(ttx_ignores_rows_of_other_pages_in_the_magazine) {
+  ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  unsigned char pes[64];
+  size_t n;
+
+  g_nlog = 0;
+  open_page(t, 701);
+  feed_row(t, 777, "OTHER PAGE", 1000);
+  open_page(t, 777);
+  feed_row(t, 777, "WANTED", 2000);
+  n = build_ttx_pes(pes, 777, 0, "");
+  pes[7] = hamm_raw(8); /* header of 778 closes ours */
+  ttx_pes(t, 1, 2100 * 90, pes, n);
+  feed_row(t, 777, "AFTER", 3000);
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 1);
+  ck_assert_str_eq(g_log[0].text, "WANTED");
+  ttx_free(t);
+}
+END_TEST
+
+START_TEST(ttx_ignores_enhancement_packets_26_and_up) {
+  ttx_t *t = ttx_new(777, "eng", 0, log_cb, NULL);
+  unsigned char pes[64];
+  size_t n;
+
+  g_nlog = 0;
+  open_page(t, 777);
+  for (unsigned pkt = 25; pkt <= 31; pkt++) {
+    n = build_ttx_pes(pes, 777, pkt, "NOT TEXT");
+    ttx_pes(t, 1, 1000 * 90, pes, n);
+  }
+  ttx_flush(t);
+  ck_assert_int_eq(g_nlog, 0);
   ttx_free(t);
 }
 END_TEST
@@ -370,6 +434,8 @@ static Suite *teletext_suite(void) {
   tcase_add_test(tc, ttx_clamps_a_lead_that_would_start_before_zero);
   tcase_add_test(tc, ttx_keeps_at_most_one_screen_of_rows_per_group);
   tcase_add_loop_test(tc, ttx_ignores_malformed_data_units, 0, (int)(sizeof corrupt_cases / sizeof corrupt_cases[0]));
+  tcase_add_test(tc, ttx_ignores_rows_of_other_pages_in_the_magazine);
+  tcase_add_test(tc, ttx_ignores_enhancement_packets_26_and_up);
   tcase_add_test(tc, ttx_survives_truncated_and_empty_input_and_missing_pts);
   suite_add_tcase(s, tc);
   return s;

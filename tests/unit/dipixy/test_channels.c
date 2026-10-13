@@ -88,7 +88,7 @@ static channels_t *build_single_m3u_list(const char *path) {
   return channels_build(&cfg);
 }
 
-START_TEST(mixed_scheme_playlist_opens_static_ctx_per_scheme) {
+START_TEST(mixed_scheme_playlist_opens_static_ctx_on_demand) {
   int listen_fd;
   pthread_t tid;
   playlist_http_server_t srv;
@@ -114,7 +114,7 @@ START_TEST(mixed_scheme_playlist_opens_static_ctx_per_scheme) {
   unlink(path);
   ck_assert_ptr_nonnull(ch);
 
-  /* rtp entry: resolved per-request via channels_resolve(), no static_ctx */
+  /* rtp entry: resolved per-request via channels_resolve(), no static ctx */
   rtp_ctx = channels_resolve_static(ch, 1, 1, NULL);
   ck_assert_ptr_null(rtp_ctx);
   ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
@@ -122,13 +122,16 @@ START_TEST(mixed_scheme_playlist_opens_static_ctx_per_scheme) {
   ck_assert_uint_eq(port, 5000u);
   ck_assert_int_eq(rtp, 1);
 
-  /* http entry: opened eagerly, static_ctx set */
+  ck_assert_int_eq(srv.accepts, 0); /* build and rtp/none lookups connect nothing */
+
+  /* http entry: opened on request */
   http_ctx = channels_resolve_static(ch, 1, 2, NULL);
   ck_assert_ptr_nonnull(http_ctx);
+  ck_assert_int_eq(srv.accepts, 1);
   capture_close(http_ctx);
 
   /* srt entry: no libsrt in this build (srtsrc_stub always fails), stays listed,
-     static_ctx NULL, unresolvable either way */
+     unresolvable either way */
   srt_ctx = channels_resolve_static(ch, 1, 3, NULL);
   ck_assert_ptr_null(srt_ctx);
   ck_assert_int_ne(channels_resolve(ch, 1, 3, NULL, &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
@@ -138,7 +141,7 @@ START_TEST(mixed_scheme_playlist_opens_static_ctx_per_scheme) {
 }
 END_TEST
 
-START_TEST(sighup_reload_reuses_http_connection_via_dedup) {
+START_TEST(sighup_reload_opens_no_http_connection) {
   int listen_fd;
   pthread_t tid;
   playlist_http_server_t srv;
@@ -147,7 +150,7 @@ START_TEST(sighup_reload_reuses_http_connection_via_dedup) {
   config_t cfg;
   source_def_t src;
   channels_t *ch;
-  capture_ctx_t *before, *after;
+  capture_ctx_t *after;
 
   snprintf(content, sizeof content,
            "#EXTINF:-1,HTTP Channel\n"
@@ -165,16 +168,12 @@ START_TEST(sighup_reload_reuses_http_connection_via_dedup) {
 
   ch = channels_build(&cfg);
   ck_assert_ptr_nonnull(ch);
-  before = channels_resolve_static(ch, 1, 1, NULL);
-  ck_assert_ptr_nonnull(before);
-  capture_close(before);
-
   channels_reload_all(ch, &cfg);
+  ck_assert_int_eq(srv.accepts, 0); /* build and reload never connect */
 
   after = channels_resolve_static(ch, 1, 1, NULL);
   ck_assert_ptr_nonnull(after);
-  ck_assert_ptr_eq(before, after); /* same ctx: reload deduped, didn't reconnect */
-  ck_assert_int_eq(srv.accepts, 1); /* one TCP connect total, across build + reload */
+  ck_assert_int_eq(srv.accepts, 1);
   capture_close(after);
 
   unlink(path);
@@ -270,7 +269,7 @@ START_TEST(list_for_each_passes_fcc_through) {
   source_def_t src;
   sds_service_t svc;
   sds_fcc_t fcc;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   char path[160];
   FILE *f;
@@ -290,7 +289,7 @@ START_TEST(list_for_each_passes_fcc_through) {
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   {
@@ -324,6 +323,7 @@ START_TEST(list_for_each_passes_fcc_through) {
   ck_assert_uint_eq(collected.fcc.rtx_pt, 98u);
 
   channels_free(ch);
+  free(buf);
 }
 END_TEST
 
@@ -333,7 +333,7 @@ START_TEST(channels_resolve_passes_ret_and_fcc_through) {
   sds_service_t svc;
   sds_ret_t ret;
   sds_fcc_t fcc;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   char path[160];
   FILE *f;
@@ -360,7 +360,7 @@ START_TEST(channels_resolve_passes_ret_and_fcc_through) {
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, &fcc, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, &fcc, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   {
@@ -395,6 +395,7 @@ START_TEST(channels_resolve_passes_ret_and_fcc_through) {
   ck_assert_uint_eq(rf.fcc.port, 7000u);
 
   channels_free(ch);
+  free(buf);
 }
 END_TEST
 
@@ -641,7 +642,7 @@ END_TEST
 START_TEST(sds_xml_file_builds_one_item_per_service) {
   char path[160];
   sds_service_t svcs[2];
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   FILE *f;
   config_t cfg;
@@ -656,7 +657,7 @@ START_TEST(sds_xml_file_builds_one_item_per_service) {
   bufcpy(svcs[1].name, sizeof svcs[1].name, "Two");
   bufcpy(svcs[1].address, sizeof svcs[1].address, "239.1.1.2");
   svcs[1].port = 5001;
-  len = sds_build_broadcast("example.invalid", 1, svcs, 2, NULL, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, svcs, 2, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   write_temp_file(path, "");
   f = fopen(path, "wb");
@@ -668,6 +669,7 @@ START_TEST(sds_xml_file_builds_one_item_per_service) {
   ck_assert_ptr_nonnull(ch);
   ck_assert_int_eq(channels_list_for_each(ch, 1, NULL, NULL), 2);
   channels_free(ch);
+  free(buf);
 }
 END_TEST
 
@@ -752,7 +754,7 @@ END_TEST
 
 static void write_sds_xml(const char *path, const char *const *names, size_t n) {
   sds_service_t svcs[4];
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   FILE *f;
 
@@ -764,12 +766,13 @@ static void write_sds_xml(const char *path, const char *const *names, size_t n) 
     svcs[i].port = (unsigned)(5000 + i);
     svcs[i].rtp = 1;
   }
-  len = sds_build_broadcast("example.invalid", 1, svcs, (int)n, NULL, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, svcs, (int)n, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   f = fopen(path, "wb");
   ck_assert_ptr_nonnull(f);
   ck_assert_uint_eq(fwrite(buf, 1, len, f), len);
   fclose(f);
+  free(buf);
 }
 
 START_TEST(reload_rebuilds_a_sds_xml_list_from_the_file) {
@@ -833,8 +836,8 @@ END_TEST
 static Suite *channels_suite(void) {
   Suite *s = suite_create("dipixy_channels");
   TCase *tc = tcase_create("core");
-  tcase_add_test(tc, mixed_scheme_playlist_opens_static_ctx_per_scheme);
-  tcase_add_test(tc, sighup_reload_reuses_http_connection_via_dedup);
+  tcase_add_test(tc, mixed_scheme_playlist_opens_static_ctx_on_demand);
+  tcase_add_test(tc, sighup_reload_opens_no_http_connection);
   tcase_add_test(tc, srt_open_failure_keeps_entry_in_list);
   tcase_add_test(tc, list_for_each_passes_dvb_triplet_through);
   tcase_add_test(tc, list_for_each_passes_fcc_through);

@@ -269,6 +269,52 @@ START_TEST(rtmpout_delivers_keyframe_end_to_end) {
 }
 END_TEST
 
+START_TEST(rtmpout_resolves_hostname_in_background) {
+  unsigned port;
+  int listen_fd = make_listener(&port, 0);
+  pthread_t th;
+  fake_server_t srv;
+  char url[64];
+  rtmpout_cfg_t cfg;
+  rtmpout_t *o;
+  unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
+
+  memset(&srv, 0, sizeof srv);
+  srv.listen_fd = listen_fd;
+  ck_assert_int_eq(pthread_create(&th, NULL, fake_server_thread, &srv), 0);
+
+  snprintf(url, sizeof url, "rtmp://localhost:%u/live/key123", port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = url;
+  o = rtmpout_open(&cfg);
+  ck_assert_ptr_nonnull(o);
+  ck_assert_int_eq(rtmpout_write(o, FLV_TAG_VIDEO, 0, keyframe, sizeof keyframe, NULL, 0), -1);
+
+  ck_assert_int_eq(drive_until_sent(o, FLV_TAG_VIDEO, keyframe, sizeof keyframe, 400), 1);
+
+  pthread_join(th, NULL);
+  close(listen_fd);
+  ck_assert_ptr_nonnull(memmem(srv.captured, srv.captured_len, "KEY", 3));
+
+  rtmpout_close(o);
+}
+END_TEST
+
+START_TEST(rtmpout_close_while_resolving_is_clean) {
+  rtmpout_cfg_t cfg;
+  unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
+
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = "rtmp://localhost:1/live/key";
+  for (int i = 0; i < 20; i++) {
+    rtmpout_t *o = rtmpout_open(&cfg);
+    ck_assert_ptr_nonnull(o);
+    rtmpout_write(o, FLV_TAG_VIDEO, 0, keyframe, sizeof keyframe, NULL, 0);
+    rtmpout_close(o);
+  }
+}
+END_TEST
+
 START_TEST(rtmpout_holds_back_interframe_until_keyframe) {
   unsigned port;
   int listen_fd = make_listener(&port, 0);
@@ -595,6 +641,8 @@ static Suite *rtmpout_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, rtmpout_open_rejects_malformed_urls);
   tcase_add_test(tc, rtmpout_delivers_keyframe_end_to_end);
+  tcase_add_test(tc, rtmpout_resolves_hostname_in_background);
+  tcase_add_test(tc, rtmpout_close_while_resolving_is_clean);
   tcase_add_test(tc, rtmpout_holds_back_interframe_until_keyframe);
   tcase_add_test(tc, rtmpout_survives_stalled_peer);
   tcase_add_test(tc, rtmpout_sends_adobe_authmod_for_userinfo_uri);

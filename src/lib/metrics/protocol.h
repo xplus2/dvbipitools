@@ -17,7 +17,7 @@
 #define METRICS_PROTO_V1 1
 #define METRICS_PROTO_VERSION 2
 #define METRICS_FLAG_LAST 0x01
-#define METRICS_MAX_PARTS 255
+#define METRICS_MAX_PARTS 64 /* x snapshot bytes must fit STORE_MAX_BLOB_BYTES */
 #define METRICS_MAX_SNAPSHOT_BYTES 4096
 #define METRICS_ID_MAX 32   /* incl NUL */
 #define METRICS_LABEL_MAX 63
@@ -244,7 +244,7 @@ typedef struct {
   uint8_t proto_version;
   metrics_component_t component;
   char metrics_id[METRICS_ID_MAX]; /* NUL-terminated */
-  uint64_t process_start_time;     /* unix seconds, restart detection */
+  uint64_t process_start_time;     /* unix ns, restart detection */
   uint64_t sequence;               /* per-process, monotonically increasing */
   uint64_t snapshot_time;          /* unix seconds */
   uint8_t part;
@@ -265,10 +265,12 @@ typedef struct {
 
 /* 0 ok, -1 bad proto_version/empty metrics_id. flush unset */
 int metrics_writer_begin(metrics_writer_t *w, const metrics_hdr_t *hdr);
-/* label may be NULL (unlabeled series), truncated to METRICS_LABEL_MAX. consecutive puts with
+/* label may be NULL (unlabeled series), truncated to METRICS_LABEL_MAX on a UTF-8 boundary. consecutive puts with
    one label share a group. full buffer: sent as non-last part through flush. -1 without flush,
    on flush failure or past METRICS_MAX_PARTS, writer becomes unusable (finish returns 0) */
 int metrics_writer_put(metrics_writer_t *w, metrics_id_t id, const char *label, uint64_t value);
+/* length of valid UTF-8 sequence at s (1..4), 0 if invalid or cut off by avail */
+size_t metrics_utf8_seq_len(const unsigned char *s, size_t avail);
 static inline uint64_t metrics_zigzag(int64_t v) { return v < 0 ? (((uint64_t)~v) << 1) | 1 : (uint64_t)v << 1; }
 static inline int64_t metrics_unzigzag(uint64_t v) { return (int64_t)(v >> 1) ^ -(int64_t)(v & 1); }
 /* signed ids only */

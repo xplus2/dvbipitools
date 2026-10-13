@@ -54,7 +54,8 @@ int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
   return 1;
 }
 
-void hls_resp_body_release(uint8_t *body, int zc) {
+void hls_resp_body_release(uint8_t *body, uint8_t *owner, int zc) {
+  (void)owner;
   (void)zc;
   free(body);
 }
@@ -62,8 +63,9 @@ void hls_resp_body_release(uint8_t *body, int zc) {
 void capture_wait_pumps_quiescent(void) { /* fake: no pumps here */ }
 int capture_defer_after_quiescent(qsbr_deferred_fn fn, void *arg) { (void)fn; (void)arg; return 0; }
 
-conn_t *conn_for_fd(int fd) {
+conn_t *conn_for_fd_gen(int fd, uint64_t gen) {
   (void)fd;
+  (void)gen;
   return NULL;
 }
 
@@ -175,10 +177,10 @@ END_TEST
 START_TEST(deliver_overflow_marks_ring_errored) {
   int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 2);
   ck_assert_int_ge(idx, 0);
-  unsigned char *big = malloc(200000);
+  unsigned char *big = malloc(600000);
   ck_assert_ptr_nonnull(big);
-  memset(big, 'x', 200000);
-  mp4push_deliver(&g_fake_seg, big, 200000);
+  memset(big, 'x', 600000);
+  mp4push_deliver(&g_fake_seg, big, 600000);
   ck_assert_int_eq(mp4push_ring_errored(idx), 1);
   free(big);
   mp4push_sub_close(idx);
@@ -205,7 +207,8 @@ START_TEST(ring_and_bind_queries_on_invalid_slot_return_safe_defaults) {
   size_t len = 123;
   ck_assert_ptr_null(mp4push_ring_peek(-1, &len));
   ck_assert_uint_eq(len, 0);
-  mp4push_ring_advance(-1, 4); /* no crash */
+  mp4push_ring_hold(-1, 4); /* no crash */
+  mp4push_ring_ack(-1, 4);
   mp4push_h2_bind(-1, NULL, NULL, 0, -1);
   mp4push_h3_bind(-1, NULL, 0, 0, -1);
 }

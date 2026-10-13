@@ -6,21 +6,32 @@
 
 #define HLS_AUDIO_REM_MAX 65536
 
+/* buffers survive */
+void audio_reset(hls_seg_ctx_t *s) {
+  unsigned char *rem = s->audio.rem;
+  size_t remcap = s->audio.remcap;
+  memset(&s->audio, 0, sizeof s->audio);
+  s->audio.rem = rem;
+  s->audio.remcap = remcap;
+}
+
 void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigned char *data, size_t len) {
   size_t pos = 0;
 
   if (s->container != SEG_CONTAINER_FMP4) return;
   if (has_pts && s->audio.ready) {
-    int64_t pts_ms = pts_unwrap(&s->audio.ptswrap, pts);
+    int64_t pts_t = pts_unwrap_ticks(&s->audio.ptswrap, pts);
     if (!s->audio.pts_anchored) {
-      s->audio.anchor_pts_ms = pts_ms;
+      s->audio.anchor_pts = pts_t;
       s->audio.anchor_nominal_samples = s->audio.nominal_samples;
       s->audio.pts_anchored = 1;
     } else {
-      int64_t expected_samples = (pts_ms - s->audio.anchor_pts_ms) * (int64_t)s->audio.rate / 1000;
+      int64_t expected_samples = (pts_t - s->audio.anchor_pts) * (int64_t)s->audio.rate / HLS_TS_HZ;
       int64_t actual_samples = s->audio.nominal_samples - s->audio.anchor_nominal_samples;
-      s->audio.pending_drift_samples = expected_samples - actual_samples;
-      s->audio.anchor_pts_ms = pts_ms;
+      int64_t drift = expected_samples - actual_samples;
+      int64_t mag = drift < 0 ? -drift : drift;
+      s->audio.pending_drift_samples = mag * HLS_TS_HZ / (int64_t)s->audio.rate > HLS_JUMP_MAX_TICKS ? 0 : drift;
+      s->audio.anchor_pts = pts_t;
       s->audio.anchor_nominal_samples = s->audio.nominal_samples;
     }
   }
@@ -58,6 +69,8 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
       } else {
         s->audio.bitrate_code = f.bitrate_code;
       }
+      s->audio.chcfg_scheme = f.chcfg_scheme;
+      s->audio.chcfg_value = f.chcfg_value;
       s->audio.ready = 1;
       try_create_fmux(s);
     }

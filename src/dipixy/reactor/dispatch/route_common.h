@@ -8,14 +8,15 @@
 #include "../../segment/segment.h"
 #include "../../ws/ws_clients.h"
 
-typedef enum { ROUTE_SETUP_OK, ROUTE_SETUP_404, ROUTE_SETUP_503 } route_setup_status_t;
+typedef enum { ROUTE_SETUP_OK, ROUTE_SETUP_404, ROUTE_SETUP_503, ROUTE_SETUP_PENDING } route_setup_status_t;
 
 typedef struct {
   capture_ctx_t *ctx;
   int ws_handle;
+  capture_open_job_t *job; /* ROUTE_SETUP_PENDING: caller parks or cancels */
 } route_setup_t;
 
-/* open_source+route_client_info+ws_clients_touch+hls_seg_touch. ctx already closed on !OK */
+/* open_source_try+route_client_info+ws_clients_touch+hls_seg_touch. ctx already closed on !OK */
 route_setup_status_t route_setup(const route_t *rt, unsigned *list_num, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *client_ip, int http_ver, route_item_bufs_t *item_bufs,
   client_info_t *cinfo, double seg_target, int max_segs, seg_container_t container, double part_target, route_setup_t *out);
 

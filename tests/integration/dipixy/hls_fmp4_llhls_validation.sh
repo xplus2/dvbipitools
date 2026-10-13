@@ -32,12 +32,13 @@ fmp4_playlist="$WORK/index_fmp4.m3u8"
 timeout 15 curl -s -o "$fmp4_playlist" "$BASE/hls-fmp4"
 sleep 4
 timeout 15 curl -s -o "$fmp4_playlist" "$BASE/hls-fmp4"
-assert_contains "$fmp4_playlist" "#EXT-X-MAP:URI=\"init.mp4\"" "hls-fmp4 playlist missing init.mp4 map"
+assert_contains "$fmp4_playlist" "#EXT-X-MAP:URI=\"init.mp4?g=" "hls-fmp4 playlist missing init.mp4 map"
+init_uri=$(grep -oE 'init\.mp4\?g=[0-9]+' "$fmp4_playlist" | head -1)
 
 fmp4_seg=$(grep -oE 'seg[0-9]+\.m4s' "$fmp4_playlist" | head -1)
 [ -n "$fmp4_seg" ] || fail "no fmp4 segment reference in playlist"
 
-timeout 10 curl -s -o "$WORK/init.mp4" "$BASE/init.mp4"
+timeout 10 curl -s -o "$WORK/init.mp4" "$BASE/$init_uri"
 timeout 10 curl -s -o "$WORK/$fmp4_seg" "$BASE/$fmp4_seg"
 [ -s "$WORK/init.mp4" ] || fail "empty init.mp4"
 [ -s "$WORK/$fmp4_seg" ] || fail "empty $fmp4_seg"

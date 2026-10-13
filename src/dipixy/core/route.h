@@ -44,8 +44,9 @@ typedef struct {
   char hls_file[32];       /* ROUTE_FMT_HLS: "index.m3u8" or "segNNNNN.ts".
                               ROUTE_FMT_HLS_FMP4: "index.m3u8", "init.mp4", or "segNNNNN.m4s".
                               ROUTE_FMT_LLHLS: "index_ll.m3u8" or "segNNNNN.PP.ts".
-                              ROUTE_FMT_DASH/ROUTE_FMT_LLDASH: "manifest.mpd" or "dsegTTTT.m4s" (TTTT: start time, ms).
-                              dseg/init: no format (playlist): always resolve to ROUTE_FMT_DASH.
+                              ROUTE_FMT_DASH/ROUTE_FMT_LLDASH: "manifest.mpd", "dsegTTTT.m4s" (TTTT: start time, ms),
+                              "dsegvTTTT.m4s"/"dsegaTTTT.m4s" or "dinitv.mp4"/"dinita.mp4" (split video/audio).
+                              dseg/dinit: no format (playlist): always resolve to ROUTE_FMT_DASH.
                               ROUTE_FMT_MP4: unused, bare route only */
 } route_t;
 
@@ -53,6 +54,9 @@ typedef struct {
 int route_parse(const char *path, route_t *out);
 
 int fmt_parse(const char *s, route_fmt_t *out);
+
+/* bitmask of (1u << route_fmt_t) able to serve the request. segment/init names shared between formats list all */
+unsigned route_file_fmts(const route_t *rt);
 
 /* uri like "rtp://@239.0.0.1:8000", "udp://@[ff0e::1]:8000" or SSM "udp://10.0.0.1@232.1.1.1:8000"
    from channel_item_t.uri. src: SSM source, "" when absent, NULL ok (srcsz 0). 0 ok, -1 malformed */

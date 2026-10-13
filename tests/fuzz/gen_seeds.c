@@ -84,7 +84,7 @@ static void gen_bim(const char *dir) {
   bufcpy(pr->channel_id, sizeof pr->channel_id, "channel1");
   bufcpy(pr->start, sizeof pr->start, "2020-12-15T12:00:00Z");
   bufcpy(pr->stop, sizeof pr->stop, "2020-12-15T12:30:00Z");
-  bufcpy(pr->title, sizeof pr->title, "News");
+  bcg_set_text(&pr->title, "News");
 
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
@@ -122,7 +122,7 @@ static void gen_bim(const char *dir) {
 
 static void gen_sds(const char *dir) {
   sds_service_t svc;
-  unsigned char buf[4096];
+  unsigned char *doc = NULL;
   size_t n;
 
   memset(&svc, 0, sizeof svc);
@@ -135,8 +135,9 @@ static void gen_sds(const char *dir) {
   svc.onid = 2;
   svc.sid = 101;
 
-  n = sds_build_broadcast("dvb-ip.example", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf);
-  if (n) write_file(dir, "sds_min.xml", buf, n);
+  n = sds_build_broadcast("dvb-ip.example", 1, &svc, 1, NULL, NULL, NULL, &doc);
+  if (n) write_file(dir, "sds_min.xml", doc, n);
+  free(doc);
 }
 
 static void gen_rtcp(const char *dir) {
@@ -274,7 +275,7 @@ static void gen_tva_xml(const char *dir) {
   bufcpy(pr->channel_id, sizeof pr->channel_id, "ch1");
   bufcpy(pr->start, sizeof pr->start, "2030-01-01T12:00:00Z");
   bufcpy(pr->stop, sizeof pr->stop, "2030-01-01T13:00:00Z");
-  bufcpy(pr->title, sizeof pr->title, "News");
+  bcg_set_text(&pr->title, "News");
   f = open_memstream(&text, &len);
   if (f) {
     tva_xml_write(f, &doc);
@@ -305,7 +306,7 @@ static void gen_bcg_container(const char *dir) {
   size_t wrapped_len = 0;
   unsigned char *seed;
 
-  if (container_build(au, sizeof au, sr, sizeof sr, &cont, &cont_len)) return;
+  if (container_build(au, sizeof au, sr, sizeof sr, NULL, 0, &cont, &cont_len)) return;
   seed = malloc(cont_len + 1);
   if (seed) {
     seed[0] = 0;

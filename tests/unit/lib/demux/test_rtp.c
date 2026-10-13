@@ -61,6 +61,22 @@ START_TEST(rtp_payload_offset_with_csrc_and_extension) {
 }
 END_TEST
 
+START_TEST(rtp_ts_payload_excludes_padding) {
+  unsigned char pkt[400];
+  size_t plen = 0;
+  size_t off = build_rtp_header(pkt, 0, 0, 33, 0, 1, 0, 0);
+  pkt[0] |= 0x20;
+  memset(pkt + off, 0x47, 188);
+  memset(pkt + off + 188, 0, 4);
+  pkt[off + 191] = 4;
+  ck_assert_uint_eq(rtp_ts_payload(pkt, off + 192, &plen), off);
+  ck_assert_uint_eq(plen, 188u);
+  pkt[off + 191] = 0; /* bogus count */
+  ck_assert_uint_eq(rtp_ts_payload(pkt, off + 192, &plen), off);
+  ck_assert_uint_eq(plen, 0u);
+}
+END_TEST
+
 START_TEST(rtp_payload_offset_rejects_bad_version) {
   unsigned char pkt[32];
   size_t off = build_rtp_header(pkt, 0, 0, 33, 0, 1, 0, 0);
@@ -112,6 +128,7 @@ static Suite *rtp_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, rtp_payload_offset_plain_header);
   tcase_add_test(tc, rtp_payload_offset_with_csrc_and_extension);
+  tcase_add_test(tc, rtp_ts_payload_excludes_padding);
   tcase_add_test(tc, rtp_payload_offset_rejects_bad_version);
   tcase_add_test(tc, rtp_payload_offset_rejects_non_ts_payload);
   tcase_add_test(tc, rtp_payload_offset_rejects_short_packet);

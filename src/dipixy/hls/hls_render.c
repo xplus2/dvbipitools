@@ -5,7 +5,9 @@
 
 #include "lib/sys/ioutil.h"
 
+#include <errno.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -23,6 +25,30 @@ static size_t fmt_ll_cb(void *ctx, char *buf, size_t cap) {
 
 #define HLS_PLAYLIST_BUF_CAP 4096
 
+int hls_inm_match(const char *inm, const char *etag) {
+  size_t elen = strlen(etag);
+  const char *p = inm;
+  if (!inm) return 0;
+  for (;;) {
+    const char *s;
+    while (*p == ' ' || *p == '\t' || *p == ',') p++;
+    if (!*p) return 0;
+    if (!strncmp(p, "W/", 2)) p += 2;
+    if (*p == '"') {
+      s = ++p;
+      while (*p && *p != '"') p++;
+      if (!*p) return 0;
+      if ((size_t)(p - s) == elen && !memcmp(s, etag, elen)) return 1;
+      p++;
+    } else {
+      s = p;
+      while (*p && *p != ',' && *p != ' ' && *p != '\t') p++;
+      if (p - s == 1 && *s == '*') return 1;
+      if ((size_t)(p - s) == elen && !memcmp(s, etag, elen)) return 1;
+    }
+  }
+}
+
 int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
                 const char *filename, const char *if_none_match, hls_resolve_t *r) {
   hls_store_t *s;
@@ -32,8 +58,9 @@ int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
   uint32_t req_seq;
   uint32_t oldest;
   uint32_t last;
+  int seq_ok;
   memset(r, 0, sizeof *r);
-  ext = hls_filename_ext(filename);
+  ext =hls_filename_ext(filename);
   if (!ext) return 0;
   s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
@@ -54,7 +81,7 @@ int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
     } else {
       plain_playlist_snap_t psnap;
       const cached_text_t *ct;
-      snapshot_plain_playlist(snap, container, &psnap);
+      snapshot_plain_playlist(snap, container, lcevc, &psnap);
       ct = snapshot_cache_text(&snap->cache_plain, fmt_plain_cb, &psnap, HLS_PLAYLIST_BUF_CAP);
       if (!ct) return 0;
       r->body = (uint8_t *)ct->text;
@@ -75,9 +102,11 @@ int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
     }
   } else {
     r->kind = HLS_RESOLVE_SEGMENT;
+    errno = 0;
     seq_ul = strtoul(filename + 3, NULL, 10);
     req_seq = (uint32_t)seq_ul;
-    if (snap && snap->count > 0) {
+    seq_ok = errno == 0 && seq_ul <= UINT32_MAX && (container == SEG_CONTAINER_FMP4) == !strcmp(ext, "m4s");
+    if (seq_ok && snap && snap->count > 0) {
       oldest = snap->oldest_seq;
       last = oldest + (uint32_t)snap->count - 1u;
       if (req_seq >= oldest && req_seq <= last) {
@@ -93,7 +122,7 @@ int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
     r->status = 404;
     return 1;
   }
-  r->status = if_none_match && !strcmp(if_none_match, r->etag) ? 304 : 200;
+  r->status = hls_inm_match(if_none_match, r->etag) ? 304 : 200;
   return 1;
 }
 
@@ -106,7 +135,7 @@ int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
   } else if (r.status == 304) {
     resp_set(out, 304, NULL, r.etag, NULL, 0, is_head);
   } else if (r.kind == HLS_RESOLVE_SEGMENT) {
-    resp_set_zc(out, 200, r.content_type, r.etag, r.body, r.body_len, is_head);
+    resp_set_zc(out, 200, r.content_type, r.etag, r.body, r.body, r.body_len, is_head);
   } else if (r.kind == HLS_RESOLVE_PLAYLIST) {
     resp_set_zc_cached(out, 200, r.content_type, NULL, r.body, r.body_len, is_head);
   } else {
@@ -144,7 +173,7 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     } else {
       ll_playlist_snap_t llsnap;
       const cached_text_t *ct;
-      snapshot_ll_playlist(snap, &llsnap);
+      snapshot_ll_playlist(snap, lcevc, &llsnap);
       ct = snapshot_cache_text(&snap->cache_ll, fmt_ll_cb, &llsnap, HLS_LL_PLAYLIST_BUF_CAP);
       if (!ct) return 0;
       r->body = (const uint8_t *)ct->text;
@@ -161,6 +190,7 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     return 1;
   }
   if (snap && snap->live_msn == req_seq && req_part < snap->live_parts.count) {
+    r->owner = snap->live_data;
     r->body = snap->live_data + snap->live_parts.offset[req_part];
     r->body_len = snap->live_parts.size[req_part];
     part_etag(req_seq, req_part, r->body_len, r->etag, sizeof r->etag);
@@ -170,6 +200,7 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     if (req_seq >= oldest && req_seq <= last) {
       const hls_seg_t *seg = &snap->ring->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
       if (req_part < seg->parts.count) {
+        r->owner = seg->data;
         r->body = seg->data + seg->parts.offset[req_part];
         r->body_len = seg->parts.size[req_part];
         part_etag(req_seq, req_part, r->body_len, r->etag, sizeof r->etag);
@@ -181,7 +212,7 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     return 1;
   }
   r->content_type = "video/mp2t";
-  r->status = if_none_match && !strcmp(if_none_match, r->etag) ? 304 : 200;
+  r->status = hls_inm_match(if_none_match, r->etag) ? 304 : 200;
   return 1;
 }
 
@@ -196,7 +227,7 @@ int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   } else if (r.kind == HLS_RESOLVE_PLAYLIST) {
     resp_set_zc_cached(out, 200, r.content_type, NULL, r.body, r.body_len, is_head);
   } else {
-    resp_set(out, 200, r.content_type, r.etag, r.body, r.body_len, is_head);
+    resp_set_zc(out, 200, r.content_type, r.etag, r.owner, (uint8_t *)r.body, r.body_len, is_head);
   }
   return 1;
 }

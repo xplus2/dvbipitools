@@ -52,6 +52,60 @@ START_TEST(strrepo_reader_truncates_into_small_buffer) {
 }
 END_TEST
 
+START_TEST(strrepo_reader_truncation_skips_rest_of_string) {
+  strrepo_reader_t sr;
+  static const unsigned char buf[] = {0x01, 'a', 'b', 'c', 'd', 'e', '\0', 'z', '\0'};
+  char out[3];
+  ck_assert_int_eq(strrepo_reader_init(&sr, buf, sizeof buf), 0);
+  ck_assert_int_eq(strrepo_reader_next(&sr, out, sizeof out), 0);
+  ck_assert_str_eq(out, "ab");
+  ck_assert_int_eq(strrepo_reader_next(&sr, out, sizeof out), 0);
+  ck_assert_str_eq(out, "z");
+}
+END_TEST
+
+START_TEST(strrepo_reader_next_dup_returns_full_string) {
+  strrepo_reader_t sr;
+  static const unsigned char buf[] = {0x01, 'a', 'b', 'c', '\0', 'z', '\0', 'q'};
+  char *s = NULL;
+  ck_assert_int_eq(strrepo_reader_init(&sr, buf, sizeof buf), 0);
+  ck_assert_int_eq(strrepo_reader_next_dup(&sr, &s), 0);
+  ck_assert_str_eq(s, "abc");
+  free(s);
+  ck_assert_int_eq(strrepo_reader_next_dup(&sr, &s), 0);
+  ck_assert_str_eq(s, "z");
+  free(s);
+  s = NULL;
+  ck_assert_int_eq(strrepo_reader_next_dup(&sr, &s), -1);
+  ck_assert_ptr_null(s);
+}
+END_TEST
+
+START_TEST(strrepo_reader_seek_repositions_and_rejects_bad_offsets) {
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  const unsigned char *data;
+  size_t len;
+  char out[16];
+  strrepo_writer_init(&sw);
+  strrepo_writer_put(&sw, "aa");
+  strrepo_writer_put(&sw, "bb");
+  data = strrepo_writer_data(&sw, &len);
+  strrepo_reader_init(&sr, data, len);
+
+  ck_assert_int_eq(strrepo_reader_seek(&sr, 4), 0);
+  ck_assert_int_eq(strrepo_reader_next(&sr, out, sizeof out), 0);
+  ck_assert_str_eq(out, "bb");
+  ck_assert_int_eq(strrepo_reader_seek(&sr, 1), 0);
+  ck_assert_int_eq(strrepo_reader_next(&sr, out, sizeof out), 0);
+  ck_assert_str_eq(out, "aa");
+  ck_assert_int_eq(strrepo_reader_seek(&sr, 0), -1); /* encoding_type byte */
+  ck_assert_int_eq(strrepo_reader_seek(&sr, len + 1), -1);
+
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
 START_TEST(strrepo_reader_init_rejects_bad_encoding_and_empty) {
   strrepo_reader_t sr;
   static const unsigned char bad[] = {0x02, 'x', '\0'};
@@ -65,7 +119,10 @@ static Suite *strrepo_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, strrepo_round_trips_multiple_strings_in_order);
   tcase_add_test(tc, strrepo_reader_truncates_into_small_buffer);
+  tcase_add_test(tc, strrepo_reader_truncation_skips_rest_of_string);
+  tcase_add_test(tc, strrepo_reader_next_dup_returns_full_string);
   tcase_add_test(tc, strrepo_reader_init_rejects_bad_encoding_and_empty);
+  tcase_add_test(tc, strrepo_reader_seek_repositions_and_rejects_bad_offsets);
   suite_add_tcase(s, tc);
   return s;
 }

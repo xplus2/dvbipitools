@@ -39,33 +39,36 @@ assert_contains "$mpd" "<Latency target=" "manifest missing Latency target"
 assert_contains "$mpd" "availabilityTimeOffset" "manifest missing availabilityTimeOffset"
 assert_contains "$mpd" "<Resync type=" "manifest missing Resync element"
 
-first_seg=$(grep -oE '<S[^/]*/>' "$mpd" | while IFS= read -r line; do
-    t=$(echo "$line" | grep -oE 't="[0-9]+"' | grep -oE '[0-9]+')
-    d=$(echo "$line" | grep -oE 'd="[0-9]+"' | grep -oE '[0-9]+')
-    [ -n "$t" ] && time=$t
-    echo "dseg${time}.m4s"
-    time=$((time + d))
-done | head -1)
+assert_contains "$mpd" 'contentType="video"' "manifest missing video AdaptationSet"
+assert_contains "$mpd" 'contentType="audio"' "manifest missing audio AdaptationSet"
+assert_contains "$mpd" 'media="dsegv\$Time\$.m4s"' "manifest missing video SegmentTemplate media pattern"
+assert_contains "$mpd" 'media="dsega\$Time\$.m4s"' "manifest missing audio SegmentTemplate media pattern"
 
-[ -n "$first_seg" ] || fail "could not derive a segment name from SegmentTimeline"
+first_t=$(grep -oE '<S t="[0-9]+"' "$mpd" | head -1 | grep -oE '[0-9]+')
+[ -n "$first_t" ] || fail "could not derive a segment time from SegmentTimeline"
 
-timeout 10 curl -s -o "$WORK/init.mp4" "$BASE/init.mp4"
-timeout 10 curl -s -o "$WORK/$first_seg" "$BASE/$first_seg"
-[ -s "$WORK/init.mp4" ] || fail "empty init.mp4"
-[ -s "$WORK/$first_seg" ] || fail "empty $first_seg"
+for track in v a; do
+    case $track in v) kind=video ;; a) kind=audio ;; esac
+    timeout 10 curl -s -o "$WORK/init-$track.mp4" "$BASE/dinit$track.mp4"
+    timeout 10 curl -s -o "$WORK/seg-$track.m4s" "$BASE/dseg$track$first_t.m4s"
+    [ -s "$WORK/init-$track.mp4" ] || fail "empty dinit$track.mp4"
+    [ -s "$WORK/seg-$track.m4s" ] || fail "empty dseg$track$first_t.m4s"
 
-moof_count=$(grep -aco "moof" "$WORK/$first_seg")
-[ "${moof_count:-0}" -ge 2 ] || fail "expected multiple CMAF chunks (moof boxes) in $first_seg, got $moof_count"
+    moof_count=$(grep -aco "moof" "$WORK/seg-$track.m4s")
+    [ "${moof_count:-0}" -ge 2 ] || fail "expected multiple CMAF chunks (moof boxes) in dseg$track$first_t.m4s, got $moof_count"
 
-cat "$WORK/init.mp4" "$WORK/$first_seg" >"$WORK/combined.mp4"
-probe="$WORK/probe.json"
-ffprobe -v error -print_format json -show_streams "$WORK/combined.mp4" >"$probe" 2>"$WORK/ffprobe.log" \
-    || fail "ffprobe failed on init.mp4+$first_seg, see $WORK/ffprobe.log"
+    cat "$WORK/init-$track.mp4" "$WORK/seg-$track.m4s" >"$WORK/combined-$track.mp4"
+    probe="$WORK/probe-$track.json"
+    ffprobe -v error -print_format json -show_streams "$WORK/combined-$track.mp4" >"$probe" 2>"$WORK/ffprobe-$track.log" \
+        || fail "ffprobe failed on dinit$track.mp4+dseg$track$first_t.m4s, see $WORK/ffprobe-$track.log"
+    got=$(jq -r "[.streams[] | select(.codec_type == \"$kind\")] | length" "$probe")
+    [ "$got" = "1" ] || fail "expected one $kind stream in LL-DASH $track track, got '$got'"
+done
 
-video_codec=$(jq -r '[.streams[] | select(.codec_type == "video")][0].codec_name // empty' "$probe")
+video_codec=$(jq -r '[.streams[] | select(.codec_type == "video")][0].codec_name // empty' "$WORK/probe-v.json")
 [ "$video_codec" = "h264" ] || fail "expected h264 video in LL-DASH segment, got '$video_codec'"
 
-audio_codec=$(jq -r '[.streams[] | select(.codec_type == "audio")][0].codec_name // empty' "$probe")
+audio_codec=$(jq -r '[.streams[] | select(.codec_type == "audio")][0].codec_name // empty' "$WORK/probe-a.json")
 [ "$audio_codec" = "aac" ] || fail "expected aac audio in LL-DASH segment, got '$audio_codec'"
 
 kill $FFPID 2>/dev/null

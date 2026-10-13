@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 
 #include "lib/helper/argutil.h"
 #include "lib/helper/uriparse.h"
@@ -26,5 +27,5 @@ void mcast_describe(const config_t *cfg, char *buf, size_t n) {
 int sds_has_suffix(const char *s, const char *sfx) {
   size_t ls = strlen(s);
   size_t lx = strlen(sfx);
-  return ls >= lx && !strcmp(s + ls - lx, sfx);
+  return ls >= lx && !strcasecmp(s + ls - lx, sfx);
 }

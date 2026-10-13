@@ -225,18 +225,27 @@ static const metric_def_t DEFS[] = {
 };
 #define N_DEFS (sizeof DEFS / sizeof DEFS[0])
 
-/* backslash/quote/newline escaping per OpenMetrics/Prometheus text label-value grammar */
+/* backslash/quote/newline escaping per OpenMetrics/Prometheus text label-value grammar.
+   invalid UTF-8 becomes U+FFFD, scrape would be rejected otherwise */
 static void escape_label(const char *in, char *out, size_t out_cap) {
   size_t oi = 0;
-  for (; *in && oi + 2 < out_cap; in++) {
-    if (*in == '\\' || *in == '"') {
+  while (*in && oi + 4 < out_cap) {
+    size_t n = metrics_utf8_seq_len((const unsigned char *)in, strlen(in));
+    if (!n) {
+      memcpy(out + oi, "\xEF\xBF\xBD", 3);
+      oi += 3;
+      in++;
+    } else if (*in == '\\' || *in == '"') {
       out[oi++] = '\\';
-      out[oi++] = *in;
+      out[oi++] = *in++;
     } else if (*in == '\n') {
       out[oi++] = '\\';
       out[oi++] = 'n';
+      in++;
     } else {
-      out[oi++] = *in;
+      memcpy(out + oi, in, n);
+      oi += n;
+      in += n;
     }
   }
   out[oi] = '\0';
@@ -391,7 +400,7 @@ static void add_head(dstrbuf_t *sb, const char *name, const char *type, const ch
 }
 
 /* one pass over every stored entry, bucketed by def instead of one scan per def */
-void render_series(dstrbuf_t *sb, const store_t *st, int instance_labels, int openmetrics) {
+int render_series(dstrbuf_t *sb, const store_t *st, int instance_labels, int openmetrics) {
   int def_idx[DEF_ID_MAX]; /* metrics_id_t -> DEFS[] index, -1 if unused */
   size_t count[N_DEFS];
   size_t start[N_DEFS];
@@ -407,29 +416,29 @@ void render_series(dstrbuf_t *sb, const store_t *st, int instance_labels, int op
   count_entries(st, def_idx, count, &total);
 
   if (total) {
+    size_t cursor[N_DEFS];
+    size_t off = 0;
     refs = malloc(sizeof *refs * total);
-    if (refs) {
-      size_t cursor[N_DEFS];
-      size_t off = 0;
-      for (unsigned i = 0; i < N_DEFS; i++) {
-        start[i] = off;
-        cursor[i] = off;
-        off += count[i];
-      }
-      fill_entry_refs(st, def_idx, refs, cursor);
+    if (!refs) return -1;
+    for (unsigned i = 0; i < N_DEFS; i++) {
+      start[i] = off;
+      cursor[i] = off;
+      off += count[i];
     }
+    fill_entry_refs(st, def_idx, refs, cursor);
   }
 
   for (unsigned i = 0; i < N_DEFS; i++) {
     const metric_def_t *def = &DEFS[i];
-    if (!count[i] || !refs) continue;
-    add_head(sb, def->name, metric_kind_name(def->kind), def->help, openmetrics);
+    if (!count[i]) continue;
+    add_head(sb, def->name, openmetrics || def->kind != M_INFO ? metric_kind_name(def->kind) : "gauge", def->help, openmetrics);
     for (size_t k = start[i]; k < start[i] + count[i]; k++) {
       const entry_ref_t *e = &refs[k];
       char label[METRICS_LABEL_MAX + 1];
       size_t mark;
-      memcpy(label, e->label, e->label_len);
-      label[e->label_len] = '\0';
+      size_t ll = e->label_len < METRICS_LABEL_MAX ? e->label_len : METRICS_LABEL_MAX;
+      memcpy(label, e->label, ll);
+      label[ll] = '\0';
       dstrbuf_add(sb, def->name);
       dstrbuf_add(sb, "{");
       mark = sb->len;
@@ -455,6 +464,7 @@ void render_series(dstrbuf_t *sb, const store_t *st, int instance_labels, int op
     }
   }
   free(refs);
+  return sb->buf ? 0 : -1;
 }
 
 static void add_sample(dstrbuf_t *sb, const char *series, uint64_t value) {
@@ -464,7 +474,7 @@ static void add_sample(dstrbuf_t *sb, const char *series, uint64_t value) {
   dstrbuf_add(sb, "\n");
 }
 
-static void render_snapshot_age(dstrbuf_t *sb, const store_t *st, double now_mono) {
+static void render_snapshot_stamps(dstrbuf_t *sb, const store_t *st, double now_mono) {
   int any = 0;
   for (int i = 0; i < STORE_MAX_INSTANCES; i++) {
     if (st->slots[i].valid) any = 1;
@@ -478,6 +488,17 @@ static void render_snapshot_age(dstrbuf_t *sb, const store_t *st, double now_mon
     dstrbuf_add(sb, "dvbipi_metrics_snapshot_age_seconds{");
     append_base_labels(sb, slot);
     dstrbuf_appendf(sb, "} %.3f\n", now_mono - slot->received_mono);
+  }
+
+  add_head(sb, "dvbipi_metrics_snapshot_time_seconds", "gauge", "sender's unix time of this instance's last snapshot", 1);
+  for (int i = 0; i < STORE_MAX_INSTANCES; i++) {
+    const store_slot_t *slot = &st->slots[i];
+    if (!slot->valid) continue;
+    dstrbuf_add(sb, "dvbipi_metrics_snapshot_time_seconds{");
+    append_base_labels(sb, slot);
+    dstrbuf_add(sb, "} ");
+    dstrbuf_add_u64(sb, slot->snapshot_time);
+    dstrbuf_add(sb, "\n");
   }
 }
 
@@ -508,18 +529,26 @@ static void render_self_metrics(dstrbuf_t *sb, const store_t *st) {
 
   add_head(sb, "dvbipi_metrics_http_requests_total", "counter", "/metrics HTTP requests by response status", 1);
   add_sample(sb, "dvbipi_metrics_http_requests_total{status=\"200\"}", st->stats.http_requests_200);
+  add_sample(sb, "dvbipi_metrics_http_requests_total{status=\"401\"}", st->stats.http_requests_401);
   add_sample(sb, "dvbipi_metrics_http_requests_total{status=\"404\"}", st->stats.http_requests_404);
+  add_sample(sb, "dvbipi_metrics_http_requests_total{status=\"405\"}", st->stats.http_requests_405);
+  add_sample(sb, "dvbipi_metrics_http_requests_total{status=\"500\"}", st->stats.http_requests_500);
 }
 
-void render_openmetrics(const store_t *st, double now_mono, char **out, size_t *out_len) {
+int render_openmetrics(const store_t *st, double now_mono, char **out, size_t *out_len) {
   dstrbuf_t sb;
   dstrbuf_init(&sb);
-  render_series(&sb, st, 1, 1);
-  render_snapshot_age(&sb, st, now_mono);
+  if (render_series(&sb, st, 1, 1)) {
+    free(sb.buf);
+    return -1;
+  }
+  render_snapshot_stamps(&sb, st, now_mono);
   render_self_metrics(&sb, st);
   dstrbuf_add(&sb, "# EOF\n");
+  if (!sb.buf) return -1;
   *out = sb.buf;
   *out_len = sb.len;
+  return 0;
 }
 
 static int local_flush(void *ctx, const unsigned char *buf, size_t len) {
@@ -552,9 +581,12 @@ int render_local(metrics_component_t component, metrics_extra_fn fill, void *ctx
   }
   store_ingest(&st, w.buf, len, 0.0, 0);
   dstrbuf_init(&sb);
-  render_series(&sb, &st, 0, 0);
+  if (render_series(&sb, &st, 0, 0)) {
+    free(sb.buf);
+    store_free(&st);
+    return -1;
+  }
   store_free(&st);
-  if (!sb.buf) return -1;
   *out = sb.buf;
   *out_len = sb.len;
   return 0;

@@ -23,11 +23,14 @@
 #define RET_GAP_MAX 32       /* missing seqs tracked per gap; a bigger one just resyncs, matching no-RET behavior */
 #define RET_HOLD_CAP 1500    /* held slot size, one Ethernet MTU; a bigger datagram bypasses holding entirely */
 #define RET_OUTQ_SLOTS (RET_GAP_MAX + 1)
-#define RET_OUTQ_CAP 65536   /* must fit any real received datagram, unlike RET_HOLD_CAP */
+#define RET_RAW_CAP 9216     /* jumbo frame, larger datagrams are dropped by mcast_recv */
+#define RET_OUTQ_CAP RET_RAW_CAP /* payload never exceeds its datagram */
 
 typedef struct {
   int used;
   size_t len;
+  double deadline;
+  double next_nack;
   unsigned char data[RET_HOLD_CAP];
 } ret_hold_t;
 
@@ -50,7 +53,6 @@ struct ret_client {
   int gap_pending;
   size_t hold_n;
   size_t hold_head;
-  double gap_deadline;
   ret_hold_t hold[RET_GAP_MAX];
 
   ret_outq_t outq[RET_OUTQ_SLOTS];
@@ -99,35 +101,15 @@ static void gap_shift(ret_client_t *r) {
   r->expected_seq++;
 }
 
-void ret_client_flush_ready(ret_client_t *r, double now) {
-  while (r->gap_pending) {
-    const ret_hold_t *h = hold_slot(r, 0);
-    if (h->used) {
-      outq_push(r, h->data, h->len);
-      gap_shift(r);
-    } else if (now >= r->gap_deadline) {
-      log_code("LW700119", "ret: seq %u lost, not repaired in time", (unsigned)r->expected_seq);
-      gap_shift(r);
-    } else {
-      break;
-    }
-    if (!r->hold_n)
-      r->gap_pending = 0;
-  }
+static void hold_arm(ret_client_t *r, size_t slot, double now) {
+  ret_hold_t *h = hold_slot(r, slot);
+  h->used = 0;
+  h->deadline = now + (double)r->wait_ms / 1000.0;
+  h->next_nack = now + (double)r->wait_ms / 3000.0;
 }
 
-/* forces the gap closed now, ignoring the deadline; used on ssrc change or a disjoint new gap */
-static void abandon_gap(ret_client_t *r) {
-  while (r->gap_pending) {
-    const ret_hold_t *h = hold_slot(r, 0);
-    if (h->used)
-      outq_push(r, h->data, h->len);
-    else
-      log_code("LW700120", "ret: seq %u lost, gap abandoned", (unsigned)r->expected_seq);
-    gap_shift(r);
-    if (!r->hold_n)
-      r->gap_pending = 0;
-  }
+static int nack_due(const ret_hold_t *h, double now) {
+  return !h->used && h->next_nack <= now && now < h->deadline;
 }
 
 static void send_nack(ret_client_t *r, uint16_t start, size_t missing) {
@@ -149,6 +131,66 @@ static void send_nack(ret_client_t *r, uint16_t start, size_t missing) {
   }
   len = rtcp_build_ff(r->sender_ssrc, r->ssrc, entries, n, pkt, sizeof pkt);
   if (len) send(r->uni_fd, pkt, len, 0);
+}
+
+/* re-NACK missing runs; two retries per wait_ms budget */
+static void nack_retry(ret_client_t *r, double now) {
+  size_t i = 0;
+  while (i < r->hold_n) {
+    size_t run = 0;
+    while (i + run < r->hold_n && nack_due(hold_slot(r, i + run), now)) {
+      hold_slot(r, i + run)->next_nack = now + (double)r->wait_ms / 3000.0;
+      run++;
+    }
+    if (run) {
+      send_nack(r, (uint16_t)(r->expected_seq + i), run);
+      i += run;
+    } else {
+      i++;
+    }
+  }
+}
+
+/* earliest of head deadline and next retry; only meaningful while gap_pending */
+static double gap_wake(ret_client_t *r) {
+  double t = hold_slot(r, 0)->deadline;
+  for (size_t i = 0; i < r->hold_n; i++) {
+    const ret_hold_t *h = hold_slot(r, i);
+    if (!h->used && h->next_nack < h->deadline && h->next_nack < t) t = h->next_nack;
+  }
+  return t;
+}
+
+void ret_client_flush_ready(ret_client_t *r, double now) {
+  while (r->gap_pending) {
+    const ret_hold_t *h = hold_slot(r, 0);
+    if (h->used) {
+      outq_push(r, h->data, h->len);
+      gap_shift(r);
+    } else if (now >= h->deadline) {
+      log_code("LW700119", "ret: seq %u lost, not repaired in time", (unsigned)r->expected_seq);
+      gap_shift(r);
+    } else {
+      break;
+    }
+    if (!r->hold_n)
+      r->gap_pending = 0;
+  }
+  if (r->gap_pending) nack_retry(r, now);
+}
+
+/* forces the gap closed now, ignoring the deadline; used on ssrc change or a disjoint new gap */
+static void abandon_gap(ret_client_t *r) {
+  while (r->gap_pending) {
+    const ret_hold_t *h = hold_slot(r, 0);
+    if (h->used)
+      outq_push(r, h->data, h->len);
+    else
+      log_code("LW700120", "ret: seq %u lost, gap abandoned", (unsigned)r->expected_seq);
+    gap_shift(r);
+    if (!r->hold_n)
+      r->gap_pending = 0;
+  }
 }
 
 /* stores payload into r->hold[slot] if it fits (1), else logs once and returns 0 */
@@ -191,10 +233,10 @@ static void handle_original_seq(ret_client_t *r, uint16_t seq, const unsigned ch
       r->hold_n = missing + 1;
       r->hold_head = 0;
       memset(r->hold, 0, sizeof r->hold);
+      for (size_t i = 0; i < missing; i++) hold_arm(r, i, now);
       hold_slot(r, missing)->used = 1;
       hold_slot(r, missing)->len = len;
       memcpy(hold_slot(r, missing)->data, payload, len);
-      r->gap_deadline = now + (double)r->wait_ms / 1000.0;
       send_nack(r, r->expected_seq, missing);
       return;
     }
@@ -205,11 +247,14 @@ static void handle_original_seq(ret_client_t *r, uint16_t seq, const unsigned ch
       if (!hold_slot(r, (size_t)delta)->used) hold_store(r, (size_t)delta, payload, len);
       return;
     }
-    if ((size_t)delta == r->hold_n && r->hold_n < RET_GAP_MAX && hold_store(r, r->hold_n, payload, len)) {
-      r->hold_n++;
+    if ((size_t)delta < RET_GAP_MAX && hold_store(r, (size_t)delta, payload, len)) {
+      size_t first = r->hold_n;
+      for (size_t i = first; i < (size_t)delta; i++) hold_arm(r, i, now);
+      r->hold_n = (size_t)delta + 1;
+      if ((size_t)delta > first) send_nack(r, (uint16_t)(r->expected_seq + first), (size_t)delta - first);
       return;
     }
-    abandon_gap(r); /* disjoint from the current window, or oversized: retry fresh below */
+    abandon_gap(r); /* beyond the window, or oversized: retry fresh below */
   }
 }
 
@@ -311,13 +356,14 @@ ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size
   int timeout_ms;
   double now;
   ssize_t n;
+  unsigned char raw[RET_RAW_CAP];
 
   n = outq_pop(r, buf, cap);
   if (n > 0) return n;
   now = mono_seconds();
   timeout_ms = 1000;
   if (r->gap_pending) {
-    double remain_ms = (r->gap_deadline - now) * 1000.0;
+    double remain_ms = (gap_wake(r) - now) * 1000.0;
     if (remain_ms < 0) remain_ms = 0;
     if (remain_ms < timeout_ms) timeout_ms = remain_ms > 0 ? (int)remain_ms + 1 : 0;
   }
@@ -346,7 +392,6 @@ ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size
   now = mono_seconds();
 
   if (pfd[mi].revents & POLLIN) {
-    unsigned char raw[65536];
     ssize_t rn = mcast_recv(main, raw, sizeof raw, NULL);
     if (rn < 0) return -1;
     if (rn > 0) {
@@ -357,13 +402,11 @@ ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size
   }
 
   if (pfd[ui].revents & (POLLIN | POLLERR)) {
-    unsigned char raw[65536];
     ssize_t rn = recv(r->uni_fd, raw, sizeof raw, MSG_DONTWAIT);
     if (rn > 0) ret_client_on_repair(r, raw, (size_t)rn, now);
   }
 
   if (ri >= 0 && (pfd[ri].revents & POLLIN)) {
-    unsigned char raw[65536];
     ssize_t rn = mcast_recv(r->repair, raw, sizeof raw, NULL);
     if (rn > 0) ret_client_on_repair(r, raw, (size_t)rn, now);
   }

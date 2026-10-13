@@ -261,6 +261,49 @@ START_TEST(rtmp_error_reply_fires_error_cb) {
 }
 END_TEST
 
+START_TEST(rtmp_error_reply_to_release_and_fcpublish_is_ignored) {
+  capture_t cap;
+  rtmp_t *r = make_client(&cap);
+  unsigned char msg[512];
+  size_t n;
+
+  ck_assert_ptr_nonnull(r);
+  run_handshake(r, &cap);
+
+  n = build_error(msg, 0);
+  ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+  ck_assert_str_eq(cap.error, "");
+  n = build_result_connect(msg);
+  ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+  n = build_error(msg, 0);
+  ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+  ck_assert_str_eq(cap.error, "");
+  n = build_result_create_stream(msg, 5.0);
+  ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+  ck_assert_int_eq(cap.ready, 1);
+
+  rtmp_free(r);
+}
+END_TEST
+
+START_TEST(rtmp_error_reply_to_create_stream_fires_error_cb) {
+  capture_t cap;
+  rtmp_t *r = make_client(&cap);
+  unsigned char msg[512];
+  size_t n;
+
+  ck_assert_ptr_nonnull(r);
+  run_handshake(r, &cap);
+  n = build_result_connect(msg);
+  ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+  n = build_error(msg, 2);
+  ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+  ck_assert_str_eq(cap.error, "_error");
+
+  rtmp_free(r);
+}
+END_TEST
+
 START_TEST(rtmp_connect_includes_authmod_when_user_set) {
   capture_t cap;
   rtmp_t *r = make_client_with_auth(&cap, "bob", "hunter2");
@@ -444,6 +487,39 @@ START_TEST(chunk_parser_handles_malformed_input_bytewise) {
 
   for (size_t i = 0; i < c->len && result == 0; i++) result = rtmp_feed(r, c->bytes + i, 1);
   ck_assert_msg(result == c->expect, "%s: bytewise feed", c->name);
+  rtmp_free(r);
+}
+END_TEST
+
+START_TEST(chunk_parser_rejects_new_header_mid_message) {
+  capture_t cap;
+  rtmp_t *r = client_after_handshake(&cap);
+  unsigned char first[14] = {0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x63, 0x00, 0x00, 0x00, 0x00, 0xAA, 0xBB};
+  unsigned char second[8] = {0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x63};
+
+  set_in_chunk_size(r, 2);
+  feed_ok(r, first, sizeof first);
+  ck_assert_int_eq(rtmp_feed(r, second, sizeof second), -1);
+  rtmp_free(r);
+}
+END_TEST
+
+START_TEST(chunk_parser_applies_new_chunk_size_to_message_in_progress) {
+  capture_t cap;
+  rtmp_t *r = client_after_handshake(&cap);
+  static const unsigned char head[] = {0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0A, 0x63, 0x00, 0x00, 0x00, 0x00, 1, 2, 3, 4};
+  static const unsigned char rest[] = {0xC5, 5, 6, 7, 8, 9, 10};
+
+  set_in_chunk_size(r, 4);
+  feed_ok(r, head, sizeof head);
+  set_in_chunk_size(r, 6);
+  feed_ok(r, rest, sizeof rest);
+  ck_assert_int_eq(r->parser.state, RTMP_PARSE_INIT);
+  for (unsigned i = 0; i < RTMP_N_CHAN; i++)
+    if (r->in_chan[i].used && r->in_chan[i].cid == 5) {
+      ck_assert_uint_eq(r->in_chan[i].bytes, 0u);
+      ck_assert_int_eq(memcmp(r->in_chan[i].payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A", 10), 0);
+    }
   rtmp_free(r);
 }
 END_TEST
@@ -721,6 +797,8 @@ static Suite *rtmp_suite(void) {
   tcase_add_test(tc, rtmp_send_before_ready_fails);
   tcase_add_test(tc, rtmp_send_after_ready_uses_created_stream_id);
   tcase_add_test(tc, rtmp_error_reply_fires_error_cb);
+  tcase_add_test(tc, rtmp_error_reply_to_release_and_fcpublish_is_ignored);
+  tcase_add_test(tc, rtmp_error_reply_to_create_stream_fires_error_cb);
   tcase_add_test(tc, rtmp_connect_includes_authmod_when_user_set);
   tcase_add_test(tc, rtmp_needauth_error_without_crypto_fails_gracefully);
   tcase_add_loop_test(tc, handshake_c1_layout_and_determinism, 0, (int)(sizeof c1_timestamps / sizeof c1_timestamps[0]));
@@ -729,6 +807,8 @@ static Suite *rtmp_suite(void) {
   tcase_add_test(tc, handshake_incomplete_s1_and_s2_emit_nothing);
   tcase_add_loop_test(tc, chunk_parser_handles_malformed_input, 0, (int)(sizeof chunk_cases / sizeof chunk_cases[0]));
   tcase_add_loop_test(tc, chunk_parser_handles_malformed_input_bytewise, 0, (int)(sizeof chunk_cases / sizeof chunk_cases[0]));
+  tcase_add_test(tc, chunk_parser_rejects_new_header_mid_message);
+  tcase_add_test(tc, chunk_parser_applies_new_chunk_size_to_message_in_progress);
   tcase_add_test(tc, chunk_parser_rejects_ninth_chunk_stream);
   tcase_add_loop_test(tc, chunk_parser_decodes_extended_chunk_stream_ids, 0, (int)(sizeof cid_cases / sizeof cid_cases[0]));
   tcase_add_test(tc, chunk_parser_applies_extended_timestamp);

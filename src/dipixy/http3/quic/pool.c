@@ -19,8 +19,6 @@ _Thread_local int *t_h3_pool_free = NULL;
 _Thread_local int t_h3_pool_free_n = 0;
 _Thread_local uint32_t t_h3_hash_cap = 0;
 
-#define H3_HASH_TOMB ((h3_conn_t *)(uintptr_t)1)
-
 int h3_tables_alloc(void) {
   if (t_h3_init)
     return 1;
@@ -67,7 +65,7 @@ static uint32_t cid_hash(const uint8_t *data, size_t len) {
 int h3_hash_insert(const ngtcp2_cid *cid, h3_conn_t *c) {
   uint32_t i = cid_hash(cid->data, cid->datalen) & (t_h3_hash_cap - 1);
   for (uint32_t n = 0; n < t_h3_hash_cap; n++, i = (i + 1) & (t_h3_hash_cap - 1)) {
-    if (t_h3_hash[i].c == NULL || t_h3_hash[i].c == H3_HASH_TOMB) {
+    if (t_h3_hash[i].c == NULL) {
       t_h3_hash[i].c = c;
       t_h3_hash[i].cid = *cid;
       return 0;
@@ -76,16 +74,27 @@ int h3_hash_insert(const ngtcp2_cid *cid, h3_conn_t *c) {
   return -1;
 }
 
-/* tombstones only, cid.c slot */
+/* backward-shift delete: no tombstones */
 void h3_hash_delete(const ngtcp2_cid *cid, const h3_conn_t *c) {
-  uint32_t i = cid_hash(cid->data, cid->datalen) & (t_h3_hash_cap - 1);
-  for (uint32_t n = 0; n < t_h3_hash_cap; n++, i = (i + 1) & (t_h3_hash_cap - 1)) {
+  const uint32_t mask = t_h3_hash_cap - 1;
+  uint32_t i = cid_hash(cid->data, cid->datalen) & mask;
+  uint32_t n = 0;
+  for (; n < t_h3_hash_cap; n++, i = (i + 1) & mask) {
     if (t_h3_hash[i].c == NULL) return;
-    if (t_h3_hash[i].c == c && ngtcp2_cid_eq(&t_h3_hash[i].cid, cid)) {
-      t_h3_hash[i].c = H3_HASH_TOMB;
-      return;
-    }
+    if (t_h3_hash[i].c == c && ngtcp2_cid_eq(&t_h3_hash[i].cid, cid)) break;
   }
+  if (n == t_h3_hash_cap) return;
+  uint32_t hole = i;
+  uint32_t j = i;
+  for (uint32_t k = 1; k < t_h3_hash_cap; k++) {
+    j = (j + 1) & mask;
+    if (t_h3_hash[j].c == NULL) break;
+    uint32_t home = cid_hash(t_h3_hash[j].cid.data, t_h3_hash[j].cid.datalen) & mask;
+    if (((j - home) & mask) < ((j - hole) & mask)) continue;
+    t_h3_hash[hole] = t_h3_hash[j];
+    hole = j;
+  }
+  t_h3_hash[hole].c = NULL;
 }
 
 int h3_cid_add(h3_conn_t *c, const ngtcp2_cid *cid) {
@@ -111,7 +120,7 @@ h3_conn_t *find_conn(const uint8_t *pkt, size_t pktlen) {
   for (uint32_t n = 0; n < t_h3_hash_cap; n++, i = (i + 1) & (t_h3_hash_cap - 1)) {
     const h3_hent_t *e = &t_h3_hash[i];
     if (!e->c) return NULL;
-    if (e->c == H3_HASH_TOMB || e->c->done) continue;
+    if (e->c->done) continue;
     if (e->cid.datalen == vc.dcidlen && memcmp(e->cid.data, vc.dcid, vc.dcidlen) == 0) return e->c;
   }
   return NULL;

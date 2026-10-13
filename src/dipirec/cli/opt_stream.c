@@ -80,6 +80,18 @@ args_status_t rec_opt_stream(rec_opt_t *p, int c) {
         return ARGS_ERR;
       }
       break;
+    case OPT_AL_FEC_OUT:
+      if (fec2022_parse_ld(optarg, &cfg->al_fec_out_l, &cfg->al_fec_out_d)) {
+        argerr("CS000702", "invalid --al-fec-out: %s (want L:D, L*D<=400, L<=40)", optarg);
+        return ARGS_ERR;
+      }
+      break;
+    case OPT_AL_FEC_PORT_OUT:
+      if (argutil_port_parse(optarg, &cfg->al_fec_out_port)) {
+        argerr("CS000703", "invalid --al-fec-port-out: %s", optarg);
+        return ARGS_ERR;
+      }
+      break;
     default:
       return OPT_UNHANDLED;
   }

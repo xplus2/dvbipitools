@@ -47,6 +47,26 @@ START_TEST(wrapper_build_compressed_round_trips) {
 }
 END_TEST
 
+START_TEST(wrapper_build_oversize_container_stays_uncompressed) {
+  size_t len = 0x1000000;
+  unsigned char *container = calloc(len, 1);
+  unsigned char *wrapped, *out;
+  size_t wrapped_len, out_len;
+
+  ck_assert_ptr_nonnull(container);
+  ck_assert_int_eq(wrapper_build(container, len, 1, &wrapped, &wrapped_len), 0);
+  ck_assert_int_eq(wrapped[0], WRAPPER_METHOD_NONE);
+  ck_assert_uint_eq(wrapped_len, 1 + len);
+
+  ck_assert_int_eq(wrapper_parse(wrapped, wrapped_len, &out, &out_len), 0);
+  ck_assert_uint_eq(out_len, len);
+
+  free(container);
+  free(wrapped);
+  free(out);
+}
+END_TEST
+
 START_TEST(wrapper_parse_rejects_empty_buffer) {
   unsigned char *out;
   size_t out_len;
@@ -83,6 +103,7 @@ static Suite *wrapper_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, wrapper_build_uncompressed_round_trips);
   tcase_add_test(tc, wrapper_build_compressed_round_trips);
+  tcase_add_test(tc, wrapper_build_oversize_container_stays_uncompressed);
   tcase_add_test(tc, wrapper_parse_rejects_empty_buffer);
   tcase_add_test(tc, wrapper_parse_rejects_truncated_zlib_header);
   tcase_add_test(tc, wrapper_parse_rejects_corrupt_zlib_stream);

@@ -24,7 +24,10 @@ typedef struct {
   int pts_seen;
 } pts_unwrap_t;
 
-/* unwrap a 33-bit PTS into a monotonic tick count, ms = return/90 */
+/* unwrap a 33-bit PTS into a monotonic 90 kHz tick count */
+int64_t pts_unwrap_ticks(pts_unwrap_t *st, uint64_t raw);
+
+/* same, in ms (ticks / 90) */
 int64_t pts_unwrap(pts_unwrap_t *st, uint64_t raw);
 
 #define PTS_DISC_MS 10000
@@ -45,5 +48,20 @@ int64_t pts_disc_shift(pts_disc_t *d, int64_t raw, int64_t next);
 
 /* same, no state change. ref: any current media position. for side channels (teletext) */
 int64_t pts_disc_peek(const pts_disc_t *d, int64_t raw, int64_t ref);
+
+/* audio clock: anchor ms + exact sample count, no per-frame ms truncation */
+typedef struct {
+  int64_t base_ms;
+  uint64_t samples;
+} aclk_t;
+
+static inline void aclk_anchor(aclk_t *c, int64_t ms) {
+  c->base_ms = ms;
+  c->samples = 0;
+}
+
+static inline int64_t aclk_ms(const aclk_t *c, uint64_t rate) {
+  return c->base_ms + (int64_t)(c->samples * 1000 / rate);
+}
 
 #endif

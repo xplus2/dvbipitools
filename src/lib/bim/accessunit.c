@@ -13,7 +13,9 @@
 
 static int emit_fuu(bitwriter_t *outer, int ctxpath, bitwriter_t *fbw) {
   size_t flen;
-  const unsigned char *fbytes = bitwriter_data(fbw, &flen);
+  const unsigned char *fbytes;
+  if (bitwriter_flush(fbw)) return -1;
+  fbytes = bitwriter_data(fbw, &flen);
   if (bitwriter_put_vluimsbf8(outer, (uint64_t)flen)) return -1;
   if (bitwriter_put(outer, (uint64_t)ctxpath, 16)) return -1;
   return bitwriter_put_bytes(outer, fbytes, flen);
@@ -44,73 +46,118 @@ static int channel_idx_find(const channel_idx_t *idx, int n, const char *id) {
   return -1;
 }
 
-int accessunit_encode(accessunit_scratch_t *sc, const bcg_doc_t *doc, bitwriter_t *bw, strrepo_writer_t *sw, int *out_nfuu) {
+static int prog_in_range(int ch, int from, int to) { return ch >= from && ch < to; }
+
+static int record_ref(accessunit_scratch_t *sc, int n, bitwriter_t *bw, const strrepo_writer_t *sw) {
+  if (bitwriter_flush(bw)) return -1;
+  sc->refs[n].au_off = (uint32_t)bw->len;
+  sc->refs[n].str_off = (uint32_t)sw->len;
+  return 0;
+}
+
+int accessunit_encode_range(accessunit_scratch_t *sc, const bcg_doc_t *doc, int ch_from, int ch_to, bitwriter_t *bw, strrepo_writer_t *sw, int *out_nfuu, int *out_nchan_prog) {
   int i;
   int nfuu = 0;
+  int nchan_prog = 0;
+  int nref = 0;
   int rc = -1;
   channel_idx_t *cidx = NULL;
   int *prog_channel = NULL;      /* channel index per programme, -1 if unmatched */
   int *channel_has_prog = NULL;  /* 1 per channel with at least one programme */
+  int *first = NULL;             /* first programme per channel, -1 none */
+  int *last = NULL;
+  int *next = NULL;              /* next programme of same channel, -1 ends */
 
   if (doc->channel_count) {
     cidx = malloc(sizeof *cidx * (size_t)doc->channel_count);
     channel_has_prog = calloc((size_t)doc->channel_count, sizeof *channel_has_prog);
-    if (!cidx || !channel_has_prog) goto done;
+    first = malloc(sizeof *first * (size_t)doc->channel_count);
+    last = malloc(sizeof *last * (size_t)doc->channel_count);
+    if (!cidx || !channel_has_prog || !first || !last) goto done;
     for (i = 0; i < doc->channel_count; i++) {
       cidx[i].id = doc->channels[i].id;
       cidx[i].idx = i;
+      first[i] = last[i] = -1;
     }
     qsort(cidx, (size_t)doc->channel_count, sizeof *cidx, channel_idx_cmp);
   }
   if (doc->programme_count) {
     prog_channel = malloc(sizeof *prog_channel * (size_t)doc->programme_count);
-    if (!prog_channel) goto done;
+    next = malloc(sizeof *next * (size_t)doc->programme_count);
+    if (!prog_channel || !next) goto done;
     for (i = 0; i < doc->programme_count; i++) {
       prog_channel[i] = channel_idx_find(cidx, doc->channel_count, doc->programmes[i].channel_id);
-      if (channel_has_prog && prog_channel[i] >= 0) channel_has_prog[prog_channel[i]] = 1;
+      next[i] = -1;
+      if (prog_channel[i] >= 0) {
+        int ch = prog_channel[i];
+        channel_has_prog[ch] = 1;
+        if (last[ch] < 0) first[ch] = i;
+        else next[last[ch]] = i;
+        last[ch] = i;
+      }
     }
   }
 
+  if (ch_from < 0) ch_from = 0;
+  if (ch_to > doc->channel_count) ch_to = doc->channel_count;
   for (i = 0; i < doc->programme_count; i++) {
-    if (prog_channel[i] >= 0 && doc->channels[prog_channel[i]].uri[0]) nfuu++;
+    if (prog_in_range(prog_channel[i], ch_from, ch_to) && doc->channels[prog_channel[i]].uri[0]) nfuu++;
   }
-  for (i = 0; i < doc->channel_count; i++) {
+  for (i = ch_from; i < ch_to; i++) {
+    nchan_prog += channel_has_prog[i];
     if (doc->channels[i].uri[0] && channel_has_prog[i]) nfuu++;
   }
-  for (i = 0; i < doc->channel_count; i++) {
+  for (i = ch_from; i < ch_to; i++) {
     if (doc->channels[i].uri[0]) nfuu++;
+  }
+  if (nfuu > sc->refs_cap) {
+    void *np = array_grow(sc->refs, &sc->refs_cap, nfuu, sizeof *sc->refs);
+    if (!np) goto done;
+    sc->refs = np;
   }
 
   if (bitwriter_put_vluimsbf8(bw, (uint64_t)nfuu)) goto done;
   for (i = 0; i < doc->programme_count; i++) {
     const bcg_programme_t *pr = &doc->programmes[i];
-    if (prog_channel[i] < 0 || !doc->channels[prog_channel[i]].uri[0]) continue;
+    if (!prog_in_range(prog_channel[i], ch_from, ch_to) || !doc->channels[prog_channel[i]].uri[0]) continue;
     bitwriter_reset(&sc->fbw);
+    if (record_ref(sc, nref++, bw, sw)) goto done;
     if (fragment_encode_program_information(pr, &sc->fbw, sw) || emit_fuu(bw, DVBCTXPATH_PROGRAM_INFORMATION, &sc->fbw)) goto done;
   }
 
-  for (i = 0; i < doc->channel_count; i++) {
+  for (i = ch_from; i < ch_to; i++) {
     const bcg_channel_t *c = &doc->channels[i];
     if (!c->uri[0] || !channel_has_prog[i]) continue;
     bitwriter_reset(&sc->fbw);
-    if (fragment_encode_schedule(c->id, doc->programmes, doc->programme_count, &sc->fbw, sw) || emit_fuu(bw, DVBCTXPATH_SCHEDULE, &sc->fbw)) goto done;
+    if (record_ref(sc, nref++, bw, sw)) goto done;
+    if (fragment_encode_schedule(c->id, doc->programmes, first[i], next, &sc->fbw, sw) || emit_fuu(bw, DVBCTXPATH_SCHEDULE, &sc->fbw)) goto done;
   }
 
-  for (i = 0; i < doc->channel_count; i++) {
+  for (i = ch_from; i < ch_to; i++) {
     const bcg_channel_t *c = &doc->channels[i];
     if (!c->uri[0]) continue;
     bitwriter_reset(&sc->fbw);
+    if (record_ref(sc, nref++, bw, sw)) goto done;
     if (fragment_encode_service_information(c, &sc->fbw, sw) || emit_fuu(bw, DVBCTXPATH_SERVICE_INFORMATION, &sc->fbw)) goto done;
   }
 
+  if (bitwriter_flush(bw)) goto done;
   *out_nfuu = nfuu;
+  if (out_nchan_prog) *out_nchan_prog = nchan_prog;
   rc = 0;
 
 done:
   free(cidx);
   free(prog_channel);
   free(channel_has_prog);
+  free(first);
+  free(last);
+  free(next);
   return rc;
+}
+
+int accessunit_encode(accessunit_scratch_t *sc, const bcg_doc_t *doc, bitwriter_t *bw, strrepo_writer_t *sw, int *out_nfuu) {
+  return accessunit_encode_range(sc, doc, 0, doc->channel_count, bw, sw, out_nfuu, NULL);
 }
 
 typedef struct {
@@ -133,14 +180,14 @@ static int ptext_lookup(void *vctx, const char *crid, bcg_programme_t *pr) {
     }
   }
   if (i < 0) return -1;
-  bufcpy(pr->title, sizeof pr->title, ctx->arr[i].title);
-  bufcpy(pr->desc, sizeof pr->desc, ctx->arr[i].desc);
-  bufcpy(pr->category, sizeof pr->category, ctx->arr[i].category);
+  if (bcg_set_text(&pr->title, ctx->arr[i].title) || bcg_set_text(&pr->desc, ctx->arr[i].desc) || bcg_set_text(&pr->category, ctx->arr[i].category))
+    return -2;
   return 0;
 }
 
 typedef struct {
   int context_path;
+  size_t start; /* FUULength position */
   size_t offset;
   size_t length;
 } fuu_index_t;
@@ -150,22 +197,31 @@ void accessunit_scratch_init(accessunit_scratch_t *sc) { memset(sc, 0, sizeof *s
 void accessunit_scratch_free(accessunit_scratch_t *sc) {
   free(sc->fuus);
   free(sc->ptext);
+  free(sc->refs);
   bitwriter_free(&sc->fbw);
   memset(sc, 0, sizeof *sc);
 }
 
 static int decode_program_info_fuu(accessunit_scratch_t *sc, bcg_progtext_t **ptext, int *ptext_n, bitreader_t *fbr, strrepo_reader_t *sr) {
   bcg_programme_t tmp;
+  bcg_progtext_t *pt;
+  char crid[BCG_ID_LEN * 3 + 64];
   if (*ptext_n >= sc->ptext_cap) {
     void *np = array_grow(sc->ptext, &sc->ptext_cap, *ptext_n + 1, sizeof **ptext);
     if (!np) return -1;
     sc->ptext = np;
     *ptext = sc->ptext;
   }
-  if (fragment_decode_program_information(fbr, sr, (*ptext)[*ptext_n].crid, sizeof (*ptext)[*ptext_n].crid, &tmp)) return -1;
-  bufcpy((*ptext)[*ptext_n].title, sizeof (*ptext)[*ptext_n].title, tmp.title);
-  bufcpy((*ptext)[*ptext_n].desc, sizeof (*ptext)[*ptext_n].desc, tmp.desc);
-  bufcpy((*ptext)[*ptext_n].category, sizeof (*ptext)[*ptext_n].category, tmp.category);
+  if (fragment_decode_program_information(fbr, sr, crid, sizeof crid, &tmp)) return -1;
+  pt = &(*ptext)[*ptext_n];
+  pt->crid = strdup(crid);
+  if (!pt->crid) {
+    bcg_programme_free_text(&tmp);
+    return -1;
+  }
+  pt->title = tmp.title;
+  pt->desc = tmp.desc;
+  pt->category = tmp.category;
   (*ptext_n)++;
   return 0;
 }
@@ -180,8 +236,20 @@ static int resolve_fuu_phase(int context_path) {
   }
 }
 
+/* NULL on alloc failure: lookup falls back to linear scan */
+static channel_idx_t *build_ptext_index(const bcg_progtext_t *arr, int n) {
+  channel_idx_t *idx = malloc(sizeof *idx * (size_t)n);
+  if (!idx) return NULL;
+  for (int k = 0; k < n; k++) {
+    idx[k].id = arr[k].crid;
+    idx[k].idx = k;
+  }
+  qsort(idx, (size_t)n, sizeof *idx, channel_idx_cmp);
+  return idx;
+}
+
 /* decodes one fuu's payload by context_path. 0 ok, -1 error */
-static int decode_one_fuu(accessunit_scratch_t *sc, bcg_doc_t *doc, strrepo_reader_t *sr, const unsigned char *base, const fuu_index_t *fu, bcg_progtext_t **ptext, int *ptext_n) {
+static int decode_one_fuu(accessunit_scratch_t *sc, bcg_doc_t *doc, strrepo_reader_t *sr, const unsigned char *base, const fuu_index_t *fu, bcg_progtext_t **ptext, int *ptext_n, channel_idx_t **pidx) {
   bitreader_t fbr;
   switch (fu->context_path) {
     case DVBCTXPATH_PROGRAM_INFORMATION:
@@ -189,21 +257,12 @@ static int decode_one_fuu(accessunit_scratch_t *sc, bcg_doc_t *doc, strrepo_read
       return decode_program_info_fuu(sc, ptext, ptext_n, &fbr, sr);
     case DVBCTXPATH_SCHEDULE: {
       ptext_ctx_t ctx;
-      int rc;
+      if (!*pidx && *ptext_n > 0) *pidx = build_ptext_index(*ptext, *ptext_n);
       ctx.arr = *ptext;
       ctx.n = *ptext_n;
-      ctx.idx = ctx.n > 0 ? malloc(sizeof *ctx.idx * (size_t)ctx.n) : NULL;
-      if (ctx.idx) {
-        for (int k = 0; k < ctx.n; k++) {
-          ctx.idx[k].id = ctx.arr[k].crid;
-          ctx.idx[k].idx = k;
-        }
-        qsort(ctx.idx, (size_t)ctx.n, sizeof *ctx.idx, channel_idx_cmp);
-      }
+      ctx.idx = *pidx;
       bitreader_init(&fbr, base + fu->offset, fu->length);
-      rc = fragment_decode_schedule(&fbr, sr, doc, ptext_lookup, &ctx);
-      free(ctx.idx);
-      return rc;
+      return fragment_decode_schedule(&fbr, sr, doc, ptext_lookup, &ctx);
     }
     case DVBCTXPATH_SERVICE_INFORMATION: {
       bcg_channel_t *c = bcg_add_channel(doc);
@@ -217,9 +276,23 @@ static int decode_one_fuu(accessunit_scratch_t *sc, bcg_doc_t *doc, strrepo_read
 }
 
 int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int *out_nfuu) {
+  return accessunit_decode_refs(sc, br, sr, NULL, 0, doc, out_nfuu);
+}
+
+/* position sr at fuu's string buffer if refs name it, hint = likely refs index. -1 on bad offset */
+static int sync_strings(strrepo_reader_t *sr, const accessunit_ref_t *refs, int nrefs, int hint, size_t start) {
+  if (hint < nrefs && refs[hint].au_off == start) return strrepo_reader_seek(sr, refs[hint].str_off);
+  for (int k = 0; k < nrefs; k++) {
+    if (refs[k].au_off == start) return strrepo_reader_seek(sr, refs[k].str_off);
+  }
+  return 0;
+}
+
+int accessunit_decode_refs(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_t *sr, const accessunit_ref_t *refs, int nrefs, bcg_doc_t *doc, int *out_nfuu) {
   const unsigned char *base = br->buf;
   bcg_progtext_t *ptext;
   int ptext_n = 0;
+  channel_idx_t *pidx = NULL; /* built at first Schedule, PI phase is over then */
   fuu_index_t *fuus;
   int nfuu;
   int i;
@@ -240,11 +313,12 @@ int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_
   fuus = sc->fuus;
   ptext = sc->ptext;
 
-  /* sr sequential cursor: fuu order must match encode's group order (program_info, schedule, service_info) or frags read wrong strings */
+  /* without refs sr is a sequential cursor: fuu order must match encode's group order (program_info, schedule, service_info) */
   phase = 0;
   for (i = 0; i < nfuu; i++) {
     uint64_t flen, ctxpath;
     int fuu_phase;
+    fuus[i].start = br->byte_pos;
     if (bitreader_get_vluimsbf8(br, &flen) || bitreader_get(br, 16, &ctxpath) || br->bit_pos != 0 || flen > bitreader_bits_left(br) / 8) {
       rc = -1;
       goto done;
@@ -263,7 +337,11 @@ int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_
     br->byte_pos += (size_t)flen;
   }
   for (i = 0; i < nfuu; i++) {
-    if (decode_one_fuu(sc, doc, sr, base, &fuus[i], &ptext, &ptext_n)) {
+    if (sync_strings(sr, refs, nrefs, i, fuus[i].start)) {
+      rc = -1;
+      goto done;
+    }
+    if (decode_one_fuu(sc, doc, sr, base, &fuus[i], &ptext, &ptext_n, &pidx)) {
       rc = -1;
       goto done;
     }
@@ -272,5 +350,7 @@ int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_
   *out_nfuu = nfuu;
 
 done:
+  free(pidx);
+  for (i = 0; i < ptext_n; i++) bcg_progtext_free(&ptext[i]);
   return rc;
 }

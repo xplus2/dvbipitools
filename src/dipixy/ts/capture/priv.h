@@ -66,6 +66,7 @@ struct capture_reader {
 typedef struct capture_snapshot {
   struct capture_snapshot *retired_next; /* g_retired list, g_lock protected */
   int n;
+  int cap;
   int shard_start[CAPTURE_PUMP_MAX_THREADS];
   int shard_count[CAPTURE_PUMP_MAX_THREADS];
   capture_ctx_t *ctxs[];
@@ -79,9 +80,10 @@ extern pthread_mutex_t g_lock;
 extern _Atomic(capture_snapshot_t *) g_snapshot;
 extern capture_snapshot_t *g_retired; /* superseded snapshots pending reclaim, g_lock protected */
 capture_ctx_t *find_existing_tssrc(const char *key);
-void rebuild_snapshot(void); /* caller holds g_lock */
-void unlink_ctx(capture_ctx_t *ctx);
+capture_ctx_t *link_ctx(capture_ctx_t *c); /* c if linked, dup (ref taken) if raced, NULL on oom */
+int unref_unlink_ctx(capture_ctx_t *ctx); /* 1: last ref dropped and unlinked, caller frees */
 void free_ctx_resources(capture_ctx_t *ctx);
+int retire_ctx(capture_ctx_t *ctx); /* 1: queued for lifecycle thread, 0: caller frees */
 void reclaim_retired_snapshots(void); /* caller holds no lock, not on a pump thread */
 
 /* capture.c */
@@ -92,5 +94,7 @@ ssize_t capture_read_dispatch(capture_ctx_t *ctx, unsigned char *buf, size_t buf
 
 /* pump.c */
 int next_pump_shard(void);
+void capture_pump_mark(uint64_t *mark); /* CAPTURE_PUMP_MAX_THREADS entries */
+int capture_pump_mark_passed(const uint64_t *mark); /* all pumps quiescent since mark */
 
 #endif

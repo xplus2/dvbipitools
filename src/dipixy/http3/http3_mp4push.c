@@ -27,8 +27,12 @@ nghttp3_ssize h3_mp4push_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec
   vec[0].base = (uint8_t *)p;
   vec[0].len = n;
   *pflags = NGHTTP3_DATA_FLAG_NONE;
-  mp4push_ring_advance(r->mp4push_sub_idx, n);
+  mp4push_ring_hold(r->mp4push_sub_idx, n);
   return 1;
+}
+
+void h3_mp4push_acked(const h3_req_t *r, size_t n) {
+  if (r->mp4push_sub_idx >= 0) mp4push_ring_ack(r->mp4push_sub_idx, n);
 }
 
 /* registers progressive-mp4 stream, submits response. always 1 = dispatched

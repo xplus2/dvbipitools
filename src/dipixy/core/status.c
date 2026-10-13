@@ -93,6 +93,19 @@ static uint64_t status_rss_bytes(void) {
 #define JBOOL(name, cond, sep) JFIELD(jbuf_str, name, (cond) ? "true" : "false", sep)
 #define JSTR_OR_NULL(name, cond, val, sep) do { jbuf_key(&j, name); if (cond) jbuf_json_string(&j, val); else jbuf_str(&j, "null"); jbuf_str(&j, sep); } while (0)
 
+static int secret_opt(const char *a, int *has_value) {
+  const char *name;
+  size_t n;
+
+  *has_value = 0;
+  if (a[0] != '-' || a[1] != '-' || !a[2]) return 0;
+  name = a + 2;
+  n = strcspn(name, "=");
+  if (name[n] == '=') *has_value = 1;
+  if (n >= 2 && !strncmp("auth", name, n)) return 1;
+  return n >= 9 && !strncmp("metrics-auth", name, n);
+}
+
 int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) {
   static _Thread_local jbuf_t j;
   struct tm tmv;
@@ -127,8 +140,24 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   jbuf_key(&j, "exec_args");
   jbuf_str(&j, "[");
   for (i = 0; i < g_argc; i++) {
+    int has_value;
+    int secret = secret_opt(g_argv[i], &has_value);
+
     if (i) jbuf_str(&j, ",");
-    jbuf_json_string(&j, g_argv[i]);
+    if (secret && has_value) {
+      char red[32];
+      size_t n = strcspn(g_argv[i], "=");
+
+      snprintf(red, sizeof red, "%.*s=***", (int)n, g_argv[i]);
+      jbuf_json_string(&j, red);
+    } else {
+      jbuf_json_string(&j, g_argv[i]);
+    }
+    if (secret && !has_value && i + 1 < g_argc) {
+      jbuf_str(&j, ",");
+      jbuf_json_string(&j, "***");
+      i++;
+    }
   }
   jbuf_str(&j, "],");
 
@@ -156,6 +185,7 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JFIELD(jbuf_i64, "workers_spec", cfg->workers_spec, ",");
   JFIELD(jbuf_i64, "max_clients", cfg->max_clients, ",");
   JFIELD(jbuf_i64, "max_channels", cfg->max_channels, ",");
+  JFIELD(jbuf_i64, "max_variants", cfg->max_variants, ",");
   JFIELD(jbuf_u64, "capture_ring_kib", cfg->capture_ring_kib, "},");
 
   JOBJ("segment");
@@ -176,6 +206,7 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JBOOL("http", cfg->metrics_http, "},");
 
   JFIELD(jbuf_json_string, "cors_origins", cfg->cors_origins ? cfg->cors_origins : "*", ",");
+  JFIELD(jbuf_json_string, "ws_allowed_hosts", cfg->ws_allowed_hosts ? cfg->ws_allowed_hosts : "", ",");
 
   JBOOL("auth_enabled", cfg->http_auth[0], ",");
 

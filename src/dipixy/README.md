@@ -29,8 +29,9 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--cpu-affinity`         | `off`\|`auto`\|`<list>`     | `off`, pin workers, list e.g. `2-4,6,8`           |       |
 |      | `--max-clients`          | `<n>`                       | `256`, cap on concurrent streams                  |       |
 |      | `--max-channels`         | `<n>`                       | `32`, concurrency (source,filter,pmt,container)   |       |
-|      | `--idle-timeout`         | `<seconds>`                 | `0` (off), close a connection idle this long      |       |
-|      | `--capture-ring-size`    | `<KiB>`                     | `4096`, per-source ingress ring buffer            |       |
+|      | `--max-variants`         | `<n>`                       | `8`, variants per source (filter,pmt,container)   |       |
+|      | `--idle-timeout`         | `<seconds>`                 | `60` (0 = off), close idle connections            |       |
+|      | `--capture-ring-size`    | `<KiB>`                     | `4096`, max `262144`, per-source ingress buffer   |       |
 |      | `--ts-startup-timeout`   | `<seconds>`                 | `5`, wait for a source's 1st packet, `0` = off    |       |
 | `-i` | `--input`                | `<source>`                  | none, repeatable                                  |       |
 | `-n` | `--name`                 | `<name>`                    | none, names the input                             | input |
@@ -40,10 +41,10 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--sds-timeout`          | `<seconds>`                 | `3`, sds:// discovery wait                        |       |
 |      | `--sds-refresh-interval` | `<seconds>`                 | `30`, sds:// retry                                |       |
 |      | `--segment-size`         | `<seconds>`                 | `3` (hls, hls-fmp4, llhls, dash, lldash)          |       |
-|      | `--segment-count`        | `<n>`                       | `4`                                               |       |
+|      | `--segment-count`        | `<n>`                       | `4` (3-10)                                        |       |
 |      | `--hls-part-size`        | `<seconds>`                 | `0.35` (llhls, must be `<` segment-size)          |       |
 |      | `--dash-part-size`       | `<seconds>`                 | `0.333` (`lldash`, must be `<` segment-size)      |       |
-|      | `--dash-utc-url`         | `<url>`                     | `http://time.akamai.com/?iso&ms` (`lldash`)       |       |
+|      | `--dash-utc-url`         | `<url>`                     | `/time` (`lldash`)                                |       |
 |      | `--hls-seg-pool`         | `<n>`                       | `8`, per-size-class segment buffer cap            |       |
 |      | `--metrics`              | `<path>`                    | `/run/dvbipitools/metrics.sock`                   |       |
 |      | `--metrics-id`           | `<name>`                    | none (metrics disabled unless set)                |       |
@@ -54,6 +55,7 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--status-tpl`           | `<path>`                    | built-in, override with your own                  |       |
 |      | `--auth`                 | `<user:pass>`               | off (HTTP Basic Auth for status)                  |       |
 |      | `--cors-origin`          | `<list>`                    | `*` (comma-separated allowlist vs `Origin`)       |       |
+|      | `--ws-allowed-hosts`     | `<list>`                    | off (extra hostnames for status WS, `*` = any)    |       |
 | `-f` | `--format`               | `<list>`                    | all, `ts,spts,rawaudio,mp4,hls,llhls,dash,lldash` |       |
 |      | `--no-url-rtp`           |                             | off (deactivate `/rtp/`)                          |       |
 |      | `--no-url-udp`           |                             | off (deactivate `/udp/`)                          |       |
@@ -139,7 +141,7 @@ the 2nd is list 2, ...
 `-n <name>` right after an `-i` gives that input a name, usable in URLs instead of its
 `/list/<n>/` index or its bare `/rist/`/`/stdin/` route (see URL Paths below). Rules: no `/`, no
 leading `.`, not one of `rtp`, `udp`, `srt`, `rist`, `stdin`, `list`, `metrics`, `ui`, `api`,
-`dlna`, `export`, and unique across every named `-i`.
+`dlna`, `export`, `time`, and unique across every named `-i`.
 
 ## URL Paths
 
@@ -232,6 +234,13 @@ Optional query params:
 
 A channel's `tvg-logo`/`<image>` (M3U/XSPF) carries through if the source playlist had one.
 
+## Time Endpoint
+
+`/time` serves ISO 8601, UTC with milliseconds (`2026-01-01T12:00:00.123Z`) on all listeners.
+`lldash` MPDs point their `UTCTiming` (`urn:mpeg:dash:utc:http-xsiso:2014`) at it,
+as `<scheme>://<Host header>/time`, so https MPDs get an https time source. Set `--dash-utc-url`
+to use a different source.
+
 ## Codecs
 
 `ts`/`spts` and plain `hls` (TS segments) are a straight TS remux: any video/audio codec passes through untouched.
@@ -302,6 +311,8 @@ On a box shared with other services (lab setup, if you're not benchmarking), bet
 For sizing, the following factors should be considered (spoiler: basically just memory-related):
   * Available memory
     + The number of different concurrent channels to support (+filters/pmt selection) (`--max-channels` )
+    + The number of variants one source may have open at once (`--max-variants` ). Requests past it get a 503, so a
+      single client cannot fill the channel table with filter/pmt combinations.
     + The number of different concurrent clients to support (`--max-clients` ). It defaults to `256` as a reasonable 
       pre-allocated middle-ground for lab/home scenario. Set it much lower to run it on a modem/gateway or as high as
       your installed memory allows for "infrastructure" operation. 

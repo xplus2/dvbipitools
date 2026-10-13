@@ -23,7 +23,7 @@ int wrapper_build(const unsigned char *container, size_t container_len, int want
   uLong bound;
   uLongf compressed_len;
   unsigned char *compbuf, *buf;
-  if (!want_compress) return build_uncompressed(container, container_len, out, out_len);
+  if (!want_compress || container_len > 0xFFFFFF) return build_uncompressed(container, container_len, out, out_len);
   bound = compressBound((uLong)container_len);
   compbuf = malloc(bound);
   if (!compbuf) return -1;

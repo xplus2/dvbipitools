@@ -27,7 +27,7 @@ void http_server_free(http_server_t *hs);
 void http_server_poll_fds(http_server_t *hs, struct pollfd *pfds, int cap, int *n);
 
 /* services whichever of hs's fds came back ready in pfds. never blocks: each ready fd gets 1 accept/recv/send.
-   reaps connections idle past their deadline. GET /metrics renders st, anything else: 404. */
+   reaps connections idle past their deadline. GET/HEAD /metrics renders st, other methods there: 405, other paths: 404. render OOM: 500. */
 void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, store_t *st, double now_mono, int verbose);
 
 #endif

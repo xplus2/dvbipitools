@@ -46,8 +46,14 @@ int pipe_write_all(int fd, const unsigned char *buf, size_t n, const atomic_int 
 /* s[0..n) all ASCII digits */
 int all_digits(const char *s, int n);
 
+/* strict decimal: nonempty, digits only, no overflow, <= max. 0 ok, -1 bad */
+int parse_ulong(const char *s, unsigned long max, unsigned long *out);
+
 /* strips trailing \n/\r in place */
 void chomp(char *line);
+
+/* fgets that never splits a line. 1 line read, 0 EOF, -1 line >= cap bytes (rest of line discarded, buf unusable) */
+int read_line(FILE *f, char *buf, size_t cap);
 
 /* splits line in place on ',', writes up to max_fields pointers into fields[]. returns fill count */
 size_t csv_split(char *line, char **fields, size_t max_fields);
@@ -60,7 +66,7 @@ typedef struct {
   iso8601_offset_kind_t offset_kind;
 } iso8601_t;
 
-/* "YYYY-MM-DDTHH:MM:SS[Z|+HH:MM|-HH:MM]". 0 ok, -1 malformed */
+/* "YYYY-MM-DDTHH:MM:SS[.f+][Z|+HH:MM|-HH:MM]", fraction dropped. 0 ok, -1 malformed */
 int iso8601_split(const char *in, iso8601_t *out);
 
 /* EN 300 468 annex C, proleptic Gregorian calendar date to modified Julian Day */
@@ -99,6 +105,10 @@ void sbuf_add(sbuf_t *b, const char *s);
 void sbuf_add_u64(sbuf_t *b, uint64_t v);
 void sbuf_add_uint(sbuf_t *b, unsigned v);
 void sbuf_add_hex2(sbuf_t *b, unsigned v);
+void sbuf_add_hex(sbuf_t *b, unsigned v);
+
+/* RFC3986 urlencode path segment. NUL-terminates */
+void pct_encode_seg(const char *s, char *out, size_t outcap);
 
 /* power of two >= n, 1 if n == 0 */
 static inline size_t next_pow2(size_t n) {

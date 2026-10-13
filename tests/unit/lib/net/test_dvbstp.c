@@ -1,12 +1,18 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <arpa/inet.h>
 #include <check.h>
+#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "lib/demux/crc32.h"
 #include "lib/net/dvbstp.h"
+#include "lib/net/multicast.h"
 
 /* fills buf[0..hdrlen) per clause 5.4.1.3, returns hdrlen */
 static size_t build_header(unsigned char *buf, unsigned payload_id, unsigned segment_id, unsigned version,
@@ -317,6 +323,32 @@ START_TEST(reasm_feed_accepts_last_section_4095) {
 }
 END_TEST
 
+START_TEST(reasm_feed_accepts_section_above_recommended_size) {
+  dvbstp_reasm_t *r = dvbstp_reasm_new();
+  static unsigned char pkt[12 + 8000];
+  const unsigned char *out_data;
+  size_t out_len;
+  size_t h = build_header(pkt, 1, 1, 1, 0, 0, 0, 0, 0, 0);
+  set_total(pkt, 8000);
+  memset(pkt + h, 'x', 8000);
+  ck_assert_int_eq(dvbstp_reasm_feed(r, pkt, h + 8000, NULL, &out_data, &out_len), 1);
+  ck_assert_uint_eq(out_len, 8000u);
+  dvbstp_reasm_free(r);
+}
+END_TEST
+
+START_TEST(reasm_feed_rejects_section_over_rx_cap) {
+  dvbstp_reasm_t *r = dvbstp_reasm_new();
+  static unsigned char pkt[12 + DVBSTP_MAX_RX_SECTION + 1];
+  const unsigned char *out_data;
+  size_t out_len;
+  size_t h = build_header(pkt, 1, 1, 1, 0, 0, 0, 0, 0, 0);
+  memset(pkt + h, 'x', DVBSTP_MAX_RX_SECTION + 1);
+  ck_assert_int_eq(dvbstp_reasm_feed(r, pkt, h + DVBSTP_MAX_RX_SECTION + 1, NULL, &out_data, &out_len), 0);
+  dvbstp_reasm_free(r);
+}
+END_TEST
+
 START_TEST(reasm_feed_rejects_segment_over_byte_cap) {
   dvbstp_reasm_t *r = dvbstp_reasm_new();
   static unsigned char pkt[12 + DVBSTP_MAX_SECTION];
@@ -484,6 +516,93 @@ START_TEST(reasm_feed_evicts_oldest_slot_once_all_slots_are_busy) {
 }
 END_TEST
 
+static int send_and_collect(int family, const char *dest, size_t seglen, size_t *max_dgram, int *count) {
+  struct sockaddr_storage ss;
+  struct timeval tv = {0, 200000};
+  socklen_t sl = family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+  unsigned char *seg = calloc(1, seglen);
+  unsigned char buf[2048];
+  dvbstp_send_t desc = {.payload_id = DVBSTP_PAYLOAD_SP_DISCOVERY, .segment_id = 1, .has_provider_id = 1, .provider_id = 7, .want_crc = 1};
+  int rx = socket(family, SOCK_DGRAM, 0);
+  unsigned port;
+  mcast_t *m;
+  ssize_t n;
+  int rc;
+
+  *max_dgram = 0;
+  *count = 0;
+  memset(&ss, 0, sizeof ss);
+  if (family == AF_INET) {
+    ((struct sockaddr_in *)&ss)->sin_family = AF_INET;
+    inet_pton(AF_INET, dest, &((struct sockaddr_in *)&ss)->sin_addr);
+  } else {
+    ((struct sockaddr_in6 *)&ss)->sin6_family = AF_INET6;
+    inet_pton(AF_INET6, dest, &((struct sockaddr_in6 *)&ss)->sin6_addr);
+  }
+  if (rx < 0 || bind(rx, (struct sockaddr *)&ss, sl) < 0 || getsockname(rx, (struct sockaddr *)&ss, &sl) < 0) {
+    if (rx >= 0) close(rx);
+    free(seg);
+    return -1;
+  }
+  setsockopt(rx, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  port = ntohs(family == AF_INET ? ((struct sockaddr_in *)&ss)->sin_port : ((struct sockaddr_in6 *)&ss)->sin6_port);
+  m = mcast_open_send(family, dest, port, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  rc = dvbstp_send_segment(m, &desc, seg, seglen);
+  ck_assert_int_eq(rc, 0);
+  while ((n = recv(rx, buf, sizeof buf, 0)) > 0) {
+    if ((size_t)n > *max_dgram) *max_dgram = (size_t)n;
+    (*count)++;
+  }
+  mcast_close(m);
+  close(rx);
+  free(seg);
+  return 0;
+}
+
+START_TEST(send_segment_v4_fills_sections_to_ipv4_limit) {
+  size_t max;
+  int count;
+  if (send_and_collect(AF_INET, "127.0.0.1", 3 * DVBSTP_MAX_SECTION, &max, &count) < 0) return;
+  ck_assert_int_eq(count, 3);
+  ck_assert_uint_eq(max, 16 + DVBSTP_MAX_SECTION + 4);
+}
+END_TEST
+
+START_TEST(send_segment_v6_keeps_datagrams_within_1452) {
+  size_t max;
+  int count;
+  if (send_and_collect(AF_INET6, "::1", 3 * DVBSTP_MAX_SECTION, &max, &count) < 0) return;
+  ck_assert_int_eq(count, 4);
+  ck_assert_uint_le(max, 1452u);
+}
+END_TEST
+
+static long send_elapsed_ms(int64_t budget_ns) {
+  dvbstp_send_t desc = {.payload_id = DVBSTP_PAYLOAD_SP_DISCOVERY, .segment_id = 1, .want_crc = 1, .pacing_budget_ns = budget_ns};
+  size_t seglen = 100 * DVBSTP_MAX_SECTION;
+  unsigned char *seg = calloc(1, seglen);
+  struct timespec t0, t1;
+  mcast_t *m = mcast_open_send(AF_INET, "127.0.0.1", 9, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  ck_assert_int_eq(dvbstp_send_segment(m, &desc, seg, seglen), 0);
+  clock_gettime(CLOCK_MONOTONIC, &t1);
+  mcast_close(m);
+  free(seg);
+  return (t1.tv_sec - t0.tv_sec) * 1000L + (t1.tv_nsec - t0.tv_nsec) / 1000000L;
+}
+
+START_TEST(send_segment_default_gap_is_1ms_per_section) {
+  ck_assert_int_ge(send_elapsed_ms(0), 99);
+}
+END_TEST
+
+START_TEST(send_segment_pacing_budget_caps_total_delay) {
+  ck_assert_int_lt(send_elapsed_ms(10000000L), 60);
+}
+END_TEST
+
 static Suite *dvbstp_suite(void) {
   Suite *s = suite_create("dvbstp");
   TCase *tc = tcase_create("core");
@@ -507,6 +626,8 @@ static Suite *dvbstp_suite(void) {
   tcase_add_test(tc, reasm_feed_rejects_section_number_past_last);
   tcase_add_test(tc, reasm_feed_assembles_more_than_64_sections);
   tcase_add_test(tc, reasm_feed_accepts_last_section_4095);
+  tcase_add_test(tc, reasm_feed_accepts_section_above_recommended_size);
+  tcase_add_test(tc, reasm_feed_rejects_section_over_rx_cap);
   tcase_add_test(tc, reasm_feed_rejects_segment_over_byte_cap);
   tcase_add_test(tc, reasm_feed_rejects_crc_flag_on_non_final_section);
   tcase_add_test(tc, reasm_feed_ignores_duplicate_section);
@@ -514,6 +635,10 @@ static Suite *dvbstp_suite(void) {
   tcase_add_test(tc, reasm_feed_rejects_total_segment_size_mismatch);
   tcase_add_test(tc, reasm_feed_keeps_providers_apart);
   tcase_add_test(tc, reasm_feed_evicts_oldest_slot_once_all_slots_are_busy);
+  tcase_add_test(tc, send_segment_v4_fills_sections_to_ipv4_limit);
+  tcase_add_test(tc, send_segment_v6_keeps_datagrams_within_1452);
+  tcase_add_test(tc, send_segment_default_gap_is_1ms_per_section);
+  tcase_add_test(tc, send_segment_pacing_budget_caps_total_delay);
   suite_add_tcase(s, tc);
   return s;
 }

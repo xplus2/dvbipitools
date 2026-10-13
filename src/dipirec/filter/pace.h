@@ -21,6 +21,10 @@ void pace_feed_pcr_pkt(pace_ctrl_t *p, const unsigned char *pkt188, unsigned pcr
    pure, no sleeping. exposed for unit-testing wraparound math. */
 void pace_accumulate(uint64_t *last_raw, uint64_t *elapsed_ticks, uint64_t raw, unsigned bits);
 
+/* one pacing step at wall time now (s). returns seconds to sleep, 0 if none.
+   jump beyond resync threshold in either direction rebaselines instead. */
+double pace_step(pace_ctrl_t *p, uint64_t raw, unsigned bits, double hz, double now);
+
 /* 1 once a feed call took its first real sample (baseline set). test hook:
    first sample never sleeps, safe to probe after one feed call. */
 int pace_has_baseline(const pace_ctrl_t *p);

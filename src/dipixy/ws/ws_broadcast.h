@@ -10,7 +10,8 @@
 /* one WS conn's sink, ctx type owned per-protocol. frame: shared across sinks, read-only, copy before returning */
 typedef void (*ws_sink_fn)(void *ctx, const uint8_t *frame, size_t frame_len);
 
-/* callable from any thread. registry mutex protected */
+/* callable from any thread. registry mutex protected. unregister waits out in-flight publishes: ctx may be freed on return.
+   never call from sinks! */
 void ws_broadcast_register(ws_sink_fn fn, void *ctx);
 void ws_broadcast_unregister(ws_sink_fn fn, void *ctx);
 

@@ -9,6 +9,7 @@
 #include "dipixy/cli/args.h"
 #include "dipixy/dlna/dlna.h"
 #include "dipixy/reactor/internal.h"
+#include "dipixy/reactor/dispatch/priv.h"
 
 static unsigned g_http_errors;
 void dipixy_metrics_note_http_error(void) { g_http_errors++; }
@@ -65,27 +66,6 @@ START_TEST(find_header_empty_list_returns_zero) {
 }
 END_TEST
 
-START_TEST(strip_etag_quotes_removes_bare_quotes) {
-  char v[32] = "\"abc123\"";
-  strip_etag_quotes(v);
-  ck_assert_str_eq(v, "abc123");
-}
-END_TEST
-
-START_TEST(strip_etag_quotes_removes_weak_prefix_and_quotes) {
-  char v[32] = "W/\"abc123\"";
-  strip_etag_quotes(v);
-  ck_assert_str_eq(v, "abc123");
-}
-END_TEST
-
-START_TEST(strip_etag_quotes_leaves_unquoted_alone) {
-  char v[32] = "abc123";
-  strip_etag_quotes(v);
-  ck_assert_str_eq(v, "abc123");
-}
-END_TEST
-
 START_TEST(auth_disabled_when_cfg_empty) {
   config_t cfg;
   memset(&cfg, 0, sizeof cfg);
@@ -101,6 +81,10 @@ START_TEST(auth_requires_exact_match_when_enabled) {
   ck_assert_int_eq(http_auth_ok(cfg.http_auth, NULL), 0);
   ck_assert_int_eq(http_auth_ok(cfg.http_auth, "Basic wrong"), 0);
   ck_assert_int_eq(http_auth_ok(cfg.http_auth, "Basic dXNlcjpwYXNz"), 1);
+  ck_assert_int_eq(http_auth_ok(cfg.http_auth, "basic dXNlcjpwYXNz"), 1);
+  ck_assert_int_eq(http_auth_ok(cfg.http_auth, "BASIC  dXNlcjpwYXNz"), 1);
+  ck_assert_int_eq(http_auth_ok(cfg.http_auth, "BasicdXNlcjpwYXNz"), 0);
+  ck_assert_int_eq(http_auth_ok(cfg.http_auth, "Bearer dXNlcjpwYXNz"), 0);
 }
 END_TEST
 
@@ -164,6 +148,103 @@ START_TEST(cors_allowlist_rejects_unlisted_origin) {
 }
 END_TEST
 
+START_TEST(ws_origin_absent_is_ok) {
+  config_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(ws_origin_ok(&cfg, NULL, "evil.tld:9080"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "", "evil.tld:9080"), 1);
+}
+END_TEST
+
+START_TEST(ws_origin_ip_and_localhost_hosts_pass) {
+  config_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://192.168.1.5:9080", "192.168.1.5:9080"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://[::1]:9080", "[::1]:9080"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://LocalHost:9080", "localhost:9080"), 1);
+}
+END_TEST
+
+START_TEST(ws_origin_rebound_name_is_rejected) {
+  config_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://evil.tld:9080", "evil.tld:9080"), 0);
+}
+END_TEST
+
+START_TEST(ws_origin_must_match_host) {
+  config_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://10.0.0.1:9080", "10.0.0.2:9080"), 0);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://10.0.0.1:9080", "10.0.0.1:9081"), 0);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://10.0.0.1:9080", NULL), 0);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "null", "10.0.0.1:9080"), 0);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "ftp://10.0.0.1", "10.0.0.1"), 0);
+}
+END_TEST
+
+START_TEST(ws_origin_default_ports_are_normalized) {
+  config_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://10.0.0.1", "10.0.0.1:80"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://10.0.0.1:80", "10.0.0.1"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "https://10.0.0.1", "10.0.0.1:443"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "https://10.0.0.1", "10.0.0.1:80"), 0);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://[::1]", "[::1]:80"), 1);
+}
+END_TEST
+
+START_TEST(ws_origin_listed_names_pass) {
+  config_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cors_origins = "https://player.example, http://tv.lan:8080";
+  cfg.ws_allowed_hosts = "box.lan, other.lan";
+  strcpy(cfg.dlna_host, "media.lan:9080");
+  ck_assert_int_eq(ws_origin_ok(&cfg, "https://player.example", "player.example"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://tv.lan:9080", "tv.lan:9080"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://BOX.lan:9080", "box.LAN:9080"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://other.lan", "other.lan"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://media.lan:9080", "media.lan:9080"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://evil.tld:9080", "evil.tld:9080"), 0);
+}
+END_TEST
+
+START_TEST(ws_origin_cors_star_does_not_allow_names) {
+  config_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  cfg.cors_origins = "*";
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://evil.tld:9080", "evil.tld:9080"), 0);
+}
+END_TEST
+
+START_TEST(ws_origin_allowed_hosts_star_allows_any) {
+  config_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  cfg.ws_allowed_hosts = "*";
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://anything.tld:9080", "anything.tld:9080"), 1);
+  ck_assert_int_eq(ws_origin_ok(&cfg, "http://a.tld:9080", "b.tld:9080"), 0);
+}
+END_TEST
+
+START_TEST(keepalive_connection_token_list) {
+  struct phr_header h;
+  h = make_header("Connection", "Upgrade, close");
+  ck_assert_int_eq(wants_keepalive(1, &h, 1), 0);
+  h = make_header("Connection", "close, Upgrade");
+  ck_assert_int_eq(wants_keepalive(1, &h, 1), 0);
+  h = make_header("Connection", "Upgrade,CLOSE ");
+  ck_assert_int_eq(wants_keepalive(1, &h, 1), 0);
+  h = make_header("Connection", "Upgrade, keep-alive");
+  ck_assert_int_eq(wants_keepalive(0, &h, 1), 1);
+  h = make_header("Connection", "Upgrade");
+  ck_assert_int_eq(wants_keepalive(1, &h, 1), 1);
+  ck_assert_int_eq(wants_keepalive(0, &h, 1), 0);
+  h = make_header("Connection", "closed");
+  ck_assert_int_eq(wants_keepalive(1, &h, 1), 1);
+  ck_assert_int_eq(wants_keepalive(1, NULL, 0), 1);
+}
+END_TEST
+
 static Suite *dispatch_suite(void) {
   Suite *s = suite_create("dipixy_dispatch");
   TCase *tc = tcase_create("core");
@@ -171,9 +252,7 @@ static Suite *dispatch_suite(void) {
   tcase_add_test(tc, find_header_missing_returns_zero);
   tcase_add_test(tc, find_header_truncates_to_buffer);
   tcase_add_test(tc, find_header_empty_list_returns_zero);
-  tcase_add_test(tc, strip_etag_quotes_removes_bare_quotes);
-  tcase_add_test(tc, strip_etag_quotes_removes_weak_prefix_and_quotes);
-  tcase_add_test(tc, strip_etag_quotes_leaves_unquoted_alone);
+  tcase_add_test(tc, keepalive_connection_token_list);
   tcase_add_test(tc, auth_disabled_when_cfg_empty);
   tcase_add_test(tc, auth_requires_exact_match_when_enabled);
   tcase_add_test(tc, metrics_auth_is_independent_of_auth);
@@ -182,6 +261,14 @@ static Suite *dispatch_suite(void) {
   tcase_add_test(tc, cors_allowlist_matches_and_sets_vary);
   tcase_add_test(tc, cors_allowlist_trims_surrounding_spaces);
   tcase_add_test(tc, cors_allowlist_rejects_unlisted_origin);
+  tcase_add_test(tc, ws_origin_absent_is_ok);
+  tcase_add_test(tc, ws_origin_ip_and_localhost_hosts_pass);
+  tcase_add_test(tc, ws_origin_rebound_name_is_rejected);
+  tcase_add_test(tc, ws_origin_must_match_host);
+  tcase_add_test(tc, ws_origin_default_ports_are_normalized);
+  tcase_add_test(tc, ws_origin_listed_names_pass);
+  tcase_add_test(tc, ws_origin_cors_star_does_not_allow_names);
+  tcase_add_test(tc, ws_origin_allowed_hosts_star_allows_any);
   suite_add_tcase(s, tc);
   return s;
 }

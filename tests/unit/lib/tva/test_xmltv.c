@@ -25,9 +25,9 @@ START_TEST(xmltv_write_read_round_trips) {
   bufcpy(pr->channel_id, sizeof pr->channel_id, "channel1");
   bufcpy(pr->start, sizeof pr->start, "2020-12-15T12:30:45Z");
   bufcpy(pr->stop, sizeof pr->stop, "2020-12-15T13:00:00Z");
-  bufcpy(pr->title, sizeof pr->title, "News & <Weather>");
-  snprintf(pr->desc, sizeof pr->desc, "Today's \"top\" stories");
-  bufcpy(pr->category, sizeof pr->category, "News");
+  bcg_set_text(&pr->title, "News & <Weather>");
+  bcg_set_text(&pr->desc, "Today's \"top\" stories");
+  bcg_set_text(&pr->category, "News");
 
   f = tmpfile();
   ck_assert_ptr_nonnull(f);
@@ -54,6 +54,59 @@ START_TEST(xmltv_write_read_round_trips) {
 
   bcg_doc_free(&doc);
   bcg_doc_free(&doc2);
+}
+END_TEST
+
+START_TEST(xmltv_read_converts_declared_latin1) {
+  static const char doc[] =
+      "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><tv><channel id=\"c1\"><display-name>Caf\xE9</display-name></channel></tv>";
+  bcg_doc_t d;
+  FILE *f = tmpfile();
+  ck_assert_ptr_nonnull(f);
+  fputs(doc, f);
+  rewind(f);
+  bcg_doc_init(&d);
+  ck_assert_int_eq(xmltv_read(f, &d), 0);
+  fclose(f);
+  ck_assert_int_eq(d.channel_count, 1);
+  ck_assert_str_eq(d.channels[0].names[0], "Caf\xC3\xA9");
+  bcg_doc_free(&d);
+}
+END_TEST
+
+START_TEST(xmltv_read_rejects_unknown_encoding) {
+  static const char doc[] = "<?xml version=\"1.0\" encoding=\"no-such-enc\"?><tv/>";
+  bcg_doc_t d;
+  FILE *f = tmpfile();
+  ck_assert_ptr_nonnull(f);
+  fputs(doc, f);
+  rewind(f);
+  bcg_doc_init(&d);
+  ck_assert_int_eq(xmltv_read(f, &d), -1);
+  fclose(f);
+  bcg_doc_free(&d);
+}
+END_TEST
+
+START_TEST(xmltv_read_keeps_description_past_1k) {
+  static char doc[4096];
+  bcg_doc_t d;
+  FILE *f;
+  size_t n = (size_t)snprintf(doc, sizeof doc, "<tv><programme start=\"20201215120000 +0000\" channel=\"c1\"><title>T</title><desc>");
+  memset(doc + n, 'd', 3000);
+  n += 3000;
+  snprintf(doc + n, sizeof doc - n, "</desc></programme></tv>");
+  f = tmpfile();
+  ck_assert_ptr_nonnull(f);
+  fputs(doc, f);
+  rewind(f);
+  bcg_doc_init(&d);
+  ck_assert_int_eq(xmltv_read(f, &d), 0);
+  fclose(f);
+  ck_assert_int_eq(d.programme_count, 1);
+  ck_assert_uint_eq(strlen(d.programmes[0].desc), 3000u);
+  ck_assert_ptr_null(d.programmes[0].category);
+  bcg_doc_free(&d);
 }
 END_TEST
 
@@ -141,13 +194,39 @@ START_TEST(xmltv_read_accepts_single_quotes_cdata_short_times_and_zone_names) {
 }
 END_TEST
 
+START_TEST(xmltv_read_keeps_programmes_before_an_unclosed_one) {
+  static const char xml[] =
+      "<tv>\n"
+      "<programme start='202012151230 +0200' channel='c1'><title>A</title></programme>\n"
+      "<programme start='202012151300 +0200' channel='c1'><title>B</title>\n"
+      "<programme start='202012151330 +0200' channel='c1'><title>C</title></programme>\n"
+      "</tv>\n";
+  bcg_doc_t doc;
+  FILE *f = tmpfile();
+
+  ck_assert_ptr_nonnull(f);
+  fputs(xml, f);
+  rewind(f);
+  bcg_doc_init(&doc);
+  ck_assert_int_eq(xmltv_read(f, &doc), 0);
+  fclose(f);
+  ck_assert_int_eq(doc.programme_count, 1);
+  ck_assert_str_eq(doc.programmes[0].title, "A");
+  bcg_doc_free(&doc);
+}
+END_TEST
+
 static Suite *xmltv_suite(void) {
   Suite *s = suite_create("xmltv");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, xmltv_write_read_round_trips);
   tcase_add_test(tc, xmltv_write_falls_back_to_id_when_no_names);
+  tcase_add_test(tc, xmltv_read_converts_declared_latin1);
+  tcase_add_test(tc, xmltv_read_rejects_unknown_encoding);
   tcase_add_test(tc, xmltv_write_untitled_fallback_for_empty_title);
+  tcase_add_test(tc, xmltv_read_keeps_description_past_1k);
   tcase_add_test(tc, xmltv_read_accepts_single_quotes_cdata_short_times_and_zone_names);
+  tcase_add_test(tc, xmltv_read_keeps_programmes_before_an_unclosed_one);
   suite_add_tcase(s, tc);
   return s;
 }

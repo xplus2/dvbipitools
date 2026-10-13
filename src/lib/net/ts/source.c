@@ -3,7 +3,9 @@
 
 #define _GNU_SOURCE
 
+#include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -93,6 +95,7 @@ static tssrc_t *tssrc_open_base(const tssrc_cfg_t *cfg, net_err_reason_t *reason
     sc.streamid = cfg->srt_streamid;
     sc.packetfilter = cfg->srt_packetfilter;
     sc.latency_ms = cfg->srt_latency_ms;
+    sc.connect_timeout_ms = cfg->srt_connect_timeout_ms;
     sc.verbose = cfg->srt_verbose;
     sc.mx = cfg->srt_mx;
     sc.tool_version = cfg->srt_tool_version;
@@ -147,20 +150,39 @@ static ssize_t stream_read_aligned(tssrc_t *s, unsigned char *buf, size_t cap, n
   return (ssize_t)out;
 }
 
-ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
+/* all ready packets, RTP stripped, as far as cap allows */
+static size_t tssrc_fec_drain(tssrc_t *s, unsigned char *buf, size_t cap) {
+  unsigned char pkt[FEC2022_MAX_PKT];
+  size_t out = 0;
+  size_t len;
+
+  while ((len = fec2022_dec_next_len(s->fec_dec)) > 0) {
+    size_t n;
+    if (len - 12 > cap - out && out > 0) break;
+    fec2022_dec_drain(s->fec_dec, pkt, sizeof pkt);
+    n = (size_t)tssrc_rtp_strip(pkt, len);
+    if (n > cap - out) n = (cap - out) - (cap - out) % 188;
+    memcpy(buf + out, pkt, n);
+    out += n;
+    if (!n && cap - out < 188) break;
+  }
+  return out;
+}
+
+static ssize_t tssrc_read_src(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
   if (s->jb) return tssrc_jitter_read(s, buf, cap, reason_out);
   switch (s->kind) {
     case TSSRC_RTP:
     case TSSRC_UDP: {
       ssize_t n;
       if (s->fec_dec) {
+        n = (ssize_t)tssrc_fec_drain(s, buf, cap);
+        if (n > 0) return n;
         n = mcast_recv(s->m, buf, cap, reason_out);
         if (n < 0) return n;
         if (n > 0) fec2022_dec_source(s->fec_dec, buf, (size_t)n);
         tssrc_fec_poll(s);
-        n = (ssize_t)fec2022_dec_drain(s->fec_dec, buf, cap);
-        if (n == 0) return 0;
-        return tssrc_rtp_strip(buf, (size_t)n);
+        return (ssize_t)tssrc_fec_drain(s, buf, cap);
       }
       n = mcast_recv(s->m, buf, cap, reason_out);
       if (n <= 0) return n;
@@ -178,14 +200,84 @@ ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t 
   return -1;
 }
 
-void tssrc_rewind(tssrc_t *s) {
-  int fd;
-  if (s->kind != TSSRC_FILE && s->kind != TSSRC_STDIN) return;
-  fd = (s->kind == TSSRC_FILE) ? s->fd : STDIN_FILENO;
-  if (lseek(fd, 0, SEEK_SET) < 0) return;
-  s->raw_len = 0;
-  s->rtp_pos = 0;
-  s->align_len = 0;
+static void tssrc_capture_drop(tssrc_t *s) {
+  free(s->cap_buf);
+  s->cap_buf = NULL;
+  s->cap_len = 0;
+  s->cap_alloc = 0;
+  s->cap_pos = 0;
+  s->cap_on = 0;
+  s->cap_replay = 0;
+}
+
+static void tssrc_capture_add(tssrc_t *s, const unsigned char *buf, size_t n) {
+  unsigned char *p;
+  size_t need = s->cap_len + n;
+  size_t sz;
+
+  if (need > s->cap_max) {
+    tssrc_capture_drop(s);
+    return;
+  }
+  if (need > s->cap_alloc) {
+    sz = need < 65536 ? 65536 : need * 2;
+    if (sz > s->cap_max) sz = s->cap_max;
+    p = realloc(s->cap_buf, sz);
+    if (!p) {
+      tssrc_capture_drop(s);
+      return;
+    }
+    s->cap_buf = p;
+    s->cap_alloc = sz;
+  }
+  memcpy(s->cap_buf + s->cap_len, buf, n);
+  s->cap_len = need;
+}
+
+ssize_t tssrc_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
+  ssize_t n;
+
+  if (s->cap_replay) {
+    size_t left = s->cap_len - s->cap_pos;
+    size_t take = left < cap ? left : cap;
+    if (take > 188 && take < left) take -= take % 188;
+    memcpy(buf, s->cap_buf + s->cap_pos, take);
+    s->cap_pos += take;
+    if (s->cap_pos >= s->cap_len) tssrc_capture_drop(s);
+    return (ssize_t)take;
+  }
+  n = tssrc_read_src(s, buf, cap, reason_out);
+  if (n > 0 && s->cap_on) tssrc_capture_add(s, buf, (size_t)n);
+  return n;
+}
+
+void tssrc_capture_start(tssrc_t *s) {
+  tssrc_capture_drop(s);
+  s->cap_max = TSSRC_CAPTURE_MAX;
+  s->cap_on = 1;
+}
+
+int tssrc_replay_pending(const tssrc_t *s) { return s->cap_replay; }
+
+int tssrc_rewind(tssrc_t *s) {
+  if (s->kind == TSSRC_FILE || s->kind == TSSRC_STDIN) {
+    int fd = (s->kind == TSSRC_FILE) ? s->fd : STDIN_FILENO;
+    if (lseek(fd, 0, SEEK_SET) >= 0) {
+      tssrc_capture_drop(s);
+      s->raw_len = 0;
+      s->rtp_pos = 0;
+      s->align_len = 0;
+      return 1;
+    }
+  }
+  if (!s->cap_on || !s->cap_buf || !s->cap_len) {
+    tssrc_capture_drop(s);
+    return 0;
+  }
+  s->cap_on = 0;
+  s->cap_pos = 0;
+  s->cap_replay = 1;
+  return 1;
 }
 
 mcast_t *tssrc_mcast(const tssrc_t *s) { return s->m; }
@@ -205,6 +297,27 @@ void tssrc_fec_poll(tssrc_t *s) {
 }
 
 int tssrc_fd(const tssrc_t *s) { return s->jb ? s->epfd : tssrc_src_fd(s); }
+
+int tssrc_wait(const tssrc_t *s, int timeout_ms) {
+  struct pollfd pfd[2];
+  nfds_t nfds = 1;
+  int pr;
+  if (s->cap_replay) return 1;
+  if (!s->jb && s->kind == TSSRC_HTTP) return tssrc_http_wait(s, timeout_ms);
+  if (!s->jb && s->fec_dec) {
+    if (fec2022_dec_next_len(s->fec_dec)) return 1;
+    pfd[1].fd = mcast_fd(s->fec_m);
+    pfd[1].events = POLLIN;
+    pfd[1].revents = 0;
+    nfds = 2;
+  }
+  pfd[0].fd = tssrc_fd(s);
+  pfd[0].events = POLLIN;
+  pfd[0].revents = 0;
+  pr = poll(pfd, nfds, timeout_ms);
+  if (pr < 0) return errno == EINTR ? 0 : -1;
+  return pr > 0;
+}
 
 int tssrc_src_fd(const tssrc_t *s) {
   switch (s->kind) {
@@ -249,5 +362,6 @@ void tssrc_close(tssrc_t *s) {
   if (s->srt) srtsrc_close(s->srt);
   if (s->kind == TSSRC_FILE) close(s->fd);
   tssrc_http_free_media(s);
+  free(s->cap_buf);
   free(s);
 }

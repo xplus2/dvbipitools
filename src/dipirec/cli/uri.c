@@ -65,6 +65,23 @@ static int parse_uri(const char *uri, source_t *s) {
   return 0;
 }
 
+/* userinfo, query, fragment dropped. rtmp: stream key dropped */
+static void describe_redacted(char *buf, size_t n, const char *uri) {
+  char *safe = uriparse_redact_dup(uri);
+  char *auth, *app;
+  if (!safe) {
+    bufcpy(buf, n, "?");
+    return;
+  }
+  auth = strstr(safe, "://");
+  if (auth && strncmp(safe, "rtmp", 4) == 0) {
+    app = strchr(auth + 3, '/');
+    if (app && (app = strchr(app + 1, '/'))) strcpy(app, "/***");
+  }
+  bufcpy(buf, n, safe);
+  free(safe);
+}
+
 void source_describe(const source_t *s, char *buf, size_t n) {
   switch (s->kind) {
     case URI_RTP:
@@ -73,14 +90,17 @@ void source_describe(const source_t *s, char *buf, size_t n) {
     case URI_UDP:
       uriparse_mcast_src_uri(buf, n, "udp", s->family, s->source, s->group, s->port);
       break;
-    case URI_HTTP:
-      describe_http_uri(buf, n, s->http.tls, s->http.host, s->http.port, s->http.path);
+    case URI_HTTP: {
+      char full[sizeof s->http.path + 300];
+      describe_http_uri(full, sizeof full, s->http.tls, s->http.host, s->http.port, s->http.path);
+      describe_redacted(buf, n, full);
       break;
+    }
     case URI_FILE:
       bufcpy(buf, n, s->file_path[0] ? s->file_path : "- (stdin)");
       break;
     case URI_RIST:
-      bufcpy(buf, n, s->rist_uri);
+      describe_redacted(buf, n, s->rist_uri);
       break;
     case URI_SRT:
       describe_srt_uri(buf, n, s->srt_family, s->srt_listen, s->srt_host, s->srt_port);
@@ -128,11 +148,11 @@ void out_describe(const out_target_t *o, char *buf, size_t n) {
       break;
     }
     case OUT_RIST:
-      bufcpy(buf, n, o->rist_uri);
+      describe_redacted(buf, n, o->rist_uri);
       break;
     case OUT_RTMP:
     case OUT_RTMPS:
-      bufcpy(buf, n, o->rtmp_url);
+      describe_redacted(buf, n, o->rtmp_url);
       break;
     case OUT_FILE:
       bufcpy(buf, n, strcmp(o->file_path, "-") == 0 ? "- (stdout)" : o->file_path);

@@ -61,8 +61,6 @@ static SSL *client_handshake(int server_fd, int client_fd, SSL_CTX *cctx) {
 START_TEST(init_with_an_unusable_certificate_leaves_tls_off) {
   ck_assert_int_eq(tls_init("/nonexistent/cert.pem", "/nonexistent/key.pem", FD_TABLE), 0);
   ck_assert_int_eq(tls_is_running(), 0);
-  ck_assert_int_eq(tls_create_listen_sock(0, "127.0.0.1"), -1);
-  ck_assert_int_eq(tls_create_listen_sock6(0, "::1"), -1);
   ck_assert_int_eq(tls_accept(5), -1);
   ck_assert_int_eq(reload_tls(), -1);
 }
@@ -78,33 +76,14 @@ START_TEST(init_rejects_an_oversized_descriptor_table) {
 }
 END_TEST
 
-START_TEST(listen_sockets_follow_the_tls_lifecycle) {
+START_TEST(cleanup_turns_tls_off) {
   creds_t c;
-  int fd;
 
   creds_make(&c);
   ck_assert_int_eq(tls_init(c.cert, c.key, FD_TABLE), 0);
   ck_assert_int_eq(tls_is_running(), 1);
-  fd = tls_create_listen_sock(0, "127.0.0.1");
-  ck_assert_int_ge(fd, 0);
-  close(fd);
-  if (geteuid() != 0) ck_assert_int_eq(tls_create_listen_sock(1, "127.0.0.1"), -1);
-  fd = socket(AF_INET6, SOCK_STREAM, 0);
-  if (fd >= 0) {
-    int v6;
-
-    close(fd);
-    v6 = tls_create_listen_sock6(0, "::1");
-    if (v6 >= 0) close(v6);
-    v6 = tls_create_listen_sock6(0, NULL);
-    if (v6 >= 0) close(v6);
-    v6 = tls_create_listen_sock6(0, "::");
-    if (v6 >= 0) close(v6);
-    if (geteuid() != 0) ck_assert_int_eq(tls_create_listen_sock6(1, "::1"), -1);
-  }
   tls_cleanup();
   ck_assert_int_eq(tls_is_running(), 0);
-  ck_assert_int_eq(tls_create_listen_sock(0, "127.0.0.1"), -1);
   creds_drop(&c);
 }
 END_TEST
@@ -241,7 +220,7 @@ static Suite *tls_lifecycle_suite(void) {
   tcase_set_timeout(tc, 30);
   tcase_add_test(tc, init_with_an_unusable_certificate_leaves_tls_off);
   tcase_add_test(tc, init_rejects_an_oversized_descriptor_table);
-  tcase_add_test(tc, listen_sockets_follow_the_tls_lifecycle);
+  tcase_add_test(tc, cleanup_turns_tls_off);
   tcase_add_test(tc, reload_swaps_the_context_and_keeps_the_old_one_on_failure);
   tcase_add_test(tc, descriptor_queries_are_safe_for_unknown_descriptors);
   tcase_add_test(tc, a_session_over_a_socket_pair_handshakes_and_closes);

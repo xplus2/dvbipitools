@@ -20,6 +20,7 @@ void xmltv_print_help(void) {
     "  -R, --reverse-map <path> uri->preferred xmltv id (optional, -f tva only)\n"
     "  -S, --suggest-map <path> dipiscan csv. write a suggested -M mapping to -o,\n"
     "                           matched by channel name (review before use)\n"
+    "                           not combinable with -f, -M, -R\n"
     "  -v, --verbose            progress on stderr\n"
     "      --color <when>       auto|always|never (default auto)\n"
     "  -h, --help               this help\n\n"

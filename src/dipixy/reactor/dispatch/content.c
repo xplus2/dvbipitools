@@ -6,6 +6,7 @@
 #include "../../core/htdocs.h"
 #include "../../core/metrics.h"
 #include "../../core/status.h"
+#include "../../core/time_ep.h"
 #include "../../dlna/dlna.h"
 #include "../../dlna/gena.h"
 
@@ -43,18 +44,24 @@ void serve_status(conn_t *c, int is_head, int keep_alive) {
   serve_body(c, "application/json", body, len, is_head, keep_alive);
 }
 
+void serve_time(conn_t *c, int is_head, int keep_alive) {
+  char body[TIME_EP_BODY_MAX];
+  size_t len = time_ep_render(body, sizeof body);
+  if (!len) {
+    respond_status(c, RESP_501, keep_alive);
+    return;
+  }
+  serve_body(c, "text/plain; charset=utf-8", body, len, is_head, keep_alive);
+}
+
 void serve_playlist(conn_t *c, route_fmt_t fmt, playlist_type_t ptype, const char *host_hdr, const char *query, const pid_filter_t *filter, const lcevc_select_t *lcevc, int is_head, int keep_alive) {
   char *body;
   size_t len;
-  const char *mime;
   if (playlist_render(reactor_cfg(), reactor_channels(), c->ssl != NULL, host_hdr, query, filter, lcevc, fmt, ptype, &body, &len)) {
     respond_status(c, RESP_501, keep_alive);
     return;
   }
-  if (playlist_query_has_flag(query, "plain")) mime = "text/plain; charset=utf-8";
-  else if (ptype == PLAYLIST_M3U) mime = "audio/x-mpegurl";
-  else mime = "application/xspf+xml";
-  serve_body(c, mime, body, len, is_head, keep_alive);
+  serve_body(c, playlist_mime(query, ptype), body, len, is_head, keep_alive);
   free(body);
 }
 
@@ -112,23 +119,27 @@ void serve_dlna_control(conn_t *c, const char *service, const struct phr_header 
   if (status != 200) dipixy_metrics_note_http_error();
 }
 
-void serve_dlna_subscribe(conn_t *c, const struct phr_header *headers, size_t num_headers, int keep_alive) {
-  char sid_buf[64];
-  char sid[64];
-  char hdr[256];
-  const char *sid_hdr;
-  sbuf_t b;
-
-  sid_hdr = find_header(headers, num_headers, "SID", sid_buf, sizeof sid_buf) ? sid_buf : NULL;
-  if (sid_hdr) {
-    gena_renew(sid_hdr, sid, sizeof sid);
-  } else {
-    gena_subscribe_new(sid);
+static const char *gena_status_line(int status) {
+  switch (status) {
+    case 400: return RESP_400;
+    case 412: return RESP_412;
+    default: return RESP_503;
   }
+}
+
+static void queue_gena_ok(conn_t *c, const char *sid, unsigned timeout_s, int keep_alive) {
+  char hdr[320];
+  sbuf_t b;
   sbuf_init(&b, hdr, sizeof hdr);
-  sbuf_add(&b, "HTTP/1.1 200 OK\r\nSID: ");
-  sbuf_add(&b, sid);
-  sbuf_add(&b, "\r\nTIMEOUT: Second-1800\r\nContent-Length: 0\r\nConnection: ");
+  sbuf_add(&b, "HTTP/1.1 200 OK\r\n");
+  if (sid) {
+    sbuf_add(&b, "SID: ");
+    sbuf_add(&b, sid);
+    sbuf_add(&b, "\r\nTIMEOUT: Second-");
+    sbuf_add_uint(&b, timeout_s);
+    sbuf_add(&b, "\r\n");
+  }
+  sbuf_add(&b, "Content-Length: 0\r\nConnection: ");
   sbuf_add(&b, keep_alive ? "keep-alive" : "close");
   sbuf_add(&b, "\r\n");
   sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
@@ -137,17 +148,39 @@ void serve_dlna_subscribe(conn_t *c, const struct phr_header *headers, size_t nu
   set_persistence(c, keep_alive);
 }
 
-void serve_dlna_unsubscribe(conn_t *c, int keep_alive) {
-  char hdr[160];
-  sbuf_t b;
-  sbuf_init(&b, hdr, sizeof hdr);
-  sbuf_add(&b, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: ");
-  sbuf_add(&b, keep_alive ? "keep-alive" : "close");
-  sbuf_add(&b, "\r\n");
-  sbuf_add(&b, altsvc_h1_line(c->ssl != NULL));
-  sbuf_add(&b, "\r\n");
-  conn_queue(c, hdr, b.len);
-  set_persistence(c, keep_alive);
+typedef struct {
+  char sid[64];
+  char callback[256];
+  char nt[32];
+  char timeout[32];
+} gena_hdrs_t;
+
+static void read_gena_headers(const struct phr_header *headers, size_t num_headers, gena_hdrs_t *g) {
+  g->sid[0] = g->callback[0] = g->nt[0] = g->timeout[0] = '\0';
+  find_header(headers, num_headers, "SID", g->sid, sizeof g->sid);
+  find_header(headers, num_headers, "CALLBACK", g->callback, sizeof g->callback);
+  find_header(headers, num_headers, "NT", g->nt, sizeof g->nt);
+  find_header(headers, num_headers, "TIMEOUT", g->timeout, sizeof g->timeout);
+}
+
+void serve_dlna_subscribe(conn_t *c, gena_svc_t svc, const struct phr_header *headers, size_t num_headers, int keep_alive) {
+  gena_hdrs_t g;
+  char sid[64];
+  unsigned timeout_s = 0;
+  int status;
+  read_gena_headers(headers, num_headers, &g);
+  status = gena_subscribe(reactor_cfg(), svc, c->client_ip, g.sid, g.callback, g.nt, g.timeout, sid, sizeof sid, &timeout_s);
+  if (status == 200) queue_gena_ok(c, sid, timeout_s, keep_alive);
+  else respond_status(c, gena_status_line(status), keep_alive);
+}
+
+void serve_dlna_unsubscribe(conn_t *c, gena_svc_t svc, const struct phr_header *headers, size_t num_headers, int keep_alive) {
+  gena_hdrs_t g;
+  int status;
+  read_gena_headers(headers, num_headers, &g);
+  status = gena_unsubscribe(svc, c->client_ip, g.sid, g.callback, g.nt);
+  if (status == 200) queue_gena_ok(c, NULL, 0, keep_alive);
+  else respond_status(c, gena_status_line(status), keep_alive);
 }
 
 void serve_htdocs_index(conn_t *c, int is_head, int keep_alive) {

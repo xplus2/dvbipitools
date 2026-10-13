@@ -32,9 +32,15 @@ typedef struct {
   char *origin; size_t origin_sz;
   char *authz; size_t authz_sz;
   char *protocol; size_t protocol_sz;
+  char *host; size_t host_sz;
+  char *soapaction; size_t soapaction_sz;
+  char *sid; size_t sid_sz;
+  char *callback; size_t callback_sz;
+  char *nt; size_t nt_sz;
+  char *timeout; size_t timeout_sz;
 } httpng_hdr_out_t;
 
-/* cb_on_header (h2) / cb_h3_recv_header (h3): both feed same six pseudo/regular
+/* cb_on_header (h2) / cb_h3_recv_header (h3): both feed same nine pseudo/regular
    headers into per-request fields, only struct layout differs */
 void httpng_parse_known_header(const char *name, size_t namelen, const char *value, size_t valuelen, const httpng_hdr_out_t *out);
 
@@ -45,25 +51,51 @@ int httpng_ws_drain_pending(pthread_mutex_t *lock, uint8_t **pending, size_t *pe
 
 /* h2_hls_cold_finish/h3_hls_cold_finish non-MP4 render dispatch
    returns hls_render()/hls_render_ll()/dash_render() handled flag */
-int httpng_hls_cold_render(hls_cold_kind_t kind, seg_container_t container, int want_ll, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
-                           const char *filename, int is_head, hls_resp_t *out);
+int httpng_hls_cold_render(hls_cold_kind_t kind, seg_container_t container, int want_ll, const char *utc_url, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,
+    const lcevc_select_t *lcevc, const char *filename, int is_head, hls_resp_t *out);
+
+/* per-request soapaction / sid / callback / nt / timeout header bufs */
+#define HTTPNG_SOAPACTION_MAX 256
+#define HTTPNG_SID_MAX 64
+#define HTTPNG_CALLBACK_MAX 256
+#define HTTPNG_NT_MAX 32
+#define HTTPNG_TIMEOUT_MAX 32
+
+/* request body cap, h1 REACTOR_MAX_REQ parity. only POST bodies kept */
+#define HTTPNG_BODY_MAX 8192
+
+/* respond_content len: no content-length header (unbounded stream HEAD) */
+#define HTTPNG_NO_LENGTH ((size_t)-1)
+#define HTTPNG_EXTRA_MAX 2
+
+/* h2/h3 header names lowercase */
+typedef struct {
+  const char *name;
+  const char *value;
+} httpng_hdr_t;
 
 typedef struct {
-  int proto;
+  conn_proto_t proto;
   void (*respond_status)(void *conn, void *req, const char *status);
   void (*respond_401)(void *conn, void *req);
   void (*respond_hls)(void *conn, void *req, int handled, const hls_resp_t *resp, const char *origin_hdr);
   void (*ws_dispatch)(void *conn, void *req);
   int (*admission_ok)(void *conn); /* TS-push slot-reservation guard, keeps WS reachable */
-  int (*tspush_dispatch)(void *conn, void *req, int sub);
+  int (*tspush_dispatch)(void *conn, void *req, int sub, int rawaudio);
   int (*dashchunk_dispatch)(void *conn, void *req, int sub, int ws_handle);
   int (*mp4push_dispatch)(void *conn, void *req, int sub, int ws_handle);
   int (*hls_cold_try_park)(void *conn, void *req, const hls_cold_park_req_t *pr);
   int (*llhls_try_park)(void *conn, void *req, const llhls_park_req_t *pr);
+  int (*ts_cold_try_park)(void *conn, void *req, const ts_cold_park_req_t *pr);
+  /* 1 parked until job is done, request dispatched again then. 0 table full */
+  int (*open_try_park)(void *conn, void *req, capture_open_job_t *job);
+  /* body: malloc'd, ownership transfers, NULL = headers only (HEAD / empty). len: its content-length */
+  void (*respond_content)(void *conn, void *req, int status, const char *content_type, const httpng_hdr_t *extra, size_t nextra, uint8_t *body, size_t len, const char *origin_hdr);
 } httpng_ops_t;
 
 /* method/path/protocol: request-line/pseudo-headers, never NULL.
-   inm/origin/authz: empty string if no header. path mutated in place */
+   inm/origin/authz/host/soapaction/sid/callback/nt/timeout: empty string if no header (host: :authority or host). path mutated in place.
+   body: POST body, NUL-terminated, NULL if none */
 typedef struct {
   char *method;
   char *path;
@@ -71,6 +103,14 @@ typedef struct {
   const char *origin;
   const char *authz;
   const char *protocol;
+  const char *host;
+  const char *soapaction;
+  const char *sid;
+  const char *callback;
+  const char *nt;
+  const char *timeout;
+  const uint8_t *body;
+  size_t body_len;
 } httpng_req_hdrs_t;
 
 typedef struct {
@@ -89,6 +129,8 @@ typedef struct {
   const char *origin;
   const char *inm;
   const char *query;
+  const char *host; /* empty if absent */
+  int opening; /* set by dispatch_*_route(): parked on async open, path needs its '?' back */
 } httpng_req_t;
 
 void dispatch_ts_route(httpng_req_t *rq);
@@ -96,6 +138,16 @@ void dispatch_hls_route(httpng_req_t *rq);
 void dispatch_llhls_route(httpng_req_t *rq);
 void dispatch_dash_route(httpng_req_t *rq);
 void dispatch_mp4_route(httpng_req_t *rq);
+
+/* 1: handled, response sent. path: query already stripped, query: after '?' or NULL.
+   index, status.js, metrics, playlist export, DLNA GET descriptors */
+int httpng_dispatch_special(const httpng_ops_t *ops, void *conn, void *req, const httpng_req_hdrs_t *hdrs, const char *query, const pid_filter_t *filter, const lcevc_select_t *lcevc, int is_head);
+
+/* POST/SUBSCRIBE/UNSUBSCRIBE: DLNA control and eventing, any path */
+void httpng_dispatch_dlna(const httpng_ops_t *ops, void *conn, void *req, const httpng_req_hdrs_t *hdrs, const char *client_ip);
+
+/* ts cold-start waiter finish: 1 + *sub when streaming may start, 0 + *err set (503/504 string) */
+int httpng_ts_cold_subscribe(ts_cold_waiter_t *w, conn_proto_t proto, int fd, const char *client_ip, int *sub, const char **err);
 
 /* fd: h2 ts_push_subscribe() needs conn fd for ring wake lookups.
    h3: subscriber to conn/stream_id after subscribe (-1) */

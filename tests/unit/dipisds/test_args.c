@@ -236,6 +236,16 @@ START_TEST(fcc_resolve_max_channels_overrides_default) {
 }
 END_TEST
 
+START_TEST(fcc_resolve_by_port_range_ends_at_65535) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--fcc-addr", "10.0.0.1:7000", "--fcc-resolve-by-port",
+                  "--fcc-resolve-base-port", "65236", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(fcc_resolve_by_port_requires_fcc_addr) {
   char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
                   "-m", "239.1.2.3:5000", "--fcc-resolve-by-port", NULL};
@@ -338,6 +348,17 @@ START_TEST(fus_name_enables_fus_with_lang_default) {
   ck_assert_str_eq(cfg.fus_name, "My FUS");
   ck_assert_uint_eq((unsigned)cfg.fus_id, 42u);
   ck_assert_int_eq(memcmp(cfg.fus_lang, "deu", 3), 0);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+static const char *const bad_fus_ids[] = {"", "-1", "abc", "12x", " 5", "99999999999999999999999"};
+
+START_TEST(fus_id_rejects_malformed_values) {
+  char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
+                  "-m", "239.1.2.3:5000", "--fus-name", "My FUS", "--fus-id", (char *)bad_fus_ids[_i], NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -615,6 +636,7 @@ static const message_case_t error_cases[] = {
   MSG(ARGS_ERR, "invalid -m group:port: bogus", "-a", "-m", "bogus"),
   MSG(ARGS_ERR, "invalid --dscp: loud", ANN_BASE, "--dscp", "loud"),
   MSG(ARGS_ERR, "invalid -t seconds: soon", ANN_BASE, "-t", "soon"),
+  MSG(ARGS_ERR, "invalid -t seconds: 0 (announce interval must be at least 1)", ANN_BASE, "-t", "0"),
   MSG(ARGS_ERR, "invalid --format: pdf", "-l", MC, "-f", "pdf"),
   MSG(ARGS_ERR, "invalid --color: rainbow", ANN_BASE, "--color", "rainbow"),
   MSG(ARGS_ERR, "invalid --ret-addr: bogus", ANN_BASE, "--ret-addr", "bogus"),
@@ -628,6 +650,8 @@ static const message_case_t error_cases[] = {
   MSG(ARGS_ERR, "invalid --fcc-rtx-pt: 128 (0..127)", ANN_BASE, "--fcc-addr", "10.0.0.2:6001", "--fcc-rtx-pt", "128"),
   MSG(ARGS_ERR, "invalid --fcc-resolve-base-port: 0", ANN_BASE, "--fcc-addr", "10.0.0.2:6001", "--fcc-resolve-base-port", "0"),
   MSG(ARGS_ERR, "invalid --fcc-resolve-max-channels: 0", ANN_BASE, "--fcc-addr", "10.0.0.2:6001", "--fcc-resolve-max-channels", "0"),
+  MSG(ARGS_ERR, "port range 65401..65700 exceeds 65535", ANN_BASE, "--fcc-addr", "10.0.0.2:65400", "--fcc-resolve-by-port"),
+  MSG(ARGS_ERR, "port range 65000..65999 exceeds 65535", ANN_BASE, "--fcc-addr", "10.0.0.2:6001", "--fcc-resolve-by-port", "--fcc-resolve-base-port", "65000", "--fcc-resolve-max-channels", "1000"),
   MSG(ARGS_ERR, "invalid --metrics-interval: 0", ANN_BASE, "--metrics-id", "m", "--metrics-interval", "0"),
   MSG(ARGS_ERR, "invalid --rms-lang: fr (3-letter ISO 639-2 code)", ANN_BASE, "--rms-name", "R", "--rms-location", "L", "--rms-lang", "fr"),
   MSG(ARGS_ERR, "invalid --fus-lang: fr (3-letter ISO 639-2 code)", ANN_BASE, "--fus-name", "F", "--fus-id", "1", "--fus-lang", "fr"),
@@ -660,6 +684,8 @@ static const message_case_t check_cases[] = {
   MSG(ARGS_ERR, "--ret-* options are announce-only", "-l", MC, "--ret-addr", "10.0.0.1:6000"),
   MSG(ARGS_ERR, "--fcc-* options are announce-only", "-l", MC, "--fcc-addr", "10.0.0.2:6001"),
   MSG(ARGS_ERR, "--metrics-id is announce-only", "-l", MC, "--metrics-id", "m"),
+  MSG(ARGS_ERR, "--al-fec-* options are announce-only", "-l", MC, "--al-fec-addr", "10.0.0.3:6002"),
+  MSG(ARGS_ERR, "--al-fec-* options are announce-only", "-l", MC, "--al-fec-pt", "97"),
   MSG(ARGS_ERR, "--packages/--cells/--rms-*/--fus-* options are announce-only", "-l", MC, "--cells", "c.xml"),
 };
 
@@ -714,6 +740,7 @@ START_TEST(suffix_and_address_helpers) {
   ck_assert_int_eq(sds_has_suffix("a.xml", ".xml"), 1);
   ck_assert_int_eq(sds_has_suffix("xml", ".xml"), 0);
   ck_assert_int_eq(sds_has_suffix("a.xmlx", ".xml"), 0);
+  ck_assert_int_eq(sds_has_suffix("a.XML", ".xml"), 1);
   ck_assert_int_eq(sds_ret_addr_parse("10.0.0.1:6000", addr, sizeof addr, &port), 0);
   ck_assert_str_eq(addr, "10.0.0.1");
   ck_assert_uint_eq(port, 6000u);
@@ -749,6 +776,7 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, fcc_options_are_announce_only);
   tcase_add_test(tc, fcc_resolve_by_port_enables_with_default_max_channels);
   tcase_add_test(tc, fcc_resolve_max_channels_overrides_default);
+  tcase_add_test(tc, fcc_resolve_by_port_range_ends_at_65535);
   tcase_add_test(tc, fcc_resolve_by_port_requires_fcc_addr);
   tcase_add_test(tc, fcc_resolve_by_port_is_announce_only);
   tcase_add_test(tc, metrics_options_require_metrics_id);
@@ -760,6 +788,7 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, rms_name_requires_rms_location);
   tcase_add_test(tc, rms_location_without_rms_name_is_rejected);
   tcase_add_test(tc, fus_name_enables_fus_with_lang_default);
+  tcase_add_loop_test(tc, fus_id_rejects_malformed_values, 0, (int)(sizeof bad_fus_ids / sizeof bad_fus_ids[0]));
   tcase_add_test(tc, fus_name_requires_fus_id);
   tcase_add_test(tc, fus_announce_is_parsed);
   tcase_add_test(tc, rms_name_and_fus_name_are_mutually_exclusive);

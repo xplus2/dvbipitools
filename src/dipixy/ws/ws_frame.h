@@ -7,6 +7,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* per-stream queued output cap, H2/H3: overflow resets stream */
+#define WS_OUT_MAX (4u * 1024 * 1024)
+
 /* RFC 6455 SS5.2 opcodes */
 typedef enum {
   WS_OP_CONTINUATION = 0x0,
@@ -21,6 +24,7 @@ typedef enum {
    frames only, reassembles fragments */
 typedef struct {
   uint8_t *buf;
+  size_t off; /* consumed prefix, compacted on feed */
   size_t len;
   size_t cap;
   uint8_t *msg;

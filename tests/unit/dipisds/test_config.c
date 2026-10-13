@@ -85,6 +85,7 @@ static const char *const bad_cases[] = {
   "dscp: 64\n",
   "interval: -1\n",
   "interval: soon\n",
+  "interval: 0\n",
   "timeout: -1\n",
   "format: pdf\n",
   "verbose: perhaps\n",
@@ -110,6 +111,7 @@ static const char *const bad_cases[] = {
   "fus:\n  lang: xx\n",
   "fus:\n  id: abc\n",
   "fus:\n  id: \"\"\n",
+  "fus:\n  id: -1\n",
   "fus:\n  announce: bogus\n",
 };
 

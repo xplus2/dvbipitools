@@ -43,6 +43,7 @@ typedef struct {
   cpuaff_t cpu_affinity;    /* --cpu-affinity: pins reactor workers, pumps float */
   int max_clients;
   int max_channels;
+  int max_variants;
   unsigned idle_timeout_s;
   double ts_startup_timeout_s;
   unsigned capture_ring_kib;
@@ -104,6 +105,7 @@ typedef struct {
   char http_auth[200];
   char http_metrics_auth[200];
   const char *cors_origins;
+  const char *ws_allowed_hosts; /* comma-sep list, "*"=any */
   int ssdp_ttl;
   const char *ssdp_iface;
   double ssdp_interval_s;

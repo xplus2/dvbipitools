@@ -140,6 +140,47 @@ START_TEST(deleted_ids_leave_the_probe_chain_intact) {
 }
 END_TEST
 
+START_TEST(deleting_everything_empties_the_table) {
+  h3rig_t h;
+  ngtcp2_cid cids[8];
+  h3_conn_t conns[8];
+
+  server_with_capacity(&h, 1);
+  ck_assert_int_eq(h3_tables_alloc(), 1);
+  memset(conns, 0, sizeof conns);
+  for (unsigned i = 0; i < 8; i++) make_cid(&cids[i], i + 80);
+  for (int round = 0; round < 4; round++) {
+    for (int i = 0; i < 6; i++) ck_assert_int_eq(h3_hash_insert(&cids[i], &conns[i]), 0);
+    for (int i = 0; i < 6; i++) h3_hash_delete(&cids[i], &conns[i]);
+  }
+  for (uint32_t i = 0; i < t_h3_hash_cap; i++) ck_assert_ptr_null(t_h3_hash[i].c);
+  h3r_server_stop(&h);
+}
+END_TEST
+
+START_TEST(churn_keeps_remaining_ids_reachable_and_table_clean) {
+  h3rig_t h;
+  ngtcp2_cid cids[7];
+  h3_conn_t conns[7];
+
+  server_with_capacity(&h, 1);
+  ck_assert_int_eq(h3_tables_alloc(), 1);
+  memset(conns, 0, sizeof conns);
+  for (unsigned i = 0; i < 7; i++) make_cid(&cids[i], i + 200);
+  for (int round = 0; round < 50; round++) {
+    for (int i = 0; i < 7; i++) ck_assert_int_eq(h3_hash_insert(&cids[i], &conns[i]), 0);
+    for (int i = 0; i < 7; i += 2) h3_hash_delete(&cids[i], &conns[i]);
+    for (int i = 0; i < 7; i++) {
+      if (i % 2) ck_assert_ptr_eq(lookup(&cids[i]), &conns[i]);
+      else ck_assert_ptr_null(lookup(&cids[i]));
+    }
+    for (int i = 1; i < 7; i += 2) h3_hash_delete(&cids[i], &conns[i]);
+    for (uint32_t k = 0; k < t_h3_hash_cap; k++) ck_assert_ptr_null(t_h3_hash[k].c);
+  }
+  h3r_server_stop(&h);
+}
+END_TEST
+
 START_TEST(delete_needs_the_owning_connection) {
   h3rig_t h;
   ngtcp2_cid cid;
@@ -287,6 +328,8 @@ static Suite *pool_suite(void) {
   tcase_add_test(tc, lookup_without_tables_finds_nothing);
   tcase_add_test(tc, inserted_ids_are_found_by_short_and_long_headers);
   tcase_add_test(tc, deleted_ids_leave_the_probe_chain_intact);
+  tcase_add_test(tc, deleting_everything_empties_the_table);
+  tcase_add_test(tc, churn_keeps_remaining_ids_reachable_and_table_clean);
   tcase_add_test(tc, delete_needs_the_owning_connection);
   tcase_add_test(tc, finished_connections_are_skipped);
   tcase_add_test(tc, per_connection_id_limit_is_enforced);

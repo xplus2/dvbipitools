@@ -53,7 +53,7 @@ static void flush_server(const h3rig_t *h) {
 }
 
 static void submit_and_wait(h3rig_t *h, int64_t sid, int status, const char *ctype, const char *etag, size_t len, uint8_t *body, const char *origin) {
-  h3_submit_resp(server_conn(), find_req(server_conn(), sid), status, ctype, etag, len, body, 0, origin);
+  h3_submit_resp(server_conn(), find_req(server_conn(), sid), status, ctype, etag, len, body, NULL, 0, origin);
   flush_server(h);
   ck_assert_int_eq(h3r_wait_response(h, sid), 1);
 }
@@ -168,9 +168,9 @@ typedef struct {
 } cold_case_t;
 
 static const cold_case_t cold_cases[] = {
-    {"hls", 404},
-    {"llhls", 404},
-    {"dash", 404},
+    {"hls", 503},
+    {"llhls", 503},
+    {"dash", 503},
     {"mp4", 503},
 };
 
@@ -206,11 +206,10 @@ START_TEST(cold_waiter_on_warming_store_expires_as_retryable_503) {
   h3r_open(&h);
   ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
-  hls_store_init(4);
   hls_store_open(ctx, &filter, 0, &lcevc, 3.0, 4, SEG_CONTAINER_TS);
   sid = parked_request(&h, PARK_PATH);
   {
-    hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 0, -1};
+    hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 0, -1, NULL};
 
     ck_assert_int_eq(h3_hls_cold_try_park(server_conn(), sid, &req), 1);
   }
@@ -236,7 +235,7 @@ START_TEST(cold_waiter_table_fills_and_releases_by_stream_and_connection) {
   ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
   {
-    hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 60000, -1};
+    hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 60000, -1, NULL};
 
     for (int i = 0; i < COLD_WAITERS_MAX; i++) ck_assert_int_eq(h3_hls_cold_try_park(c, 1000 + 4 * i, &req), 1);
     ck_assert_int_eq(h3_hls_cold_try_park(c, 9999, &req), 0);
@@ -364,6 +363,27 @@ START_TEST(websocket_ping_is_answered_with_a_pong) {
 }
 END_TEST
 
+START_TEST(websocket_sent_buffers_are_released_once_acked) {
+  h3rig_t h;
+  int64_t sid;
+  h3_req_t *r;
+  static const uint8_t ping[] = {'h', 'i'};
+
+  h3r_open(&h);
+  sid = open_ws(&h);
+  ws_send(&h, sid, WS_OP_PING, ping, sizeof ping);
+  ws_send(&h, sid, WS_OP_PING, ping, sizeof ping);
+  ws_send(&h, sid, WS_OP_PING, ping, sizeof ping);
+  ck_assert_uint_eq(h3r_resp_for(&h, sid)->body_len, 12u);
+  (void)h3r_pump_timed(&h, cond_never, NULL, SETTLE_MS);
+  r = find_req(server_conn(), sid);
+  ck_assert_ptr_nonnull(r);
+  ck_assert_uint_eq(r->ws_unacked_bytes, 0u);
+  ck_assert_ptr_null(r->ws_unacked);
+  h3r_close(&h);
+}
+END_TEST
+
 START_TEST(websocket_close_is_echoed) {
   h3rig_t h;
   int64_t sid;
@@ -397,7 +417,7 @@ START_TEST(websocket_client_snapshot_request_is_answered) {
 }
 END_TEST
 
-START_TEST(websocket_unmasked_frame_is_ignored) {
+START_TEST(websocket_unmasked_frame_resets_the_stream) {
   h3rig_t h;
   int64_t sid;
   static const uint8_t bad[] = {0x89, 0x02, 'h', 'i'};
@@ -407,8 +427,27 @@ START_TEST(websocket_unmasked_frame_is_ignored) {
   h3r_upload(&h, sid, bad, sizeof bad);
   (void)h3r_pump_timed(&h, cond_never, NULL, SETTLE_MS);
   ck_assert_uint_eq(h3r_resp_for(&h, sid)->body_len, 0u);
-  ck_assert_int_eq(server_conn()->ws_active_count, 1);
+  ck_assert_int_eq(server_conn()->ws_active_count, 0);
+  ck_assert_int_eq(ws_broadcast_has_sinks(), 0);
   h3r_close(&h);
+}
+END_TEST
+
+START_TEST(websocket_output_overflow_resets_the_stream) {
+  h3rig_t h;
+  char *msg = malloc(100001);
+
+  ck_assert_ptr_nonnull(msg);
+  memset(msg, 'x', 100000);
+  msg[100000] = '\0';
+  h3r_open(&h);
+  open_ws(&h);
+  for (int i = 0; i < 50; i++) ws_broadcast_publish(msg);
+  (void)h3r_pump_timed(&h, cond_never, NULL, SETTLE_MS);
+  ck_assert_int_eq(server_conn()->ws_active_count, 0);
+  ck_assert_int_eq(ws_broadcast_has_sinks(), 0);
+  h3r_close(&h);
+  free(msg);
 }
 END_TEST
 
@@ -479,7 +518,7 @@ START_TEST(ts_push_streams_deliver_ring_data_and_release_the_subscription) {
   r = find_req(c, sid);
   sub = ts_push_subscribe(ctx, &filter, CONN_PROTO_H3, -1, 0, 0, 0, &info, &lcevc);
   ck_assert_int_ge(sub, 0);
-  ck_assert_int_eq(h3_tspush_dispatch(c, r, sub), 1);
+  ck_assert_int_eq(h3_tspush_dispatch(c, r, sub, 0), 1);
   flush_server(&h);
   (void)h3r_pump_timed(&h, cond_never, NULL, SETTLE_MS);
   st = h3r_resp_for(&h, sid);
@@ -619,7 +658,7 @@ START_TEST(rawaudio_subscription_keeps_its_own_pid_filter) {
   sub = subscribe_rawaudio_excluding(ctx, 0x100, 0x101);
   ck_assert_int_ge(sub, 0);
   clobber_stack();
-  ck_assert_int_eq(h3_tspush_dispatch(c, find_req(c, sid), sub), 1);
+  ck_assert_int_eq(h3_tspush_dispatch(c, find_req(c, sid), sub, 0), 1);
   flush_server(&h);
   (void)h3r_pump_timed(&h, cond_never, NULL, SETTLE_MS);
   st = h3r_resp_for(&h, sid);
@@ -646,6 +685,7 @@ END_TEST
 
 static void setup_registries(void) {
   ws_clients_init(8);
+  hls_store_init(8);
   hls_seg_init(8);
 }
 
@@ -668,9 +708,11 @@ static Suite *handlers_suite(void) {
   tcase_add_test(tc, websocket_connect_is_accepted_with_a_data_stream);
   tcase_add_test(tc, websocket_connect_is_refused_without_the_status_page);
   tcase_add_test(tc, websocket_ping_is_answered_with_a_pong);
+  tcase_add_test(tc, websocket_sent_buffers_are_released_once_acked);
   tcase_add_test(tc, websocket_close_is_echoed);
   tcase_add_test(tc, websocket_client_snapshot_request_is_answered);
-  tcase_add_test(tc, websocket_unmasked_frame_is_ignored);
+  tcase_add_test(tc, websocket_unmasked_frame_resets_the_stream);
+  tcase_add_test(tc, websocket_output_overflow_resets_the_stream);
   tcase_add_test(tc, websocket_broadcast_reaches_the_stream);
   tcase_add_test(tc, websocket_stream_close_releases_the_sink);
   tcase_add_test(tc, connection_teardown_releases_open_websockets);

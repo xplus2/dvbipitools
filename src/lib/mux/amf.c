@@ -118,8 +118,12 @@ const unsigned char *amf_read_string(const unsigned char *p, const unsigned char
   return p + 3 + n;
 }
 
+#define AMF_MAX_DEPTH 32
+
+static const unsigned char *skip_value(const unsigned char *p, const unsigned char *end, unsigned depth);
+
 /* object/ecma-array body: key/value pairs until 00 00 09 terminator */
-static const unsigned char *amf_skip_props(const unsigned char *p, const unsigned char *end) {
+static const unsigned char *amf_skip_props(const unsigned char *p, const unsigned char *end, unsigned depth) {
   for (;;) {
     unsigned keylen;
     if (end - p < 2)
@@ -132,13 +136,13 @@ static const unsigned char *amf_skip_props(const unsigned char *p, const unsigne
     p += 2;
     if (end - p < (ptrdiff_t)keylen) return NULL;
     p += keylen;
-    p = amf_skip_value(p, end);
+    p = skip_value(p, end, depth);
     if (!p) return NULL;
   }
 }
 
-const unsigned char *amf_skip_value(const unsigned char *p, const unsigned char *end) {
-  if (end - p < 1) return NULL;
+static const unsigned char *skip_value(const unsigned char *p, const unsigned char *end, unsigned depth) {
+  if (end - p < 1 || depth >= AMF_MAX_DEPTH) return NULL;
   switch (p[0]) {
     case AMF_T_NUMBER:
       return end - p < 9 ? NULL : p + 9;
@@ -148,18 +152,18 @@ const unsigned char *amf_skip_value(const unsigned char *p, const unsigned char 
       if (end - p < 3) return NULL;
       return amf_read_string(p, end, NULL, 0);
     case AMF_T_OBJECT:
-      return amf_skip_props(p + 1, end);
+      return amf_skip_props(p + 1, end, depth + 1);
     case AMF_T_NULL:
     case AMF_T_UNDEFINED:
       return p + 1;
     case AMF_T_ECMA_ARRAY:
-      return end - p < 5 ? NULL : amf_skip_props(p + 5, end);
+      return end - p < 5 ? NULL : amf_skip_props(p + 5, end, depth + 1);
     case AMF_T_STRICT_ARRAY:
       if (end - p < 5) return NULL;
       uint32_t count = be32_get(p + 1);
       p += 5;
       for (uint32_t i = 0; i < count; i++) {
-        p = amf_skip_value(p, end);
+        p = skip_value(p, end, depth + 1);
         if (!p) return NULL;
       }
       return p;
@@ -171,6 +175,10 @@ const unsigned char *amf_skip_value(const unsigned char *p, const unsigned char 
     default:
       return NULL; /* unknown/unsupported marker: can't safely skip */
   }
+}
+
+const unsigned char *amf_skip_value(const unsigned char *p, const unsigned char *end) {
+  return skip_value(p, end, 0);
 }
 
 int amf_object_find_string(const unsigned char *p, const unsigned char *end, const char *key, char *out, size_t cap) {

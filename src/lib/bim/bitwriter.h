@@ -23,13 +23,13 @@ void bitwriter_reset(bitwriter_t *bw);
 int bitwriter_put(bitwriter_t *bw, uint64_t value, int nbits);
 /* caller must be byte-aligned already (e.g. right after bitwriter_flush) */
 int bitwriter_put_bytes(bitwriter_t *bw, const unsigned char *data, size_t len);
-/* zero-pads and commits any pending partial byte */
-void bitwriter_flush(bitwriter_t *bw);
+/* zero-pads and commits any pending partial byte. returns 0 ok, -1 oom (pending bits kept) */
+int bitwriter_flush(bitwriter_t *bw);
 /* TS 102 822-3-2 3.3: byte-continuation varint, 7 payload bits/byte */
 int bitwriter_put_vluimsbf8(bitwriter_t *bw, uint64_t value);
 /* TS 102 822-3-2 3.3 (vluimsbf5-style): unary continuation prefix, n*4 payload bits */
 int bitwriter_put_vluimsbf4(bitwriter_t *bw, uint64_t value);
-/* implies flush */
+/* implies flush. NULL with *out_len 0 if flush fails */
 const unsigned char *bitwriter_data(bitwriter_t *bw, size_t *out_len);
 
 #endif

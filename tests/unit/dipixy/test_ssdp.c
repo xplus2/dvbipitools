@@ -58,13 +58,24 @@ static void rig_close(const rig_t *r) {
   close(r->client);
 }
 
+static int parse_req(const char *req, ssdp_query_t *q) {
+  config_t cfg;
+  char uuid[37];
+
+  init_cfg(&cfg);
+  ssdp_device_uuid(&cfg, uuid);
+  return ssdp_msearch_parse(req, uuid, q);
+}
+
 static void rig_search(rig_t *r, const config_t *cfg, const char *st_line) {
   char uuid[37];
   char req[256];
+  ssdp_query_t q;
 
   ssdp_device_uuid(cfg, uuid);
-  snprintf(req, sizeof req, "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\n%s\r\n", st_line);
-  ssdp_handle_msearch(r->server, req, (struct sockaddr *)&r->client_addr, sizeof r->client_addr, cfg, uuid);
+  snprintf(req, sizeof req, "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\n%s\r\n", st_line);
+  if (!ssdp_msearch_parse(req, uuid, &q)) return;
+  ssdp_msearch_reply(r->server, (struct sockaddr *)&r->client_addr, sizeof r->client_addr, cfg, uuid, q.mask);
 }
 
 static int rig_recv(const rig_t *r, char *buf, size_t sz) {
@@ -195,17 +206,36 @@ END_TEST
 
 START_TEST(other_datagrams_are_ignored) {
   static const char *const msgs[] = {"NOTIFY * HTTP/1.1\r\nST: ssdp:all\r\n\r\n", "M-SEARCH * HTTP/1.1", "M-SEARCH"};
-  config_t cfg;
-  rig_t r;
-  char uuid[37];
-  char buf[1024];
+  ssdp_query_t q;
 
-  init_cfg(&cfg);
-  ssdp_device_uuid(&cfg, uuid);
-  rig_open(&r);
-  ssdp_handle_msearch(r.server, msgs[_i], (struct sockaddr *)&r.client_addr, sizeof r.client_addr, &cfg, uuid);
-  ck_assert_int_eq(rig_recv(&r, buf, sizeof buf), 0);
-  rig_close(&r);
+  ck_assert_int_eq(parse_req(msgs[_i], &q), 0);
+}
+END_TEST
+
+START_TEST(search_without_valid_man_or_mx_is_rejected) {
+  static const char *const reqs[] = {
+      "M-SEARCH * HTTP/1.1\r\nMX: 2\r\nST: ssdp:all\r\n\r\n",
+      "M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:other\"\r\nMX: 2\r\nST: ssdp:all\r\n\r\n",
+      "M-SEARCH * HTTP/1.1\r\nMAN: ssdp:discover\r\nMX: 2\r\nST: ssdp:all\r\n\r\n",
+      "M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:discover\"\r\nST: ssdp:all\r\n\r\n",
+      "M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:discover\"\r\nMX: 0\r\nST: ssdp:all\r\n\r\n",
+      "M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:discover\"\r\nMX: -1\r\nST: ssdp:all\r\n\r\n",
+      "M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:discover\"\r\nMX: 2x\r\nST: ssdp:all\r\n\r\n",
+      "M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:discover\"\r\nMX: 121\r\nST: ssdp:all\r\n\r\n",
+  };
+  ssdp_query_t q;
+
+  ck_assert_int_eq(parse_req(reqs[_i], &q), 0);
+}
+END_TEST
+
+START_TEST(search_mx_is_clamped_to_five) {
+  ssdp_query_t q;
+
+  ck_assert_int_eq(parse_req("M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:discover\"\r\nMX: 120\r\nST: ssdp:all\r\n\r\n", &q), 1);
+  ck_assert_uint_eq(q.mx_s, 5u);
+  ck_assert_int_eq(parse_req("M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:discover\"\r\nMX: 3\r\nST: ssdp:all\r\n\r\n", &q), 1);
+  ck_assert_uint_eq(q.mx_s, 3u);
 }
 END_TEST
 
@@ -245,6 +275,8 @@ static Suite *ssdp_suite(void) {
   tcase_add_test(tc, search_for_the_device_uuid_answers_once);
   tcase_add_loop_test(tc, unmatched_requests_get_no_reply, 0, 2);
   tcase_add_loop_test(tc, other_datagrams_are_ignored, 0, 3);
+  tcase_add_loop_test(tc, search_without_valid_man_or_mx_is_rejected, 0, 8);
+  tcase_add_test(tc, search_mx_is_clamped_to_five);
   tcase_add_test(tc, start_and_stop_are_idempotent);
   suite_add_tcase(s, tc);
   return s;

@@ -123,6 +123,8 @@ static inline int h3r_recv_data(nghttp3_conn *c, int64_t sid, const uint8_t *dat
   (void)c;
   (void)sud;
   if (st) client_resp_data(st, data, len);
+  ngtcp2_conn_extend_max_stream_offset(h->qc, sid, len);
+  ngtcp2_conn_extend_max_offset(h->qc, len);
   return 0;
 }
 

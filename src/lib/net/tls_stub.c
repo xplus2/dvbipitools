@@ -43,4 +43,9 @@ int tls_pending(const tls_t *t) {
   return 0;
 }
 
+int tls_want_read(const tls_t *t) {
+  (void)t;
+  return 0;
+}
+
 void tls_close(tls_t *t) { (void)t; }

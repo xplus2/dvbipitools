@@ -116,6 +116,9 @@ args_status_t dixy_opt_http(dixy_opt_t *p, int c) {
     case OPT_CORS_ORIGIN:
       cfg->cors_origins = optarg;
       break;
+    case OPT_WS_ALLOWED_HOSTS:
+      cfg->ws_allowed_hosts = optarg;
+      break;
     default:
       return OPT_UNHANDLED;
   }

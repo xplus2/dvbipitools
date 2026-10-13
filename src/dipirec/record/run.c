@@ -61,17 +61,28 @@ int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const
 
   while (!stop_now(cfg, start)) {
     ssize_t n;
+    net_err_reason_t reason;
     int pr;
     sinks_service_srt(sinks, n_sinks);
     if (ctx.insp) tsinspect_tick(ctx.insp, mono_seconds());
     pr = src_wait_readable(s, 100);
-    if (pr < 0) break;
+    if (pr < 0) {
+      log_code("CE000712", TOOL_NAME ": input error");
+      rc = 1;
+      break;
+    }
     if (pr == 0) {
       sinks_flush(sinks, n_sinks);
       continue;
     }
-    n = src_read(s, buf, sizeof buf);
-    if (n < 0) break;
+    n = src_read_reason(s, buf, sizeof buf, &reason);
+    if (n < 0) {
+      if (reason != NET_ERR_EOF) {
+        log_code("CE000712", TOOL_NAME ": input error");
+        rc = 1;
+      }
+      break;
+    }
     if (n == 0) continue;
     if (pace) {
       if (tssrc_is_rtp_framed(s->t)) {
@@ -134,12 +145,15 @@ static inline int stream_feed(stream_ctx_t *c, const unsigned char *pkt, int ins
     pace_feed_pcr_pkt(c->pace, pkt, psi_pcr_pid(p));
   }
   if (c->f) {
-    unsigned char o[188];
-    const unsigned char *r = ts_filter_packet(c->f, pkt, o);
+    unsigned char o[TS_FILTER_OUT_MAX];
+    size_t n;
+    const unsigned char *r = ts_filter_packet(c->f, pkt, o, &n);
     if (r) {
-      if (inspect && c->out) tsinspect_packet(c->out, r);
-      if (write_to_sinks(c->sinks, c->n_sinks, r, 188)) return 1;
-      *c->bytes += 188;
+      if (inspect && c->out) {
+        for (size_t k = 0; k < n; k++) tsinspect_packet(c->out, r + k * 188);
+      }
+      if (write_to_sinks(c->sinks, c->n_sinks, r, n * 188)) return 1;
+      *c->bytes += n * 188;
     }
     if (ts_filter_bad_track(c->f)) {
       c->bad = 1;
@@ -244,18 +258,29 @@ int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, in
 
   while (!stop_now(cfg, start)) {
     ssize_t n;
+    net_err_reason_t reason;
     int pr;
     sinks_service_srt(sinks, n_sinks);
     if (ctx.in) tsinspect_tick(ctx.in, mono_seconds());
     if (ctx.out) tsinspect_tick(ctx.out, mono_seconds());
     pr = src_wait_readable(s, 100);
-    if (pr < 0) break;
+    if (pr < 0) {
+      log_code("CE000712", TOOL_NAME ": input error");
+      rc = 1;
+      break;
+    }
     if (pr == 0) {
       sinks_flush(sinks, n_sinks);
       continue;
     }
-    n = src_read(s, buf, sizeof buf);
-    if (n < 0) break;
+    n = src_read_reason(s, buf, sizeof buf, &reason);
+    if (n < 0) {
+      if (reason != NET_ERR_EOF) {
+        log_code("CE000712", TOOL_NAME ": input error");
+        rc = 1;
+      }
+      break;
+    }
     if (n == 0) continue;
     if (pace) {
       if (tssrc_is_rtp_framed(s->t)) {
@@ -310,7 +335,7 @@ int resolve_pmt_selection(const config_t *cfg, src_t *s, unsigned *pmt_pid, unsi
     return 0;
   }
 
-  probe = mpts_probe_run(s->t, MPTS_NAME_WAIT_MS);
+  probe = mpts_probe_run(s->t, MPTS_PROBE_PAT_WAIT_MS, MPTS_NAME_WAIT_MS);
   if (probe.kind == MPTS_PROBE_FAIL) {
     log_code("CE000423", TOOL_NAME ": no PAT received, giving up");
     return 1;
@@ -331,6 +356,11 @@ int resolve_pmt_selection(const config_t *cfg, src_t *s, unsigned *pmt_pid, unsi
       log_code("CS000576", TOOL_NAME ": -f mkv/mp4/-o rtmp:// can't hold multiple programs, pick one with -p <pid>");
       mpts_probe_print_programs(TOOL_NAME, &probe);
       return 1;
+    }
+    if (cfg->format == FMT_TS) {
+      if (!cfg->audio_all) log_code("CA000708", TOOL_NAME ": -a ignored, -p all forwards unfiltered");
+      if (cfg->subs != SUB_KEEP) log_code("CA000709", TOOL_NAME ": -s ignored, -p all forwards unfiltered");
+      if (cfg->fl.have_strip) log_code("CA000710", TOOL_NAME ": --strip ignored, -p all forwards unfiltered");
     }
     for (int k = 0; k < probe.program_count; k++) all_pids[(*n_all_pids)++] = probe.programs[k].pmt_pid;
     return 0;

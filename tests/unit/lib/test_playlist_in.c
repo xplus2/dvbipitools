@@ -110,6 +110,49 @@ START_TEST(csv_dipiscan_shaped_parses_triplet) {
 }
 END_TEST
 
+START_TEST(csv_reads_icon_field) {
+  char path[160];
+  playlist_list_t *pl;
+  write_temp_file(path, ".csv", "One,rtp://239.1.1.1:5000,1,2,3,http://x/i.png\nTwo,u,1,2,3,\n");
+  pl = playlist_in_parse_csv(path);
+  unlink(path);
+  ck_assert_ptr_nonnull(pl);
+  ck_assert_int_eq(pl->count, 2);
+  ck_assert_str_eq(pl->items[0].icon_uri, "http://x/i.png");
+  ck_assert_ptr_null(pl->items[1].icon_uri);
+  playlist_list_free(pl);
+}
+END_TEST
+
+START_TEST(csv_stream_reports_bad_number_line) {
+  char buf[] = "One,u,1,2,3\nTwo,u,1,2,70000\n";
+  FILE *f = fmemopen(buf, strlen(buf), "r");
+  playlist_list_t *pl = NULL;
+  int line = 0;
+  ck_assert_ptr_nonnull(f);
+  ck_assert_int_eq(playlist_in_read_csv(f, &pl, &line), PLAYLIST_CSV_BAD_NUM);
+  ck_assert_int_eq(line, 2);
+  ck_assert_ptr_null(pl);
+  fclose(f);
+}
+END_TEST
+
+START_TEST(csv_stream_reports_long_line) {
+  char buf[PLAYLIST_CSV_LINE_MAX + 8];
+  FILE *f;
+  playlist_list_t *pl = NULL;
+  int line = 0;
+  memset(buf, 'x', sizeof buf - 2);
+  buf[sizeof buf - 2] = '\n';
+  buf[sizeof buf - 1] = 0;
+  f = fmemopen(buf, strlen(buf), "r");
+  ck_assert_ptr_nonnull(f);
+  ck_assert_int_eq(playlist_in_read_csv(f, &pl, &line), PLAYLIST_CSV_LONG_LINE);
+  ck_assert_int_eq(line, 1);
+  fclose(f);
+}
+END_TEST
+
 START_TEST(csv_missing_file_returns_null) {
   ck_assert_ptr_null(playlist_in_parse_csv("/nonexistent/path.csv"));
 }
@@ -194,6 +237,9 @@ static Suite *playlist_in_suite(void) {
   tcase_add_test(tc, m3u_plain_uri_with_no_extinf_at_all);
   tcase_add_test(tc, m3u_missing_file_returns_null);
   tcase_add_test(tc, csv_dipiscan_shaped_parses_triplet);
+  tcase_add_test(tc, csv_reads_icon_field);
+  tcase_add_test(tc, csv_stream_reports_bad_number_line);
+  tcase_add_test(tc, csv_stream_reports_long_line);
   tcase_add_test(tc, csv_missing_file_returns_null);
   tcase_add_test(tc, xspf_dipiscan_shaped_parses_triplet);
   tcase_add_test(tc, xspf_generic_third_party_without_extension);

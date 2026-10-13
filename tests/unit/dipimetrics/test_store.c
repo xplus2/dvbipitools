@@ -462,7 +462,7 @@ START_TEST(oversized_snapshot_is_dropped) {
   ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
   w.flush = capture_part;
   w.flush_ctx = &g_cap;
-  while (g_cap.n < METRICS_MAX_PARTS - 2) {
+  while (g_cap.n < 1) {
     char label[METRICS_LABEL_MAX + 1];
     char num[16];
     size_t nl = uint_to_str(num, n++);
@@ -471,8 +471,10 @@ START_TEST(oversized_snapshot_is_dropped) {
     memcpy(label, num, nl);
     ck_assert_int_eq(metrics_writer_put(&w, METRICS_ID_INPUT_BYTES_TOTAL, label, 1), 0);
   }
-  for (unsigned i = 0; i < g_cap.n; i++)
-    store_ingest(&st, g_cap.parts[i], g_cap.lens[i], 10.0, 0);
+  for (unsigned i = 0; i < 70; i++) {
+    g_cap.parts[0][2] = (unsigned char)i;
+    store_ingest(&st, g_cap.parts[0], g_cap.lens[0], 10.0, 0);
+  }
   ck_assert_uint_eq(st.stats.snapshots_rejected_toolarge, 1u);
   ck_assert_ptr_null(only_used_slot(&st));
   store_free(&st);

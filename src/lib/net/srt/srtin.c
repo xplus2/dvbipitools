@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -17,6 +18,8 @@
 #include "srtin.h"
 
 #define SRT_RCVTIMEO_MS 200
+#define SRT_CONNECT_SLICE_MS 100
+#define SRT_CONNECT_TIMEOUT_DEFAULT_MS 3000
 
 struct srtin {
   SRTSOCKET sock;
@@ -32,6 +35,73 @@ static int stop_wanted(const srtin_cfg_t *cfg) {
   return signal_stop_requested() || (cfg->stop && atomic_load_explicit(cfg->stop, memory_order_relaxed));
 }
 
+static unsigned connect_total_ms(const srtin_cfg_t *cfg) {
+  return cfg->connect_timeout_ms ? cfg->connect_timeout_ms : SRT_CONNECT_TIMEOUT_DEFAULT_MS;
+}
+
+/* non-blocking connect, polled in slices. 0 connected, -1 fail/stopped */
+static int connect_interruptible(const srtin_cfg_t *cfg, SRTSOCKET s, const struct sockaddr *remote, int remote_len) {
+  unsigned total = connect_total_ms(cfg);
+  int sync = 0;
+  int tmo = (int)total;
+  int events = SRT_EPOLL_OUT | SRT_EPOLL_ERR;
+  int eid;
+  struct timespec t0;
+  int rc = -1;
+
+  if (srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof sync) != 0 || srt_setsockopt(s, 0, SRTO_CONNTIMEO, &tmo, sizeof tmo) != 0) {
+    log_code("LE500158", "srt: setsockopt failed: %s", srt_getlasterror_str());
+    return -1;
+  }
+  eid = srt_epoll_create();
+  if (eid < 0) {
+    log_code("LE500160", "srt: epoll create failed: %s", srt_getlasterror_str());
+    return -1;
+  }
+  if (srt_epoll_add_usock(eid, s, &events) != 0) {
+    log_code("LE500161", "srt: epoll add failed: %s", srt_getlasterror_str());
+    goto out;
+  }
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  if (srt_connect(s, remote, remote_len) == SRT_ERROR) {
+    log_code("LE600137", "srt: connect failed: %s", srt_getlasterror_str());
+    goto out;
+  }
+  while (!stop_wanted(cfg)) {
+    SRT_SOCKSTATUS st = srt_getsockstate(s);
+    SRTSOCKET rd[1];
+    SRTSOCKET wr[1];
+    int nrd = 1;
+    int nwr = 1;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (st == SRTS_CONNECTED) {
+      sync = 1;
+      if (srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof sync) != 0) {
+        log_code("LE500158", "srt: setsockopt failed: %s", srt_getlasterror_str());
+        goto out;
+      }
+      rc = 0;
+      goto out;
+    }
+    if (st != SRTS_CONNECTING) {
+      log_code("LE600137", "srt: connect failed: %s", srt_getlasterror_str());
+      goto out;
+    }
+    if ((now.tv_sec - t0.tv_sec) * 1000L + (now.tv_nsec - t0.tv_nsec) / 1000000L >= (long)total) {
+      log_code("LE600137", "srt: connect failed: timeout");
+      goto out;
+    }
+    srt_epoll_wait(eid, rd, &nrd, wr, &nwr, SRT_CONNECT_SLICE_MS, NULL, NULL, NULL, NULL);
+  }
+
+out:
+  srt_epoll_release(eid);
+  return rc;
+}
+
+static int stop_cb(void *arg) { return stop_wanted(arg); }
+
 static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
   SRTSOCKET s;
   struct sockaddr_storage remote;
@@ -39,7 +109,7 @@ static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
   int remote_len;
   int local_len;
 
-  if (srtcommon_resolve(cfg->peers[0].host, cfg->peers[0].port, &remote, &remote_len))
+  if (srtcommon_resolve_stoppable(cfg->peers[0].host, cfg->peers[0].port, &remote, &remote_len, connect_total_ms(cfg), stop_cb, (void *)cfg))
     return SRT_INVALID_SOCK;
 
   s = srt_create_socket();
@@ -67,8 +137,7 @@ static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
       srt_close(s);
       return SRT_INVALID_SOCK;
     }
-  } else if (srt_connect(s, (struct sockaddr *)&remote, remote_len) != 0) {
-    log_code("LE600137", "srt: connect failed: %s", srt_getlasterror_str());
+  } else if (connect_interruptible(cfg, s, (struct sockaddr *)&remote, remote_len) != 0) {
     srt_close(s);
     return SRT_INVALID_SOCK;
   }

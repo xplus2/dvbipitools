@@ -78,6 +78,42 @@ START_TEST(unusable_credentials_leave_the_quic_context_unbuilt) {
 }
 END_TEST
 
+START_TEST(reload_swaps_the_quic_context_and_keeps_the_old_one_on_failure) {
+  char dir[] = "/tmp/dipixy_h3rl_XXXXXX";
+  char cert[64];
+  char key[64];
+  char cmd[96];
+  SSL_CTX *before;
+  FILE *f;
+
+  ck_assert_ptr_nonnull(mkdtemp(dir));
+  snprintf(cert, sizeof cert, "%s/a.crt", dir);
+  snprintf(key, sizeof key, "%s/a.key", dir);
+  tls_fixture_write_cert(cert, key);
+
+  ck_assert_int_eq(h3_reload(), -1);
+  h3_init(cert, key);
+  ck_assert_int_eq(h3_ready(), 1);
+  before = g_h3_ssl_ctx;
+  ck_assert_int_eq(h3_reload(), 0);
+  ck_assert_ptr_ne(g_h3_ssl_ctx, before);
+  tls_ctx_gc_sweep();
+
+  before = g_h3_ssl_ctx;
+  f = fopen(cert, "wb");
+  ck_assert_ptr_nonnull(f);
+  fputs("not a certificate\n", f);
+  fclose(f);
+  ck_assert_int_eq(h3_reload(), -1);
+  ck_assert_ptr_eq(g_h3_ssl_ctx, before);
+  ck_assert_int_eq(h3_ready(), 1);
+
+  h3_cleanup();
+  snprintf(cmd, sizeof cmd, "rm -rf %s", dir);
+  ck_assert_int_eq(system(cmd), 0);
+}
+END_TEST
+
 typedef struct {
   const char *name;
   const unsigned char *alpn;
@@ -218,6 +254,7 @@ static Suite *tls_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_set_timeout(tc, 30);
   tcase_add_test(tc, unusable_credentials_leave_the_quic_context_unbuilt);
+  tcase_add_test(tc, reload_swaps_the_quic_context_and_keeps_the_old_one_on_failure);
   tcase_add_loop_test(tc, client_hello_without_the_h3_protocol_is_refused, 0, (int)(sizeof alpn_cases / sizeof alpn_cases[0]));
   tcase_add_test(tc, non_quic_datagrams_create_no_connections);
   tcase_add_test(tc, truncated_initial_packets_are_dropped);

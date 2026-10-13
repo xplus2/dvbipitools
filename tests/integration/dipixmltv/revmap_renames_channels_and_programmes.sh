@@ -8,9 +8,9 @@ BIN=$1
 cat > "$WORK/in.tva.xml" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <TVAMain xmlns="urn:tva:metadata:2004">
-<ProgramDescription>
 <MetadataOriginationInformationTable/>
 <ClassificationSchemeTable/>
+<ProgramDescription>
 <ProgramInformationTable>
 <ProgramInformation programId="crid://dipixmltv.invalid/channel1/20201215120000"><BasicDescription><Title>News One</Title></BasicDescription></ProgramInformation>
 <ProgramInformation programId="crid://dipixmltv.invalid/channel1/20201215130000"><BasicDescription><Title>Weather One</Title></BasicDescription></ProgramInformation>

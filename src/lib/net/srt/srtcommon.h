@@ -35,6 +35,10 @@ int srtcommon_apply_opts(SRTSOCKET s, const srtcommon_opts_t *o, int is_group, i
 /* SOCK_DGRAM: addrinfo family/form only. UDP socket itself: caller's own. 0 ok, -1 error */
 int srtcommon_resolve(const char *host, unsigned port, struct sockaddr_storage *ss, int *len);
 
+/* resolve on detached helper, abandoned on stop()/timeout (helper frees itself when the resolver returns).
+   timeout_ms 0: no limit. at most 16 in flight process-wide. 0 ok, -1 err/stopped */
+int srtcommon_resolve_stoppable(const char *host, unsigned port, struct sockaddr_storage *ss, int *len, unsigned timeout_ms, int (*stop)(void *), void *arg);
+
 /* builds one SRT_SOCKGROUPCONFIG per peer via srt_prepare_endpoint(). 0 ok, -1 error (resolve failed) */
 int srtcommon_build_group_config(const srtcommon_peer_t *peers, int npeers, SRT_SOCKGROUPCONFIG *gc_out);
 

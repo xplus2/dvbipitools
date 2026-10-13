@@ -94,7 +94,13 @@ args_status_t rec_cli_check(config_t *cfg) {
     return ARGS_ERR;
   }
   if (!cfg->al_fec_l && cfg->al_fec_port) log_code("CS000536", TOOL_NAME ": --al-fec-port needs --al-fec");
-  if (cfg->al_fec_l && !has_rtp && cfg->source.kind != URI_RTP) log_code("CS000537", TOOL_NAME ": --al-fec needs -i rtp:// or -o rtp:// target");
+  if (cfg->al_fec_l && cfg->source.kind != URI_RTP) log_code("CS000537", TOOL_NAME ": --al-fec needs -i rtp:// source");
+  if (cfg->al_fec_out_l && !cfg->al_fec_out_port) {
+    argerr("CS000704", "--al-fec-out requires --al-fec-port-out");
+    return ARGS_ERR;
+  }
+  if (!cfg->al_fec_out_l && cfg->al_fec_out_port) log_code("CS000705", TOOL_NAME ": --al-fec-port-out needs --al-fec-out");
+  if (cfg->al_fec_out_l && !has_rtp) log_code("CS000706", TOOL_NAME ": --al-fec-out needs -o rtp:// target");
   if (cfg->insecure_tls && !has_rtmps && !(cfg->source.kind == URI_HTTP && cfg->source.http.tls)) log_code("CS000538", TOOL_NAME ": --insecure needs -o rtmps:// target or -i https:// source");
   /* LCEVC also strips mp4/mkv/rtmp inline data, unlike others */
   if (cfg->fl.have_strip && cfg->format != FMT_TS && (cfg->strip_mask & ~STRIP_LCEVC)) log_code("CA000539", TOOL_NAME ": --strip has no effect outside -f ts");

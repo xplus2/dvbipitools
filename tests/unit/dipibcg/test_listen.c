@@ -75,6 +75,51 @@ START_TEST(already_seen_stops_recording_past_the_cap) {
 }
 END_TEST
 
+START_TEST(already_seen_distinguishes_by_provider_id) {
+  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
+  int count = 0;
+  dvbstp_header_t a = make_header(1, 2, 3);
+  dvbstp_header_t b = make_header(1, 2, 3);
+  b.has_provider_id = 1;
+  b.provider_id = 7;
+  dvbstp_header_t c = b;
+  c.provider_id = 8;
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &a), 0);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &b), 0);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &c), 0);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &b), 1);
+  ck_assert_int_eq(count, 3);
+}
+END_TEST
+
+START_TEST(write_csvmap_quotes_fields_with_commas_and_quotes) {
+  char path[] = "/tmp/dvbipitools_test_listen_csvmap_XXXXXX";
+  bcg_doc_t doc;
+  bcg_channel_t *c;
+  FILE *f;
+  char line[256];
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  close(fd);
+
+  bcg_doc_init(&doc);
+  c = bcg_add_channel(&doc);
+  bufcpy(c->id, sizeof c->id, "a,b\"c");
+  bufcpy(c->uri, sizeof c->uri, "rtp://h/x,y");
+  c->tsid = 1;
+  c->onid = 2;
+  c->sid = 3;
+  write_csvmap(path, &doc);
+  f = fopen(path, "r");
+  ck_assert_ptr_nonnull(f);
+  ck_assert_ptr_nonnull(fgets(line, sizeof line, f));
+  ck_assert_str_eq(line, "\"a,b\"\"c\",\"rtp://h/x,y\",1,2,3\n");
+  fclose(f);
+  bcg_doc_free(&doc);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(write_csvmap_writes_only_channels_with_uri) {
   char path[] = "/tmp/dvbipitools_test_listen_csvmap_XXXXXX";
   bcg_doc_t doc;
@@ -145,14 +190,14 @@ static void build_wrapped(bcg_sender_t *b, int compress) {
   bufcpy(pr->channel_id, sizeof pr->channel_id, "ch1");
   bufcpy(pr->start, sizeof pr->start, "2030-01-01T12:00:00Z");
   bufcpy(pr->stop, sizeof pr->stop, "2030-01-01T13:00:00Z");
-  bufcpy(pr->title, sizeof pr->title, "News");
+  bcg_set_text(&pr->title, "News");
   accessunit_scratch_init(&sc);
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
   ck_assert_int_eq(accessunit_encode(&sc, &doc, &bw, &sw, &nfuu), 0);
   bits = bitwriter_data(&bw, &bits_len);
   strs = strrepo_writer_data(&sw, &strs_len);
-  ck_assert_int_eq(container_build(bits, bits_len, strs, strs_len, &cont, &cont_len), 0);
+  ck_assert_int_eq(container_build(bits, bits_len, strs, strs_len, NULL, 0, &cont, &cont_len), 0);
   ck_assert_int_eq(wrapper_build(cont, cont_len, compress, &b->valid, &b->sd.lens[0]), 0);
   b->sd.docs[0] = b->valid;
   free(cont);
@@ -273,6 +318,8 @@ static Suite *listen_suite(void) {
   tcase_add_test(tc, already_seen_is_true_on_repeat);
   tcase_add_test(tc, already_seen_distinguishes_by_all_three_fields);
   tcase_add_test(tc, already_seen_stops_recording_past_the_cap);
+  tcase_add_test(tc, already_seen_distinguishes_by_provider_id);
+  tcase_add_test(tc, write_csvmap_quotes_fields_with_commas_and_quotes);
   tcase_add_test(tc, write_csvmap_writes_only_channels_with_uri);
   tcase_add_loop_test(tc, listen_run_captures_a_wrapped_container_and_skips_bad_segments, 0, (int)(sizeof bcg_listen_cases / sizeof bcg_listen_cases[0]));
   suite_add_tcase(s, tc);

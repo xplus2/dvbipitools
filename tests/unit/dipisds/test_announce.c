@@ -89,11 +89,56 @@ START_TEST(state_reload_bumps_version_in_docs_and_keeps_state_on_failure) {
   ck_assert_int_eq(st.in.service_count, 2);
 
   cfg.input_path = path;
+  ck_assert_int_eq(state_reload(&cfg, &st), 1);
+  ck_assert_uint_eq(st.version, 2u);
+  ck_assert_ptr_nonnull(memmem(st.broadcast_doc, st.broadcast_len, "Version=\"2\"", 11));
+
   st.version = 255;
   ck_assert_int_eq(state_reload(&cfg, &st), 0);
   ck_assert_uint_eq(st.version, 1u);
-  for (i = 0; i < 3; i++) ck_assert_int_eq(state_reload(&cfg, &st), 0);
+  for (i = 0; i < 3; i++) {
+    char body[64];
+    snprintf(body, sizeof body, "Alpha,rtp://239.1.1.1:%u\n", 5001 + i);
+    unlink(path);
+    write_temp_file(path, ".csv", body);
+    cfg.input_path = path;
+    ck_assert_int_eq(state_reload(&cfg, &st), 0);
+  }
   ck_assert_uint_eq(st.version, 4u);
+
+  state_free(&st);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(state_reload_raw_xml_follows_document_version) {
+  char path[160];
+  config_t cfg;
+  sds_state_t st;
+  FILE *f;
+
+  write_temp_file(path, ".xml", "<BroadcastDiscovery Version=\"7\">raw</BroadcastDiscovery>\n");
+  memset(&cfg, 0, sizeof cfg);
+  cfg.input_path = path;
+
+  ck_assert_int_eq(state_load(&cfg, &st), 0);
+  ck_assert_uint_eq(st.version, 7u);
+  ck_assert_int_eq(state_reload(&cfg, &st), 1);
+  ck_assert_uint_eq(st.version, 7u);
+
+  f = fopen(path, "w");
+  ck_assert_ptr_nonnull(f);
+  fputs("<BroadcastDiscovery Version=\"9\">raw</BroadcastDiscovery>\n", f);
+  fclose(f);
+  ck_assert_int_eq(state_reload(&cfg, &st), 0);
+  ck_assert_uint_eq(st.version, 9u);
+
+  f = fopen(path, "w");
+  ck_assert_ptr_nonnull(f);
+  fputs("<BroadcastDiscovery>raw</BroadcastDiscovery>\n", f);
+  fclose(f);
+  ck_assert_int_eq(state_reload(&cfg, &st), 0);
+  ck_assert_uint_eq(st.version, 10u);
 
   state_free(&st);
   unlink(path);
@@ -288,6 +333,29 @@ START_TEST(state_load_rejects_bad_packages_file) {
 }
 END_TEST
 
+START_TEST(state_load_rejects_unknown_package_service) {
+  char csv_path[160], pkg_path[160];
+  config_t cfg;
+  sds_state_t st;
+
+  write_temp_file(csv_path, ".csv", "Channel One,rtp://239.1.1.1:5000,1,2,101\n");
+  write_temp_file(pkg_path, ".csv", "1,Bundle,eng,1,Channel One|Chanel Two\n");
+  memset(&cfg, 0, sizeof cfg);
+  cfg.input_path = csv_path;
+  cfg.provider = "example.org";
+  cfg.offering = "My Headend";
+  memcpy(cfg.lang, "deu", 3);
+  cfg.family = AF_INET;
+  strcpy(cfg.mcast_group, "239.255.0.1");
+  cfg.mcast_port = 3937;
+  cfg.packages_path = pkg_path;
+
+  ck_assert_int_eq(state_load(&cfg, &st), -1);
+  unlink(csv_path);
+  unlink(pkg_path);
+}
+END_TEST
+
 static void base_cfg(config_t *cfg, const char *input_path) {
   memset(cfg, 0, sizeof *cfg);
   cfg->input_path = input_path;
@@ -310,8 +378,10 @@ typedef struct {
 static const side_case_t side_cases[] = {
   {SIDE_PACKAGES, NULL, "cannot open"},
   {SIDE_CELLS, NULL, "cannot open"},
-  {SIDE_PACKAGES, "1,Bundle,eng,1,Channel One\n1,Again,eng,1,Channel One\nx,Bad,eng,1,Channel One\n", "bad package id"},
+  {SIDE_PACKAGES, "1,Bundle,eng,1,Channel One\n2,Again,eng,1,Channel One\nx,Bad,eng,1,Channel One\n", "bad package id"},
   {SIDE_PACKAGES, "1,Bundle,en,1,Channel One\n", "bad lang"},
+  {SIDE_PACKAGES, "1,Bundle,eng,1,Channel One\n1,Again,eng,1,Channel One\n", "duplicate package id"},
+  {SIDE_PACKAGES, "1,Bundle,eng,yes,Channel One\n", "bad visible flag"},
   {SIDE_CELLS, "Paris East,FRA,1:IDF\n", "bad country code"},
   {SIDE_CELLS, "Paris East,FR\n", "no CA entries"},
   {SIDE_CELLS, "Paris East,FR,IDF\n", "bad CA entry"},
@@ -352,13 +422,6 @@ END_TEST
 
 typedef enum { BIG_BROADCAST, BIG_PACKAGE, BIG_CELL, BIG_RMSFUS } big_kind_t;
 
-static const char *const big_msgs[] = {
-  "SD&S document too large",
-  "Package Discovery document too large",
-  "Regionalisation Discovery document too large",
-  "RMS-FUS Discovery document too large",
-};
-
 static void fill_services(char *buf, size_t cap, int count) {
   size_t n = 0;
 
@@ -386,11 +449,10 @@ static void fill_cells(char *buf, size_t cap, int count) {
   }
 }
 
-START_TEST(state_load_reports_documents_over_the_size_cap) {
+START_TEST(state_load_builds_documents_over_64k) {
   big_kind_t kind = (big_kind_t)_i;
   char csv_path[160];
   char side_path[160] = "";
-  char msg[4096];
   char *buf = malloc(BIG_BUF);
   char *rms_logo = NULL;
   config_t cfg;
@@ -420,11 +482,10 @@ START_TEST(state_load_reports_documents_over_the_size_cap) {
     cfg.rms_location = "https://rms.example/";
     cfg.rms_logo = rms_logo;
   }
-  log_capture_begin();
   rc = state_load(&cfg, &st);
-  log_capture_end(msg, sizeof msg);
-  ck_assert_int_eq(rc, -1);
-  ck_assert_ptr_nonnull(strstr(msg, big_msgs[kind]));
+  ck_assert_int_eq(rc, 0);
+  ck_assert_uint_gt(kind == BIG_BROADCAST ? st.broadcast_len : kind == BIG_PACKAGE ? st.package_len : kind == BIG_CELL ? st.cell_len : st.rmsfus_len, 65536u);
+  state_free(&st);
   unlink(csv_path);
   if (side_path[0]) unlink(side_path);
   free(rms_logo);
@@ -506,9 +567,7 @@ START_TEST(announce_run_reloads_on_sighup_and_keeps_the_old_input_on_failure) {
 }
 END_TEST
 
-#define HUGE_XML_LEN 6000000u
-
-typedef enum { EMIT_SERVICES, EMIT_RAW_XML, EMIT_SEND_FAILURE } emit_kind_t;
+typedef enum { EMIT_SERVICES, EMIT_RAW_XML } emit_kind_t;
 
 typedef struct {
   emit_kind_t kind;
@@ -521,7 +580,6 @@ typedef struct {
 static const emit_case_t emit_cases[] = {
   {EMIT_SERVICES, 1, 1, 1, 0},
   {EMIT_RAW_XML, 0, 0, 1, 0},
-  {EMIT_SEND_FAILURE, 0, 0, 0, 1},
 };
 
 START_TEST(announce_run_exports_provider_service_and_announcement_metrics) {
@@ -540,18 +598,7 @@ START_TEST(announce_run_exports_provider_service_and_announcement_metrics) {
   if (c->kind == EMIT_SERVICES) {
     write_temp_file(path, ".csv", "Channel One,rtp://239.1.1.1:5000\n");
   } else {
-    char *big = malloc(HUGE_XML_LEN + 1);
-
-    ck_assert_ptr_nonnull(big);
-    if (c->kind == EMIT_RAW_XML) {
-      snprintf(big, HUGE_XML_LEN, "<BroadcastDiscovery>raw</BroadcastDiscovery>\n");
-    } else {
-      memset(big, ' ', HUGE_XML_LEN);
-      memcpy(big, "<BroadcastDiscovery>", 20);
-      big[HUGE_XML_LEN] = '\0';
-    }
-    write_temp_file(path, ".xml", big);
-    free(big);
+    write_temp_file(path, ".xml", "<BroadcastDiscovery>raw</BroadcastDiscovery>\n");
   }
   base_cfg(&cfg, path);
   run_helper_group(cfg.mcast_group, sizeof cfg.mcast_group, 78);
@@ -587,11 +634,35 @@ START_TEST(announce_run_exports_provider_service_and_announcement_metrics) {
 }
 END_TEST
 
+START_TEST(announce_run_rejects_oversize_raw_xml_with_log) {
+  char path[160];
+  char msg[8192];
+  config_t cfg;
+  sink_t ms;
+  char *big = malloc(DVBSTP_MAX_SEGMENT + 2);
+  ck_assert_ptr_nonnull(big);
+  memset(big, ' ', DVBSTP_MAX_SEGMENT + 1);
+  big[DVBSTP_MAX_SEGMENT + 1] = '\0';
+  memcpy(big, "<BroadcastDiscovery>", 20);
+  write_temp_file(path, ".xml", big);
+  free(big);
+  base_cfg(&cfg, path);
+  sink_open(&ms, METRICS_COMPONENT_SDS, "sds1", 0.1);
+  log_capture_begin();
+  ck_assert_int_eq(announce_run(&cfg, &ms.mx), 1);
+  log_capture_end(msg, sizeof msg);
+  ck_assert_ptr_nonnull(strstr(msg, "AE000695"));
+  sink_close(&ms);
+  unlink(path);
+}
+END_TEST
+
 static Suite *announce_suite(void) {
   Suite *s = suite_create("dipisds_announce");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, state_load_builds_broadcast_and_sp_docs_for_service_input);
   tcase_add_test(tc, state_reload_bumps_version_in_docs_and_keeps_state_on_failure);
+  tcase_add_test(tc, state_reload_raw_xml_follows_document_version);
   tcase_add_test(tc, state_load_leaves_docs_unset_for_raw_xml_input);
   tcase_add_test(tc, state_load_applies_ret_and_fcc_to_broadcast_doc);
   tcase_add_test(tc, state_load_builds_package_doc_and_lists_it_in_sp_doc);
@@ -599,10 +670,12 @@ static Suite *announce_suite(void) {
   tcase_add_test(tc, state_load_builds_rmsfus_doc_for_rms);
   tcase_add_test(tc, state_load_builds_rmsfus_doc_for_fus);
   tcase_add_test(tc, state_load_rejects_bad_packages_file);
+  tcase_add_test(tc, state_load_rejects_unknown_package_service);
   tcase_add_loop_test(tc, state_load_fails_on_unreadable_or_bad_side_files, 0, (int)(sizeof side_cases / sizeof side_cases[0]));
-  tcase_add_loop_test(tc, state_load_reports_documents_over_the_size_cap, 0, BIG_RMSFUS + 1);
+  tcase_add_loop_test(tc, state_load_builds_documents_over_64k, 0, BIG_RMSFUS + 1);
   tcase_add_test(tc, state_load_rejects_missing_input);
   tcase_add_loop_test(tc, announce_run_exports_provider_service_and_announcement_metrics, 0, (int)(sizeof emit_cases / sizeof emit_cases[0]));
+  tcase_add_test(tc, announce_run_rejects_oversize_raw_xml_with_log);
   tcase_add_loop_test(tc, announce_run_reloads_on_sighup_and_keeps_the_old_input_on_failure, 0, (int)(sizeof announce_cases / sizeof announce_cases[0]));
   suite_add_tcase(s, tc);
   return s;

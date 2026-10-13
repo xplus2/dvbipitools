@@ -6,6 +6,7 @@
 #ifdef HAVE_HTTP3
 
 #include "http3_stateless.h"
+#include "http3_udp.h"
 
 #include <ngtcp2/ngtcp2_crypto.h>
 #include <openssl/rand.h>
@@ -75,21 +76,24 @@ static int budget_ok(void) {
   return sent++ < H3_STATELESS_PER_SEC;
 }
 
-static void send_pkt(int fd, const uint8_t *buf, size_t len, const struct sockaddr *peer, socklen_t peerlen) {
-  (void)sendto(fd, buf, len, 0, peer, peerlen);
+static void send_pkt(int fd, const uint8_t *buf, size_t len, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr_storage *local) {
+  struct sockaddr_storage dst;
+  if (peerlen > sizeof dst) return;
+  memcpy(&dst, peer, peerlen);
+  h3_udp_send(fd, &dst, peerlen, local, buf, len, len);
 }
 
-static void send_version_neg(int fd, const ngtcp2_version_cid *vc, const struct sockaddr *peer, socklen_t peerlen) {
+static void send_version_neg(int fd, const ngtcp2_version_cid *vc, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr_storage *local) {
   static const uint32_t versions[] = {NGTCP2_PROTO_VER_V1};
   uint8_t buf[NGTCP2_MAX_UDP_PAYLOAD_SIZE];
   uint8_t rnd;
   if (!budget_ok() || RAND_bytes(&rnd, 1) != 1) return;
   ngtcp2_ssize n = ngtcp2_pkt_write_version_negotiation(buf, sizeof buf, rnd, vc->scid, vc->scidlen, vc->dcid, vc->dcidlen, versions, sizeof versions / sizeof versions[0]);
-  if (n > 0) send_pkt(fd, buf, (size_t)n, peer, peerlen);
+  if (n > 0) send_pkt(fd, buf, (size_t)n, peer, peerlen, local);
 }
 
 /* reply < trigger, else reset loops */
-static void send_reset(int fd, size_t pktlen, const ngtcp2_version_cid *vc, const struct sockaddr *peer, socklen_t peerlen) {
+static void send_reset(int fd, size_t pktlen, const ngtcp2_version_cid *vc, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr_storage *local) {
   uint8_t rnd[H3_RESET_TARGET_LEN];
   uint8_t buf[H3_RESET_TARGET_LEN];
   ngtcp2_stateless_reset_token token = {0};
@@ -102,10 +106,10 @@ static void send_reset(int fd, size_t pktlen, const ngtcp2_version_cid *vc, cons
   ngtcp2_cid_init(&cid, vc->dcid, vc->dcidlen);
   if (h3_reset_token(token.data, &cid) != 0) return;
   ngtcp2_ssize n = ngtcp2_pkt_write_stateless_reset2(buf, sizeof buf, &token, rnd, randlen);
-  if (n > 0 && (size_t)n < pktlen) send_pkt(fd, buf, (size_t)n, peer, peerlen);
+  if (n > 0 && (size_t)n < pktlen) send_pkt(fd, buf, (size_t)n, peer, peerlen, local);
 }
 
-static void send_retry(int fd, const ngtcp2_pkt_hd *hd, const struct sockaddr *peer, socklen_t peerlen, ngtcp2_tstamp ts) {
+static void send_retry(int fd, const ngtcp2_pkt_hd *hd, const struct sockaddr *peer, socklen_t peerlen, ngtcp2_tstamp ts, const struct sockaddr_storage *local) {
   uint8_t tok[NGTCP2_CRYPTO_MAX_RETRY_TOKENLEN2];
   uint8_t buf[NGTCP2_MAX_UDP_PAYLOAD_SIZE];
   ngtcp2_cid scid;
@@ -115,27 +119,27 @@ static void send_retry(int fd, const ngtcp2_pkt_hd *hd, const struct sockaddr *p
   ngtcp2_ssize toklen = h3_token_retry_make(tok, peer, peerlen, hd->version, &scid, &hd->dcid, ts);
   if (toklen < 0) return;
   ngtcp2_ssize n = ngtcp2_crypto_write_retry(buf, sizeof buf, hd->version, &hd->scid, &scid, &hd->dcid, tok, (size_t)toklen);
-  if (n > 0) send_pkt(fd, buf, (size_t)n, peer, peerlen);
+  if (n > 0) send_pkt(fd, buf, (size_t)n, peer, peerlen, local);
 }
 
-static void send_invalid_token(int fd, const ngtcp2_pkt_hd *hd, const struct sockaddr *peer, socklen_t peerlen) {
+static void send_invalid_token(int fd, const ngtcp2_pkt_hd *hd, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr_storage *local) {
   uint8_t buf[NGTCP2_MAX_UDP_PAYLOAD_SIZE];
   if (!budget_ok()) return;
   ngtcp2_ssize n = ngtcp2_crypto_write_connection_close(buf, sizeof buf, hd->version, &hd->scid, &hd->dcid, NGTCP2_INVALID_TOKEN, NULL, 0);
-  if (n > 0) send_pkt(fd, buf, (size_t)n, peer, peerlen);
+  if (n > 0) send_pkt(fd, buf, (size_t)n, peer, peerlen, local);
 }
 
-int h3_stateless_admit(int udp_fd, const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, int active, int max_conns, ngtcp2_pkt_hd *hd, h3_admit_t *ai) {
+int h3_stateless_admit(int udp_fd, const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr_storage *local, int active, int max_conns, ngtcp2_pkt_hd *hd, h3_admit_t *ai) {
   ngtcp2_version_cid vc;
   ngtcp2_tstamp ts;
   int rv = ngtcp2_pkt_decode_version_cid(&vc, pkt, pktlen, H3_SCID_LEN);
   if (rv == NGTCP2_ERR_VERSION_NEGOTIATION) {
-    send_version_neg(udp_fd, &vc, peer, peerlen);
+    send_version_neg(udp_fd, &vc, peer, peerlen, local);
     return 0;
   }
   if (rv != 0) return 0;
   if ((pkt[0] & 0x80) == 0) {
-    send_reset(udp_fd, pktlen, &vc, peer, peerlen);
+    send_reset(udp_fd, pktlen, &vc, peer, peerlen, local);
     return 0;
   }
   if (ngtcp2_accept(hd, pkt, pktlen) != 0) return 0;
@@ -146,7 +150,7 @@ int h3_stateless_admit(int udp_fd, const uint8_t *pkt, size_t pktlen, const stru
   if (hd->tokenlen > 0) {
     if (hd->token[0] == NGTCP2_CRYPTO_TOKEN_MAGIC_RETRY2) {
       if (h3_token_retry_check(&ai->odcid, hd->token, hd->tokenlen, peer, peerlen, hd->version, &hd->dcid, ts) != 0) {
-        send_invalid_token(udp_fd, hd, peer, peerlen);
+        send_invalid_token(udp_fd, hd, peer, peerlen, local);
         return 0;
       }
       ai->token = hd->token;
@@ -163,7 +167,7 @@ int h3_stateless_admit(int udp_fd, const uint8_t *pkt, size_t pktlen, const stru
     }
   }
   if (h3_retry_needed(g_mode, active, max_conns)) {
-    send_retry(udp_fd, hd, peer, peerlen, ts);
+    send_retry(udp_fd, hd, peer, peerlen, ts, local);
     return 0;
   }
   return 1;

@@ -26,6 +26,7 @@
 /* bytes buffered before deciding raw vs RTP framing, TSSRC_STDIN/TSSRC_FILE */
 #define TSSRC_DETECT_CAP (2 * TSSRC_RTP_MAX_RECORD + 20)
 #define TSSRC_RAWBUF_CAP 65536
+#define TSSRC_CAPTURE_MAX (64u * 1024 * 1024)
 
 typedef enum { HTTP_CONTENT_TS, HTTP_CONTENT_HLS, HTTP_CONTENT_DASH, HTTP_CONTENT_UNKNOWN } http_content_kind_t;
 
@@ -62,8 +63,18 @@ struct tssrc {
   jitbuf_t *jb;
   int epfd;
   int tfd;
+  int64_t tfd_due; /* armed deadline, 0 = disarmed or fired */
   int jb_failed; /* src failed, queue drains first */
   net_err_reason_t jb_reason;
+
+  /* probe capture/replay: bytes tssrc_read() handed out, served again after tssrc_rewind() */
+  unsigned char *cap_buf;
+  size_t cap_len;
+  size_t cap_alloc;
+  size_t cap_max;
+  size_t cap_pos;
+  int cap_on;
+  int cap_replay;
 
   http_sub_kind_t http_sub;
   unsigned char http_sniff_buf[TSSRC_HTTP_SNIFF_CAP];
@@ -90,6 +101,7 @@ void tssrc_jitter_free(tssrc_t *s);
 http_content_kind_t tssrc_http_classify(const unsigned char *b, size_t n);
 ssize_t tssrc_http_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out);
 int tssrc_http_fd(const tssrc_t *s);
+int tssrc_http_wait(const tssrc_t *s, int timeout_ms);
 void tssrc_http_free_media(const tssrc_t *s);
 void tssrc_hls_fmp4_segment_feed(void *ctx, hls_live_t *h, const unsigned char *data, size_t len);
 void tssrc_dash_fmp4_segment_feed(void *ctx, dash_live_t *h, const unsigned char *data, size_t len);

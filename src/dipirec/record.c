@@ -2,7 +2,6 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdio.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "lib/demux/psi/psi.h"
@@ -10,9 +9,7 @@
 #include "lib/sys/signal.h"
 
 #include "record/priv.h"
-
-#define DIPIREC_RIST_DRAIN_MS_DEFAULT 1000 /* librist's own default recovery buffer length */
-#define DIPIREC_SRT_DRAIN_MS_DEFAULT 1000  /* srt's own default latency buffer */
+#include "version.h"
 
 int record_run(const config_t *cfg, metrics_exporter_t *mx) {
   unsigned long long bytes = 0;
@@ -64,8 +61,8 @@ int record_run(const config_t *cfg, metrics_exporter_t *mx) {
     return 1;
   }
 
-  if (cfg->source.kind == URI_FILE) /* probing above consumed bytes it can't give back */
-    tssrc_rewind(s.t);
+  if (cfg->format != FMT_RAW && !tssrc_rewind(s.t))
+    log_code("CA000711", TOOL_NAME ": probe consumed the stream head, input starts later");
 
   pace = cfg->pace ? pace_new() : NULL;
   use_raw = cfg->format == FMT_RAW || (cfg->format == FMT_TS && n_all_pids > 0);
@@ -97,27 +94,6 @@ int record_run(const config_t *cfg, metrics_exporter_t *mx) {
   tsinspect_free(ri.in);
   tsinspect_free(ri.out);
   pace_free(pace);
-
-  if (!stop_now(cfg, start)) {
-    /* eof/err, not live stop: drain rist/srt retransmits before teardown */
-    int have_rist_out = 0, have_srt_out = 0;
-    for (int i = 0; i < n_sinks; i++) {
-      if (sinks[i].rist)
-        have_rist_out = 1;
-      if (sinks[i].srt)
-        have_srt_out = 1;
-    }
-    if (have_rist_out) {
-      unsigned drain_ms = cfg->rist_buffer_ms ? cfg->rist_buffer_ms : DIPIREC_RIST_DRAIN_MS_DEFAULT;
-      struct timespec ts = {(time_t)(drain_ms / 1000), (long)(drain_ms % 1000) * 1000000L};
-      nanosleep(&ts, NULL);
-    }
-    if (have_srt_out) {
-      unsigned drain_ms = cfg->srt_latency_ms ? cfg->srt_latency_ms : DIPIREC_SRT_DRAIN_MS_DEFAULT;
-      struct timespec ts = {(time_t)(drain_ms / 1000), (long)(drain_ms % 1000) * 1000000L};
-      nanosleep(&ts, NULL);
-    }
-  }
 
   src_close(&s); /* IGMP/MLD leave */
   rtmp_fanout_close(&rf);

@@ -33,8 +33,9 @@ static const struct option longopts[] = {
   {"window", required_argument, 0, 'w'},
   {"mcast", required_argument, 0, 'm'},
   {"iface", required_argument, 0, 'I'},
-  {"interval", required_argument, 0, 't'},
-  {"timeout", required_argument, 0, 't'},
+  {"interval", required_argument, 0, OPT_INTERVAL},
+  {"timeout", required_argument, 0, OPT_TIMEOUT},
+  {"refresh", required_argument, 0, OPT_REFRESH},
   {"output", required_argument, 0, 'o'},
   {"csv-map", required_argument, 0, 'C'},
   {"compress", no_argument, 0, 'Z'},
@@ -57,8 +58,8 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
   opterr = 0;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     if (c == 'c') *cfg_path = optarg;
-    if (c == 1005) *configtest = 1;
-    if (c == 1006) *strict = 1;
+    if (c == OPT_CONFIGTEST) *configtest = 1;
+    if (c == OPT_CONFIG_STRICT) *strict = 1;
     if (c == 'h') {
       bcg_print_help();
       opterr = 1;
@@ -125,7 +126,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'I':
         cfg->iface = optarg;
         break;
-      case 't': {
+      case 't':
+      case OPT_INTERVAL:
+      case OPT_TIMEOUT: {
         unsigned v;
         if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
           argerr("GS000104", "invalid -t seconds: %s", optarg);
@@ -133,6 +136,16 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         cfg->fl.t_value = v;
         cfg->fl.have_t = 1;
+        cfg->fl.t_opt = c == 't' ? 0 : c;
+        break;
+      }
+      case OPT_REFRESH: {
+        unsigned v;
+        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
+          argerr("GS000693", "invalid --refresh cycles: %s", optarg);
+          return ARGS_ERR;
+        }
+        cfg->refresh_cycles = v;
         break;
       }
       case 'o':
@@ -205,7 +218,17 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("GS000111", "missing -M map");
       return ARGS_ERR;
     }
-    if (cfg->fl.have_t) cfg->interval_s = cfg->fl.t_value;
+    if (cfg->fl.have_t) {
+      if (cfg->fl.t_opt == OPT_TIMEOUT) {
+        argerr("GS000690", "--timeout is listen-only (use -t/--interval)");
+        return ARGS_ERR;
+      }
+      if (cfg->fl.t_value < 1) {
+        argerr("GS000124", "invalid -t interval: must be >= 1");
+        return ARGS_ERR;
+      }
+      cfg->interval_s = cfg->fl.t_value;
+    }
   } else {
     if (cfg->metrics_id) {
       argerr("GS000112", "--metrics-id is announce-only");
@@ -215,8 +238,18 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       argerr("GS000113", "-Z/--compress is announce-only");
       return ARGS_ERR;
     }
+    if (cfg->refresh_cycles != 1) {
+      argerr("GS000692", "--refresh is announce-only");
+      return ARGS_ERR;
+    }
     if (!cfg->output_path) cfg->output_path = "-";
-    if (cfg->fl.have_t) cfg->timeout_s = cfg->fl.t_value;
+    if (cfg->fl.have_t) {
+      if (cfg->fl.t_opt == OPT_INTERVAL) {
+        argerr("GS000691", "--interval is announce-only (use -t/--timeout)");
+        return ARGS_ERR;
+      }
+      cfg->timeout_s = cfg->fl.t_value;
+    }
   }
   return ARGS_OK;
 }

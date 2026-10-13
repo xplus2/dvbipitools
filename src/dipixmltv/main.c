@@ -44,6 +44,22 @@ static int revmap_rename_cmp(const void *a, const void *b) {
   return strcmp(((const revmap_rename_t *)a)->old_id, ((const revmap_rename_t *)b)->old_id);
 }
 
+static int id_ptr_cmp(const void *a, const void *b) {
+  return strcmp(*(const char *const *)a, *(const char *const *)b);
+}
+
+static void warn_duplicate_channel_ids(const bcg_doc_t *doc) {
+  const char **ids = malloc(sizeof *ids * (size_t)doc->channel_count);
+  if (!ids) return;
+  for (int i = 0; i < doc->channel_count; i++) ids[i] = doc->channels[i].id;
+  qsort(ids, (size_t)doc->channel_count, sizeof *ids, id_ptr_cmp);
+  for (int i = 1; i < doc->channel_count; i++) {
+    if (!strcmp(ids[i], ids[i - 1]))
+      log_code("XW400224", TOOL_NAME ": duplicate channel id %s after reverse map", ids[i]);
+  }
+  free(ids);
+}
+
 static void apply_revmap(bcg_doc_t *doc, const revmap_t *rev) {
   revmap_rename_t *renames;
   int n = 0;
@@ -79,6 +95,7 @@ static void apply_revmap(bcg_doc_t *doc, const revmap_t *rev) {
     }
     for (i = 0; i < n; i++)
       bufcpy(doc->channels[renames[i].channel_idx].id, sizeof doc->channels[renames[i].channel_idx].id, renames[i].preferred);
+    warn_duplicate_channel_ids(doc);
   }
   free(renames);
 }
@@ -87,6 +104,37 @@ static void write_xmltv(FILE *out, bcg_doc_t *doc, int have_rev, const revmap_t 
   if (have_rev) apply_revmap(doc, rev);
   xmltv_write(out, doc, TOOL_NAME);
   if (verbose) log_code("XD000258", "%d channels, %d programmes read", doc->channel_count, doc->programme_count);
+}
+
+static int flush_output(FILE *buf, const char *path) {
+  char chunk[8192];
+  size_t n;
+  FILE *out;
+  int rc = 0;
+
+  if (fflush(buf) || fseek(buf, 0, SEEK_SET)) {
+    log_code("XE100102", TOOL_NAME ": error writing %s", path);
+    return 1;
+  }
+  out = fileutil_open_std(path, "w");
+  if (!out) {
+    log_code("XS100104", TOOL_NAME ": cannot open %s", path);
+    return 1;
+  }
+  while ((n = fread(chunk, 1, sizeof chunk, buf)) > 0) {
+    if (fwrite(chunk, 1, n, out) != n) {
+      rc = 1;
+      break;
+    }
+  }
+  if (ferror(buf)) rc = 1;
+  if (out == stdout) {
+    if (fflush(out)) rc = 1;
+  } else if (fclose(out)) {
+    rc = 1;
+  }
+  if (rc) log_code("XE100102", TOOL_NAME ": error writing %s", path);
+  return rc;
 }
 
 int main(int argc, char **argv) {
@@ -101,7 +149,7 @@ int main(int argc, char **argv) {
     log_code("XS000100", TOOL_NAME ": cannot open %s", cfg.input_path);
     return 1;
   }
-  out = fileutil_open_std(cfg.output_path, "w");
+  out = tmpfile();
   if (!out) {
     log_code("XS100104", TOOL_NAME ": cannot open %s", cfg.output_path);
     if (in != stdin) fclose(in);
@@ -117,10 +165,8 @@ int main(int argc, char **argv) {
       fclose(scan);
     }
     if (in != stdin) fclose(in);
-    if (out != stdout && fclose(out) && rc == 0) {
-      log_code("XE100102", TOOL_NAME ": error writing %s", cfg.output_path);
-      rc = 1;
-    }
+    if (rc == 0) rc = flush_output(out, cfg.output_path);
+    fclose(out);
     return rc;
   }
   bcg_doc_init(&doc);
@@ -154,9 +200,7 @@ int main(int argc, char **argv) {
   }
   bcg_doc_free(&doc);
   if (in != stdin) fclose(in);
-  if (out != stdout && fclose(out) && rc == 0) {
-    log_code("XE100102", TOOL_NAME ": error writing %s", cfg.output_path);
-    rc = 1;
-  }
+  if (rc == 0) rc = flush_output(out, cfg.output_path);
+  fclose(out);
   return rc;
 }

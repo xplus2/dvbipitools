@@ -141,15 +141,27 @@ int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num,
   return route_resolve_channel_uri(uri, family, addr, addrsz, src, srcsz, port, rtp);
 }
 
+int channel_uri_is_static(const char *uri) {
+  return !strncmp(uri, "srt://", 6) || !strncmp(uri, "http://", 7) || !strncmp(uri, "https://", 8);
+}
+
 capture_ctx_t *channels_resolve_static(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name) {
   const channel_list_t *l;
   const channel_item_t *it;
-  capture_ctx_t *ctx;
+  char uri[1024];
+  int insecure_tls;
   l = channels_get(ch, list_num);
   it = l ? (item_name ? channel_list_find_name(l, item_name) : channel_list_get_item(l, item_num)) : NULL;
-  ctx = it ? it->static_ctx : NULL;
-  if (ctx) ctx = capture_ref(ctx);
-  return ctx;
+  if (!it || !channel_uri_is_static(it->uri) || strlen(it->uri) >= sizeof uri) return NULL;
+  bufcpy(uri, sizeof uri, it->uri);
+  insecure_tls = it->insecure_tls;
+  if (!strncmp(uri, "srt://", 6)) {
+    char host[256];
+    unsigned port;
+    if (route_parse_srt_uri(uri, host, sizeof host, &port)) return NULL;
+    return capture_open_srt(host, port);
+  }
+  return capture_open_http_static(uri, insecure_tls);
 }
 
 int channels_list_for_each(const channels_t *ch, unsigned list_num, void (*emit)(void *ctx, const channel_item_t *item), void *ctx) {

@@ -22,7 +22,7 @@ int dscr_resolve_pmt_selection(const config_t *cfg, tssrc_t *src, unsigned *pmt_
   *pmt_pid = 0;
   *n_all_pids = 0;
 
-  probe = mpts_probe_run(src, MPTS_NAME_WAIT_MS);
+  probe = mpts_probe_run(src, MPTS_PROBE_PAT_WAIT_MS, MPTS_NAME_WAIT_MS);
   if (probe.kind == MPTS_PROBE_FAIL) {
     log_code("DE000423", TOOL_NAME ": no PAT received, giving up");
     return 1;

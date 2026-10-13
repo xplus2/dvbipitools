@@ -142,6 +142,34 @@ START_TEST(peek_and_advance_walk_the_same_data_zero_copy) {
 }
 END_TEST
 
+START_TEST(held_bytes_block_the_producer_until_acked) {
+  byte_ring_t r;
+  static const uint8_t a[6] = {1, 2, 3, 4, 5, 6};
+  static const uint8_t b[4] = {7, 8, 9, 10};
+  const uint8_t *p;
+  size_t len = 0;
+
+  ring_open(&r, 16);
+  ck_assert_int_eq(byte_ring_write(&r, a, sizeof a), 1);
+  p = byte_ring_peek(&r, &len);
+  ck_assert_uint_eq(len, sizeof a);
+  byte_ring_hold(&r, len);
+  ck_assert_uint_eq(byte_ring_unsent(&r), 0u);
+  ck_assert_ptr_null(byte_ring_peek(&r, &len));
+  ck_assert_int_eq(byte_ring_write(&r, b, sizeof b), 1);
+  ck_assert_uint_eq(byte_ring_unsent(&r), sizeof b);
+  ck_assert_mem_eq(p, a, sizeof a);
+  ck_assert_int_eq(byte_ring_write(&r, a, 16), 0);
+  byte_ring_ack(&r, sizeof a);
+  ck_assert_uint_eq(byte_ring_unsent(&r), sizeof b);
+  byte_ring_ack(&r, 100);
+  p = byte_ring_peek(&r, &len);
+  ck_assert_uint_eq(len, sizeof b);
+  ck_assert_mem_eq(p, b, sizeof b);
+  byte_ring_free(&r);
+}
+END_TEST
+
 START_TEST(positions_survive_32_bit_counter_wrap) {
   byte_ring_t r;
   static const uint8_t in[RING_CAP] = {1, 2, 3, 4, 5, 6, 7, 8};
@@ -249,6 +277,7 @@ static Suite *byte_ring_suite(void) {
   tcase_add_test(tc, wraparound_splits_reads_into_contiguous_runs);
   tcase_add_test(tc, read_honours_maxlen);
   tcase_add_test(tc, peek_and_advance_walk_the_same_data_zero_copy);
+  tcase_add_test(tc, held_bytes_block_the_producer_until_acked);
   tcase_add_test(tc, positions_survive_32_bit_counter_wrap);
   tcase_add_test(tc, reset_keeps_the_buffer_and_clears_positions);
   tcase_add_test(tc, free_is_idempotent);

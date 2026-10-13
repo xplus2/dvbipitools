@@ -133,6 +133,9 @@ Cap on concurrent streams. Default: 256.
 .B \-\-max\-channels \fIn\fR
 Cap on concurrent (source,filter,pmt,container) stores. Default: 32.
 .TP
+.B \-\-max\-variants \fIn\fR
+cap on concurrent variants per source. Default: 8
+.TP
 .B \-\-idle\-timeout \fIs\fR
 Close a connection idle this long, in seconds. Default: 0 (off).
 .TP
@@ -211,7 +214,8 @@ Default: 0.333.
 .TP
 .B \-\-dash\-utc\-url \fIurl\fR
 LL\-DASH MPD UTCTiming source (max 256 chars). Default:
-.IR http://time.akamai.com/?iso&ms .
+.B /time
+endpoint, URL built from the request Host header.
 .TP
 .B \-\-hls\-seg\-pool \fIn\fR
 Segment buffer freelist cap per size class. Raise on a memory\-rich

@@ -25,7 +25,12 @@ void scan_cfg_defaults(config_t *cfg) {
 }
 
 static int apply_mcast(void *c, const char *v, char *e, size_t n) {
-  if (scan_cfg_mcast(c, v)) {
+  int rc = scan_cfg_mcast(c, v);
+  if (rc == RANGE_TOO_LARGE) {
+    snprintf(e, n, "range '%s' too large (max %u addresses)", v, MAX_SWEEP_ADDRS);
+    return -1;
+  }
+  if (rc) {
     snprintf(e, n, "invalid '%s' (addr, addr/prefixlen, or startaddr-stopaddr)", v);
     return -1;
   }

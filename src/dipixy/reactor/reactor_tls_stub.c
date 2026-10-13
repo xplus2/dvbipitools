@@ -27,18 +27,6 @@ void tls_gc_init(int nshards) { (void)nshards; }
 
 void tls_cleanup(void) {}
 
-int tls_create_listen_sock(int port, const char *host) {
-  (void)port;
-  (void)host;
-  return -1;
-}
-
-int tls_create_listen_sock6(int port, const char *host6) {
-  (void)port;
-  (void)host6;
-  return -1;
-}
-
 int tls_is_running(void) { return 0; }
 
 int tls_accept(int fd) {
@@ -109,6 +97,8 @@ void tls_get_client_cert_cn(int fd, char *buf, size_t bufsz) {
 int reload_tls(void) { return -1; }
 
 void tls_ctx_gc_sweep(void) {} /* no ctx to sweep, stub build */
+
+void tls_ctx_retire(struct ssl_ctx_st *old) { (void)old; }
 
 void tls_cert_info(char *buf, size_t sz, const char *path, int from_file) {
   (void)path;

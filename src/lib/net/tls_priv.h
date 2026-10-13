@@ -14,6 +14,7 @@ struct tls {
   SSL_CTX *ctx;
   SSL *ssl;
   int fd;
+  int want_read; /* last 0 return from tls_read/tls_write was blocked on socket readability */
 };
 
 void tls_log_ssl_error(const char *what);

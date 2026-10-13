@@ -10,6 +10,7 @@
 
 #include "lib/helper/log.h"
 
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -22,6 +23,9 @@ _Atomic int g_ts_active_count;
 
 static int g_ts_push_reactor_efds[TS_PUSH_MAX_REACTOR_THREADS];
 
+/* serialize per-ctx chain link/unlink. pump readers lock-free */
+static pthread_mutex_t g_chain_mtx = PTHREAD_MUTEX_INITIALIZER;
+
 /* flush_ready(tid)'s subscriber chain. slot T touched only by thread T:
    every begin/close path for subscription runs on its own owning thread (H1/H2/H3 don't migrate threads) */
 int g_tid_head[TS_PUSH_MAX_REACTOR_THREADS];
@@ -29,7 +33,7 @@ int g_tid_head[TS_PUSH_MAX_REACTOR_THREADS];
 static _Thread_local uint32_t *t_wake_batch;
 
 static void ts_push_wake_reactor_now(int tid) {
-  int efd = g_ts_push_reactor_efds[tid];
+  int efd = __atomic_load_n(&g_ts_push_reactor_efds[tid], __ATOMIC_RELAXED);
   if (efd >= 0) {
     uint64_t one = 1;
     ssize_t r = write(efd, &one, sizeof one);
@@ -193,7 +197,14 @@ void ts_push_set_reactor_tid(int idx, int tid) {
 }
 
 void ts_push_register_reactor_efd(int tid, int efd) {
-  if (tid >= 0 && tid < TS_PUSH_MAX_REACTOR_THREADS) g_ts_push_reactor_efds[tid] = efd;
+  if (tid >= 0 && tid < TS_PUSH_MAX_REACTOR_THREADS) __atomic_store_n(&g_ts_push_reactor_efds[tid], efd, __ATOMIC_RELAXED);
+}
+
+void ts_push_close_reactor_efds(void) {
+  for (int i = 0; i < TS_PUSH_MAX_REACTOR_THREADS; i++) {
+    int efd = __atomic_exchange_n(&g_ts_push_reactor_efds[i], -1, __ATOMIC_RELAXED);
+    if (efd >= 0) close(efd);
+  }
 }
 
 int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto_t proto, int fd,
@@ -250,6 +261,7 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto
   s->filter = *filter;
   s->proto = proto;
   s->fd = fd;
+  s->conn_gen = proto == CONN_PROTO_H1 ? conn_gen_for_fd(fd) : 0;
   atomic_store_explicit(&s->ready, 0, memory_order_relaxed);
   s->h2c = NULL;
   s->h2_slot = NULL;
@@ -265,14 +277,18 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto
   s->spts_n_allowed = 0;
   s->filter_psi = filter_psi;
   s->cc_pmt = 0;
+  s->cc_pat = 0;
+  s->filter_base = *filter;
+  s->spts_pmt_seen = 0;
   s->lcevc = *lcevc;
   s->lcevc_locked = 0;
   s->rawaudio = rawaudio_demux;
   head = capture_ts_push_head_ptr(ctx);
+  pthread_mutex_lock(&g_chain_mtx);
   old_head = atomic_load_explicit(head, memory_order_relaxed);
   atomic_store_explicit(&s->ctx_next, old_head, memory_order_relaxed);
-  while (!atomic_compare_exchange_weak_explicit(head, &old_head, i, memory_order_release, memory_order_relaxed))
-    atomic_store_explicit(&s->ctx_next, old_head, memory_order_relaxed);
+  atomic_store_explicit(head, i, memory_order_release);
+  pthread_mutex_unlock(&g_chain_mtx);
   atomic_fetch_add_explicit(&g_ts_active_count, 1, memory_order_relaxed);
   return i;
 
@@ -307,26 +323,31 @@ static void ts_push_unlink_tid(int idx) {
   }
 }
 
-/* removes idx from ctx's feed_pkt chain. caller: pump quiescent, ctx not
-   yet capture_close()'d (may free it) */
+/* removes idx from ctx's feed_pkt chain. idx's ctx_next stays intact for pumps standing on it.
+   ctx not yet capture_close()'d (might free) */
 static void ts_push_unlink_ctx(capture_ctx_t *ctx, int idx) {
   _Atomic int *head = capture_ts_push_head_ptr(ctx);
   const ts_sub_t *s = &g_ts_subs[idx];
-  int next = atomic_load_explicit(&s->ctx_next, memory_order_relaxed);
-  int cur = atomic_load_explicit(head, memory_order_relaxed);
+  int next;
+  int cur;
+  pthread_mutex_lock(&g_chain_mtx);
+  next = atomic_load_explicit(&s->ctx_next, memory_order_relaxed);
+  cur = atomic_load_explicit(head, memory_order_relaxed);
   if (cur == idx) {
-    atomic_store_explicit(head, next, memory_order_relaxed);
+    atomic_store_explicit(head, next, memory_order_release);
+    pthread_mutex_unlock(&g_chain_mtx);
     return;
   }
   while (cur != -1) {
     ts_sub_t *cs = &g_ts_subs[cur];
     int cs_next = atomic_load_explicit(&cs->ctx_next, memory_order_relaxed);
     if (cs_next == idx) {
-      atomic_store_explicit(&cs->ctx_next, next, memory_order_relaxed);
-      return;
+      atomic_store_explicit(&cs->ctx_next, next, memory_order_release);
+      break;
     }
     cur = cs_next;
   }
+  pthread_mutex_unlock(&g_chain_mtx);
 }
 
 static void ts_push_finish_unsub(void *arg) {
@@ -336,7 +357,6 @@ static void ts_push_finish_unsub(void *arg) {
   ts_push_unlink_tid(idx);
   ws_clients_remove(s->ws_handle);
   ctx = atomic_load_explicit(&s->ctx, memory_order_relaxed);
-  ts_push_unlink_ctx(ctx, idx);
   capture_close(ctx);
   atomic_store_explicit(&s->ctx, NULL, memory_order_relaxed);
   /* h3_ring/h2_ring/pkt_ring kept, not freed: pump reads unlocked. reused by next occupant in ts_push_subscribe() */
@@ -358,6 +378,7 @@ void ts_push_unsubscribe_by_idx(int idx) {
   if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, TS_SUB_CLOSING, memory_order_acquire, memory_order_relaxed))
     return; /* already closing or already closed */
   atomic_fetch_sub_explicit(&g_ts_active_count, 1, memory_order_relaxed);
+  ts_push_unlink_ctx(atomic_load_explicit(&s->ctx, memory_order_relaxed), idx);
   if (!capture_defer_after_quiescent(ts_push_finish_unsub, (void *)(intptr_t)idx)) {
     capture_wait_pumps_quiescent();
     ts_push_finish_unsub((void *)(intptr_t)idx);

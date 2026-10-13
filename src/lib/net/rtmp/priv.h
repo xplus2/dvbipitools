@@ -17,11 +17,13 @@
 #define RTMP_CID_VIDEO 5
 
 #define RTMP_N_CHAN 8
+#define RTMP_WBUF_SIZE 8192 /* coalesces chunk headers and payload pieces into few sends */
 #define RTMP_MAX_HEADER 18 /* 3B basic + 11B message + 4B extended timestamp */
 #define RTMP_TRANSACTION_CONNECT 1
 #define RTMP_TRANSACTION_CREATE_STREAM 2
 
 #define RTMP_TYPE_SET_CHUNK_SIZE 1
+#define RTMP_TYPE_USER_CONTROL 4
 #define RTMP_TYPE_AUDIO 8
 #define RTMP_TYPE_VIDEO 9
 #define RTMP_TYPE_DATA 18
@@ -56,6 +58,7 @@ typedef struct {
   unsigned char buffer[RTMP_MAX_HEADER];
   uint32_t basic_bytes;
   uint32_t bytes;
+  size_t chunk_bytes; /* payload bytes of current chunk, survives in_chunk_size change */
   rtmp_parse_state_t state;
   rtmp_in_chan_t *pkt;
 } rtmp_parser_t;
@@ -83,7 +86,8 @@ struct rtmp {
   char user[128];
   char password[128];
   char auth_query[400]; /* appended to connect app once auth needed */
-  int auth_tried;       /* credentialed retry sent, no more retries */
+  int auth_tried;       /* connect carried credentials, no more retries */
+  int auth_retry;       /* auth_query holds response for a fresh connection */
 
   rtmp_out_chan_t out_chan[RTMP_N_CHAN];
   rtmp_in_chan_t in_chan[RTMP_N_CHAN];
@@ -91,6 +95,9 @@ struct rtmp {
 
   unsigned char s1[RTMP_HANDSHAKE_SIZE];
   size_t hs_bytes;
+
+  unsigned char wbuf[RTMP_WBUF_SIZE];
+  size_t wn;
 
   rtmp_write_cb write_cb;
   rtmp_ready_cb ready_cb;
@@ -108,6 +115,7 @@ int rtmp_command_release_stream(struct rtmp *r);
 int rtmp_command_fcpublish(struct rtmp *r);
 int rtmp_command_create_stream(struct rtmp *r);
 int rtmp_command_publish(struct rtmp *r);
+void rtmp_command_on_user_control(struct rtmp *r, const unsigned char *payload, size_t len);
 void rtmp_command_on_invoke(struct rtmp *r, const unsigned char *payload, size_t len);
 
 void rtmp_on_message(struct rtmp *r, unsigned char type, uint32_t timestamp, const unsigned char *payload, size_t len);

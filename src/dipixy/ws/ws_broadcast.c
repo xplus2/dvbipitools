@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define WS_BROADCAST_MAX_SINKS 256
 
@@ -23,6 +24,9 @@ typedef struct {
 
 static _Atomic(sink_snapshot_t *) g_snapshot;
 static pthread_mutex_t g_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_drain_mtx = PTHREAD_MUTEX_INITIALIZER;
+static _Atomic int g_inflight[2];
+static int g_epoch; /* g_mtx */
 
 static void snapshot_release(sink_snapshot_t *s) {
   if (atomic_fetch_sub_explicit(&s->refs, 1, memory_order_acq_rel) == 1) free(s);
@@ -53,20 +57,30 @@ void ws_broadcast_register(ws_sink_fn fn, void *ctx) {
   if (old) snapshot_release(old);
 }
 
+static void snapshot_nap(void) {
+  struct timespec ts = {0, 20000};
+  nanosleep(&ts, NULL);
+}
+
+/* barrier: no publisher touches ctx after return. caller holds no lock sinks take.
+   epoch flip: publishers started before swap may hold any older snapshot */
 void ws_broadcast_unregister(ws_sink_fn fn, void *ctx) {
   sink_snapshot_t *old, *fresh;
-  int n, w = 0;
-  pthread_mutex_lock(&g_mtx);
-  old = atomic_load_explicit(&g_snapshot, memory_order_relaxed);
-  if (!old) {
+  int n, w = 0, drain;
+  pthread_mutex_lock(&g_drain_mtx);
+  for (;;) {
+    pthread_mutex_lock(&g_mtx);
+    old = atomic_load_explicit(&g_snapshot, memory_order_relaxed);
+    if (!old) {
+      pthread_mutex_unlock(&g_mtx);
+      pthread_mutex_unlock(&g_drain_mtx);
+      return;
+    }
+    n = old->n;
+    fresh = malloc(sizeof *fresh + sizeof(sink_t) * (size_t)n);
+    if (fresh) break;
     pthread_mutex_unlock(&g_mtx);
-    return;
-  }
-  n = old->n;
-  fresh = malloc(sizeof *fresh + sizeof(sink_t) * (size_t)n);
-  if (!fresh) {
-    pthread_mutex_unlock(&g_mtx);
-    return;
+    snapshot_nap(); /* may not fail: ctx dies on return */
   }
   atomic_init(&fresh->refs, 1);
   for (int i = 0; i < n; i++)
@@ -74,25 +88,39 @@ void ws_broadcast_unregister(ws_sink_fn fn, void *ctx) {
       fresh->sinks[w++] = old->sinks[i];
   fresh->n = w;
   atomic_store_explicit(&g_snapshot, fresh, memory_order_release);
+  drain = g_epoch;
+  g_epoch ^= 1;
   pthread_mutex_unlock(&g_mtx);
+  while (atomic_load_explicit(&g_inflight[drain], memory_order_acquire) > 0) snapshot_nap();
+  pthread_mutex_unlock(&g_drain_mtx);
   snapshot_release(old);
+}
+
+static void publish_done(sink_snapshot_t *snap, int epoch) {
+  snapshot_release(snap);
+  atomic_fetch_sub_explicit(&g_inflight[epoch], 1, memory_order_release);
 }
 
 void ws_broadcast_publish(const char *msg) {
   static _Thread_local uint8_t *frame;
   static _Thread_local size_t frame_cap;
   sink_snapshot_t *snap;
-  int n;
+  int n, epoch;
   size_t mlen, flen;
 
   pthread_mutex_lock(&g_mtx);
   snap = atomic_load_explicit(&g_snapshot, memory_order_relaxed);
-  if (snap) atomic_fetch_add_explicit(&snap->refs, 1, memory_order_relaxed);
+  epoch = g_epoch;
+  if (snap) {
+    atomic_fetch_add_explicit(&snap->refs, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&g_inflight[epoch], 1, memory_order_relaxed);
+  }
   pthread_mutex_unlock(&g_mtx);
 
-  n = snap ? snap->n : 0;
+  if (!snap) return;
+  n = snap->n;
   if (!n) {
-    if (snap) snapshot_release(snap);
+    publish_done(snap, epoch);
     return;
   }
   mlen = strlen(msg);
@@ -101,7 +129,7 @@ void ws_broadcast_publish(const char *msg) {
     uint8_t *p = realloc(frame, flen);
     if (!p) {
       if (flen > frame_cap) {
-        snapshot_release(snap);
+        publish_done(snap, epoch);
         return;
       }
     } else {
@@ -112,7 +140,7 @@ void ws_broadcast_publish(const char *msg) {
   ws_frame_encode(frame, WS_OP_TEXT, msg, mlen);
   for (int i = 0; i < n; i++)
     snap->sinks[i].fn(snap->sinks[i].ctx, frame, flen);
-  snapshot_release(snap);
+  publish_done(snap, epoch);
 }
 
 int ws_broadcast_has_sinks(void) {

@@ -63,20 +63,24 @@ static void try_parse_av1_hdr(flv_t *f, flv_track_t *t) {
   }
 }
 
-static void video_ts(flv_t *f, flv_track_t *t, uint64_t pts) {
-  int64_t raw = pts_unwrap(&t->pts, pts);
-  int64_t ts = raw - pts_disc_shift(&f->disc, raw, t->ts_seen ? t->ts_ms + t->step_ms : PTS_DISC_NONE);
+static void video_ts(flv_t *f, flv_track_t *t, uint64_t pts, int has_dts, uint64_t dts) {
+  int64_t rpts = pts_unwrap(&t->pts, pts);
+  int64_t raw = has_dts ? pts_unwrap(&t->dts_uw, dts) : rpts;
+  int64_t shift = pts_disc_shift(&f->disc, raw, t->ts_seen ? t->ts_ms + t->step_ms : PTS_DISC_NONE);
+  int64_t ts = raw - shift;
   if (t->ts_seen && ts > t->ts_ms && ts - t->ts_ms < 1000) t->step_ms = ts - t->ts_ms;
   t->ts_ms = ts;
+  t->cts_ms = rpts - shift - ts;
+  if (t->cts_ms < 0) t->cts_ms = 0;
   t->ts_seen = 1;
 }
 
 /* one video PES = one Annex-B access unit */
-static void handle_video(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
+static void handle_video(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *d, size_t len) {
   int key = 0;
   lcevc_strip_t strip;
   if (f->flushing) return;
-  if (has_pts) video_ts(f, t, pts);
+  if (has_pts) video_ts(f, t, pts, has_dts, dts);
   t->vbuflen = 0;
   strip.rb = &t->lcevc_rb;
   strip.rbcap = &t->lcevc_rbcap;
@@ -105,6 +109,7 @@ static void handle_audio(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, co
     int64_t raw = pts_unwrap(&t->pts, pts);
     t->ts_ms = raw - pts_disc_shift(&f->disc, raw, t->ts_seen ? t->ts_ms : PTS_DISC_NONE);
     t->ts_seen = 1;
+    aclk_anchor(&t->aclk, t->ts_ms);
   }
   if (t->remlen > FLV_REM_MAX) t->remlen = 0;
   if (esc_rem_append(&t->rem, &t->remlen, &t->remcap, data, len)) return;
@@ -124,7 +129,10 @@ static void handle_audio(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, co
       flv_all_ready(f);
     }
     if (fr.outlen && f->started) flv_emit_audio(f, t, fr.out, fr.outlen);
-    if (t->es.rate && fr.samples) t->ts_ms += (int64_t)fr.samples * 1000 / (int64_t)t->es.rate;
+    if (t->es.rate && fr.samples) {
+      t->aclk.samples += fr.samples;
+      t->ts_ms = aclk_ms(&t->aclk, t->es.rate);
+    }
     pos += fr.consumed;
   }
   if (pos) {
@@ -136,15 +144,13 @@ static void handle_audio(flv_t *f, flv_track_t *t, int has_pts, uint64_t pts, co
 void flv_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len) {
   flv_t *f = ctx;
   flv_track_t *t = NULL;
-  (void)has_dts;
-  (void)dts;
   if (f->err) return;
   if (f->have_v && pid == f->vtrk.pid)
     t = &f->vtrk;
   else if (f->have_a && pid == f->atrk.pid)
     t = &f->atrk;
   if (!t) return;
-  if (t->cls == PID_VIDEO) handle_video(f, t, has_pts, pts, data, len);
+  if (t->cls == PID_VIDEO) handle_video(f, t, has_pts, pts, has_dts, dts, data, len);
   else handle_audio(f, t, has_pts, pts, data, len);
 }
 

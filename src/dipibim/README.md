@@ -45,12 +45,12 @@ a length + 16-bit `DVBContextPath` type tag + the fragment's own BiM bytes, wrap
 
 ## Codecs (9.4.3)
 
-All 5 except `dvbDurationCodec` (currently unused).
+All 5. `dvbDurationCodec` is read only.
+Payloads are BiM against `urn:tva:metadata:2004`.
 * `dvbStringCodec` - all string leaves
-* `dvbLocatorCodec` - all anyURI leaves (CRIDs, service locators). String fallback only. Optimized-branch locators aren't supported.
-* `dvbDateTimeCodec` - full-precision mode (8-byte MJD+ms), not the lossy 11-bit-minutes one. Always UTC.
-* `dvbControlledTermCodec` - `Genre@href`; compact scheme+term branch only on an exact table 69
-  match with an integer term, string fallback otherwise
+* `dvbLocatorCodec` - all anyURI leaves (CRIDs, service locators). Written as string, optimized branch is read.
+* `dvbDateTimeCodec` - written full-precision (8-byte MJD+ms), always UTC. 11-bit-minutes PublishedTime is read.
+* `dvbControlledTermCodec` - `Genre@href`; written as string, compact scheme+term form is read
 
 ## CRID caveat
 

@@ -31,7 +31,7 @@ static void ws_sink(void *ctx, const uint8_t *frame, size_t flen) {
   conn_send_buffered((conn_t *)ctx, frame, flen, NULL, 0);
 }
 
-static void send_frame(int epfd, conn_t *c, int opcode, const void *payload, size_t len) {
+static void send_frame(conn_t *c, int opcode, const void *payload, size_t len) {
   ws_conn_state_t *ws = c->ws;
   size_t flen = ws_frame_hdr_len(len) + len;
   if (flen > ws->out_cap) {
@@ -52,7 +52,6 @@ static void send_frame(int epfd, conn_t *c, int opcode, const void *payload, siz
   pthread_mutex_lock(&c->out_lock); /* c->out also written by ws_sink() on other threads */
   conn_queue(c, ws->out_buf, flen);
   pthread_mutex_unlock(&c->out_lock);
-  reactor_ws_flush(epfd, c);
 }
 
 #define WS_CONN_POOL_MAX 64
@@ -64,8 +63,11 @@ void reactor_ws_pool_release(void) {
   while (t_ws_pool_n > 0) free(t_ws_pool[--t_ws_pool_n]);
 }
 
+static int ws_drain(conn_t *c, ws_conn_state_t *ws);
+
 void reactor_ws_begin(int epfd, conn_t *c) {
   ws_conn_state_t *ws;
+  size_t pending = c->in.len > c->req_bytes ? c->in.len - c->req_bytes : 0; /* frames sent behind upgrade request */
   if (t_ws_pool_n > 0) {
     ws = t_ws_pool[--t_ws_pool_n];
   } else {
@@ -88,6 +90,12 @@ void reactor_ws_begin(int epfd, conn_t *c) {
   reactor_arm(epfd, c, 0);
   conn_publish(c);
   ws_broadcast_register(ws_sink, c);
+  if (!pending) return;
+  if (ws_parser_feed(&ws->parser, c->in.buf + c->req_bytes, pending) || ws_drain(c, ws) < 0) {
+    reactor_ws_close(epfd, c);
+    return;
+  }
+  reactor_ws_flush(epfd, c);
 }
 
 void reactor_ws_close(int epfd, conn_t *c) {
@@ -113,17 +121,34 @@ void reactor_ws_flush(int epfd, conn_t *c) {
 
 static void dispatch_queue_cb(void *ctx, int opcode, const void *payload, size_t len) {
   conn_t *c = ctx;
-  send_frame(c->epfd, c, opcode, payload, len);
+  send_frame(c, opcode, payload, len);
+}
+
+static int ws_drain(conn_t *c, ws_conn_state_t *ws) {
+  for (;;) {
+    int opcode, got;
+    const uint8_t *payload;
+    size_t plen;
+    got = ws_parser_next(&ws->parser, &opcode, &payload, &plen);
+    if (got <= 0) return got;
+    ws_dispatch_frame(c, dispatch_queue_cb, opcode, payload, plen);
+    if (opcode == WS_OP_CLOSE) {
+      c->close_after_flush = 1;
+      atomic_store_explicit(&c->read_done, 1, memory_order_relaxed);
+      /* input no longer read: level-triggered EPOLLIN would spin */
+      conn_epoll_mod(c, c->epfd, atomic_load_explicit(&c->want_write, memory_order_relaxed));
+    }
+  }
 }
 
 void reactor_ws_readable(int epfd, conn_t *c) {
   ws_conn_state_t *ws = c->ws;
   char buf[4096];
 
-  for (;;) {
+  while (!c->close_after_flush) {
     ssize_t n = tls_net_recv(c->fd, buf, sizeof buf);
     if (n > 0) {
-      if (ws_parser_feed(&ws->parser, (const uint8_t *)buf, (size_t)n)) {
+      if (ws_parser_feed(&ws->parser, (const uint8_t *)buf, (size_t)n) || ws_drain(c, ws) < 0) {
         reactor_ws_close(epfd, c);
         return;
       }
@@ -137,20 +162,6 @@ void reactor_ws_readable(int epfd, conn_t *c) {
     reactor_ws_close(epfd, c);
     return;
   }
-
-  for (;;) {
-    int opcode, got;
-    const uint8_t *payload;
-    size_t plen;
-    got = ws_parser_next(&ws->parser, &opcode, &payload, &plen);
-    if (got < 0) {
-      reactor_ws_close(epfd, c);
-      return;
-    }
-    if (!got) break;
-    ws_dispatch_frame(c, dispatch_queue_cb, opcode, payload, plen);
-    if (opcode == WS_OP_CLOSE) c->close_after_flush = 1;
-  }
   reactor_ws_flush(epfd, c);
 }
 
@@ -162,16 +173,29 @@ static int ci_contains(const char *hay, const char *needle) {
   return 0;
 }
 
+static int ws_close_resp(conn_t *c, const char *resp, size_t len) {
+  conn_queue(c, resp, len);
+  c->keep_alive = 0;
+  c->close_after_flush = 1;
+  return 1;
+}
+
+static int ws_forbid(conn_t *c) {
+  static const char resp[] = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+  return ws_close_resp(c, resp, sizeof resp - 1);
+}
+
 static int ws_reject(conn_t *c) {
   static const char resp[] = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-  conn_queue(c, resp, sizeof resp - 1);
-  return 1;
+  return ws_close_resp(c, resp, sizeof resp - 1);
 }
 
 int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers, size_t num_headers) {
   char conn_val[64];
   char upg_val[32];
   char key[80];
+  char origin[128];
+  char host[128];
   char accept[64];
   char hdr[256];
   uint8_t digest[20];
@@ -179,10 +203,14 @@ int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers
   size_t klen;
   size_t off;
 
-  if (strcmp(path, "/ui/ws/") && strcmp(path, "/ui/ws")) return 0;
+  if (!path_is_ui_ws(path)) return 0;
   if (!find_header(headers, num_headers, "Connection", conn_val, sizeof conn_val) || !ci_contains(conn_val, "upgrade")) return ws_reject(c);
   if (!find_header(headers, num_headers, "Upgrade", upg_val, sizeof upg_val) || strcasecmp(upg_val, "websocket")) return ws_reject(c);
   if (!find_header(headers, num_headers, "Sec-WebSocket-Key", key, sizeof key)) return ws_reject(c);
+  if (find_header(headers, num_headers, "Origin", origin, sizeof origin)) {
+    if (!find_header(headers, num_headers, "Host", host, sizeof host)) host[0] = '\0';
+    if (!ws_origin_ok(reactor_cfg(), origin, host)) return ws_forbid(c);
+  }
 
   klen = bufcpy(input, sizeof input, key);
   bufcpy(input + klen, sizeof input - klen, WS_GUID);

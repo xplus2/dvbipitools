@@ -127,6 +127,8 @@ int main(int argc, char **argv) {
 
   if (dscr_resolve_pmt_selection(&cfg, src, &pmt_pid, all_pids, &n_all_pids))
     goto cleanup;
+  if (!tssrc_rewind(src))
+    log_code("DA000711", TOOL_NAME ": probe consumed the stream head, input starts later");
 
   if (dscr_open_outputs(&cfg, &lc, &mkv_fd))
     goto cleanup;

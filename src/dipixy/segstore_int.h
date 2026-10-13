@@ -11,6 +11,7 @@
 
 #include "lib/sys/ioutil.h"
 
+#include "core/time_ep.h"
 #include "segstore.h"
 #include "ts/lcevcselect.h"
 #include "reactor/qsbr.h"
@@ -18,7 +19,10 @@
 typedef struct {
   char *text;
   size_t len;
+  char key[TIME_EP_URL_MAX]; /* variant selector, "" if unkeyed */
 } cached_text_t;
+
+#define MPD_LL_VARIANTS 4
 
 typedef struct {
   size_t offset[HLS_MAX_PARTS]; /* offsets index owning data: hls_seg_t.data or store's live_data */
@@ -35,6 +39,7 @@ typedef struct {
   uint32_t seq;
   uint64_t start_ms; /* cumulative offset since store open, DASH $Time$ addressing */
   hls_parts_t parts; /* count 0 if this store never had LL-HLS enabled */
+  uint8_t disc; /* first segment after a break: EXT-X-DISCONTINUITY */
 } hls_seg_t;
 
 /* ftyp+moov worst case: FMP4_MAX_TRACKS(4) x FMP4_CPRIV_MAX(512) plus box overhead */
@@ -52,6 +57,10 @@ typedef struct hls_snapshot {
   uint32_t oldest_seq;
   uint32_t next_seq;
   uint64_t cum_ms; /* next segment's start_ms, never reset by eviction */
+  uint32_t epoch; /* bumped per hls_store_discontinuity_at(): HLS EXT-X-DISCONTINUITY-SEQUENCE, DASH Period id */
+  uint8_t disc_pending; /* break not yet carried by a pushed segment */
+  uint64_t epoch_base_ms; /* cum_ms at last break: DASH Period start + presentationTimeOffset */
+  uint64_t avail_ms; /* wall clock (unix ms) of media time 0, 0 = not anchored */
   double td_hw; /* target dur high water mark */
 
   uint8_t *init_data; /* SEG_CONTAINER_FMP4 only, seg_buf_alloc'd */
@@ -60,6 +69,9 @@ typedef struct hls_snapshot {
   codec_t video_codec; /* HLS VERSION + DASH codecs= */
   char vcodec_str[32];
   char acodec_str[32];
+  unsigned audio_rate; /* FMP4_AUDIO store only: DASH audioSamplingRate, exact */
+  hls_chcfg_t audio_chcfg;
+  unsigned audio_chcfg_value;
 
   double part_target; /* 0 = LL disabled */
   uint8_t *live_data;  /* in-progress segment bytes, hls_push_part()-accumulated */
@@ -74,7 +86,7 @@ typedef struct hls_snapshot {
   _Atomic(cached_text_t *) cache_ll;
   _Atomic(cached_text_t *) cache_lcevc[2];
   _Atomic(cached_text_t *) cache_mpd;
-  _Atomic(cached_text_t *) cache_mpd_ll;
+  _Atomic(cached_text_t *) cache_mpd_ll[MPD_LL_VARIANTS]; /* per UTCTiming url */
 } hls_snapshot_t;
 
 #define HLS_SNAP_RETIRE_DEPTH 4
@@ -87,7 +99,7 @@ typedef struct hls_store_t {
   double seg_target;
   int max_segs;
   seg_container_t container;
-  time_t opened_at; /* MPD availabilityStartTime */
+  time_t opened_at; /* MPD availabilityStartTime until anchored */
   _Atomic int lldash_sub_head;
   _Atomic(hls_snapshot_t *) snap; /* published; NULL till 1st push */
 
@@ -100,6 +112,7 @@ typedef struct hls_store_t {
 pthread_mutex_t *store_lock(const hls_store_t *s);
 int hls_target_duration(const hls_snapshot_t *snap);
 uint8_t *seg_buf_alloc(size_t size);
+size_t seg_buf_cap(size_t size);
 void seg_buf_ref(uint8_t *data);
 void seg_buf_unref(uint8_t *data);
 void seg_buf_release_cb(void *arg);
@@ -108,6 +121,9 @@ void cached_text_unref(const char *text);
 
 typedef size_t (*text_fmt_fn)(void *ctx, char *buf, size_t cap);
 const cached_text_t *snapshot_cache_text(_Atomic(cached_text_t *) *slot, text_fmt_fn fmt, void *ctx, size_t buf_cap);
+/* slots full: result is private, *owned set, caller frees with cached_text_release() */
+const cached_text_t *snapshot_cache_text_keyed(_Atomic(cached_text_t *) *slots, int n, const char *key, text_fmt_fn fmt, void *ctx, size_t buf_cap, int *owned);
+void cached_text_release(const cached_text_t *t);
 
 void respond_status(conn_t *c, const char *status, int keep_alive);
 void queue_not_modified(conn_t *c, const char *etag, int keep_alive);
@@ -131,7 +147,7 @@ char *write_fixed1(char *dst, double v);
 char *write_fixed3(char *dst, double v);
 
 void resp_set(hls_resp_t *out, int status, const char *content_type, const char *etag, const uint8_t *body, size_t body_len, int is_head);
-void resp_set_zc(hls_resp_t *out, int status, const char *content_type, const char *etag, uint8_t *body, size_t body_len, int is_head);
+void resp_set_zc(hls_resp_t *out, int status, const char *content_type, const char *etag, uint8_t *owner, uint8_t *body, size_t body_len, int is_head);
 void resp_set_zc_cached(hls_resp_t *out, int status, const char *content_type, const char *etag, const uint8_t *body, size_t body_len, int is_head);
 
 #endif

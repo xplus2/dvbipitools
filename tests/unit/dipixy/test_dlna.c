@@ -202,6 +202,31 @@ START_TEST(keep_multicast_direct_children_mixes_mcast_and_unicast_res) {
 }
 END_TEST
 
+START_TEST(radio_item_announces_audio_mpeg) {
+  config_t cfg;
+  source_def_t src;
+  channels_t *ch;
+  char path[160];
+  char *out;
+  size_t out_len;
+
+  memset(&cfg, 0, sizeof cfg);
+  write_temp_file(path, "m3u", "#EXTINF:-1,Radio\nrtp://@239.1.1.1:5000\n");
+  ch = build_single_list(&cfg, &src, SRC_M3U, path);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+  src.media_type = MEDIA_RADIO;
+
+  strcpy(cfg.dlna_host, "dvb.example:9080");
+  ck_assert_int_eq(browse(&cfg, ch, "L1I1", "BrowseMetadata", &out, &out_len), 200);
+  ck_assert_ptr_nonnull(strstr(out, "http-get:*:audio/mpeg:"));
+  ck_assert_ptr_null(strstr(out, "video/mpeg"));
+  ck_assert_ptr_nonnull(strstr(out, "/rawaudio"));
+
+  channels_free(ch);
+}
+END_TEST
+
 START_TEST(get_protocol_info_lists_video) {
   config_t cfg;
   char *out;
@@ -210,6 +235,7 @@ START_TEST(get_protocol_info_lists_video) {
   memset(&cfg, 0, sizeof cfg);
   ck_assert_int_eq(dlna_handle_control(&cfg, NULL, "cm", "GetProtocolInfo", "", 0, &out, &out_len), 200);
   ck_assert_ptr_nonnull(strstr(out, "video/mpeg"));
+  ck_assert_ptr_nonnull(strstr(out, "audio/mpeg"));
   ck_assert_ptr_null(strstr(out, "dvb-igmp"));
 }
 END_TEST
@@ -651,6 +677,7 @@ static Suite *dlna_suite(void) {
   tcase_add_test(tc, keep_multicast_leaves_unicast_srt_item_on_http_proxy);
   tcase_add_test(tc, keep_multicast_direct_children_mixes_mcast_and_unicast_res);
   tcase_add_test(tc, device_desc_omits_x_dvbdoc);
+  tcase_add_test(tc, radio_item_announces_audio_mpeg);
   tcase_add_test(tc, get_protocol_info_lists_video);
   tcase_add_test(tc, get_protocol_info_lists_multicast_when_keep_multicast_set);
   tcase_add_test(tc, root_browse_direct_children_lists_stdin_and_named_http_source);

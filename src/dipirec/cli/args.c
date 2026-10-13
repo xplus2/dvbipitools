@@ -30,6 +30,8 @@ static const struct option longopts[] = {
   {"ttl", required_argument, 0, OPT_TTL},
   {"al-fec", required_argument, 0, OPT_AL_FEC},
   {"al-fec-port", required_argument, 0, OPT_AL_FEC_PORT},
+  {"al-fec-out", required_argument, 0, OPT_AL_FEC_OUT},
+  {"al-fec-port-out", required_argument, 0, OPT_AL_FEC_PORT_OUT},
   {"rist-profile", required_argument, 0, OPT_PROFILE},
   {"rist-secret", required_argument, 0, OPT_SECRET},
   {"rist-encryption-type", required_argument, 0, OPT_ENCRYPTION_TYPE},

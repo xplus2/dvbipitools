@@ -79,15 +79,8 @@ static tssrc_open_state_t drive_open(tssrc_open_t *o, int max_iters) {
 static size_t drive_read(tssrc_t *s, unsigned char *buf, size_t cap, int max_iters) {
   size_t got = 0;
   for (int i = 0; i < max_iters && got < cap; i++) {
-    struct pollfd pfd;
     ssize_t n;
-    int fd = tssrc_fd(s);
-    if (fd >= 0) {
-      pfd.fd = fd;
-      pfd.events = POLLIN;
-      pfd.revents = 0;
-      poll(&pfd, 1, 50);
-    }
+    ck_assert_int_ge(tssrc_wait(s, 50), 0);
     n = tssrc_read(s, buf + got, cap - got, NULL);
     if (n > 0) got += (size_t)n;
     else if (n < 0) break;

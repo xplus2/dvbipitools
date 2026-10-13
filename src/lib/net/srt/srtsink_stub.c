@@ -17,10 +17,11 @@ void srtsink_service(srtsink_t *r, srtsink_status_t *out) {
   out->connected = 0;
 }
 
-void srtsink_write(srtsink_t *r, const unsigned char *buf, size_t n) {
+int srtsink_write(srtsink_t *r, const unsigned char *buf, size_t n) {
   (void)r;
   (void)buf;
   (void)n;
+  return -1;
 }
 
 void srtsink_close(srtsink_t *r) { (void)r; }

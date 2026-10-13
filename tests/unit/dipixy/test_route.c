@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -190,6 +191,24 @@ START_TEST(malformed_dash_seg_filename_rejected) {
   route_t r;
   ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/dseg.m4s", &r), 0);
   ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/dseg12000.ts", &r), 0);
+  ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/dsegv.m4s", &r), 0);
+  ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/dsegx12.m4s", &r), 0);
+  ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/dinit.mp4", &r), 0);
+  ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/dinitx.mp4", &r), 0);
+}
+END_TEST
+
+START_TEST(dash_track_filenames_route_to_dash) {
+  static const char *const names[] = {"dsegv500.m4s", "dsega500.m4s", "dinitv.mp4", "dinita.mp4"};
+  for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
+    char path[96];
+    route_t r;
+    snprintf(path, sizeof path, "/list/1/item/3/%s", names[i]);
+    ck_assert_int_eq(route_parse(path, &r), 0);
+    ck_assert_int_eq(r.kind, ROUTE_LIST_ITEM);
+    ck_assert_int_eq(r.fmt, ROUTE_FMT_DASH);
+    ck_assert_str_eq(r.hls_file, names[i]);
+  }
 }
 END_TEST
 
@@ -512,6 +531,7 @@ static Suite *route_suite(void) {
   tcase_add_test(tc, udp_lldash_direct_route_parses);
   tcase_add_test(tc, dash_seg_filename_route_parses);
   tcase_add_test(tc, malformed_dash_seg_filename_rejected);
+  tcase_add_test(tc, dash_track_filenames_route_to_dash);
   tcase_add_test(tc, rtp_ipv6_bracket_address_parses);
   tcase_add_test(tc, srt_ts_direct_route_parses);
   tcase_add_test(tc, srt_ipv6_bracket_address_parses);

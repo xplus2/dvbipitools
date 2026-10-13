@@ -8,6 +8,13 @@
 
 typedef enum { OUT_M3U, OUT_CSV, OUT_XSPF, OUT_XML, OUT_NULL } out_fmt_t;
 
+/* cap on swept addresses: do not sweep millions of candidates */
+#define MAX_SWEEP_HOSTBITS 20
+#define MAX_SWEEP_ADDRS (1u << MAX_SWEEP_HOSTBITS)
+
+/* -m parse result: syntax ok, range over cap */
+#define RANGE_TOO_LARGE (-2)
+
 /* -j|--jets */
 #define DIPISCAN_MAX_JETS 256
 

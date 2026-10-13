@@ -50,8 +50,8 @@ srtsink_t *srtsink_open(const srtsink_cfg_t *cfg);
 void srtsink_service(srtsink_t *r, srtsink_status_t *out);
 
 /* never blocks: chunks to SRT payload size, queues unsent data (bounded),
-   drops oldest on overflow */
-void srtsink_write(srtsink_t *r, const unsigned char *buf, size_t n);
+   drops oldest on overflow. 0 ok, -1 if send failed or data was dropped */
+int srtsink_write(srtsink_t *r, const unsigned char *buf, size_t n);
 
 void srtsink_close(srtsink_t *r);
 

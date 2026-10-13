@@ -18,7 +18,12 @@ rtmp_t *rtmp_new(const rtmp_cfg_t *cfg) {
   if (cfg->user && cfg->user[0]) {
     bufcpy(r->user, sizeof r->user, cfg->user);
     bufcpy(r->password, sizeof r->password, cfg->password ? cfg->password : "");
-    snprintf(r->auth_query, sizeof r->auth_query, "?authmod=adobe&user=%s", r->user);
+    if (cfg->auth_query && cfg->auth_query[0]) {
+      bufcpy(r->auth_query, sizeof r->auth_query, cfg->auth_query);
+      r->auth_tried = 1;
+    } else {
+      snprintf(r->auth_query, sizeof r->auth_query, "?authmod=adobe&user=%s", r->user);
+    }
   }
   r->in_chunk_size = 128;
   r->out_chunk_size = 128;
@@ -34,6 +39,16 @@ void rtmp_free(rtmp_t *r) {
   if (!r) return;
   for (unsigned i = 0; i < RTMP_N_CHAN; i++) free(r->in_chan[i].payload);
   free(r);
+}
+
+int rtmp_auth_carry(const rtmp_t *r, char *out, size_t cap) {
+  if (!cap) return 0;
+  out[0] = '\0';
+  if (!r->auth_retry || bufcpy(out, cap, r->auth_query) >= cap) {
+    out[0] = '\0';
+    return 0;
+  }
+  return 1;
 }
 
 void rtmp_start(rtmp_t *r) {
@@ -104,6 +119,9 @@ void rtmp_on_message(struct rtmp *r, unsigned char type, uint32_t timestamp, con
           if (r->error_cb) r->error_cb(r->cb_ctx, "invalid chunk size");
         }
       }
+      break;
+    case RTMP_TYPE_USER_CONTROL:
+      rtmp_command_on_user_control(r, payload, len);
       break;
     case RTMP_TYPE_INVOKE:
       rtmp_command_on_invoke(r, payload, len);

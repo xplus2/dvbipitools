@@ -1066,7 +1066,17 @@ if (OpenSSL_FOUND)
 
     dvbipitools_add_unit_test(lib_net_rtmp_auth
         unit/lib/net/rtmp/test_auth.c
-        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/session.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/chunk.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/handshake.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/ebml.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
+        ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
     target_link_libraries(test_lib_net_rtmp_auth PRIVATE OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(lib_net_httpclient_async_tls
@@ -1474,6 +1484,7 @@ dvbipitools_add_unit_test(lib_tva_timefmt
 dvbipitools_add_unit_test(lib_tva_bcg_doc
     unit/lib/tva/test_bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -1628,6 +1639,7 @@ dvbipitools_add_unit_test(dipixmltv_revmap
 dvbipitools_add_unit_test(dipixmltv_suggest
     unit/dipixmltv/test_suggest.c
     ${CMAKE_SOURCE_DIR}/src/dipixmltv/suggest.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_in.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/xmltv.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
@@ -3295,6 +3307,8 @@ dvbipitools_add_unit_test(lib_cas_cas_group
 
 dvbipitools_add_unit_test(dipirec_ts_filter
     unit/dipirec/test_ts_filter.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
@@ -3452,6 +3466,8 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmpout.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+    ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c)
 
@@ -3602,6 +3618,8 @@ if (TARGET dipirist AND TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/command.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmpout.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
+        ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
         ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
         ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c)
     target_link_libraries(test_dipirec_record_net PRIVATE PkgConfig::RIST PkgConfig::SRT)
@@ -4777,6 +4795,7 @@ dvbipitools_add_unit_test(dipixy_capture
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/qsbr.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
@@ -4849,6 +4868,7 @@ dvbipitools_add_unit_test(dipixy_channels
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena_notify.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_soap.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_oid.c
@@ -4960,6 +4980,7 @@ dvbipitools_add_unit_test(dipixy_playlist
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena_notify.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_soap.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_oid.c
@@ -5069,6 +5090,7 @@ dvbipitools_add_unit_test(dipixy_gena
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_didl.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena_notify.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/channels.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
@@ -5186,6 +5208,7 @@ dvbipitools_add_unit_test(dipixy_dlna
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_didl.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena_notify.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/ssdp.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/channels.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
@@ -5347,6 +5370,11 @@ dvbipitools_add_unit_test(dipixy_status
     ${CMAKE_SOURCE_DIR}/src/lib/helper/jsonbuf.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
 
+dvbipitools_add_unit_test(dipixy_time_ep
+    unit/dipixy/test_time_ep.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/core/time_ep.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
+
 dvbipitools_add_unit_test(dipixy_htdocs
     unit/dipixy/test_htdocs.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/core/htdocs.c
@@ -5388,6 +5416,7 @@ dvbipitools_add_unit_test(dipixy_dispatch
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route_common.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/waiters.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/core/time_ep.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
 target_compile_options(test_dipixy_dispatch PRIVATE -ffunction-sections -fdata-sections)
@@ -5421,6 +5450,7 @@ dvbipitools_add_unit_test(dipixy_ws_sources
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
+    ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena_notify.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_soap.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_oid.c
@@ -5676,6 +5706,7 @@ if (DIPIXY_TEST_HTTP3)
     pkg_check_modules(H3TEST REQUIRED IMPORTED_TARGET libngtcp2 libngtcp2_crypto_ossl)
     dvbipitools_add_unit_test(dipixy_h3_stateless
         unit/dipixy/test_h3_stateless.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_udp.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_stateless.c)
     target_compile_definitions(test_dipixy_h3_stateless PRIVATE HAVE_HTTP3)
     target_link_libraries(test_dipixy_h3_stateless PRIVATE PkgConfig::H3TEST OpenSSL::SSL OpenSSL::Crypto)
@@ -5692,6 +5723,7 @@ if (DIPIXY_TEST_HTTP3)
         ${CMAKE_SOURCE_DIR}/src/dipixy/http3/quic/tls.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_udp.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_stateless.c
+        ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tls_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
     target_compile_definitions(test_dipixy_h3_quic_tls PRIVATE HAVE_HTTP3)
     target_link_libraries(test_dipixy_h3_quic_tls PRIVATE PkgConfig::H3TEST OpenSSL::SSL OpenSSL::Crypto)

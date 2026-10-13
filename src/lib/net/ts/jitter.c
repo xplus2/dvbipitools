@@ -34,6 +34,7 @@ int tssrc_jitter_attach(tssrc_t *s, unsigned delay_ms) {
   s->tfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
   s->epfd = epoll_create1(EPOLL_CLOEXEC);
   if (s->tfd < 0 || s->epfd < 0) return -1;
+  if (is_dgram_kind(s->kind) && mcast_set_nonblock(s->m)) return -1;
   memset(&ev, 0, sizeof ev);
   ev.events = EPOLLIN;
   ev.data.fd = tssrc_src_fd(s);
@@ -68,7 +69,7 @@ static void jitter_fill(tssrc_t *s) {
   uint64_t expirations;
   ssize_t tr = read(s->tfd, &expirations, sizeof expirations);
 
-  (void)tr;
+  if (tr > 0) s->tfd_due = 0;
   if (s->fec_dec) {
     tssrc_fec_poll(s);
     jitter_fec_drain(s, tmp, sizeof tmp, mono_ns());
@@ -79,10 +80,12 @@ static void jitter_fill(tssrc_t *s) {
     ssize_t n;
     uint64_t now;
 
-    p.fd = tssrc_src_fd(s);
-    p.events = POLLIN;
-    p.revents = 0;
-    if (poll(&p, 1, 0) <= 0) break;
+    if (!is_dgram_kind(s->kind)) {
+      p.fd = tssrc_src_fd(s);
+      p.events = POLLIN;
+      p.revents = 0;
+      if (poll(&p, 1, 0) <= 0) break;
+    }
     n = jitter_recv(s, tmp, &r);
     if (n < 0) {
       jitter_src_failed(s, r);
@@ -100,10 +103,13 @@ static void jitter_fill(tssrc_t *s) {
   }
 }
 
-static void jitter_rearm(const tssrc_t *s, uint64_t now) {
+static void jitter_rearm(tssrc_t *s, uint64_t now) {
   struct itimerspec its;
   int64_t ns = jitbuf_next_ns(s->jb, now);
+  int64_t due = ns < 0 ? 0 : (int64_t)now + (ns ? ns : 1);
 
+  if (due == s->tfd_due) return;
+  s->tfd_due = due;
   memset(&its, 0, sizeof its);
   if (ns >= 0) {
     if (ns == 0) ns = 1;

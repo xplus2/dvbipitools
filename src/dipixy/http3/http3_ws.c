@@ -32,40 +32,36 @@ static nghttp3_ssize h3_ws_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *v
   vec[0].base = r->ws_send_data + r->ws_send_off;
   vec[0].len = r->ws_send_len - r->ws_send_off;
   r->ws_send_off = r->ws_send_len;
-  r->ws_inflight = 0; /* data itself stays alive: freed a cycle later via ws_prev_data */
+  r->ws_inflight = 0; /* data stays alive until acked: see h3_ws_acked */
   *pflags = NGHTTP3_DATA_FLAG_NONE;
   return 1;
 }
 
+static int h3_ws_reserve(h3_req_t *r, size_t flen) {
+  if (!r->ws_active || r->ws_dead) return -1;
+  if (r->ws_pending_len + flen > WS_OUT_MAX) {
+    r->ws_dead = 1; /* slow consumer: reactor resets in h3_ws_flush */
+    return -1;
+  }
+  return growbuf_reserve((void **)&r->ws_pending, &r->ws_pending_cap, 1, r->ws_pending_len + flen, 4096);
+}
+
 static void h3_ws_queue_prebuilt(h3_req_t *r, const uint8_t *frame, size_t flen) {
   pthread_mutex_lock(&r->ws_lock);
-  if (!r->ws_active) {
-    pthread_mutex_unlock(&r->ws_lock);
-    return;
+  if (!h3_ws_reserve(r, flen)) {
+    memcpy(r->ws_pending + r->ws_pending_len, frame, flen);
+    r->ws_pending_len += flen;
   }
-  if (growbuf_reserve((void **)&r->ws_pending, &r->ws_pending_cap, 1, r->ws_pending_len + flen, 4096)) {
-    pthread_mutex_unlock(&r->ws_lock);
-    return;
-  }
-  memcpy(r->ws_pending + r->ws_pending_len, frame, flen);
-  r->ws_pending_len += flen;
   pthread_mutex_unlock(&r->ws_lock);
 }
 
 static void h3_ws_queue(h3_req_t *r, int opcode, const void *payload, size_t len) {
-  size_t hdr = ws_frame_hdr_len(len);
-  size_t flen = hdr + len;
+  size_t flen = ws_frame_hdr_len(len) + len;
   pthread_mutex_lock(&r->ws_lock);
-  if (!r->ws_active) {
-    pthread_mutex_unlock(&r->ws_lock);
-    return;
+  if (!h3_ws_reserve(r, flen)) {
+    ws_frame_encode(r->ws_pending + r->ws_pending_len, opcode, payload, len);
+    r->ws_pending_len += flen;
   }
-  if (growbuf_reserve((void **)&r->ws_pending, &r->ws_pending_cap, 1, r->ws_pending_len + flen, 4096)) {
-    pthread_mutex_unlock(&r->ws_lock);
-    return;
-  }
-  ws_frame_encode(r->ws_pending + r->ws_pending_len, opcode, payload, len);
-  r->ws_pending_len += flen;
   pthread_mutex_unlock(&r->ws_lock);
 }
 
@@ -73,13 +69,32 @@ static void h3_ws_sink(void *ctx, const uint8_t *frame, size_t flen) { h3_ws_que
 
 static void h3_ws_queue_cb(void *ctx, int opcode, const void *payload, size_t len) { h3_ws_queue(ctx, opcode, payload, len); }
 
-void h3_ws_data_chunk(h3_req_t *r, const uint8_t *data, size_t len) {
+static void h3_ws_reset(h3_conn_t *c, h3_req_t *r) {
+  if (r->ws_reset) return;
+  r->ws_reset = 1;
+  ngtcp2_conn_shutdown_stream(c->qconn, 0, r->stream_id, NGHTTP3_H3_GENERAL_PROTOCOL_ERROR);
+}
+
+static void h3_ws_fail(h3_conn_t *c, h3_req_t *r) {
+  pthread_mutex_lock(&r->ws_lock);
+  r->ws_dead = 1;
+  pthread_mutex_unlock(&r->ws_lock);
+  ws_parser_free(&r->ws_parser);
+  h3_ws_reset(c, r);
+}
+
+void h3_ws_data_chunk(h3_conn_t *c, h3_req_t *r, const uint8_t *data, size_t len) {
   int opcode, got;
   const uint8_t *payload;
   size_t plen;
-  if (!r->ws_active || ws_parser_feed(&r->ws_parser, data, len)) return;
+  if (!r->ws_active || r->ws_dead) return;
+  if (ws_parser_feed(&r->ws_parser, data, len)) {
+    h3_ws_fail(c, r);
+    return;
+  }
   for (;;) {
     got = ws_parser_next(&r->ws_parser, &opcode, &payload, &plen);
+    if (got < 0) h3_ws_fail(c, r);
     if (got <= 0) return;
     ws_dispatch_frame(r, h3_ws_queue_cb, opcode, payload, plen);
   }
@@ -120,6 +135,24 @@ void h3_ws_on_conn_close(h3_conn_t *c) {
   }
 }
 
+void h3_ws_acked(h3_req_t *r, size_t n) {
+  while (n && r->ws_unacked) {
+    h3_ws_buf_t *b = r->ws_unacked;
+    if (n < b->len) {
+      b->data += n;
+      b->len -= n;
+      r->ws_unacked_bytes -= n;
+      return;
+    }
+    n -= b->len;
+    r->ws_unacked_bytes -= b->len;
+    r->ws_unacked = b->next;
+    if (!r->ws_unacked) r->ws_unacked_tail = NULL;
+    free(b->base);
+    free(b);
+  }
+}
+
 /* per-reactor eventfd handler: resumes H3 WS streams with data queued from any thread */
 void h3_ws_flush(void) {
   int ci, ri, fd;
@@ -132,10 +165,34 @@ void h3_ws_flush(void) {
       h3_req_t *r = &c->reqs[ri];
       uint8_t *data;
       size_t len;
-      if (!r->active || !r->ws_active || r->ws_inflight) continue;
-      if (!httpng_ws_drain_pending(&r->ws_lock, &r->ws_pending, &r->ws_pending_len, &r->ws_pending_cap, &data, &len)) continue;
-      free(r->ws_prev_data);
-      r->ws_prev_data = r->ws_send_data;
+      h3_ws_buf_t *b;
+      int dead;
+      if (!r->active || !r->ws_active) continue;
+      pthread_mutex_lock(&r->ws_lock);
+      dead = r->ws_dead;
+      pthread_mutex_unlock(&r->ws_lock);
+      if (dead) {
+        if (!r->ws_reset) {
+          h3_ws_reset(c, r);
+          flush_tx(c, fd);
+        }
+        continue;
+      }
+      if (r->ws_inflight || r->ws_unacked_bytes >= H3_WS_UNACKED_MAX) continue;
+      b = malloc(sizeof *b);
+      if (!b) continue;
+      if (!httpng_ws_drain_pending(&r->ws_lock, &r->ws_pending, &r->ws_pending_len, &r->ws_pending_cap, &data, &len)) {
+        free(b);
+        continue;
+      }
+      b->next = NULL;
+      b->base = data;
+      b->data = data;
+      b->len = len;
+      if (r->ws_unacked_tail) r->ws_unacked_tail->next = b;
+      else r->ws_unacked = b;
+      r->ws_unacked_tail = b;
+      r->ws_unacked_bytes += len;
       r->ws_send_data = data;
       r->ws_send_len = len;
       r->ws_send_off = 0;

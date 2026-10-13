@@ -47,7 +47,10 @@ typedef struct {
   uint64_t snapshots_incomplete;
   uint64_t parts_orphaned;
   uint64_t http_requests_200;
+  uint64_t http_requests_401;
   uint64_t http_requests_404;
+  uint64_t http_requests_405;
+  uint64_t http_requests_500;
 } store_stats_t;
 
 typedef struct {

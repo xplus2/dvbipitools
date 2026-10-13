@@ -24,6 +24,7 @@ START_TEST(no_args_applies_all_defaults) {
   ck_assert_uint_eq(cfg.listen_tls.port, 9443u);
   ck_assert_int_eq(cfg.workers_spec, -1);
   ck_assert_int_eq(cfg.max_clients, 256);
+  ck_assert_uint_eq(cfg.idle_timeout_s, 60u);
   ck_assert_int_eq(cfg.n_sources, 0);
   ck_assert_str_eq(cfg.iface, "eth0");
   ck_assert_double_eq_tol(cfg.segment_size, 3.0, 1e-9);
@@ -58,6 +59,14 @@ START_TEST(segment_count_is_overridable) {
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.segment_count, 6);
   args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(segment_count_rejects_above_store_limit) {
+  char *argv[] = {"dipixy", "--segment-count", "11", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -1028,6 +1037,26 @@ START_TEST(cors_origin_defaults_to_null) {
 }
 END_TEST
 
+START_TEST(ws_allowed_hosts_defaults_to_null) {
+  char *argv[] = {"dipixy", "-I", "eth0", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_ptr_eq(cfg.ws_allowed_hosts, NULL);
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(ws_allowed_hosts_is_recorded) {
+  char *argv[] = {"dipixy", "--ws-allowed-hosts", "a.lan,b.lan", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.ws_allowed_hosts, "a.lan,b.lan");
+  args_free(&cfg);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(cors_origin_is_recorded) {
   char *argv[] = {"dipixy", "--cors-origin", "https://a.example,https://b.example", NULL};
   config_t cfg = {0};
@@ -1570,8 +1599,11 @@ START_TEST(out_of_range_option_values_are_rejected) {
       {"-L", "bogus"},
       {"--max-channels", "0"},
       {"--max-channels", "1025"},
+      {"--max-variants", "0"},
+      {"--max-variants", "1025"},
       {"--idle-timeout", "86401"},
       {"--capture-ring-size", "0"},
+      {"--capture-ring-size", "262145"},
       {"--ts-startup-timeout", "-1"},
       {"--ts-startup-timeout", "abc"},
       {"--sds-refresh-interval", "0"},
@@ -1602,10 +1634,11 @@ START_TEST(out_of_range_option_values_are_rejected) {
 END_TEST
 
 START_TEST(server_limits_are_recorded) {
-  char *argv[] = {"dipixy", "--max-channels", "64", "--idle-timeout", "0", "--capture-ring-size", "512", "--ts-startup-timeout", "0", NULL};
+  char *argv[] = {"dipixy", "--max-channels", "64", "--max-variants", "3", "--idle-timeout", "0", "--capture-ring-size", "512", "--ts-startup-timeout", "0", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.max_channels, 64);
+  ck_assert_int_eq(cfg.max_variants, 3);
   ck_assert_uint_eq(cfg.idle_timeout_s, 0u);
   ck_assert_uint_eq(cfg.capture_ring_kib, 512u);
   ck_assert_double_eq_tol(cfg.ts_startup_timeout_s, 0.0, 1e-9);
@@ -1728,6 +1761,7 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, segment_size_rejects_below_minimum);
   tcase_add_test(tc, segment_count_is_overridable);
   tcase_add_test(tc, segment_count_rejects_below_minimum);
+  tcase_add_test(tc, segment_count_rejects_above_store_limit);
   tcase_add_test(tc, bad_metrics_inspect_ts_frees_cfg_before_returning_err);
   tcase_add_test(tc, bad_al_fec_frees_cfg_before_returning_err);
   tcase_add_test(tc, hls_part_size_is_overridable);
@@ -1823,6 +1857,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, ssdp_iface_is_recorded);
   tcase_add_test(tc, cors_origin_defaults_to_null);
   tcase_add_test(tc, cors_origin_is_recorded);
+  tcase_add_test(tc, ws_allowed_hosts_defaults_to_null);
+  tcase_add_test(tc, ws_allowed_hosts_is_recorded);
   tcase_add_test(tc, auth_defaults_to_off);
   tcase_add_test(tc, auth_encodes_user_password);
   tcase_add_test(tc, auth_rejects_missing_colon);

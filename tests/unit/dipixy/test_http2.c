@@ -31,7 +31,7 @@ START_TEST(clean_request_walks_the_callback_chain) {
   ck_assert_ptr_nonnull(s);
   ck_assert_str_eq(s->method, "GET");
   ck_assert_str_eq(s->path, PATH_UNKNOWN);
-  ck_assert_str_eq(s->inm, "abc");
+  ck_assert_str_eq(s->inm, "\"abc\"");
   ck_assert_str_eq(s->origin, "https://example.test");
   ck_assert_str_eq(s->authz, "Basic Zm9vOmJhcg==");
   ck_assert_str_eq(s->protocol, "");

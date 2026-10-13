@@ -95,6 +95,31 @@ START_TEST(help_returns_help_status) {
 }
 END_TEST
 
+START_TEST(reverse_map_rejected_with_xmltv) {
+  char *argv[] = {"dipixmltv", "-f", "xmltv", "-M", "map.csv", "-R", "rev.csv", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(map_rejected_with_tva) {
+  char *argv[] = {"dipixmltv", "-f", "tva", "-M", "map.csv", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+}
+END_TEST
+
+START_TEST(suggest_map_rejects_format_map_and_revmap) {
+  char *a1[] = {"dipixmltv", "-S", "scan.csv", "-f", "tva", NULL};
+  char *a2[] = {"dipixmltv", "-S", "scan.csv", "-M", "map.csv", NULL};
+  char *a3[] = {"dipixmltv", "-S", "scan.csv", "-R", "rev.csv", NULL};
+  config_t cfg;
+  ck_assert_int_eq(args_parse(ARGC(a1), a1, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(a2), a2, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(a3), a3, &cfg), ARGS_ERR);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipixmltv_args");
   TCase *tc = tcase_create("core");
@@ -109,6 +134,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, invalid_color_mode_is_rejected);
   tcase_add_test(tc, unexpected_positional_argument_is_rejected);
   tcase_add_test(tc, help_returns_help_status);
+  tcase_add_test(tc, reverse_map_rejected_with_xmltv);
+  tcase_add_test(tc, map_rejected_with_tva);
+  tcase_add_test(tc, suggest_map_rejects_format_map_and_revmap);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -21,14 +21,18 @@ static atomic_int g_tls_reload = 0;
 
 static int g_wake_fd = -1;
 
-static void on_stop(int sig) {
-  (void)sig;
+void signal_request_stop(void) {
   atomic_store_explicit(&g_stop, 1, memory_order_relaxed);
   if (g_wake_fd >= 0) {
     uint64_t one = 1;
     ssize_t r = write(g_wake_fd, &one, sizeof one);
     (void)r;
   }
+}
+
+static void on_stop(int sig) {
+  (void)sig;
+  signal_request_stop();
 }
 
 static void on_reload(int sig) {
@@ -42,13 +46,24 @@ static void on_tls_reload(int sig) {
   atomic_store_explicit(&g_tls_reload, 1, memory_order_relaxed);
 }
 
+static void install_stop(struct sigaction *sa) {
+  g_wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+  memset(sa, 0, sizeof *sa);
+  sa->sa_handler = on_stop;
+  sigaction(SIGINT, sa, NULL);
+  sigaction(SIGTERM, sa, NULL);
+}
+
+void signals_install_oneshot(void) {
+  struct sigaction sa;
+  install_stop(&sa);
+  sigaction(SIGHUP, &sa, NULL); /* terminal closed */
+  signal(SIGPIPE, SIG_IGN);
+}
+
 void signals_install(void) {
   struct sigaction sa;
-  g_wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-  memset(&sa, 0, sizeof sa);
-  sa.sa_handler = on_stop;
-  sigaction(SIGINT, &sa, NULL);
-  sigaction(SIGTERM, &sa, NULL);
+  install_stop(&sa);
   sa.sa_handler = on_reload;
   sigaction(SIGHUP, &sa, NULL);
   sa.sa_handler = on_tls_reload;

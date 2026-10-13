@@ -12,9 +12,9 @@ dipixmltv -S <scan.csv> [-i <guide.xml>] [-o <path>] [options]
 ## Options
 | flag  | long form       | argument              | default                                               |
 |-------|-----------------|-----------------------|-------------------------------------------------------|
-| `-i`  | `--input`       | `<path>`              | xmltv or tva file, `-` for stdin. required            |
-| `-o`  | `--output`      | `<path>`              | xmltv or tva file, `-` for stdout. required           |
-| `-f`  | `--format`      | `<format>`            | input is xmltv or tva (required for stdin)            |
+| `-i`  | `--input`       | `<path>`              | xmltv or tva file, `-` for stdin (default)            |
+| `-o`  | `--output`      | `<path>`              | xmltv or tva file, `-` for stdout (default)           |
+| `-f`  | `--format`      | `<format>`            | input is xmltv or tva (required unless -S)            |
 | `-M`  | `--map`         | `<path>`              | xmltv id -> uri,tsid,onid,sid (required for -f xmltv) |
 | `-R`  | `--reverse-map` | `<path>`              | uri -> preferred xmltv id (optional, -f tva only)     |
 | `-S`  | `--suggest-map` | `<path>`              | dipiscan csv - write a suggested -M mapping to -o     |

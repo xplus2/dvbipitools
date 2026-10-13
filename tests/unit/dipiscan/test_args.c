@@ -91,6 +91,8 @@ typedef struct {
 static const error_case_t error_cases[] = {
   ERR(ARGS_ERR, "invalid -m address: bogus", "-m", "bogus"),
   ERR(ARGS_ERR, "invalid -m address: 239.1.2.3/40", "-m", "239.1.2.3/40"),
+  ERR(ARGS_ERR, "-m range too large: 239.0.0.0/8", "-m", "239.0.0.0/8"),
+  ERR(ARGS_ERR, "-m range too large: 239.0.0.0-239.255.0.0", "-m", "239.0.0.0-239.255.0.0"),
   ERR(ARGS_ERR, "invalid -p port range: 0", "-p", "0"),
   ERR(ARGS_ERR, "invalid -p port range: 9-3", "-p", "9-3"),
   ERR(ARGS_ERR, "invalid -f format: pdf", "-f", "pdf"),

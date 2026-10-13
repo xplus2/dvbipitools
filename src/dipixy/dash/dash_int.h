@@ -7,6 +7,6 @@
 #include "../segstore_int.h"
 
 /* dash.c */
-int parse_dash_seg_filename(const char *fn, uint64_t *t);
+int parse_dash_seg_filename(const char *fn, uint64_t *t, seg_container_t *container);
 
 #endif

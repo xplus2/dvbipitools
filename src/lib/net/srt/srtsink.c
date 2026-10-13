@@ -64,7 +64,7 @@ void srtsink_service(srtsink_t *r, srtsink_status_t *out) {
   out->connected = st.connected;
 }
 
-void srtsink_write(srtsink_t *r, const unsigned char *buf, size_t n) { srtout_write(r->o, buf, n); }
+int srtsink_write(srtsink_t *r, const unsigned char *buf, size_t n) { return srtout_write(r->o, buf, n); }
 
 void srtsink_close(srtsink_t *r) {
   if (!r) return;

@@ -4,7 +4,9 @@
 #include "ssdp.h"
 
 #include <errno.h>
+#include <arpa/inet.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -12,7 +14,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/random.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
@@ -25,6 +29,9 @@
 #define SSDP_PORT 1900
 #define SSDP_RECV_TIMEOUT_MS 1000
 #define SSDP_RECV_BUF 2048
+#define SSDP_PENDING_MAX 16
+#define SSDP_MX_CAP 5u
+#define SSDP_MX_MAX_ACCEPT 120u
 
 #define STRINGIFY_(x) #x
 #define STRINGIFY(x) STRINGIFY_(x)
@@ -37,6 +44,7 @@ static const char *const ssdp_types[] = {
     "urn:schemas-upnp-org:service:ConnectionManager:1",
 };
 #define SSDP_NTYPES (sizeof ssdp_types / sizeof ssdp_types[0])
+#define SSDP_MASK_ALL ((2u << SSDP_NTYPES) - 1u)
 
 static uint64_t fnv1a64(const char *s, const char *salt) {
   uint64_t h = 0xcbf29ce484222325ULL;
@@ -195,36 +203,152 @@ static void send_msearch_reply_one(int fd, const struct sockaddr *peer, socklen_
   if (!b.truncated) sendto(fd, pkt, b.len, 0, peer, peerlen);
 }
 
-void ssdp_handle_msearch(int fd, const char *buf, const struct sockaddr *peer, socklen_t peerlen, const config_t *cfg, const char *uuid) {
-  const char *line_end;
-  char st[192];
-  size_t i;
-  char want_uuid[192];
+static void trim_end(char *s) {
+  size_t n = strlen(s);
+  while (n && (s[n - 1] == ' ' || s[n - 1] == '\t')) s[--n] = '\0';
+}
 
-  if (strncmp(buf, "M-SEARCH", 8) != 0) return;
+/* digits only, 1..SSDP_MX_MAX_ACCEPT. larger than SSDP_MX_CAP clamps to cap */
+static int parse_mx(const char *s, unsigned *out) {
+  unsigned v = 0;
+  if (!*s) return 0;
+  for (; *s; s++) {
+    if (*s < '0' || *s > '9') return 0;
+    v = v * 10 + (unsigned)(*s - '0');
+    if (v > SSDP_MX_MAX_ACCEPT) return 0;
+  }
+  if (!v) return 0;
+  *out = v > SSDP_MX_CAP ? SSDP_MX_CAP : v;
+  return 1;
+}
+
+int ssdp_msearch_parse(const char *buf, const char *uuid, ssdp_query_t *q) {
+  const char *line_end;
+  const char *hdrs;
+  char st[192];
+  char man[32];
+  char mx[16];
+  char want_uuid[192];
+  size_t i;
+
+  if (strncmp(buf, "M-SEARCH", 8) != 0) return 0;
   line_end = strstr(buf, "\r\n");
-  if (!line_end || !ssdp_msearch_header(line_end + 2, "ST", st, sizeof st)) return;
+  if (!line_end) return 0;
+  hdrs = line_end + 2;
+  if (!ssdp_msearch_header(hdrs, "MAN", man, sizeof man)) return 0;
+  trim_end(man);
+  if (strcmp(man, "\"ssdp:discover\"") != 0) return 0;
+  if (!ssdp_msearch_header(hdrs, "MX", mx, sizeof mx)) return 0;
+  trim_end(mx);
+  if (!parse_mx(mx, &q->mx_s)) return 0;
+  if (!ssdp_msearch_header(hdrs, "ST", st, sizeof st)) return 0;
+  trim_end(st);
   if (!strcmp(st, "ssdp:all")) {
-    send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, NULL);
-    for (i = 0; i < SSDP_NTYPES; i++) send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, ssdp_types[i]);
-    return;
+    q->mask = SSDP_MASK_ALL;
+    return 1;
   }
   build_usn(uuid, NULL, want_uuid, sizeof want_uuid);
   if (!strcmp(st, want_uuid)) {
-    send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, NULL);
-    return;
+    q->mask = 1u;
+    return 1;
   }
   for (i = 0; i < SSDP_NTYPES; i++)
     if (!strcmp(st, ssdp_types[i])) {
-      send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, ssdp_types[i]);
-      return;
+      q->mask = 2u << i;
+      return 1;
     }
+  return 0;
+}
+
+void ssdp_msearch_reply(int fd, const struct sockaddr *peer, socklen_t peerlen, const config_t *cfg, const char *uuid, unsigned mask) {
+  if (mask & 1u) send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, NULL);
+  for (size_t i = 0; i < SSDP_NTYPES; i++)
+    if (mask & (2u << i)) send_msearch_reply_one(fd, peer, peerlen, cfg, uuid, ssdp_types[i]);
+}
+
+typedef struct {
+  struct sockaddr_in peer;
+  unsigned mask;
+  double due;
+  int used;
+} ssdp_pending_t;
+
+/* 1 dg read. *to_group set when header destination is an mcast addr */
+static ssize_t recv_query(int fd, char *buf, size_t cap, struct sockaddr_in *peer, int *to_group) {
+  char cbuf[CMSG_SPACE(sizeof(struct in_pktinfo))];
+  struct iovec iov = {buf, cap};
+  struct msghdr mh;
+  ssize_t n;
+
+  memset(&mh, 0, sizeof mh);
+  mh.msg_name = peer;
+  mh.msg_namelen = sizeof *peer;
+  mh.msg_iov = &iov;
+  mh.msg_iovlen = 1;
+  mh.msg_control = cbuf;
+  mh.msg_controllen = sizeof cbuf;
+  *to_group = 0;
+  n = recvmsg(fd, &mh, MSG_DONTWAIT);
+  if (n <= 0) return n;
+  for (struct cmsghdr *c = CMSG_FIRSTHDR(&mh); c; c = CMSG_NXTHDR(&mh, c)) {
+    if (c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_PKTINFO) {
+      struct in_pktinfo pi;
+      memcpy(&pi, CMSG_DATA(c), sizeof pi);
+      *to_group = IN_MULTICAST(ntohl(pi.ipi_addr.s_addr));
+    }
+  }
+  return n;
+}
+
+static int peer_valid(const struct sockaddr_in *p) {
+  uint32_t a = ntohl(p->sin_addr.s_addr);
+  return p->sin_family == AF_INET && p->sin_port != 0 && a != INADDR_ANY && a != INADDR_BROADCAST && !IN_MULTICAST(a);
+}
+
+/* random delay in [0, mx) s. no entropy: no delay */
+static double reply_delay(unsigned mx_s) {
+  uint32_t r;
+  if (getrandom(&r, sizeof r, 0) != (ssize_t)sizeof r) return 0.0;
+  return (double)mx_s * ((double)r / 4294967296.0);
+}
+
+static void pending_add(ssdp_pending_t *pend, const struct sockaddr_in *peer, const ssdp_query_t *q, double now) {
+  ssdp_pending_t *slot = NULL;
+  for (size_t i = 0; i < SSDP_PENDING_MAX; i++) {
+    if (!pend[i].used) {
+      if (!slot) slot = &pend[i];
+    } else if (pend[i].peer.sin_addr.s_addr == peer->sin_addr.s_addr) {
+      return; /* 1 outstanding answer per src host */
+    }
+  }
+  if (!slot) return;
+  slot->peer = *peer;
+  slot->mask = q->mask;
+  slot->due = now + reply_delay(q->mx_s);
+  slot->used = 1;
+}
+
+/* sends due answers, returns seconds until next or a negative value if none */
+static double pending_flush(ssdp_pending_t *pend, int fd, const config_t *cfg, const char *uuid, double now) {
+  double next = -1.0;
+  for (size_t i = 0; i < SSDP_PENDING_MAX; i++) {
+    if (!pend[i].used) continue;
+    if (pend[i].due <= now) {
+      ssdp_msearch_reply(fd, (struct sockaddr *)&pend[i].peer, sizeof pend[i].peer, cfg, uuid, pend[i].mask);
+      pend[i].used = 0;
+    } else if (next < 0.0 || pend[i].due - now < next) {
+      next = pend[i].due - now;
+    }
+  }
+  return next;
 }
 
 static void *ssdp_thread_fn(void *arg) {
   ssdp_arg_t *a = arg;
+  ssdp_pending_t pend[SSDP_PENDING_MAX];
   mcast_t *recv_m;
   int fd;
+  int on = 1;
   double next_announce;
   recv_m = mcast_open(AF_INET, SSDP_ADDR, SSDP_PORT, a->cfg->ssdp_iface, SSDP_RECV_TIMEOUT_MS);
   if (!recv_m) {
@@ -232,26 +356,41 @@ static void *ssdp_thread_fn(void *arg) {
     return NULL;
   }
   fd = mcast_fd(recv_m);
+  memset(pend, 0, sizeof pend);
+  /* no destination info: unicast cannot be told apart */
+  if (setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof on) != 0) {
+    log_code("YA500235", TOOL_NAME ": ssdp: IP_PKTINFO: %s, not answering searches", strerror(errno));
+    on = 0;
+  }
   next_announce = 0.0;
   send_notify_all(a->cfg, a->uuid, 1);
   log_line_ansi(TOOL_NAME ": ssdp: announcing uuid:%s at \e[0;34mhttp://%s/dlna/desc.xml\e[0m", a->uuid, a->cfg->dlna_host);
 
   while (g_running) {
     char buf[SSDP_RECV_BUF];
-    struct sockaddr_storage peer;
-    socklen_t peerlen = sizeof peer;
+    struct sockaddr_in peer;
+    struct pollfd pfd = {fd, POLLIN, 0};
+    ssdp_query_t q;
     ssize_t n;
+    int to_group;
+    int wait_ms = SSDP_RECV_TIMEOUT_MS;
     double now = mono_seconds();
+    double next_due;
 
     if (now >= next_announce) {
       send_notify_all(a->cfg, a->uuid, 1);
       next_announce = now + a->cfg->ssdp_interval_s;
     }
 
-    n = recvfrom(fd, buf, sizeof buf - 1, 0, (struct sockaddr *)&peer, &peerlen);
+    next_due = pending_flush(pend, fd, a->cfg, a->uuid, now);
+    if (next_due >= 0.0 && next_due * 1000.0 < wait_ms) wait_ms = (int)(next_due * 1000.0) + 1;
+    if (poll(&pfd, 1, wait_ms) <= 0) continue;
+
+    n = recv_query(fd, buf, sizeof buf - 1, &peer, &to_group);
     if (n > 0) {
       buf[n] = '\0';
-      ssdp_handle_msearch(fd, buf, (struct sockaddr *)&peer, peerlen, a->cfg, a->uuid);
+      if (on && to_group && peer_valid(&peer) && ssdp_msearch_parse(buf, a->uuid, &q))
+        pending_add(pend, &peer, &q, mono_seconds());
     } else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
       log_code("YE500204", TOOL_NAME ": ssdp: recv error: %s", strerror(errno));
       break;

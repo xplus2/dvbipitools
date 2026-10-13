@@ -327,7 +327,7 @@ START_TEST(unknown_path_returns_404) {
 }
 END_TEST
 
-START_TEST(post_to_metrics_also_returns_404) {
+START_TEST(post_to_metrics_returns_405_and_is_counted) {
   store_t st;
   int lfd;
   int cfd;
@@ -343,7 +343,38 @@ START_TEST(post_to_metrics_also_returns_404) {
 
   drive_until_closed(hs, &st, cfd);
   recv_all(cfd, buf, sizeof buf);
-  ck_assert(strstr(buf, "HTTP/1.1 404 Not Found") == buf);
+  ck_assert(strstr(buf, "HTTP/1.1 405 Method Not Allowed") == buf);
+  ck_assert(strstr(buf, "Allow: GET, HEAD") != NULL);
+  ck_assert_uint_eq(st.stats.http_requests_405, 1u);
+  ck_assert_uint_eq(st.stats.http_requests_404, 0u);
+
+  close(cfd);
+  http_server_free(hs);
+  close(lfd);
+}
+END_TEST
+
+START_TEST(head_metrics_returns_headers_without_body) {
+  store_t st;
+  int lfd;
+  int cfd;
+  http_server_t *hs;
+  char buf[8192];
+  const char req[] = "HEAD /metrics HTTP/1.1\r\nHost: x\r\n\r\n";
+
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  hs = http_server_new(lfd, NULL, "");
+  cfd = connect_to(lfd);
+  ck_assert_int_eq((int)send(cfd, req, sizeof req - 1, 0), (int)sizeof req - 1);
+
+  drive_until_closed(hs, &st, cfd);
+  recv_all(cfd, buf, sizeof buf);
+  ck_assert(strstr(buf, "HTTP/1.1 200 OK") == buf);
+  ck_assert(strstr(buf, "Content-Length: ") != NULL);
+  ck_assert(strstr(buf, "# EOF") == NULL);
+  ck_assert(strcmp(buf + strlen(buf) - 4, "\r\n\r\n") == 0);
+  ck_assert_uint_eq(st.stats.http_requests_200, 1u);
 
   close(cfd);
   http_server_free(hs);
@@ -421,6 +452,9 @@ START_TEST(request_counters_reflect_status_and_include_current_request) {
   recv_all(c1, buf1, sizeof buf1);
   ck_assert(strstr(buf1, "dvbipi_metrics_http_requests_total{status=\"200\"} 1") != NULL);
   ck_assert(strstr(buf1, "dvbipi_metrics_http_requests_total{status=\"404\"} 0") != NULL);
+  ck_assert(strstr(buf1, "dvbipi_metrics_http_requests_total{status=\"401\"} 0") != NULL);
+  ck_assert(strstr(buf1, "dvbipi_metrics_http_requests_total{status=\"405\"} 0") != NULL);
+  ck_assert(strstr(buf1, "dvbipi_metrics_http_requests_total{status=\"500\"} 0") != NULL);
 
   c2 = connect_to(lfd);
   ck_assert_int_gt((int)send(c2, "GET /nope HTTP/1.1\r\n\r\n", 23, 0), 0);
@@ -462,6 +496,7 @@ START_TEST(metrics_requires_auth_when_configured) {
   recv_all(cfd, buf, sizeof buf);
   ck_assert(strstr(buf, "HTTP/1.1 401 Unauthorized") == buf);
   ck_assert(strstr(buf, "WWW-Authenticate: Basic realm=\"metrics\"") != NULL);
+  ck_assert_uint_eq(st.stats.http_requests_401, 1u);
 
   close(cfd);
   http_server_free(hs);
@@ -759,12 +794,10 @@ typedef struct {
 } method_case_t;
 
 static const method_case_t method_cases[] = {
-  {"HEAD /metrics HTTP/1.1\r\nHost: x\r\n\r\n", "404 HEAD /metrics"},
-  {"PUT /metrics HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n", "404 PUT /metrics"},
   {"DELETE / HTTP/1.1\r\nHost: x\r\n\r\n", "404 DELETE /"},
   {"GET /metrics/ HTTP/1.1\r\nHost: x\r\n\r\n", "404 GET /metrics/"},
   {"GET /METRICS HTTP/1.1\r\nHost: x\r\n\r\n", "404 GET /METRICS"},
-  {"ABCDEFGHIJKLMNOPQRST /metrics HTTP/1.1\r\nHost: x\r\n\r\n", "404 ABCDEFGHIJKLMNO /metrics"},
+  {"ABCDEFGHIJKLMNOPQRST /x HTTP/1.1\r\nHost: x\r\n\r\n", "404 ABCDEFGHIJKLMNO /x"},
   {"\x01\x02garbage\r\n\r\n", NULL},
 };
 
@@ -782,6 +815,22 @@ START_TEST(other_methods_and_malformed_requests_get_404) {
   ck_assert_uint_eq(st.stats.http_requests_404, 1u);
   if (c->log_has) ck_assert_ptr_nonnull(strstr(msg, c->log_has));
   else ck_assert_ptr_null(strstr(msg, "404 "));
+}
+END_TEST
+
+START_TEST(put_metrics_returns_405_and_logs) {
+  store_t st;
+  char buf[8192];
+  char msg[4096];
+  const char req[] = "PUT /metrics HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n";
+
+  store_init(&st);
+  log_capture_begin();
+  serve_one("", req, sizeof req - 1, 1, &st, buf, sizeof buf);
+  log_capture_end(msg, sizeof msg);
+  ck_assert_ptr_nonnull(strstr(buf, "HTTP/1.1 405 Method Not Allowed"));
+  ck_assert_uint_eq(st.stats.http_requests_405, 1u);
+  ck_assert_ptr_nonnull(strstr(msg, "405 PUT /metrics"));
 }
 END_TEST
 
@@ -814,7 +863,9 @@ static Suite *httpserver_suite(void) {
   tcase_add_test(tc, get_metrics_returns_200_and_openmetrics_body);
   tcase_add_test(tc, fragmented_request_across_multiple_writes_still_returns_200);
   tcase_add_test(tc, unknown_path_returns_404);
-  tcase_add_test(tc, post_to_metrics_also_returns_404);
+  tcase_add_test(tc, post_to_metrics_returns_405_and_is_counted);
+  tcase_add_test(tc, head_metrics_returns_headers_without_body);
+  tcase_add_test(tc, put_metrics_returns_405_and_logs);
   tcase_add_test(tc, query_string_is_stripped_before_matching);
   tcase_add_test(tc, sequential_scrapes_each_get_a_correct_independent_response);
   tcase_add_test(tc, request_counters_reflect_status_and_include_current_request);

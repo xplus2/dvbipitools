@@ -35,6 +35,8 @@ daemonize: off
 dscp: signalling
 # -t|--interval 5 # seconds
 interval: 5
+# --refresh 1
+refresh: 1
 # -Z|--compress off
 compress: off
 

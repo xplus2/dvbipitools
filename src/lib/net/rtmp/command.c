@@ -131,6 +131,27 @@ int rtmp_command_publish(struct rtmp *r) {
   return send_invoke(r, r->stream_id, &b);
 }
 
+#define RTMP_UC_PING_REQUEST 6
+#define RTMP_UC_PING_RESPONSE 7
+
+void rtmp_command_on_user_control(struct rtmp *r, const unsigned char *payload, size_t len) {
+  unsigned char body[6];
+  if (len < 6 || payload[0] != 0 || payload[1] != RTMP_UC_PING_REQUEST || r->state == RTMP_ST_FAILED) return;
+  memcpy(body, payload, sizeof body);
+  body[1] = RTMP_UC_PING_RESPONSE;
+  rtmp_session_write_message(r, RTMP_CID_PROTOCOL, RTMP_TYPE_USER_CONTROL, 0, 0, NULL, 0, body, sizeof body);
+}
+
+static void on_status(struct rtmp *r, const unsigned char *p, const unsigned char *end) {
+  char level[16];
+  char code[96];
+  p = amf_skip_value(p, end); /* command object, Null */
+  if (!p || amf_object_find_string(p, end, "level", level, sizeof level) != 1 || strcmp(level, "error") != 0) return;
+  if (amf_object_find_string(p, end, "code", code, sizeof code) != 1) bufcpy(code, sizeof code, "onStatus error");
+  r->state = RTMP_ST_FAILED;
+  if (r->error_cb) r->error_cb(r->cb_ctx, code);
+}
+
 void rtmp_command_on_invoke(struct rtmp *r, const unsigned char *payload, size_t len) {
   const unsigned char *p = payload;
   const unsigned char *end = payload + len;
@@ -142,26 +163,35 @@ void rtmp_command_on_invoke(struct rtmp *r, const unsigned char *payload, size_t
   p = amf_read_number(p, end, &transaction);
   if (!p) return;
   if (strcmp(cmd, "_error") == 0) {
-    const unsigned char *info = amf_skip_value(p, end); /* command object, normally Null */
+    const unsigned char *info;
+    int waiting = (r->state == RTMP_ST_WAIT_CONNECT_RESULT && (int)transaction == RTMP_TRANSACTION_CONNECT) ||
+                  (r->state == RTMP_ST_WAIT_CREATE_STREAM_RESULT && (int)transaction == RTMP_TRANSACTION_CREATE_STREAM);
+    if (!waiting) return; /* releaseStream/FCPublish replies carry transaction 0 */
+    info = amf_skip_value(p, end); /* command object, normally Null */
     if (r->state == RTMP_ST_WAIT_CONNECT_RESULT && r->user[0] && !r->auth_tried && info) {
       char desc[400];
       char salt[128];
       char opaque[128];
       char challenge[128];
       char challenge2[24];
-      char response[24];
+      char response[32];
       opaque[0] = challenge[0] = '\0';
       if (amf_object_find_string(info, end, "description", desc, sizeof desc) == 1 && desc_kv(desc, "salt=", salt, sizeof salt) &&
           (desc_kv(desc, "opaque=", opaque, sizeof opaque) || desc_kv(desc, "challenge=", challenge, sizeof challenge)) &&
           rtmp_auth_adobe_response(r->user, r->password, salt, opaque[0] ? opaque : NULL, challenge[0] ? challenge : NULL, challenge2, sizeof challenge2, response, sizeof response) == 0) {
-        r->auth_tried = 1;
         snprintf(r->auth_query, sizeof r->auth_query, "?authmod=adobe&user=%s&challenge=%s&response=%s%s%s", r->user, challenge2, response, opaque[0] ? "&opaque=" : "", opaque);
-        rtmp_command_connect(r);
+        r->auth_retry = 1;
+        r->state = RTMP_ST_FAILED;
+        if (r->error_cb) r->error_cb(r->cb_ctx, "auth challenge");
         return;
       }
     }
     r->state = RTMP_ST_FAILED;
     if (r->error_cb) r->error_cb(r->cb_ctx, cmd);
+    return;
+  }
+  if (strcmp(cmd, "onStatus") == 0) {
+    if (r->state != RTMP_ST_FAILED) on_status(r, p, end);
     return;
   }
   if (strcmp(cmd, "_result") != 0) return;

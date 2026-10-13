@@ -12,6 +12,8 @@
 #endif
 
 #include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <string.h>
@@ -72,26 +74,50 @@ static void reactor_accept_setup(int epfd, const reactor_listener *L, int fd, co
     return;
   }
   c->epfd = epfd; /* owning epoll, for cross-thread EPOLLOUT arming */
-  if (saddr->ss_family == AF_INET6)
-    inet_ntop(AF_INET6, &((const struct sockaddr_in6 *)saddr)->sin6_addr, c->client_ip, sizeof(c->client_ip));
-  else
-    inet_ntop(AF_INET, &((const struct sockaddr_in *)saddr)->sin_addr, c->client_ip, sizeof(c->client_ip));
+  sockaddr_ip_str(saddr, c->client_ip, sizeof(c->client_ip));
 
   struct epoll_event ev;
   memset(&ev, 0, sizeof(ev));
   ev.events = EPOLLIN;
   ev.data.ptr = c;
-  if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) < 0)
+  if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) < 0) {
     reactor_close(epfd, c);
+    return;
+  }
+  conn_publish(c); /* idle sweep sees every conn, not just streams */
+}
+
+static _Thread_local int t_accept_spare = -1;
+
+/* spare fd: closed to make room, accept+drop one conn, reopened. drains level-triggered backlog on EMFILE/ENFILE */
+static int reactor_accept_shed(int lfd) {
+  close(t_accept_spare);
+  int fd = accept4(lfd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
+  if (fd >= 0) close(fd);
+  t_accept_spare = open("/dev/null", O_RDONLY | O_CLOEXEC);
+  return fd >= 0;
 }
 
 /* listener readable: accept all pending */
 void reactor_accept(int epfd, reactor_listener *L) {
+  if (t_accept_spare < 0) t_accept_spare = open("/dev/null", O_RDONLY | O_CLOEXEC);
   for (;;) {
     struct sockaddr_storage saddr;
     socklen_t addrlen = sizeof(saddr);
-    int fd = accept4(L->fd, (struct sockaddr *)&saddr, &addrlen,SOCK_NONBLOCK | SOCK_CLOEXEC);
-    if (fd < 0) break; /* EAGAIN: backlog drained (or a transient error) */
+    int fd = accept4(L->fd, (struct sockaddr *)&saddr, &addrlen, SOCK_NONBLOCK | SOCK_CLOEXEC);
+    if (fd < 0) {
+      if (errno == EINTR || errno == ECONNABORTED) continue;
+      if (errno == EMFILE || errno == ENFILE) {
+        if (t_accept_spare >= 0 && reactor_accept_shed(L->fd)) continue;
+        break;
+      }
+      break; /* EAGAIN: backlog drained */
+    }
     reactor_accept_setup(epfd, L, fd, &saddr);
   }
+}
+
+void reactor_accept_fini(void) {
+  if (t_accept_spare >= 0) close(t_accept_spare);
+  t_accept_spare = -1;
 }

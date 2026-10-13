@@ -364,6 +364,7 @@ START_TEST(reader_that_falls_behind_loses_the_oldest_bytes) {
   r = capture_reader_open(cap);
   ck_assert_ptr_nonnull(r);
 
+  memset(dgram, 0, sizeof dgram);
   for (int i = 0; i < SENDS; i++) {
     for (size_t k = 0; k < sizeof dgram; k += 188) make_ts_packet(dgram + k, (unsigned char)(i + 1));
     ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), DGRAM);
@@ -517,6 +518,74 @@ START_TEST(rtp_source_drain_unwraps_and_skips_non_rtp_datagrams) {
 }
 END_TEST
 
+static _Atomic int g_woken_tid = -1;
+
+static void wake_cb(int tid) { atomic_store(&g_woken_tid, tid); }
+
+static int wait_job(const capture_open_job_t *job) {
+  for (int i = 0; i < 3000; i++) {
+    if (capture_open_job_done(job)) return 1;
+    usleep(1000);
+  }
+  return 0;
+}
+
+START_TEST(async_open_unavailable_before_lifecycle_start) {
+  ck_assert_ptr_null(capture_open_async(0, AF_INET, "239.8.8.30", NULL, 15830, NULL, 0, NULL, NULL, NULL, 0, 0));
+  ck_assert_ptr_null(capture_open_srt_async(0, "127.0.0.1", 15830));
+  ck_assert_ptr_null(capture_try_ref(AF_INET, "239.8.8.30", NULL, 15830, NULL));
+}
+END_TEST
+
+START_TEST(async_open_completes_wakes_and_dedups) {
+  capture_open_job_t *job;
+  capture_ctx_t *ctx, *again;
+
+  capture_pump_set_thread_count(1);
+  ck_assert_int_eq(capture_lifecycle_start(wake_cb), 0);
+  job = capture_open_async(7, AF_INET, "239.8.8.31", NULL, 15831, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ck_assert_ptr_nonnull(job);
+  ck_assert(wait_job(job));
+  ck_assert_int_eq(atomic_load(&g_woken_tid), 7);
+  ctx = capture_open_job_take(job);
+  ck_assert_ptr_nonnull(ctx);
+  again = capture_try_ref(AF_INET, "239.8.8.31", NULL, 15831, NULL);
+  ck_assert_ptr_eq(ctx, again);
+  ck_assert_int_eq(capture_active_count(), 1);
+  capture_close(again);
+  capture_close(ctx);
+  ck_assert_int_eq(capture_active_count(), 0);
+  capture_lifecycle_stop();
+}
+END_TEST
+
+START_TEST(close_returns_without_waiting_for_pump_quiescence) {
+  capture_ctx_t *ctx;
+
+  capture_pump_set_thread_count(1);
+  ck_assert_int_eq(capture_lifecycle_start(wake_cb), 0);
+  ctx = capture_open(AF_INET, "239.8.8.32", NULL, 15832, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ck_assert_ptr_nonnull(ctx);
+  capture_close(ctx); /* no pump thread runs: a blocking close never returns */
+  ck_assert_int_eq(capture_active_count(), 0);
+  capture_lifecycle_stop();
+}
+END_TEST
+
+START_TEST(cancelled_job_closes_its_result) {
+  capture_open_job_t *job;
+
+  capture_pump_set_thread_count(1);
+  ck_assert_int_eq(capture_lifecycle_start(wake_cb), 0);
+  job = capture_open_async(0, AF_INET, "239.8.8.33", NULL, 15833, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ck_assert_ptr_nonnull(job);
+  capture_open_job_cancel(job);
+  for (int i = 0; i < 3000 && capture_active_count() > 0; i++) usleep(1000);
+  ck_assert_int_eq(capture_active_count(), 0);
+  capture_lifecycle_stop();
+}
+END_TEST
+
 static Suite *capture_suite(void) {
   Suite *s = suite_create("dipixy_capture");
   TCase *tc = tcase_create("core");
@@ -536,6 +605,10 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, datagram_larger_than_the_ring_keeps_only_its_tail);
   tcase_add_test(tc, http_stream_reassembles_packets_split_across_reads);
   tcase_add_test(tc, rtp_source_drain_unwraps_and_skips_non_rtp_datagrams);
+  tcase_add_test(tc, async_open_unavailable_before_lifecycle_start);
+  tcase_add_test(tc, async_open_completes_wakes_and_dedups);
+  tcase_add_test(tc, close_returns_without_waiting_for_pump_quiescence);
+  tcase_add_test(tc, cancelled_job_closes_its_result);
   suite_add_tcase(s, tc);
   return s;
 }

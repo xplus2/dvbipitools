@@ -33,11 +33,19 @@ static const char *section_fault(psi_t *c, psi_obs_id_t id, const unsigned char 
   return NULL;
 }
 
+static sdt_name_t *sdt_name_find(psi_t *c, unsigned sid) {
+  for (int k = 0; k < c->sdt_name_count; k++) {
+    if (c->sdt_names[k].sid == sid) return &c->sdt_names[k];
+  }
+  return NULL;
+}
+
 /* registers pid as a new PMT candidate for program prog (assumes prog/pid pair isn't already a
    candidate). also mirrors into c->multi[] when multi-program mode is on */
 static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
   if (c->pmt_cand_count < PSI_MAX_PROGRAMS) {
     pmt_cand_t *cand = &c->pmt_cand[c->pmt_cand_count];
+    const sdt_name_t *n;
     memset(cand, 0, sizeof *cand);
     cand->obs_ver = -1;
     cand->program_number = prog;
@@ -49,6 +57,11 @@ static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
       memset(m, 0, sizeof *m);
       m->program_number = prog;
       m->pmt_pid = pid;
+      n = sdt_name_find(c, prog);
+      if (n) {
+        memcpy(m->provider_name, n->provider_name, PSI_NAME);
+        memcpy(m->service_name, n->service_name, PSI_NAME);
+      }
       c->multi_count++;
     }
   } else if (!c->pmt_cand_overflow_logged) {
@@ -57,18 +70,35 @@ static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
   }
 }
 
+/* single-program lock: locked program now listed on another pmt pid, retarget locked cand */
+static void follow_pmt_move(psi_t *c, unsigned pid) {
+  pmt_cand_t *cand = &c->pmt_cand[c->pmt_lock_idx];
+  memset(&cand->asm_, 0, sizeof cand->asm_);
+  cand->pmt_pid = pid;
+  c->pmt_pid = pid;
+  c->pmt_wanted[pid] = 1;
+}
+
 void parse_pat(psi_t *c) {
   const unsigned char *b = c->pat.buf;
   size_t n = c->pat.expect;
   size_t end;
+  unsigned moved_pid = 0;
+  int still_listed = 0;
+  int ver;
   const char *fault = section_fault(c, PSI_OBS_PAT, b, n, 12, 0x00);
   if (fault) {
     log_throttled(&c->pat_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400144", "%s: PAT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
+  if (!(b[5] & 1)) return;
   obs_version(c, PSI_OBS_PAT, b, NULL);
-  c->nit_pid = 0;
-  c->pat_program_count = 0;
+  ver = (b[5] >> 1) & 0x1F;
+  if (!c->have_pat || b[6] == 0 || ver != c->pat_version) {
+    c->nit_pid = 0;
+    c->pat_program_count = 0;
+  }
+  c->pat_version = ver;
   /* pmt_cand[] deliberately not reset here: a candidate's PMT may still be
    * mid-assembly, PAT repeats far more often than that takes */
   c->tsid = ((unsigned)b[3] << 8) | b[4];
@@ -88,10 +118,17 @@ void parse_pat(psi_t *c) {
       log_code("LW400145", "%s: PAT has more than %d programs, dropping the rest", psi_tag(c), PSI_MAX_PROGRAMS);
       c->pat_program_overflow_logged = 1;
     }
-    if (c->pmt_locked && !c->multi_mode) continue;
+    if (c->pmt_locked && !c->multi_mode) {
+      if (prog == c->pmt_cand[c->pmt_lock_idx].program_number) {
+        if (pid == c->pmt_cand[c->pmt_lock_idx].pmt_pid) still_listed = 1;
+        else moved_pid = pid;
+      }
+      continue;
+    }
     if (c->preferred_pmt_pid && pid != c->preferred_pmt_pid) continue;
     if (!find_cand(c, prog, pid)) add_pmt_candidate(c, prog, pid);
   }
+  if (moved_pid && !still_listed) follow_pmt_move(c, moved_pid);
   if (c->pat_program_count < PSI_MAX_PROGRAMS) c->pat_program_overflow_logged = 0;
   if (c->pmt_cand_count < PSI_MAX_PROGRAMS) c->pmt_cand_overflow_logged = 0;
   c->have_pat = 1;
@@ -132,6 +169,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n) {
   size_t pil;
   size_t l;
   unsigned prog;
+  const sdt_name_t *sn;
   int hdmv = 0;
   const unsigned char *ca;
   const char *fault = section_fault(c, PSI_OBS_PMT, b, n, 16, 0x02);
@@ -147,6 +185,11 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n) {
   }
   obs_version(c, PSI_OBS_PMT, b, cand);
   c->program_number = prog;
+  sn = sdt_name_find(c, prog);
+  if (sn) {
+    memcpy(c->provider_name, sn->provider_name, PSI_NAME);
+    memcpy(c->service_name, sn->service_name, PSI_NAME);
+  }
   c->pmt_pid = cand->pmt_pid;
   c->pcr_pid = (((unsigned)b[8] & 0x1F) << 8) | b[9];
   pil = tspack_length12(b + 10);
@@ -234,6 +277,7 @@ void parse_sdt(psi_t *c) {
   size_t n = c->sdt.expect;
   size_t i;
   size_t end;
+  sdt_name_t *cache;
   const char *fault = section_fault(c, PSI_OBS_SDT, b, n, 12, 0x42);
   if (fault) {
     log_throttled(&c->sdt_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400148", "%s: SDT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
@@ -248,6 +292,13 @@ void parse_sdt(psi_t *c) {
     const unsigned char *d = b + i + 5;
     size_t dll = tspack_length12(b + i + 3);
     if (i + 5 + dll > end) break;
+    cache = sdt_name_find(c, sid);
+    if (!cache && c->sdt_name_count < PSI_MAX_PROGRAMS) {
+      cache = &c->sdt_names[c->sdt_name_count++];
+      memset(cache, 0, sizeof *cache);
+      cache->sid = sid;
+    }
+    if (cache) decode_service_desc(d, dll, cache->provider_name, cache->service_name);
     if (sid == c->program_number) decode_service_desc(d, dll, c->provider_name, c->service_name);
     if (c->multi_mode) {
       int k = find_multi_index(c, sid);

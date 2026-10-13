@@ -13,6 +13,7 @@ typedef struct {
   uint32_t cap; /* power of 2 */
   _Atomic uint32_t wpos;
   _Atomic uint32_t rpos;
+  uint32_t inflight; /* consumer thread only: handed out via byte_ring_hold(), not yet acked */
 } byte_ring_t;
 
 /* mallocs buf if not allocated (cap fixed at first call), resets wpos/rpos to 0. cap must be a ^2. buf stays NULL on OOM */
@@ -26,10 +27,20 @@ int byte_ring_write(byte_ring_t *r, const uint8_t *data, size_t len);
 /* single consumer. copies up to maxlen contiguous bytes, 0 if empty/buf NULL */
 size_t byte_ring_read(byte_ring_t *r, uint8_t *dst, size_t maxlen);
 
-/* zero-copy: ptr to the next contiguous run, *len its size (0/NULL if empty) */
+/* zero-copy: ptr to the next contiguous run past held bytes, *len its size (0/NULL if none) */
 const uint8_t *byte_ring_peek(const byte_ring_t *r, size_t *len);
 
 /* consumer-side advance after byte_ring_peek() */
 void byte_ring_advance(byte_ring_t *r, size_t n);
+
+/* consumer-side: n peeked bytes handed to a transport that reads them again until ackd.
+   producer cannot overwrite them until byte_ring_ack() */
+void byte_ring_hold(byte_ring_t *r, size_t n);
+
+/* consumer-side: releases up to n held bytes to the producer */
+void byte_ring_ack(byte_ring_t *r, size_t n);
+
+/* bytes written and not yet peeked/held */
+uint32_t byte_ring_unsent(const byte_ring_t *r);
 
 #endif

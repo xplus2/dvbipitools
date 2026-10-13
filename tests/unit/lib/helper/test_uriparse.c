@@ -7,6 +7,8 @@
 #include <sys/socket.h>
 
 #include "lib/helper/uriparse.h"
+#include "lib/sys/ioutil.h"
+#include "lib/sys/ioutil.h"
 
 typedef struct {
   const char *in;
@@ -197,6 +199,26 @@ START_TEST(mcast_src_uri_formats) {
 }
 END_TEST
 
+START_TEST(pct_encode_seg_encodes_reserved_and_high_bytes) {
+  char out[64];
+  pct_encode_seg("Das Erste HD/ZDF-1._~", out, sizeof out);
+  ck_assert_str_eq(out, "Das%20Erste%20HD%2FZDF-1._~");
+  pct_encode_seg("\xc3\xa4", out, sizeof out);
+  ck_assert_str_eq(out, "%C3%A4");
+}
+END_TEST
+
+START_TEST(pct_encode_seg_truncates_on_triplet_boundary) {
+  char out[8];
+  memset(out, 'x', sizeof out);
+  pct_encode_seg("a b c", out, 5);
+  ck_assert_str_eq(out, "a%20");
+  memset(out, 'x', sizeof out);
+  pct_encode_seg("a", out, 0);
+  ck_assert_int_eq(out[0], 'x');
+}
+END_TEST
+
 static Suite *uriparse_suite(void) {
   Suite *s = suite_create("uriparse");
   TCase *tc = tcase_create("core");
@@ -207,6 +229,8 @@ static Suite *uriparse_suite(void) {
   tcase_add_loop_test(tc, mcast_describe_formats_and_truncates, 0, (int)(sizeof describe_cases / sizeof describe_cases[0]));
   tcase_add_test(tc, mcast_describe_leaves_zero_capacity_buffer_alone);
   tcase_add_loop_test(tc, rtmp_or_file_classifies_and_bounds_targets, 0, (int)(sizeof target_cases / sizeof target_cases[0]));
+  tcase_add_test(tc, pct_encode_seg_encodes_reserved_and_high_bytes);
+  tcase_add_test(tc, pct_encode_seg_truncates_on_triplet_boundary);
   suite_add_tcase(s, tc);
   return s;
 }

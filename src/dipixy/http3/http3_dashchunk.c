@@ -33,8 +33,12 @@ nghttp3_ssize h3_dashchunk_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *v
   vec[0].base = (uint8_t *)p;
   vec[0].len = n;
   *pflags = NGHTTP3_DATA_FLAG_NONE;
-  dash_lldash_ring_advance(r->dashchunk_sub_idx, n);
+  dash_lldash_ring_hold(r->dashchunk_sub_idx, n);
   return 1;
+}
+
+void h3_dashchunk_acked(const h3_req_t *r, size_t n) {
+  if (r->dashchunk_sub_idx >= 0) dash_lldash_ring_ack(r->dashchunk_sub_idx, n);
 }
 
 /* registers dash-chunk stream, submits response. always 1 = dispatched. h3 tracks sub_idx on request itself */

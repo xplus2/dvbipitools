@@ -67,8 +67,14 @@ static ssize_t http_read_chunked(struct http *h, void *buf, size_t cap, net_err_
 }
 
 ssize_t http_read(http_t *h, void *buf, size_t cap, net_err_reason_t *reason_out) {
-  if (h->chunked) return http_read_chunked(h, buf, cap, reason_out);
-  return body_read_raw(h, buf, cap, reason_out);
+  net_err_reason_t r = NET_ERR_OTHER;
+  ssize_t n = h->chunked ? http_read_chunked(h, buf, cap, &r) : body_read_raw(h, buf, cap, &r);
+  if (n < 0) {
+    int cut = h->chunked ? !h->chunk_done : (h->has_content_length && h->body_consumed < h->content_length);
+    if (r == NET_ERR_EOF && cut) r = NET_ERR_READ;
+    if (reason_out) *reason_out = r;
+  }
+  return n;
 }
 
 int http_fd(const http_t *h) { return h->fd; }

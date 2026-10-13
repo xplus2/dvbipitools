@@ -72,7 +72,27 @@ START_TEST(xmltv_time_to_iso8601_reports_unknown_zone_name) {
 }
 END_TEST
 
+START_TEST(xmltv_time_to_iso8601_accepts_colon_and_trailing_space) {
+  char out[32];
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 +01:00", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-15T12:30:45+01:00");
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 -05:30", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-15T12:30:45-05:30");
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 +0100 ", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-15T12:30:45+01:00");
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 CET\t", out, sizeof out), 0);
+  ck_assert_str_eq(out, "2020-12-15T12:30:45+01:00");
+}
+END_TEST
+
 START_TEST(xmltv_time_to_iso8601_rejects_trailing_junk) {
+  char out[32];
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 +01:0", out, sizeof out), -1);
+  ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 +01:00:", out, sizeof out), -1);
+}
+END_TEST
+
+START_TEST(xmltv_time_to_iso8601_rejects_short_offset) {
   char out[32];
   ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 +02", out, sizeof out), -1);
   ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045+0200x", out, sizeof out), -1);
@@ -106,6 +126,17 @@ START_TEST(iso8601_to_xmltv_time_rejects_malformed) {
 }
 END_TEST
 
+START_TEST(iso8601_to_xmltv_time_accepts_fractional_seconds) {
+  char out[32];
+  ck_assert_int_eq(iso8601_to_xmltv_time("2024-03-15T12:30:45.000Z", out, sizeof out), 0);
+  ck_assert_str_eq(out, "20240315123045 +0000");
+  ck_assert_int_eq(iso8601_to_xmltv_time("2024-03-15T12:30:45.25+02:00", out, sizeof out), 0);
+  ck_assert_str_eq(out, "20240315123045 +0200");
+  ck_assert_int_eq(iso8601_to_xmltv_time("2024-03-15T12:30:45.", out, sizeof out), -1);
+  ck_assert_int_eq(iso8601_to_xmltv_time("2024-03-15T12:30:45.5x", out, sizeof out), -1);
+}
+END_TEST
+
 START_TEST(timefmt_round_trips_utc) {
   char mid[32], back[32];
   ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 +0000", mid, sizeof mid), 0);
@@ -124,11 +155,14 @@ static Suite *timefmt_suite(void) {
   tcase_add_test(tc, xmltv_time_to_iso8601_accepts_reduced_precision);
   tcase_add_test(tc, xmltv_time_to_iso8601_maps_named_zones);
   tcase_add_test(tc, xmltv_time_to_iso8601_reports_unknown_zone_name);
+  tcase_add_test(tc, xmltv_time_to_iso8601_accepts_colon_and_trailing_space);
+  tcase_add_test(tc, xmltv_time_to_iso8601_rejects_short_offset);
   tcase_add_test(tc, xmltv_time_to_iso8601_rejects_trailing_junk);
   tcase_add_test(tc, iso8601_to_xmltv_time_z_becomes_plus_zero);
   tcase_add_test(tc, iso8601_to_xmltv_time_with_offset);
   tcase_add_test(tc, iso8601_to_xmltv_time_no_offset);
   tcase_add_test(tc, iso8601_to_xmltv_time_rejects_malformed);
+  tcase_add_test(tc, iso8601_to_xmltv_time_accepts_fractional_seconds);
   tcase_add_test(tc, timefmt_round_trips_utc);
   suite_add_tcase(s, tc);
   return s;

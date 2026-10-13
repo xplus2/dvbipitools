@@ -13,6 +13,7 @@
 #define METRICS_DEFAULT_INTERVAL_S 5.0
 
 void metrics_exporter_init(metrics_exporter_t *exp, metrics_component_t component, const char *metrics_id, const char *sock_path, double interval_s) {
+  struct timespec now;
   memset(exp, 0, sizeof *exp);
   exp->fd = -1;
   if (!metrics_id || !metrics_id[0]) return;
@@ -27,7 +28,8 @@ void metrics_exporter_init(metrics_exporter_t *exp, metrics_component_t componen
   exp->dest_len = (socklen_t)(sizeof exp->dest.sun_family + strlen(sock_path) + 1);
   exp->component = component;
   bufcpy(exp->metrics_id, sizeof exp->metrics_id, metrics_id);
-  exp->process_start_time = (uint64_t)time(NULL);
+  clock_gettime(CLOCK_REALTIME, &now);
+  exp->process_start_time = (uint64_t)now.tv_sec * 1000000000ULL + (uint64_t)now.tv_nsec;
   exp->interval_s = interval_s;
   exp->enabled = 1;
 }
@@ -134,7 +136,7 @@ void input_metrics_note_read(input_metrics_t *im, ssize_t n, net_err_reason_t re
   if (n > 0) {
     im->bytes_total += (uint64_t)n;
     im->last_data_time = (double)time(NULL);
-  } else if (n < 0) {
+  } else if (n < 0 && (unsigned)reason < NET_ERR_COUNT) {
     im->errors_total[reason]++;
   }
 }

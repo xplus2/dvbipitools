@@ -113,6 +113,33 @@ START_TEST(put_truncates_oversized_label) {
 }
 END_TEST
 
+static size_t put_read_len(const char *in) {
+  metrics_writer_t w;
+  metrics_reader_t r;
+  metrics_hdr_t hdr, out_hdr;
+  metrics_id_t id;
+  char label[METRICS_LABEL_MAX + 1];
+  uint64_t value;
+  make_hdr(&hdr, "x");
+  ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
+  ck_assert_int_eq(metrics_writer_put(&w, METRICS_ID_ERRORS_TOTAL, in, 1), 0);
+  ck_assert_int_eq(metrics_reader_init(&r, w.buf, w.len, &out_hdr), 0);
+  ck_assert_int_eq(metrics_reader_next(&r, &id, label, sizeof label, &value), 1);
+  return strlen(label);
+}
+
+START_TEST(put_truncates_on_utf8_boundary) {
+  char in[METRICS_LABEL_MAX + 10];
+  memset(in, 'a', sizeof in - 1);
+  in[sizeof in - 1] = '\0';
+  memcpy(in + METRICS_LABEL_MAX - 1, "\xC3\xA4", 2);
+  ck_assert_uint_eq(put_read_len(in), (unsigned)METRICS_LABEL_MAX - 1);
+  memcpy(in + METRICS_LABEL_MAX - 2, "\xC3\xA4", 2);
+  in[METRICS_LABEL_MAX] = 'a';
+  ck_assert_uint_eq(put_read_len(in), (unsigned)METRICS_LABEL_MAX);
+}
+END_TEST
+
 START_TEST(reader_rejects_short_buffer) {
   metrics_reader_t r;
   metrics_hdr_t hdr;
@@ -360,6 +387,28 @@ START_TEST(reader_accepts_v1_entries) {
 }
 END_TEST
 
+START_TEST(reader_rejects_oversized_v1_label) {
+  unsigned char buf[METRICS_HDR_LEN + 3 + 255 + 8];
+  metrics_writer_t w;
+  metrics_reader_t r;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out;
+  metrics_id_t id;
+  char label[METRICS_LABEL_MAX + 1];
+  uint64_t value;
+
+  make_hdr(&hdr, "x");
+  ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
+  memset(buf, 0, sizeof buf);
+  memcpy(buf, w.buf, METRICS_HDR_LEN);
+  buf[0] = METRICS_PROTO_V1;
+  buf[METRICS_HDR_LEN + 1] = (unsigned char)METRICS_ID_OUTPUT_PACKETS_TOTAL;
+  buf[METRICS_HDR_LEN + 2] = 255;
+  ck_assert_int_eq(metrics_reader_init(&r, buf, sizeof buf, &out), 0);
+  ck_assert_int_eq(metrics_reader_next(&r, &id, label, sizeof label, &value), -1);
+}
+END_TEST
+
 START_TEST(reader_rejects_malformed_v2_groups) {
   metrics_writer_t w;
   metrics_reader_t r;
@@ -425,6 +474,7 @@ static Suite *protocol_suite(void) {
   tcase_add_test(tc, begin_rejects_empty_metrics_id);
   tcase_add_test(tc, put_overflow_makes_writer_unusable);
   tcase_add_test(tc, put_truncates_oversized_label);
+  tcase_add_test(tc, put_truncates_on_utf8_boundary);
   tcase_add_test(tc, reader_rejects_short_buffer);
   tcase_add_test(tc, reader_rejects_bad_version);
   tcase_add_test(tc, reader_rejects_unknown_component);
@@ -436,6 +486,7 @@ static Suite *protocol_suite(void) {
   tcase_add_test(tc, flush_failure_makes_writer_unusable);
   tcase_add_test(tc, parts_are_capped);
   tcase_add_test(tc, reader_accepts_v1_entries);
+  tcase_add_test(tc, reader_rejects_oversized_v1_label);
   tcase_add_test(tc, reader_rejects_malformed_v2_groups);
   tcase_add_test(tc, signed_values_roundtrip_zigzag);
   suite_add_tcase(s, tc);

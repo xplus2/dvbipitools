@@ -30,6 +30,7 @@ struct jitbuf {
   uint16_t next_seq; /* RTP: next to release */
   uint32_t ssrc;
   uint32_t span;     /* RTP: slots from next_seq to highest queued, exclusive */
+  uint32_t skip;     /* RTP: slots from next_seq known empty, scans resume behind them */
   unsigned far_run;
   int released;      /* RTP: start fixed after first pop */
   jitbuf_stats_t st;
@@ -63,6 +64,7 @@ static void flush_all(jitbuf_t *j) {
   j->count = 0;
   j->head = 0;
   j->span = 0;
+  j->skip = 0;
 }
 
 static void fifo_push(jitbuf_t *j, const unsigned char *d, size_t len, uint64_t now_ns) {
@@ -103,6 +105,7 @@ static void rtp_push(jitbuf_t *j, const unsigned char *d, size_t len, uint64_t n
   if (diff < 0 && !j->released && (uint32_t)-diff + j->span < JITBUF_SLOTS) {
     j->next_seq = h.seq;
     j->span += (uint32_t)-diff;
+    j->skip = 0;
     diff = 0;
   } else if (diff < 0) {
     if (diff >= -JITBUF_LATE_WINDOW) {
@@ -136,6 +139,7 @@ static void rtp_push(jitbuf_t *j, const unsigned char *d, size_t len, uint64_t n
   s->at_ns = now_ns;
   s->used = 1;
   j->count++;
+  if ((uint32_t)diff < j->skip) j->skip = (uint32_t)diff;
   if ((uint32_t)diff + 1 > j->span) j->span = (uint32_t)diff + 1;
   else j->st.reordered++;
 }
@@ -162,13 +166,15 @@ void jitbuf_push(jitbuf_t *j, const unsigned char *dgram, size_t len, uint64_t n
 }
 
 static slot_t *rtp_first(jitbuf_t *j, uint32_t *dist) {
-  for (uint32_t d = 0; d < j->span; d++) {
+  for (uint32_t d = j->skip; d < j->span; d++) {
     slot_t *s = rtp_slot(j, (uint16_t)(j->next_seq + d));
     if (s->used) {
+      j->skip = d;
       *dist = d;
       return s;
     }
   }
+  j->skip = j->span;
   return NULL;
 }
 
@@ -198,6 +204,7 @@ size_t jitbuf_pop(jitbuf_t *j, unsigned char *out, size_t cap, uint64_t now_ns) 
     j->st.lost += dist;
     j->next_seq = (uint16_t)(j->next_seq + dist + 1);
     j->span = j->span > dist + 1 ? j->span - (dist + 1) : 0;
+    j->skip = 0;
   } else {
     j->head = (j->head + 1) & (JITBUF_SLOTS - 1);
   }
@@ -210,7 +217,7 @@ int64_t jitbuf_next_ns(const jitbuf_t *j, uint64_t now_ns) {
 
   if (j->count == 0) return -1;
   if (j->mode == MODE_RTP) {
-    for (uint32_t d = 0; d < j->span; d++) {
+    for (uint32_t d = j->skip; d < j->span; d++) {
       const slot_t *c = &j->slots[(uint16_t)(j->next_seq + d) & (JITBUF_SLOTS - 1)];
       if (c->used) {
         s = c;

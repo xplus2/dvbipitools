@@ -43,8 +43,8 @@ void srtout_service(srtout_t *r, srtout_status_t *out);
 
 /* never blocks: chunks at SRT live payload size, queues what can't send yet
    (not connected, backpressure) up to a bitrate/latency-sized bound, drops
-   oldest on overflow */
-void srtout_write(srtout_t *r, const unsigned char *buf, size_t n);
+   oldest on overflow. 0 ok, -1 if send failed or a chunk was dropped */
+int srtout_write(srtout_t *r, const unsigned char *buf, size_t n);
 
 typedef struct {
   const char *peer_label;

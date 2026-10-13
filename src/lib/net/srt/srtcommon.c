@@ -2,7 +2,11 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <netdb.h>
+#include <pthread.h>
+#include <stdatomic.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
@@ -76,6 +80,120 @@ int srtcommon_resolve(const char *host, unsigned port, struct sockaddr_storage *
   *len = (int)res->ai_addrlen;
   freeaddrinfo(res);
   return 0;
+}
+
+#define RESOLVE_INFLIGHT_MAX 16
+
+static atomic_int g_resolve_inflight;
+
+typedef struct {
+  pthread_mutex_t mu;
+  pthread_cond_t cv;
+  int refs;
+  int done;
+  int rc;
+  struct sockaddr_storage ss;
+  int len;
+  unsigned port;
+  char host[256];
+} resolve_job_t;
+
+static void resolve_job_unref(resolve_job_t *j) {
+  int n;
+  pthread_mutex_lock(&j->mu);
+  n = --j->refs;
+  pthread_mutex_unlock(&j->mu);
+  if (n) return;
+  pthread_cond_destroy(&j->cv);
+  pthread_mutex_destroy(&j->mu);
+  free(j);
+}
+
+static void *resolve_thread(void *arg) {
+  resolve_job_t *j = arg;
+  struct sockaddr_storage ss;
+  int len = 0;
+  int rc = srtcommon_resolve(j->host, j->port, &ss, &len);
+  pthread_mutex_lock(&j->mu);
+  if (rc == 0) {
+    memcpy(&j->ss, &ss, sizeof ss);
+    j->len = len;
+  }
+  j->rc = rc;
+  j->done = 1;
+  pthread_cond_signal(&j->cv);
+  pthread_mutex_unlock(&j->mu);
+  atomic_fetch_sub_explicit(&g_resolve_inflight, 1, memory_order_relaxed);
+  resolve_job_unref(j);
+  return NULL;
+}
+
+int srtcommon_resolve_stoppable(const char *host, unsigned port, struct sockaddr_storage *ss, int *len, unsigned timeout_ms, int (*stop)(void *), void *arg) {
+  resolve_job_t *j;
+  pthread_condattr_t ca;
+  pthread_attr_t ta;
+  pthread_t th;
+  struct timespec t0;
+  int rc = -1;
+  int started;
+
+  if (strlen(host) >= sizeof j->host) return srtcommon_resolve(host, port, ss, len);
+  if (atomic_fetch_add_explicit(&g_resolve_inflight, 1, memory_order_relaxed) >= RESOLVE_INFLIGHT_MAX) {
+    atomic_fetch_sub_explicit(&g_resolve_inflight, 1, memory_order_relaxed);
+    log_code("LE600135", "srt: address resolve failed for %s:%u: too many lookups in flight", host, port);
+    return -1;
+  }
+  j = calloc(1, sizeof *j);
+  if (!j) {
+    atomic_fetch_sub_explicit(&g_resolve_inflight, 1, memory_order_relaxed);
+    return -1;
+  }
+  pthread_mutex_init(&j->mu, NULL);
+  pthread_condattr_init(&ca);
+  pthread_condattr_setclock(&ca, CLOCK_MONOTONIC);
+  pthread_cond_init(&j->cv, &ca);
+  pthread_condattr_destroy(&ca);
+  j->refs = 2;
+  j->port = port;
+  strcpy(j->host, host);
+  pthread_attr_init(&ta);
+  pthread_attr_setdetachstate(&ta, PTHREAD_CREATE_DETACHED);
+  started = pthread_create(&th, &ta, resolve_thread, j) == 0;
+  pthread_attr_destroy(&ta);
+  if (!started) {
+    atomic_fetch_sub_explicit(&g_resolve_inflight, 1, memory_order_relaxed);
+    resolve_job_unref(j);
+    resolve_job_unref(j);
+    return srtcommon_resolve(host, port, ss, len);
+  }
+
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  pthread_mutex_lock(&j->mu);
+  while (!j->done) {
+    struct timespec now;
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (stop(arg)) break;
+    if (timeout_ms && (now.tv_sec - t0.tv_sec) * 1000L + (now.tv_nsec - t0.tv_nsec) / 1000000L >= (long)timeout_ms) {
+      log_code("LE600135", "srt: address resolve failed for %s:%u: timeout", host, port);
+      break;
+    }
+    ts = now;
+    ts.tv_nsec += 100000000L;
+    if (ts.tv_nsec >= 1000000000L) {
+      ts.tv_sec++;
+      ts.tv_nsec -= 1000000000L;
+    }
+    pthread_cond_timedwait(&j->cv, &j->mu, &ts);
+  }
+  if (j->done && j->rc == 0) {
+    memcpy(ss, &j->ss, sizeof *ss);
+    *len = j->len;
+    rc = 0;
+  }
+  pthread_mutex_unlock(&j->mu);
+  resolve_job_unref(j);
+  return rc;
 }
 
 int srtcommon_build_group_config(const srtcommon_peer_t *peers, int npeers, SRT_SOCKGROUPCONFIG *gc_out) {

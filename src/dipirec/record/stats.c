@@ -71,15 +71,15 @@ void stats_show(const config_t *cfg, double elapsed, unsigned long long bytes, c
     char stop[16];
     if (pct > 100.0)
       pct = 100.0;
-    gmtime_r(&st, &tm);
+    localtime_r(&st, &tm);
     strftime(stop, sizeof stop, "%H:%M:%S", &tm);
-    snprintf(line + len, sizeof line - (size_t)len, "%.1f%% stop=%s", pct, stop);
+    snprintf(line + len, sizeof line - (size_t)len, " %.1f%% stop=%s", pct, stop);
   }
   fprintf(stderr, "\r%s\033[K", line);
   fflush(stderr);
 }
 
-/* label o<i>: net/rist sinks only, up/retry concept. label rtmp<i>: rtmp targets */
+/* label o<i>: net/rist/srt sinks only, up/retry concept. label rtmp<i>: rtmp targets */
 void push_metrics(metrics_exporter_t *mx, const config_t *cfg, const out_sink_t *sinks, int n_sinks,
                    const rtmp_fanout_t *rf, unsigned long long bytes, double start) {
   metrics_writer_t w;
@@ -92,12 +92,12 @@ void push_metrics(metrics_exporter_t *mx, const config_t *cfg, const out_sink_t 
   metrics_writer_put(&w, METRICS_ID_REC_ELAPSED_SECONDS, NULL, (uint64_t)(mono_seconds() - start));
   metrics_writer_put(&w, METRICS_ID_REC_DURATION_LIMIT_SECONDS, NULL, cfg->duration_s > 0 ? (uint64_t)cfg->duration_s : 0);
   for (int i = 0; i < n_sinks; i++) {
-    if (!sinks[i].net && !sinks[i].rist)
+    if (!sinks[i].net && !sinks[i].rist && !sinks[i].srt)
       continue;
     sbuf_init(&lb, label, sizeof label);
     sbuf_add(&lb, "o");
     sbuf_add_uint(&lb, (unsigned)i);
-    metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_UP, label, (sinks[i].net_had_error || sinks[i].rist_had_error) ? 0 : 1);
+    metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_UP, label, (sinks[i].net_had_error || sinks[i].rist_had_error || sinks[i].srt_had_error || (sinks[i].srt && !sinks[i].srt_connected)) ? 0 : 1);
     metrics_writer_put(&w, METRICS_ID_REC_OUTPUT_ERRORS_TOTAL, label, sinks[i].errors_total);
   }
   for (int i = 0; i < rf->n; i++) {

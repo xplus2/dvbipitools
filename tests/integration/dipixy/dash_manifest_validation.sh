@@ -35,32 +35,41 @@ timeout 15 curl -s -o "$mpd" "$BASE/dash"
 
 [ -s "$mpd" ] || fail "empty/missing DASH manifest, see $WORK/dipixy.log"
 assert_contains "$mpd" "<MPD" "not a valid DASH manifest"
-assert_contains "$mpd" 'media="dseg\$Time\$.m4s"' "manifest missing SegmentTemplate media pattern"
+assert_contains "$mpd" 'contentType="video"' "manifest missing video AdaptationSet"
+assert_contains "$mpd" 'contentType="audio"' "manifest missing audio AdaptationSet"
+assert_contains "$mpd" 'media="dsegv\$Time\$.m4s"' "manifest missing video SegmentTemplate media pattern"
+assert_contains "$mpd" 'media="dsega\$Time\$.m4s"' "manifest missing audio SegmentTemplate media pattern"
+assert_contains "$mpd" 'initialization="dinitv.mp4"' "manifest missing video init"
+assert_contains "$mpd" 'initialization="dinita.mp4"' "manifest missing audio init"
+assert_contains "$mpd" 'audioSamplingRate="' "manifest missing audioSamplingRate"
+assert_contains "$mpd" "<AudioChannelConfiguration" "manifest missing AudioChannelConfiguration"
+if grep -q 'codecs="[^"]*,' "$mpd"; then
+    fail "manifest still lists muxed codecs in one Representation"
+fi
 
-first_seg=$(grep -oE '<S[^/]*/>' "$mpd" | while IFS= read -r line; do
-    t=$(echo "$line" | grep -oE 't="[0-9]+"' | grep -oE '[0-9]+')
-    d=$(echo "$line" | grep -oE 'd="[0-9]+"' | grep -oE '[0-9]+')
-    [ -n "$t" ] && time=$t
-    echo "dseg${time}.m4s"
-    time=$((time + d))
-done | head -1)
+first_t=$(grep -oE '<S t="[0-9]+"' "$mpd" | head -1 | grep -oE '[0-9]+')
+[ -n "$first_t" ] || fail "could not derive a segment time from SegmentTimeline"
 
-[ -n "$first_seg" ] || fail "could not derive a segment name from SegmentTimeline"
+for track in v a; do
+    case $track in v) kind=video; other=audio ;; a) kind=audio; other=video ;; esac
+    timeout 10 curl -s -o "$WORK/init-$track.mp4" "$BASE/dinit$track.mp4"
+    timeout 10 curl -s -o "$WORK/seg-$track.m4s" "$BASE/dseg$track$first_t.m4s"
+    [ -s "$WORK/init-$track.mp4" ] || fail "empty dinit$track.mp4"
+    [ -s "$WORK/seg-$track.m4s" ] || fail "empty dseg$track$first_t.m4s"
+    cat "$WORK/init-$track.mp4" "$WORK/seg-$track.m4s" >"$WORK/combined-$track.mp4"
+    probe="$WORK/probe-$track.json"
+    ffprobe -v error -print_format json -show_streams "$WORK/combined-$track.mp4" >"$probe" 2>"$WORK/ffprobe-$track.log" \
+        || fail "ffprobe failed on dinit$track.mp4+dseg$track$first_t.m4s, see $WORK/ffprobe-$track.log"
+    got=$(jq -r "[.streams[] | select(.codec_type == \"$kind\")] | length" "$probe")
+    [ "$got" = "1" ] || fail "expected one $kind stream in $track track, got '$got'"
+    got=$(jq -r "[.streams[] | select(.codec_type == \"$other\")] | length" "$probe")
+    [ "$got" = "0" ] || fail "$track track carries $got $other stream(s), expected none"
+done
 
-timeout 10 curl -s -o "$WORK/init.mp4" "$BASE/init.mp4"
-timeout 10 curl -s -o "$WORK/$first_seg" "$BASE/$first_seg"
-[ -s "$WORK/init.mp4" ] || fail "empty init.mp4"
-[ -s "$WORK/$first_seg" ] || fail "empty $first_seg"
-
-cat "$WORK/init.mp4" "$WORK/$first_seg" >"$WORK/combined.mp4"
-probe="$WORK/probe.json"
-ffprobe -v error -print_format json -show_streams "$WORK/combined.mp4" >"$probe" 2>"$WORK/ffprobe.log" \
-    || fail "ffprobe failed on init.mp4+$first_seg, see $WORK/ffprobe.log"
-
-video_codec=$(jq -r '[.streams[] | select(.codec_type == "video")][0].codec_name // empty' "$probe")
+video_codec=$(jq -r '[.streams[] | select(.codec_type == "video")][0].codec_name // empty' "$WORK/probe-v.json")
 [ "$video_codec" = "h264" ] || fail "expected h264 video in DASH segment, got '$video_codec'"
 
-audio_codec=$(jq -r '[.streams[] | select(.codec_type == "audio")][0].codec_name // empty' "$probe")
+audio_codec=$(jq -r '[.streams[] | select(.codec_type == "audio")][0].codec_name // empty' "$WORK/probe-a.json")
 [ "$audio_codec" = "aac" ] || fail "expected aac audio in DASH segment, got '$audio_codec'"
 
 kill $FFPID 2>/dev/null

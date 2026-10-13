@@ -7,7 +7,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* TS payload offset in RTP datagram, 0 if not RTP. checks v2 + sync */
+/* TS payload offset in RTP datagram, 0 if not RTP. checks v2 + sync.
+   *plen: payload bytes without trailing padding (P bit), 0 if padding count is bogus */
+size_t rtp_ts_payload(const unsigned char *p, size_t len, size_t *plen);
+
+/* offset only, padding not accounted for: use rtp_ts_payload() when the length matters */
 size_t rtp_payload_offset(const unsigned char *p, size_t len);
 
 typedef struct {

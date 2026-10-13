@@ -98,7 +98,7 @@ static int write_net(tssink_t *s, const unsigned char *buf, size_t n) {
     size_t chunk = n < TS_PER_DGRAM * 188 ? n : TS_PER_DGRAM * 188;
     size_t rlen;
     if (s->rtph) {
-      uint32_t ts90k = (uint32_t)(mono_seconds() * 90000.0);
+      uint32_t ts90k = (uint32_t)(uint64_t)(mono_seconds() * 90000.0);
       if (s->fec_enc) {
         rtpheader_build(s->rtph, ts90k, dgram, 12);
         memcpy(dgram + 12, buf, chunk);
@@ -118,19 +118,22 @@ static int write_net(tssink_t *s, const unsigned char *buf, size_t n) {
   return 0;
 }
 
+/* [0,from) holds packets each followed by a sync byte, never rescanned */
 static void pend_resync(tssink_t *s) {
+  size_t from = 0;
   for (;;) {
-    size_t k = 0;
+    size_t k = from;
     size_t p;
     while (k < s->pendlen && s->pend[k] != TS_SYNC) k++;
-    if (k) {
-      memmove(s->pend, s->pend + k, s->pendlen - k);
-      s->pendlen -= k;
+    if (k > from) {
+      memmove(s->pend + from, s->pend + k, s->pendlen - k);
+      s->pendlen -= k - from;
     }
-    for (p = 188; p < s->pendlen; p += 188)
+    for (p = from + 188; p < s->pendlen; p += 188)
       if (s->pend[p] != TS_SYNC) break;
     if (p >= s->pendlen) return;
-    memmove(s->pend, s->pend + 1, --s->pendlen);
+    from = p - 188; /* packet before the break is suspect */
+    memmove(s->pend + from, s->pend + from + 1, --s->pendlen - from);
   }
 }
 

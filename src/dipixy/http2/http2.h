@@ -27,6 +27,10 @@ void h2_llhls_flush_waiters(void);
 /* resumes any H2 streams cold-parked on index.m3u8/manifest.mpd before the first segment existed, call once per worker loop tick */
 void h2_hls_cold_flush_waiters(void);
 
+/* resumes any H2 streams parked on a TS/SPTS/rawaudio stream awaiting its first packet, call once per worker loop tick */
+void h2_ts_cold_flush_waiters(void);
+void h2_open_flush_waiters(void);
+
 #endif /* HAVE_HTTP2 */
 
 #endif /* DIPIXY_HTTP2_H */

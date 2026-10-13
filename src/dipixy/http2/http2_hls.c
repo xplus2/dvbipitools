@@ -6,6 +6,7 @@
 #include "../hls/hls.h"
 #include "../dash/dash.h"
 #include "../segment/mp4push.h"
+#include "../ts/ts_push.h"
 #include "../reactor/internal.h"
 #include "../httpng/httpng.h"
 #include "http2.h"
@@ -18,6 +19,7 @@
 
 typedef struct {
   uint8_t *data;
+  uint8_t *owner;
   size_t len;
   size_t off;
   int zc;
@@ -52,19 +54,20 @@ static ssize_t body_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *buf
   src->off += n;
   if (src->off >= src->len) {
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-    hls_resp_body_release(src->data, src->zc);
+    hls_resp_body_release(src->data, src->owner, src->zc);
     h2_body_src_free(src);
   }
   return (ssize_t)n;
 }
 
-void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, int zc, const char *origin_hdr) {
+void h2_submit_resp_ex(h2_conn_t *conn, int32_t stream_id, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body,
+    uint8_t *owner, int zc, const char *origin_hdr, const httpng_hdr_t *extra, size_t nextra) {
   const char *status_buf;
   char len_buf[24];
   char etag_buf[56];
   size_t len_n;
   size_t etag_n;
-  nghttp2_nv nva[8];
+  nghttp2_nv nva[8 + HTTPNG_EXTRA_MAX];
   size_t nvlen = 0;
   nghttp2_data_provider dp;
   h2_body_src_t *src;
@@ -76,7 +79,8 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
   if (content_type)
     nva[nvlen++] = (nghttp2_nv){(uint8_t *)"content-type", (uint8_t *)content_type, 12, strlen(content_type), NGHTTP2_NV_FLAG_NONE};
   len_n = httpng_u64_to_dec(len_buf, (uint64_t)content_length);
-  nva[nvlen++] = (nghttp2_nv){(uint8_t *)"content-length", (uint8_t *)len_buf, 14, len_n, NGHTTP2_NV_FLAG_NONE};
+  if (content_length != HTTPNG_NO_LENGTH)
+    nva[nvlen++] = (nghttp2_nv){(uint8_t *)"content-length", (uint8_t *)len_buf, 14, len_n, NGHTTP2_NV_FLAG_NONE};
   etag_n = httpng_format_etag(etag_buf, sizeof etag_buf, etag);
   if (etag_n)
     nva[nvlen++] = (nghttp2_nv){(uint8_t *)"etag", (uint8_t *)etag_buf, 4, etag_n, NGHTTP2_NV_FLAG_NONE};
@@ -85,6 +89,8 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
     if (cors_vary) nva[nvlen++] = (nghttp2_nv){(uint8_t *)"vary", (uint8_t *)"Origin", 4, 6, NGHTTP2_NV_FLAG_NONE};
   }
   if (status == 503) nva[nvlen++] = (nghttp2_nv)MAKE_NV_LIT("retry-after", REACTOR_RETRY_AFTER_S);
+  for (size_t i = 0; i < nextra && i < HTTPNG_EXTRA_MAX; i++)
+    nva[nvlen++] = (nghttp2_nv){(uint8_t *)extra[i].name, (uint8_t *)extra[i].value, strlen(extra[i].name), strlen(extra[i].value), NGHTTP2_NV_FLAG_NONE};
   nvlen = h2_nv_altsvc(nva, nvlen);
   if (!body) {
     nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, NULL);
@@ -92,18 +98,23 @@ void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *
   }
   src = h2_body_src_alloc();
   if (!src) {
-    hls_resp_body_release(body, zc);
+    hls_resp_body_release(body, owner, zc);
     nghttp2_nv e = MAKE_NV_LIT(":status", "500");
     nghttp2_submit_response(conn->ng, stream_id, &e, 1, NULL);
     return;
   }
   src->data = body;
+  src->owner = owner;
   src->len = content_length;
   src->off = 0;
   src->zc = zc;
   dp.read_callback = body_read_cb;
   dp.source.ptr = src;
   nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, &dp);
+}
+
+void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, uint8_t *owner, int zc, const char *origin_hdr) {
+  h2_submit_resp_ex(conn, stream_id, status, content_type, etag, content_length, body, owner, zc, origin_hdr, NULL, 0);
 }
 
 #define H2_LLHLS_WAITERS_MAX 8
@@ -128,9 +139,9 @@ static void h2_llhls_finish(hls_waiter_t *w) {
   h2_conn_t *conn = w->owner;
   hls_resp_t resp;
   if (!hls_render_ll(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, w->inm[0] ? w->inm : NULL, &resp)) {
-    h2_submit_resp(conn, (int32_t)w->stream_id, 404, NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);
+    h2_submit_resp(conn, (int32_t)w->stream_id, 404, NULL, NULL, 0, NULL, NULL, 0, w->origin[0] ? w->origin : NULL);
   } else {
-    h2_submit_resp(conn, (int32_t)w->stream_id, resp.status, resp.content_type, resp.etag, resp.body_len, resp.body, resp.zc, w->origin[0] ? w->origin : NULL);
+    h2_submit_resp(conn, (int32_t)w->stream_id, resp.status, resp.content_type, resp.etag, resp.body_len, resp.body, resp.owner, resp.zc, w->origin[0] ? w->origin : NULL);
     if (resp.status == 200) ws_clients_add_bytes(w->ws_handle, resp.body_len);
   }
   h2_flush_tx(conn, conn->c);
@@ -167,16 +178,16 @@ static void h2_hls_cold_finish(hls_waiter_t *w) {
     int sub = mp4push_subscribe(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, CONN_PROTO_H2);
     if (sub < 0 || !h2_mp4push_dispatch(conn, conn->c, (int32_t)w->stream_id, sub, w->ws_handle)) {
       if (sub >= 0) mp4push_sub_close(sub);
-      h2_submit_resp(conn, (int32_t)w->stream_id, 503, NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);
+      h2_submit_resp(conn, (int32_t)w->stream_id, 503, NULL, NULL, 0, NULL, NULL, 0, w->origin[0] ? w->origin : NULL);
     }
   } else if (!hls_cold_ready(w)) {
-    h2_submit_resp(conn, (int32_t)w->stream_id, hls_cold_expired_status(w), NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);
+    h2_submit_resp(conn, (int32_t)w->stream_id, hls_cold_expired_status(w), NULL, NULL, 0, NULL, NULL, 0, w->origin[0] ? w->origin : NULL);
   } else {
-    handled = httpng_hls_cold_render(w->kind, w->container, w->want_ll, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, &resp);
+    handled = httpng_hls_cold_render(w->kind, w->container, w->want_ll, w->utc_url, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, &resp);
     if (!handled) {
-      h2_submit_resp(conn, (int32_t)w->stream_id, 404, NULL, NULL, 0, NULL, 0, w->origin[0] ? w->origin : NULL);
+      h2_submit_resp(conn, (int32_t)w->stream_id, 404, NULL, NULL, 0, NULL, NULL, 0, w->origin[0] ? w->origin : NULL);
     } else {
-      h2_submit_resp(conn, (int32_t)w->stream_id, resp.status, resp.content_type, resp.etag, resp.body_len, resp.body, resp.zc, w->origin[0] ? w->origin : NULL);
+      h2_submit_resp(conn, (int32_t)w->stream_id, resp.status, resp.content_type, resp.etag, resp.body_len, resp.body, resp.owner, resp.zc, w->origin[0] ? w->origin : NULL);
       if (resp.status == 200) ws_clients_add_bytes(w->ws_handle, resp.body_len);
     }
   }
@@ -185,6 +196,90 @@ static void h2_hls_cold_finish(hls_waiter_t *w) {
 
 void h2_hls_cold_flush_waiters(void) {
   llhls_waiter_pool_flush(t_h2_hls_cold_waiters, H2_HLS_COLD_WAITERS_MAX, &t_h2_hls_cold_waiters_active, hls_cold_ready, h2_hls_cold_finish);
+}
+
+#define H2_TS_COLD_WAITERS_MAX 64
+
+static _Thread_local ts_cold_waiter_t t_h2_ts_cold_waiters[H2_TS_COLD_WAITERS_MAX];
+static _Thread_local int t_h2_ts_cold_waiters_active;
+
+/* 1 parked: no packet yet, waits for first one or ts-startup-timeout. 0 table full: caller serves */
+int h2_ts_cold_try_park(h2_conn_t *conn, int32_t stream_id, const ts_cold_park_req_t *req) {
+  return ts_cold_waiter_pool_try_park(t_h2_ts_cold_waiters, H2_TS_COLD_WAITERS_MAX, &t_h2_ts_cold_waiters_active, conn, stream_id, req);
+}
+
+void h2_ts_cold_on_stream_close(const h2_conn_t *conn, int32_t stream_id) {
+  ts_cold_waiter_pool_close_owner(t_h2_ts_cold_waiters, H2_TS_COLD_WAITERS_MAX, &t_h2_ts_cold_waiters_active, conn, stream_id);
+}
+
+void h2_ts_cold_on_conn_close(const h2_conn_t *conn) {
+  ts_cold_waiter_pool_close_owner(t_h2_ts_cold_waiters, H2_TS_COLD_WAITERS_MAX, &t_h2_ts_cold_waiters_active, conn, -1);
+}
+
+static void h2_ts_cold_finish(ts_cold_waiter_t *w) {
+  h2_conn_t *conn = w->owner;
+  int32_t sid = (int32_t)w->stream_id;
+  const char *err = NULL;
+  int sub;
+  if (!httpng_ts_cold_subscribe(w, CONN_PROTO_H2, conn->fd, conn->c->client_ip, &sub, &err)) {
+    nghttp2_nv nva[3] = {{(uint8_t *)":status", (uint8_t *)err, 7, 3, NGHTTP2_NV_FLAG_NONE}};
+    size_t nvlen = 1;
+    if (!strcmp(err, "503")) nva[nvlen++] = (nghttp2_nv)MAKE_NV_LIT("retry-after", REACTOR_RETRY_AFTER_S);
+    nvlen = h2_nv_altsvc(nva, nvlen);
+    nghttp2_submit_response(conn->ng, sid, nva, nvlen, NULL);
+  } else if (!h2_tspush_dispatch(conn, conn->c, sid, sub, w->rawaudio)) {
+    nghttp2_nv nva[3] = {MAKE_NV_LIT(":status", "503"), MAKE_NV_LIT("retry-after", REACTOR_RETRY_AFTER_S)};
+    ts_push_unsubscribe_by_idx(sub);
+    nghttp2_submit_response(conn->ng, sid, nva, h2_nv_altsvc(nva, 2), NULL);
+  }
+  h2_flush_tx(conn, conn->c);
+}
+
+void h2_ts_cold_flush_waiters(void) {
+  ts_cold_waiter_pool_flush(t_h2_ts_cold_waiters, H2_TS_COLD_WAITERS_MAX, &t_h2_ts_cold_waiters_active, h2_ts_cold_finish);
+}
+
+#define H2_OPEN_WAITERS_MAX 64
+
+static _Thread_local open_waiter_t t_h2_open_waiters[H2_OPEN_WAITERS_MAX];
+static _Thread_local int t_h2_open_waiters_active;
+
+int h2_open_try_park(h2_conn_t *conn, int32_t stream_id, capture_open_job_t *job) {
+  return open_waiter_pool_try_park(t_h2_open_waiters, H2_OPEN_WAITERS_MAX, &t_h2_open_waiters_active, conn, stream_id, job);
+}
+
+int h2_open_parked(const h2_conn_t *conn, int32_t stream_id) {
+  for (int i = 0; i < H2_OPEN_WAITERS_MAX; i++) {
+    const open_waiter_t *w = &t_h2_open_waiters[i];
+    if (w->active && w->owner == conn && w->stream_id == stream_id) return 1;
+  }
+  return 0;
+}
+
+void h2_open_on_stream_close(const h2_conn_t *conn, int32_t stream_id) {
+  open_waiter_pool_close_owner(t_h2_open_waiters, H2_OPEN_WAITERS_MAX, &t_h2_open_waiters_active, conn, stream_id);
+}
+
+void h2_open_on_conn_close(const h2_conn_t *conn) {
+  open_waiter_pool_close_owner(t_h2_open_waiters, H2_OPEN_WAITERS_MAX, &t_h2_open_waiters_active, conn, -1);
+}
+
+static void h2_open_resume(open_waiter_t *w, capture_ctx_t *ctx) {
+  h2_conn_t *conn = w->owner;
+  h2_stream_t *stream = h2_find_stream(conn, (int32_t)w->stream_id);
+  if (!stream) {
+    capture_close(ctx);
+    return;
+  }
+  open_replay_begin(ctx);
+  h2_dispatch_stream(conn, conn->c, stream);
+  open_replay_end(ctx);
+  if (!h2_open_parked(conn, (int32_t)w->stream_id)) h2_free_stream(conn, (int32_t)w->stream_id);
+  h2_flush_tx(conn, conn->c);
+}
+
+void h2_open_flush_waiters(void) {
+  open_waiter_pool_flush(t_h2_open_waiters, H2_OPEN_WAITERS_MAX, &t_h2_open_waiters_active, h2_open_resume);
 }
 
 #endif /* HAVE_HTTP2 */

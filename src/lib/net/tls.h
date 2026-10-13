@@ -23,6 +23,9 @@ ssize_t tls_read(tls_t *t, void *buf, size_t cap);
 
 int tls_pending(const tls_t *t);
 
+/* after tls_read/tls_write returned 0: 1 = retry once socket is readable, 0 = writable */
+int tls_want_read(const tls_t *t);
+
 /* like send(): >0 bytes, 0 = transient (would block), -1 = error */
 ssize_t tls_write(tls_t *t, const void *buf, size_t len);
 

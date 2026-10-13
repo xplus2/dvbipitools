@@ -13,7 +13,7 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx);
 
 typedef struct {
   input_t in;
-  unsigned version; /* XML Version and segment_version, 1..255, bumped per reload */
+  unsigned version;
   unsigned char *broadcast_doc;
   unsigned char *sp_doc;
   size_t broadcast_len;

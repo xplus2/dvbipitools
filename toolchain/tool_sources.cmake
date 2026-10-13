@@ -790,6 +790,7 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmp.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/rtmpout.c
             ${RTMP_AUTH_SRC}
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c
             ${SRT_SRC})
@@ -1278,7 +1279,8 @@ function(dipixy_resolve_sources)
     endif ()
 
     if (DIPIXY_HAVE_HTTP2 OR DIPIXY_HAVE_HTTP3)
-        set(DIPIXY_HTTPNG_SRCS ${CMAKE_SOURCE_DIR}/src/dipixy/httpng/httpng.c)
+        set(DIPIXY_HTTPNG_SRCS ${CMAKE_SOURCE_DIR}/src/dipixy/httpng/httpng.c
+                ${CMAKE_SOURCE_DIR}/src/dipixy/httpng/httpng_special.c)
     else ()
         set(DIPIXY_HTTPNG_SRCS)
     endif ()
@@ -1375,6 +1377,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/core/status.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/core/time_ep.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/core/tlscert.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ws/ws_frame.c
@@ -1409,6 +1412,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_didl.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/dlna_control.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dlna/gena_notify.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/core/metrics.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/box.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/growbuf.c
@@ -1742,6 +1746,7 @@ function(dipixmltv_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
             ${CMAKE_SOURCE_DIR}/src/dipixmltv/revmap.c
             ${CMAKE_SOURCE_DIR}/src/dipixmltv/suggest.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_in.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c

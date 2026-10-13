@@ -22,7 +22,7 @@
 #define DASHCHUNK_SUBS_HEADROOM 16
 #define DASHCHUNK_SUBS_FLOOR 32
 #define DASHCHUNK_MAX_REACTOR_THREADS 32
-#define DASHCHUNK_RING_BYTES (1u << 17)
+#define DASHCHUNK_RING_BYTES (1u << 19)
 
 #define DASHCHUNK_SUB_FREE 0
 #define DASHCHUNK_SUB_ALIVE 1
@@ -38,6 +38,7 @@ typedef struct {
   uint32_t want_seg;
   conn_proto_t proto;
   int fd;
+  uint64_t conn_gen; /* H1: conn ident, fd may be reused after teardown */
   void *h2c;
   void *h2_slot;
   void *h3c; /* h3: owning h3_conn_t* */
@@ -45,6 +46,11 @@ typedef struct {
   int ws_handle;
   int reactor_tid; /* h2/h3: owning reactor thread */
   _Atomic int finalized;
+  pthread_mutex_t lock; /* serializes delivery: segmenter vs attach */
+  int attached; /* consumer ready, parts may flow */
+  int sent; /* parts of want_seg delivered */
+  int ended; /* terminator/EOF issued */
+  int aborted; /* store closed before attach */
   byte_ring_t ring; /* h2/h3 */
   _Atomic int ring_errored;
   _Atomic int store_next;
@@ -58,6 +64,7 @@ static int g_tid_head[DASHCHUNK_MAX_REACTOR_THREADS];
 static int *g_free_slots;
 static int g_free_slots_n;
 static pthread_mutex_t g_free_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_chain_mtx = PTHREAD_MUTEX_INITIALIZER; /* store chain writers. pumps walk lock-free */
 
 static void free_slot(int idx) {
   atomic_store_explicit(&g_subs[idx].alive, DASHCHUNK_SUB_FREE, memory_order_release);
@@ -83,11 +90,11 @@ static char *write_hex(char *dst, size_t v) {
 }
 
 /* HTTP/1.1 chunk framing: "<hex size>\r\n<data>\r\n". cross-thread, matches ts_push's conn_send_buffered usage */
-static void send_chunk(int fd, int ws_handle, const uint8_t *data, size_t len) {
+static void send_chunk(int fd, uint64_t gen, int ws_handle, const uint8_t *data, size_t len) {
   conn_t *c;
   char hdr[24];
   char *p = hdr;
-  c = conn_for_fd(fd);
+  c = conn_for_fd_gen(fd, gen);
   if (!c) return;
   p = write_hex(p, len);
   *p++ = '\r';
@@ -97,10 +104,15 @@ static void send_chunk(int fd, int ws_handle, const uint8_t *data, size_t len) {
   ws_clients_add_bytes(ws_handle, len);
 }
 
+static void h1_wake(int fd, uint64_t gen) {
+  conn_t *c = conn_for_fd_gen(fd, gen);
+  if (c) conn_send_buffered(c, NULL, 0, NULL, 0); /* re-arm EPOLLOUT, flush rechecks finalized */
+}
+
 static void wake_reactor(int tid) {
   int efd;
   if (tid < 0 || tid >= DASHCHUNK_MAX_REACTOR_THREADS) return;
-  efd = g_reactor_efds[tid];
+  efd = __atomic_load_n(&g_reactor_efds[tid], __ATOMIC_RELAXED);
   if (efd >= 0) {
     uint64_t one = 1;
     ssize_t r = write(efd, &one, sizeof one);
@@ -116,30 +128,118 @@ static void ring_enqueue(dashchunk_sub_t *s, const uint8_t *data, size_t len) {
   ws_clients_add_bytes(s->ws_handle, len);
 }
 
+/* sub->lock held */
+static void sub_emit(dashchunk_sub_t *s, const uint8_t *data, size_t len) {
+  if (s->proto == CONN_PROTO_H1) {
+    send_chunk(s->fd, s->conn_gen, s->ws_handle, data, len);
+  } else {
+    ring_enqueue(s, data, len);
+    wake_reactor(s->reactor_tid);
+  }
+}
+
+/* sub->lock held. finalized only after terminator is queued */
+static void sub_end(dashchunk_sub_t *s) {
+  if (s->ended) return;
+  s->ended = 1;
+  if (s->proto == CONN_PROTO_H1) {
+    send_chunk(s->fd, s->conn_gen, s->ws_handle, NULL, 0);
+    atomic_store_explicit(&s->finalized, 1, memory_order_release);
+    h1_wake(s->fd, s->conn_gen);
+  } else {
+    atomic_store_explicit(&s->finalized, 1, memory_order_release);
+    wake_reactor(s->reactor_tid);
+  }
+}
+
+/* sub->lock held. kill stream without terminator */
+static void sub_abort(dashchunk_sub_t *s) {
+  if (s->ended && s->proto == CONN_PROTO_H1) return; /* h2/h3 flag errored even once finished */
+  s->ended = 1;
+  if (s->proto == CONN_PROTO_H1) {
+    conn_t *c = conn_for_fd_gen(s->fd, s->conn_gen);
+    if (c) conn_request_close(c);
+    atomic_store_explicit(&s->finalized, 1, memory_order_release);
+    h1_wake(s->fd, s->conn_gen);
+  } else {
+    atomic_store_explicit(&s->ring_errored, 1, memory_order_release);
+    atomic_store_explicit(&s->finalized, 1, memory_order_release);
+    wake_reactor(s->reactor_tid);
+  }
+}
+
+/* sub->lock held, consumer ready. replays parts missed since subscribe from snapshot */
+static void sub_catch_up(dashchunk_sub_t *s) {
+  const hls_snapshot_t *snap;
+  const hls_parts_t *parts;
+  const uint8_t *base;
+  if (s->aborted) {
+    sub_abort(s);
+    return;
+  }
+  snap = atomic_load_explicit(&s->store->snap, memory_order_acquire);
+  if (!snap) {
+    sub_abort(s);
+    return;
+  }
+  if (snap->live_msn == s->want_seg) {
+    parts = &snap->live_parts;
+    base = snap->live_data;
+  } else {
+    const hls_seg_t *seg = NULL;
+    uint32_t off = s->want_seg - snap->oldest_seq;
+    if (snap->count > 0 && s->want_seg >= snap->oldest_seq && off < (uint32_t)snap->count) seg = &snap->ring->segs[(snap->head + (int)off) % HLS_MAX_SEGS];
+    if (!seg) {
+      sub_abort(s);
+      return;
+    }
+    parts = &seg->parts;
+    base = seg->data;
+  }
+  for (int i = s->sent; i < parts->count; i++) sub_emit(s, base + parts->offset[i], parts->size[i]);
+  if (parts->count > s->sent) s->sent = parts->count;
+  if (snap->live_msn != s->want_seg) sub_end(s);
+}
+
+static void sub_attach(int idx) {
+  dashchunk_sub_t *s = &g_subs[idx];
+  pthread_mutex_lock(&s->lock);
+  s->attached = 1;
+  sub_catch_up(s);
+  pthread_mutex_unlock(&s->lock);
+}
+
 void link_store_chain(hls_store_t *store, int idx) {
-  int old_head = atomic_load_explicit(&store->lldash_sub_head, memory_order_relaxed);
+  int old_head;
+  pthread_mutex_lock(&g_chain_mtx);
+  old_head = atomic_load_explicit(&store->lldash_sub_head, memory_order_relaxed);
   atomic_store_explicit(&g_subs[idx].store_next, old_head, memory_order_relaxed);
-  while (!atomic_compare_exchange_weak_explicit(&store->lldash_sub_head, &old_head, idx, memory_order_release, memory_order_relaxed))
-    atomic_store_explicit(&g_subs[idx].store_next, old_head, memory_order_relaxed);
+  atomic_store_explicit(&store->lldash_sub_head, idx, memory_order_release);
+  pthread_mutex_unlock(&g_chain_mtx);
 }
 
 void unlink_store_chain(hls_store_t *store, int idx) {
   const dashchunk_sub_t *s = &g_subs[idx];
-  int next = atomic_load_explicit(&s->store_next, memory_order_relaxed);
-  int cur = atomic_load_explicit(&store->lldash_sub_head, memory_order_relaxed);
+  int next;
+  int cur;
+  pthread_mutex_lock(&g_chain_mtx);
+  next = atomic_load_explicit(&s->store_next, memory_order_relaxed);
+  cur = atomic_load_explicit(&store->lldash_sub_head, memory_order_relaxed);
   if (cur == idx) {
-    atomic_store_explicit(&store->lldash_sub_head, next, memory_order_relaxed);
+    atomic_store_explicit(&store->lldash_sub_head, next, memory_order_release);
+    pthread_mutex_unlock(&g_chain_mtx);
     return;
   }
   while (cur != -1) {
     dashchunk_sub_t *cs = &g_subs[cur];
     int cs_next = atomic_load_explicit(&cs->store_next, memory_order_relaxed);
     if (cs_next == idx) {
-      atomic_store_explicit(&cs->store_next, next, memory_order_relaxed);
-      return;
+      atomic_store_explicit(&cs->store_next, next, memory_order_release);
+      break;
     }
     cur = cs_next;
   }
+  pthread_mutex_unlock(&g_chain_mtx);
 }
 
 void link_tid_chain(int idx, int tid) {
@@ -168,20 +268,20 @@ void unlink_tid_chain(int idx) {
   }
 }
 
-void on_part_pushed(const hls_store_t *store, uint32_t seq, const uint8_t *data, size_t len) {
+void on_part_pushed(const hls_store_t *store, uint32_t seq, int part_idx, const uint8_t *data, size_t len) {
   int i;
-  if (store->container != SEG_CONTAINER_FMP4) return;
+  if (store->container == SEG_CONTAINER_TS) return;
   i = atomic_load_explicit(&store->lldash_sub_head, memory_order_acquire);
   while (i != -1) {
     dashchunk_sub_t *s = &g_subs[i];
     int next = atomic_load_explicit(&s->store_next, memory_order_relaxed);
     if (atomic_load_explicit(&s->alive, memory_order_acquire) == DASHCHUNK_SUB_ALIVE && sub_matches(s, store, seq)) {
-      if (s->proto == CONN_PROTO_H1) {
-        send_chunk(s->fd, s->ws_handle, data, len);
-      } else if (s->proto == CONN_PROTO_H2 || s->proto == CONN_PROTO_H3) {
-        ring_enqueue(s, data, len);
-        wake_reactor(s->reactor_tid);
+      pthread_mutex_lock(&s->lock);
+      if (s->attached && !s->ended && part_idx == s->sent) {
+        sub_emit(s, data, len);
+        s->sent++;
       }
+      pthread_mutex_unlock(&s->lock);
     }
     i = next;
   }
@@ -189,19 +289,15 @@ void on_part_pushed(const hls_store_t *store, uint32_t seq, const uint8_t *data,
 
 void on_segment_done(const hls_store_t *store, uint32_t seq) {
   int i;
-  if (store->container != SEG_CONTAINER_FMP4) return;
+  if (store->container == SEG_CONTAINER_TS) return;
   i = atomic_load_explicit(&store->lldash_sub_head, memory_order_acquire);
   while (i != -1) {
     dashchunk_sub_t *s = &g_subs[i];
     int next = atomic_load_explicit(&s->store_next, memory_order_relaxed);
     if (atomic_load_explicit(&s->alive, memory_order_acquire) == DASHCHUNK_SUB_ALIVE && sub_matches(s, store, seq)) {
-      if (s->proto == CONN_PROTO_H1) {
-        send_chunk(s->fd, s->ws_handle, NULL, 0);
-        atomic_store_explicit(&s->finalized, 1, memory_order_release);
-      } else if (s->proto == CONN_PROTO_H2 || s->proto == CONN_PROTO_H3) {
-        atomic_store_explicit(&s->finalized, 1, memory_order_release);
-        wake_reactor(s->reactor_tid);
-      }
+      pthread_mutex_lock(&s->lock);
+      if (s->attached) sub_end(s); /* unattached: catch-up sees segment in ring */
+      pthread_mutex_unlock(&s->lock);
     }
     i = next;
   }
@@ -213,14 +309,11 @@ void on_store_closing(const hls_store_t *store) {
     dashchunk_sub_t *s = &g_subs[i];
     int next = atomic_load_explicit(&s->store_next, memory_order_relaxed);
     if (atomic_load_explicit(&s->alive, memory_order_acquire) == DASHCHUNK_SUB_ALIVE) {
-      if (s->proto == CONN_PROTO_H1) {
-        send_chunk(s->fd, s->ws_handle, NULL, 0);
-        atomic_store_explicit(&s->finalized, 1, memory_order_release);
-      } else if (s->proto == CONN_PROTO_H2 || s->proto == CONN_PROTO_H3) {
-        atomic_store_explicit(&s->ring_errored, 1, memory_order_release);
-        atomic_store_explicit(&s->finalized, 1, memory_order_release);
-        wake_reactor(s->reactor_tid);
-      }
+      pthread_mutex_lock(&s->lock);
+      if (!s->attached) s->aborted = 1;
+      else if (s->proto == CONN_PROTO_H1) sub_end(s);
+      else sub_abort(s);
+      pthread_mutex_unlock(&s->lock);
     }
     i = next;
   }
@@ -236,6 +329,7 @@ void dash_lldash_init(int max_clients) {
     return;
   }
   g_subs_n = n;
+  for (int i = 0; i < n; i++) pthread_mutex_init(&g_subs[i].lock, NULL);
   for (int i = 0; i < DASHCHUNK_MAX_REACTOR_THREADS; i++) {
     g_reactor_efds[i] = -1;
     g_tid_head[i] = -1;
@@ -253,12 +347,13 @@ void dash_lldash_init(int max_clients) {
 int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, conn_proto_t proto) {
   hls_store_t *s;
   const hls_snapshot_t *snap;
+  seg_container_t container;
   uint64_t want_t_ms;
   uint32_t want_seg;
   int idx = -1;
 
-  if (!parse_dash_seg_filename(filename, &want_t_ms)) return -1;
-  s = hls_store_find(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4);
+  if (!parse_dash_seg_filename(filename, &want_t_ms, &container)) return -1;
+  s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
   if (!snap || snap->part_target <= 0.0 || snap->cum_ms != want_t_ms) return -1;
   want_seg = snap->live_msn;
@@ -266,7 +361,6 @@ int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsign
   if (g_free_slots_n > 0) idx = g_free_slots[--g_free_slots_n];
   pthread_mutex_unlock(&g_free_lock);
   if (idx < 0) return -1;
-  atomic_store_explicit(&g_subs[idx].alive, DASHCHUNK_SUB_ALIVE, memory_order_release);
 
   g_subs[idx].store = s;
   g_subs[idx].cap_ctx = ctx;
@@ -276,6 +370,7 @@ int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsign
   g_subs[idx].want_seg = want_seg;
   g_subs[idx].proto = proto;
   g_subs[idx].fd = -1;
+  g_subs[idx].conn_gen = 0;
   g_subs[idx].h2c = NULL;
   g_subs[idx].h2_slot = NULL;
   g_subs[idx].h3c = NULL;
@@ -285,6 +380,10 @@ int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsign
   g_subs[idx].tid_next = -1;
   atomic_store_explicit(&g_subs[idx].finalized, 0, memory_order_relaxed);
   atomic_store_explicit(&g_subs[idx].ring_errored, 0, memory_order_relaxed);
+  g_subs[idx].attached = 0;
+  g_subs[idx].sent = 0;
+  g_subs[idx].ended = 0;
+  g_subs[idx].aborted = 0;
   if (proto == CONN_PROTO_H2 || proto == CONN_PROTO_H3) {
     byte_ring_reset(&g_subs[idx].ring, DASHCHUNK_RING_BYTES);
     if (!g_subs[idx].ring.buf) {
@@ -292,6 +391,7 @@ int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsign
       return -1;
     }
   }
+  atomic_store_explicit(&g_subs[idx].alive, DASHCHUNK_SUB_ALIVE, memory_order_release);
   link_store_chain(s, idx);
   return idx;
 }
@@ -303,6 +403,7 @@ void dash_lldash_h2_bind(int slot, void *h2c, void *h2_slot, int reactor_tid, in
   g_subs[slot].reactor_tid = reactor_tid;
   g_subs[slot].ws_handle = ws_handle;
   link_tid_chain(slot, reactor_tid);
+  sub_attach(slot);
 }
 
 void *dash_lldash_sub_h2c(int slot) {
@@ -322,6 +423,7 @@ void dash_lldash_h3_bind(int slot, void *h3c, int64_t h3_sid, int reactor_tid, i
   g_subs[slot].reactor_tid = reactor_tid;
   g_subs[slot].ws_handle = ws_handle;
   link_tid_chain(slot, reactor_tid);
+  sub_attach(slot);
 }
 
 void *dash_lldash_sub_h3c(int slot) {
@@ -343,7 +445,7 @@ int dash_lldash_ring_pending(int slot) {
   dashchunk_sub_t *s;
   if (slot < 0 || slot >= g_subs_n) return 0;
   s = &g_subs[slot];
-  return atomic_load_explicit(&s->ring.wpos, memory_order_acquire) != atomic_load_explicit(&s->ring.rpos, memory_order_relaxed);
+  return byte_ring_unsent(&s->ring) != 0;
 }
 
 int dash_lldash_ring_errored(int slot) {
@@ -359,14 +461,26 @@ const uint8_t *dash_lldash_ring_peek(int slot, size_t *len) {
   return byte_ring_peek(&g_subs[slot].ring, len);
 }
 
-void dash_lldash_ring_advance(int slot, size_t n) {
+void dash_lldash_ring_hold(int slot, size_t n) {
   if (slot < 0 || slot >= g_subs_n) return;
-  byte_ring_advance(&g_subs[slot].ring, n);
+  byte_ring_hold(&g_subs[slot].ring, n);
+}
+
+void dash_lldash_ring_ack(int slot, size_t n) {
+  if (slot < 0 || slot >= g_subs_n) return;
+  byte_ring_ack(&g_subs[slot].ring, n);
 }
 
 void dash_lldash_register_reactor_efd(int tid, int efd) {
   if (tid < 0 || tid >= DASHCHUNK_MAX_REACTOR_THREADS) return;
-  g_reactor_efds[tid] = efd;
+  __atomic_store_n(&g_reactor_efds[tid], efd, __ATOMIC_RELAXED);
+}
+
+void dash_lldash_close_reactor_efds(void) {
+  for (int i = 0; i < DASHCHUNK_MAX_REACTOR_THREADS; i++) {
+    int efd = __atomic_exchange_n(&g_reactor_efds[i], -1, __ATOMIC_RELAXED);
+    if (efd >= 0) close(efd);
+  }
 }
 
 void dash_lldash_flush_ready(int tid) {
@@ -397,6 +511,7 @@ int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *fi
   int idx = dash_lldash_subscribe(ctx, filter, pmt_pid, lcevc, filename, 1);
   if (idx < 0) return 0;
   g_subs[idx].fd = c->fd;
+  g_subs[idx].conn_gen = atomic_load_explicit(&c->gen, memory_order_relaxed);
   g_subs[idx].ws_handle = ws_handle;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
   sbuf_init(&b, hdr, sizeof hdr);
@@ -413,9 +528,21 @@ int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *fi
   return 1;
 }
 
+void dash_lldash_sub_attach(int slot) {
+  if (slot < 0 || slot >= g_subs_n) return;
+  sub_attach(slot);
+}
+
 int dash_lldash_sub_finalized(int slot) {
   if (slot < 0 || slot >= g_subs_n) return 1;
   return atomic_load_explicit(&g_subs[slot].finalized, memory_order_acquire);
+}
+
+static void dashchunk_finish_sub_close(void *arg) {
+  int slot = (int)(intptr_t)arg;
+  const dashchunk_sub_t *s = &g_subs[slot];
+  if (s->proto == CONN_PROTO_H2 || s->proto == CONN_PROTO_H3) unlink_tid_chain(slot);
+  free_slot(slot);
 }
 
 void dash_lldash_sub_close(int slot) {
@@ -425,8 +552,9 @@ void dash_lldash_sub_close(int slot) {
   s = &g_subs[slot];
   expected = DASHCHUNK_SUB_ALIVE;
   if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, DASHCHUNK_SUB_CLOSING, memory_order_acquire, memory_order_relaxed)) return;
-  capture_wait_pumps_quiescent();
   unlink_store_chain(s->store, slot);
-  if (s->proto == CONN_PROTO_H2 || s->proto == CONN_PROTO_H3) unlink_tid_chain(slot);
-  free_slot(slot);
+  if (!capture_defer_after_quiescent(dashchunk_finish_sub_close, (void *)(intptr_t)slot)) {
+    capture_wait_pumps_quiescent();
+    dashchunk_finish_sub_close((void *)(intptr_t)slot);
+  }
 }

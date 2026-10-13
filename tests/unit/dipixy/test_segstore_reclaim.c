@@ -372,10 +372,22 @@ START_TEST(concurrent_sweeper_does_not_release_closed_snapshot_early) {
 }
 END_TEST
 
+START_TEST(oversize_buffer_holds_requested_size) {
+  size_t size = ((size_t)64 << 20) + 4096;
+  uint8_t *b = seg_buf_alloc(size);
+
+  ck_assert_ptr_nonnull(b);
+  ck_assert_uint_ge(seg_buf_cap(size), size);
+  memset(b, 0xA5, size);
+  seg_buf_unref(b);
+}
+END_TEST
+
 static Suite *segstore_reclaim_suite(void) {
   Suite *s = suite_create("dipixy_segstore_reclaim");
   TCase *tc = tcase_create("core");
   tcase_set_timeout(tc, 10);
+  tcase_add_test(tc, oversize_buffer_holds_requested_size);
   tcase_add_test(tc, close_keeps_snapshot_until_every_worker_ticks);
   tcase_add_test(tc, full_table_reopens_only_after_every_worker_ticks);
   tcase_add_test(tc, replaced_snapshots_survive_until_every_worker_ticks);

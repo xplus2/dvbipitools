@@ -34,8 +34,19 @@ typedef struct {
   int latm_cfg_ok;
   int latm_flt;
   unsigned truehd_samples;
+  unsigned dts_total_ch;  /* DTS: all channels incl. LFE, extension asset wins over core */
+  int dts_total_ext;
+  unsigned truehd_cicp;
   log_throttle_t vbuf_drop_throttle;
 } esc_track_t;
+
+typedef enum {
+  ESC_CHCFG_NONE,
+  ESC_CHCFG_DOLBY_2011, /* tag:dolby.com,2014:dash:audio_channel_configuration:2011, 16 bit location mask */
+  ESC_CHCFG_DOLBY_2015, /* tag:dolby.com,2015:dash:audio_channel_configuration:2015, 24 bit speaker group mask */
+  ESC_CHCFG_DTS_2012,   /* tag:dts.com,2014:dash:audio_channel_configuration:2012, total channels incl. LFE */
+  ESC_CHCFG_CICP        /* urn:mpeg:mpegB:cicp:ChannelConfiguration, ISO/IEC 23091-3 index */
+} esc_chcfg_t;
 
 typedef struct {
   size_t consumed;
@@ -58,6 +69,8 @@ typedef struct {
   unsigned ac4_bitstream_version;
   unsigned ac4_presentation_version;
   unsigned ac4_mdcompat;
+  esc_chcfg_t chcfg_scheme;
+  unsigned chcfg_value;
 } esc_frame_t;
 
 typedef struct {

@@ -18,6 +18,7 @@
 #include "../reactor/reactor_tls.h"
 #include "../reactor/dispatch/route_common.h"
 #include "../core/route.h"
+#include "../core/metrics.h"
 #include "../httpng/httpng.h"
 #include "http3.h"
 #include "http3_int.h"
@@ -49,26 +50,57 @@ static int cb_h3_recv_header(nghttp3_conn *h3, int64_t sid, int32_t token, nghtt
 
   httpng_parse_known_header((const char *)n.base, n.len, (const char *)v.base, v.len,
     &(httpng_hdr_out_t){r->method, sizeof r->method, r->path, H3_PATH_MAX,
-    r->inm, sizeof r->inm, r->origin, sizeof r->origin, r->authz, sizeof r->authz, r->protocol, sizeof r->protocol});
+    r->inm, sizeof r->inm, r->origin, sizeof r->origin, r->authz, sizeof r->authz, r->protocol, sizeof r->protocol, r->host, sizeof r->host,
+    r->soapaction, sizeof r->soapaction, r->sid, sizeof r->sid,
+    r->callback, sizeof r->callback, r->nt, sizeof r->nt, r->timeout, sizeof r->timeout});
   return 0;
 }
 
+static void h3_req_body_append(h3_req_t *r, const uint8_t *data, size_t len) {
+  if (r->body_over) return;
+  if (r->body_len + len > HTTPNG_BODY_MAX) {
+    r->body_over = 1;
+    return;
+  }
+  if (!r->body) {
+    r->body = malloc(HTTPNG_BODY_MAX + 1);
+    if (!r->body) {
+      r->body_over = 1;
+      return;
+    }
+  }
+  memcpy(r->body + r->body_len, data, len);
+  r->body_len += len;
+  r->body[r->body_len] = '\0';
+}
+
 static int cb_h3_recv_data(nghttp3_conn *h3, int64_t sid, const uint8_t *data, size_t datalen, void *ud, void *stream_ud) {
+  h3_conn_t *c = ud;
+  h3_req_t *r = find_req(c, sid);
   (void)h3;
-  (void)sid;
-  (void)ud;
-  if (stream_ud) h3_ws_data_chunk(stream_ud, data, datalen);
+  if (r && r->body_wait) h3_req_body_append(r, data, datalen);
+  else if (stream_ud) h3_ws_data_chunk(c, stream_ud, data, datalen);
+  ngtcp2_conn_extend_max_stream_offset(c->qconn, sid, datalen);
+  ngtcp2_conn_extend_max_offset(c->qconn, datalen);
+  return 0;
+}
+
+static int cb_h3_end_stream(nghttp3_conn *h3, int64_t sid, void *ud, void *stream_ud) {
+  h3_req_t *r = find_req(ud, sid);
+  (void)h3;
+  (void)stream_ud;
+  if (r && r->body_wait && !r->dispatched) r->dispatch_pending = 1;
   return 0;
 }
 
 static int cb_h3_end_headers(nghttp3_conn *h3, int64_t sid, int fin, void *ud, void *stream_ud) {
   (void)h3;
-  (void)fin;
   (void)stream_ud;
   h3_conn_t *c = ud;
   h3_req_t *r = find_req(c, sid);
   if (!r) return 0;
-  if (!r->dispatched) r->dispatch_pending = 1;
+  if (!strcmp(r->method, "POST") && !fin) r->body_wait = 1;
+  else if (!r->dispatched) r->dispatch_pending = 1;
   return 0;
 }
 
@@ -78,6 +110,19 @@ static int cb_h3_deferred_consume(nghttp3_conn *h3, int64_t sid, size_t consumed
   (void)stream_ud;
   ngtcp2_conn_extend_max_stream_offset(c->qconn, sid, consumed);
   ngtcp2_conn_extend_max_offset(c->qconn, consumed);
+  return 0;
+}
+
+static int cb_h3_acked_stream_data(nghttp3_conn *h3, int64_t sid, uint64_t datalen, void *ud, void *stream_ud) {
+  h3_req_t *r = stream_ud;
+  (void)h3;
+  (void)sid;
+  (void)ud;
+  if (!r || !r->active) return 0;
+  if (r->tspush_sub_idx >= 0) h3_tspush_acked(r, (size_t)datalen);
+  else if (r->mp4push_sub_idx >= 0) h3_mp4push_acked(r, (size_t)datalen);
+  else if (r->dashchunk_sub_idx >= 0) h3_dashchunk_acked(r, (size_t)datalen);
+  else if (r->ws_active) h3_ws_acked(r, (size_t)datalen);
   return 0;
 }
 
@@ -98,7 +143,9 @@ int cb_handshake_completed(ngtcp2_conn *qconn, void *ud) {
   h3cbs.recv_header = cb_h3_recv_header;
   h3cbs.end_headers = cb_h3_end_headers;
   h3cbs.recv_data = cb_h3_recv_data;
+  h3cbs.end_stream = cb_h3_end_stream;
   h3cbs.deferred_consume = cb_h3_deferred_consume;
+  h3cbs.acked_stream_data = cb_h3_acked_stream_data;
   nghttp3_settings h3s;
   nghttp3_settings_default_versioned(NGHTTP3_SETTINGS_VERSION, &h3s);
   h3s.enable_connect_protocol = 1;
@@ -118,12 +165,8 @@ static int h3_conn_active_count(const h3_conn_t *c) {
   return n;
 }
 
-static void h3_client_ip(const h3_conn_t *c, char *buf, size_t bufsz) {
-  const struct sockaddr_storage *sa = &c->peer_addr;
-  if (sa->ss_family == AF_INET6)
-    inet_ntop(AF_INET6, &((const struct sockaddr_in6 *)sa)->sin6_addr, buf, (socklen_t)bufsz);
-  else
-    inet_ntop(AF_INET, &((const struct sockaddr_in *)sa)->sin_addr, buf, (socklen_t)bufsz);
+void h3_client_ip(const h3_conn_t *c, char *buf, size_t bufsz) {
+  sockaddr_ip_str(&c->peer_addr, buf, bufsz);
 }
 
 static void h3ops_respond_status(void *connv, void *reqv, const char *status) {
@@ -145,7 +188,19 @@ static int h3ops_admission_ok(void *connv) {
   return h3_conn_active_count(connv) <= ((const h3_conn_t *)connv)->max_reqs - H3_WS_RESERVE;
 }
 
-static int h3ops_tspush_dispatch(void *connv, void *reqv, int sub) { return h3_tspush_dispatch(connv, reqv, sub); }
+static int h3ops_tspush_dispatch(void *connv, void *reqv, int sub, int rawaudio) { return h3_tspush_dispatch(connv, reqv, sub, rawaudio); }
+
+static int h3ops_ts_cold_try_park(void *connv, void *reqv, const ts_cold_park_req_t *req) {
+  return h3_ts_cold_try_park(connv, ((h3_req_t *)reqv)->stream_id, req);
+}
+
+static int h3ops_open_try_park(void *connv, void *reqv, capture_open_job_t *job) {
+  return h3_open_try_park(connv, ((h3_req_t *)reqv)->stream_id, job);
+}
+
+static void h3ops_respond_content(void *connv, void *reqv, int status, const char *content_type, const httpng_hdr_t *extra, size_t nextra, uint8_t *body, size_t len, const char *origin_hdr) {
+  h3_submit_resp_ex(connv, reqv, status, content_type, NULL, len, body, NULL, 0, origin_hdr, extra, nextra);
+}
 
 static int h3ops_dashchunk_dispatch(void *connv, void *reqv, int sub, int ws_handle) { return h3_dashchunk_dispatch(connv, reqv, sub, ws_handle); }
 
@@ -160,7 +215,7 @@ static int h3ops_llhls_try_park(void *connv, void *reqv, const llhls_park_req_t 
 }
 
 static const httpng_ops_t h3_httpng_ops = {
-    .proto = 3,
+    .proto = CONN_PROTO_H3,
     .respond_status = h3ops_respond_status,
     .respond_401 = h3ops_respond_401,
     .respond_hls = h3ops_respond_hls,
@@ -171,6 +226,9 @@ static const httpng_ops_t h3_httpng_ops = {
     .mp4push_dispatch = h3ops_mp4push_dispatch,
     .hls_cold_try_park = h3ops_hls_cold_try_park,
     .llhls_try_park = h3ops_llhls_try_park,
+    .ts_cold_try_park = h3ops_ts_cold_try_park,
+    .open_try_park = h3ops_open_try_park,
+    .respond_content = h3ops_respond_content,
 };
 
 void dispatch_req(h3_conn_t *c, h3_req_t *r) {
@@ -185,6 +243,18 @@ void dispatch_req(h3_conn_t *c, h3_req_t *r) {
   hdrs.origin = r->origin;
   hdrs.authz = r->authz;
   hdrs.protocol = r->protocol;
+  hdrs.host = r->host;
+  hdrs.soapaction = r->soapaction;
+  hdrs.sid = r->sid;
+  hdrs.callback = r->callback;
+  hdrs.nt = r->nt;
+  hdrs.timeout = r->timeout;
+  hdrs.body = r->body;
+  hdrs.body_len = r->body_len;
+  if (r->body_over) {
+    h3_respond_status(c, r->stream_id, "400");
+    return;
+  }
   httpng_dispatch(&h3_httpng_ops, c, r, &hdrs, client_ip, -1);
 }
 

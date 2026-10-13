@@ -64,9 +64,8 @@ args_status_t sds_opt_rms(sds_opt_t *p, int c) {
       cfg->fl.have_fus_lang = 1;
       break;
     case OPT_FUS_ID: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0') {
+      unsigned long v;
+      if (parse_ulong(optarg, ULONG_MAX, &v)) {
         argerr("AS000209", "invalid --fus-id: %s", optarg);
         return ARGS_ERR;
       }

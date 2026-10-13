@@ -9,7 +9,13 @@
 
 #include <openssl/evp.h>
 
+#include "lib/mux/amf.h"
 #include "lib/net/rtmp/auth.h"
+#include "lib/net/rtmp/chunk.h"
+#include "lib/net/rtmp/handshake.h"
+#include "lib/net/rtmp/rtmp.h"
+
+#define RTMP_TYPE_INVOKE 20
 
 static void md5_b64_ref(const char *s, char *out) {
   unsigned char digest[EVP_MAX_MD_SIZE];
@@ -134,6 +140,133 @@ START_TEST(adobe_response_response_buffer_exact_fit) {
 }
 END_TEST
 
+typedef struct {
+  unsigned char buf[16384];
+  size_t len;
+  int ready;
+  char error[64];
+} capture_t;
+
+static void cap_write(void *ctx, const unsigned char *data, size_t len) {
+  capture_t *c = ctx;
+  ck_assert_uint_le(c->len + len, sizeof c->buf);
+  memcpy(c->buf + c->len, data, len);
+  c->len += len;
+}
+
+static void cap_ready(void *ctx) { ((capture_t *)ctx)->ready = 1; }
+
+static void cap_error(void *ctx, const char *msg) {
+  capture_t *c = ctx;
+  snprintf(c->error, sizeof c->error, "%s", msg);
+}
+
+static size_t build_needauth(unsigned char *out) {
+  ebuf_t b;
+  rtmp_chunk_header_t h;
+  size_t n;
+
+  memset(&b, 0, sizeof b);
+  amf_string(&b, "_error");
+  amf_number(&b, 1);
+  amf_null(&b);
+  amf_object_start(&b);
+  amf_object_key(&b, "description");
+  amf_string(&b, "?reason=needauth&user=bob&salt=abcd1234&opaque=deadbeef");
+  amf_object_end(&b);
+  h.fmt = RTMP_CHUNK_FMT_0;
+  h.cid = 3;
+  h.timestamp = 0;
+  h.length = (uint32_t)b.len;
+  h.type = RTMP_TYPE_INVOKE;
+  h.stream_id = 0;
+  n = rtmp_chunk_basic_header_write(out, h.fmt, h.cid);
+  n += rtmp_chunk_message_header_write(out + n, &h);
+  memcpy(out + n, b.p, b.len);
+  n += b.len;
+  ebuf_free(&b);
+  return n;
+}
+
+static rtmp_t *new_client(capture_t *cap, const char *auth_query) {
+  rtmp_cfg_t cfg;
+
+  memset(cap, 0, sizeof *cap);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.app = "live";
+  cfg.tcurl = "rtmp://host/live";
+  cfg.stream_name = "key123";
+  cfg.user = "bob";
+  cfg.password = "hunter2";
+  cfg.auth_query = auth_query;
+  cfg.write_cb = cap_write;
+  cfg.ready_cb = cap_ready;
+  cfg.error_cb = cap_error;
+  cfg.cb_ctx = cap;
+  return rtmp_new(&cfg);
+}
+
+static void handshake(rtmp_t *r) {
+  unsigned char s[1 + 2 * RTMP_HANDSHAKE_SIZE];
+
+  rtmp_start(r);
+  s[0] = RTMP_VERSION;
+  memset(s + 1, 0x42, sizeof s - 1);
+  ck_assert_int_eq(rtmp_feed(r, s, sizeof s), 0);
+}
+
+START_TEST(rtmp_needauth_yields_carryable_query) {
+  capture_t cap;
+  char q[400];
+  char want[40];
+  char c2[40];
+  const char *p;
+  unsigned char msg[512];
+  size_t mlen;
+  rtmp_t *r = new_client(&cap, NULL);
+
+  ck_assert_ptr_nonnull(r);
+  handshake(r);
+  ck_assert_int_eq(rtmp_auth_carry(r, q, sizeof q), 0);
+  mlen = build_needauth(msg);
+  ck_assert_int_eq(rtmp_feed(r, msg, mlen), 0);
+  ck_assert_str_eq(cap.error, "auth challenge");
+  ck_assert_int_eq(rtmp_auth_carry(r, q, sizeof q), 1);
+  ck_assert_ptr_nonnull(strstr(q, "?authmod=adobe&user=bob&challenge="));
+  ck_assert_ptr_nonnull(strstr(q, "&opaque=deadbeef"));
+  p = strstr(q, "&challenge=") + 11;
+  memcpy(c2, p, 16);
+  c2[16] = '\0';
+  expected_response("bob", "hunter2", "abcd1234", "deadbeef", c2, want);
+  p = strstr(q, "&response=");
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(strncmp(p + 10, want, 24), 0);
+  ck_assert_int_eq(p[10 + 24], '&');
+  ck_assert_int_eq(rtmp_auth_carry(r, q, 10), 0);
+  rtmp_free(r);
+}
+END_TEST
+
+START_TEST(rtmp_carried_query_is_sent_and_not_retried) {
+  capture_t cap;
+  unsigned char msg[512];
+  size_t mlen;
+  rtmp_t *r = new_client(&cap, "?authmod=adobe&user=bob&challenge=0123456789abcdef&response=XXXXXXXXXXXXXXXXXXXXXXXX&opaque=deadbeef");
+  char q[400];
+
+  ck_assert_ptr_nonnull(r);
+  handshake(r);
+  /* connect spans several 128B chunks: match short pieces */
+  ck_assert_ptr_nonnull(memmem(cap.buf, cap.len, "challenge=", 10));
+  ck_assert_ptr_nonnull(memmem(cap.buf, cap.len, "opaque=", 7));
+  mlen = build_needauth(msg);
+  ck_assert_int_eq(rtmp_feed(r, msg, mlen), 0);
+  ck_assert_str_eq(cap.error, "_error");
+  ck_assert_int_eq(rtmp_auth_carry(r, q, sizeof q), 0);
+  rtmp_free(r);
+}
+END_TEST
+
 static Suite *auth_suite(void) {
   Suite *s = suite_create("rtmp_auth");
   TCase *tc = tcase_create("adobe");
@@ -147,6 +280,8 @@ static Suite *auth_suite(void) {
   tcase_add_test(tc, adobe_response_challenge2_buffer_too_small);
   tcase_add_test(tc, adobe_response_response_buffer_too_small);
   tcase_add_test(tc, adobe_response_response_buffer_exact_fit);
+  tcase_add_test(tc, rtmp_needauth_yields_carryable_query);
+  tcase_add_test(tc, rtmp_carried_query_is_sent_and_not_retried);
   suite_add_tcase(s, tc);
   return s;
 }

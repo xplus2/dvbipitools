@@ -23,4 +23,7 @@ void uriparse_mcast_describe(int family, const char *group, unsigned port, char 
    returns 0 = file, 1 = rtmp, 2 = rtmps, -1 if uri doesn't fit target buffer. */
 int uriparse_rtmp_or_file(const char *uri, char *rtmp_buf, size_t rtmp_cap, char *file_buf, size_t file_cap);
 
+/* malloc'd copy of uri without userinfo, query, fragment. empty userinfo ("rtp://@host") kept. NULL on oom */
+char *uriparse_redact_dup(const char *uri);
+
 #endif

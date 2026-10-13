@@ -16,7 +16,8 @@
 typedef struct {
   uint8_t data[FAKE_RING_BYTES];
   size_t len;
-  size_t off;
+  size_t off;  /* acked */
+  size_t held; /* handed out, not acked */
   int errored;
   int finalized;
   h3_conn_t *c;
@@ -47,12 +48,18 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
 }
 
 static const uint8_t *fake_peek(const fake_sub_t *f, size_t *len) {
-  if (f->off >= f->len) return NULL;
-  *len = f->len - f->off;
-  return f->data + f->off;
+  if (f->off + f->held >= f->len) return NULL;
+  *len = f->len - f->off - f->held;
+  return f->data + f->off + f->held;
 }
 
-static void fake_advance(fake_sub_t *f, size_t n) {
+static void fake_hold(fake_sub_t *f, size_t n) {
+  f->held += n;
+}
+
+static void fake_ack(fake_sub_t *f, size_t n) {
+  if (n > f->held) n = f->held;
+  f->held -= n;
   f->off += n;
 }
 
@@ -63,7 +70,8 @@ static void fake_write(fake_sub_t *f, const uint8_t *data, size_t len) {
 }
 
 const uint8_t *dash_lldash_ring_peek(int slot, size_t *len) { return fake_peek(&fake_dash[slot], len); }
-void dash_lldash_ring_advance(int slot, size_t n) { fake_advance(&fake_dash[slot], n); }
+void dash_lldash_ring_hold(int slot, size_t n) { fake_hold(&fake_dash[slot], n); }
+void dash_lldash_ring_ack(int slot, size_t n) { fake_ack(&fake_dash[slot], n); }
 int dash_lldash_ring_errored(int slot) { return fake_dash[slot].errored; }
 int dash_lldash_sub_finalized(int slot) { return fake_dash[slot].finalized; }
 void *dash_lldash_sub_h3c(int slot) { return fake_dash[slot].c; }
@@ -77,7 +85,8 @@ void dash_lldash_h3_bind(int slot, void *h3c, int64_t sid, int tid, int ws_handl
 }
 
 const uint8_t *mp4push_ring_peek(int slot, size_t *len) { return fake_peek(&fake_mp4[slot], len); }
-void mp4push_ring_advance(int slot, size_t n) { fake_advance(&fake_mp4[slot], n); }
+void mp4push_ring_hold(int slot, size_t n) { fake_hold(&fake_mp4[slot], n); }
+void mp4push_ring_ack(int slot, size_t n) { fake_ack(&fake_mp4[slot], n); }
 int mp4push_ring_errored(int slot) { return fake_mp4[slot].errored; }
 void *mp4push_sub_h3c(int slot) { return fake_mp4[slot].c; }
 int64_t mp4push_sub_h3_sid(int slot) { return fake_mp4[slot].sid; }
@@ -95,6 +104,8 @@ typedef struct {
   int (*dispatch)(h3_conn_t *c, h3_req_t *r, int sub);
   void (*wake)(int sub);
   void (*feed)(int sub, const uint8_t *data, size_t len);
+  void (*acked)(const h3_req_t *r, size_t n);
+  size_t (*retained)(int sub); /* written and not yet acked */
   void (*set_sub)(h3_req_t *r, int sub);
   int (*get_sub)(const h3_req_t *r);
   void (*bound)(int sub, h3_conn_t **c, int64_t *sid, int *tid, int *ws);
@@ -103,7 +114,7 @@ typedef struct {
   int eof_when_finalized;
 } push_kind_t;
 
-static int ts_dispatch(h3_conn_t *c, h3_req_t *r, int sub) { return h3_tspush_dispatch(c, r, sub); }
+static int ts_dispatch(h3_conn_t *c, h3_req_t *r, int sub) { return h3_tspush_dispatch(c, r, sub, 0); }
 static int dash_dispatch(h3_conn_t *c, h3_req_t *r, int sub) { return h3_dashchunk_dispatch(c, r, sub, FAKE_WS_HANDLE); }
 static int mp4_dispatch(h3_conn_t *c, h3_req_t *r, int sub) { return h3_mp4push_dispatch(c, r, sub, FAKE_WS_HANDLE); }
 
@@ -113,6 +124,14 @@ static void ts_feed(int sub, const uint8_t *data, size_t len) {
 
 static void dash_feed(int sub, const uint8_t *data, size_t len) { fake_write(&fake_dash[sub], data, len); }
 static void mp4_feed(int sub, const uint8_t *data, size_t len) { fake_write(&fake_mp4[sub], data, len); }
+
+static size_t ts_retained(int sub) {
+  const byte_ring_t *r = &g_ts_subs[sub].h3_ring;
+  return atomic_load(&r->wpos) - atomic_load(&r->rpos);
+}
+
+static size_t dash_retained(int sub) { return fake_dash[sub].len - fake_dash[sub].off; }
+static size_t mp4_retained(int sub) { return fake_mp4[sub].len - fake_mp4[sub].off; }
 
 static void ts_set_sub(h3_req_t *r, int sub) { r->tspush_sub_idx = sub; }
 static void dash_set_sub(h3_req_t *r, int sub) { r->dashchunk_sub_idx = sub; }
@@ -158,9 +177,9 @@ static void mp4_bind_for_wake(int sub, h3_conn_t *c, int64_t sid) {
 }
 
 static const push_kind_t kinds[KIND_COUNT] = {
-    {"tspush", h3_tspush_read_cb, ts_dispatch, h3_tspush_wake, ts_feed, ts_set_sub, ts_get_sub, ts_bound, ts_bind_for_wake, 0, 0},
-    {"dashchunk", h3_dashchunk_read_cb, dash_dispatch, h3_dashchunk_wake, dash_feed, dash_set_sub, dash_get_sub, dash_bound, dash_bind_for_wake, 1, 1},
-    {"mp4push", h3_mp4push_read_cb, mp4_dispatch, h3_mp4push_wake, mp4_feed, mp4_set_sub, mp4_get_sub, mp4_bound, mp4_bind_for_wake, 1, 0},
+    {"tspush", h3_tspush_read_cb, ts_dispatch, h3_tspush_wake, ts_feed, h3_tspush_acked, ts_retained, ts_set_sub, ts_get_sub, ts_bound, ts_bind_for_wake, 0, 0},
+    {"dashchunk", h3_dashchunk_read_cb, dash_dispatch, h3_dashchunk_wake, dash_feed, h3_dashchunk_acked, dash_retained, dash_set_sub, dash_get_sub, dash_bound, dash_bind_for_wake, 1, 1},
+    {"mp4push", h3_mp4push_read_cb, mp4_dispatch, h3_mp4push_wake, mp4_feed, h3_mp4push_acked, mp4_retained, mp4_set_sub, mp4_get_sub, mp4_bound, mp4_bind_for_wake, 1, 0},
 };
 
 static void world_open(h3_conn_t *c) {
@@ -253,6 +272,35 @@ START_TEST(read_callback_hands_out_ring_bytes_and_consumes_them) {
   ck_assert_uint_eq(vec[0].len, sizeof payload - 1);
   ck_assert_mem_eq(vec[0].base, payload, sizeof payload - 1);
   ck_assert_int_eq((int)k->read_cb(NULL, 4, vec, 1, &flags, &c, &r), NGHTTP3_ERR_WOULDBLOCK);
+  world_close(&c);
+}
+END_TEST
+
+START_TEST(handed_out_bytes_stay_retained_until_acked) {
+  const push_kind_t *k = &kinds[_i];
+  static const uint8_t first[] = "abcd";
+  static const uint8_t second[] = "efghij";
+  h3_conn_t c;
+  h3_req_t r;
+  nghttp3_vec vec[1];
+  uint32_t flags = 0;
+
+  world_open(&c);
+  make_req(&r, 4);
+  k->set_sub(&r, 2);
+  k->feed(2, first, sizeof first - 1);
+  ck_assert_int_eq((int)k->read_cb(NULL, 4, vec, 1, &flags, &c, &r), 1);
+  ck_assert_uint_eq(k->retained(2), 4u);
+  k->feed(2, second, sizeof second - 1);
+  ck_assert_mem_eq(vec[0].base, first, sizeof first - 1);
+  ck_assert_int_eq((int)k->read_cb(NULL, 4, vec, 1, &flags, &c, &r), 1);
+  ck_assert_uint_eq(vec[0].len, sizeof second - 1);
+  ck_assert_mem_eq(vec[0].base, second, sizeof second - 1);
+  ck_assert_uint_eq(k->retained(2), 10u);
+  k->acked(&r, 4);
+  ck_assert_uint_eq(k->retained(2), 6u);
+  k->acked(&r, 6);
+  ck_assert_uint_eq(k->retained(2), 0u);
   world_close(&c);
 }
 END_TEST
@@ -364,6 +412,7 @@ static Suite *push_suite(void) {
   tcase_add_loop_test(tc, read_callback_ends_the_stream_without_a_request_or_subscription, 0, KIND_COUNT);
   tcase_add_loop_test(tc, read_callback_blocks_on_an_empty_ring, 0, KIND_COUNT);
   tcase_add_loop_test(tc, read_callback_hands_out_ring_bytes_and_consumes_them, 0, KIND_COUNT);
+  tcase_add_loop_test(tc, handed_out_bytes_stay_retained_until_acked, 0, KIND_COUNT);
   tcase_add_loop_test(tc, read_callback_ends_after_an_overflowed_ring_where_supported, 0, KIND_COUNT);
   tcase_add_test(tc, finalized_dash_segments_end_the_stream_once_drained);
   tcase_add_loop_test(tc, dispatch_binds_the_subscription_to_stream_and_thread, 0, KIND_COUNT);

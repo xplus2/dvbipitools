@@ -86,27 +86,6 @@ const char *strip_scheme_at(const char *uri) {
   return p;
 }
 
-static const char *const path_seg_unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-static const char path_seg_hex[] = "0123456789ABCDEF";
-
-/* RFC3986 percent-encode for one URI path segment, e.g. a -n name with spaces */
-static void pct_encode_seg(const char *s, char *out, size_t outcap) {
-  size_t oi = 0;
-  for (; *s && oi + 1 < outcap; s++) {
-    if (strchr(path_seg_unreserved, *s)) {
-      out[oi++] = *s;
-    } else {
-      unsigned char c = (unsigned char)*s;
-      if (oi + 4 > outcap) break;
-      out[oi] = '%';
-      out[oi + 1] = path_seg_hex[c >> 4];
-      out[oi + 2] = path_seg_hex[c & 0xF];
-      oi += 3;
-    }
-  }
-  out[oi] = '\0';
-}
-
 static void build_simple_path(sbuf_t *b, const char *name, const char *fallback, char *name_enc, size_t name_enc_sz, const char *fmt) {
   if (name) {
     pct_encode_seg(name, name_enc, name_enc_sz);

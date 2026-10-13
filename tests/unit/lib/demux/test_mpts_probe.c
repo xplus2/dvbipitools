@@ -98,7 +98,7 @@ START_TEST(mpts_probe_classifies_spts) {
   slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
   send_section(sock, &dst, 0x0000, sec, slen);
 
-  r = mpts_probe_run(src, 200);
+  r = mpts_probe_run(src, 2000, 200);
   ck_assert_int_eq(r.kind, MPTS_PROBE_SPTS);
   ck_assert_int_eq(r.program_count, 1);
 
@@ -137,7 +137,7 @@ START_TEST(mpts_probe_classifies_mpts_with_names) {
   slen = psi_build_sdt(0, 0x1234, 5, 102, 0x01, "P", "Two", sec, sizeof sec);
   send_section(sock, &dst, 0x0011, sec, slen);
 
-  r = mpts_probe_run(src, 500);
+  r = mpts_probe_run(src, 2000, 500);
   ck_assert_int_eq(r.kind, MPTS_PROBE_MPTS);
   ck_assert_int_eq(r.program_count, 2);
   for (k = 0; k < 2; k++) {
@@ -181,11 +181,54 @@ START_TEST(mpts_probe_straggler_falls_back_to_empty_name) {
   send_section(sock, &dst, 0x0200, sec, slen);
   /* no SDT ever sent: both PMTs resolve, names stay "" past the short budget */
 
-  r = mpts_probe_run(src, 200);
+  r = mpts_probe_run(src, 2000, 200);
   ck_assert_int_eq(r.kind, MPTS_PROBE_MPTS);
   ck_assert_int_eq(r.program_count, 2);
   ck_assert_str_eq(r.programs[0].name, "");
   ck_assert_str_eq(r.programs[1].name, "");
+
+  close(sock);
+  tssrc_close(src);
+}
+END_TEST
+
+START_TEST(mpts_probe_times_out_without_pat) {
+  tssrc_t *src = open_recv(run_helper_group_n(4), run_helper_port(4));
+  mpts_probe_result_t r;
+
+  ck_assert_ptr_nonnull(src);
+  r = mpts_probe_run(src, 300, 200);
+  ck_assert_int_eq(r.kind, MPTS_PROBE_FAIL);
+
+  tssrc_close(src);
+}
+END_TEST
+
+START_TEST(mpts_probe_rewind_replays_consumed_head) {
+  tssrc_t *src = open_recv(run_helper_group_n(5), run_helper_port(5));
+  struct sockaddr_in dst;
+  int sock = open_sender(run_helper_group_n(5), run_helper_port(5), &dst);
+  unsigned char sec[256], buf[188 * 4];
+  size_t slen;
+  ssize_t n;
+  mpts_probe_result_t r;
+
+  ck_assert_ptr_nonnull(src);
+  ck_assert_int_ge(sock, 0);
+
+  slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
+  send_section(sock, &dst, 0x0000, sec, slen);
+
+  r = mpts_probe_run(src, 2000, 200);
+  ck_assert_int_eq(r.kind, MPTS_PROBE_SPTS);
+  ck_assert_int_eq(tssrc_rewind(src), 1);
+  ck_assert_int_eq(tssrc_replay_pending(src), 1);
+
+  n = tssrc_read(src, buf, sizeof buf, NULL);
+  ck_assert_int_eq(n, 188);
+  ck_assert_int_eq(buf[0], 0x47);
+  ck_assert_int_eq(buf[2], 0x00); /* PAT pid */
+  ck_assert_int_eq(tssrc_replay_pending(src), 0);
 
   close(sock);
   tssrc_close(src);
@@ -199,6 +242,8 @@ static Suite *mpts_probe_suite(void) {
   tcase_add_test(tc, mpts_probe_classifies_spts);
   tcase_add_test(tc, mpts_probe_classifies_mpts_with_names);
   tcase_add_test(tc, mpts_probe_straggler_falls_back_to_empty_name);
+  tcase_add_test(tc, mpts_probe_times_out_without_pat);
+  tcase_add_test(tc, mpts_probe_rewind_replays_consumed_head);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -76,11 +76,9 @@ START_TEST(already_seen_stops_recording_past_the_cap) {
 }
 END_TEST
 
-#define DOC_CAP 8192
-
 typedef struct {
   dvbstp_sender_t sd;
-  unsigned char buf[2][DOC_CAP];
+  unsigned char *buf[2];
 } sds_sender_t;
 
 static void build_docs(sds_sender_t *sd) {
@@ -99,8 +97,8 @@ static void build_docs(sds_sender_t *sd) {
   snprintf(svc[1].name, sizeof svc[1].name, "Svc B");
   snprintf(svc[1].address, sizeof svc[1].address, "239.1.1.2");
   svc[1].sid = 102;
-  sd->sd.lens[0] = sds_build_broadcast("example.org", 1, svc, 2, NULL, NULL, NULL, sd->buf[0], DOC_CAP);
-  sd->sd.lens[1] = sds_build_broadcast("example.org", 2, svc, 1, NULL, NULL, NULL, sd->buf[1], DOC_CAP);
+  sd->sd.lens[0] = sds_build_broadcast("example.org", 1, svc, 2, NULL, NULL, NULL, &sd->buf[0]);
+  sd->sd.lens[1] = sds_build_broadcast("example.org", 2, svc, 1, NULL, NULL, NULL, &sd->buf[1]);
   sd->sd.docs[0] = sd->buf[0];
   sd->sd.docs[1] = sd->buf[1];
   ck_assert_uint_gt(sd->sd.lens[0], 0u);
@@ -127,6 +125,34 @@ static char *slurp_text(const char *path) {
   return buf;
 }
 
+static void *provider_sender_thread(void *arg) {
+  const dvbstp_sender_t *sd = arg;
+  mcast_t *m;
+
+  sleep_ms(DVBSTP_SENDER_START_MS);
+  m = mcast_open_send(AF_INET, sd->group, sd->port, NULL, 0);
+  if (m) {
+    for (unsigned pass = 0; pass < DVBSTP_SENDER_PASSES; pass++)
+      for (unsigned i = 0; i < sd->nsteps; i++) {
+        const send_step_t *st = &sd->steps[i];
+        dvbstp_send_t seg = {.payload_id = st->payload_id,
+                             .segment_id = 1,
+                             .segment_version = st->version,
+                             .compr = st->compr,
+                             .has_provider_id = 1,
+                             .provider_id = 7 + i,
+                             .want_crc = 1};
+
+        dvbstp_send_segment(m, &seg, sd->docs[st->doc], sd->lens[st->doc]);
+        sleep_ms(DVBSTP_SENDER_GAP_MS);
+      }
+    mcast_close(m);
+  }
+  sleep_ms(DVBSTP_SENDER_TAIL_MS);
+  kill(getpid(), SIGTERM);
+  return NULL;
+}
+
 typedef struct {
   const send_step_t *steps;
   unsigned nsteps;
@@ -150,11 +176,17 @@ static const send_step_t steps_two_versions[] = {
   {DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, 2, 1, 0},
 };
 
+static const send_step_t steps_two_providers[] = {
+  {DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, 1, 0, 0},
+  {DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, 2, 1, 0},
+};
+
 static const listen_case_t listen_cases[] = {
   {steps_one, 1, OUT_CSV, 0, 1, 2, "found 2 services in 1 segment", "Svc B,rtp://@239.1.1.2:5000,1,2,102"},
   {steps_one, 1, OUT_CSV, 1, 1, 2, "segment 1: 2 services", "Svc A,rtp://@239.1.1.1:5000,1,2,101"},
   {steps_other_and_dup, 4, OUT_CSV, 0, 1, 2, "found 2 services in 1 segment", "Svc A"},
   {steps_two_versions, 2, OUT_CSV, 0, 1, 1, "found 1 service in 1 segment", "Svc A"},
+  {steps_two_providers, 2, OUT_CSV, 0, 2, 3, "found 3 services in 2 segments", "Svc A"},
   {steps_one, 1, OUT_XML, 0, 1, 2, "found 2 services in 1 segment", "<BroadcastDiscovery"},
 };
 
@@ -192,7 +224,7 @@ START_TEST(listen_run_collects_broadcast_discovery_in_every_format) {
   cfg.verbose = c->verbose;
   signals_install();
   log_capture_begin();
-  ck_assert_int_eq(pthread_create(&th, NULL, dvbstp_sender_thread, &sd->sd), 0);
+  ck_assert_int_eq(pthread_create(&th, NULL, c->steps == steps_two_providers ? provider_sender_thread : dvbstp_sender_thread, &sd->sd), 0);
   rc = listen_run(&cfg);
   pthread_join(th, NULL);
   log_capture_end(msg, sizeof msg);
@@ -208,6 +240,8 @@ START_TEST(listen_run_collects_broadcast_discovery_in_every_format) {
   snprintf(want, sizeof want, "in %u segment", c->segments);
   ck_assert_ptr_nonnull(strstr(msg, want));
   free(out);
+  free(sd->buf[0]);
+  free(sd->buf[1]);
   free(sd);
   unlink(out_path);
 }

@@ -273,7 +273,7 @@ START_TEST(ac3_stsd_has_dac3_with_bsi_fields) {
 END_TEST
 
 START_TEST(eac3_stsd_has_dec3_with_bsi_fields) {
-  fmp4_mux_t *m = make_ac3_mux(CODEC_EAC3, 16, 0, 2, 1, 192);
+  fmp4_mux_t *m = make_ac3_mux(CODEC_EAC3, 16, 3, 2, 1, 192);
   unsigned char *out;
   const unsigned char *stsd, *entry, *dec3;
   size_t len, stsd_len, entry_len, dec3_len;
@@ -287,9 +287,9 @@ START_TEST(eac3_stsd_has_dec3_with_bsi_fields) {
   ck_assert_uint_eq(rd16(dec3) >> 3, 192);      /* data_rate */
   ck_assert_uint_eq(dec3[2] >> 6, 0);           /* fscod: 48000 -> 0 */
   ck_assert_uint_eq((dec3[2] >> 1) & 0x1F, 16); /* bsid */
-  ck_assert_uint_eq(dec3[3] >> 5, 0);           /* bsmod */
-  ck_assert_uint_eq((dec3[3] >> 2) & 7, 2);     /* acmod */
-  ck_assert_uint_eq((dec3[3] >> 1) & 1, 1);     /* lfeon */
+  ck_assert_uint_eq((dec3[3] >> 4) & 7, 3);     /* bsmod */
+  ck_assert_uint_eq((dec3[3] >> 1) & 7, 2);     /* acmod */
+  ck_assert_uint_eq(dec3[3] & 1, 1);            /* lfeon */
 
   fmp4_mux_free(m);
 }

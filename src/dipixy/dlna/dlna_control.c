@@ -46,12 +46,11 @@ static int handle_browse(const config_t *cfg, const channels_t *channels, const 
 }
 
 void dlna_source_protocol_info(const config_t *cfg, char *out, size_t outsz) {
+  size_t off = bufcpy(out, outsz, TS_PROTOCOL_INFO "," RADIO_PROTOCOL_INFO);
   if (cfg->dlna_keep_multicast) {
-    size_t off = bufcpy(out, outsz, TS_PROTOCOL_INFO ",");
-    off += bufcpy(out + off, outsz - off, MCAST_IGMP_PROTOCOL_INFO ",");
+    off += bufcpy(out + off, outsz - off, "," MCAST_IGMP_PROTOCOL_INFO ",");
     bufcpy(out + off, outsz - off, MCAST_MLD_PROTOCOL_INFO);
-  } else
-    bufcpy(out, outsz, TS_PROTOCOL_INFO);
+  }
 }
 
 int dlna_handle_control(const config_t *cfg, const channels_t *channels, const char *service, const char *action, const char *body, size_t body_len, char **out, size_t *out_len) {

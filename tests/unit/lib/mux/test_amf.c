@@ -47,6 +47,29 @@ START_TEST(amf_skip_value_object_with_nested_values) {
 }
 END_TEST
 
+static int skips_nested_objects(unsigned depth) {
+  ebuf_t b = {0};
+  const unsigned char *r;
+
+  for (unsigned i = 0; i < depth; i++) {
+    amf_object_start(&b);
+    amf_object_key(&b, "k");
+  }
+  amf_null(&b);
+  for (unsigned i = 0; i < depth; i++) amf_object_end(&b);
+  r = amf_skip_value(b.p, b.p + b.len);
+  ck_assert(r == NULL || r == b.p + b.len);
+  ebuf_free(&b);
+  return r != NULL;
+}
+
+START_TEST(amf_skip_value_nesting_is_bounded) {
+  ck_assert(skips_nested_objects(16));
+  ck_assert(!skips_nested_objects(100));
+  ck_assert(!skips_nested_objects(100000));
+}
+END_TEST
+
 START_TEST(amf_skip_value_ecma_array) {
   ebuf_t b = {0};
   amf_ecma_array_start(&b, 2);
@@ -104,6 +127,7 @@ static Suite *amf_suite(void) {
   tcase_add_test(tc, amf_skip_value_ecma_array);
   tcase_add_test(tc, amf_skip_value_truncated_object_at_every_length);
   tcase_add_test(tc, amf_skip_value_truncated_ecma_array_at_every_length);
+  tcase_add_test(tc, amf_skip_value_nesting_is_bounded);
   tcase_add_test(tc, amf_skip_value_object_without_terminator_marker);
   tcase_add_test(tc, amf_skip_value_object_with_unknown_member_type);
   suite_add_tcase(s, tc);

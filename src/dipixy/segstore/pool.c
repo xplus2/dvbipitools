@@ -33,24 +33,31 @@ void hls_set_seg_pool_cap(int n) {
   for (int i = 0; i < SEG_POOL_CLASSES; i++) seg_pool[i].slots = calloc((size_t)n, sizeof *seg_pool[i].slots);
 }
 
-int seg_pool_class_for(size_t size) {
+/* -1: larger than biggest class, malloc'd unpooled */
+static int seg_pool_class_for(size_t size) {
   size_t cap = 4096;
   int cls = 0;
-  while (cap < size && cls < SEG_POOL_CLASSES - 1) {
+  while (cap < size) {
+    if (cls == SEG_POOL_CLASSES - 1) return -1;
     cap <<= 1;
     cls++;
   }
   return cls;
 }
 
-size_t seg_pool_class_cap(int cls) { return (size_t)4096 << cls; }
+static size_t seg_pool_class_cap(int cls) { return (size_t)4096 << cls; }
+
+size_t seg_buf_cap(size_t size) {
+  int cls = seg_pool_class_for(size);
+  return cls < 0 ? size : seg_pool_class_cap(cls);
+}
 
 uint8_t *seg_buf_alloc(size_t size) {
   int cls = seg_pool_class_for(size);
-  seg_pool_class_t *c = &seg_pool[cls];
+  seg_pool_class_t *c = cls < 0 ? NULL : &seg_pool[cls];
   seg_buf_hdr_t *h = NULL;
 
-  if (c->slots) {
+  if (c && c->slots) {
     for (int i = 0; i < g_seg_pool_cap; i++) {
       seg_buf_hdr_t *expected = atomic_load_explicit(&c->slots[i], memory_order_relaxed);
       if (!expected) continue;
@@ -63,7 +70,7 @@ uint8_t *seg_buf_alloc(size_t size) {
   if (h)
     atomic_store_explicit(&c->last_used_ms, now_ms(), memory_order_relaxed);
   else {
-    h = malloc(sizeof(*h) + seg_pool_class_cap(cls));
+    h = malloc(sizeof(*h) + seg_buf_cap(size));
     if (!h) return NULL;
     h->pool_class = cls;
   }
@@ -84,6 +91,10 @@ void seg_buf_unref(uint8_t *data) {
   if (!data) return;
   h = (seg_buf_hdr_t *)data - 1;
   if (atomic_fetch_sub_explicit(&h->refcnt, 1, memory_order_acq_rel) != 1) return;
+  if (h->pool_class < 0) {
+    free(h);
+    return;
+  }
   c = &seg_pool[h->pool_class];
   if (c->slots) {
     for (int i = 0; i < g_seg_pool_cap; i++) {

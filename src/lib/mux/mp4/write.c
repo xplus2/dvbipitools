@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -105,8 +106,39 @@ void p4_route(mp4_t *m, track_t *t, int64_t ts_ms, int32_t cts, const unsigned c
   }
 }
 
+void p4_track_free(track_t *t) {
+  free(t->rem);
+  free(t->vbuf);
+  free(t->lcevc_rb);
+  free(t->lcevc_esc);
+  free(t->av1_rb);
+  free(t->samp);
+  ttx_free(t->ttx);
+}
+
+/* forced start: tracks without parsed header cannot be described, leave them out */
+static void drop_unready(mp4_t *m) {
+  int map[MP4_MAX_TRACKS];
+  int n = 0;
+  for (int i = 0; i < m->ntrk; i++) {
+    map[i] = -1;
+    if (!m->trk[i].hdr_parsed) {
+      p4_track_free(&m->trk[i]);
+      continue;
+    }
+    if (n != i) m->trk[n] = m->trk[i];
+    m->trk[n].track_id = (unsigned)(n + 1);
+    map[i] = n++;
+  }
+  for (int i = 0; i < m->npend; i++) m->pend[i].trk = map[m->pend[i].trk];
+  m->ntrk = n;
+  m->last_trk_idx = -1;
+}
+
 void p4_start(mp4_t *m) {
   if (m->started || !m->ntrk) return;
+  drop_unready(m);
+  if (!m->ntrk) return;
   m->t0 = 0;
   if (m->npend) {
     int vtrk = -1;

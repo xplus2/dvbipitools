@@ -81,16 +81,21 @@ int bitwriter_put_bytes(bitwriter_t *bw, const unsigned char *data, size_t len) 
   return 0;
 }
 
-void bitwriter_flush(bitwriter_t *bw) {
+int bitwriter_flush(bitwriter_t *bw) {
   if (bw->cur_bits > 0) {
-    push_byte(bw, (unsigned char)bw->cur);
+    if (push_byte(bw, (unsigned char)bw->cur))
+      return -1;
     bw->cur = 0;
     bw->cur_bits = 0;
   }
+  return 0;
 }
 
 const unsigned char *bitwriter_data(bitwriter_t *bw, size_t *out_len) {
-  bitwriter_flush(bw);
+  if (bitwriter_flush(bw)) {
+    *out_len = 0;
+    return NULL;
+  }
   *out_len = bw->len;
   return bw->buf;
 }

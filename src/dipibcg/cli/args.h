@@ -13,6 +13,7 @@ typedef struct {
   int have_l;
   int have_mcast;
   int have_t;
+  int t_opt; /* 0 = -t, else OPT_INTERVAL / OPT_TIMEOUT */
   long t_value;
 } args_flags_t;
 
@@ -28,6 +29,7 @@ typedef struct {
   const char *iface;        /* -I; NULL = kernel default route */
   int dscp;                 /* --dscp, announce only, default NET_DSCP_SIGNALLING */
   long interval_s;          /* -t, announce: repeat interval, default 5 */
+  long refresh_cycles;      /* --refresh, announce: unchanged segments sent every Nth cycle, default 1 */
   long timeout_s;           /* -t, listen: default 35 (> 30s max cycle time) */
   const char *output_path;  /* -o, listen; NULL = stdout */
   const char *csvmap_path;  /* -C, listen: optional companion mapping csv */

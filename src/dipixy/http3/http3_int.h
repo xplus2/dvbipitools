@@ -8,6 +8,7 @@
 
 #ifdef HAVE_HTTP3
 
+#include <stdatomic.h>
 #include <nghttp3/nghttp3.h>
 #include <ngtcp2/ngtcp2.h>
 #include <ngtcp2/ngtcp2_crypto.h>
@@ -31,6 +32,7 @@
 #include "../dash/lldash.h"
 #include "../segment/mp4push.h"
 #include "../reactor/internal.h"
+#include "../httpng/httpng.h"
 #include "../ws/ws_frame.h"
 #include "http3_stateless.h"
 #include "http3_udp.h"
@@ -43,6 +45,8 @@
 /* TS-push holds its slot for the stream's life, unlike HLS/DASH GETs.
    reserved so it can't starve WS out of every slot on this connection */
 #define H3_WS_RESERVE 2
+/* unacked WS bytes per stream before flush pauses and data stays queued */
+#define H3_WS_UNACKED_MAX (1u << 20)
 #define H3_PKT_MAX 1452
 #define H3_DEFAULT_IDLE_S 30
 #define H3_PATH_MAX 8192
@@ -59,20 +63,38 @@ extern ngtcp2_cc_algo g_h3_cc;
 extern uint16_t g_h3_probes[2];
 extern size_t g_h3_nprobes;
 extern uint32_t g_h3_hash_cap;
-extern SSL_CTX *g_h3_ssl_ctx;
+extern _Atomic(SSL_CTX *) g_h3_ssl_ctx; /* swapped wholesale by h3_reload() */
+
+typedef struct h3_ws_buf {
+  struct h3_ws_buf *next;
+  uint8_t *base; /* malloc'd block */
+  uint8_t *data; /* first unacked byte */
+  size_t len;    /* unacked bytes */
+} h3_ws_buf_t;
 
 typedef struct h3_req {
   int active;
   int64_t stream_id;
   char method[16];
   char *path;             /* H3_PATH_MAX bytes, owned while active */
-  char inm[80];           /* if-none-match header value, empty if absent */
+  char inm[256];           /* if-none-match header value, empty if absent */
   char origin[128];       /* origin header value, empty if absent */
   char protocol[16];      /* :protocol pseudo-header, RFC9220 extended CONNECT */
   char authz[200];        /* authorization header value, empty if absent */
+  char host[128];         /* :authority or host value, empty if absent */
+  char soapaction[HTTPNG_SOAPACTION_MAX];
+  char sid[HTTPNG_SID_MAX];
+  char callback[HTTPNG_CALLBACK_MAX];
+  char nt[HTTPNG_NT_MAX];
+  char timeout[HTTPNG_TIMEOUT_MAX];
+  uint8_t *body;          /* POST only, NUL-terminated, HTTPNG_BODY_MAX cap */
+  size_t body_len;
+  int body_wait;          /* POST: dispatch deferred to end of stream */
+  int body_over;          /* body exceeded cap */
   int dispatch_pending;
   int dispatched;         /* blocks second dispatch_req() call for this stream */
   uint8_t *resp_data;
+  uint8_t *resp_owner;
   size_t resp_len;
   size_t resp_off;
   int resp_zc;
@@ -84,9 +106,13 @@ typedef struct h3_req {
   uint8_t *ws_pending;    /* not yet handed to nghttp3 */
   size_t ws_pending_len, ws_pending_cap;
   int ws_inflight;
-  uint8_t *ws_send_data; /* currently being read by nghttp3, zero-copy */
+  int ws_dead;  /* under ws_lock: overflow or protocol error, stream reset by reactor */
+  int ws_reset; /* stream shutdown issued */
+  uint8_t *ws_send_data; /* currently being read by nghttp3, zero-copy. owned by ws_unacked tail */
   size_t ws_send_len, ws_send_off;
-  uint8_t *ws_prev_data; /* last fully-sent buffer, kept one cycle vs in-flight retransmit */
+  struct h3_ws_buf *ws_unacked; /* handed to nghttp3, freed once acked: it re-reads them for retransmits */
+  struct h3_ws_buf *ws_unacked_tail;
+  size_t ws_unacked_bytes;
   pthread_mutex_t ws_lock; /* zero-init valid: default glibc mutex */
 } h3_req_t;
 
@@ -123,7 +149,7 @@ typedef struct h3_conn {
 /* t_h3_active[]: dense, no holes, iterate for "all connections" (h3_tick, idle sweeps, ts_push_h3_flush).
    t_h3_hash[]: open-addressing lookup by raw CID bytes, 1 entry per issued CID + ODCID. */
 typedef struct {
-  h3_conn_t *c; /* NULL empty, H3_HASH_TOMB deleted */
+  h3_conn_t *c; /* NULL empty */
   ngtcp2_cid cid;
 } h3_hent_t;
 
@@ -169,8 +195,9 @@ static inline h3_req_t *alloc_req(h3_conn_t *c, int64_t sid) {
 }
 
 static inline void release_req(h3_req_t *r) {
-  hls_resp_body_release(r->resp_data, r->resp_zc);
+  hls_resp_body_release(r->resp_data, r->resp_owner, r->resp_zc);
   r->resp_data = NULL;
+  r->resp_owner = NULL;
   if (r->tspush_sub_idx >= 0) {
     ts_push_unsubscribe_by_idx(r->tspush_sub_idx);
     r->tspush_sub_idx = -1;
@@ -185,10 +212,17 @@ static inline void release_req(h3_req_t *r) {
   }
   free(r->ws_pending);
   r->ws_pending = NULL;
-  free(r->ws_send_data);
+  while (r->ws_unacked) {
+    h3_ws_buf_t *b = r->ws_unacked;
+    r->ws_unacked = b->next;
+    free(b->base);
+    free(b);
+  }
+  r->ws_unacked_tail = NULL;
+  r->ws_unacked_bytes = 0;
   r->ws_send_data = NULL;
-  free(r->ws_prev_data);
-  r->ws_prev_data = NULL;
+  free(r->body);
+  r->body = NULL;
   free(r->path);
   r->path = NULL;
   r->active = 0;
@@ -216,6 +250,7 @@ int cb_remove_connection_id(ngtcp2_conn *qconn, const ngtcp2_cid *cid, void *ud)
 int cb_path_validation(ngtcp2_conn *qconn, uint32_t flags, const ngtcp2_path *path, const ngtcp2_path *fallback, ngtcp2_path_validation_result res, void *ud);
 int cb_recv_stream_data(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id, uint64_t offset, const uint8_t *data, size_t datalen, void *ud, void *stream_ud);
 int cb_acked_stream_data_offset(ngtcp2_conn *qconn, int64_t stream_id, uint64_t offset, uint64_t datalen, void *ud, void *stream_ud);
+int cb_extend_max_stream_data(ngtcp2_conn *qconn, int64_t stream_id, uint64_t max_data, void *ud, void *stream_ud);
 int cb_stream_open(ngtcp2_conn *qconn, int64_t stream_id, void *ud);
 int cb_stream_close(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id, uint64_t app_err, void *ud, void *stream_ud);
 
@@ -228,25 +263,39 @@ static inline void h3_push_resume(h3_conn_t *c, int64_t sid) {
 
 /* from http3_req.c */
 void dispatch_req(h3_conn_t *c, h3_req_t *r);
+void h3_client_ip(const h3_conn_t *c, char *buf, size_t bufsz);
 int cb_handshake_completed(ngtcp2_conn *qconn, void *ud);
 
 /* from http3_resp.c */
 void h3_respond_status(h3_conn_t *c, int64_t sid, const char *status);
 void h3_respond_401(h3_conn_t *c, int64_t sid);
-void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, int zc, const char *origin_hdr);
+void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, uint8_t *owner, int zc, const char *origin_hdr);
+void h3_submit_resp_ex(h3_conn_t *c, h3_req_t *r, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, uint8_t *owner, int zc, const char *origin_hdr,
+                       const httpng_hdr_t *extra, size_t nextra);
 void h3_respond_hls(h3_conn_t *c, h3_req_t *r, int handled, const hls_resp_t *resp);
 
 /* from http3_tspush.c */
 nghttp3_ssize h3_tspush_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud);
-int h3_tspush_dispatch(h3_conn_t *c, h3_req_t *r, int sub);
+int h3_tspush_dispatch(h3_conn_t *c, h3_req_t *r, int sub, int rawaudio);
+void h3_tspush_acked(const h3_req_t *r, size_t n);
+
+/* http3_tspush.c: TS/SPTS/rawaudio parked until 1st pkg */
+int h3_ts_cold_try_park(h3_conn_t *conn, int64_t stream_id, const ts_cold_park_req_t *req);
+void h3_ts_cold_on_stream_close(const h3_conn_t *c, int64_t stream_id);
+void h3_ts_cold_on_conn_close(const h3_conn_t *c);
+int h3_open_try_park(h3_conn_t *conn, int64_t stream_id, capture_open_job_t *job);
+void h3_open_on_stream_close(const h3_conn_t *c, int64_t stream_id);
+void h3_open_on_conn_close(const h3_conn_t *c);
 
 /* from http3_dashchunk.c */
 nghttp3_ssize h3_dashchunk_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud);
 int h3_dashchunk_dispatch(h3_conn_t *c, h3_req_t *r, int sub, int ws_handle);
+void h3_dashchunk_acked(const h3_req_t *r, size_t n);
 
 /* from http3_mp4push.c */
 nghttp3_ssize h3_mp4push_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud);
 int h3_mp4push_dispatch(h3_conn_t *c, h3_req_t *r, int sub, int ws_handle);
+void h3_mp4push_acked(const h3_req_t *r, size_t n);
 
 /* from http3_llhls.c */
 int h3_llhls_try_park(h3_conn_t *conn, int64_t stream_id, const llhls_park_req_t *req);
@@ -265,7 +314,8 @@ void h3_ws_dispatch(h3_conn_t *c, h3_req_t *r);
 void h3_ws_flush(void);
 void h3_ws_on_stream_close(h3_conn_t *c, int64_t stream_id);
 void h3_ws_on_conn_close(h3_conn_t *c);
-void h3_ws_data_chunk(h3_req_t *r, const uint8_t *data, size_t len);
+void h3_ws_data_chunk(h3_conn_t *c, h3_req_t *r, const uint8_t *data, size_t len);
+void h3_ws_acked(h3_req_t *r, size_t n);
 
 #endif /* HAVE_HTTP3 */
 #endif /* DIPIXY_HTTP3_INT_H */

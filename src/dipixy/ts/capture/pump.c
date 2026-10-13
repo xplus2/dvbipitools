@@ -11,6 +11,7 @@
 #include <time.h>
 
 #define CAPTURE_TSSRC_DRAIN_BUDGET_MS 5
+#define CAPTURE_MCAST_DRAIN_BUDGET_MS 5
 
 static const capture_snapshot_t *g_pump_last_snap[CAPTURE_PUMP_MAX_THREADS];
 static int g_pump_resume_idx[CAPTURE_PUMP_MAX_THREADS];
@@ -61,6 +62,14 @@ void capture_wait_pumps_quiescent(void) {
     }
     qsbr_backoff(spins++);
   }
+}
+
+void capture_pump_mark(uint64_t *mark) {
+  qsbr_mark(g_pump_qsbr, mark);
+}
+
+int capture_pump_mark_passed(const uint64_t *mark) {
+  return qsbr_mark_passed_excl(g_pump_qsbr, mark, t_pump_tid);
 }
 
 #define QSBR_DEFERRED_MAX 64
@@ -161,12 +170,15 @@ int capture_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned ch
   if (g_insp_agg && !ctx->insp) ctx->insp = tsinspect_agg_add(g_insp_agg);
   if (ctx->insp) tsinspect_tick(ctx->insp, mono_seconds());
   if (ctx->backend == CAP_BACKEND_TSSRC) return tssrc_drain(ctx, sink, user);
+  int64_t deadline = monotonic_ms() + CAPTURE_MCAST_DRAIN_BUDGET_MS;
   for (;;) {
     unsigned char buf[CAPTURE_RECV_BUF];
     const unsigned char *payload;
     size_t len;
     ssize_t n;
     int unwrapped;
+    /* flooded group must not starve shard peers */
+    if (monotonic_ms() >= deadline) return 0;
     n = capture_read_dispatch(ctx, buf, sizeof buf, &unwrapped);
     if (n < 0) return -1;
     if (n == 0) return 0;
@@ -205,9 +217,9 @@ static void pump_trampoline(void *user, const unsigned char *pkt) {
 #define CAPTURE_PUMP_SNAPSHOT_MAX 4096
 
 static void pump_release_pin(capture_ctx_t *c) {
-  if (atomic_fetch_sub_explicit(&c->refcount, 1, memory_order_acq_rel) != 1) return;
-  unlink_ctx(c);
-  free_ctx_resources(c);
+  if (!unref_unlink_ctx(c)) return;
+  if (retire_ctx(c)) return;
+  free_ctx_resources(c); /* lifecycle down: inline, cannot wait on own quiescence */
 }
 
 int capture_pump_tick(int pid, void (*sink)(capture_ctx_t *ctx, void *user, const unsigned char *pkt), void *user) {

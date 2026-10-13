@@ -6,6 +6,7 @@
 
 #include "bimreader.h"
 #include "bitwriter.h"
+#include "codec.h"
 #include "lib/tva/bcg_doc.h"
 #include "strrepo.h"
 
@@ -19,16 +20,22 @@
    1:1 with one bcg_doc_t record. 0 ok, -1 oom. */
 
 int fragment_encode_program_information(const bcg_programme_t *pr, bitwriter_t *bw, strrepo_writer_t *sw);
-/* crid_out: fragment's own programId, not carried in bcg_programme_t */
+/* crid_out: fragment's own programId, not carried in bcg_programme_t. on success caller frees pr_out text (bcg_programme_free_text) */
 int fragment_decode_program_information(bitreader_t *br, strrepo_reader_t *sr, char *crid_out, size_t crid_cap, bcg_programme_t *pr_out);
 
-int fragment_encode_schedule(const char *channel_id, const bcg_programme_t *programmes, int count, bitwriter_t *bw, strrepo_writer_t *sw);
-/* called per ScheduleEvent with its Program/@crid to fill title/desc/category. return 0 filled, -1 not found (left empty) */
+/* chain: first index (-1 none), next[j] follows j (-1 ends) */
+int fragment_encode_schedule(const char *channel_id, const bcg_programme_t *programmes, int first, const int *next, bitwriter_t *bw, strrepo_writer_t *sw);
+/* called per ScheduleEvent with its Program/@crid to fill title/desc/category. return 0 filled, -1 not found (left empty), -2 OOM (aborts decode) */
 typedef int (*fragment_text_lookup_fn)(void *ctx, const char *crid, bcg_programme_t *pr);
 /* appends one bcg_programme_t per ScheduleEvent, text fields filled via lookup */
 int fragment_decode_schedule(bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, fragment_text_lookup_fn lookup, void *ctx);
 
 int fragment_encode_service_information(const bcg_channel_t *c, bitwriter_t *bw, strrepo_writer_t *sw);
 int fragment_decode_service_information(bitreader_t *br, strrepo_reader_t *sr, bcg_channel_t *c_out);
+
+/* TS 102 822-3-1 urn:tva:metadata:2004 fragment root types */
+extern const bim_type_t *const tva_type_program_information;
+extern const bim_type_t *const tva_type_schedule;
+extern const bim_type_t *const tva_type_service_information;
 
 #endif

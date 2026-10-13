@@ -36,8 +36,10 @@ h3:
 #max-clients: 256
 # --max-channels 32
 #max-channels: 32
-# --idle-timeout 0 # seconds, 0 = off
-#idle-timeout: 0
+# --max-variants 8
+#max-variants: 8
+# --idle-timeout 60 # seconds, 0 = off
+#idle-timeout: 60
 # --capture-ring-size 4096 # KiB
 #capture-ring-size: 4096
 ts:
@@ -53,6 +55,8 @@ ts:
 #auth: 'user:password'
 # --cors-origin *
 #cors-origin: '*'
+# --ws-allowed-hosts [not set]
+#ws-allowed-hosts: 'test.internal,tv.example.com'
 
 # -i|--input [not set, repeatable]
 #input:
@@ -81,8 +85,8 @@ hls:
 dash:
   # --dash-part-size 0.333 # seconds
   part-size: 0.333
-  # --dash-utc-url http://time.akamai.com/?iso&ms
-  utc-url: http://time.akamai.com/?iso&ms
+  # --dash-utc-url <url> # empty: /time
+  utc-url: ""
 
 metrics:
   # --metrics /run/dvbipitools/metrics.sock

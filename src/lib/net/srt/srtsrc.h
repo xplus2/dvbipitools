@@ -19,6 +19,7 @@ typedef struct {
   const char *streamid;     /* NULL/"" = none */
   const char *packetfilter; /* NULL/"" = none, raw SRTO_PACKETFILTER string */
   unsigned latency_ms;       /* 0 = library default */
+  unsigned connect_timeout_ms; /* caller connect. 0 = 3000 */
   int verbose;               /* gates libsrt's own NOTICE/DEBUG logging */
   metrics_exporter_t *mx;    /* NULL = no stats push */
   const char *tool_version;  /* required if mx set */

@@ -24,6 +24,10 @@ subtitles: keep
 #al-fec: <L>:<D>
 # --al-fec-port [not set]
 #al-fec-port: <port>
+# --al-fec-out [not set]
+#al-fec-out: <L>:<D>
+# --al-fec-port-out [not set]
+#al-fec-port-out: <port>
 # --insecure off
 insecure: off
 # -v|--verbose off

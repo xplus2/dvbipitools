@@ -2,12 +2,19 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "lib/demux/tspack.h"
+#include "lib/helper/log.h"
 #include "priv.h"
 
 mp4_t *mp4_new(int fd, const mp4_opts_t *opts, int video_ok, unsigned long long *bytes, const unsigned *pmt_pids, int n_pids) {
-  mp4_t *m = calloc(1, sizeof *m);
+  mp4_t *m;
+  if (lseek(fd, 0, SEEK_CUR) < 0) { /* index is patched in place */
+    log_code("LE100125", "mp4 write: output not seekable, use a file or -f mkv/ts");
+    return NULL;
+  }
+  m = calloc(1, sizeof *m);
   if (!m) return NULL;
   m->pend_arena = malloc(MP4_PEND_BYTES);
   if (!m->pend_arena) {
@@ -72,17 +79,10 @@ void mp4_close(mp4_t *m) {
     if (t->cls == PID_VIDEO && t->prev_dur_slot) *t->prev_dur_slot = t->last_dur ? t->last_dur : 1;
   }
   if (m->started) p4_write_moov(m);
-  for (int i = 0; i < m->ntrk; i++) {
-    free(m->trk[i].rem);
-    free(m->trk[i].vbuf);
-    free(m->trk[i].lcevc_rb);
-    free(m->trk[i].lcevc_esc);
-    free(m->trk[i].av1_rb);
-    free(m->trk[i].samp);
-    ttx_free(m->trk[i].ttx);
-  }
+  for (int i = 0; i < m->ntrk; i++) p4_track_free(&m->trk[i]);
   pes_free(m->pes);
   for (int i = 0; i < m->npsi; i++) psi_free(m->psi[i]);
+  mp4buf_free(&m->ck_moov);
   free(m->pend_arena);
   free(m);
 }

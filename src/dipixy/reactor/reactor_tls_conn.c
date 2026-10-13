@@ -75,8 +75,9 @@ void tls_get_client_cert_cn(int fd, char *buf, size_t bufsz) {
 
 /* non-blocking, handshake completes lazily on first SSL_read/write */
 int tls_accept(int fd) {
-  if (!g_ssl_ctx || fd < 0 || fd >= g_tls_fd_max) return -1;
-  SSL *ssl = SSL_new(g_ssl_ctx);
+  SSL_CTX *ctx = atomic_load_explicit(&g_ssl_ctx, memory_order_acquire);
+  if (!ctx || fd < 0 || fd >= g_tls_fd_max) return -1;
+  SSL *ssl = SSL_new(ctx);
   if (!ssl) return -1;
   SSL_set_fd(ssl, fd);
   SSL_set_accept_state(ssl);

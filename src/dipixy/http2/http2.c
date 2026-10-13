@@ -21,6 +21,7 @@
 #include "../reactor/dispatch/route_common.h"
 #include "../core/route.h"
 #include "../ts/ts_push.h"
+#include "../core/metrics.h"
 #include "../httpng/httpng.h"
 
 #include <errno.h>
@@ -52,7 +53,10 @@ h2_stream_t *h2_alloc_stream(h2_conn_t *conn, int32_t id) {
 
 void h2_free_stream(h2_conn_t *conn, int32_t id) {
   for (int i = 0; i < H2_MAX_STREAMS; i++) {
-    if (conn->streams[i].id == id) conn->streams[i].id = 0;
+    if (conn->streams[i].id != id) continue;
+    free(conn->streams[i].body);
+    conn->streams[i].body = NULL;
+    conn->streams[i].id = 0;
   }
 }
 
@@ -86,15 +90,43 @@ static int cb_on_header(nghttp2_session *ng, const nghttp2_frame *frame, const u
   httpng_parse_known_header((const char *)name, namelen, (const char *)value, valuelen,
                             &(httpng_hdr_out_t){s->method, sizeof s->method, s->path, sizeof s->path,
                             s->inm, sizeof s->inm, s->origin, sizeof s->origin,
-                            s->authz, sizeof s->authz, s->protocol, sizeof s->protocol});
+                            s->authz, sizeof s->authz, s->protocol, sizeof s->protocol,
+                            s->host, sizeof s->host, s->soapaction, sizeof s->soapaction, s->sid, sizeof s->sid,
+                            s->callback, sizeof s->callback, s->nt, sizeof s->nt, s->timeout, sizeof s->timeout});
   return 0;
 }
 
+static void h2_stream_body_append(h2_stream_t *s, const uint8_t *data, size_t len) {
+  if (s->body_over) return;
+  if (s->body_len + len > HTTPNG_BODY_MAX) {
+    s->body_over = 1;
+    return;
+  }
+  if (!s->body) {
+    s->body = malloc(HTTPNG_BODY_MAX + 1);
+    if (!s->body) {
+      s->body_over = 1;
+      return;
+    }
+  }
+  memcpy(s->body + s->body_len, data, len);
+  s->body_len += len;
+  s->body[s->body_len] = '\0';
+}
+
 static int cb_data_chunk_recv(nghttp2_session *ng, uint8_t flags, int32_t stream_id, const uint8_t *data, size_t len, void *ud) {
+  h2_stream_t *s = h2_find_stream(ud, stream_id);
   (void)ng;
   (void)flags;
-  h2_ws_data_chunk(ud, stream_id, data, len);
+  if (s && s->body_wait) h2_stream_body_append(s, data, len);
+  else h2_ws_data_chunk(ud, stream_id, data, len);
   return 0;
+}
+
+static void h2_queue_dispatch(h2_conn_t *conn, h2_stream_t *s) {
+  if (s->dispatch_pending) return;
+  s->dispatch_pending = 1;
+  conn->pending[conn->pending_n++] = s;
 }
 
 static int cb_frame_recv(nghttp2_session *ng, const nghttp2_frame *frame, void *ud) {
@@ -102,10 +134,14 @@ static int cb_frame_recv(nghttp2_session *ng, const nghttp2_frame *frame, void *
   h2_conn_t *conn = ud;
   if (frame->hd.type == NGHTTP2_HEADERS && (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS)) {
     h2_stream_t *s = conn->hdr_stream;
-    if (s && s->id == frame->hd.stream_id && !s->dispatch_pending) {
-      s->dispatch_pending = 1;
-      conn->pending[conn->pending_n++] = s;
+    if (s && s->id == frame->hd.stream_id) {
+      if (!strcmp(s->method, "POST") && !(frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) s->body_wait = 1;
+      else h2_queue_dispatch(conn, s);
     }
+  }
+  if (frame->hd.type == NGHTTP2_DATA && (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+    h2_stream_t *s = h2_find_stream(conn, frame->hd.stream_id);
+    if (s && s->body_wait) h2_queue_dispatch(conn, s);
   }
   if (frame->hd.type == NGHTTP2_GOAWAY) conn->done = 1;
   return 0;
@@ -121,6 +157,8 @@ static int cb_stream_close(nghttp2_session *ng, int32_t stream_id, uint32_t erro
   h2_mp4push_on_stream_close(conn, stream_id);
   h2_llhls_on_stream_close(conn, stream_id);
   h2_hls_cold_on_stream_close(conn, stream_id);
+  h2_ts_cold_on_stream_close(conn, stream_id);
+  h2_open_on_stream_close(conn, stream_id);
   h2_ws_on_stream_close(conn, stream_id);
   return 0;
 }
@@ -148,6 +186,7 @@ static void h2_respond_status(h2_conn_t *conn, int32_t stream_id, const char *st
   if (!strcmp(status, "503")) nva[nvlen++] = (nghttp2_nv)MAKE_NV_LIT("retry-after", REACTOR_RETRY_AFTER_S);
   nvlen = h2_nv_altsvc(nva, nvlen);
   nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, NULL);
+  dipixy_metrics_note_http_error();
 }
 
 static void h2_respond_401(h2_conn_t *conn, int32_t stream_id) {
@@ -157,13 +196,14 @@ static void h2_respond_401(h2_conn_t *conn, int32_t stream_id) {
   };
   size_t nvlen = h2_nv_altsvc(nva, 2);
   nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, NULL);
+  dipixy_metrics_note_http_error();
 }
 
 static void h2_respond_hls(h2_conn_t *conn, int32_t stream_id, int handled, const hls_resp_t *resp, const char *origin_hdr) {
   if (!handled)
     h2_respond_status(conn, stream_id, "404");
   else
-    h2_submit_resp(conn, stream_id, resp->status, resp->content_type, resp->etag, resp->body_len, resp->body, resp->zc, origin_hdr);
+    h2_submit_resp(conn, stream_id, resp->status, resp->content_type, resp->etag, resp->body_len, resp->body, resp->owner, resp->zc, origin_hdr);
 }
 
 /* httpng_dispatch() opaque req: h2 per-request state spans transient stream
@@ -194,9 +234,23 @@ static int h2ops_admission_ok(void *connv) {
   return h2_conn_active_count(connv) <= H2_MAX_STREAMS - H2_WS_RESERVE;
 }
 
-static int h2ops_tspush_dispatch(void *connv, void *reqv, int sub) {
+static int h2ops_tspush_dispatch(void *connv, void *reqv, int sub, int rawaudio) {
   h2_req_ctx_t *rq = reqv;
-  return h2_tspush_dispatch(connv, rq->c, rq->stream->id, sub);
+  return h2_tspush_dispatch(connv, rq->c, rq->stream->id, sub, rawaudio);
+}
+
+static int h2ops_ts_cold_try_park(void *connv, void *reqv, const ts_cold_park_req_t *req) {
+  const h2_req_ctx_t *rq = reqv;
+  return h2_ts_cold_try_park(connv, rq->stream->id, req);
+}
+
+static int h2ops_open_try_park(void *connv, void *reqv, capture_open_job_t *job) {
+  const h2_req_ctx_t *rq = reqv;
+  return h2_open_try_park(connv, rq->stream->id, job);
+}
+
+static void h2ops_respond_content(void *connv, void *reqv, int status, const char *content_type, const httpng_hdr_t *extra, size_t nextra, uint8_t *body, size_t len, const char *origin_hdr) {
+  h2_submit_resp_ex(connv, ((h2_req_ctx_t *)reqv)->stream->id, status, content_type, NULL, len, body, NULL, 0, origin_hdr, extra, nextra);
 }
 
 static int h2ops_dashchunk_dispatch(void *connv, void *reqv, int sub, int ws_handle) {
@@ -220,7 +274,7 @@ static int h2ops_llhls_try_park(void *connv, void *reqv, const llhls_park_req_t 
 }
 
 static const httpng_ops_t h2_httpng_ops = {
-    .proto = 2,
+    .proto = CONN_PROTO_H2,
     .respond_status = h2ops_respond_status,
     .respond_401 = h2ops_respond_401,
     .respond_hls = h2ops_respond_hls,
@@ -231,11 +285,19 @@ static const httpng_ops_t h2_httpng_ops = {
     .mp4push_dispatch = h2ops_mp4push_dispatch,
     .hls_cold_try_park = h2ops_hls_cold_try_park,
     .llhls_try_park = h2ops_llhls_try_park,
+    .ts_cold_try_park = h2ops_ts_cold_try_park,
+    .open_try_park = h2ops_open_try_park,
+    .respond_content = h2ops_respond_content,
 };
 
 void h2_dispatch_stream(h2_conn_t *conn, conn_t *c, h2_stream_t *stream) {
   h2_req_ctx_t rq = {c, stream};
-  httpng_req_hdrs_t hdrs = {stream->method, stream->path, stream->inm, stream->origin, stream->authz, stream->protocol};
+  httpng_req_hdrs_t hdrs = {stream->method, stream->path, stream->inm, stream->origin, stream->authz, stream->protocol, stream->host,
+    stream->soapaction, stream->sid, stream->callback, stream->nt, stream->timeout, stream->body, stream->body_len};
+  if (stream->body_over) {
+    h2_respond_status(conn, stream->id, "400");
+    return;
+  }
   httpng_dispatch(&h2_httpng_ops, conn, &rq, &hdrs, c->client_ip, c->fd);
 }
 
@@ -301,7 +363,7 @@ void h2_handle_readable(int epfd, conn_t *c) {
     int32_t sid = s->id;
     s->dispatch_pending = 0;
     h2_dispatch_stream(conn, c, s);
-    h2_free_stream(conn, sid);
+    if (!h2_open_parked(conn, sid)) h2_free_stream(conn, sid);
   }
   if (conn->done || (!nghttp2_session_want_read(conn->ng) && !nghttp2_session_want_write(conn->ng))) {
     h2_conn_close(epfd, c);
@@ -346,14 +408,14 @@ void h2_conn_close(int epfd, conn_t *c) {
   }
   h2_llhls_on_conn_close(conn);
   h2_hls_cold_on_conn_close(conn);
+  h2_ts_cold_on_conn_close(conn);
+  h2_open_on_conn_close(conn);
   h2_ws_on_conn_close(conn);
+  for (int i = 0; i < H2_MAX_STREAMS; i++) free(conn->streams[i].body);
   nghttp2_session_del(conn->ng);
   free(conn);
   c->h2 = NULL;
-  conn_unpublish(c);
-  epoll_ctl(epfd, EPOLL_CTL_DEL, c->fd, NULL);
-  tls_close_fd(c->fd);
-  conn_free(c);
+  reactor_teardown_common(epfd, c);
 }
 
 #endif /* HAVE_HTTP2 */

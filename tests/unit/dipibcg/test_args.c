@@ -82,6 +82,36 @@ START_TEST(listen_rejects_negative_timeout) {
 }
 END_TEST
 
+START_TEST(listen_rejects_interval_long_option) {
+  char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "--interval", "10", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(announce_rejects_timeout_long_option) {
+  char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000", "--timeout", "10", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(long_options_set_matching_mode_value) {
+  char *la[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "--timeout", "12", NULL};
+  char *aa[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000", "--interval", "7", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(la), la, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.timeout_s, 12);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(aa), aa, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.interval_s, 7);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(mode_is_required) {
   char *argv[] = {"dipibcg", "-m", "239.1.2.3:5000", NULL};
   config_t cfg = {0};
@@ -176,6 +206,45 @@ END_TEST
 START_TEST(metrics_interval_out_of_range_is_rejected) {
   char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000",
                   "--metrics-id", "inst1", "--metrics-interval", "0", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(refresh_defaults_to_one_and_is_overridable) {
+  char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000", NULL};
+  char *ar[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000", "--refresh", "4", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.refresh_cycles, 1);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  optind = 1;
+  ck_assert_int_eq(args_parse(ARGC(ar), ar, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.refresh_cycles, 4);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(refresh_zero_is_rejected) {
+  char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000", "--refresh", "0", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(refresh_is_announce_only) {
+  char *argv[] = {"dipibcg", "-l", "-m", "239.1.2.3:5000", "--refresh", "3", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(announce_interval_zero_is_rejected) {
+  char *argv[] = {"dipibcg", "-a", "-i", "guide.xml", "-M", "map.csv", "-m", "239.1.2.3:5000", "-t", "0", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
@@ -369,6 +438,10 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, metrics_id_is_announce_only);
   tcase_add_test(tc, metrics_id_enables_metrics_in_announce_mode);
   tcase_add_test(tc, metrics_interval_out_of_range_is_rejected);
+  tcase_add_test(tc, announce_interval_zero_is_rejected);
+  tcase_add_test(tc, refresh_defaults_to_one_and_is_overridable);
+  tcase_add_test(tc, refresh_zero_is_rejected);
+  tcase_add_test(tc, refresh_is_announce_only);
   tcase_add_test(tc, invalid_color_mode_is_rejected);
   tcase_add_test(tc, compress_flag_enables_in_announce_mode);
   tcase_add_test(tc, compress_flag_is_announce_only);
@@ -381,6 +454,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, config_both_modes_is_error);
   tcase_add_test(tc, configtest_reports_by_exit_status);
   tcase_add_test(tc, invalid_dscp_is_rejected);
+  tcase_add_test(tc, listen_rejects_interval_long_option);
+  tcase_add_test(tc, announce_rejects_timeout_long_option);
+  tcase_add_test(tc, long_options_set_matching_mode_value);
   tcase_add_test(tc, announce_requires_map_when_input_is_given);
   tcase_add_test(tc, config_strict_option_rejects_unknown_keys);
   suite_add_tcase(s, tc);

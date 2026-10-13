@@ -52,7 +52,7 @@ int h3_reset_token(uint8_t *token, const ngtcp2_cid *cid);
 
 /* NEW_TOKEN for clients after handshake */
 void h3_stateless_offer_token(ngtcp2_conn *qconn, const struct sockaddr *peer, socklen_t peerlen);
-int h3_stateless_admit(int udp_fd, const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, int active, int max_conns, ngtcp2_pkt_hd *hd, h3_admit_t *ai);
+int h3_stateless_admit(int udp_fd, const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr_storage *local, int active, int max_conns, ngtcp2_pkt_hd *hd, h3_admit_t *ai);
 
 #endif /* HAVE_HTTP3 */
 

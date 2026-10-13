@@ -35,12 +35,12 @@ produced or expected; see
 .BR dipibcg (1)
 for that layer.
 .PP
-Supported codecs (TS 102 323, subclause 9.4.3.3ff) are dvbStringCodec,
-dvbLocatorCodec (string fallback only, optimized-branch locators
-unsupported), dvbDateTimeCodec (full-precision 8-byte MJD+ms mode, always
-UTC) and dvbControlledTermCodec (compact scheme+term branch only on an
-exact table 69 match with an integer term).
-dvbDurationCodec is unused. CRIDs are derived from start time at write time rather than stored.
+Payloads are BiM against urn:tva:metadata:2004. Codecs (TS 102 323,
+subclause 9.4.3.3ff): dvbStringCodec; dvbLocatorCodec (written as string,
+optimized branch read); dvbDateTimeCodec (written full-precision, always UTC,
+PublishedTime read); dvbDurationCodec (read only); dvbControlledTermCodec
+(written as string, compact form read).
+CRIDs are derived from start time at write time rather than stored.
 A non-UTC source time round-trips to a different-looking CRID for the same
 instant.
 .SH OPTIONS

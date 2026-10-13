@@ -285,6 +285,75 @@ START_TEST(touch_with_an_existing_key_reuses_the_segmenter) {
 }
 END_TEST
 
+START_TEST(touch_reclaims_closed_store_slots_when_table_is_full) {
+  capture_ctx_t *ctx;
+  hls_seg_ctx_t *segs[MAX_STORES];
+  pid_filter_t none = {0};
+  hls_seg_ctx_t *fresh;
+
+  world_open();
+  ctx = open_ctx();
+  for (int i = 0; i < MAX_STORES; i++) segs[i] = make_seg(ctx, &none, 0x100 + (unsigned)i, &full, SEG_CONTAINER_TS, 0.0);
+  release_all(segs, MAX_STORES);
+  ck_assert_int_eq(chain_length(ctx), 0);
+  fresh = make_seg(ctx, &none, 0x200, &full, SEG_CONTAINER_TS, 0.0);
+  ck_assert_ptr_nonnull(fresh);
+  release_all(&fresh, 1);
+  capture_close(ctx);
+}
+END_TEST
+
+START_TEST(variant_cap_limits_new_variants_per_source) {
+  capture_ctx_t *ctx;
+  hls_seg_ctx_t *segs[2];
+  pid_filter_t f1 = {0};
+  pid_filter_t f2 = {0};
+  pid_filter_t f3 = {0};
+
+  world_open();
+  hls_seg_set_max_variants(2);
+  ctx = open_ctx();
+  pid_filter_add(&f1, 0x101);
+  pid_filter_add(&f2, 0x102);
+  pid_filter_add(&f3, 0x103);
+  segs[0] = make_seg(ctx, &f1, 0, &full, SEG_CONTAINER_TS, 0.0);
+  segs[1] = make_seg(ctx, &f2, 0, &full, SEG_CONTAINER_TS, 0.0);
+  ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), &f3, 0, &full, SEG_TARGET, MAX_SEGS, SEG_CONTAINER_TS, 0.0), 0);
+  ck_assert_int_eq(chain_length(ctx), 2);
+  ck_assert_ptr_eq(make_seg(ctx, &f1, 0, &full, SEG_CONTAINER_TS, 0.0), segs[0]);
+  release_all(segs, 2);
+  hls_seg_set_max_variants(0);
+  capture_close(ctx);
+}
+END_TEST
+
+START_TEST(variant_cap_is_counted_per_source) {
+  capture_ctx_t *a;
+  capture_ctx_t *b;
+  hls_seg_ctx_t *segs[2];
+  pid_filter_t f1 = {0};
+  pid_filter_t f2 = {0};
+
+  world_open();
+  hls_seg_set_max_variants(1);
+  a = open_ctx();
+  b = capture_open(AF_INET, GROUP, NULL, PORT + 1, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ck_assert_ptr_nonnull(b);
+  pid_filter_add(&f1, 0x101);
+  pid_filter_add(&f2, 0x102);
+  segs[0] = make_seg(a, &f1, 0, &full, SEG_CONTAINER_TS, 0.0);
+  ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, NULL, PORT + 1, NULL, 0, NULL, NULL, NULL, 0, 0), &f2, 0, &full, SEG_TARGET, MAX_SEGS, SEG_CONTAINER_TS, 0.0), 1);
+  hls_seg_registry_lock();
+  segs[1] = hls_seg_find_locked(b, &f2, 0, &full, SEG_CONTAINER_TS);
+  hls_seg_registry_unlock();
+  ck_assert_ptr_nonnull(segs[1]);
+  release_all(segs, 2);
+  hls_seg_set_max_variants(0);
+  capture_close(a);
+  capture_close(b);
+}
+END_TEST
+
 static Suite *segment_suite(void) {
   Suite *s = suite_create("dipixy_segment");
   TCase *tc = tcase_create("core");
@@ -297,6 +366,9 @@ static Suite *segment_suite(void) {
   tcase_add_test(tc, sweep_leaves_active_and_subscribed_segmenters_alone);
   tcase_add_test(tc, sweep_retire_oom_keeps_the_segmenter_alive);
   tcase_add_test(tc, touch_with_an_existing_key_reuses_the_segmenter);
+  tcase_add_test(tc, touch_reclaims_closed_store_slots_when_table_is_full);
+  tcase_add_test(tc, variant_cap_limits_new_variants_per_source);
+  tcase_add_test(tc, variant_cap_is_counted_per_source);
   suite_add_tcase(s, tc);
   return s;
 }

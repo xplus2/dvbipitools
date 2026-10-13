@@ -92,6 +92,13 @@ void pid_filter_format(const pid_filter_t *f, char *buf, size_t bufsz) {
   }
 }
 
+static int hex_nibble(int c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
 int query_param_extract(const char *query, const char *key, char *buf, size_t bufsz) {
   size_t keylen = strlen(key);
   const char *f = query;
@@ -105,7 +112,16 @@ int query_param_extract(const char *query, const char *key, char *buf, size_t bu
     f += keylen;
   }
   p = f + keylen;
-  while (*p && *p != '&' && i + 1 < bufsz) buf[i++] = *p++;
+  while (*p && *p != '&' && i + 1 < bufsz) {
+    int hi = *p == '%' ? hex_nibble((unsigned char)p[1]) : -1;
+    int lo = hi >= 0 ? hex_nibble((unsigned char)p[2]) : -1;
+    if (lo >= 0) {
+      buf[i++] = (char)((hi << 4) | lo);
+      p += 3;
+    } else {
+      buf[i++] = *p++;
+    }
+  }
   buf[i] = '\0';
   return 1;
 }

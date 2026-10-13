@@ -4,7 +4,10 @@
 #ifndef DIPIREC_FILTER_TS_H
 #define DIPIREC_FILTER_TS_H
 
+#include <stddef.h>
+
 #include "lib/demux/psi/psi.h"
+#include "lib/mux/pmt_filter.h"
 
 typedef struct ts_filter ts_filter_t;
 
@@ -32,9 +35,13 @@ typedef struct ts_filter ts_filter_t;
 ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs, unsigned preferred_pmt_pid, unsigned strip_mask);
 void ts_filter_free(ts_filter_t *f);
 
-/* filter one pkt. NULL = strip. else result pointer:
-   in on passthrough, out on rewrite (PAT/PMT). no copy on passthrough. */
-const unsigned char *ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out);
+/* out size for ts_filter_packet() */
+#define TS_FILTER_OUT_MAX (PMT_FILTER_PKT_MAX * 188)
+
+/* filter one pkt. NULL = strip, *n 0. else result pointer, *n packets of it:
+   in on passthrough (1), out on PAT/PMT rewrite. PAT/PMT is held until its last packet,
+   then emitted whole, so 1..PMT_FILTER_PKT_MAX packets. no copy on passthrough. */
+const unsigned char *ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out, size_t *n);
 
 /* stream model */
 const psi_t *ts_filter_psi(const ts_filter_t *f);

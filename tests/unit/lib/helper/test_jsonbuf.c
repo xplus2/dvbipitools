@@ -118,6 +118,17 @@ static const string_case_t string_cases[] = {
     {"\xc3\xa9", "\"\xc3\xa9\""},
     {"x\"\n\"y", "\"x\\\"\\n\\\"y\""},
     {"\"", "\"\\\"\""},
+    {"\xe2\x82\xac", "\"\xe2\x82\xac\""},
+    {"\xf0\x9f\x98\x80", "\"\xf0\x9f\x98\x80\""},
+    {"caf\xe9", "\"caf\\ufffd\""},
+    {"\xe9s", "\"\\ufffds\""},
+    {"a\xc3", "\"a\\ufffd\""},
+    {"\xe2\x82", "\"\\ufffd\\ufffd\""},
+    {"\x80", "\"\\ufffd\""},
+    {"\xc0\xaf", "\"\\ufffd\\ufffd\""},
+    {"\xed\xa0\x80", "\"\\ufffd\\ufffd\\ufffd\""},
+    {"\xf4\x90\x80\x80", "\"\\ufffd\\ufffd\\ufffd\\ufffd\""},
+    {"\xff", "\"\\ufffd\""},
 };
 
 START_TEST(json_string_escapes_and_quotes) {

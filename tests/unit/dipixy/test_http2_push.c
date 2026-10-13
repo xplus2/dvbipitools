@@ -192,7 +192,7 @@ typedef struct {
 } push_kind_t;
 
 static int ts_dispatch(mem_t *m, int32_t sid, int sub) {
-  return h2_tspush_dispatch(&m->conn, &m->fake_conn, sid, sub);
+  return h2_tspush_dispatch(&m->conn, &m->fake_conn, sid, sub, 0);
 }
 
 static int dash_dispatch(mem_t *m, int32_t sid, int sub) {

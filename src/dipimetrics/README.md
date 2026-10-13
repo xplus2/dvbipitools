@@ -77,9 +77,11 @@ one `# TYPE`/`# HELP` pair per metric family actually present (families with zer
 `headend_id="<the exporter's --metrics-id>"` plus whatever label the metric itself carries
 (`reason`, `input`, `table`, `codec`, `transport`, `version`, `peer`, `output`, `mode`, `direction`, `stream`).
 
-One extra, collector-computed series is added per tracked instance:
+Two extra series are added per tracked instance:
 `dvbipi_metrics_snapshot_age_seconds`: seconds since that instance's last accepted snapshot,
-independent of anything the exporter itself reports.
+independent of anything the exporter itself reports, and
+`dvbipi_metrics_snapshot_time_seconds`: the exporter's own unix time stamped on that snapshot.
+`time() - dvbipi_metrics_snapshot_time_seconds` shows the exporter's clock skew.
 
 dipimetrics also reports on itself, always present regardless of what's currently tracked:
 * `dvbipi_metrics_instances` (gauge, exporter instances currently held in the store)
@@ -88,7 +90,7 @@ dipimetrics also reports on itself, always present regardless of what's currentl
 (counter, one series per reason)
 * `dvbipi_metrics_snapshots_incomplete_total` (counter, snapshots discarded because a piece of them was lost)
 * `dvbipi_metrics_parts_orphaned_total` (counter, stray snapshot pieces dropped)
-* `dvbipi_metrics_http_requests_total{status="200|404"}` (counter, one series per status). 
+* `dvbipi_metrics_http_requests_total{status="200|401|404|405|500"}` (counter, one series per status).
 
 Each exporter additionally reports `dvbipi_metrics_parts_dropped_total` (counter, snapshot pieces it failed to send).
 
@@ -125,7 +127,7 @@ checks only.
 ## Live stats (`-v`)
 
 Logs every rejected/dropped snapshot (malformed, unsupported protocol version, stale sequence, store full, oversized, orphan part)
-and every `404`, with enough detail to diagnose a misbehaving exporter or a stray HTTP client.
+and every `404` and `405`, with enough detail to diagnose a misbehaving exporter or a stray HTTP client.
 
 ## Signals
 

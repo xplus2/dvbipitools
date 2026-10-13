@@ -4,6 +4,7 @@
 #ifdef HAVE_HTTP3
 
 #include "../reactor/internal.h"
+#include "../core/metrics.h"
 #include "../httpng/httpng.h"
 #include "http3.h"
 #include "http3_int.h"
@@ -14,6 +15,7 @@ void h3_respond_status(h3_conn_t *c, int64_t sid, const char *status) {
   nghttp3_nv nva[] = {{(uint8_t *)":status", (uint8_t *)status, 7, strlen(status), NGHTTP3_NV_FLAG_NONE},
                       {(uint8_t *)"retry-after", (uint8_t *)REACTOR_RETRY_AFTER_S, 11, sizeof REACTOR_RETRY_AFTER_S - 1, NGHTTP3_NV_FLAG_NONE}};
   nghttp3_conn_submit_response(c->h3conn, sid, nva, strcmp(status, "503") ? 1 : 2, NULL);
+  dipixy_metrics_note_http_error();
 }
 
 void h3_respond_401(h3_conn_t *c, int64_t sid) {
@@ -22,6 +24,7 @@ void h3_respond_401(h3_conn_t *c, int64_t sid) {
       {(uint8_t *)"www-authenticate", (uint8_t *)"Basic realm=\"dipixy\"", 16, 20, NGHTTP3_NV_FLAG_NONE},
   };
   nghttp3_conn_submit_response(c->h3conn, sid, nva, 2, NULL);
+  dipixy_metrics_note_http_error();
 }
 
 /* one-shot: nghttp3 vecs are zero-copy, no per-call length limit like nghttp2 */
@@ -39,13 +42,14 @@ static nghttp3_ssize h3_resp_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec 
 }
 
 /* body ownership transfers in: released by free_req() on stream close */
-void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, int zc, const char *origin_hdr) {
+void h3_submit_resp_ex(h3_conn_t *c, h3_req_t *r, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, uint8_t *owner, int zc, const char *origin_hdr,
+    const httpng_hdr_t *extra, size_t nextra) {
   const char *status_buf;
   char len_buf[24];
   size_t len_n;
   size_t etag_n;
   char etag_buf[56];
-  nghttp3_nv nva[7];
+  nghttp3_nv nva[7 + HTTPNG_EXTRA_MAX];
   size_t nvlen = 0;
   nghttp3_data_reader dr;
   int cors_vary;
@@ -56,7 +60,8 @@ void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_t
   if (content_type)
     nva[nvlen++] = (nghttp3_nv){(uint8_t *)"content-type", (uint8_t *)content_type, 12, strlen(content_type), NGHTTP3_NV_FLAG_NONE};
   len_n = httpng_u64_to_dec(len_buf, content_length);
-  nva[nvlen++] = (nghttp3_nv){(uint8_t *)"content-length", (uint8_t *)len_buf, 14, len_n, NGHTTP3_NV_FLAG_NONE};
+  if (content_length != HTTPNG_NO_LENGTH)
+    nva[nvlen++] = (nghttp3_nv){(uint8_t *)"content-length", (uint8_t *)len_buf, 14, len_n, NGHTTP3_NV_FLAG_NONE};
   etag_n = httpng_format_etag(etag_buf, sizeof etag_buf, etag);
   if (etag_n)
     nva[nvlen++] = (nghttp3_nv){(uint8_t *)"etag", (uint8_t *)etag_buf, 4, etag_n, NGHTTP3_NV_FLAG_NONE};
@@ -66,11 +71,14 @@ void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_t
   }
   if (status == 503)
     nva[nvlen++] = (nghttp3_nv){(uint8_t *)"retry-after", (uint8_t *)REACTOR_RETRY_AFTER_S, 11, sizeof REACTOR_RETRY_AFTER_S - 1, NGHTTP3_NV_FLAG_NONE};
+  for (size_t i = 0; i < nextra && i < HTTPNG_EXTRA_MAX; i++)
+    nva[nvlen++] = (nghttp3_nv){(uint8_t *)extra[i].name, (uint8_t *)extra[i].value, strlen(extra[i].name), strlen(extra[i].value), NGHTTP3_NV_FLAG_NONE};
   if (!body) {
     nghttp3_conn_submit_response(c->h3conn, r->stream_id, nva, nvlen, NULL);
     return;
   }
   r->resp_data = body;
+  r->resp_owner = owner;
   r->resp_len = content_length;
   r->resp_off = 0;
   r->resp_zc = zc;
@@ -79,11 +87,15 @@ void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_t
   nghttp3_conn_submit_response(c->h3conn, r->stream_id, nva, nvlen, &dr);
 }
 
+void h3_submit_resp(h3_conn_t *c, h3_req_t *r, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, uint8_t *owner, int zc, const char *origin_hdr) {
+  h3_submit_resp_ex(c, r, status, content_type, etag, content_length, body, owner, zc, origin_hdr, NULL, 0);
+}
+
 void h3_respond_hls(h3_conn_t *c, h3_req_t *r, int handled, const hls_resp_t *resp) {
   if (!handled)
     h3_respond_status(c, r->stream_id, "404");
   else
-    h3_submit_resp(c, r, resp->status, resp->content_type, resp->etag, resp->body_len, resp->body, resp->zc, r->origin[0] ? r->origin : NULL);
+    h3_submit_resp(c, r, resp->status, resp->content_type, resp->etag, resp->body_len, resp->body, resp->owner, resp->zc, r->origin[0] ? r->origin : NULL);
 }
 
 #endif /* HAVE_HTTP3 */

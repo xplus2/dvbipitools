@@ -303,6 +303,13 @@ static ssize_t stub_read(void *ctx, unsigned char *buf, size_t cap) {
   return (ssize_t)n;
 }
 
+static void probe_once(chan_read_fn rf, void *rctx, int timeout_ms, int multi, int detect_rtp, probe_result_t *r) {
+  psi_t *psi = psi_new();
+  ck_assert_ptr_nonnull(psi);
+  probe_common(psi, rf, rctx, timeout_ms, multi, detect_rtp, r);
+  psi_free(psi);
+}
+
 START_TEST(probe_common_resolves_named_single_program) {
   unsigned char sec[64];
   unsigned char pat[188], pmt[188], sdt[188];
@@ -327,7 +334,7 @@ START_TEST(probe_common_resolves_named_single_program) {
   sr.count = 3;
   sr.next = 0;
 
-  probe_common(stub_read, &sr, 2000, 0, &r);
+  probe_once(stub_read, &sr, 2000, 0, 1, &r);
 
   ck_assert_int_eq(r.kind, PROBE_NAMED);
   ck_assert_str_eq(r.name, "Channel One");
@@ -336,6 +343,52 @@ START_TEST(probe_common_resolves_named_single_program) {
   ck_assert_uint_eq(r.sid, 7u);
   ck_assert_int_eq(r.rtp_wrapped, 0);
   ck_assert_uint_eq(r.pkts, 3u);
+}
+END_TEST
+
+START_TEST(probe_common_reused_psi_carries_no_state_between_probes) {
+  unsigned char sec[64];
+  unsigned char pat[188], pmt[188], sdt[188];
+  size_t slen;
+  const unsigned char *pkts[3], *none[1];
+  size_t lens[3], nlens[1] = {0};
+  stub_reader_t sr, empty;
+  probe_result_t r;
+  psi_t *psi = psi_new();
+
+  ck_assert_ptr_nonnull(psi);
+  slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
+  wrap_ts_packet(pat, 0x0000, sec, slen);
+  slen = build_pmt(sec, 7, 0x0101);
+  wrap_ts_packet(pmt, 0x0100, sec, slen);
+  slen = psi_build_sdt(0, 0x1234, 5, 7, 0x01, "Provider", "Channel One", sec, sizeof sec);
+  wrap_ts_packet(sdt, 0x0011, sec, slen);
+  pkts[0] = pat; lens[0] = 188;
+  pkts[1] = pmt; lens[1] = 188;
+  pkts[2] = sdt; lens[2] = 188;
+  sr.pkts = pkts;
+  sr.lens = lens;
+  sr.count = 3;
+  sr.next = 0;
+  probe_common(psi, stub_read, &sr, 2000, 0, 1, &r);
+  ck_assert_int_eq(r.kind, PROBE_NAMED);
+
+  none[0] = NULL;
+  empty.pkts = none;
+  empty.lens = nlens;
+  empty.count = 0;
+  empty.next = 0;
+  probe_common(psi, stub_read, &empty, 5, 0, 1, &r);
+  ck_assert_int_eq(r.kind, PROBE_NONE);
+  ck_assert(!psi_have_pat(psi));
+  ck_assert_str_eq(psi_service_name(psi), "");
+  ck_assert_int_eq(psi_classify(psi, 0x0100), PID_UNKNOWN);
+
+  sr.next = 0;
+  probe_common(psi, stub_read, &sr, 2000, 0, 1, &r);
+  ck_assert_int_eq(r.kind, PROBE_NAMED);
+  ck_assert_str_eq(r.name, "Channel One");
+  psi_free(psi);
 }
 END_TEST
 
@@ -371,11 +424,36 @@ START_TEST(probe_common_detects_rtp_wrapping_and_strips_header) {
   sr.count = 3;
   sr.next = 0;
 
-  probe_common(stub_read, &sr, 2000, 0, &r);
+  probe_once(stub_read, &sr, 2000, 0, 1, &r);
 
   ck_assert_int_eq(r.rtp_wrapped, 1);
   ck_assert_int_eq(r.kind, PROBE_NAMED);
   ck_assert_str_eq(r.name, "Channel One");
+}
+END_TEST
+
+START_TEST(probe_common_no_rtp_detection_leaves_stream_data_untouched) {
+  unsigned char sec[64];
+  unsigned char pat[12 + 188];
+  size_t slen;
+  const unsigned char *pkts[1];
+  size_t lens[1];
+  stub_reader_t sr;
+  probe_result_t r;
+
+  memset(pat, 0, 12);
+  pat[0] = 0x80;
+  slen = psi_build_pat(1, 0, 1, 0x0100, sec, sizeof sec);
+  wrap_ts_packet(pat + 12, 0x0000, sec, slen);
+  pkts[0] = pat; lens[0] = sizeof pat;
+  sr.pkts = pkts;
+  sr.lens = lens;
+  sr.count = 1;
+  sr.next = 0;
+
+  probe_once(stub_read, &sr, 50, 0, 0, &r);
+
+  ck_assert_int_eq(r.rtp_wrapped, 0);
 }
 END_TEST
 
@@ -387,7 +465,7 @@ START_TEST(probe_common_times_out_with_no_data) {
   sr.count = 0;
   sr.next = 0;
 
-  probe_common(stub_read, &sr, 5, 0, &r); /* 5ms: keeps the test fast */
+  probe_once(stub_read, &sr, 5, 0, 1, &r); /* 5ms: keeps the test fast */
 
   ck_assert_int_eq(r.kind, PROBE_NONE);
   ck_assert_uint_eq(r.pkts, 0u);
@@ -440,7 +518,7 @@ START_TEST(probe_common_first_packet_wait_scales_with_timeout) {
   dr.delay = 0.45;
   dr.start = test_now();
 
-  probe_common(delayed_read, &dr, 5000, 0, &r);
+  probe_once(delayed_read, &dr, 5000, 0, 1, &r);
 
   ck_assert_int_eq(r.kind, PROBE_NAMED);
   ck_assert_str_eq(r.name, "Channel One");
@@ -484,7 +562,7 @@ START_TEST(probe_common_multi_mode_resolves_every_program) {
   sr.count = 5;
   sr.next = 0;
 
-  probe_common(stub_read, &sr, 2000, 1, &r);
+  probe_once(stub_read, &sr, 2000, 1, 1, &r);
 
   ck_assert_int_eq(r.kind, PROBE_NAMED);
   ck_assert_int_eq(r.program_count, 2);
@@ -808,6 +886,30 @@ START_TEST(scan_run_http_missing_stream_reports_no_stream) {
 }
 END_TEST
 
+static size_t respond_stalled(const char *path, unsigned char *out, size_t cap, int *status) {
+  usleep(1500000);
+  return respond_single(path, out, cap, status);
+}
+
+START_TEST(scan_run_http_stalled_headers_respect_timeout) {
+  scan_http_fixture_t fx;
+  config_t cfg;
+  char *out = NULL;
+  char log[SCAN_MSG_MAX];
+  double t0;
+
+  scan_http_start(&fx, 1, respond_stalled);
+  scan_http_cfg(&cfg, &fx, "239.1.2.5-239.1.2.5");
+  cfg.timeout_ms = 300;
+  t0 = mono_seconds();
+  ck_assert_int_eq(run_scan_capture(&cfg, &out, log, sizeof log), 0);
+  ck_assert_msg(mono_seconds() - t0 < 1.0, "scan took %.2f s with -t 300 ms", mono_seconds() - t0);
+  scan_http_stop(&fx);
+  ck_assert_ptr_nonnull(strstr(log, "found 0 stations"));
+  free(out);
+}
+END_TEST
+
 typedef struct {
   out_fmt_t fmt;
   const char *want_in_output;
@@ -886,6 +988,23 @@ START_TEST(scan_run_http_parallel_jets_keep_address_order) {
     last = at;
   }
   ck_assert_ptr_nonnull(strstr(log, "found 4 stations"));
+  free(out);
+}
+END_TEST
+
+START_TEST(scan_run_http_jets_exceeding_total_single_address) {
+  scan_http_fixture_t fx;
+  config_t cfg;
+  char *out = NULL;
+  char log[SCAN_MSG_MAX];
+
+  scan_http_start(&fx, 1, respond_by_last_octet);
+  scan_http_cfg(&cfg, &fx, "239.1.2.1-239.1.2.1");
+  cfg.jets = 256;
+  ck_assert_int_eq(run_scan_capture(&cfg, &out, log, sizeof log), 0);
+  scan_http_stop(&fx);
+  ck_assert_ptr_nonnull(strstr(out, "Chan 1"));
+  ck_assert_ptr_nonnull(strstr(log, "found 1 station"));
   free(out);
 }
 END_TEST
@@ -1005,7 +1124,9 @@ static Suite *scan_suite(void) {
   tcase_add_test(tc, multi_all_named_false_when_only_some_programs_named);
   tcase_add_test(tc, probe_cb_single_mode_stops_once_named);
   tcase_add_test(tc, probe_common_resolves_named_single_program);
+  tcase_add_test(tc, probe_common_reused_psi_carries_no_state_between_probes);
   tcase_add_test(tc, probe_common_detects_rtp_wrapping_and_strips_header);
+  tcase_add_test(tc, probe_common_no_rtp_detection_leaves_stream_data_untouched);
   tcase_add_test(tc, probe_common_times_out_with_no_data);
   tcase_add_test(tc, probe_common_first_packet_wait_scales_with_timeout);
   tcase_add_test(tc, probe_common_multi_mode_resolves_every_program);
@@ -1016,10 +1137,12 @@ static Suite *scan_suite(void) {
   tcase_add_test(tc, configtest_reports_by_exit_status);
   tcase_add_test(tc, scan_run_http_single_program_stream);
   tcase_add_test(tc, scan_run_http_mpts_reports_every_program);
+  tcase_add_test(tc, scan_run_http_stalled_headers_respect_timeout);
   tcase_add_loop_test(tc, scan_run_http_missing_stream_reports_no_stream, 0, (int)(sizeof missing_stream_responders / sizeof missing_stream_responders[0]));
   tcase_add_loop_test(tc, scan_run_http_writes_every_output_format, 0, (int)(sizeof scan_format_cases / sizeof scan_format_cases[0]));
   tcase_add_test(tc, scan_run_http_path_template_is_expanded);
   tcase_add_test(tc, scan_run_http_parallel_jets_keep_address_order);
+  tcase_add_test(tc, scan_run_http_jets_exceeding_total_single_address);
   tcase_add_test(tc, scan_run_stop_request_reports_interrupted);
   tcase_add_loop_test(tc, scan_run_multicast_probe_udp_and_rtp, 0, 2);
   suite_add_tcase(s, tc);

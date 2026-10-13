@@ -41,40 +41,45 @@ static ssize_t ws_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *buf, 
   return (ssize_t)n;
 }
 
-static void queue_prebuilt_frame(h2_ws_stream_t *ws, const uint8_t *frame, size_t flen) {
+static int pending_reserve(h2_ws_stream_t *ws, size_t flen) {
+  if (!ws->sid || ws->dead) return -1;
+  if (ws->pending_len + flen > WS_OUT_MAX) {
+    ws->dead = 1; /* slow consumer: reactor resets in h2_ws_flush */
+    return -1;
+  }
+  return growbuf_reserve((void **)&ws->pending, &ws->pending_cap, 1, ws->pending_len + flen, 4096);
+}
+
+static void ws_wake(h2_ws_stream_t *ws) {
   conn_t *c = ws->c;
-  pthread_mutex_lock(&ws->pending_lock);
-  if (!ws->sid) {
-    pthread_mutex_unlock(&ws->pending_lock);
-    return;
-  }
-  if (growbuf_reserve((void **)&ws->pending, &ws->pending_cap, 1, ws->pending_len + flen, 4096)) {
-    pthread_mutex_unlock(&ws->pending_lock);
-    return;
-  }
-  memcpy(ws->pending + ws->pending_len, frame, flen);
-  ws->pending_len += flen;
-  pthread_mutex_unlock(&ws->pending_lock);
   if (!atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) conn_epoll_mod(c, c->epfd, 1);
 }
 
-static void queue_frame(h2_ws_stream_t *ws, int opcode, const void *payload, size_t len) {
-  conn_t *c = ws->c;
-  size_t hdr = ws_frame_hdr_len(len);
-  size_t flen = hdr + len;
+static void queue_prebuilt_frame(h2_ws_stream_t *ws, const uint8_t *frame, size_t flen) {
+  int rc, dead;
   pthread_mutex_lock(&ws->pending_lock);
-  if (!ws->sid) {
-    pthread_mutex_unlock(&ws->pending_lock);
-    return;
+  rc = pending_reserve(ws, flen);
+  if (!rc) {
+    memcpy(ws->pending + ws->pending_len, frame, flen);
+    ws->pending_len += flen;
   }
-  if (growbuf_reserve((void **)&ws->pending, &ws->pending_cap, 1, ws->pending_len + flen, 4096)) {
-    pthread_mutex_unlock(&ws->pending_lock);
-    return;
-  }
-  ws_frame_encode(ws->pending + ws->pending_len, opcode, payload, len);
-  ws->pending_len += flen;
+  dead = ws->dead;
   pthread_mutex_unlock(&ws->pending_lock);
-  if (!atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) conn_epoll_mod(c, c->epfd, 1);
+  if (!rc || dead) ws_wake(ws);
+}
+
+static void queue_frame(h2_ws_stream_t *ws, int opcode, const void *payload, size_t len) {
+  size_t flen = ws_frame_hdr_len(len) + len;
+  int rc, dead;
+  pthread_mutex_lock(&ws->pending_lock);
+  rc = pending_reserve(ws, flen);
+  if (!rc) {
+    ws_frame_encode(ws->pending + ws->pending_len, opcode, payload, len);
+    ws->pending_len += flen;
+  }
+  dead = ws->dead;
+  pthread_mutex_unlock(&ws->pending_lock);
+  if (!rc || dead) ws_wake(ws);
 }
 
 static void ws_sink(void *ctx, const uint8_t *frame, size_t flen) { queue_prebuilt_frame(ctx, frame, flen); }
@@ -119,16 +124,34 @@ static h2_ws_stream_t *find_ws(h2_conn_t *conn, int32_t stream_id) {
   return NULL;
 }
 
+static void ws_reset(h2_conn_t *conn, h2_ws_stream_t *ws) {
+  if (ws->reset) return;
+  ws->reset = 1;
+  nghttp2_submit_rst_stream(conn->ng, NGHTTP2_FLAG_NONE, ws->sid, NGHTTP2_PROTOCOL_ERROR);
+}
+
+static void ws_fail(h2_conn_t *conn, h2_ws_stream_t *ws) {
+  pthread_mutex_lock(&ws->pending_lock);
+  ws->dead = 1;
+  pthread_mutex_unlock(&ws->pending_lock);
+  ws_parser_free(&ws->parser);
+  ws_reset(conn, ws);
+}
+
 void h2_ws_data_chunk(h2_conn_t *conn, int32_t stream_id, const uint8_t *data, size_t len) {
   h2_ws_stream_t *ws = find_ws(conn, stream_id);
   int opcode, got;
   const uint8_t *payload;
   size_t plen;
 
-  if (!ws) return;
-  if (ws_parser_feed(&ws->parser, data, len)) return;
+  if (!ws || ws->dead) return;
+  if (ws_parser_feed(&ws->parser, data, len)) {
+    ws_fail(conn, ws);
+    return;
+  }
   for (;;) {
     got = ws_parser_next(&ws->parser, &opcode, &payload, &plen);
+    if (got < 0) ws_fail(conn, ws);
     if (got <= 0) return;
     ws_dispatch_frame(ws, queue_frame_cb, opcode, payload, plen);
   }
@@ -140,7 +163,16 @@ void h2_ws_flush(h2_conn_t *conn) {
     h2_ws_stream_t *ws = &conn->ws[i];
     uint8_t *data;
     size_t len;
-    if (!ws->sid || ws->inflight) continue;
+    int dead;
+    if (!ws->sid) continue;
+    pthread_mutex_lock(&ws->pending_lock);
+    dead = ws->dead;
+    pthread_mutex_unlock(&ws->pending_lock);
+    if (dead) {
+      ws_reset(conn, ws);
+      continue;
+    }
+    if (ws->inflight) continue;
     if (!httpng_ws_drain_pending(&ws->pending_lock, &ws->pending, &ws->pending_len, &ws->pending_cap, &data, &len))
       continue;
     ws->send_data = data;

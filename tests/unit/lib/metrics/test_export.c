@@ -27,6 +27,17 @@ START_TEST(disabled_without_metrics_id) {
 }
 END_TEST
 
+START_TEST(start_time_distinguishes_rapid_restart) {
+  metrics_exporter_t a, b;
+  metrics_exporter_init(&a, METRICS_COMPONENT_SDS, "inst1", NULL, 5.0);
+  metrics_exporter_init(&b, METRICS_COMPONENT_SDS, "inst1", NULL, 5.0);
+  ck_assert_uint_gt(a.process_start_time, 1000000000ULL * 1000000000ULL);
+  ck_assert_uint_ne(a.process_start_time, b.process_start_time);
+  metrics_exporter_close(&a);
+  metrics_exporter_close(&b);
+}
+END_TEST
+
 START_TEST(disabled_on_empty_metrics_id) {
   metrics_exporter_t mx;
   metrics_exporter_init(&mx, METRICS_COMPONENT_TVHEAD, "", "/tmp/whatever.sock", 5.0);
@@ -140,6 +151,10 @@ START_TEST(input_metrics_note_read_accumulates) {
 
   input_metrics_note_read(&im, 0, NET_ERR_OTHER);
   ck_assert_uint_eq(im.bytes_total, 100u); /* n==0 no-op */
+
+  /* out-of-range reason must not write past errors_total */
+  input_metrics_note_read(&im, -1, (net_err_reason_t)NET_ERR_COUNT);
+  ck_assert_uint_eq(im.bytes_total, 100u);
 
   /* NULL im must be a safe no-op (disabled-exporter fast path) */
   input_metrics_note_read(NULL, 50, NET_ERR_OTHER);
@@ -310,6 +325,7 @@ static Suite *export_suite(void) {
   Suite *s = suite_create("metrics_export");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, disabled_without_metrics_id);
+  tcase_add_test(tc, start_time_distinguishes_rapid_restart);
   tcase_add_test(tc, disabled_on_empty_metrics_id);
   tcase_add_test(tc, default_socket_path_used_when_null);
   tcase_add_test(tc, overridden_socket_path_used);

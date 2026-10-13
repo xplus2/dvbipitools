@@ -33,6 +33,10 @@ void h3_llhls_flush_waiters(void);
 /* resumes cold-parked H3 manifest/playlist streams, call once per tick */
 void h3_hls_cold_flush_waiters(void);
 
+/* resumes H3 streams parked on a TS/SPTS/rawaudio stream awaiting its first packet, call once per tick */
+void h3_ts_cold_flush_waiters(void);
+void h3_open_flush_waiters(void);
+
 /* resumes H3 WS streams with data queued from any thread, call once per tick */
 void h3_ws_flush(void);
 
@@ -44,6 +48,9 @@ void h3_thread_cleanup(void);
 
 /* global HTTP/3 state (SSL_CTX for QUIC). called once after tls_init() */
 void h3_init(const char *cert_path, const char *key_path);
+
+/* rebuilds QUIC context from h3_init()'s paths. 0 ok, -1 fail (old ctx kept). new conns only */
+int h3_reload(void);
 
 /* 1 once QUIC context is built by h3_init() */
 int h3_ready(void);

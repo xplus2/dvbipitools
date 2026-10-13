@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -160,44 +161,81 @@ playlist_list_t *playlist_in_parse_m3u(const char *path) {
   return pl;
 }
 
-playlist_list_t *playlist_in_parse_csv(const char *path) {
-  char *buf;
-  size_t len;
-  playlist_list_t *pl;
-  char *saveptr;
+static int csv_u16(const char *s, unsigned *out) {
+  char *end;
+  unsigned long v;
+  if (!*s)
+    return -1;
+  errno = 0;
+  v = strtoul(s, &end, 10);
+  if (errno || *end || v > 0xFFFF)
+    return -1;
+  *out = (unsigned)v;
+  return 0;
+}
 
-  if (slurp(path, &buf, &len))
-    return NULL;
+static int csv_fill(playlist_item_t *slot, char **fields, size_t nf) {
+  slot->name = strdup(fields[0]);
+  slot->uri = strdup(fields[1]);
+  slot->icon_uri = nf >= 6 && fields[5][0] ? strdup(fields[5]) : NULL;
+  slot->tsid = slot->onid = slot->sid = 0;
+  slot->has_triplet = nf >= 5;
+  if (!slot->name || !slot->uri || (nf >= 6 && fields[5][0] && !slot->icon_uri))
+    return PLAYLIST_CSV_NOMEM;
+  if ((nf > 2 && csv_u16(fields[2], &slot->tsid)) || (nf > 3 && csv_u16(fields[3], &slot->onid)) || (nf > 4 && csv_u16(fields[4], &slot->sid)))
+    return PLAYLIST_CSV_BAD_NUM;
+  return 0;
+}
 
-  pl = calloc(1, sizeof *pl);
-  if (!pl) {
-    free(buf);
-    return NULL;
-  }
+int playlist_in_read_csv(FILE *f, playlist_list_t **out, int *err_line) {
+  char line[PLAYLIST_CSV_LINE_MAX];
+  playlist_list_t *pl = calloc(1, sizeof *pl);
+  int lineno = 0, rc, err = 0;
 
-  for (char *line = strtok_r(buf, "\n", &saveptr); line; line = strtok_r(NULL, "\n", &saveptr)) {
+  if (!pl)
+    return PLAYLIST_CSV_NOMEM;
+  while (!err && (rc = read_line(f, line, sizeof line)) != 0) {
     char *fields[6];
     size_t nf;
     playlist_item_t *slot;
+    lineno++;
+    if (rc < 0) {
+      err = PLAYLIST_CSV_LONG_LINE;
+      break;
+    }
     chomp(line);
-    if (*line == '\0')
+    if (!line[0])
       continue;
     nf = csv_split(line, fields, 6);
     if (nf < 2)
       continue; /* need at least name,uri */
     slot = list_append(pl);
-    if (!slot)
+    if (!slot) {
+      err = PLAYLIST_CSV_NOMEM;
       break;
-    slot->name = strdup(fields[0]);
-    slot->uri = strdup(fields[1]);
-    slot->tsid = nf > 2 ? (unsigned)strtoul(fields[2], NULL, 10) : 0;
-    slot->onid = nf > 3 ? (unsigned)strtoul(fields[3], NULL, 10) : 0;
-    slot->sid = nf > 4 ? (unsigned)strtoul(fields[4], NULL, 10) : 0;
-    slot->has_triplet = nf >= 5;
-    slot->icon_uri = nf >= 6 && fields[5][0] ? strdup(fields[5]) : NULL;
+    }
+    err = csv_fill(slot, fields, nf);
   }
-  free(buf);
-  return pl;
+  if (err) {
+    if (err_line)
+      *err_line = lineno;
+    playlist_list_free(pl);
+    return err;
+  }
+  *out = pl;
+  return 0;
+}
+
+playlist_list_t *playlist_in_parse_csv(const char *path) {
+  FILE *f = fopen(path, "r");
+  playlist_list_t *pl = NULL;
+  int rc;
+
+  if (!f)
+    return NULL;
+  rc = playlist_in_read_csv(f, &pl, NULL);
+  fclose(f);
+  return rc ? NULL : pl;
 }
 
 static int track_cb(const char *tag, const char *blk_end, void *ctx) {

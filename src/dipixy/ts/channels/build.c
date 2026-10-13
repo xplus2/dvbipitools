@@ -32,17 +32,6 @@ static channel_item_t *list_append(channel_list_t *l) {
   return it;
 }
 
-/* srt/http(s) entries get static_ctx. rtp/udp entries stay NULL */
-static void playlist_item_open_static(channel_item_t *it, int insecure_tls) {
-  if (!strncmp(it->uri, "srt://", 6)) {
-    char host[256];
-    unsigned port;
-    if (!route_parse_srt_uri(it->uri, host, sizeof host, &port)) it->static_ctx = capture_open_srt(host, port);
-  } else if (!strncmp(it->uri, "http://", 7) || !strncmp(it->uri, "https://", 8)) {
-    it->static_ctx = capture_open_http_static(it->uri, insecure_tls);
-  }
-}
-
 static void list_from_playlist(channel_list_t *l, const playlist_list_t *pl, int insecure_tls) {
   for (int i = 0; i < pl->count; i++) {
     channel_item_t *it = list_append(l);
@@ -53,7 +42,7 @@ static void list_from_playlist(channel_list_t *l, const playlist_list_t *pl, int
     it->tsid = pl->items[i].tsid;
     it->onid = pl->items[i].onid;
     it->sid = pl->items[i].sid;
-    playlist_item_open_static(it, insecure_tls);
+    it->insecure_tls = insecure_tls;
   }
 }
 
@@ -80,7 +69,7 @@ void build_from_xspf(channel_list_t *l, const char *path, int insecure_tls) {
 void build_from_csv(channel_list_t *l, const char *path, int insecure_tls) {
   playlist_list_t *pl = playlist_in_parse_csv(path);
   if (!pl) {
-    log_code("YW000679", TOOL_NAME ": --csv %s: cannot open, list left empty", path);
+    log_code("YW000679", TOOL_NAME ": --csv %s: cannot open/parse, list left empty", path);
     return;
   }
   list_from_playlist(l, pl, insecure_tls);
@@ -136,17 +125,11 @@ void build_from_xml(channel_list_t *l, const char *path) {
 }
 
 void build_from_http(channel_list_t *l, const char *url, int insecure_tls) {
-  capture_ctx_t *ctx = capture_open_http_static(url, insecure_tls);
-  channel_item_t *it;
-  if (!ctx) return;
-  it = list_append(l);
-  if (!it) {
-    capture_close(ctx);
-    return;
-  }
+  channel_item_t *it = list_append(l);
+  if (!it) return;
   it->name = strdup(url);
   it->uri = strdup(url);
-  it->static_ctx = ctx;
+  it->insecure_tls = insecure_tls;
 }
 
 /* -i rtp://addr:port, -i udp://addr:port:, lazy join */
@@ -166,11 +149,11 @@ void channels_join_all(channel_list_t *l, const config_t *cfg) {
     char addr[64];
     char src[64];
     unsigned port;
-    if (it->static_ctx) continue;
+    if (channel_uri_is_static(it->uri)) continue;
     if (route_resolve_channel_uri(it->uri, &family, addr, sizeof addr, src, sizeof src, &port, &rtp)) continue;
-    it->static_ctx = capture_open(family, addr, src, port, cfg->iface, rtp, it->has_ret && !cfg->no_ret ? &it->ret : NULL,
+    it->join_ctx = capture_open(family, addr, src, port, cfg->iface, rtp, it->has_ret && !cfg->no_ret ? &it->ret : NULL,
       it->has_fcc && !cfg->no_fcc ? &it->fcc : NULL, it->has_fec && !cfg->no_al_fec ? &it->fec : NULL, cfg->al_fec_l, cfg->al_fec_d);
-    if (!it->static_ctx) log_code("YW600158", TOOL_NAME ": --join-all: %s unreachable, left unjoined", it->uri);
+    if (!it->join_ctx) log_code("YW600158", TOOL_NAME ": --join-all: %s unreachable, left unjoined", it->uri);
   }
 }
 

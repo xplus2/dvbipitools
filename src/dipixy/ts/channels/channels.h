@@ -28,7 +28,8 @@ typedef struct {
   sds_fcc_t fcc;
   int has_fec;
   sds_fec_t fec;
-  capture_ctx_t *static_ctx; /* srt/http items only, opened at channels_build() */
+  int insecure_tls; /* srt/http items only, used at open time */
+  capture_ctx_t *join_ctx; /* --join-all hold, multicast items only */
 } channel_item_t;
 
 typedef struct {
@@ -69,6 +70,9 @@ void channels_start_refresh(channels_t *ch, const config_t *cfg);
 /* re-reads every source (same as a SIGHUP), swaps results into ch under an internal lock */
 void channels_reload_all(channels_t *ch, const config_t *cfg);
 
+/* async: refresh thread runs channels_reload_all() on its next tick. safe from any thread, never blocks */
+void channels_request_reload(void);
+
 /* stops and joins refresh thread, safe even if never started. must run before channels_free() */
 void channels_stop_refresh(void);
 
@@ -79,7 +83,8 @@ int channels_refresh_active(void);
    item_name non-NULL: sel by name[item_num]. rf: NULL ok. thread-safe vs concurrent refresh. 0 ok, -1 not found/malformed */
 int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, int *family, char *addr, size_t addrsz, char *src, size_t srcsz, unsigned *port, int *rtp, channel_ret_fcc_t *rf);
 
-/* same params as channels_resolve(). srt/http items only: ref++'d ctx instead of family/addr/port. NULL otherwise */
+/* same params as channels_resolve(). srt/http items only: opens on demand (deduped), ref++'d ctx instead of family/addr/port.
+   no connection held while unused. NULL otherwise or open failed */
 capture_ctx_t *channels_resolve_static(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name);
 
 /* emit(ctx,item) per item, locked vs refresh. NULL emit: count only, no walk. ret count, 0 if empty/invalid */

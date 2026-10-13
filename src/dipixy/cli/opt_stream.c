@@ -12,6 +12,7 @@
 #include "lib/mux/fec2022.h"
 
 #include "priv.h"
+#include "../segstore.h"
 
 args_status_t dixy_opt_stream(dixy_opt_t *p, int c) {
   config_t *cfg = p->cfg;
@@ -30,8 +31,8 @@ args_status_t dixy_opt_stream(dixy_opt_t *p, int c) {
     }
     case OPT_SEGMENT_COUNT: {
       unsigned v;
-      if (argutil_uint_range(optarg, 3, 1000, &v)) {
-        argerr("YS000653", "invalid --segment-count: %s (min 3)", optarg);
+      if (argutil_uint_range(optarg, 3, HLS_MAX_SEGS, &v)) {
+        argerr("YS000653", "invalid --segment-count: %s (3-%d)", optarg, HLS_MAX_SEGS);
         args_free(cfg);
         return ARGS_ERR;
       }

@@ -14,6 +14,31 @@ static int truehd_ch(unsigned chanmap) {
   return ch;
 }
 
+/* arrangement bit to AC-4 speaker group bit (TS 103 190-2 table A.27). Lsd/Rsd has no group */
+static const unsigned thd_group[13] = {0x00001, 0x00002, 0x00040, 0x00004, 0x00010, 0x00008, 0x20000, 0x08000, 0x00800, 0, 0x20000, 0x00200, 0x01000};
+
+/* speaker group mask to ISO/IEC 23091-3 ChannelConfiguration index, as mapped in TS 103 190-2 table G.1 */
+static const struct {
+  unsigned mask;
+  unsigned cicp;
+} thd_cicp_map[] = {
+  {0x000002, 1}, {0x000001, 2}, {0x000003, 3}, {0x008003, 4}, {0x000007, 5}, {0x000047, 6}, {0x020047, 7}, {0x008001, 9},
+  {0x000005, 10}, {0x008047, 11}, {0x00004F, 12}, {0x02FF7F, 13}, {0x000057, 14}, {0x00145F, 15}, {0x000077, 16},
+  {0x000A77, 17}, {0x000A7F, 18}, {0x00007F, 19}, {0x01007F, 20},
+};
+
+static unsigned truehd_cicp(unsigned chanmap) {
+  unsigned mask = 0;
+  for (int i = 0; i < 13; i++) {
+    if (!((chanmap >> i) & 1)) continue;
+    if (!thd_group[i]) return 0;
+    mask |= thd_group[i];
+  }
+  for (size_t i = 0; i < sizeof thd_cicp_map / sizeof thd_cicp_map[0]; i++)
+    if (thd_cicp_map[i].mask == mask) return thd_cicp_map[i].cicp;
+  return 0;
+}
+
 int next_truehd(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   unsigned au_size;
   unsigned ratebits;
@@ -49,6 +74,7 @@ int next_truehd(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t 
     if (!b.err && ratebits != 0x0F) {
       t->rate = (unsigned)((ratebits & 8) ? 44100 : 48000) << (ratebits & 7);
       t->channels = (unsigned)truehd_ch(chanmap2);
+      t->truehd_cicp = truehd_cicp(chanmap2);
       t->truehd_samples = 40u << (ratebits & 7);
     }
     f->atmos = !b.err && num_substreams == 4 && (substream_info >> 7) == 1;
@@ -64,6 +90,10 @@ int next_truehd(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t 
   f->outlen = au_size;
   f->rate = t->rate;
   f->ch = t->channels;
+  if (t->truehd_cicp) {
+    f->chcfg_scheme = ESC_CHCFG_CICP;
+    f->chcfg_value = t->truehd_cicp;
+  }
   f->samples = t->truehd_samples;
   return 0;
 }

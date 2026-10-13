@@ -3,21 +3,35 @@
 
 #include "hls_int.h"
 
+#include <errno.h>
 #include <limits.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-void snapshot_plain_playlist(const hls_snapshot_t *s, seg_container_t container, plain_playlist_snap_t *snap) {
+char *write_lcevc_arg(char *mp, const char *lcevc, char sep) {
+  if (!lcevc[0]) return mp;
+  *mp++ = sep;
+  mp = WRITE_LIT(mp, "lcevc=");
+  return write_lit(mp, lcevc, strlen(lcevc));
+}
+
+void snapshot_plain_playlist(const hls_snapshot_t *s, seg_container_t container, const lcevc_select_t *lcevc, plain_playlist_snap_t *snap) {
   snap->container = container;
+  lcevc_select_format(lcevc, snap->lcevc, sizeof snap->lcevc);
   snap->video_codec = s->video_codec;
   snap->td = hls_target_duration(s);
   snap->oldest_seq = s->oldest_seq;
+  snap->init_gen = s->init_gen;
   snap->seg_count = s->count;
+  snap->disc_seq = s->epoch;
   for (int i = 0; i < s->count; i++) {
     const hls_seg_t *seg = &s->ring->segs[(s->head + i) % HLS_MAX_SEGS];
     snap->segs[i].seq = seg->seq;
     snap->segs[i].duration = seg->duration;
+    snap->segs[i].disc = seg->disc;
+    snap->disc_seq -= seg->disc;
   }
 }
 
@@ -31,15 +45,28 @@ size_t format_plain_playlist(const plain_playlist_snap_t *snap, char *m3u8, size
   mp = WRITE_LIT(mp, "\n#EXT-X-MEDIA-SEQUENCE:");
   mp = write_u32(mp, snap->oldest_seq, 0);
   *mp++ = '\n';
-  if (snap->container == SEG_CONTAINER_FMP4) mp = WRITE_LIT(mp, "#EXT-X-MAP:URI=\"init.mp4\"\n");
+  if (snap->disc_seq) {
+    mp = WRITE_LIT(mp, "#EXT-X-DISCONTINUITY-SEQUENCE:");
+    mp = write_u32(mp, snap->disc_seq, 0);
+    *mp++ = '\n';
+  }
+  if (snap->seg_count > 0 && snap->segs[0].disc) mp = WRITE_LIT(mp, "#EXT-X-DISCONTINUITY\n");
+  if (snap->container == SEG_CONTAINER_FMP4) {
+    mp = WRITE_LIT(mp, "#EXT-X-MAP:URI=\"init.mp4?g=");
+    mp = write_u32(mp, (uint32_t)snap->init_gen, 0);
+    mp = write_lcevc_arg(mp, snap->lcevc, '&');
+    mp = WRITE_LIT(mp, "\"\n");
+  }
   for (int i = 0; i < snap->seg_count; i++) {
-    if ((size_t)(mp - m3u8) + 64 > cap) break;
+    if ((size_t)(mp - m3u8) + 80 > cap) break;
+    if (i > 0 && snap->segs[i].disc) mp = WRITE_LIT(mp, "#EXT-X-DISCONTINUITY\n");
     mp = WRITE_LIT(mp, "#EXTINF:");
     mp = write_fixed3(mp, snap->segs[i].duration);
     mp = WRITE_LIT(mp, ",\nseg");
     mp = write_u32(mp, snap->segs[i].seq, 5);
     *mp++ = '.';
     mp = write_lit(mp, seg_ext, strlen(seg_ext));
+    mp = write_lcevc_arg(mp, snap->lcevc, '?');
     *mp++ = '\n';
   }
   return (size_t)(mp - m3u8);
@@ -119,8 +146,9 @@ int parse_part_filename(const char *fn, uint32_t *seq, int *part) {
   if (strncmp(fn, "seg", 3) != 0) return 0;
   p = fn + 3;
   if (*p < '0' || *p > '9') return 0;
+  errno = 0;
   v = strtoul(p, &end, 10);
-  if (*end != '.') return 0;
+  if (*end != '.' || errno != 0 || v > UINT32_MAX) return 0;
   *seq = (uint32_t)v;
   p = end + 1;
   if (*p < '0' || *p > '9') return 0;

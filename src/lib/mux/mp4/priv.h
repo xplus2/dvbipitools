@@ -22,6 +22,20 @@
 #define MP4_MOOV_RESERVE (8u * 1024 * 1024) /* free box before mdat, holds moov checkpoints */
 #define MP4_CKPT_MS 5000
 
+enum { CK_STTS, CK_CTTS, CK_STSS, CK_STSZ, CK_CO, CK_NTAB };
+
+typedef struct {
+  size_t pos;      /* entries offset in checkpoint image, esz 0: table absent */
+  unsigned esz;    /* entry bytes */
+  uint32_t cap;    /* entries reserved */
+  uint32_t n;      /* entries valid in image */
+  uint32_t synced; /* entries before this are on disk */
+  uint32_t folded; /* samples consumed */
+  uint32_t run_cnt; /* stts/ctts open run */
+  uint32_t run_val;
+  uint32_t closed; /* stts/ctts runs final */
+} ck_tab_t;
+
 typedef struct {
   uint64_t offset;
   uint32_t size;
@@ -42,6 +56,7 @@ typedef struct {
   int64_t ts_ms;      /* video: dts. audio/subs: pts (no reordering, dts==pts) */
   int64_t pts_ms;     /* video only, for cts_offset */
   int ts_seen;
+  aclk_t aclk; /* audio */
   pts_unwrap_t pts_uw;
   pts_unwrap_t dts_uw;
   unsigned char *rem; /* audio: partial frame carry-over */
@@ -67,6 +82,8 @@ typedef struct {
   unsigned truehd_format_info;
   unsigned truehd_peak_data_rate;
   int dts_has_core;
+  int sub_seen; /* subs: sub_end_ms valid */
+  int64_t sub_end_ms; /* subs: end of last cue */
 
   mp4_samp_t *samp;
   int nsamp;
@@ -76,6 +93,13 @@ typedef struct {
   uint32_t last_dur;
   int64_t first_ts_ms; /* first written sample: video dts, else pts */
   int32_t first_cts;
+  ck_tab_t ck[CK_NTAB];
+  int ck_wide;      /* chunk offsets 64 bit */
+  int ck_had;       /* layout saw samples */
+  uint64_t ck_dur;  /* folded durations */
+  size_t ck_tkhd;   /* duration field offsets in image */
+  size_t ck_mdhd;
+  size_t ck_elst;   /* 0: no edit list */
 } track_t;
 
 typedef struct {
@@ -116,12 +140,15 @@ struct mp4mux {
   int64_t next_ckpt_ms;  /* t0-relative */
   int ckpt_full;         /* moov outgrew region, checkpoints stopped */
   int ckpt_done;         /* region holds a moov */
+  mp4buf_t ck_moov;      /* checkpoint image, written incrementally */
+  size_t ck_mvhd;
 };
 
 /* write.c */
 void p4_wfd(mp4_t *m, const void *p, size_t n);
 track_t *p4_find_track(mp4_t *m, unsigned pid);
 void p4_start(mp4_t *m);
+void p4_track_free(track_t *t);
 void p4_pend_add(mp4_t *m, int trk, int64_t ts, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur);
 void p4_write_sample(mp4_t *m, track_t *t, int64_t ts_ms, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur);
 void p4_route(mp4_t *m, track_t *t, int64_t ts_ms, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur);

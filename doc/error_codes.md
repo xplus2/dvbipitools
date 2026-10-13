@@ -62,6 +62,8 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 
 | Number  | Codes                      | Message                                                                                                               |
 |---------|----------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| 000001  | MS                         | tls cert given without tls key                                                                                        |
+| 000002  | MS                         | tls key given without tls cert                                                                                        |
 | 000100  | AE,BS,GE,XS                | cannot open %s                                                                                                        |
 | 000101  | GW                         | reload failed, keeping previous guide                                                                                 |
 | 000102  | GS                         | invalid -w window hours: %s                                                                                           |
@@ -81,11 +83,12 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000116  | AA,GA                      | input not set (required for announce unless given on the command line)                                                |
 | 000117  | GA                         | map not set (required for announce unless given on the command line)                                                  |
 | 000118  | AA,GA                      | announce and listen are mutually exclusive                                                                            |
-| 000119  | GA                         | metrics.id and compress are announce-only                                                                             |
+| 000119  | GA                         | metrics.id, compress and refresh are announce-only                                                                    |
 | 000120  | AA,CA,DA,FA,GA,HA,RA,VA,YA | metrics.sock and metrics.interval require metrics.id                                                                  |
 | 000121  | BS                         | invalid -f format: %s (xml\|bim)                                                                                      |
 | 000122  | BS                         | missing -f format (xml\|bim)                                                                                          |
 | 000123  | BE                         | read failed                                                                                                           |
+| 000124  | AS,GS                      | invalid -t interval: must be >= 1                                                                                     |
 | 000125  | 3S                         | invalid -p port: %s                                                                                                   |
 | 000126  | 3S                         | invalid --caid: %s                                                                                                    |
 | 000127  | 3S                         | invalid --algo: %s (cissa\|csa2)                                                                                      |
@@ -99,8 +102,8 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000135  | FS,MS                      | invalid -l addr:port: %s                                                                                              |
 | 000136  | MS                         | invalid -e expiry seconds: %s                                                                                         |
 | 000137  | MS                         | ?                                                                                                                     |
-| 000138  | MS                         | dipimetrics: invalid listen address %s                                                                                |
-| 000139  | MS                         | dipimetrics: socket path too long: %s                                                                                 |
+| 000138  | MS                         | invalid listen address %s                                                                                             |
+| 000139  | MS                         | socket path too long: %s                                                                                              |
 | 000140  | LE,VS                      | rist: invalid peer url: %s                                                                                            |
 | 000141  | CS,DS,HS,VS                | missing -o output                                                                                                     |
 | 000142  | VS                         | exactly one of -i/-o must be rist://, the other a plain endpoint                                                      |
@@ -139,15 +142,15 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000175  | AW                         | reload failed, keeping previous input                                                                                 |
 | 000176  | AS                         | missing -p provider (required unless -i is .xml)                                                                      |
 | 000177  | AS                         | missing -O offering (required unless -i is .xml)                                                                      |
-| 000178  | AS                         | --ret-addr has no effect with a raw .xml -i input (that path is sent through unparsed)                                |
+| 000178  | AS                         | --ret-addr has no effect with a raw .xml -i input                                                                     |
 | 000179  | AS                         | --ret-rtx-time/--ret-rtx-pt/--ret-mc/--ret-mc-port/--ret-rsi-mc-ret require --ret-addr                                |
 | 000180  | AS                         | --ret-rsi-mc-ret requires --ret-mc                                                                                    |
-| 000181  | AS                         | --fcc-addr has no effect with a raw .xml -i input (that path is sent through unparsed)                                |
+| 000181  | AS                         | --fcc-addr has no effect with a raw .xml -i input                                                                     |
 | 000182  | AS                         | --fcc-rtx-time/--fcc-rtx-pt/--fcc-resolve-* require --fcc-addr                                                        |
-| 000183  | AS                         | --al-fec-addr has no effect with a raw .xml -i input (that path is sent through unparsed)                             |
+| 000183  | AS                         | --al-fec-addr has no effect with a raw .xml -i input                                                                  |
 | 000184  | AS                         | --al-fec-pt requires --al-fec-addr                                                                                    |
-| 000185  | AS                         | --packages/--cells/--rms-name/--fus-name have no effect with a raw .xml -i input (that path is sent through unparsed) |
-| 000186  | AS                         | --rms-name and --fus-name are mutually exclusive (RMSFUSDiscovery carries one or the other, never both)               |
+| 000185  | AS                         | --packages/--cells/--rms-name/--fus-name have no effect with a raw .xml -i input                                      |
+| 000186  | AS                         | --rms-name and --fus-name are mutually exclusive                                                                      |
 | 000187  | AS                         | --rms-lang/--rms-location/--rms-logo require --rms-name                                                               |
 | 000188  | AS                         | --rms-name requires --rms-location                                                                                    |
 | 000189  | AS                         | --fus-lang/--fus-id/--fus-announce/--fus-logo require --fus-name                                                      |
@@ -172,8 +175,8 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000208  | AS                         | invalid --fus-lang: %s (3-letter ISO 639-2 code)                                                                      |
 | 000209  | AS                         | invalid --fus-id: %s                                                                                                  |
 | 000210  | AS                         | invalid --fus-announce: %s                                                                                            |
-| 000211  | AA                         | provider not set (required for a non-.xml input unless given on the command line)                                     |
-| 000212  | AA                         | offering not set (required for a non-.xml input unless given on the command line)                                     |
+| 000211  | AA                         | provider not set                                                                                                      |
+| 000212  | AA                         | offering not set                                                                                                      |
 | 000213  | AA                         | ret, fcc, al-fec, metrics id, packages, cells, rms and fus are announce-only                                          |
 | 000214  | AA                         | rms and fus are mutually exclusive                                                                                    |
 | 000215  | AA                         | rms.name requires rms.location                                                                                        |
@@ -220,6 +223,8 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000256  | XS                         | missing -f format (xmltv\|tva)                                                                                        |
 | 000257  | XS                         | missing -M map (required for -f xmltv)                                                                                |
 | 000258  | XD                         | %d channels, %d programmes read                                                                                       |
+| 000259  | XS                         | -%c not allowed with -f %s                                                                                            |
+| 000260  | XS                         | -%c not allowed with -S                                                                                               |
 | 000261  | XS                         | cannot open reverse map file %s                                                                                       |
 | 000262  | IS                         | dvbipitools: %s: not a directory                                                                                      |
 | 000263  | IS                         | dvbipitools: path too long: %s/%s                                                                                     |
@@ -267,7 +272,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000305  | LW                         | playlist: title truncated to %zu bytes                                                                                |
 | 000306  | LW                         | input %u (%s): HLS media sequence reset, rejoining                                                                    |
 | 000307  | LW                         | input %u (%s): HLS segment gap, skipping ahead                                                                        |
-| 000308  | LD                         | dipimetrics: dropped stale snapshot for %s/%s (seq %llu)                                                              |
+| 000308  | LD                         | dropped stale snapshot for %s/%s (seq %llu)                                                                           |
 | 000309  | LE                         | mpts: %u programs requested, exceeds MPTS_MAX_PROGRAMS (%u)                                                           |
 | 000310  | LE                         | http request too long                                                                                                 |
 | 000311  | LE                         | unknown interface: %s                                                                                                 |
@@ -496,7 +501,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000534  | CS                         | --out-iface needs -o rtp:// or udp:// target                                                                          |
 | 000535  | CS                         | --ttl needs -o rtp:// or udp:// target                                                                                |
 | 000536  | CS                         | --al-fec-port needs --al-fec                                                                                          |
-| 000537  | CS                         | --al-fec needs -i rtp:// or -o rtp:// target                                                                          |
+| 000537  | CS                         | --al-fec needs -i rtp:// source                                                                                       |
 | 000538  | CS                         | --insecure needs -o rtmps:// target or -i https:// source                                                             |
 | 000539  | CA                         | --strip has no effect outside -f ts                                                                                   |
 | 000540  | CS                         | -s srt requires -f mkv, mka, mp4 or m4a                                                                               |
@@ -577,8 +582,8 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000615  | TW                         | input error, retrying in %lds                                                                                         |
 | 000616  | TW                         | no live PMT found within %.0fs (use -p to select one, or check the source)                                            |
 | 000617  | TW                         | retrying in %lds                                                                                                      |
-| 000618  | YS                         | invalid %s: %s (need user:password)                                                                                   |
-| 000619  | YS                         | %s credentials too long: %s                                                                                           |
+| 000618  | YS                         | invalid %s (need user:password)                                                                                       |
+| 000619  | YS                         | %s credentials too long                                                                                               |
 | 000620  | YS                         | --tls-cert given without --tls-key                                                                                    |
 | 000621  | YS                         | --tls-key given without --tls-cert                                                                                    |
 | 000622  | YS                         | --hls-part-size (%.2f) must be smaller than --segment-size (%.2f)                                                     |
@@ -609,16 +614,16 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000647  | YS                         | invalid --max-clients: %s (1..65536)                                                                                  |
 | 000648  | YS                         | invalid --max-channels: %s (1..1024)                                                                                  |
 | 000649  | YS                         | invalid --idle-timeout: %s (seconds, 0..86400, 0 = off)                                                               |
-| 000650  | YS                         | invalid --capture-ring-size: %s (KiB, min 1)                                                                          |
+| 000650  | YS                         | invalid --capture-ring-size: %s (KiB, 1..262144)                                                                      |
 | 000651  | YS                         | invalid --ts-startup-timeout: %s (seconds, 0=off)                                                                     |
 | 000652  | YS                         | invalid --segment-size: %s (seconds, min 2)                                                                           |
-| 000653  | YS                         | invalid --segment-count: %s (min 3)                                                                                   |
+| 000653  | YS                         | invalid --segment-count: %s (3-%d)                                                                                    |
 | 000654  | YS                         | invalid --hls-part-size: %s (seconds, 0.05-5.0)                                                                       |
 | 000655  | YS                         | invalid --dash-part-size: %s (seconds, 0.05-5.0)                                                                      |
 | 000656  | YS                         | invalid --dash-utc-url: too long (max 256 chars)                                                                      |
 | 000657  | YS                         | invalid --hls-seg-pool: %s (min 1)                                                                                    |
 | 000658  | YS                         | invalid -f/--format: %s (comma-separated list of ts,spts,rawaudio,hls,llhls,dash,lldash)                              |
-| 000659  | YA                         | tls.cert given without tls.key                                                                                        |
+| 000659  | YS                         | invalid --max-variants: %s (1..1024)                                                                                  |
 | 000660  | YA                         | tls.key given without tls.cert                                                                                        |
 | 000661  | YA                         | hls.part-size must be smaller than segment-size                                                                       |
 | 000662  | YA                         | dash.part-size must be smaller than segment-size                                                                      |
@@ -638,7 +643,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000676  | YE                         | -i -: %s                                                                                                              |
 | 000677  | YW                         | --m3u %s: cannot open/parse, list left empty                                                                          |
 | 000678  | YW                         | --xspf %s: cannot open/parse, list left empty                                                                         |
-| 000679  | YW                         | --csv %s: cannot open, list left empty                                                                                |
+| 000679  | YW                         | --csv %s: cannot open/parse, list left empty                                                                          |
 | 000680  | YW                         | --xml %s: cannot open, list left empty                                                                                |
 | 000681  | YW                         | --xml %s: cannot read, list left empty                                                                                |
 | 000682  | YW                         | --xml %s: no services found, list left empty                                                                          |
@@ -648,12 +653,32 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000687  | LS                         | invalid --metrics-interval: %s (seconds, 1..86400)                                                                    |
 | 000688  | LS                         | invalid --metrics-inspect-ts-pids: %s (comma separated pids, 0..8191)                                                 |
 | 000689  | LS                         | invalid --metrics-inspect-ts: %s (off\|basic\|medium\|full)                                                           |
+| 000690  | GS                         | --timeout is listen-only (use -t/--interval)                                                                          |
+| 000691  | GS                         | --interval is announce-only (use -t/--timeout)                                                                        |
+| 000692  | GS                         | --refresh is announce-only                                                                                            |
+| 000693  | GS                         | invalid --refresh cycles: %s                                                                                          |
+| 000695  | AE                         | %s: %zu bytes, max %u                                                                                                 |
+| 000698  | AS                         | --fcc-resolve-by-port port range %lu..%lu exceeds 65535                                                               |
+| 000699  | AS                         | --al-fec-* options are announce-only                                                                                  |
+| 000700  | YA                         | tls.cert given without tls.key                                                                                        |
+| 000701  | SS                         | -m range too large: %s (max %u addresses)                                                                             |
+| 000702  | CS                         | invalid --al-fec-out: %s (want L:D, L*D<=400, L<=40)                                                                  |
+| 000703  | CS                         | invalid --al-fec-port-out: %s                                                                                         |
+| 000704  | CS                         | --al-fec-out requires --al-fec-port-out                                                                               |
+| 000705  | CS                         | --al-fec-port-out needs --al-fec-out                                                                                  |
+| 000706  | CS                         | --al-fec-out needs -o rtp:// target                                                                                   |
+| 000707  | CA                         | al-fec-out requires al-fec-port-out                                                                                   |
+| 000713  | MS                         | %s exists and is not a socket                                                                                         |
+| 000714  | MS                         | %s is in use by another process                                                                                       |
+| 000715  | MS                         | empty -S path                                                                                                         |
+| 000716  | MS                         | empty --tls-cert path                                                                                                 |
+| 000717  | MS                         | empty --tls-key path                                                                                                  |
 
 ### 1xxxxx Output
 
 | Number  | Codes          | Message                                                         |
 |---------|----------------|-----------------------------------------------------------------|
-| 100100  | GD             | cycle %u sent, %d fragments                                     |
+| 100100  | GD             | cycle %u sent, %d fragments in %d containers                    |
 | 100101  | AS,GE,GS       | cannot open %s for writing                                      |
 | 100102  | AE,BE,GE,SE,XE | error writing %s                                                |
 | 100103  | BE             | write failed                                                    |
@@ -690,6 +715,13 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 100138  | FE             | unicast sendto: %s                                              |
 | 100139  | CE             | w:%s                                                            |
 | 100140  | CW             | %s output: write failed, will keep retrying                     |
+| 100141  | GE             | container build failed                                          |
+| 100142  | GE             | wrapper build failed                                            |
+| 100143  | GE             | guide too large (%zu bytes, max %u), reduce window or channels  |
+| 100144  | AE,GE          | send failed                                                     |
+| 100145  | GE             | channel %s alone exceeds %u bytes per repository, reduce its programmes |
+| 100146  | GW             | channel %s: line break in id or uri, skipped in csv map         |
+| 100147  | GE             | guide needs more than %u segments, reduce channels              |
 
 ### 3xxxxx Authentication and cryptography
 
@@ -701,7 +733,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 300103  | 3W    | username mismatch, closing (slot %d)                                                      |
 | 300104  | 3W    | checksum error, wrong password? (slot %d)                                                 |
 | 300105  | 3S    | %s: cannot load RSA private key from -k %s                                                |
-| 300106  | MW,YW | dipimetrics: SIGUSR1: TLS cert reload failed                                              |
+| 300106  | MW,YW | SIGUSR1: TLS cert reload failed                                                           |
 | 300107  | LW    | biss-ca: entitlement_key_id derivation failed for a key in %s, skipping                   |
 | 300108  | LW    | biss-ca: cannot open --biss2-ca-receivers %s: %s                                          |
 | 300109  | LW    | biss-ca: %s holds no readable PEM public key, skipping                                    |
@@ -767,6 +799,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 300169  | YE    | http3: RAND_bytes failed                                                                  |
 | 300170  | YA    | TLS init failed, --listen-tls not bound                                                   |
 | 300171  | YA    | no usable TLS certificate found, --listen-tls not bound                                   |
+| 300172  | MA    | --auth is visible in the process list, use 'auth' in the config file                      |
 
 ### 4xxxxx Format
 
@@ -786,7 +819,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 400111  | AE    | malformed #EXTINF line: %s                                                     |
 | 400112  | AE    | bad uri: %s                                                                    |
 | 400113  | AE    | %s: no recognized SD&S root element                                            |
-| 400114  | AE    | %s: unrecognized suffix, expected .csv/.m3u/.xspf/.xml                         |
+| 400114  | AE    | %s: unrecognized suffix, expected .csv/.m3u/.m3u8/.xspf/.xml                   |
 | 400115  | AE    | %s: line %d: expected id,name,lang,visible,svc1\|svc2\|...                     |
 | 400116  | AE    | %s: line %d: bad package id: %s                                                |
 | 400117  | AE    | %s: line %d: bad lang: %s                                                      |
@@ -794,7 +827,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 400119  | AE    | %s: line %d: expected id,country,type:value,...                                |
 | 400120  | AE    | %s: line %d: bad country code: %s                                              |
 | 400121  | AE    | %s: line %d: bad CA entry: %s                                                  |
-| 400122  | AE    | %s: line %d: bad CA type: %s                                                   |
+| 400122  | AE    | %s: line %d: bad CA type (0..255): %s                                          |
 | 400123  | AE    | %s: line %d: cell has no CA entries                                            |
 | 400124  | XS    | reverse map line %d: expected uri,id                                           |
 | 400125  | LE    | ecmg: malformed or unusable channel_status                                     |
@@ -829,11 +862,11 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 400154  | LE    | ret: bad --ret address: %s                                                     |
 | 400155  | LE    | input %u (%s): HLS init segment unusable                                       |
 | 400156  | LW    | HLS segment format not supported, skipped                                      |
-| 400157  | LD    | dipimetrics: rejected malformed snapshot (%zu bytes)                           |
-| 400158  | LD    | dipimetrics: rejected snapshot with unsupported protocol version %u            |
-| 400159  | LD    | dipimetrics: dropped orphan part %u for %s/%s                                  |
-| 400160  | LD    | dipimetrics: rejected malformed snapshot part for %s/%s                        |
-| 400161  | LD    | dipimetrics: dropped oversized snapshot for %s/%s                              |
+| 400157  | LD    | rejected malformed snapshot (%zu bytes)                                        |
+| 400158  | LD    | rejected snapshot with unsupported protocol version %u                         |
+| 400159  | LD    | dropped orphan part %u for %s/%s                                               |
+| 400160  | LD    | rejected malformed snapshot part for %s/%s                                     |
+| 400161  | LD    | dropped oversized snapshot for %s/%s                                           |
 | 400162  | LW    | flv=no_vc(%s)                                                                  |
 | 400163  | LW    | flv: pes tracker full, pid 0x%04x not reassembled                              |
 | 400164  | LW    | flv=no_ac(%s)                                                                  |
@@ -855,7 +888,6 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 400180  | LW    | http: unsupported transfer-encoding: %s                                        |
 | 400181  | LE    | http: malformed chunked body                                                   |
 | 400182  | LW    | bcg: channel %s has more than %d names, dropping "%s"                          |
-| 400183  | LW    | bcg: <%s> text truncated to %zu bytes                                          |
 | 400184  | LW    | bcg: attribute %s truncated to %zu bytes                                       |
 | 400185  | LE    | mapping: line %d: bad tsid/onid/sid                                            |
 | 400186  | LW    | bcg: <Name> text truncated to %zu bytes                                        |
@@ -877,6 +909,21 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 400202  | YW    | hls: remlen exceeded HLS_AUDIO_REM_MAX, discarding pending bytes               |
 | 400203  | YW    | hls: audio ES parse failed, resyncing byte by byte                             |
 | 400204  | YE    | hls_set_init_segment: %zu exceeds HLS_INIT_SEG_MAX %d                          |
+| 400205  | AE,LE,XS | mapping/reverse map line %d: longer than %zu bytes                             |
+| 400206  | LE,XS | mapping/reverse map line %d: id or uri longer than %zu bytes                   |
+| 400207  | XS    | scan: line %d: longer than %d bytes                                            |
+| 400208  | XS    | scan: entry %d: name or uri longer than %zu bytes                              |
+| 400209  | XS    | scan: line %d: bad tsid/onid/sid                                               |
+| 400210  | AE    | %s: line %d: bad visible flag, expected 0 or 1: %s                             |
+| 400211  | AE    | %s: line %d: duplicate package id: %u                                          |
+| 400214  | LW    | xmltv: skipping programme, bad start time: %s                                  |
+| 400215  | AE    | bad %s (0..65535): %s                                                          |
+| 400216  | AE    | line %d: bad service id field                                                  |
+| 400217  | AE    | xspf track %d: bad service id field                                            |
+| 400220  | AE    | %s: package %u: unknown service: %s                                            |
+| 400223  | XW    | reverse map: duplicate uri %s, first entry wins                                |
+| 400224  | XW    | duplicate channel id %s after reverse map                                      |
+| 400225  | LW    | xmltv: <%s> at line %lu has no end tag, rest of file ignored                   |
 
 ### 5xxxxx System
 
@@ -891,10 +938,10 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 500106  | 3S,FS,MS    | fcntl O_NONBLOCK: %s                                                                             |
 | 500107  | 3E          | accept: %s                                                                                       |
 | 500108  | 3S          | %s: failed to start cs378x listener on %s port %u                                                |
-| 500109  | MS          | dipimetrics: socket() failed: %s                                                                 |
-| 500110  | MS          | dipimetrics: bind %s:%u failed: %s                                                               |
-| 500111  | MS          | dipimetrics: listen failed: %s                                                                   |
-| 500112  | MS          | dipimetrics: bind %s failed: %s                                                                  |
+| 500109  | MS          | socket() failed: %s                                                                              |
+| 500110  | MS          | bind %s:%u failed: %s                                                                            |
+| 500111  | MS          | listen failed: %s                                                                                |
+| 500112  | MS          | bind %s failed: %s                                                                               |
 | 500113  | LE,VS       | rist: receiver create failed                                                                     |
 | 500114  | AE          | out of memory building %s document                                                               |
 | 500115  | HE          | srt output: poll failed: %s                                                                      |
@@ -1007,6 +1054,19 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 500222  | YE          | hls: close retire alloc failed, store stays open                                                 |
 | 500223  | YW          | --sds %s: cannot join, list left empty                                                           |
 | 500224  | YS          | out of memory sizing ts_push subscriber table (%d entries)                                       |
+| 500225  | LE          | xmltv: cannot convert encoding %s to UTF-8                                                       |
+| 500226  | YE          | worker %d: epoll_create1: %s                                                                     |
+| 500227  | YW          | http3: udp4 bind failed, no HTTP/3 over IPv4                                                     |
+| 500228  | YW          | http3: udp6 bind failed, no HTTP/3 over IPv6                                                     |
+| 500229  | YW          | segmenter variant cap (%d per source) reached, rejecting new variants                            |
+| 500230  | LE          | tva: cannot read input (read error or out of memory)                                             |
+| 500231  | LE          | tva: out of memory parsing input                                                                 |
+| 500233  | GE          | out of memory, version not advanced                                                              |
+| 500235  | YA          | ssdp: IP_PKTINFO: %s, not answering searches                                                     |
+| 500236  | YE          | cannot listen on %s:%u%s (worker %d): %s                                                         |
+| 500237  | YW          | hls: pes_new failed, program change not applied                                                  |
+| 500238  | YW          | hls: no video keyframe within buffer cap, segment data dropped                                   |
+| 500240  | AE,GE       | receive on %s failed, giving up                                                                  |
 
 ### 6xxxxx Remote
 
@@ -1072,19 +1132,21 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 600157  | YE    | http source %s: %s, source left unavailable                       |
 | 600158  | YW    | --join-all: %s unreachable, left unjoined                         |
 | 600159  | YW    | --sds %s: no services discovered in %.0fs                         |
+| 600160  | LW    | rtmpout: %s: setup timed out after %us, reconnecting              |
 
 ### 7xxxxx Misc
 
 | Number  | Codes             | Message                                                                                                            |
 |---------|-------------------|--------------------------------------------------------------------------------------------------------------------|
+| 700001  | LA                | %s: %u warnings or errors in config (summary line)                                                                 |
 | 700010  | LD,LE,LW,VD,VE,VW | rist: %s                                                                                                           |
 | 700011  | LD,LE,LW          | srt: %s                                                                                                            |
 | 700100  | GD                | segment %u: %d channels, %d programmes, %d fragments                                                               |
 | 700101  | BD                | %d channels, %d programmes, %d fragments -> %zu+%zu bytes                                                          |
 | 700102  | BD                | %d channels, %d programmes, %d fragments read                                                                      |
 | 700103  | 3D                | no CW available yet, dropping request                                                                              |
-| 700104  | MD                | dipimetrics: 404 %s %s                                                                                             |
-| 700105  | MW                | dipimetrics: SIGUSR1: no TLS configured, ignoring                                                                  |
+| 700104  | MD                | 404 %s %s                                                                                                          |
+| 700105  | MW                | SIGUSR1: no TLS configured, ignoring                                                                               |
 | 700106  | VA                | warning: this librist build (<=0.2.20) has known IPv6 handling bugs, %s may crash it                               |
 | 700107  | AW                | cannot keep segment %u, dropped                                                                                    |
 | 700108  | AW                | segment %u: %d services, more present beyond the %d cap                                                            |
@@ -1105,7 +1167,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 700123  | LW                | ret: repair payload %zu exceeds hold cap (%d), dropping until it fits again                                        |
 | 700124  | LW                | HLS packed audio is not ADTS AAC, skipped                                                                          |
 | 700125  | LW                | metrics: label for id %u truncated to %d bytes: %s                                                                 |
-| 700126  | LD                | dipimetrics: dropped snapshot from new instance %s/%s, store full (%d slots)                                       |
+| 700126  | LD                | dropped snapshot from new instance %s/%s, store full (%d slots)                                                    |
 | 700127  | LW                | mp4: index outgrew reserved region, no further crash checkpoints                                                   |
 | 700128  | LW                | dvbstp: reassembly slots full (%d), evicting in-progress payload_id=0x%02x segment_id=%u                           |
 | 700129  | LA                | rist: this build has no librist support, rist:// input unavailable                                                 |
@@ -1130,8 +1192,18 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 700148  | YW                | hls: hls_push_part failed, part lost                                                                               |
 | 700149  | YW                | hls: hls_push_segment_ll failed, segment lost                                                                      |
 | 700150  | YW                | hls: hls_push_segment failed, segment lost                                                                         |
-| 700151  | YW                | ts_push: h2 ring full, dropping packet                                                                             |
-| 700152  | YW                | ts_push: h3 ring full, dropping packet                                                                             |
+| 700151  | YW                | ts_push: h2 ring full, resetting stream                                                                            |
+| 700152  | YW                | ts_push: h3 ring full, resetting stream                                                                            |
+| 700153  | YW                | hls: discontinuity not recorded, old segments stay listed                                                          |
+| 700154  | YW                | hls: program layout changed, relocked on video pid 0x%04x                                                          |
+| 700155  | YW                | hls: store anchor failed, availabilityStartTime stays at store open                                                |
+| 700156  | YW                | hls: video track store sync failed, stale segments stay listed                                                     |
+| 700157  | YW                | hls: audio track store sync failed, stale segments stay listed                                                     |
+| 700158  | YW                | hls: track init segment lost, DASH falls back to muxed                                                             |
+| 700159  | YW                | hls: track store push failed, DASH track data lost                                                                 |
+| 700160  | YW                | hls: audio parameters not recorded, DASH audio rate and channels missing                                           |
+| 700163  | LW                | mapping: duplicate id %s, first entry wins                                                                         |
+| 700164  | MD                | 405 %s %s                                                                                                          |
 
 ### 8xxxxx and 9xxxxx
 

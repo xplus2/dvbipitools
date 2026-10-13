@@ -12,6 +12,7 @@
 #include "core/htdocs.h"
 #include "core/metrics.h"
 #include "core/status.h"
+#include "dlna/gena.h"
 #include "dlna/ssdp.h"
 #include "reactor/reactor.h"
 #include "ts/capture/capture.h"
@@ -119,6 +120,7 @@ int main(int argc, char **argv) {
   rc = reactor_run(&cfg, channels, &mx, ssdp_start);
   ssdp_stop();
   channels_stop_refresh();
+  gena_stop();
   metrics_exporter_clear_extras(&mx);
   dipixy_metrics_close(&mx);
   channels_free(channels);

@@ -11,6 +11,7 @@
 #include "dipixy/segment/pidlock.h"
 #include "dipixy/segment/priv.h"
 #include "dipixy/segstore.h"
+#include "dipixy/segstore_int.h"
 
 #define GROUP "239.255.42.42"
 #define PORT 42142
@@ -20,6 +21,9 @@
 #define PMT_PID 0x100
 #define VIDEO_PID 0x101
 #define AUDIO_PID 0x102
+#define NEW_VIDEO_PID 0x201
+#define NEW_AUDIO_PID 0x202
+#define NEW_PMT_PID 0x300
 #define OTHER_PID 0x300
 #define ST_H264 0x1B
 #define ST_AAC 0x0F
@@ -314,11 +318,28 @@ START_TEST(timestamps_anchor_once_ready_and_measure_drift) {
   ck_assert_int_eq(g.s->audio.pts_anchored, 0);
   handle_audio_pes(g.s, 1, 90000, frame, n);
   ck_assert_int_eq(g.s->audio.pts_anchored, 1);
-  ck_assert_int_eq((int)g.s->audio.anchor_pts_ms, 1000);
+  ck_assert_int_eq((int)g.s->audio.anchor_pts, 90000);
   ck_assert_int_eq((int)g.s->audio.anchor_nominal_samples, AAC_SAMPLES);
   handle_audio_pes(g.s, 1, 90000 * 2, frame, n);
   ck_assert_int_eq((int)g.s->audio.pending_drift_samples, ADTS_RATE - AAC_SAMPLES);
-  ck_assert_int_eq((int)g.s->audio.anchor_pts_ms, 2000);
+  ck_assert_int_eq((int)g.s->audio.anchor_pts, 180000);
+  seg_close(&g);
+}
+END_TEST
+
+START_TEST(splice_sized_drift_is_not_corrected) {
+  seg_t g;
+  pid_filter_t none = {0};
+  uint8_t frame[256];
+  size_t n = adts_frame(frame, ADTS_PAYLOAD);
+
+  seg_open(&g, &none, SEG_CONTAINER_FMP4);
+  audio_ready(&g);
+  handle_audio_pes(g.s, 1, 90000, frame, n);
+  handle_audio_pes(g.s, 1, 90000, frame, n);
+  handle_audio_pes(g.s, 1, 90000 * 10, frame, n);
+  ck_assert_int_eq((int)g.s->audio.pending_drift_samples, 0);
+  ck_assert_int_eq((int)g.s->audio.anchor_pts, 90000 * 10);
   seg_close(&g);
 }
 END_TEST
@@ -414,20 +435,251 @@ START_TEST(pmt_rewrite_falls_back_silently_when_it_cannot_apply) {
   pid_filter_t drop = {0};
   unsigned char pkt[188];
   unsigned char rw[PSI_SECTION_ASM_BUF_LEN];
-  unsigned char out[188];
+  unsigned char out[PMT_FILTER_PKT_MAX * 188];
   unsigned char cc = 4;
+  size_t n = 0;
 
   pid_filter_add(&drop, AUDIO_PID);
   fixture_ts_packet(pkt, PMT_PID, 0, 0x55);
-  ck_assert_ptr_eq(pidlock_rewrite_pmt(NULL, &drop, &cc, pkt, PMT_PID, rw, out), pkt);
-  ck_assert_ptr_eq(pidlock_rewrite_pmt(psi, &none, &cc, pkt, PMT_PID, rw, out), pkt);
-  ck_assert_ptr_eq(pidlock_rewrite_pmt(empty, &drop, &cc, pkt, PMT_PID, rw, out), pkt);
-  ck_assert_ptr_eq(pidlock_rewrite_pmt(psi, &drop, &cc, pkt, OTHER_PID, rw, out), pkt);
+  pkt[1] |= 0x40;
+  ck_assert_ptr_eq(pidlock_rewrite_pmt(NULL, &drop, &cc, pkt, PMT_PID, rw, out, &n), pkt);
+  ck_assert_uint_eq(n, 1u);
+  ck_assert_ptr_eq(pidlock_rewrite_pmt(psi, &none, &cc, pkt, PMT_PID, rw, out, &n), pkt);
+  ck_assert_ptr_eq(pidlock_rewrite_pmt(empty, &drop, &cc, pkt, PMT_PID, rw, out, &n), pkt);
+  ck_assert_ptr_eq(pidlock_rewrite_pmt(psi, &drop, &cc, pkt, OTHER_PID, rw, out, &n), pkt);
   ck_assert_uint_eq(cc, 4u);
-  ck_assert_ptr_eq(pidlock_rewrite_pmt(psi, &drop, &cc, pkt, PMT_PID, rw, out), out);
+  ck_assert_ptr_eq(pidlock_rewrite_pmt(psi, &drop, &cc, pkt, PMT_PID, rw, out, &n), out);
+  ck_assert_uint_eq(n, 1u);
+  ck_assert_uint_eq(cc, 5u);
+  pkt[1] &= (unsigned char)~0x40;
+  ck_assert_ptr_eq(pidlock_rewrite_pmt(psi, &drop, &cc, pkt, PMT_PID, rw, out, &n), NULL);
+  ck_assert_uint_eq(n, 0u);
   ck_assert_uint_eq(cc, 5u);
   psi_free(psi);
   psi_free(empty);
+}
+END_TEST
+
+START_TEST(pmt_rewrite_spans_packets_when_the_section_outgrows_one) {
+  enum { N_ES = 40, DROP_PID = 0x205 };
+  unsigned char body[9 + N_ES * 5];
+  unsigned char section[3 + sizeof body + 4];
+  unsigned char pat[64];
+  unsigned char pat_pkt[188];
+  unsigned char src[2 * 188];
+  unsigned char rw[PSI_SECTION_ASM_BUF_LEN];
+  unsigned char out[PMT_FILTER_PKT_MAX * 188];
+  unsigned char cc_src = 0;
+  unsigned char cc = 4;
+  size_t n = 0;
+  size_t o = 0;
+  size_t hdr;
+  size_t pat_len;
+  psi_t *psi = psi_new();
+  pid_filter_t drop = {0};
+
+  body[o++] = 0x00;
+  body[o++] = 0x01;
+  body[o++] = 0xC1;
+  body[o++] = 0x00;
+  body[o++] = 0x00;
+  body[o++] = 0xE2;
+  body[o++] = 0x00;
+  body[o++] = 0xF0;
+  body[o++] = 0x00;
+  for (unsigned i = 0; i < N_ES; i++) {
+    body[o++] = ST_H264;
+    body[o++] = (unsigned char)(0xE0 | (((0x200 + i) >> 8) & 0x1F));
+    body[o++] = (unsigned char)(0x200 + i);
+    body[o++] = 0xF0;
+    body[o++] = 0x00;
+  }
+  hdr = o + 4;
+  section[0] = 0x02;
+  section[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  section[2] = (unsigned char)hdr;
+  memcpy(section + 3, body, o);
+  be32_put(section + 3 + o, crc32_mpeg(section, 3 + o));
+  ck_assert_uint_eq(pmt_filter_emit_packets(src, sizeof src, PMT_PID, &cc_src, section, sizeof section), 2u);
+
+  pat_len = psi_build_pat(0x1234, 0, 1, PMT_PID, pat, sizeof pat);
+  fixture_wrap_section(pat_pkt, 0x0000, pat, pat_len);
+  psi_feed(psi, pat_pkt);
+  psi_feed(psi, src);
+  psi_feed(psi, src + 188);
+  ck_assert_int_eq(psi_have_pmt(psi), 1);
+
+  pid_filter_add(&drop, DROP_PID);
+  ck_assert_ptr_eq(pidlock_rewrite_pmt(psi, &drop, &cc, src, PMT_PID, rw, out, &n), out);
+  ck_assert_uint_eq(n, 2u);
+  ck_assert_uint_eq(cc, 6u);
+  ck_assert_uint_eq(out[1] & 0x40, 0x40u);
+  ck_assert_uint_eq(out[3] & 0x0F, 5u);
+  ck_assert_uint_eq(out[188 + 1] & 0x40, 0u);
+  ck_assert_uint_eq(out[188 + 3] & 0x0F, 6u);
+  ck_assert_int_eq(has_es_entry(out, n * 188, ST_H264, DROP_PID), 0);
+  ck_assert_int_eq(has_es_entry(out, n * 188, ST_H264, 0x204), 1);
+  ck_assert_int_eq(has_es_entry(out, n * 188, ST_H264, 0x206), 1);
+
+  ck_assert_ptr_eq(pidlock_rewrite_pmt(psi, &drop, &cc, src + 188, PMT_PID, rw, out, &n), NULL);
+  ck_assert_uint_eq(n, 0u);
+  ck_assert_uint_eq(cc, 6u);
+  psi_free(psi);
+}
+END_TEST
+
+START_TEST(pat_rewrite_narrows_to_the_locked_program) {
+  psi_t *psi = build_psi_with_program(1, VIDEO_PID, ST_H264, VIDEO_PID);
+  psi_t *empty = psi_new();
+  unsigned char pkt[188];
+  unsigned char out[188];
+  unsigned char cc = 4;
+
+  fixture_ts_packet(pkt, 0, 0, 0x55);
+  pkt[1] |= 0x40;
+  ck_assert_ptr_eq(pidlock_rewrite_pat(NULL, &cc, pkt, 0, out), pkt);
+  ck_assert_ptr_eq(pidlock_rewrite_pat(empty, &cc, pkt, 0, out), pkt);
+  ck_assert_ptr_eq(pidlock_rewrite_pat(psi, &cc, pkt, OTHER_PID, out), pkt);
+  ck_assert_uint_eq(cc, 4u);
+  ck_assert_ptr_eq(pidlock_rewrite_pat(psi, &cc, pkt, 0, out), out);
+  ck_assert_uint_eq(cc, 5u);
+  ck_assert_uint_eq(out[0], 0x47u);
+  ck_assert_uint_eq(out[3] & 0x0F, 5u);
+  ck_assert_uint_eq(out[5], 0u);
+  ck_assert_uint_eq(((unsigned)out[15] & 0x1F) << 8 | out[16], (unsigned)PMT_PID);
+  ck_assert_uint_eq(psi_program_number(psi), ((unsigned)out[13] << 8) | out[14]);
+  pkt[1] &= (unsigned char)~0x40;
+  ck_assert_ptr_eq(pidlock_rewrite_pat(psi, &cc, pkt, 0, out), NULL);
+  ck_assert_uint_eq(cc, 5u);
+  psi_free(psi);
+  psi_free(empty);
+}
+END_TEST
+
+static const unsigned new_av_es[2][2] = {{ST_H264, NEW_VIDEO_PID}, {ST_AAC, NEW_AUDIO_PID}};
+
+static void feed_programme_pcr(const seg_t *g, unsigned pcr_pid, const unsigned (*es)[2], unsigned n_es) {
+  unsigned char pkts[2][188];
+
+  fixture_programme_packets_es(1, pcr_pid, es, n_es, pkts);
+  hls_seg_feed_all(g->ctx, pkts[0]);
+  hls_seg_feed_all(g->ctx, pkts[1]);
+}
+
+static const hls_snapshot_t *store_snap(const seg_t *g) {
+  return atomic_load(&g->s->store->snap);
+}
+
+START_TEST(changed_pmt_relocks_onto_the_new_pids) {
+  seg_t g;
+  pid_filter_t none = {0};
+
+  seg_open(&g, &none, SEG_CONTAINER_TS);
+  feed_programme(&g, av_es, 2);
+  feed_programme_pcr(&g, NEW_VIDEO_PID, new_av_es, 2);
+  ck_assert_int_eq(g.s->demux.video_pid_known, 1);
+  ck_assert_uint_eq(g.s->demux.video_pid, (unsigned)NEW_VIDEO_PID);
+  ck_assert_int_eq(pidlock_allowed(g.s->demux.allowed_pids, g.s->demux.n_allowed, NEW_AUDIO_PID), 1);
+  ck_assert_int_eq(pidlock_allowed(g.s->demux.allowed_pids, g.s->demux.n_allowed, AUDIO_PID), 0);
+  ck_assert_uint_eq(g.s->len, 188u);
+  feed_pid(&g, VIDEO_PID);
+  ck_assert_uint_eq(g.s->len, 188u);
+  feed_pid(&g, NEW_VIDEO_PID);
+  ck_assert_uint_eq(g.s->len, 376u);
+  seg_close(&g);
+}
+END_TEST
+
+START_TEST(repeated_identical_pmt_keeps_the_lock_state) {
+  seg_t g;
+  pid_filter_t none = {0};
+
+  seg_open(&g, &none, SEG_CONTAINER_TS);
+  feed_programme(&g, av_es, 2);
+  feed_programme(&g, av_es, 2);
+  ck_assert_uint_eq(g.s->len, 564u);
+  ck_assert_int_eq(store_snap(&g) == NULL || store_snap(&g)->epoch == 0, 1);
+  seg_close(&g);
+}
+END_TEST
+
+START_TEST(relock_follows_codec_and_audio_changes_for_fragmented_output) {
+  const unsigned hevc_es[2][2] = {{0x24, VIDEO_PID}, {0x81, AUDIO_PID}};
+  seg_t g;
+  pid_filter_t none = {0};
+
+  seg_open(&g, &none, SEG_CONTAINER_FMP4);
+  feed_programme(&g, av_es, 2);
+  ck_assert_int_eq(g.s->demux.video_codec, CODEC_H264);
+  ck_assert_int_eq(g.s->demux.audio_codec, CODEC_AAC);
+  feed_programme(&g, hevc_es, 2);
+  ck_assert_int_eq(g.s->demux.video_codec, CODEC_HEVC);
+  ck_assert_int_eq(g.s->video.es.codec, CODEC_HEVC);
+  ck_assert_int_eq(g.s->demux.audio_codec, CODEC_AC3);
+  ck_assert_int_eq(g.s->audio.es.codec, CODEC_AC3);
+  ck_assert_int_eq(g.s->audio.ready, 0);
+  feed_programme(&g, new_av_es, 1);
+  ck_assert_uint_eq(g.s->demux.video_pid, (unsigned)NEW_VIDEO_PID);
+  ck_assert_int_eq(g.s->demux.audio_pid_known, 0);
+  ck_assert_int_eq(g.s->audio.present, 0);
+  seg_close(&g);
+}
+END_TEST
+
+START_TEST(relock_restarts_the_published_window) {
+  const uint8_t data[188] = {0x47};
+  seg_t g;
+  pid_filter_t none = {0};
+
+  seg_open(&g, &none, SEG_CONTAINER_TS);
+  feed_programme(&g, av_es, 2);
+  ck_assert_int_eq(hls_push_segment_at(g.s->store, data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_push_segment_at(g.s->store, data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(store_snap(&g)->count, 2);
+  feed_programme_pcr(&g, NEW_VIDEO_PID, new_av_es, 2);
+  ck_assert_uint_eq(store_snap(&g)->epoch, 1u);
+  ck_assert_int_eq(store_snap(&g)->count, 0);
+  ck_assert_uint_eq(store_snap(&g)->oldest_seq, 3u);
+  ck_assert_uint_eq(store_snap(&g)->epoch_base_ms, 4000u);
+  seg_close(&g);
+}
+END_TEST
+
+START_TEST(relock_follows_a_program_moved_to_another_pmt_pid) {
+  unsigned char pkts[2][188];
+  unsigned char pat[64];
+  unsigned char pat_pkt[188];
+  unsigned char pmt_pkt[188];
+  size_t pat_len = psi_build_pat(0x1234, 1, 1, NEW_PMT_PID, pat, sizeof pat);
+  size_t pmt_len;
+  seg_t g;
+  pid_filter_t none = {0};
+
+  seg_open(&g, &none, SEG_CONTAINER_TS);
+  feed_programme(&g, av_es, 2);
+  fixture_programme_packets_es(1, NEW_VIDEO_PID, new_av_es, 2, pkts);
+  pmt_len = 3 + (((size_t)(pkts[1][6] & 0x0F) << 8) | pkts[1][7]);
+  fixture_wrap_section(pat_pkt, 0x0000, pat, pat_len);
+  fixture_wrap_section(pmt_pkt, NEW_PMT_PID, pkts[1] + 5, pmt_len);
+  hls_seg_feed_all(g.ctx, pat_pkt);
+  hls_seg_feed_all(g.ctx, pmt_pkt);
+  ck_assert_uint_eq(g.s->demux.video_pid, (unsigned)NEW_VIDEO_PID);
+  ck_assert_int_eq(pidlock_allowed(g.s->demux.allowed_pids, g.s->demux.n_allowed, NEW_PMT_PID), 1);
+  ck_assert_int_eq(pidlock_allowed(g.s->demux.allowed_pids, g.s->demux.n_allowed, PMT_PID), 0);
+  seg_close(&g);
+}
+END_TEST
+
+START_TEST(lcevc_excludes_never_change_the_lookup_key) {
+  seg_t g;
+  pid_filter_t none = {0};
+  pid_filter_t key;
+
+  seg_open(&g, &none, SEG_CONTAINER_TS);
+  key = g.s->filter;
+  pid_filter_add(&g.s->drop, OTHER_PID);
+  ck_assert(pid_filter_equal(&g.s->filter, &key));
+  seg_close(&g);
 }
 END_TEST
 
@@ -449,12 +701,21 @@ static Suite *demux_suite(void) {
   tcase_add_test(tc, leading_garbage_is_skipped_to_the_next_frame);
   tcase_add_test(tc, pure_garbage_never_makes_audio_ready);
   tcase_add_test(tc, timestamps_anchor_once_ready_and_measure_drift);
+  tcase_add_test(tc, splice_sized_drift_is_not_corrected);
   tcase_add_test(tc, transport_containers_ignore_audio_pes);
   tcase_add_test(tc, runaway_remainders_are_discarded);
   tcase_add_test(tc, snapshot_lists_the_program_pids_in_order_and_honours_the_cap);
   tcase_add_test(tc, allowed_lookup_is_exact);
   tcase_add_loop_test(tc, lcevc_selection_excludes_the_unwanted_layers, 0, (int)(sizeof lcevc_cases / sizeof lcevc_cases[0]));
   tcase_add_test(tc, pmt_rewrite_falls_back_silently_when_it_cannot_apply);
+  tcase_add_test(tc, pmt_rewrite_spans_packets_when_the_section_outgrows_one);
+  tcase_add_test(tc, pat_rewrite_narrows_to_the_locked_program);
+  tcase_add_test(tc, changed_pmt_relocks_onto_the_new_pids);
+  tcase_add_test(tc, repeated_identical_pmt_keeps_the_lock_state);
+  tcase_add_test(tc, relock_follows_codec_and_audio_changes_for_fragmented_output);
+  tcase_add_test(tc, relock_restarts_the_published_window);
+  tcase_add_test(tc, relock_follows_a_program_moved_to_another_pmt_pid);
+  tcase_add_test(tc, lcevc_excludes_never_change_the_lookup_key);
   suite_add_tcase(s, tc);
   return s;
 }

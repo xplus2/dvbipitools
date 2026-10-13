@@ -37,11 +37,12 @@ int64_t dash_lldash_sub_h3_sid(int slot);
 /* h2: drains up to maxlen bytes into buf, returns bytes copied (0: ring empty) */
 size_t dash_lldash_ring_read(int slot, uint8_t *buf, size_t maxlen);
 
-/* h3 zero-copy read: peek then advance */
+/* h3 zero-copy read: peek, hold, then ack once the peer acked the bytes. peeked mem stays valid till ack */
 const uint8_t *dash_lldash_ring_peek(int slot, size_t *len);
-void dash_lldash_ring_advance(int slot, size_t n);
+void dash_lldash_ring_hold(int slot, size_t n);
+void dash_lldash_ring_ack(int slot, size_t n);
 
-/* h2/h3: 1 if ring has bytes still to drain */
+/* h2/h3: 1 if ring has bytes still to hand out */
 int dash_lldash_ring_pending(int slot);
 
 /* h2/h3: 1 if a ring enqueue overflowed (stream should be aborted, not just finalized) */
@@ -51,11 +52,18 @@ int dash_lldash_ring_errored(int slot);
    subscribed segment has finalized (terminating chunk queued/EOF eligible) */
 int dash_lldash_sub_finalized(int slot);
 
+/* reactor_dashchunk.c: h1 conn published, header flushed.
+   replays parts missed since subscribe, enables delivery */
+void dash_lldash_sub_attach(int slot);
+
 /* reactor_dashchunk.c/http2_dashchunk.c/http3_dashchunk.c: releases slot */
 void dash_lldash_sub_close(int slot);
 
 /* reactor_listen.c: per-reactor-thread wakeup eventfd for h2/h3 chunk. -1 efd: unregister */
 void dash_lldash_register_reactor_efd(int tid, int efd);
+
+/* reactor.c: after all pump and reactor threads joined. closes registered efds */
+void dash_lldash_close_reactor_efds(void);
 
 /* reactor_loop.c: called on that eventfd's readable event, wakes pending h2/h3 subs owned by tid */
 void dash_lldash_flush_ready(int tid);
@@ -70,7 +78,7 @@ void link_store_chain(hls_store_t *store, int idx);
 void unlink_store_chain(hls_store_t *store, int idx);
 void link_tid_chain(int idx, int tid);
 void unlink_tid_chain(int idx);
-void on_part_pushed(const hls_store_t *store, uint32_t seq, const uint8_t *data, size_t len);
+void on_part_pushed(const hls_store_t *store, uint32_t seq, int part_idx, const uint8_t *data, size_t len);
 void on_segment_done(const hls_store_t *store, uint32_t seq);
 void on_store_closing(const hls_store_t *store);
 

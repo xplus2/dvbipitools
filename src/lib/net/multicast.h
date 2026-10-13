@@ -27,6 +27,9 @@ ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_o
 int mcast_enable_rx_timestamps(mcast_t *m);
 uint64_t mcast_last_rx_ns(const mcast_t *m);
 
+/* AF_INET or AF_INET6 */
+int mcast_family(const mcast_t *m);
+
 /* underlying fd, for poll()/select() alongside other sockets */
 int mcast_fd(const mcast_t *m);
 

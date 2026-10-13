@@ -8,16 +8,20 @@
 #include "lib/demux/crc32.h"
 #include "lib/demux/psi/section_asm.h"
 #include "lib/demux/tspack.h"
+#include "lib/mux/pmt_filter.h"
 #include "ts.h"
 
 struct ts_filter {
   psi_t *psi;
+  psi_section_asm_t pat_asm; /* own reassembly, rewrite fires on completion */
+  psi_section_asm_t pmt_asm;
   unsigned char cc_pat;
   unsigned char cc_pmt;
   int audio_all;
   unsigned audio_track; /* 1-based, if !audio_all */
   int strip_subs;       /* -s strip */
   int bad_track;        /* -a track missing from PMT */
+  int track_seen;       /* -a track was present once, later PMT drops are transient */
   unsigned strip_mask;  /* --strip, STRIP_* bits */
   unsigned char int_pending[8192]; /* STRIP_INT: pid currently mid an INT section */
   unsigned char audio_drop[8192]; /* rebuilt each PMT parse, see rebuild_audio_drop() */
@@ -147,19 +151,6 @@ static size_t pmt_rewrite(const ts_filter_t *f, const unsigned char *src, size_t
   return o + 4;
 }
 
-/* section -> one TS packet, 0xFF padded */
-static int emit_section(unsigned char *out, unsigned pid, unsigned char cc, const unsigned char *sec, size_t seclen) {
-  if (seclen + 1 > 184) return 0;
-  memset(out, 0xFF, 188);
-  out[0] = 0x47;
-  out[1] = 0x40 | (unsigned char)((pid >> 8) & 0x1F);
-  out[2] = (unsigned char)(pid & 0xFF);
-  out[3] = 0x10 | (cc & 0x0F);
-  out[4] = 0x00;
-  memcpy(out + 5, sec, seclen);
-  return 1;
-}
-
 ts_filter_t *ts_filter_new(int audio_all, unsigned audio_track, int strip_subs, unsigned preferred_pmt_pid, unsigned strip_mask) {
   ts_filter_t *f = calloc(1, sizeof *f);
   if (!f) return NULL;
@@ -232,45 +223,69 @@ static int table_dropped(const ts_filter_t *f, unsigned pid, pid_class_t cls) {
   return 0;
 }
 
-const unsigned char *ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out) {
-  unsigned pid;
+/* rewritten section of pid's table, valid only if psi.c parsed the very same one */
+static size_t rewrite_section(const ts_filter_t *f, unsigned pid, const unsigned char *sec, size_t sl, unsigned char *rw) {
+  const unsigned char *known;
+  size_t kl, rl;
+  if (pid == 0x0000) known = psi_pat_section(f->psi, &kl);
+  else known = psi_pmt_section(f->psi, &kl);
+  if (!known || kl != sl || memcmp(known, sec, sl)) return 0;
+  rl = pid == 0x0000 ? pat_rewrite(sec, sl, rw) : pmt_rewrite(f, sec, sl, rw);
+  if (rl) return rl;
+  memcpy(rw, sec, sl); /* unparseable: keep as is */
+  return sl;
+}
+
+/* PAT/PMT packet in, completed sections out as 1..n packets. continuation packets yield 0 */
+static size_t section_packets(ts_filter_t *f, psi_section_asm_t *a, const unsigned char *in, unsigned pid, unsigned char *cc, unsigned char *out) {
+  unsigned char rw[PSI_SECTION_ASM_BUF_LEN]; /* output never larger than input */
+  const unsigned char *pl;
+  size_t plen, total = 0;
   int pusi;
+  if (!tspack_payload(in, &pl, &plen, &pusi) || !psi_section_asm_cc(a, in)) return 0;
+  if (pid != 0x0000) rebuild_audio_drop(f);
+  for (int got = psi_section_asm_feed(a, pl, plen, pusi); got; got = psi_section_asm_next(a, pl, plen)) {
+    size_t rl = rewrite_section(f, pid, a->buf, a->expect, rw);
+    if (rl) total += pmt_filter_emit_packets(out + total * 188, TS_FILTER_OUT_MAX - total * 188, pid, cc, rw, rl);
+  }
+  return total;
+}
+
+/* locked PMT pid. unlocked: any PAT-listed pid, PMT may be mid-section */
+static int pmt_pid_held(const ts_filter_t *f, unsigned pid) {
+  const psi_program_t *pr;
+  unsigned locked = psi_pmt_pid(f->psi);
+  int count;
+  if (!psi_have_pat(f->psi)) return 0;
+  if (locked) return pid == locked;
+  pr = psi_pat_programs(f->psi, &count);
+  for (int k = 0; k < count; k++) {
+    if (pr[k].pmt_pid == pid) return 1;
+  }
+  return 0;
+}
+
+const unsigned char *ts_filter_packet(ts_filter_t *f, const unsigned char *in, unsigned char *out, size_t *n) {
+  unsigned pid;
   pid_class_t cls;
+  *n = 0;
   psi_feed(f->psi, in);
   if (in[0] != 0x47) return NULL;
   pid = tspack_pid(in);
-  pusi = in[1] & 0x40;
-  if (!f->audio_all && psi_have_pmt(f->psi) && (int)f->audio_track > psi_audio_count(f->psi)) f->bad_track = 1;
-
-  if (pid == 0x0000) {
-    /* output is never larger than input, sized to psi.c's section cap */
-    unsigned char rw[PSI_SECTION_ASM_BUF_LEN];
-    size_t sl, rl;
-    const unsigned char *sec;
-    if (!(f->strip_mask & STRIP_NIT)) return in;
-    sec = psi_pat_section(f->psi, &sl);
-    if (!sec || !pusi) return NULL;
-    rl = pat_rewrite(sec, sl, rw);
-    if (rl) {
-      f->cc_pat = (f->cc_pat + 1) & 0x0F;
-      if (emit_section(out, 0x0000, f->cc_pat, rw, rl)) return out;
-    }
-    return in; /* fallback: original */
+  if (!f->audio_all && psi_have_pmt(f->psi)) {
+    if ((int)f->audio_track <= psi_audio_count(f->psi)) f->track_seen = 1;
+    else if (!f->track_seen) f->bad_track = 1;
   }
 
-  if (psi_have_pat(f->psi) && pid == psi_pmt_pid(f->psi)) {
-    /* output is never larger than input, sized to psi.c's section cap */
-    unsigned char rw[PSI_SECTION_ASM_BUF_LEN];
-    size_t sl, rl;
-    const unsigned char *sec = psi_pmt_section(f->psi, &sl);
-    if (!sec || !pusi) return NULL;
-    rebuild_audio_drop(f);
-    rl = pmt_rewrite(f, sec, sl, rw);
-    if (rl) {
-      f->cc_pmt = (f->cc_pmt + 1) & 0x0F;
-      if (emit_section(out, pid, f->cc_pmt, rw, rl)) return out;
-    }
-    return in;
+  if (pid == 0x0000) {
+    if (!(f->strip_mask & STRIP_NIT)) return in;
+    *n = section_packets(f, &f->pat_asm, in, pid, &f->cc_pat, out);
+    return *n ? out : NULL;
+  }
+
+  if (pmt_pid_held(f, pid)) {
+    *n = section_packets(f, &f->pmt_asm, in, pid, &f->cc_pmt, out);
+    return *n ? out : NULL;
   }
 
   cls = psi_classify(f->psi, pid);
@@ -279,6 +294,7 @@ const unsigned char *ts_filter_packet(ts_filter_t *f, const unsigned char *in, u
   if (es_dropped(f, pid))    return NULL; /* -a / -s drop */
   /* hold unclassified ES until PMT */
   if ((!f->audio_all || f->strip_subs) && !psi_have_pmt(f->psi) && cls == PID_UNKNOWN) return NULL;
+  *n = 1;
   return in;
 }
 

@@ -159,6 +159,20 @@ START_TEST(rss_is_a_whole_number_of_pages_within_the_address_space) {
 }
 END_TEST
 
+START_TEST(exec_args_redact_credentials) {
+  char *argv[] = {"dipixy", "--auth", "u:secret1", "--metrics-auth=u:secret2", "--aut", "u:secret3", "--metrics-a", "u:secret4", "--workers", "4"};
+  char *json;
+  size_t len;
+
+  dipixy_status_init((int)(sizeof argv / sizeof argv[0]), argv);
+  ck_assert_int_eq(dipixy_status_render_json(&g_cfg, &json, &len), 0);
+  ck_assert_ptr_null(strstr(json, "secret"));
+  ck_assert_ptr_nonnull(strstr(json, "\"--metrics-auth=***\""));
+  ck_assert_ptr_nonnull(strstr(json, "\"--workers\",\"4\""));
+  ck_assert_ptr_nonnull(strstr(json, "\"--auth\",\"***\""));
+}
+END_TEST
+
 static void setup(void) {
   memset(&g_cfg, 0, sizeof g_cfg);
   g_in_bytes = 0;
@@ -178,6 +192,7 @@ static Suite *status_suite(void) {
   tcase_add_test(tc, tick_without_elapsed_time_keeps_previous_rates);
   tcase_add_test(tc, rate_uses_deltas_since_the_previous_tick_only);
   tcase_add_test(tc, rss_is_a_whole_number_of_pages_within_the_address_space);
+  tcase_add_test(tc, exec_args_redact_credentials);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -33,14 +33,14 @@ static bcg_doc_t *build_doc(void) {
   bufcpy(pr->channel_id, sizeof pr->channel_id, "channel1");
   bufcpy(pr->start, sizeof pr->start, "2020-12-15T12:00:00Z");
   bufcpy(pr->stop, sizeof pr->stop, "2020-12-15T12:30:00Z");
-  bufcpy(pr->title, sizeof pr->title, "News");
-  bufcpy(pr->desc, sizeof pr->desc, "Evening news");
-  bufcpy(pr->category, sizeof pr->category, "Current affairs");
+  bcg_set_text(&pr->title, "News");
+  bcg_set_text(&pr->desc, "Evening news");
+  bcg_set_text(&pr->category, "Current affairs");
 
   pr = bcg_add_programme(&doc);
   bufcpy(pr->channel_id, sizeof pr->channel_id, "channel1");
   bufcpy(pr->start, sizeof pr->start, "2020-12-15T13:00:00Z");
-  bufcpy(pr->title, sizeof pr->title, "Weather");
+  bcg_set_text(&pr->title, "Weather");
 
   return &doc;
 }
@@ -95,6 +95,97 @@ START_TEST(accessunit_encode_decode_round_trips_full_doc) {
 
   bcg_doc_free(doc);
   bcg_doc_free(&doc2);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
+START_TEST(accessunit_decode_refs_follows_string_buffer_offsets) {
+  bcg_doc_t *doc = build_doc();
+  bcg_doc_t doc2;
+  bitwriter_t bw;
+  bitreader_t br;
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  accessunit_scratch_t sc;
+  accessunit_ref_t refs[8];
+  unsigned char *shifted;
+  const unsigned char *bwdata, *swdata;
+  size_t bwlen, swlen;
+  int nfuu, nfuu2;
+
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_encode(&sc, doc, &bw, &sw, &nfuu), 0);
+  ck_assert_int_eq(nfuu, 4);
+  memcpy(refs, sc.refs, sizeof(accessunit_ref_t) * (size_t)nfuu);
+  ck_assert_uint_eq(refs[0].str_off, 1);
+  for (int i = 1; i < nfuu; i++) {
+    ck_assert_uint_gt(refs[i].au_off, refs[i - 1].au_off);
+    ck_assert_uint_gt(refs[i].str_off, refs[i - 1].str_off);
+  }
+
+  bwdata = bitwriter_data(&bw, &bwlen);
+  swdata = strrepo_writer_data(&sw, &swlen);
+  /* junk string ahead of all buffers: only offsets find the real strings */
+  shifted = malloc(swlen + 5);
+  ck_assert_ptr_nonnull(shifted);
+  shifted[0] = swdata[0];
+  memcpy(shifted + 1, "junk", 5);
+  memcpy(shifted + 6, swdata + 1, swlen - 1);
+  for (int i = 0; i < nfuu; i++) refs[i].str_off += 5;
+
+  bitreader_init(&br, bwdata, bwlen);
+  ck_assert_int_eq(strrepo_reader_init(&sr, shifted, swlen + 5), 0);
+  bcg_doc_init(&doc2);
+  ck_assert_int_eq(accessunit_decode_refs(&sc, &br, &sr, refs, nfuu, &doc2, &nfuu2), 0);
+  ck_assert_int_eq(nfuu2, 4);
+  ck_assert_str_eq(doc2.channels[0].id, "channel1");
+  ck_assert_str_eq(doc2.programmes[0].title, "News");
+  ck_assert_str_eq(doc2.programmes[1].title, "Weather");
+
+  refs[1].str_off = (uint32_t)swlen + 6; /* past end */
+  bitreader_init(&br, bwdata, bwlen);
+  strrepo_reader_init(&sr, shifted, swlen + 5);
+  bcg_doc_free(&doc2);
+  bcg_doc_init(&doc2);
+  ck_assert_int_eq(accessunit_decode_refs(&sc, &br, &sr, refs, nfuu, &doc2, &nfuu2), -1);
+
+  accessunit_scratch_free(&sc);
+  free(shifted);
+  bcg_doc_free(doc);
+  bcg_doc_free(&doc2);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
+START_TEST(accessunit_encode_range_limits_output_to_given_channels) {
+  bcg_doc_t *doc = build_doc();
+  bitwriter_t bw;
+  strrepo_writer_t sw;
+  accessunit_scratch_t sc;
+  int all, part = 0, none = 0, nprog = -1;
+
+  accessunit_scratch_init(&sc);
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(accessunit_encode(&sc, doc, &bw, &sw, &all), 0);
+  bitwriter_reset(&bw);
+  strrepo_writer_free(&sw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(accessunit_encode_range(&sc, doc, 0, 1, &bw, &sw, &part, &nprog), 0);
+  ck_assert_int_eq(part, all);
+  ck_assert_int_ge(nprog, 0);
+  bitwriter_reset(&bw);
+  strrepo_writer_free(&sw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(accessunit_encode_range(&sc, doc, 1, 1, &bw, &sw, &none, NULL), 0);
+  ck_assert_int_eq(none, 0);
+
+  accessunit_scratch_free(&sc);
+  bcg_doc_free(doc);
   bitwriter_free(&bw);
   strrepo_writer_free(&sw);
 }
@@ -300,16 +391,16 @@ START_TEST(accessunit_decode_rejects_schedule_fuu_before_program_information_fuu
   memset(&pr, 0, sizeof pr);
   bufcpy(pr.channel_id, sizeof pr.channel_id, "channel1");
   bufcpy(pr.start, sizeof pr.start, "2020-12-15T12:00:00Z");
-  bufcpy(pr.title, sizeof pr.title, "News");
-  bufcpy(pr.desc, sizeof pr.desc, "Evening news");
-  bufcpy(pr.category, sizeof pr.category, "Current affairs");
+  bcg_set_text(&pr.title, "News");
+  bcg_set_text(&pr.desc, "Evening news");
+  bcg_set_text(&pr.category, "Current affairs");
 
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
   ck_assert_int_eq(bitwriter_put_vluimsbf8(&bw, 2), 0);
 
   bitwriter_init(&fbw);
-  ck_assert_int_eq(fragment_encode_schedule("channel1", &pr, 1, &fbw, &sw), 0);
+  ck_assert_int_eq(fragment_encode_schedule("channel1", &pr, 0, (const int[]){-1}, &fbw, &sw), 0);
   ck_assert_int_eq(emit_fuu(&bw, DVBCTXPATH_SCHEDULE, &fbw), 0);
   bitwriter_free(&fbw);
 
@@ -326,6 +417,7 @@ START_TEST(accessunit_decode_rejects_schedule_fuu_before_program_information_fuu
   accessunit_scratch_init(&sc);
   ck_assert_int_eq(accessunit_decode(&sc, &br, &sr, &doc, &nfuu), -1);
   accessunit_scratch_free(&sc);
+  bcg_programme_free_text(&pr);
 
   bcg_doc_free(&doc);
   bitwriter_free(&bw);
@@ -337,6 +429,8 @@ static Suite *accessunit_suite(void) {
   Suite *s = suite_create("accessunit");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, accessunit_encode_decode_round_trips_full_doc);
+  tcase_add_test(tc, accessunit_decode_refs_follows_string_buffer_offsets);
+  tcase_add_test(tc, accessunit_encode_range_limits_output_to_given_channels);
   tcase_add_test(tc, accessunit_encode_empty_doc_has_zero_fuus);
   tcase_add_test(tc, accessunit_decode_rejects_fuu_count_above_int_max);
   tcase_add_test(tc, accessunit_decode_rejects_implausible_fuu_count_for_remaining_bytes);

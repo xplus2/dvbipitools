@@ -27,12 +27,14 @@ typedef struct {
   uint16_t last_ecm_pid[PSI_MAX_ES];
 } pmt_cand_t;
 
+typedef struct {
+  unsigned sid;
+  char provider_name[PSI_NAME];
+  char service_name[PSI_NAME];
+} sdt_name_t;
+
 struct psi {
   psi_obs_t *obs;
-  psi_section_asm_t pat;
-  psi_section_asm_t sdt;
-  psi_section_asm_t nit;
-  psi_section_asm_t cat;
   int have_pat;
   int have_pmt;
   unsigned long pmt_parsed;
@@ -50,31 +52,23 @@ struct psi {
   unsigned pmt_ca_pid; /* PMT program_info CA_descriptor's PID, 0 if none */
   unsigned tsid;
   unsigned onid;
-  psi_es_t es[PSI_MAX_ES];
   int es_count;
   int audio_count;
-  unsigned ecm[PSI_MAX_ES];
   int ecm_count;
   char service_name[PSI_NAME];
   char provider_name[PSI_NAME];
   char network_name[PSI_NAME];
-  psi_program_t pat_programs[PSI_MAX_PROGRAMS];
   int pat_program_count;
-  pmt_cand_t pmt_cand[PSI_MAX_PROGRAMS];
+  int pat_version;
   int pmt_cand_count;
+  int sdt_name_count;
   unsigned preferred_pmt_pid; /* 0 = none, auto-select whichever candidate resolves first */
   int pmt_locked;             /* program_number/pmt_pid finalized: pmt_cand[pmt_lock_idx] wins */
   int pmt_lock_idx;
-  unsigned char pmt_sec[PSI_SECTION_ASM_BUF_LEN]; /* last valid pmt of locked prog */
   size_t pmt_sec_len;
 
   int multi_mode; /* every candidate resolves independently, see psi_enable_multi_program() */
-  psi_multi_program_t multi[PSI_MAX_PROGRAMS];
   int multi_count;
-
-  pid_class_t class_by_pid[8192]; /* direct pid->class, rebuilt on parse_pat/parse_pmt */
-  uint16_t service_by_pid[8192];
-  unsigned char pmt_wanted[8192]; /* direct pid->ever-a-candidate, mirrors pmt_cand[] growth, set-only */
 
   /* overflow logging, edge-triggered: logged once when a repeat first exceeds a cap, cleared once a repeat no longer does. avoids spamming every PAT/PMT cycle */
   int pat_program_overflow_logged;
@@ -87,6 +81,23 @@ struct psi {
   log_throttle_t sdt_drop_throttle;
   log_throttle_t nit_drop_throttle;
   log_throttle_t cat_drop_throttle;
+
+  /* bulk: bounded by the counts above, not cleared by psi_reset() */
+  psi_section_asm_t pat;
+  psi_section_asm_t sdt;
+  psi_section_asm_t nit;
+  psi_section_asm_t cat;
+  psi_es_t es[PSI_MAX_ES];
+  unsigned ecm[PSI_MAX_ES];
+  psi_program_t pat_programs[PSI_MAX_PROGRAMS];
+  pmt_cand_t pmt_cand[PSI_MAX_PROGRAMS];
+  sdt_name_t sdt_names[PSI_MAX_PROGRAMS]; /* all SDT services seen, resolved when PMT/candidate appears */
+  unsigned char pmt_sec[PSI_SECTION_ASM_BUF_LEN]; /* last valid pmt of locked prog */
+  psi_multi_program_t multi[PSI_MAX_PROGRAMS];
+
+  uint8_t class_by_pid[8192]; /* direct pid->class, rebuilt on parse_pat/parse_pmt */
+  uint16_t service_by_pid[8192];
+  unsigned char pmt_wanted[8192]; /* direct pid->ever-a-candidate, mirrors pmt_cand[] growth, set-only */
 };
 
 /* psi.c */

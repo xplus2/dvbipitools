@@ -7,11 +7,13 @@
 #include "../internal.h"
 #include "../reactor_tls.h"
 #include "../../core/playlist.h"
+#include "../../dlna/gena.h"
 
 extern const char RESP_400[];
 extern const char RESP_401[];
 extern const char RESP_404[];
 extern const char RESP_405[];
+extern const char RESP_412[];
 extern const char RESP_431[];
 extern const char RESP_501[];
 extern const char RESP_503[];
@@ -29,14 +31,15 @@ void set_persistence(conn_t *c, int keep_alive);
 void serve_body(conn_t *c, const char *content_type, const char *body, size_t len, int is_head, int keep_alive);
 void serve_metrics(conn_t *c, int is_head, int keep_alive);
 void serve_status(conn_t *c, int is_head, int keep_alive);
+void serve_time(conn_t *c, int is_head, int keep_alive);
 void serve_playlist(conn_t *c, route_fmt_t fmt, playlist_type_t ptype, const char *host_hdr, const char *query,
   const pid_filter_t *filter, const lcevc_select_t *lcevc, int is_head, int keep_alive);
 void serve_dlna_desc(conn_t *c, int is_head, int keep_alive);
 void serve_dlna_cd_scpd(conn_t *c, int is_head, int keep_alive);
 void serve_dlna_cm_scpd(conn_t *c, int is_head, int keep_alive);
 void serve_dlna_control(conn_t *c, const char *service, const struct phr_header *headers, size_t num_headers, const char *body, size_t body_len, int keep_alive);
-void serve_dlna_subscribe(conn_t *c, const struct phr_header *headers, size_t num_headers, int keep_alive);
-void serve_dlna_unsubscribe(conn_t *c, int keep_alive);
+void serve_dlna_subscribe(conn_t *c, gena_svc_t svc, const struct phr_header *headers, size_t num_headers, int keep_alive);
+void serve_dlna_unsubscribe(conn_t *c, gena_svc_t svc, const struct phr_header *headers, size_t num_headers, int keep_alive);
 void serve_htdocs_index(conn_t *c, int is_head, int keep_alive);
 
 /* waiters.c */

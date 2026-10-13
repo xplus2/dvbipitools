@@ -34,18 +34,36 @@ void playlist_out_init(FILE *f, playlist_out_fmt_t fmt, const char *invocation, 
 
 void playlist_out_close(FILE *f, playlist_out_fmt_t fmt) {
   switch (fmt) {
-    case PLAYLIST_OUT_M3U:  fputs("\n#EXT-X-ENDLIST\n", f); break;
-    case PLAYLIST_OUT_XSPF: fputs("</playlist>\n", f);      break;
+    case PLAYLIST_OUT_XSPF: fputs("</playlist>\n", f); break;
+    case PLAYLIST_OUT_M3U:
     case PLAYLIST_OUT_CSV:
     case PLAYLIST_OUT_XML:
     case PLAYLIST_OUT_NULL: break;
   }
 }
 
+/* drop control chars, opt '"' for quoted attributes */
+static void m3u_put(FILE *f, const char *s, int in_quotes) {
+  for (; *s; s++) {
+    unsigned char c = (unsigned char)*s;
+    if (c < 0x20 || c == 0x7f || (in_quotes && c == '"'))
+      continue;
+    fputc(c, f);
+  }
+}
+
 void playlist_out_m3u_item(FILE *f, const char *name, const char *uri, const char *icon_uri, unsigned tsid, unsigned onid, unsigned sid) {
   fputs("#EXTINF:-1 ", f);
-  if (icon_uri && *icon_uri) fprintf(f, "tvg-logo=\"%s\" ", icon_uri);
-  fprintf(f, "tsid=\"%u\" onid=\"%u\" sid=\"%u\",%s\n%s\n", tsid, onid, sid, name, uri);
+  if (icon_uri && *icon_uri) {
+    fputs("tvg-logo=\"", f);
+    m3u_put(f, icon_uri, 1);
+    fputs("\" ", f);
+  }
+  fprintf(f, "tsid=\"%u\" onid=\"%u\" sid=\"%u\",", tsid, onid, sid);
+  m3u_put(f, name, 0);
+  fputc('\n', f);
+  m3u_put(f, uri, 0);
+  fputc('\n', f);
 }
 
 void playlist_out_csv_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid) {

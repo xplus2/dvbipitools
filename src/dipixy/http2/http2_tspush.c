@@ -30,10 +30,11 @@ static ssize_t tspush_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *b
   return (ssize_t)n;
 }
 
-static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_push_slot_t *tcs) {
+static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_push_slot_t *tcs, int rawaudio) {
+  const char *ctype = rawaudio ? "audio/mpeg" : "video/mp2t";
   nghttp2_nv nva[3] = {
       {(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP2_NV_FLAG_NONE},
-      {(uint8_t *)"content-type", (uint8_t *)"video/mp2t", 12, 10, NGHTTP2_NV_FLAG_NONE},
+      {(uint8_t *)"content-type", (uint8_t *)ctype, 12, strlen(ctype), NGHTTP2_NV_FLAG_NONE},
   };
   size_t nvlen = h2_nv_altsvc(nva, 2);
   nghttp2_data_provider dp;
@@ -51,14 +52,25 @@ void h2_tspush_wake(int sub_idx) {
   h2_wake_stream(c, tcs ? tcs->sid : 0);
 }
 
+void h2_tspush_reset(int sub_idx) {
+  conn_t *c;
+  const h2_push_slot_t *tcs;
+  if (sub_idx < 0 || sub_idx >= g_ts_subs_n) return;
+  c = g_ts_subs[sub_idx].h2c;
+  tcs = g_ts_subs[sub_idx].h2_slot;
+  if (!c || !tcs || !tcs->sid) return;
+  nghttp2_submit_rst_stream(((h2_conn_t *)c->h2)->ng, NGHTTP2_FLAG_NONE, tcs->sid, NGHTTP2_INTERNAL_ERROR);
+  h2_wake_stream(c, tcs->sid);
+}
+
 /* registers a TS push stream. 1 = dispatched, 0 = slot table full (caller sends an error response) */
-int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush_sub) {
+int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush_sub, int rawaudio) {
   int ci = h2_push_slot_find_free(conn->tspush, H2_TSPUSH_MAX);
   if (ci < 0) return 0;
   h2_push_slot_t *tcs = &conn->tspush[ci];
   tcs->sub_idx = tspush_sub;
   tcs->sid = stream_id;
-  h2_submit_tspush_response(conn, stream_id, tcs);
+  h2_submit_tspush_response(conn, stream_id, tcs, rawaudio);
   g_ts_subs[tspush_sub].h2c = c;
   g_ts_subs[tspush_sub].h2_slot = tcs;
   ts_push_set_reactor_tid(tspush_sub, t_reactor_tid);

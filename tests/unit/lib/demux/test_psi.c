@@ -2,9 +2,11 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "lib/demux/crc32.h"
 #include "lib/demux/psi/psi.h"
@@ -502,6 +504,84 @@ static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, unsigned char c
   for (size_t i = 5 + slen; i < 188; i++) pkt[i] = 0xFF;
 }
 
+/* PAT section with one program, explicit version, section numbers and current_next */
+static size_t build_pat_sec(unsigned char *out, unsigned ver, unsigned cur, unsigned sec, unsigned last, unsigned prog, unsigned pmt_pid) {
+  size_t n = 0;
+  uint32_t crc;
+  out[n++] = 0x00;
+  out[n++] = 0xB0;
+  out[n++] = 0x0D;
+  out[n++] = 0x12;
+  out[n++] = 0x34;
+  out[n++] = (unsigned char)(0xC0 | (ver << 1) | cur);
+  out[n++] = (unsigned char)sec;
+  out[n++] = (unsigned char)last;
+  out[n++] = (unsigned char)(prog >> 8);
+  out[n++] = (unsigned char)prog;
+  out[n++] = (unsigned char)(0xE0 | ((pmt_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)pmt_pid;
+  crc = crc32_mpeg(out, n);
+  out[n++] = (unsigned char)(crc >> 24);
+  out[n++] = (unsigned char)(crc >> 16);
+  out[n++] = (unsigned char)(crc >> 8);
+  out[n++] = (unsigned char)crc;
+  return n;
+}
+
+START_TEST(psi_pat_accumulates_programs_across_sections) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_program_t *progs;
+
+  slen = build_pat_sec(section, 3, 1, 0, 1, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pat_sec(section, 3, 1, 1, 1, 2, 0x0200);
+  wrap_ts_packet(pkt, 0x0000, 1, section, slen);
+  psi_feed(p, pkt);
+
+  progs = psi_pat_programs(p, &count);
+  ck_assert_int_eq(count, 2);
+  ck_assert_uint_eq(progs[0].program_number, 1u);
+  ck_assert_uint_eq(progs[1].program_number, 2u);
+
+  slen = build_pat_sec(section, 3, 1, 0, 1, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 2, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pat_sec(section, 3, 1, 1, 1, 2, 0x0200);
+  wrap_ts_packet(pkt, 0x0000, 3, section, slen);
+  psi_feed(p, pkt);
+  psi_pat_programs(p, &count);
+  ck_assert_int_eq(count, 2);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_pat_ignores_next_section) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_program_t *progs;
+
+  slen = build_pat_sec(section, 1, 1, 0, 0, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pat_sec(section, 2, 0, 0, 0, 5, 0x0500);
+  wrap_ts_packet(pkt, 0x0000, 1, section, slen);
+  psi_feed(p, pkt);
+
+  progs = psi_pat_programs(p, &count);
+  ck_assert_int_eq(count, 1);
+  ck_assert_uint_eq(progs[0].program_number, 1u);
+  psi_free(p);
+}
+END_TEST
+
 START_TEST(psi_parses_pat_and_pmt) {
   psi_t *p = psi_new();
   unsigned char section[64];
@@ -906,6 +986,88 @@ START_TEST(psi_multi_mode_resolves_every_pmt_and_sdt_name) {
 }
 END_TEST
 
+START_TEST(psi_multi_mode_sdt_before_pat_names_resolve_later) {
+  psi_t *p = psi_new();
+  unsigned char section[128];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_multi_program_t *m;
+
+  psi_enable_multi_program(p);
+  slen = build_sdt2(section, 0x0055, 1, "One", 2, "Two");
+  wrap_ts_packet(pkt, 0x0011, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pat2(section, 0x1234, 1, 0x0100, 2, 0x0200);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  m = psi_multi_programs(p, &count);
+  ck_assert_int_eq(count, 2);
+  ck_assert_str_eq(m[0].service_name, "One");
+  ck_assert_str_eq(m[1].service_name, "Two");
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_single_mode_sdt_before_pmt_name_resolves_on_lock) {
+  psi_t *p = psi_new();
+  unsigned char section[128];
+  unsigned char pkt[188];
+  size_t slen;
+
+  slen = build_sdt2(section, 0x0055, 1, "One", 2, "Two");
+  wrap_ts_packet(pkt, 0x0011, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_str_eq(psi_service_name(p), "");
+  slen = build_pat2(section, 0x1234, 2, 0x0200, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt(section, 2, 0x0201, 0x0201, 0x1B, 0x0202, 0x0F);
+  wrap_ts_packet(pkt, 0x0200, 0, section, slen);
+  psi_feed(p, pkt);
+
+  ck_assert_uint_eq(psi_program_number(p), 2u);
+  ck_assert_str_eq(psi_service_name(p), "Two");
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_non_actual_sdt_and_nit_tables_are_skipped_quietly) {
+  psi_t *p = psi_new();
+  unsigned char section[128];
+  unsigned char pkt[188];
+  size_t slen;
+  char line[64];
+  int saved = dup(STDERR_FILENO);
+  FILE *tmp = tmpfile();
+  const unsigned char sdt_ids[] = {0x46, 0x4A};
+
+  ck_assert_ptr_nonnull(tmp);
+  fflush(stderr);
+  dup2(fileno(tmp), STDERR_FILENO);
+  for (size_t k = 0; k < sizeof sdt_ids; k++) {
+    slen = build_sdt2(section, 0x0055, 1, "One", 2, "Two");
+    section[0] = sdt_ids[k];
+    wrap_ts_packet(pkt, 0x0011, 0, section, slen);
+    psi_feed(p, pkt);
+  }
+  slen = build_sdt2(section, 0x0055, 1, "One", 2, "Two");
+  section[0] = 0x41;
+  wrap_ts_packet(pkt, 0x0010, 0, section, slen);
+  psi_feed(p, pkt);
+  fflush(stderr);
+  dup2(saved, STDERR_FILENO);
+  close(saved);
+
+  rewind(tmp);
+  ck_assert_ptr_null(fgets(line, sizeof line, tmp));
+  fclose(tmp);
+  ck_assert_uint_eq(psi_original_network_id(p), 0u);
+  psi_free(p);
+}
+END_TEST
+
 START_TEST(psi_service_of_pid_maps_every_parsed_pmt) {
   psi_t *p = psi_new();
   unsigned char section[128];
@@ -1009,6 +1171,60 @@ START_TEST(psi_wants_pid_tracks_new_pid_when_program_moves) {
   psi_feed(p, pkt);
   ck_assert_int_eq(psi_wants_pid(p, 0x0300), 1);
   ck_assert_int_eq(psi_wants_pid(p, 0x0100), 1); /* stale candidate never removed, still tracked */
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_locked_program_follows_a_moved_pmt_pid) {
+  psi_t *p = psi_new();
+  unsigned char section[128];
+  unsigned char pkt[188];
+  size_t slen;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt(section, 1, 0x0101, 0x0101, 0x1B, 0x0102, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq(psi_pmt_pid(p), 0x0100u);
+
+  slen = build_pat(section, 0x1234, 1, 0x0300);
+  wrap_ts_packet(pkt, 0x0000, 1, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq(psi_pmt_pid(p), 0x0300u);
+  ck_assert_int_eq(psi_wants_pid(p, 0x0300), 1);
+  ck_assert_int_eq(psi_wants_pid(p, 0x0100), 0);
+
+  slen = build_pmt(section, 1, 0x0401, 0x0401, 0x24, 0x0402, 0x0F);
+  wrap_ts_packet(pkt, 0x0300, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq(psi_pcr_pid(p), 0x0401u);
+  ck_assert_uint_eq(psi_program_number(p), 1u);
+  ck_assert_int_eq(psi_classify(p, 0x0401), PID_VIDEO);
+
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_locked_program_listed_on_two_pids_stays_put) {
+  psi_t *p = psi_new();
+  unsigned char section[128];
+  unsigned char pkt[188];
+  size_t slen;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+  slen = build_pmt(section, 1, 0x0101, 0x0101, 0x1B, 0x0102, 0x0F);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pat2(section, 0x1234, 1, 0x0300, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 1, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_uint_eq(psi_pmt_pid(p), 0x0100u);
 
   psi_free(p);
 }
@@ -1631,6 +1847,8 @@ static Suite *psi_suite(void) {
   Suite *s = suite_create("psi");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, psi_parses_pat_and_pmt);
+  tcase_add_test(tc, psi_pat_accumulates_programs_across_sections);
+  tcase_add_test(tc, psi_pat_ignores_next_section);
   tcase_add_test(tc, psi_pmt_parsed_counts_each_good_pmt_section);
   tcase_add_test(tc, psi_rejects_pat_with_bad_crc);
   tcase_add_test(tc, psi_ignores_pointer_field_beyond_payload);
@@ -1643,6 +1861,9 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_pmt_with_no_ca_descriptor_leaves_pmt_ca_system_id_zero);
   tcase_add_test(tc, psi_without_multi_mode_locks_first_pmt_only);
   tcase_add_test(tc, psi_multi_mode_resolves_every_pmt_and_sdt_name);
+  tcase_add_test(tc, psi_multi_mode_sdt_before_pat_names_resolve_later);
+  tcase_add_test(tc, psi_single_mode_sdt_before_pmt_name_resolves_on_lock);
+  tcase_add_test(tc, psi_non_actual_sdt_and_nit_tables_are_skipped_quietly);
   tcase_add_test(tc, psi_multi_mode_resolves_programs_sharing_one_pmt_pid);
   tcase_add_test(tc, psi_single_mode_ignores_other_program_on_locked_pmt_pid);
   tcase_add_test(tc, psi_service_of_pid_maps_every_parsed_pmt);
@@ -1650,6 +1871,8 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_wants_pid_picks_up_program_added_before_lock);
   tcase_add_test(tc, psi_wants_pid_picks_up_program_added_in_multi_mode);
   tcase_add_test(tc, psi_wants_pid_tracks_new_pid_when_program_moves);
+  tcase_add_test(tc, psi_locked_program_follows_a_moved_pmt_pid);
+  tcase_add_test(tc, psi_locked_program_listed_on_two_pids_stays_put);
   tcase_add_test(tc, psi_classifies_vvc_video_stream_type);
   tcase_add_test(tc, psi_classifies_opus_via_registration_descriptor);
   tcase_add_test(tc, psi_classifies_av1_video_stream_type);

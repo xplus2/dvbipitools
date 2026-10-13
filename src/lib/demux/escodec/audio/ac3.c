@@ -21,6 +21,13 @@ static const unsigned short ac3_fsz[38][3] = {
 static const unsigned ac3_rate[3] = {48000, 44100, 32000};
 static const unsigned ac3_ch[8] = {2, 1, 2, 3, 3, 4, 4, 5};
 
+/* ETSI TS 102 366 channel locations: L 8000, C 4000, R 2000, Ls 1000, Rs 0800, Cs 0100, LFE 0001. dual mono as L/R */
+static void ac3_chcfg(esc_frame_t *f) {
+  static const unsigned by_acmod[8] = {0xA000, 0x4000, 0xA000, 0xE000, 0xA100, 0xE100, 0xB800, 0xF800};
+  f->chcfg_scheme = ESC_CHCFG_DOLBY_2011;
+  f->chcfg_value = by_acmod[f->acmod & 7] | (f->lfeon ? 0x0001u : 0u);
+}
+
 int next_ac3(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   unsigned fscod;
   unsigned frmsizecod;
@@ -52,6 +59,7 @@ int next_ac3(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame
   if (acmod & 4) br_u(&b, 2); /* surmixlev */
   if (acmod == 2) br_u(&b, 2); /* dsurmod */
   f->lfeon = br_u(&b, 1);
+  ac3_chcfg(f);
   return 0;
 }
 
@@ -84,6 +92,7 @@ int next_eac3(const esc_track_t *t, const unsigned char *d, size_t len, esc_fram
   f->lfeon = d[4] & 1;
   f->bsid = d[5] >> 3;
   f->bsmod = 0; /* no fixed E-AC-3 bit position, dec3 leaves 0 */
+  ac3_chcfg(f);
   f->out = d;
   f->outlen = f->consumed;
   return 0;

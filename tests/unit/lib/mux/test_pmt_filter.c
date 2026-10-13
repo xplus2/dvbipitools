@@ -201,6 +201,38 @@ START_TEST(pmt_filter_emit_packet_rejects_oversized_section) {
 }
 END_TEST
 
+START_TEST(pmt_filter_emit_packets_splits_section_across_packets) {
+  unsigned char sec[400];
+  unsigned char out[3 * 188];
+  unsigned char cc = 14;
+
+  for (size_t i = 0; i < sizeof sec; i++) sec[i] = (unsigned char)i;
+  ck_assert_uint_eq(pmt_filter_emit_packets(out, sizeof out, 0x0100, &cc, sec, sizeof sec), 3u);
+  ck_assert_uint_eq(cc, 1u);
+  for (int k = 0; k < 3; k++) {
+    ck_assert_uint_eq(out[k * 188], 0x47u);
+    ck_assert_uint_eq(out[k * 188 + 1], (unsigned char)((k ? 0x00 : 0x40) | 0x01));
+    ck_assert_uint_eq(out[k * 188 + 3], (unsigned char)(0x10 | ((15 + k) & 0x0F)));
+  }
+  ck_assert_uint_eq(out[4], 0x00u);
+  ck_assert_mem_eq(out + 5, sec, 183);
+  ck_assert_mem_eq(out + 188 + 4, sec + 183, 184);
+  ck_assert_mem_eq(out + 376 + 4, sec + 367, 33);
+  ck_assert_uint_eq(out[376 + 4 + 33], 0xFFu);
+  ck_assert_uint_eq(out[3 * 188 - 1], 0xFFu);
+}
+END_TEST
+
+START_TEST(pmt_filter_emit_packets_rejects_small_buffer) {
+  unsigned char sec[400] = {0};
+  unsigned char out[2 * 188];
+  unsigned char cc = 3;
+
+  ck_assert_uint_eq(pmt_filter_emit_packets(out, sizeof out, 0x0100, &cc, sec, sizeof sec), 0u);
+  ck_assert_uint_eq(cc, 3u);
+}
+END_TEST
+
 static Suite *pmt_filter_suite(void) {
   Suite *s = suite_create("pmt_filter");
   TCase *tc = tcase_create("core");
@@ -215,6 +247,8 @@ static Suite *pmt_filter_suite(void) {
   tcase_add_test(tc, pmt_filter_rewrite_rejects_small_out_cap);
   tcase_add_test(tc, pmt_filter_emit_packet_wraps_section);
   tcase_add_test(tc, pmt_filter_emit_packet_rejects_oversized_section);
+  tcase_add_test(tc, pmt_filter_emit_packets_splits_section_across_packets);
+  tcase_add_test(tc, pmt_filter_emit_packets_rejects_small_buffer);
   suite_add_tcase(s, tc);
   return s;
 }

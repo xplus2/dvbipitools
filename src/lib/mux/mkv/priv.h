@@ -33,6 +33,7 @@ typedef struct {
   int64_t ts_ms;
   int64_t step_ms; /* last video ts delta, expected-next hint */
   int ts_seen;
+  aclk_t aclk; /* audio */
   pts_unwrap_t pts;
   int psi_idx; /* m->psi[] index. TrackName resolved late in write_head(), sdt may lag setup() */
   unsigned char *rem; /* audio: partial frame carry-over */
@@ -110,6 +111,7 @@ track_t *find_track(mkv_t *m, unsigned pid);
 void cluster_flush(mkv_t *m);
 void put_block(mkv_t *m, int num, int64_t rel, const unsigned char *d, size_t n, int key, int64_t dur);
 void start(mkv_t *m);
+void track_free(track_t *t);
 void seg_finish(mkv_t *m);
 void pend_add(mkv_t *m, int num, int64_t ts, const unsigned char *d, size_t n, int key, int64_t dur);
 void emit(mkv_t *m, track_t *t, const unsigned char *d, size_t n, int key);

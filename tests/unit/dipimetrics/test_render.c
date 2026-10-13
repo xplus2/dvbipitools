@@ -56,6 +56,9 @@ START_TEST(empty_store_renders_only_self_metrics) {
   ck_assert(strstr(out, "dvbipi_metrics_snapshots_received_total 0") != NULL);
   ck_assert(strstr(out, "dvbipi_metrics_snapshots_rejected_total{reason=\"malformed\"} 0") != NULL);
   ck_assert(strstr(out, "dvbipi_metrics_http_requests_total{status=\"200\"} 0") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_http_requests_total{status=\"401\"} 0") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_http_requests_total{status=\"405\"} 0") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_http_requests_total{status=\"500\"} 0") != NULL);
   /* no exporter-supplied family should appear with nothing tracked */
   ck_assert(strstr(out, "dvbipi_sds_services") == NULL);
   ck_assert(strstr(out, "# EOF\n") != NULL);
@@ -103,6 +106,31 @@ START_TEST(headend_info_uses_version_label_and_info_type) {
 }
 END_TEST
 
+START_TEST(info_family_is_typed_gauge_in_plain_prometheus_format) {
+  store_t st;
+  store_slot_t *s;
+  dstrbuf_t sb;
+  memset(&st, 0, sizeof st);
+
+  s = add_slot(&st, METRICS_COMPONENT_TVHEAD, "inst1", 5.0);
+  add_entry(s, METRICS_ID_HEADEND_INFO, "2.2.0", 1);
+  dstrbuf_init(&sb);
+  ck_assert_int_eq(render_series(&sb, &st, 0, 0), 0);
+  ck_assert(strstr(sb.buf, "# TYPE dvbipi_headend_info gauge") != NULL);
+  ck_assert(strstr(sb.buf, "# TYPE dvbipi_headend_info info") == NULL);
+  free(sb.buf);
+  store_free(&st);
+}
+END_TEST
+
+START_TEST(render_reports_failure_when_buffer_is_dead) {
+  store_t st;
+  dstrbuf_t sb = {NULL, 0, 0};
+  memset(&st, 0, sizeof st);
+  ck_assert_int_eq(render_series(&sb, &st, 1, 1), -1);
+}
+END_TEST
+
 START_TEST(composite_input_reason_label_is_split) {
   store_t st;
   store_slot_t *s;
@@ -138,6 +166,22 @@ START_TEST(headend_id_label_is_escaped) {
 }
 END_TEST
 
+START_TEST(invalid_utf8_label_is_replaced) {
+  store_t st;
+  store_slot_t *s;
+  char *out;
+  size_t len;
+  memset(&st, 0, sizeof st);
+
+  s = add_slot(&st, METRICS_COMPONENT_SDS, "x", 5.0);
+  add_entry(s, METRICS_ID_ERRORS_TOTAL, "ok\xC3\xA4_\xC3", 1);
+  render_openmetrics(&st, 10.0, &out, &len);
+  ck_assert(strstr(out, "reason=\"ok\xC3\xA4_\xEF\xBF\xBD\"") != NULL);
+  free(out);
+  store_free(&st);
+}
+END_TEST
+
 START_TEST(snapshot_age_reflects_now_minus_received) {
   store_t st;
   store_slot_t *s;
@@ -151,6 +195,25 @@ START_TEST(snapshot_age_reflects_now_minus_received) {
   render_openmetrics(&st, 12.5, &out, &len);
   ck_assert(strstr(out, "# TYPE dvbipi_metrics_snapshot_age_seconds gauge") != NULL);
   ck_assert(strstr(out, "dvbipi_metrics_snapshot_age_seconds{component=\"sds\",headend_id=\"inst1\"} 7.500") != NULL);
+  free(out);
+  store_free(&st);
+}
+END_TEST
+
+START_TEST(snapshot_time_is_the_sender_stamp) {
+  store_t st;
+  store_slot_t *s;
+  char *out;
+  size_t len;
+  memset(&st, 0, sizeof st);
+
+  s = add_slot(&st, METRICS_COMPONENT_SDS, "inst1", 5.0);
+  s->snapshot_time = 1760000000ULL;
+  add_entry(s, METRICS_ID_SDS_SERVICES, NULL, 1);
+
+  render_openmetrics(&st, 12.5, &out, &len);
+  ck_assert(strstr(out, "# TYPE dvbipi_metrics_snapshot_time_seconds gauge") != NULL);
+  ck_assert(strstr(out, "dvbipi_metrics_snapshot_time_seconds{component=\"sds\",headend_id=\"inst1\"} 1760000000\n") != NULL);
   free(out);
   store_free(&st);
 }
@@ -298,9 +361,13 @@ static Suite *render_suite(void) {
   tcase_add_test(tc, empty_store_renders_only_self_metrics);
   tcase_add_test(tc, family_present_only_with_live_samples);
   tcase_add_test(tc, headend_info_uses_version_label_and_info_type);
+  tcase_add_test(tc, info_family_is_typed_gauge_in_plain_prometheus_format);
+  tcase_add_test(tc, render_reports_failure_when_buffer_is_dead);
   tcase_add_test(tc, composite_input_reason_label_is_split);
   tcase_add_test(tc, headend_id_label_is_escaped);
+  tcase_add_test(tc, invalid_utf8_label_is_replaced);
   tcase_add_test(tc, snapshot_age_reflects_now_minus_received);
+  tcase_add_test(tc, snapshot_time_is_the_sender_stamp);
   tcase_add_test(tc, output_ends_with_eof_marker);
   tcase_add_test(tc, self_metrics_reflect_stats_and_instance_count);
   tcase_add_test(tc, grouped_entries_share_label_and_render_each_value);

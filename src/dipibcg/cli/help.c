@@ -38,6 +38,7 @@ void bcg_print_help(void) {
     "      --dscp <v>         output DSCP marking: video-high|video-low|voice|\n"
     "                         signalling|best-effort|0..63 (default: signalling)\n"
     "  -t, --interval <s>     repeat interval (default 5)\n"
+    "      --refresh <n>      resend unchanged segments every Nth cycle (default 1)\n"
     "  -Z, --compress         zlib-compress BCG containers (RFC 1950)\n\n"
     "examples:\n"
     "  %s -a -i guide.xml -M mapping.csv -m 239.255.0.2:3938\n"

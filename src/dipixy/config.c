@@ -9,6 +9,7 @@
 #include "lib/sys/ioutil.h"
 #include "lib/mux/fec2022.h"
 #include "config.h"
+#include "segstore.h"
 #include "version.h"
 
 static struct {
@@ -24,6 +25,8 @@ void dixy_cfg_defaults(config_t *cfg) {
   cfg->workers_spec = -1;
   cfg->max_clients = 256;
   cfg->max_channels = 32;
+  cfg->max_variants = 8;
+  cfg->idle_timeout_s = 60;
   cfg->capture_ring_kib = 4096;
   cfg->ts_startup_timeout_s = 5.0;
   cfg->sds_timeout_s = 3.0;
@@ -32,7 +35,7 @@ void dixy_cfg_defaults(config_t *cfg) {
   cfg->segment_count = 4;
   cfg->hls_part_size = 0.35;
   cfg->dash_part_size = 0.333;
-  cfg->dash_utc_url = "http://time.akamai.com/?iso&ms";
+  cfg->dash_utc_url = "";
   cfg->hls_seg_pool = 8;
   cfg->ssdp_ttl = 3;
   cfg->ssdp_interval_s = 60.0;
@@ -145,12 +148,16 @@ static int apply_max_channels(void *c, const char *v, char *e, size_t n) {
   return set_int(&((config_t *)c)->max_channels, v, 1, 1024, e, n);
 }
 
+static int apply_max_variants(void *c, const char *v, char *e, size_t n) {
+  return set_int(&((config_t *)c)->max_variants, v, 1, 1024, e, n);
+}
+
 static int apply_idle_timeout(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->idle_timeout_s, v, 0, 86400, e, n);
 }
 
 static int apply_capture_ring_size(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_uint(&((config_t *)c)->capture_ring_kib, v, 1, UINT_MAX, e, n);
+  return yamlcfg_set_uint(&((config_t *)c)->capture_ring_kib, v, 1, 262144, e, n);
 }
 
 static int apply_ts_startup_timeout(void *c, const char *v, char *e, size_t n) {
@@ -178,7 +185,7 @@ static int apply_segment_size(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_segment_count(void *c, const char *v, char *e, size_t n) {
-  return set_int(&((config_t *)c)->segment_count, v, 3, 1000, e, n);
+  return set_int(&((config_t *)c)->segment_count, v, 3, HLS_MAX_SEGS, e, n);
 }
 
 static int apply_hls_part_size(void *c, const char *v, char *e, size_t n) {
@@ -341,6 +348,11 @@ static int apply_cors_origin(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_str(&cfg->str_pool, &cfg->cors_origins, v, e, n);
 }
 
+static int apply_ws_allowed_hosts(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->ws_allowed_hosts, v, e, n);
+}
+
 static int apply_ssdp_ttl(void *c, const char *v, char *e, size_t n) {
   return set_int(&((config_t *)c)->ssdp_ttl, v, 1, 255, e, n);
 }
@@ -398,6 +410,7 @@ static const yamlcfg_key_t keys[] = {
   {"cpu-affinity", apply_cpu_affinity, 0, 0},
   {"max-clients", apply_max_clients, 0, 0},
   {"max-channels", apply_max_channels, 0, 0},
+  {"max-variants", apply_max_variants, 0, 0},
   {"idle-timeout", apply_idle_timeout, 0, 0},
   {"capture-ring-size", apply_capture_ring_size, 0, 0},
   {"ts.startup-timeout", apply_ts_startup_timeout, 0, 0},
@@ -444,6 +457,7 @@ static const yamlcfg_key_t keys[] = {
   {"status-tpl", apply_status_tpl, 1, 0},
   {"auth", apply_auth, 0, 0},
   {"cors-origin", apply_cors_origin, 0, 0},
+  {"ws-allowed-hosts", apply_ws_allowed_hosts, 0, 0},
   {"ssdp.ttl", apply_ssdp_ttl, 0, 0},
   {"ssdp.iface", apply_ssdp_iface, 0, 0},
   {"ssdp.interval", apply_ssdp_interval, 0, 0},
@@ -487,7 +501,7 @@ int dixy_cfg_test(const char *path, int strict) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }
-  warn_if(&y, cfg.tls_cert && !cfg.tls_key, "YA000659", "tls.cert given without tls.key");
+  warn_if(&y, cfg.tls_cert && !cfg.tls_key, "YA000700", "tls.cert given without tls.key");
   warn_if(&y, cfg.tls_key && !cfg.tls_cert, "YA000660", "tls.key given without tls.cert");
   warn_if(&y, cfg.hls_part_size >= cfg.segment_size, "YA000661", "hls.part-size must be smaller than segment-size");
   warn_if(&y, cfg.dash_part_size >= cfg.segment_size, "YA000662", "dash.part-size must be smaller than segment-size");

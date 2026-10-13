@@ -14,6 +14,7 @@ const char RESP_400[] = "400 Bad Request";
 const char RESP_401[] = "401 Unauthorized";
 const char RESP_404[] = "404 Not Found";
 const char RESP_405[] = "405 Method Not Allowed";
+const char RESP_412[] = "412 Precondition Failed";
 const char RESP_431[] = "431 Request Header Fields Too Large";
 const char RESP_501[] = "501 Not Implemented";
 const char RESP_503[] = "503 Service Unavailable";
@@ -84,14 +85,20 @@ size_t build_stream_header(char *hdr, size_t hdrsz, const char *content_type, in
   return b.len;
 }
 
-/* HTTP/1.1 default persistent unless Connection: close. HTTP/1.0 and older
-   default close unless Connection: keep-alive */
+/* HTTP/1.1 default persistent unless Connection has close token. HTTP/1.0 and
+   older default close unless keep-alive token. Close wins over keep-alive */
 int wants_keepalive(int minor_version, const struct phr_header *headers, size_t num_headers) {
-  char conn[32];
-  int has_conn = find_header(headers, num_headers, "Connection", conn, sizeof conn);
-  if (has_conn) {
-    if (!strcasecmp(conn, "close"))       return 0;
-    if (!strcasecmp(conn, "keep-alive"))  return 1;
+  char conn[128];
+  int keep = minor_version == 1;
+  if (find_header(headers, num_headers, "Connection", conn, sizeof conn)) {
+    char *save = NULL;
+    for (char *tok = strtok_r(conn, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+      while (*tok == ' ' || *tok == '\t') tok++;
+      size_t n = strlen(tok);
+      while (n && (tok[n - 1] == ' ' || tok[n - 1] == '\t')) tok[--n] = '\0';
+      if (!strcasecmp(tok, "close")) return 0;
+      if (!strcasecmp(tok, "keep-alive")) keep = 1;
+    }
   }
-  return minor_version == 1;
+  return keep;
 }

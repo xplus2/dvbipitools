@@ -68,6 +68,17 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + fixed rawaudio freed memory read
     + fixed idle client pool starvation
     + 503 Retry-After when appropriate
+    + closed cross-site ws hijack
+    + wired up missing routes on h2/h3
+    + fixed pidfilter decoding
+    + dropping unicast SSDP
+    + https dash utc url (+ added our own optional time service)
+    + tvg-logo escaping
+    + finalized GENA
+    + new idle-timeout default: gone in 60 seconds (was: off)
+    + fixes rare epoll spins
+    + fMP4 and LCEVC get the 90 kHz treatment
+    + DASH AdaptationSets
   * dipimetrics
     + better concurrency handling (>8 conns)
     + stricter OpenMetrics 1.0.0 response

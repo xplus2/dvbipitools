@@ -77,14 +77,14 @@ Reads `-i` and transmits it as DVBSTP-carried SD&S records on `-m`, repeating ev
 (`--interval`) seconds, default 5. ETSI TS 102 034 caps the full announce cycle at 30 seconds;
 keep `-t` comfortably under that. SIGHUP re-reads `-i` (see [Signals](#signals)).
 
-`-i` format is taken from the path suffix:
+`-i` format is taken from the path suffix (case-insensitive):
 
-| suffix  | content                                                                             |
-|---------|-------------------------------------------------------------------------------------|
-| `.csv`  | `name,uri[,tsid,onid,sid]`, same as dipiscan's own csv output                       |
-| `.m3u`  | `#EXTINF` with optional `tsid=".." onid=".." sid=".."` attributes, same as dipiscan |
-| `.xspf` | XSPF, triplet in a `<extension application="urn:dvbipitools:dvb-triplet">`          |
-| `.xml`  | a hand-authored SD&S document, or dipiscan's own `-f xml` output                    |
+| suffix          | content                                                                             |
+|-----------------|-------------------------------------------------------------------------------------|
+| `.csv`          | `name,uri[,tsid,onid,sid]`, same as dipiscan's own csv output                       |
+| `.m3u`, `.m3u8` | `#EXTINF` with optional `tsid=".." onid=".." sid=".."` attributes, same as dipiscan |
+| `.xspf`         | XSPF, triplet in a `<extension application="urn:dvbipitools:dvb-triplet">`          |
+| `.xml`          | a hand-authored SD&S document, or dipiscan's own `-f xml` output                    |
 
 `uri` is `rtp://[@]<addr>:<port>` or `udp://[@]<addr>:<port>`, matching dipirec/dipiscan's own
 convention. Missing `tsid`/`onid` default to 1, missing `sid` auto-increments from 1.
@@ -234,7 +234,7 @@ id,name,lang,visible,svc1|svc2|svc3
 ```
 `id` is the numeric `Id`. `name` and `lang` set the `PackageName` text and its language (ISO 639-2).
 `visible` is `0` or `1` (default=1). 
-Service names are matched against `-i` entries by `ServiceName`. Matches get a `DVBTriplet`, unmatched names are emitted without one.
+Service names are matched against `-i` entries by `ServiceName`. Each match gets a `DVBTriplet`. A name without a match is a load error.
 
 Known gaps: 
 `PackageDescription` (BCG linkage), `LogicalChannelNumber`, `PackageReference`, `PackageAvailability`, `URILinkage`,
@@ -291,7 +291,12 @@ Broadcast Discovery records it saw as a playlist. A segment is keyed by payload 
 when its version changes (announcer reload), the newer version replaces the earlier one.
 
 `-f` (`--format`) is `m3u`/`csv`/`xspf` (same shapes as dipiscan, including the triplet), `xml`
-(dumps the reassembled document as received, for debugging), or `null`.
+(dumps the reassembled documents as received, for debugging), or `null`.
+
+> Note: `-f xml` output is not a single well-formed XML file when more than one segment was
+> received. Each segment is written verbatim as its own complete document, with its own
+> `<?xml?>` declaration and root element, one after another. Split on the declarations before
+> feeding the output to an XML parser.
 
 ## Network interface (`-I`)
 
@@ -307,6 +312,9 @@ Announce: one line per cycle. Listen: one line per segment received.
 * `^C`, SIGINT or SIGTERM: stop the process
 * SIGHUP: re-read `-i` from disk. On error, the previous input keeps being announced and the error
   is logged. (No effect in `-l` mode).
+  With a raw `.xml` input, the segment version is the root element's `Version` attribute, so it
+  stays put when the document does. Without that attribute it is bumped when the content changed.
+  A reload that yields identical documents keeps the version and is logged as unchanged.
 
 ## Scope
 

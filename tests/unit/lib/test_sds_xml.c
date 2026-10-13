@@ -11,7 +11,7 @@
 
 START_TEST(sds_broadcast_round_trips_multiple_services) {
   sds_service_t svcs[2], out[8];
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   int n;
 
@@ -32,7 +32,7 @@ START_TEST(sds_broadcast_round_trips_multiple_services) {
   svcs[1].onid = 2;
   svcs[1].sid = 102;
 
-  len = sds_build_broadcast("example.invalid", 1, svcs, 2, NULL, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, svcs, 2, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 8, NULL);
@@ -51,6 +51,7 @@ START_TEST(sds_broadcast_round_trips_multiple_services) {
   ck_assert_uint_eq(out[1].port, 5001u);
   ck_assert_int_eq(out[1].rtp, 0);
   ck_assert_uint_eq(out[1].sid, 102u);
+  free(buf);
 }
 END_TEST
 
@@ -58,7 +59,7 @@ START_TEST(sds_broadcast_includes_ret_and_fcc_elements_when_present) {
   sds_service_t svc;
   sds_ret_t ret;
   sds_fcc_t fcc;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&svc, 0, sizeof svc);
@@ -79,20 +80,21 @@ START_TEST(sds_broadcast_includes_ret_and_fcc_elements_when_present) {
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, &fcc, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, &fcc, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   ck_assert_ptr_nonnull(strstr((char *)buf, "<RTPRetransmission>"));
   ck_assert_ptr_nonnull(strstr((char *)buf, "DestinationAddress=\"10.0.0.1\""));
   ck_assert_ptr_nonnull(strstr((char *)buf, "<ServerBasedEnhancementServiceInfo>"));
   ck_assert_ptr_nonnull(strstr((char *)buf, "DestinationAddress=\"10.0.0.2\""));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_broadcast_includes_fec_element_when_present) {
   sds_service_t svc;
   sds_fec_t fec;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&svc, 0, sizeof svc);
@@ -104,18 +106,19 @@ START_TEST(sds_broadcast_includes_fec_element_when_present) {
   fec.port = 6002;
   fec.pt = 96;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, &buf);
   ck_assert_uint_gt(len, 0u);
 
   ck_assert_ptr_nonnull(strstr((char *)buf, "<FECBaseLayer Address=\"10.0.0.3\" Port=\"6002\""));
   ck_assert_ptr_null(strstr((char *)buf, "PayloadTypeNumber"));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_broadcast_includes_fec_pt_when_not_96) {
   sds_service_t svc;
   sds_fec_t fec;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&svc, 0, sizeof svc);
@@ -127,10 +130,11 @@ START_TEST(sds_broadcast_includes_fec_pt_when_not_96) {
   fec.port = 6002;
   fec.pt = 100;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, &buf);
   ck_assert_uint_gt(len, 0u);
 
   ck_assert_ptr_nonnull(strstr((char *)buf, "PayloadTypeNumber=\"100\""));
+  free(buf);
 }
 END_TEST
 
@@ -138,7 +142,7 @@ START_TEST(sds_parse_broadcast_round_trips_fec) {
   sds_service_t svc;
   sds_service_t out[2];
   sds_fec_t fec;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   int n;
 
@@ -151,7 +155,7 @@ START_TEST(sds_parse_broadcast_round_trips_fec) {
   fec.port = 6002;
   fec.pt = 100;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -160,6 +164,7 @@ START_TEST(sds_parse_broadcast_round_trips_fec) {
   ck_assert_str_eq(out[0].fec.addr, "10.0.0.3");
   ck_assert_uint_eq(out[0].fec.port, 6002u);
   ck_assert_uint_eq(out[0].fec.pt, 100u);
+  free(buf);
 }
 END_TEST
 
@@ -167,7 +172,7 @@ START_TEST(sds_parse_broadcast_round_trips_fec_default_pt) {
   sds_service_t svc;
   sds_service_t out[2];
   sds_fec_t fec;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   int n;
 
@@ -180,20 +185,21 @@ START_TEST(sds_parse_broadcast_round_trips_fec_default_pt) {
   fec.port = 6002;
   fec.pt = 96;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
   ck_assert_int_eq(n, 1);
   ck_assert_int_eq(out[0].has_fec, 1);
   ck_assert_uint_eq(out[0].fec.pt, 96u);
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_broadcast_omits_dvb_rsi_mc_ret_by_default) {
   sds_service_t svc;
   sds_ret_t ret;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&svc, 0, sizeof svc);
@@ -204,16 +210,17 @@ START_TEST(sds_broadcast_omits_dvb_rsi_mc_ret_by_default) {
   bufcpy(ret.addr, sizeof ret.addr, "10.0.0.1");
   ret.port = 6000;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_null(strstr((char *)buf, "dvb-rsi-mc-ret"));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_broadcast_includes_dvb_rsi_mc_ret_when_set) {
   sds_service_t svc;
   sds_ret_t ret;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&svc, 0, sizeof svc);
@@ -226,16 +233,17 @@ START_TEST(sds_broadcast_includes_dvb_rsi_mc_ret_when_set) {
   ret.mc = 1;
   ret.rsi_mc_ret = 1;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((char *)buf, "dvb-rsi-mc-ret=\"true\""));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_broadcast_fcc_resolve_by_port_stays_in_range) {
   sds_service_t svc;
   sds_fcc_t fcc;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   char needle[32];
   size_t len;
   unsigned port = 0;
@@ -250,7 +258,7 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_stays_in_range) {
   fcc.resolve_base_port = 7000;
   fcc.resolve_max_channels = 16;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   for (size_t i = 0; i < fcc.resolve_max_channels; i++) {
@@ -264,13 +272,14 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_stays_in_range) {
   ck_assert_uint_ge(port, fcc.resolve_base_port);
   ck_assert_uint_lt(port, fcc.resolve_base_port + fcc.resolve_max_channels);
   ck_assert_ptr_null(strstr((char *)buf, "DestinationPort=\"0\""));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_broadcast_fcc_resolve_by_port_is_deterministic) {
   sds_service_t svc;
   sds_fcc_t fcc;
-  unsigned char buf1[4096], buf2[4096];
+  unsigned char *buf1 = NULL, *buf2 = NULL;
   size_t len1, len2;
 
   memset(&svc, 0, sizeof svc);
@@ -283,17 +292,19 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_is_deterministic) {
   fcc.resolve_base_port = 7000;
   fcc.resolve_max_channels = 384;
 
-  len1 = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, buf1, sizeof buf1);
-  len2 = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, buf2, sizeof buf2);
+  len1 = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf1);
+  len2 = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf2);
   ck_assert_uint_eq(len1, len2);
   ck_assert_mem_eq(buf1, buf2, len1);
+  free(buf1);
+  free(buf2);
 }
 END_TEST
 
 START_TEST(sds_broadcast_fcc_resolve_by_port_ignores_literal_port) {
   sds_service_t svc;
   sds_fcc_t fcc;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&svc, 0, sizeof svc);
@@ -307,15 +318,16 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_ignores_literal_port) {
   fcc.resolve_base_port = 7000;
   fcc.resolve_max_channels = 16;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_null(strstr((char *)buf, "DestinationPort=\"6001\""));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_broadcast_omits_ret_fcc_elements_when_absent) {
   sds_service_t svc;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&svc, 0, sizeof svc);
@@ -323,46 +335,85 @@ START_TEST(sds_broadcast_omits_ret_fcc_elements_when_absent) {
   bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   ck_assert_ptr_null(strstr((char *)buf, "RTPRetransmission"));
   ck_assert_ptr_null(strstr((char *)buf, "ServerBasedEnhancementServiceInfo"));
+  free(buf);
 }
 END_TEST
 
-START_TEST(sds_build_broadcast_rejects_small_cap) {
+START_TEST(sds_broadcast_escapes_addresses) {
   sds_service_t svc;
-  unsigned char buf[8];
+  sds_ret_t ret;
+  unsigned char *buf = NULL;
+  size_t len;
+
   memset(&svc, 0, sizeof svc);
-  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
-  ck_assert_uint_eq(sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf), 0u);
+  memset(&ret, 0, sizeof ret);
+  bufcpy(svc.name, sizeof svc.name, "Test");
+  bufcpy(svc.address, sizeof svc.address, "a\"&b");
+  bufcpy(ret.addr, sizeof ret.addr, "c\"&d");
+  ret.mc = 1;
+  svc.port = 5000;
+
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "Address=\"a&quot;&amp;b\""));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "GroupAddress=\"a&quot;&amp;b\""));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "DestinationAddress=\"c&quot;&amp;d\""));
+  free(buf);
+}
+END_TEST
+
+START_TEST(sds_build_broadcast_exceeds_64k) {
+  static sds_service_t svcs[256];
+  sds_ret_t ret;
+  sds_fcc_t fcc;
+  unsigned char *buf = NULL;
+  size_t len;
+  memset(&ret, 0, sizeof ret);
+  memset(&fcc, 0, sizeof fcc);
+  bufcpy(ret.addr, sizeof ret.addr, "239.2.2.2");
+  ret.port = 6000;
+  bufcpy(fcc.addr, sizeof fcc.addr, "239.3.3.3");
+  fcc.port = 7000;
+  for (int i = 0; i < 256; i++) {
+    snprintf(svcs[i].name, sizeof svcs[i].name, "Channel number %d", i);
+    bufcpy(svcs[i].address, sizeof svcs[i].address, "239.1.1.1");
+    svcs[i].port = 5000;
+    svcs[i].tsid = 1;
+    svcs[i].onid = 2;
+    svcs[i].sid = (unsigned)i + 1;
+  }
+  len = sds_build_broadcast("example.invalid", 1, svcs, 256, &ret, &fcc, NULL, &buf);
+  ck_assert_uint_gt(len, 65536u);
+  ck_assert_uint_eq(strlen((char *)buf), len);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "Channel number 255"));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_build_sp_contains_expected_fields) {
-  unsigned char buf[2048];
-  size_t len = sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, NULL, 0, buf, sizeof buf);
+  unsigned char *buf = NULL;
+  size_t len = sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, NULL, 0, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((char *)buf, "DomainName=\"example.invalid\""));
   ck_assert_ptr_nonnull(strstr((char *)buf, "Language=\"deu\""));
   ck_assert_ptr_nonnull(strstr((char *)buf, "My Provider"));
   ck_assert_ptr_nonnull(strstr((char *)buf, "Address=\"239.9.9.9\" Port=\"7000\""));
-}
-END_TEST
-
-START_TEST(sds_build_sp_rejects_small_cap) {
-  unsigned char buf[8];
-  ck_assert_uint_eq(sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, NULL, 0, buf, sizeof buf), 0u);
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_build_sp_lists_extra_payload_ids) {
-  unsigned char buf[2048];
+  unsigned char *buf = NULL;
   unsigned extra[2] = {5, 7};
-  size_t len = sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, extra, 2, buf, sizeof buf);
+  size_t len = sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, extra, 2, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((char *)buf, "<PayloadId Id=\"2\"/><PayloadId Id=\"5\"/><PayloadId Id=\"7\"/>"));
+  free(buf);
 }
 END_TEST
 
@@ -453,7 +504,7 @@ START_TEST(sds_parse_broadcast_round_trips_fcc) {
   sds_service_t svc;
   sds_service_t out[2];
   sds_fcc_t fcc;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   int n;
 
@@ -467,7 +518,7 @@ START_TEST(sds_parse_broadcast_round_trips_fcc) {
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -477,6 +528,7 @@ START_TEST(sds_parse_broadcast_round_trips_fcc) {
   ck_assert_uint_eq(out[0].fcc.port, 7000u);
   ck_assert_uint_eq(out[0].fcc.rtx_time_ms, 3000u);
   ck_assert_uint_eq(out[0].fcc.rtx_pt, 98u);
+  free(buf);
 }
 END_TEST
 
@@ -484,7 +536,7 @@ START_TEST(sds_parse_broadcast_round_trips_fcc_resolve_by_port) {
   sds_service_t svc;
   sds_service_t out[2];
   sds_fcc_t fcc;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   int n;
   unsigned expect_port;
@@ -500,7 +552,7 @@ START_TEST(sds_parse_broadcast_round_trips_fcc_resolve_by_port) {
   fcc.resolve_base_port = 7000;
   fcc.resolve_max_channels = 16;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -509,6 +561,7 @@ START_TEST(sds_parse_broadcast_round_trips_fcc_resolve_by_port) {
   expect_port = out[0].fcc.port;
   ck_assert_uint_ge(expect_port, fcc.resolve_base_port);
   ck_assert_uint_lt(expect_port, fcc.resolve_base_port + (unsigned)fcc.resolve_max_channels);
+  free(buf);
 }
 END_TEST
 
@@ -516,7 +569,7 @@ START_TEST(sds_parse_broadcast_round_trips_unicast_ret) {
   sds_service_t svc;
   sds_service_t out[2];
   sds_ret_t ret;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   int n;
 
@@ -530,7 +583,7 @@ START_TEST(sds_parse_broadcast_round_trips_unicast_ret) {
   ret.rtx_time_ms = 2000;
   ret.rtx_pt = 99;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -541,6 +594,7 @@ START_TEST(sds_parse_broadcast_round_trips_unicast_ret) {
   ck_assert_uint_eq(out[0].ret.rtx_time_ms, 2000u);
   ck_assert_uint_eq(out[0].ret.rtx_pt, 99u);
   ck_assert_int_eq(out[0].ret.mc, 0);
+  free(buf);
 }
 END_TEST
 
@@ -548,7 +602,7 @@ START_TEST(sds_parse_broadcast_round_trips_multicast_ret) {
   sds_service_t svc;
   sds_service_t out[2];
   sds_ret_t ret;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   int n;
 
@@ -564,7 +618,7 @@ START_TEST(sds_parse_broadcast_round_trips_multicast_ret) {
   ret.mc = 1;
   ret.mc_port = 5000;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -572,6 +626,7 @@ START_TEST(sds_parse_broadcast_round_trips_multicast_ret) {
   ck_assert_int_eq(out[0].has_ret, 1);
   ck_assert_int_eq(out[0].ret.mc, 1);
   ck_assert_uint_eq(out[0].ret.mc_port, 0u);
+  free(buf);
 }
 END_TEST
 
@@ -579,7 +634,7 @@ START_TEST(sds_parse_broadcast_round_trips_multicast_ret_override_port) {
   sds_service_t svc;
   sds_service_t out[2];
   sds_ret_t ret;
-  unsigned char buf[4096];
+  unsigned char *buf = NULL;
   size_t len;
   int n;
 
@@ -593,20 +648,21 @@ START_TEST(sds_parse_broadcast_round_trips_multicast_ret_override_port) {
   ret.mc = 1;
   ret.mc_port = 5555;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
   ck_assert_int_eq(n, 1);
   ck_assert_int_eq(out[0].ret.mc, 1);
   ck_assert_uint_eq(out[0].ret.mc_port, 5555u);
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_build_package_resolves_dvb_triplet_by_name) {
   sds_service_t svcs[1];
   sds_package_t pkg;
-  unsigned char buf[2048];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(svcs, 0, sizeof svcs);
@@ -624,17 +680,18 @@ START_TEST(sds_build_package_resolves_dvb_triplet_by_name) {
   bufcpy(pkg.service_names[1], sizeof pkg.service_names[1], "Unknown Channel");
   pkg.service_count = 2;
 
-  len = sds_build_package("example.invalid", 1, &pkg, 1, svcs, 1, buf, sizeof buf);
+  len = sds_build_package("example.invalid", 1, &pkg, 1, svcs, 1, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((char *)buf, "<Package Id=\"7\" Visible=\"true\">"));
   ck_assert_ptr_nonnull(strstr((char *)buf, "<DVBTriplet OrigNetId=\"2\" TSId=\"1\" ServiceId=\"101\"/>"));
   ck_assert_ptr_nonnull(strstr((char *)buf, "ServiceName=\"Unknown Channel\"/></Service>"));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_build_regionalisation_nests_ca_chain) {
   sds_cell_t cell;
-  unsigned char buf[2048];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&cell, 0, sizeof cell);
@@ -646,16 +703,17 @@ START_TEST(sds_build_regionalisation_nests_ca_chain) {
   bufcpy(cell.ca[1].value, sizeof cell.ca[1].value, "Paris");
   cell.ca_depth = 2;
 
-  len = sds_build_regionalisation("example.invalid", 1, &cell, 1, buf, sizeof buf);
+  len = sds_build_regionalisation("example.invalid", 1, &cell, 1, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((char *)buf, "<Cell Id=\"Paris East\">"));
   ck_assert_ptr_nonnull(strstr((char *)buf, "<CA Type=\"1\" Value=\"IDF\"><CA Type=\"3\" Value=\"Paris\"></CA></CA>"));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_build_rms_fus_emits_rms_provider) {
   sds_rms_t rms;
-  unsigned char buf[2048];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&rms, 0, sizeof rms);
@@ -663,16 +721,17 @@ START_TEST(sds_build_rms_fus_emits_rms_provider) {
   memcpy(rms.lang, "eng", 3);
   rms.location = "https://rms.example/";
 
-  len = sds_build_rms_fus("example.invalid", 1, &rms, 1, NULL, 0, buf, sizeof buf);
+  len = sds_build_rms_fus("example.invalid", 1, &rms, 1, NULL, 0, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((char *)buf, "<RMSProvider RMSLocation=\"https://rms.example/\">"));
   ck_assert_ptr_null(strstr((char *)buf, "<FUSProvider"));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_build_rms_fus_emits_fus_provider) {
   sds_fus_t fus;
-  unsigned char buf[2048];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&fus, 0, sizeof fus);
@@ -682,18 +741,19 @@ START_TEST(sds_build_rms_fus_emits_fus_provider) {
   fus.announce_addr = "239.1.1.1";
   fus.announce_port = 5000;
 
-  len = sds_build_rms_fus("example.invalid", 1, NULL, 0, &fus, 1, buf, sizeof buf);
+  len = sds_build_rms_fus("example.invalid", 1, NULL, 0, &fus, 1, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((char *)buf, "<FUSID>42</FUSID>"));
   ck_assert_ptr_nonnull(strstr((char *)buf, "<MulticastAnnouncementAddress Address=\"239.1.1.1\" Port=\"5000\"/>"));
   ck_assert_ptr_null(strstr((char *)buf, "<RMSProvider"));
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_broadcast_round_trips_ssm_source) {
   sds_service_t svc;
   sds_service_t out[2];
-  unsigned char buf[2048];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&svc, 0, sizeof svc);
@@ -704,30 +764,32 @@ START_TEST(sds_broadcast_round_trips_ssm_source) {
   svc.tsid = 1;
   svc.onid = 1;
   svc.sid = 1;
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((const char *)buf, "Source=\"10.9.8.7\""));
   ck_assert_int_eq(sds_parse_broadcast((const char *)buf, out, 2, NULL), 1);
   ck_assert_str_eq(out[0].address, "232.1.2.3");
   ck_assert_str_eq(out[0].source, "10.9.8.7");
+  free(buf);
 }
 END_TEST
 
 START_TEST(sds_broadcast_omits_source_for_asm) {
   sds_service_t svc;
   sds_service_t out[2];
-  unsigned char buf[2048];
+  unsigned char *buf = NULL;
   size_t len;
 
   memset(&svc, 0, sizeof svc);
   bufcpy(svc.name, sizeof svc.name, "Asm");
   bufcpy(svc.address, sizeof svc.address, "239.1.2.3");
   svc.port = 5000;
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, buf, sizeof buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_null(strstr((const char *)buf, "Source="));
   ck_assert_int_eq(sds_parse_broadcast((const char *)buf, out, 2, NULL), 1);
   ck_assert_str_eq(out[0].source, "");
+  free(buf);
 }
 END_TEST
 
@@ -744,11 +806,11 @@ static Suite *sds_xml_suite(void) {
   tcase_add_test(tc, sds_broadcast_fcc_resolve_by_port_is_deterministic);
   tcase_add_test(tc, sds_broadcast_fcc_resolve_by_port_ignores_literal_port);
   tcase_add_test(tc, sds_broadcast_omits_ret_fcc_elements_when_absent);
+  tcase_add_test(tc, sds_broadcast_escapes_addresses);
   tcase_add_test(tc, sds_broadcast_omits_dvb_rsi_mc_ret_by_default);
   tcase_add_test(tc, sds_broadcast_includes_dvb_rsi_mc_ret_when_set);
-  tcase_add_test(tc, sds_build_broadcast_rejects_small_cap);
+  tcase_add_test(tc, sds_build_broadcast_exceeds_64k);
   tcase_add_test(tc, sds_build_sp_contains_expected_fields);
-  tcase_add_test(tc, sds_build_sp_rejects_small_cap);
   tcase_add_test(tc, sds_build_sp_lists_extra_payload_ids);
   tcase_add_test(tc, sds_build_package_resolves_dvb_triplet_by_name);
   tcase_add_test(tc, sds_build_regionalisation_nests_ca_chain);

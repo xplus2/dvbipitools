@@ -4,6 +4,7 @@
 #include <check.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
@@ -398,6 +399,56 @@ START_TEST(send_buffered_on_dead_conn_short_circuits) {
 }
 END_TEST
 
+START_TEST(sweep_idle_wakes_owner_when_epollout_already_armed) {
+  int epfd = epoll_create1(0);
+  int fds[2];
+  conn_t *c;
+  struct epoll_event ev, out_ev;
+
+  ck_assert_int_eq(conn_table_init(64), 0);
+  nonblocking_socketpair(fds);
+  c = conn_new(fds[0], NULL);
+  c->epfd = epfd;
+  atomic_store(&c->want_write, 1); /* stalled writer: EPOLLOUT armed, never fires */
+  atomic_store(&c->last_active, 1);
+  memset(&ev, 0, sizeof ev);
+  ev.events = EPOLLIN;
+  ev.data.ptr = c;
+  ck_assert_int_eq(epoll_ctl(epfd, EPOLL_CTL_ADD, c->fd, &ev), 0);
+  conn_publish(c);
+  ck_assert_int_eq(epoll_wait(epfd, &out_ev, 1, 0), 0);
+
+  conn_sweep_idle(5);
+  ck_assert_int_eq(c->close_requested, 1);
+  ck_assert_int_eq(epoll_wait(epfd, &out_ev, 1, 100), 1);
+  ck_assert(out_ev.events & EPOLLIN);
+
+  conn_unpublish(c);
+  close(fds[0]);
+  close(fds[1]);
+  close(epfd);
+  conn_free(c);
+}
+END_TEST
+
+START_TEST(sweep_idle_skips_recent_conn) {
+  int fds[2];
+  conn_t *c;
+
+  ck_assert_int_eq(conn_table_init(64), 0);
+  nonblocking_socketpair(fds);
+  c = conn_new(fds[0], NULL);
+  conn_publish(c);
+  conn_sweep_idle(5);
+  ck_assert_int_eq(c->close_requested, 0);
+
+  conn_unpublish(c);
+  close(fds[0]);
+  close(fds[1]);
+  conn_free(c);
+}
+END_TEST
+
 START_TEST(claim_teardown_wins_once) {
   conn_t *c = conn_new(-1, NULL);
   ck_assert_int_eq(conn_claim_teardown(c), 1);
@@ -433,6 +484,8 @@ static Suite *conn_suite(void) {
   tcase_add_test(tc, send_buffered_queues_both_chunks);
   tcase_add_test(tc, send_buffered_over_cap_marks_dead_without_queuing);
   tcase_add_test(tc, send_buffered_on_dead_conn_short_circuits);
+  tcase_add_test(tc, sweep_idle_wakes_owner_when_epollout_already_armed);
+  tcase_add_test(tc, sweep_idle_skips_recent_conn);
   tcase_add_test(tc, claim_teardown_wins_once);
   suite_add_tcase(s, tc);
   return s;

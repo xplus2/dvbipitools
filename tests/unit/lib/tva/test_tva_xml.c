@@ -8,6 +8,7 @@
 
 #include "lib/tva/tva_xml.h"
 #include "lib/sys/ioutil.h"
+#include "../../log_capture.h"
 
 START_TEST(tva_xml_write_read_round_trips) {
   bcg_doc_t doc, doc2;
@@ -28,9 +29,9 @@ START_TEST(tva_xml_write_read_round_trips) {
   bufcpy(pr->channel_id, sizeof pr->channel_id, "bbc1");
   bufcpy(pr->start, sizeof pr->start, "2024-03-15T12:30:45Z");
   bufcpy(pr->stop, sizeof pr->stop, "2024-03-15T13:00:00Z");
-  bufcpy(pr->title, sizeof pr->title, "News & <Weather>");
-  snprintf(pr->desc, sizeof pr->desc, "Today's \"top\" stories");
-  bufcpy(pr->category, sizeof pr->category, "News");
+  bcg_set_text(&pr->title, "News & <Weather>");
+  bcg_set_text(&pr->desc, "Today's \"top\" stories");
+  bcg_set_text(&pr->category, "News");
 
   f = tmpfile();
   ck_assert_ptr_nonnull(f);
@@ -63,6 +64,38 @@ START_TEST(tva_xml_write_read_round_trips) {
 }
 END_TEST
 
+START_TEST(tva_xml_write_dtt_is_hex_and_omitted_without_triplet) {
+  bcg_doc_t doc;
+  bcg_channel_t *c;
+  char buf[4096];
+  size_t n;
+  FILE *f;
+
+  bcg_doc_init(&doc);
+  c = bcg_add_channel(&doc);
+  bufcpy(c->id, sizeof c->id, "a");
+  bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
+  c->onid = 0x22d4;
+  c->tsid = 0x1f;
+  c->sid = 255;
+  c = bcg_add_channel(&doc);
+  bufcpy(c->id, sizeof c->id, "b");
+  bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.2:5000");
+
+  f = tmpfile();
+  ck_assert_ptr_nonnull(f);
+  tva_xml_write(f, &doc);
+  rewind(f);
+  n = fread(buf, 1, sizeof buf - 1, f);
+  buf[n] = '\0';
+  fclose(f);
+
+  ck_assert_ptr_nonnull(strstr(buf, "dvb://22d4.1f.ff<"));
+  ck_assert_ptr_null(strstr(buf, "dvb://0.0.0"));
+  bcg_doc_free(&doc);
+}
+END_TEST
+
 START_TEST(tva_xml_write_drops_channels_without_uri) {
   bcg_doc_t doc, doc2;
   bcg_channel_t *c;
@@ -75,7 +108,7 @@ START_TEST(tva_xml_write_drops_channels_without_uri) {
   pr = bcg_add_programme(&doc);
   bufcpy(pr->channel_id, sizeof pr->channel_id, "noturi");
   bufcpy(pr->start, sizeof pr->start, "2024-03-15T12:30:45Z");
-  bufcpy(pr->title, sizeof pr->title, "Should be dropped");
+  bcg_set_text(&pr->title, "Should be dropped");
 
   f = tmpfile();
   ck_assert_ptr_nonnull(f);
@@ -98,6 +131,27 @@ START_TEST(tva_build_crid_percent_encodes_and_compacts_time) {
   char out[256];
   tva_build_crid("bbc/one", "2024-03-15T12:30:45Z", out, sizeof out);
   ck_assert_str_eq(out, "crid://dipixmltv.invalid/bbc%2Fone/20240315123045");
+}
+END_TEST
+
+START_TEST(tva_build_crid_dst_overlap_distinct) {
+  char a[256], b[256], c[256];
+  tva_build_crid("ch", "2026-10-25T02:30:00+02:00", a, sizeof a);
+  tva_build_crid("ch", "2026-10-25T02:30:00+01:00", b, sizeof b);
+  ck_assert_str_ne(a, b);
+  ck_assert_str_eq(a, "crid://dipixmltv.invalid/ch/20261025003000");
+  ck_assert_str_eq(b, "crid://dipixmltv.invalid/ch/20261025013000");
+  tva_build_crid("ch", "2026-10-25T00:30:00Z", c, sizeof c);
+  ck_assert_str_eq(a, c);
+}
+END_TEST
+
+START_TEST(tva_build_crid_offset_crosses_day) {
+  char out[256];
+  tva_build_crid("ch", "2026-01-01T00:30:00+01:00", out, sizeof out);
+  ck_assert_str_eq(out, "crid://dipixmltv.invalid/ch/20251231233000");
+  tva_build_crid("ch", "2024-02-28T23:30:00-02:00", out, sizeof out);
+  ck_assert_str_eq(out, "crid://dipixmltv.invalid/ch/20240229013000");
 }
 END_TEST
 
@@ -135,7 +189,7 @@ START_TEST(tva_xml_write_groups_programmes_for_unsorted_channels) {
 
     bufcpy(pr->channel_id, sizeof pr->channel_id, multi_channel_programmes[i].channel);
     snprintf(pr->start, sizeof pr->start, "2024-03-15T12:%02zu:00Z", i);
-    bufcpy(pr->title, sizeof pr->title, multi_channel_programmes[i].title);
+    bcg_set_text(&pr->title, multi_channel_programmes[i].title);
     kept += multi_channel_programmes[i].expect_kept;
   }
   f = tmpfile();
@@ -152,7 +206,7 @@ START_TEST(tva_xml_write_groups_programmes_for_unsorted_channels) {
   for (size_t i = 0; i < sizeof multi_channel_programmes / sizeof multi_channel_programmes[0]; i++) {
     int found = 0;
     for (int j = 0; j < doc2.programme_count; j++)
-      if (!strcmp(doc2.programmes[j].title, multi_channel_programmes[i].title) && !strcmp(doc2.programmes[j].channel_id, multi_channel_programmes[i].channel)) found = 1;
+      if (!strcmp(bcg_str(doc2.programmes[j].title), multi_channel_programmes[i].title) && !strcmp(doc2.programmes[j].channel_id, multi_channel_programmes[i].channel)) found = 1;
     ck_assert_msg(found == multi_channel_programmes[i].expect_kept, "%s: found %d", multi_channel_programmes[i].title, found);
   }
   bcg_doc_free(&doc);
@@ -204,7 +258,7 @@ START_TEST(tva_xml_write_omits_absent_optional_fields) {
   fclose(f);
   ck_assert_int_eq(doc2.programme_count, 1);
   ck_assert_str_eq(doc2.programmes[0].stop, "");
-  ck_assert_str_eq(doc2.programmes[0].title, "");
+  ck_assert_ptr_null(doc2.programmes[0].title);
   bcg_doc_free(&doc);
   bcg_doc_free(&doc2);
 }
@@ -264,7 +318,7 @@ START_TEST(tva_xml_read_tolerates_incomplete_elements) {
     "<ServiceInformation foo=\"x\"><Name>No id</Name></ServiceInformation>\n"
     "<ServiceInformation serviceId=\"ch1\"><Name>One</Name><Name>Uno</Name><ServiceURL name=\"IPTV\">rtp://239.1.1.1:5000</ServiceURL>"
     "<ServiceURL name=\"DTT\">dvb://bogus</ServiceURL></ServiceInformation>\n"
-    "<ServiceInformation serviceId=\"ch2\"><ServiceURL name=\"DTT\">dvb://1.2.3</ServiceURL></ServiceInformation>\n"
+    "<ServiceInformation serviceId=\"ch2\"><ServiceURL name=\"DTT\">dvb://1.2.1f</ServiceURL></ServiceInformation>\n"
     "</ServiceInformationTable>\n"
     "</ProgramDescription></TVAMain>\n";
   bcg_doc_t doc;
@@ -286,13 +340,13 @@ START_TEST(tva_xml_read_tolerates_incomplete_elements) {
   ck_assert_str_eq(doc.channels[1].uri, "");
   ck_assert_uint_eq(doc.channels[1].onid, 1u);
   ck_assert_uint_eq(doc.channels[1].tsid, 2u);
-  ck_assert_uint_eq(doc.channels[1].sid, 3u);
+  ck_assert_uint_eq(doc.channels[1].sid, 0x1fu);
 
   ck_assert_int_eq(doc.programme_count, 2);
   ck_assert_str_eq(doc.programmes[0].title, "Known");
   ck_assert_str_eq(doc.programmes[0].desc, "Desc");
   ck_assert_str_eq(doc.programmes[0].stop, "");
-  ck_assert_str_eq(doc.programmes[1].title, "");
+  ck_assert_ptr_null(doc.programmes[1].title);
   ck_assert_str_eq(doc.programmes[1].stop, "2024-01-01T12:00:00Z");
   bcg_doc_free(&doc);
 }
@@ -312,6 +366,22 @@ START_TEST(tva_xml_read_of_empty_input_yields_an_empty_document) {
 }
 END_TEST
 
+START_TEST(tva_xml_read_logs_unreadable_input) {
+  bcg_doc_t doc;
+  char msg[LOG_CAPTURE_BUF];
+  FILE *f = fopen("/dev/null", "w");
+
+  ck_assert_ptr_nonnull(f);
+  bcg_doc_init(&doc);
+  log_capture_begin();
+  ck_assert_int_eq(tva_xml_read(f, &doc), -1);
+  log_capture_end(msg, sizeof msg);
+  ck_assert_ptr_nonnull(strstr(msg, "LE500230"));
+  fclose(f);
+  bcg_doc_free(&doc);
+}
+END_TEST
+
 START_TEST(tva_xml_read_accepts_prefixes_single_quotes_and_cdata) {
   static const char xml[] =
       "<tva:TVAMain xmlns:tva='urn:tva'><tva:ProgramDescription>\n"
@@ -322,7 +392,7 @@ START_TEST(tva_xml_read_accepts_prefixes_single_quotes_and_cdata) {
       "<tva:ServiceInformationTable>"
       "<tva:ServiceInformation serviceId='svc1'><tva:Name>Svc One</tva:Name>"
       "<tva:ServiceURL name='IPTV'>rtp://239.1.1.1:5000</tva:ServiceURL>"
-      "<tva:ServiceURL name='DTT'>dvb://1.2.3</tva:ServiceURL></tva:ServiceInformation>"
+      "<tva:ServiceURL name='DTT'>dvb://1.2.a</tva:ServiceURL></tva:ServiceInformation>"
       "</tva:ServiceInformationTable>\n"
       "<tva:ProgramLocationTable><tva:Schedule serviceIDRef = \"svc1\">"
       "<tva:ScheduleEvent><tva:Program crid='crid://x/1'/>"
@@ -344,7 +414,7 @@ START_TEST(tva_xml_read_accepts_prefixes_single_quotes_and_cdata) {
   ck_assert_str_eq(doc.channels[0].id, "svc1");
   ck_assert_str_eq(doc.channels[0].names[0], "Svc One");
   ck_assert_str_eq(doc.channels[0].uri, "rtp://239.1.1.1:5000");
-  ck_assert_uint_eq(doc.channels[0].sid, 3);
+  ck_assert_uint_eq(doc.channels[0].sid, 10);
   ck_assert_int_eq(doc.programme_count, 1);
   ck_assert_str_eq(doc.programmes[0].channel_id, "svc1");
   ck_assert_str_eq(doc.programmes[0].start, "2024-03-15T12:30:45Z");
@@ -353,18 +423,132 @@ START_TEST(tva_xml_read_accepts_prefixes_single_quotes_and_cdata) {
 }
 END_TEST
 
+START_TEST(tva_xml_read_trims_whitespace_around_times) {
+  const char xml[] =
+    "<TVAMain><ProgramDescription><ProgramLocationTable><Schedule serviceIDRef=\"c\">"
+    "<ScheduleEvent><Program crid=\"x\"/><PublishedStartTime>\n  2024-03-15T12:30:45.000Z \t</PublishedStartTime>"
+    "<PublishedEndTime> 2024-03-15T13:00:00Z\n</PublishedEndTime></ScheduleEvent>"
+    "</Schedule></ProgramLocationTable></ProgramDescription></TVAMain>\n";
+  bcg_doc_t doc;
+  FILE *f = tmpfile();
+
+  ck_assert_ptr_nonnull(f);
+  fputs(xml, f);
+  rewind(f);
+  bcg_doc_init(&doc);
+  ck_assert_int_eq(tva_xml_read(f, &doc), 0);
+  fclose(f);
+  ck_assert_int_eq(doc.programme_count, 1);
+  ck_assert_str_eq(doc.programmes[0].start, "2024-03-15T12:30:45.000Z");
+  ck_assert_str_eq(doc.programmes[0].stop, "2024-03-15T13:00:00Z");
+  bcg_doc_free(&doc);
+}
+END_TEST
+
+static void read_one_stop(const char *start, const char *tail, char *stop, size_t cap) {
+  char xml[512];
+  bcg_doc_t doc;
+  FILE *f = tmpfile();
+  ck_assert_ptr_nonnull(f);
+  snprintf(xml, sizeof xml,
+           "<TVAMain><ProgramDescription><ProgramLocationTable><Schedule serviceIDRef=\"c\">"
+           "<ScheduleEvent><Program crid=\"x\"/><PublishedStartTime>%s</PublishedStartTime>%s"
+           "</ScheduleEvent></Schedule></ProgramLocationTable></ProgramDescription></TVAMain>\n",
+           start, tail);
+  fputs(xml, f);
+  rewind(f);
+  bcg_doc_init(&doc);
+  ck_assert_int_eq(tva_xml_read(f, &doc), 0);
+  fclose(f);
+  ck_assert_int_eq(doc.programme_count, 1);
+  snprintf(stop, cap, "%s", doc.programmes[0].stop);
+  bcg_doc_free(&doc);
+}
+
+START_TEST(tva_xml_read_derives_stop_from_published_duration) {
+  char stop[64];
+  read_one_stop("2024-03-15T12:30:45Z", "<PublishedDuration>PT1H30M</PublishedDuration>", stop, sizeof stop);
+  ck_assert_str_eq(stop, "2024-03-15T14:00:45Z");
+  read_one_stop("2024-12-31T23:30:00.500+01:00", "<PublishedDuration> PT45M10S </PublishedDuration>", stop, sizeof stop);
+  ck_assert_str_eq(stop, "2025-01-01T00:15:10+01:00");
+  read_one_stop("2024-02-28T10:00:00", "<PublishedDuration>P1DT2H</PublishedDuration>", stop, sizeof stop);
+  ck_assert_str_eq(stop, "2024-02-29T12:00:00");
+  read_one_stop("2024-03-15T12:00:00-05:30", "<PublishedDuration>PT0.5S</PublishedDuration>", stop, sizeof stop);
+  ck_assert_str_eq(stop, "2024-03-15T12:00:00-05:30");
+}
+END_TEST
+
+START_TEST(tva_xml_read_end_time_wins_and_bad_duration_leaves_stop_empty) {
+  char stop[64];
+  read_one_stop("2024-03-15T12:00:00Z",
+                "<PublishedDuration>PT1H</PublishedDuration><PublishedEndTime>2024-03-15T12:20:00Z</PublishedEndTime>", stop,
+                sizeof stop);
+  ck_assert_str_eq(stop, "2024-03-15T12:20:00Z");
+  read_one_stop("2024-03-15T12:00:00Z", "<PublishedDuration>P1M</PublishedDuration>", stop, sizeof stop);
+  ck_assert_str_eq(stop, "");
+  read_one_stop("2024-03-15T12:00:00Z", "<PublishedDuration>P</PublishedDuration>", stop, sizeof stop);
+  ck_assert_str_eq(stop, "");
+  read_one_stop("2024-03-15T12:00:00Z", "<PublishedDuration>1H</PublishedDuration>", stop, sizeof stop);
+  ck_assert_str_eq(stop, "");
+  read_one_stop("2024-03-15T12:00:00Z", "<PublishedDuration>-PT1H</PublishedDuration>", stop, sizeof stop);
+  ck_assert_str_eq(stop, "");
+}
+END_TEST
+
+START_TEST(tva_genre_href_maps_known_and_falls_back) {
+  ck_assert_str_eq(tva_genre_href("News"), "urn:tva:metadata:cs:ContentCS:2011:3.1.1");
+  ck_assert_str_eq(tva_genre_href("SPORTS"), "urn:tva:metadata:cs:ContentCS:2011:3.2");
+  ck_assert_str_eq(tva_genre_href("Soap"), "urn:tva:metadata:cs:ContentCS:2011:3.4.2");
+  ck_assert_str_eq(tva_genre_href("Zorbing"), "urn:tva:metadata:cs:ContentCS:2011:3.0");
+}
+END_TEST
+
+START_TEST(tva_xml_write_emits_mapped_genre_href) {
+  bcg_doc_t doc;
+  bcg_channel_t *c;
+  bcg_programme_t *pr;
+  FILE *f;
+  char *xml;
+  bcg_doc_init(&doc);
+  c = bcg_add_channel(&doc);
+  bufcpy(c->id, sizeof c->id, "ch");
+  bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
+  pr = bcg_add_programme(&doc);
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "ch");
+  bufcpy(pr->start, sizeof pr->start, "2024-03-15T12:30:45Z");
+  bcg_set_text(&pr->category, "Comedy");
+  f = tmpfile();
+  ck_assert_ptr_nonnull(f);
+  tva_xml_write(f, &doc);
+  xml = slurp_tmp(f);
+  ck_assert_ptr_nonnull(strstr(xml, "<Genre href=\"urn:tva:metadata:cs:ContentCS:2011:3.5.7\"><Name>Comedy</Name></Genre>"));
+  free(xml);
+  fclose(f);
+  bcg_doc_free(&doc);
+}
+END_TEST
+
 static Suite *tva_xml_suite(void) {
   Suite *s = suite_create("tva_xml");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, tva_xml_write_read_round_trips);
+  tcase_add_test(tc, tva_xml_write_dtt_is_hex_and_omitted_without_triplet);
   tcase_add_test(tc, tva_xml_write_drops_channels_without_uri);
   tcase_add_test(tc, tva_build_crid_percent_encodes_and_compacts_time);
+  tcase_add_test(tc, tva_build_crid_dst_overlap_distinct);
+  tcase_add_test(tc, tva_build_crid_offset_crosses_day);
   tcase_add_test(tc, tva_xml_write_groups_programmes_for_unsorted_channels);
   tcase_add_test(tc, tva_xml_write_omits_absent_optional_fields);
   tcase_add_test(tc, tva_xml_write_handles_empty_documents_and_channels_without_programmes);
   tcase_add_test(tc, tva_xml_read_tolerates_incomplete_elements);
   tcase_add_test(tc, tva_xml_read_of_empty_input_yields_an_empty_document);
+  tcase_add_test(tc, tva_xml_read_logs_unreadable_input);
   tcase_add_test(tc, tva_xml_read_accepts_prefixes_single_quotes_and_cdata);
+  tcase_add_test(tc, tva_xml_read_trims_whitespace_around_times);
+  tcase_add_test(tc, tva_xml_read_derives_stop_from_published_duration);
+  tcase_add_test(tc, tva_xml_read_end_time_wins_and_bad_duration_leaves_stop_empty);
+  tcase_add_test(tc, tva_genre_href_maps_known_and_falls_back);
+  tcase_add_test(tc, tva_xml_write_emits_mapped_genre_href);
   suite_add_tcase(s, tc);
   return s;
 }

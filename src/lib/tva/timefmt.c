@@ -25,10 +25,13 @@ static int zone_from_name(const char *s, int *off_min) {
   return -1;
 }
 
-/* [+-]HHMM, 0 ok */
+/* [+-]HHMM or [+-]HH:MM, 0 ok */
 static int zone_from_numeric(const char *s, int *off_min) {
-  if ((s[0] != '+' && s[0] != '-') || !all_digits(s + 1, 4) || s[5]) return -1;
-  *off_min = ((s[1] - '0') * 10 + (s[2] - '0')) * 60 + (s[3] - '0') * 10 + (s[4] - '0');
+  const char *m = s + 3;
+  if ((s[0] != '+' && s[0] != '-') || !all_digits(s + 1, 2)) return -1;
+  if (*m == ':') m++;
+  if (!all_digits(m, 2) || m[2]) return -1;
+  *off_min = ((s[1] - '0') * 10 + (s[2] - '0')) * 60 + (m[0] - '0') * 10 + (m[1] - '0');
   if (s[0] == '-') *off_min = -*off_min;
   return 0;
 }
@@ -54,6 +57,8 @@ int xmltv_time_to_iso8601(const char *in, char *out, size_t outcap) {
   size_t nd = 0;
   size_t n = 0;
   const char *z;
+  char zbuf[16];
+  size_t zlen;
   int off_min = 0;
   int has_zone = 1;
   int unknown_zone = 0;
@@ -66,7 +71,13 @@ int xmltv_time_to_iso8601(const char *in, char *out, size_t outcap) {
 
   z = in + nd;
   while (*z == ' ' || *z == '\t') z++;
-  if (*z) {
+  zlen = strlen(z);
+  while (zlen && (z[zlen - 1] == ' ' || z[zlen - 1] == '\t')) zlen--;
+  if (zlen) {
+    if (zlen >= sizeof zbuf) return -1;
+    memcpy(zbuf, z, zlen);
+    zbuf[zlen] = '\0';
+    z = zbuf;
     if (zone_from_numeric(z, &off_min) != 0 && zone_from_name(z, &off_min) != 0) {
       if (!isalpha((unsigned char)z[0])) return -1;
       unknown_zone = 1;

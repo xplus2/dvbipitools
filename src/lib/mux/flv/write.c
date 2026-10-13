@@ -21,7 +21,8 @@
 
 /* Enhanced RTMP (github.com/veovera/enhanced-rtmp) PacketType/AudioPacketType */
 #define FLV_EX_PT_SEQ_START 0
-#define FLV_EX_PT_CODED_FRAMES_X 3 /* CompositionTime implied zero, no DTS tracked separately from PTS */
+#define FLV_EX_PT_CODED_FRAMES 1
+#define FLV_EX_PT_CODED_FRAMES_X 3 /* CompositionTime implied zero */
 #define FLV_EX_APT_SEQ_START 0
 #define FLV_EX_APT_CODED_FRAMES 1
 
@@ -92,23 +93,29 @@ static void video_seqhdr(flv_t *f, flv_track_t *t) {
 }
 
 void flv_emit_video(flv_t *f, flv_track_t *t, const unsigned char *d, size_t n, int key) {
-  unsigned char hdr[5];
+  unsigned char hdr[8];
   size_t hn = 0;
   int64_t rel = t->ts_ms - f->t0;
   uint32_t ts = rel > 0 ? (uint32_t)rel : 0;
+  uint32_t cts = (uint32_t)(t->cts_ms & 0xFFFFFF);
   int frame_type = key ? FLV_FRAME_KEY : FLV_FRAME_INTER;
 
   if (!t->seqhdr_sent) video_seqhdr(f, t);
   if (t->es.codec == CODEC_H264) {
     hdr[hn++] = (unsigned char)((frame_type << 4) | FLV_CODECID_AVC);
     hdr[hn++] = FLV_AVC_NALU;
-    hdr[hn++] = 0;
-    hdr[hn++] = 0;
-    hdr[hn++] = 0; /* CompositionTime = 0 */
+    hdr[hn++] = (unsigned char)(cts >> 16);
+    hdr[hn++] = (unsigned char)(cts >> 8);
+    hdr[hn++] = (unsigned char)cts;
   } else {
-    hdr[hn++] = (unsigned char)(0x80 | (frame_type << 4) | FLV_EX_PT_CODED_FRAMES_X);
+    hdr[hn++] = (unsigned char)(0x80 | (frame_type << 4) | (cts ? FLV_EX_PT_CODED_FRAMES : FLV_EX_PT_CODED_FRAMES_X));
     memcpy(hdr + hn, ex_video_fourcc(t->es.codec), 4);
     hn += 4;
+    if (cts) {
+      hdr[hn++] = (unsigned char)(cts >> 16);
+      hdr[hn++] = (unsigned char)(cts >> 8);
+      hdr[hn++] = (unsigned char)cts;
+    }
   }
   flv_send_tag(f, FLV_TAG_VIDEO, ts, hdr, hn, d, n);
 }

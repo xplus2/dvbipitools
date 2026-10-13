@@ -79,6 +79,7 @@ h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *
   qcbs.handshake_completed = cb_handshake_completed;
   qcbs.recv_stream_data = cb_recv_stream_data;
   qcbs.acked_stream_data_offset = cb_acked_stream_data_offset;
+  qcbs.extend_max_stream_data = cb_extend_max_stream_data;
   qcbs.stream_open = cb_stream_open;
   qcbs.stream_close = cb_stream_close;
   qcbs.rand = cb_rand;
@@ -158,6 +159,8 @@ void h3conn_del(h3_conn_t *c) {
   if (!c) return;
   h3_llhls_on_conn_close(c);
   h3_hls_cold_on_conn_close(c);
+  h3_ts_cold_on_conn_close(c);
+  h3_open_on_conn_close(c);
   h3_ws_on_conn_close(c);
   if (c->h3conn) {
     nghttp3_conn_del(c->h3conn);

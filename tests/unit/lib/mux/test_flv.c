@@ -365,6 +365,54 @@ START_TEST(flv_video_sequence_header_and_coded_frames) {
 }
 END_TEST
 
+START_TEST(flv_video_tag_ts_is_dts_with_composition_time) {
+  const flv_video_case_t *c = &flv_video_cases[_i];
+  unsigned long long bytes = 0;
+  flv_opts_t opts;
+  flv_t *f;
+  tag_capture_t cap;
+  unsigned char pkts[DISCOVERY_PACKETS][188];
+  unsigned char au[128];
+  unsigned char pes[188];
+  unsigned char pkt[188];
+  size_t cts_off = c->fourcc ? 5 : 2;
+  int frames = 0;
+  int seen_seq = 0;
+  uint32_t prev_ts = 0;
+
+  memset(&opts, 0, sizeof opts);
+  memset(&cap, 0, sizeof cap);
+  f = flv_new(&opts, 0, capture_cb, &cap, &bytes);
+  ck_assert_ptr_nonnull(f);
+  build_video_discovery(pkts, 0, c->stream_type);
+  for (size_t i = 0; i < DISCOVERY_PACKETS; i++) flv_feed(f, pkts[i]);
+  for (unsigned i = 0; i < VIDEO_AUS; i++) {
+    size_t alen = c->build_au(au, i == 0);
+    size_t plen = build_pes_with_pts_dts(pes, 99000 + i * 3000, 90000 + i * 3000, au, alen);
+
+    wrap_ts_packet_exact(pkt, 0x0101, 1, pes, plen);
+    flv_feed(f, pkt);
+  }
+  ck_assert_int_eq(flv_error(f), 0);
+  flv_close(f);
+
+  for (int i = 0; i < cap.n; i++) {
+    const captured_tag_t *tag = &cap.tags[i];
+
+    if (tag->type != FLV_TAG_VIDEO) continue;
+    if (!seen_seq++) continue;
+    ck_assert_uint_ge(tag->len, cts_off + 3);
+    ck_assert_uint_eq(tag->data[cts_off], 0);
+    ck_assert_uint_eq(tag->data[cts_off + 1], 0);
+    ck_assert_uint_eq(tag->data[cts_off + 2], 100);
+    if (frames) ck_assert_uint_gt(tag->timestamp_ms, prev_ts);
+    prev_ts = tag->timestamp_ms;
+    frames++;
+  }
+  ck_assert_int_ge(frames, 2);
+}
+END_TEST
+
 START_TEST(flv_unsupported_video_codec_emits_nothing_and_no_error) {
   unsigned long long bytes = 0;
   flv_opts_t opts;
@@ -520,6 +568,7 @@ static Suite *flv_suite(void) {
   tcase_add_test(tc, flv_emits_av01_fourcc_and_av1c_seqhdr);
   tcase_add_loop_test(tc, flv_edge_case_streams_never_error_and_drop_unusable_frames, 0, EDGE_COUNT);
   tcase_add_loop_test(tc, flv_video_sequence_header_and_coded_frames, 0, (int)(sizeof flv_video_cases / sizeof flv_video_cases[0]));
+  tcase_add_loop_test(tc, flv_video_tag_ts_is_dts_with_composition_time, 0, (int)(sizeof flv_video_cases / sizeof flv_video_cases[0]));
   tcase_add_test(tc, flv_unsupported_video_codec_emits_nothing_and_no_error);
   tcase_add_test(tc, flv_selects_the_requested_audio_track);
   tcase_add_test(tc, flv_waits_for_every_track_header_before_emitting);

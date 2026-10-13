@@ -347,8 +347,9 @@ START_TEST(the_queue_drops_oldest_chunks_while_unconnected) {
   srtout_service(out, &st);
   ck_assert_int_eq(st.connected, 0);
   srtout_queue_stats(out, &qs);
-  for (int i = 0; i < qs.capacity + 50; i++) srtout_write(out, chunk, sizeof chunk);
-  srtout_write(out, chunk, 100);
+  for (int i = 0; i < qs.capacity; i++) ck_assert_int_eq(srtout_write(out, chunk, sizeof chunk), 0);
+  for (int i = 0; i < 50; i++) ck_assert_int_eq(srtout_write(out, chunk, sizeof chunk), -1);
+  ck_assert_int_eq(srtout_write(out, chunk, 100), -1);
   srtout_queue_stats(out, &qs);
   ck_assert_int_eq(qs.chunks, qs.capacity);
   ck_assert_uint_ge(qs.dropped, 50u);

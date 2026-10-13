@@ -34,8 +34,6 @@ void tls_set_http2_enabled(int enabled);
 int tls_init(const char *cert_path, const char *key_path, int fd_table_cap); /* init SSL_CTX once before spawning threads, -1: caller aborts */
 void tls_gc_init(int nshards); /* one GC queue per worker thread, before spawning them */
 void tls_cleanup(void);
-int tls_create_listen_sock(int port, const char *host);   /* per-thread, IPv4 */
-int tls_create_listen_sock6(int port, const char *host6); /* per-thread, IPv6 */
 int tls_is_running(void); /* non-zero when SSL_CTX is active */
 int tls_accept(int fd);
 int tls_handshake(int fd); /* 1=done, 0=needs I/O (EAGAIN), -1=error */
@@ -51,8 +49,10 @@ int tls_is_tls(int fd);
 int tls_client_cert_verified(int fd);
 /* CN of verified client cert into buf, empty string if none */
 void tls_get_client_cert_cn(int fd, char *buf, size_t bufsz);
-int reload_tls(void); /* rereads cert/key from tls_init()'s paths. 0 ok, -1 fail (old ctx kept running) */
+int reload_tls(void); /* rereads cert/key from tls_init()'s paths, TCP and QUIC. 0 ok, -1 fail (old ctx kept running) */
 void tls_ctx_gc_sweep(void);
+struct ssl_ctx_st;
+void tls_ctx_retire(struct ssl_ctx_st *old); /* deferred free, takes ownership */
 void tls_cert_info(char *buf, size_t sz, const char *path, int from_file);
 
 int tls_has_pending(int fd);

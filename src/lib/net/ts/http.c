@@ -3,6 +3,8 @@
 
 #define _GNU_SOURCE
 
+#include <errno.h>
+#include <poll.h>
 #include <string.h>
 
 #include "../../dash/live.h"
@@ -88,6 +90,52 @@ int tssrc_http_fd(const tssrc_t *s) {
     return -1;
   }
   return -1;
+}
+
+#define HTTP_IDLE_WAIT_MS 20
+
+int tssrc_http_wait(const tssrc_t *s, int timeout_ms) {
+  struct pollfd pfd[sizeof s->hls / sizeof s->hls[0]];
+  nfds_t n = 0;
+  int idle = 0;
+  int pr;
+  switch (s->http_sub) {
+  case HTTP_SUB_TS:
+    if (s->http_sniff_pos < s->http_sniff_len || http_has_buffered(s->h)) return 1;
+    pfd[n].fd = http_fd(s->h);
+    pfd[n++].events = POLLIN;
+    break;
+  case HTTP_SUB_HLS:
+    for (unsigned i = 0; i < s->n_media && n < sizeof pfd / sizeof pfd[0]; i++) {
+      int fd = hls_live_poll_fd(s->hls[i]);
+      if (hls_live_has_buffered(s->hls[i])) return 1;
+      if (fd < 0) {
+        idle = 1;
+        continue;
+      }
+      pfd[n].fd = fd;
+      pfd[n++].events = hls_live_poll_events(s->hls[i]);
+    }
+    break;
+  case HTTP_SUB_DASH:
+    for (unsigned i = 0; i < s->n_media && n < sizeof pfd / sizeof pfd[0]; i++) {
+      int fd = dash_live_poll_fd(s->dash[i]);
+      if (dash_live_has_buffered(s->dash[i])) return 1;
+      if (fd < 0) {
+        idle = 1;
+        continue;
+      }
+      pfd[n].fd = fd;
+      pfd[n++].events = dash_live_poll_events(s->dash[i]);
+    }
+    break;
+  }
+  /* idle media wake on timers, not fds */
+  if (idle && timeout_ms > HTTP_IDLE_WAIT_MS) timeout_ms = HTTP_IDLE_WAIT_MS;
+  for (nfds_t i = 0; i < n; i++) pfd[i].revents = 0;
+  pr = poll(pfd, n, timeout_ms);
+  if (pr < 0) return errno == EINTR ? 0 : -1;
+  return pr > 0;
 }
 
 void tssrc_http_free_media(const tssrc_t *s) {

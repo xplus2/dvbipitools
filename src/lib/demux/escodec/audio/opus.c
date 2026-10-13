@@ -15,9 +15,30 @@ int next_opus(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f
   unsigned config;
   unsigned code;
   unsigned frames;
+  size_t hdr = 0;
 
   if (len < 1) return 1;
-  if (len >= 2 && d[0] == 0xFF && (d[1] & 0xE0) == 0xE0) return -1; /* control header prefix au. not supported */
+  if (len >= 2 && d[0] == 0x7F && (d[1] & 0xE0) == 0xE0) {
+    size_t p = 2;
+    size_t au = 0;
+    for (;;) {
+      if (p >= len) return 1;
+      au += d[p];
+      if (d[p++] != 0xFF) break;
+    }
+    if (d[1] & 0x10) p += 2;
+    if (d[1] & 0x08) p += 2;
+    if (d[1] & 0x04) {
+      if (p >= len) return 1;
+      p += 1u + d[p];
+    }
+    if (!au) return -1;
+    if (p > len || len - p < au) return 1;
+    hdr = p;
+    len = p + au;
+  }
+  d += hdr;
+  len -= hdr;
   toc = d[0];
   config = (toc >> 3) & 0x1F;
   code = toc & 0x03;
@@ -28,7 +49,7 @@ int next_opus(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f
   } else frames = (code == 0) ? 1 : 2;
 
   if (frames * opus_frame_samples[config] > 5760) return -1;
-  f->consumed = len;
+  f->consumed = hdr + len;
   f->out = d;
   f->outlen = len;
   f->rate = 48000;

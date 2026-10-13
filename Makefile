@@ -153,6 +153,7 @@ dipixmltv_SRCS := \
 	src/lib/helper/fileutil.c \
 	src/dipixmltv/revmap.c \
 	src/dipixmltv/suggest.c \
+	src/lib/helper/playlist_in.c \
 	src/lib/helper/log.c \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
@@ -468,6 +469,7 @@ dipirec_SRCS := \
 	src/lib/net/rtmp/rtmp.c \
 	src/lib/net/rtmp/rtmpout.c \
 	$(dipirec_AUTH_SRC) \
+	src/lib/mux/pmt_filter.c \
 	src/dipirec/filter/ts.c \
 	src/dipirec/filter/pace.c
 
@@ -1504,7 +1506,7 @@ endif
 
 dipixy_HTTPNG_SRC :=
 ifneq ($(HAVE_HTTP2)$(HAVE_HTTP3),nono)
-dipixy_HTTPNG_SRC := src/dipixy/httpng/httpng.c
+dipixy_HTTPNG_SRC := src/dipixy/httpng/httpng.c src/dipixy/httpng/httpng_special.c
 endif
 
 # gen_htdocs -> build time: NOT a cross build
@@ -1610,6 +1612,7 @@ dipixy_SRCS := \
 	src/lib/mux/fec2022.c \
 	src/lib/mux/pmt_filter.c \
 	src/dipixy/core/status.c \
+	src/dipixy/core/time_ep.c \
 	src/dipixy/core/tlscert.c \
 	src/lib/helper/toolmain.c \
 	src/dipixy/ws/ws_frame.c \
@@ -1644,6 +1647,7 @@ dipixy_SRCS := \
 	src/dipixy/dlna/dlna_didl.c \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/gena.c \
+	src/dipixy/dlna/gena_notify.c \
 	src/dipixy/core/metrics.c \
 	src/lib/mux/fmp4/box.c \
 	src/lib/mux/growbuf.c \
@@ -1923,7 +1927,17 @@ UNIT_TESTS += lib_net_rtmp_auth
 lib_net_rtmp_auth_BIN := tests/unit/lib/net/rtmp/test_auth
 lib_net_rtmp_auth_SRCS := \
 	tests/unit/lib/net/rtmp/test_auth.c \
-	src/lib/net/rtmp/auth.c
+	src/lib/net/rtmp/auth.c \
+	src/lib/net/rtmp/rtmp.c \
+	src/lib/net/rtmp/session.c \
+	src/lib/net/rtmp/command.c \
+	src/lib/net/rtmp/chunk.c \
+	src/lib/net/rtmp/handshake.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
 lib_net_rtmp_auth_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_net_rtmp_auth_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -3833,6 +3847,7 @@ lib_tva_bcg_doc_BIN := tests/unit/lib/tva/test_bcg_doc
 lib_tva_bcg_doc_SRCS := \
 	tests/unit/lib/tva/test_bcg_doc.c \
 	src/lib/tva/bcg_doc.c \
+	src/lib/helper/xml_util.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
@@ -4002,6 +4017,7 @@ dipixmltv_suggest_BIN := tests/unit/dipixmltv/test_suggest
 dipixmltv_suggest_SRCS := \
 	tests/unit/dipixmltv/test_suggest.c \
 	src/dipixmltv/suggest.c \
+	src/lib/helper/playlist_in.c \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
 	src/lib/tva/bcg_doc.c \
@@ -6097,6 +6113,8 @@ lib_cas_cas_group_SRCS := \
 dipirec_ts_filter_BIN := tests/unit/dipirec/test_ts_filter
 dipirec_ts_filter_SRCS := \
 	tests/unit/dipirec/test_ts_filter.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/pmt_filter.c \
 	src/dipirec/filter/ts.c \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
@@ -6242,6 +6260,8 @@ dipirec_record_SRCS := \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
 	src/lib/net/rtmp/rtmpout.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/pmt_filter.c \
 	src/dipirec/filter/ts.c \
 	src/dipirec/filter/pace.c
 
@@ -6381,6 +6401,8 @@ dipirec_record_net_SRCS := \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
 	src/lib/net/rtmp/rtmpout.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/pmt_filter.c \
 	src/dipirec/filter/ts.c \
 	src/dipirec/filter/pace.c
 dipirec_record_net_EXTRA_CFLAGS := $(shell pkg-config --cflags librist srt)
@@ -6719,7 +6741,7 @@ dipifccret_e2e_SRCS := \
 dipifccret_e2e_EXTRA_CFLAGS := -pthread
 dipifccret_e2e_EXTRA_LDFLAGS := -pthread -latomic
 
-UNIT_TESTS += dipixy_args dipixy_config dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_status dipixy_htdocs dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_ssdp dipixy_conn dipixy_conn_concurrency dipixy_tls_stub dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_segstore_reclaim dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
+UNIT_TESTS += dipixy_args dipixy_config dipixy_route dipixy_playlist dipixy_capture dipixy_channels dipixy_pidfilter dipixy_ts_push_queue dipixy_pmtselect dipixy_lcevcselect dipixy_rawaudio dipixy_ws_frame dipixy_status dipixy_time_ep dipixy_htdocs dipixy_tlscert dipixy_ws_broadcast dipixy_ws_clients dipixy_ws_sources dipixy_gena dipixy_dlna dipixy_ssdp dipixy_conn dipixy_conn_concurrency dipixy_tls_stub dipixy_reactor dipixy_dispatch dipixy_hls dipixy_segstore_concurrency dipixy_segstore_reclaim dipixy_mp4push dipixy_altsvc dipixy_segment_video lib_playlist_in
 
 dipixy_args_BIN := tests/unit/dipixy/test_args
 dipixy_args_SRCS := \
@@ -6800,6 +6822,7 @@ dipixy_playlist_SRCS := \
 	src/dipixy/ts/channels/build.c \
 	src/dipixy/ts/channels/reload.c \
 	src/dipixy/dlna/gena.c \
+	src/dipixy/dlna/gena_notify.c \
 	src/dipixy/dlna/dlna.c \
 	src/dipixy/dlna/dlna_soap.c \
 	src/dipixy/dlna/dlna_oid.c \
@@ -6906,6 +6929,7 @@ dipixy_capture_SRCS := \
 	src/dipixy/reactor/qsbr.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
+	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
@@ -6964,6 +6988,7 @@ dipixy_channels_SRCS := \
 	src/dipixy/ts/channels/build.c \
 	src/dipixy/ts/channels/reload.c \
 	src/dipixy/dlna/gena.c \
+	src/dipixy/dlna/gena_notify.c \
 	src/dipixy/dlna/dlna.c \
 	src/dipixy/dlna/dlna_soap.c \
 	src/dipixy/dlna/dlna_oid.c \
@@ -7120,6 +7145,12 @@ dipixy_status_SRCS := \
 	src/lib/helper/jsonbuf.c \
 	src/lib/sys/ioutil.c
 
+dipixy_time_ep_BIN := tests/unit/dipixy/test_time_ep
+dipixy_time_ep_SRCS := \
+	tests/unit/dipixy/test_time_ep.c \
+	src/dipixy/core/time_ep.c \
+	src/lib/sys/ioutil.c
+
 dipixy_htdocs_BIN := tests/unit/dipixy/test_htdocs
 dipixy_htdocs_SRCS := \
 	tests/unit/dipixy/test_htdocs.c \
@@ -7167,6 +7198,7 @@ dipixy_dispatch_SRCS := \
 	src/dipixy/reactor/dispatch/route.c \
 	src/dipixy/reactor/dispatch/route_common.c \
 	src/dipixy/reactor/dispatch/waiters.c \
+	src/dipixy/core/time_ep.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/sys/ioutil.c
 dipixy_dispatch_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
@@ -7327,6 +7359,7 @@ dipixy_h3_quic_tls_SRCS := \
 	src/dipixy/http3/quic/tls.c \
 	src/dipixy/http3/http3_udp.c \
 	src/dipixy/http3/http3_stateless.c \
+	src/dipixy/reactor/reactor_tls_stub.c \
 	src/lib/helper/log.c
 dipixy_h3_quic_tls_EXTRA_CFLAGS := -DHAVE_HTTP3 $(shell pkg-config --cflags libngtcp2 libngtcp2_crypto_ossl openssl)
 ifneq (,$(findstring -static,$(LDFLAGS)))
@@ -7337,7 +7370,8 @@ endif
 dipixy_h3_stateless_BIN := tests/unit/dipixy/test_h3_stateless
 dipixy_h3_stateless_SRCS := \
 	tests/unit/dipixy/test_h3_stateless.c \
-	src/dipixy/http3/http3_stateless.c
+	src/dipixy/http3/http3_stateless.c \
+	src/dipixy/http3/http3_udp.c
 dipixy_h3_stateless_EXTRA_CFLAGS := -DHAVE_HTTP3 $(shell pkg-config --cflags libngtcp2 libngtcp2_crypto_ossl openssl)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipixy_h3_stateless_EXTRA_LDFLAGS := $(shell pkg-config --static --libs libngtcp2 libngtcp2_crypto_ossl openssl)
@@ -7395,6 +7429,7 @@ dipixy_ws_sources_SRCS := \
 	src/dipixy/ts/channels/build.c \
 	src/dipixy/ts/channels/reload.c \
 	src/dipixy/dlna/gena.c \
+	src/dipixy/dlna/gena_notify.c \
 	src/dipixy/dlna/dlna.c \
 	src/dipixy/dlna/dlna_soap.c \
 	src/dipixy/dlna/dlna_oid.c \
@@ -7489,6 +7524,7 @@ dipixy_gena_SRCS := \
 	src/dipixy/dlna/dlna_didl.c \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/gena.c \
+	src/dipixy/dlna/gena_notify.c \
 	src/dipixy/dlna/ssdp.c \
 	src/dipixy/ts/channels/channels.c \
 	src/dipixy/ts/channels/build.c \
@@ -7593,6 +7629,7 @@ dipixy_dlna_SRCS := \
 	src/dipixy/dlna/dlna_didl.c \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/gena.c \
+	src/dipixy/dlna/gena_notify.c \
 	src/dipixy/dlna/ssdp.c \
 	src/dipixy/ts/channels/channels.c \
 	src/dipixy/ts/channels/build.c \

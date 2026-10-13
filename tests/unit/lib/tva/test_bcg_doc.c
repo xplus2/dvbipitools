@@ -72,11 +72,42 @@ START_TEST(bcg_add_programme_zeroes_new_entries) {
   bcg_doc_init(&d);
   pr = bcg_add_programme(&d);
   ck_assert_ptr_nonnull(pr);
-  ck_assert_uint_eq(strlen(pr->title), 0u);
+  ck_assert_ptr_null(pr->title);
   ck_assert_uint_eq(strlen(pr->channel_id), 0u);
   ck_assert_int_eq(d.programme_count, 1);
 
   bcg_doc_free(&d);
+}
+END_TEST
+
+START_TEST(bcg_set_text_copies_replaces_and_maps_empty_to_null) {
+  char *t = NULL;
+  char src[] = "abc";
+  ck_assert_int_eq(bcg_set_text(&t, src), 0);
+  src[0] = 'x';
+  ck_assert_str_eq(t, "abc");
+  ck_assert_int_eq(bcg_set_text(&t, "def"), 0);
+  ck_assert_str_eq(t, "def");
+  ck_assert_int_eq(bcg_set_text(&t, ""), 0);
+  ck_assert_ptr_null(t);
+  ck_assert_int_eq(bcg_set_text(&t, NULL), 0);
+  ck_assert_ptr_null(t);
+}
+END_TEST
+
+START_TEST(bcg_programme_copy_is_deep) {
+  bcg_programme_t a, b;
+  memset(&a, 0, sizeof a);
+  ck_assert_int_eq(bcg_set_text(&a.title, "T"), 0);
+  ck_assert_int_eq(bcg_set_text(&a.desc, "D"), 0);
+  ck_assert_int_eq(bcg_programme_copy(&b, &a), 0);
+  ck_assert_ptr_ne(a.title, b.title);
+  ck_assert_str_eq(b.title, "T");
+  ck_assert_str_eq(b.desc, "D");
+  ck_assert_ptr_null(b.category);
+  bcg_programme_free_text(&a);
+  ck_assert_str_eq(b.title, "T");
+  bcg_programme_free_text(&b);
 }
 END_TEST
 
@@ -87,6 +118,8 @@ static Suite *bcg_doc_suite(void) {
   tcase_add_test(tc, bcg_find_channel_by_id);
   tcase_add_test(tc, bcg_channel_add_name_caps_at_max_and_drops_silently);
   tcase_add_test(tc, bcg_add_programme_zeroes_new_entries);
+  tcase_add_test(tc, bcg_set_text_copies_replaces_and_maps_empty_to_null);
+  tcase_add_test(tc, bcg_programme_copy_is_deep);
   suite_add_tcase(s, tc);
   return s;
 }

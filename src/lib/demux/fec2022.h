@@ -7,7 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define FEC2022_MAX_PKT (12 + 7 * 188)
+/* RTP header + up to 15 CSRC + extension + 7 TS, MTU sized */
+#define FEC2022_MAX_PKT 1500
 #define FEC2022_MAX_REPAIR (12 + 16 + (FEC2022_MAX_PKT - 12))
 #define FEC2022_MAX_L 40
 #define FEC2022_MAX_LD 400
@@ -19,6 +20,10 @@ void fec2022_dec_free(fec2022_dec_t *d);
 
 int fec2022_dec_source(fec2022_dec_t *d, const unsigned char *pkt, size_t len);
 void fec2022_dec_repair(fec2022_dec_t *d, const unsigned char *pkt, size_t len);
+/* length of next ready packet, 0 if none */
+size_t fec2022_dec_next_len(const fec2022_dec_t *d);
+/* next ready packet in sequence order, recovered ones included. 0 if none or cap too small.
+   a source/repair call can release many at once: callers drain until 0 */
 size_t fec2022_dec_drain(fec2022_dec_t *d, unsigned char *out, size_t cap);
 
 #endif

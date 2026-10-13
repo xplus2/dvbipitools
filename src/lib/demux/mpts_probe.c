@@ -54,13 +54,14 @@ static void fill_result(const psi_t *psi, mpts_probe_result_t *r) {
   r->kind = (r->program_count > 1) ? MPTS_PROBE_MPTS : MPTS_PROBE_SPTS;
 }
 
-mpts_probe_result_t mpts_probe_run(tssrc_t *src, int name_wait_ms) {
+mpts_probe_result_t mpts_probe_run(tssrc_t *src, int pat_wait_ms, int name_wait_ms) {
   mpts_probe_result_t r;
   unsigned char buf[65536];
   tspack_t pz;
   probe_cb_ctx_t ctx;
   double name_deadline = 0; /* gcc maybe-uninitialized fp: set with have_deadline flag */
   int have_deadline = 0;
+  double pat_deadline = mono() + (double)pat_wait_ms / 1000.0;
 
   memset(&r, 0, sizeof r);
   memset(&pz, 0, sizeof pz);
@@ -70,6 +71,7 @@ mpts_probe_result_t mpts_probe_run(tssrc_t *src, int name_wait_ms) {
     return r;
   }
   psi_enable_multi_program(ctx.psi);
+  tssrc_capture_start(src);
 
   for (;;) {
     ssize_t n = tssrc_read(src, buf, sizeof buf, NULL);
@@ -81,7 +83,19 @@ mpts_probe_result_t mpts_probe_run(tssrc_t *src, int name_wait_ms) {
       return r;
     }
     if (n > 0) tspack_feed(&pz, buf, (size_t)n, probe_cb, &ctx);
-    if (!psi_have_pat(ctx.psi)) continue;
+    if (!psi_have_pat(ctx.psi)) {
+      if (mono() >= pat_deadline) {
+        r.kind = MPTS_PROBE_FAIL;
+        psi_free(ctx.psi);
+        return r;
+      }
+      if (n == 0 && tssrc_wait(src, 50) < 0) {
+        r.kind = MPTS_PROBE_FAIL;
+        psi_free(ctx.psi);
+        return r;
+      }
+      continue;
+    }
     named = all_named(ctx.psi, &count);
     if (count <= 1) break; /* spts: name not needed */
     if (!have_deadline) {

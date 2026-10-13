@@ -74,6 +74,16 @@ args_status_t dixy_opt_server(dixy_opt_t *p, int c) {
       cfg->max_channels = (int)v;
       break;
     }
+    case OPT_MAX_VARIANTS: {
+      unsigned v;
+      if (argutil_uint_range(optarg, 1, 1024, &v)) {
+        argerr("YS000659", "invalid --max-variants: %s (1..1024)", optarg);
+        args_free(cfg);
+        return ARGS_ERR;
+      }
+      cfg->max_variants = (int)v;
+      break;
+    }
     case OPT_IDLE_TIMEOUT: {
       unsigned v;
       if (argutil_uint_range(optarg, 0, 86400, &v)) {
@@ -86,8 +96,8 @@ args_status_t dixy_opt_server(dixy_opt_t *p, int c) {
     }
     case OPT_CAPTURE_RING_SIZE: {
       unsigned v;
-      if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-        argerr("YS000650", "invalid --capture-ring-size: %s (KiB, min 1)", optarg);
+      if (argutil_uint_range(optarg, 1, 262144, &v)) {
+        argerr("YS000650", "invalid --capture-ring-size: %s (KiB, 1..262144)", optarg);
         args_free(cfg);
         return ARGS_ERR;
       }

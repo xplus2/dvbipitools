@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdio.h>
 #include <string.h>
 
 #include "lib/helper/argutil.h"
@@ -17,7 +16,7 @@ int dixy_cfg_auth(const char *val, char *out, size_t outsz, char *err, size_t er
   char b64[192];
   size_t n;
   if (!colon || colon == val) {
-    snprintf(err, errsz, "invalid '%s' (need user:password)", val);
+    bufcpy(err, errsz, "invalid credentials (need user:password)");
     return -1;
   }
   if (strlen(val) >= ARGS_AUTH_CREDS_MAX) {
@@ -35,11 +34,11 @@ int dixy_basic_auth_parse(const char *flag, const char *val, char *out, size_t o
   char b64[192];
   size_t n;
   if (!colon || colon == val) {
-    argerr("YS000618", "invalid %s: %s (need user:password)", flag, val);
+    argerr("YS000618", "invalid %s (need user:password)", flag);
     return -1;
   }
   if (strlen(val) >= ARGS_AUTH_CREDS_MAX) {
-    argerr("YS000619", "%s credentials too long: %s", flag, val);
+    argerr("YS000619", "%s credentials too long", flag);
     return -1;
   }
   base64_encode(val, strlen(val), b64);

@@ -264,6 +264,7 @@ static conn_t *dashchunk_conn(loop_t *l, int sv[2], int slot, int keep_alive) {
   loop_open(l);
   pair(sv);
   c = add_conn(l, sv[0], CONN_READING, 0);
+  c->slot = -1; /* no subscription to attach */
   reactor_dashchunk_begin(l->epfd, c);
   c->slot = slot;
   c->keep_alive = keep_alive;

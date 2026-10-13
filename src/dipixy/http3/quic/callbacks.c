@@ -71,6 +71,15 @@ int cb_acked_stream_data_offset(ngtcp2_conn *qconn, int64_t stream_id, uint64_t 
   return 0;
 }
 
+int cb_extend_max_stream_data(ngtcp2_conn *qconn, int64_t stream_id, uint64_t max_data, void *ud, void *stream_ud) {
+  (void)qconn;
+  (void)max_data;
+  (void)stream_ud;
+  h3_conn_t *c = ud;
+  if (c->h3conn && nghttp3_conn_unblock_stream(c->h3conn, stream_id) != 0) return NGTCP2_ERR_CALLBACK_FAILURE;
+  return 0;
+}
+
 int cb_stream_open(ngtcp2_conn *qconn, int64_t stream_id, void *ud) {
   (void)qconn;
   if ((stream_id & 0x02) == 0) alloc_req(ud, stream_id);
@@ -85,6 +94,8 @@ int cb_stream_close(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id, uint6
   if (c->h3conn) nghttp3_conn_close_stream(c->h3conn, stream_id, app_err);
   h3_llhls_on_stream_close(c, stream_id);
   h3_hls_cold_on_stream_close(c, stream_id);
+  h3_ts_cold_on_stream_close(c, stream_id);
+  h3_open_on_stream_close(c, stream_id);
   h3_ws_on_stream_close(c, stream_id);
   free_req(c, stream_id);
   if ((stream_id & 0x03) == 0) ngtcp2_conn_extend_max_streams_bidi(qconn, 1);

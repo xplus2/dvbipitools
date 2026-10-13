@@ -188,6 +188,7 @@ static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
     int64_t raw = pts_unwrap(&t->pts, pts);
     t->ts_ms = raw - pts_disc_shift(&m->disc, raw, t->ts_seen ? t->ts_ms : PTS_DISC_NONE);
     t->ts_seen = 1;
+    aclk_anchor(&t->aclk, t->ts_ms);
   }
   if (t->remlen > MKV_REM_MAX) t->remlen = 0;
   if (esc_rem_append(&t->rem, &t->remlen, &t->remcap, data, len)) return;
@@ -208,7 +209,10 @@ static void handle_audio(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
       all_ready(m);
     }
     if (f.outlen) emit(m, t, f.out, f.outlen, t->es.codec == CODEC_AC4 ? f.ac4_iframe : 1);
-    if (t->es.rate && f.samples) t->ts_ms += (int64_t)f.samples * 1000 / (int64_t)t->es.rate;
+    if (t->es.rate && f.samples) {
+      t->aclk.samples += f.samples;
+      t->ts_ms = aclk_ms(&t->aclk, t->es.rate);
+    }
     pos += f.consumed;
   }
   if (pos) {

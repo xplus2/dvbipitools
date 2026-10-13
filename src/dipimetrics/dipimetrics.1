@@ -69,7 +69,9 @@ too.
 .BI \-\-auth " user\fR:\fBpass"
 HTTP Basic Auth for
 .B GET /metrics.
-Default: off.
+Default: off. Visible in the process list, prefer
+.B auth
+in the config file.
 .TP
 .BR \-e ", " \-\-expiry\ \fI<s>\fR
 Drop an instance after this many seconds without a new snapshot.
@@ -80,7 +82,7 @@ i.e. 6 missed sends at an exporter's own default 5s
 .TP
 .BR \-v ", " \-\-verbose
 Log every rejected/dropped snapshot (malformed, unsupported protocol
-version, stale sequence, store full) and every HTTP 404, to stderr.
+version, stale sequence, store full) and every HTTP 404 and 405, to stderr.
 .TP
 .B \-\-color \fI<when>\fR
 .IR auto | always | never .
@@ -111,10 +113,14 @@ Show usage and exit.
 .BR \-l / \-\-listen
 is the address:port
 .B GET /metrics
-is served on. Every other path returns
+is served on, as
+.B HEAD
+too. Other methods on that path return
+.BR 405 ,
+every other path
 .BR 404 .
 The server is intentionally minimal: up to 128 connections in flight at
-once (at most 64 per source address), a 5-second read/write budget per
+once (at most 64 per source address, IPv6 by /64 prefix), a 5-second read/write budget per
 connection so a stalled client can't wedge the collector, idle
 connections evicted oldest-first when a new one arrives and the pool is
 full, and
@@ -161,10 +167,14 @@ itself), which would collide with and rename an exporter-supplied
 label to
 .BR exported_instance .
 .PP
-One extra, collector-computed series is added per tracked instance:
+Two extra series are added per tracked instance:
 .BR dvbipi_metrics_snapshot_age_seconds ,
 seconds since that instance's last accepted snapshot, independent of
-anything the exporter itself reports.
+anything the exporter itself reports, and
+.BR dvbipi_metrics_snapshot_time_seconds ,
+the exporter's own unix time stamped on that snapshot.
+.B time() \- dvbipi_metrics_snapshot_time_seconds
+shows the exporter's clock skew.
 .PP
 .B dipimetrics
 also reports on itself, always present regardless of what's currently
@@ -179,7 +189,7 @@ tracked:
 (counter, snapshots discarded because a piece of them was lost),
 .BR dvbipi_metrics_parts_orphaned_total
 (counter, stray snapshot pieces dropped) and
-.BR dvbipi_metrics_http_requests_total{status="200|404"}
+.BR dvbipi_metrics_http_requests_total{status="200|401|404|405|500"}
 (counter, one series per status). Each exporter additionally reports
 .BR dvbipi_metrics_parts_dropped_total
 (counter, snapshot pieces it failed to send).

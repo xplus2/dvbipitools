@@ -35,7 +35,7 @@ START_TEST(response_carries_headers_and_the_whole_body) {
 
   rig_open(&r);
   sid = open_stream(&r);
-  h2_submit_resp(r.h2, sid, 200, "text/plain", "abc", MID_BODY, make_body(MID_BODY), 0, NULL);
+  h2_submit_resp(r.h2, sid, 200, "text/plain", "abc", MID_BODY, make_body(MID_BODY), NULL, 0, NULL);
   settle(&r);
   st = h2c_stream_for(&r.cl, sid);
   ck_assert_int_eq(st->status, 200);
@@ -57,7 +57,7 @@ START_TEST(large_body_is_streamed_across_flow_control_windows) {
 
   rig_open(&r);
   sid = open_stream(&r);
-  h2_submit_resp(r.h2, sid, 200, "application/octet-stream", NULL, BIG_BODY, make_body(BIG_BODY), 0, NULL);
+  h2_submit_resp(r.h2, sid, 200, "application/octet-stream", NULL, BIG_BODY, make_body(BIG_BODY), NULL, 0, NULL);
   settle(&r);
   st = h2c_stream_for(&r.cl, sid);
   ck_assert_uint_eq(st->total_bytes, (size_t)BIG_BODY);
@@ -75,7 +75,7 @@ START_TEST(bodyless_response_ends_with_the_headers) {
 
   rig_open(&r);
   sid = open_stream(&r);
-  h2_submit_resp(r.h2, sid, 304, NULL, "tag", 0, NULL, 0, NULL);
+  h2_submit_resp(r.h2, sid, 304, NULL, "tag", 0, NULL, NULL, 0, NULL);
   settle(&r);
   st = h2c_stream_for(&r.cl, sid);
   ck_assert_int_eq(st->status, 304);
@@ -95,7 +95,7 @@ START_TEST(status_codes_map_to_the_supported_set) {
 
   rig_open(&r);
   sid = open_stream(&r);
-  h2_submit_resp(r.h2, sid, sc->given, NULL, NULL, 0, NULL, 0, NULL);
+  h2_submit_resp(r.h2, sid, sc->given, NULL, NULL, 0, NULL, NULL, 0, NULL);
   settle(&r);
   ck_assert_int_eq(h2c_stream_for(&r.cl, sid)->status, sc->expect);
   rig_close(&r);
@@ -108,7 +108,7 @@ START_TEST(service_unavailable_carries_retry_after) {
 
   rig_open(&r);
   sid = open_stream(&r);
-  h2_submit_resp(r.h2, sid, 503, NULL, NULL, 0, NULL, 0, NULL);
+  h2_submit_resp(r.h2, sid, 503, NULL, NULL, 0, NULL, NULL, 0, NULL);
   settle(&r);
   ck_assert_int_eq(h2c_stream_for(&r.cl, sid)->status, 503);
   ck_assert_str_eq(client_resp_header_value(h2c_stream_for(&r.cl, sid), "retry-after"), "5");
@@ -126,7 +126,7 @@ START_TEST(oversized_etag_is_clamped_to_the_header_buffer) {
   long_etag[sizeof long_etag - 1] = '\0';
   rig_open(&r);
   sid = open_stream(&r);
-  h2_submit_resp(r.h2, sid, 200, NULL, long_etag, 0, NULL, 0, NULL);
+  h2_submit_resp(r.h2, sid, 200, NULL, long_etag, 0, NULL, NULL, 0, NULL);
   settle(&r);
   got = client_resp_header_value(h2c_stream_for(&r.cl, sid), "etag");
   ck_assert_ptr_nonnull(got);
@@ -143,7 +143,7 @@ START_TEST(empty_etag_is_omitted) {
 
   rig_open(&r);
   sid = open_stream(&r);
-  h2_submit_resp(r.h2, sid, 200, NULL, "", 0, NULL, 0, NULL);
+  h2_submit_resp(r.h2, sid, 200, NULL, "", 0, NULL, NULL, 0, NULL);
   settle(&r);
   ck_assert_ptr_null(client_resp_header_value(h2c_stream_for(&r.cl, sid), "etag"));
   rig_close(&r);
@@ -159,7 +159,7 @@ START_TEST(cors_allowlist_echoes_only_listed_origins) {
   rig_open(&r);
   r.cfg.cors_origins = cors_list;
   sid = open_stream(&r);
-  h2_submit_resp(r.h2, sid, 200, NULL, NULL, 0, NULL, 0, cc->origin);
+  h2_submit_resp(r.h2, sid, 200, NULL, NULL, 0, NULL, NULL, 0, cc->origin);
   settle(&r);
   st = h2c_stream_for(&r.cl, sid);
   if (cc->expect_allow) ck_assert_str_eq(client_resp_header_value(st, "access-control-allow-origin"), cc->expect_allow);
@@ -177,7 +177,7 @@ START_TEST(alt_svc_is_advertised_when_enabled) {
   rig_open(&r);
   altsvc_set(4433);
   sid = open_stream(&r);
-  h2_submit_resp(r.h2, sid, 200, NULL, NULL, 0, NULL, 0, NULL);
+  h2_submit_resp(r.h2, sid, 200, NULL, NULL, 0, NULL, NULL, 0, NULL);
   settle(&r);
   ck_assert_ptr_nonnull(client_resp_header_value(h2c_stream_for(&r.cl, sid), "alt-svc"));
   altsvc_set(0);
@@ -192,7 +192,7 @@ START_TEST(consecutive_bodies_reuse_the_source_pool) {
   rig_open(&r);
   for (int i = 0; i < 3; i++) {
     sids[i] = open_stream(&r);
-    h2_submit_resp(r.h2, sids[i], 200, NULL, NULL, 300, make_body(300), 0, NULL);
+    h2_submit_resp(r.h2, sids[i], 200, NULL, NULL, 300, make_body(300), NULL, 0, NULL);
     settle(&r);
     ck_assert_uint_eq(h2c_stream_for(&r.cl, sids[i])->checksum, body_checksum(300));
     ck_assert_int_eq(h2c_stream_for(&r.cl, sids[i])->ended, 1);
@@ -228,7 +228,7 @@ START_TEST(cold_waiter_is_answered_when_its_deadline_passes) {
   capture_ctx_t *ctx = open_cold_ctx();
   pid_filter_t filter = {0};
   lcevc_select_t lcevc = {0};
-  hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, cc->file, cc->kind, SEG_CONTAINER_TS, 0, 0, 0, NULL, 0, -1};
+  hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, cc->file, cc->kind, SEG_CONTAINER_TS, 0, 0, 0, NULL, 0, -1, NULL};
 
   rig_open(&r);
   sid = open_stream(&r);
@@ -250,7 +250,7 @@ START_TEST(cold_waiter_table_fills_and_releases_by_stream_and_connection) {
   capture_ctx_t *ctx = open_cold_ctx();
   pid_filter_t filter = {0};
   lcevc_select_t lcevc = {0};
-  hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 60000, -1};
+  hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 60000, -1, NULL};
 
   rig_open(&r);
   for (int i = 0; i < COLD_WAITERS_MAX; i++) ck_assert_int_eq(h2_hls_cold_try_park(r.h2, 1 + 2 * i, &req), 1);
@@ -402,7 +402,7 @@ START_TEST(websocket_unrelated_text_gets_no_reply) {
 }
 END_TEST
 
-START_TEST(websocket_unmasked_frame_is_rejected_quietly) {
+START_TEST(websocket_unmasked_frame_resets_the_stream) {
   rig_t r;
   int32_t sid;
   static const uint8_t bad[] = {0x89, 0x02, 'h', 'i'};
@@ -412,8 +412,28 @@ START_TEST(websocket_unmasked_frame_is_rejected_quietly) {
   h2c_upload(&r.cl, sid, bad, sizeof bad);
   rig_exchange(&r);
   ck_assert_uint_eq(h2c_stream_for(&r.cl, sid)->body_len, 0u);
-  ck_assert_int_eq(r.h2->ws[0].sid, sid);
+  ck_assert_int_eq(r.h2->ws[0].sid, 0);
+  ck_assert_int_eq(ws_broadcast_has_sinks(), 0);
   rig_close(&r);
+}
+END_TEST
+
+START_TEST(websocket_output_overflow_resets_the_stream) {
+  rig_t r;
+  char *msg = malloc(100001);
+
+  ck_assert_ptr_nonnull(msg);
+  memset(msg, 'x', 100000);
+  msg[100000] = '\0';
+  rig_open(&r);
+  open_ws(&r);
+  for (int i = 0; i < 50; i++) ws_broadcast_publish(msg);
+  h2_handle_writable(r.epfd, r.c);
+  rig_exchange(&r);
+  ck_assert_int_eq(r.h2->ws[0].sid, 0);
+  ck_assert_int_eq(ws_broadcast_has_sinks(), 0);
+  rig_close(&r);
+  free(msg);
 }
 END_TEST
 
@@ -514,7 +534,8 @@ static Suite *resp_suite(void) {
   tcase_add_test(tc, websocket_close_is_echoed);
   tcase_add_test(tc, websocket_client_snapshot_request_is_answered);
   tcase_add_test(tc, websocket_unrelated_text_gets_no_reply);
-  tcase_add_test(tc, websocket_unmasked_frame_is_rejected_quietly);
+  tcase_add_test(tc, websocket_unmasked_frame_resets_the_stream);
+  tcase_add_test(tc, websocket_output_overflow_resets_the_stream);
   tcase_add_test(tc, websocket_broadcast_reaches_the_stream);
   tcase_add_test(tc, websocket_table_full_answers_service_unavailable);
   tcase_add_test(tc, websocket_stream_close_releases_the_slot_and_sink);

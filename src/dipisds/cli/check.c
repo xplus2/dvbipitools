@@ -37,7 +37,13 @@ static args_status_t validate_announce_input(config_t *cfg, const args_flags_t *
     }
   }
   if (!cfg->lang[0]) memcpy(cfg->lang, "deu", 3);
-  if (fl->have_t) cfg->interval_s = fl->t_value;
+  if (fl->have_t) {
+    if (!fl->t_value) {
+      argerr("AS000124", "invalid -t seconds: 0 (announce interval must be at least 1)");
+      return ARGS_ERR;
+    }
+    cfg->interval_s = fl->t_value;
+  }
   return ARGS_OK;
 }
 
@@ -74,6 +80,13 @@ static args_status_t validate_announce_fcc(config_t *cfg, const args_flags_t *fl
     if (!fl->have_fcc_rtx_time) cfg->fcc_rtx_time = 2000;
     if (!fl->have_fcc_rtx_pt) cfg->fcc_rtx_pt = 99;
     if (!fl->have_fcc_resolve_max_channels) cfg->fcc_resolve_max_channels = 300;
+    if (cfg->fcc_resolve_by_port) {
+      unsigned long base = cfg->fcc_resolve_base_port ? cfg->fcc_resolve_base_port : (unsigned long)cfg->fcc_port + 1;
+      if (base + cfg->fcc_resolve_max_channels - 1 > 65535UL) {
+        argerr("AS000698", "--fcc-resolve-by-port port range %lu..%lu exceeds 65535 (lower --fcc-resolve-base-port or --fcc-resolve-max-channels)", base, base + cfg->fcc_resolve_max_channels - 1);
+        return ARGS_ERR;
+      }
+    }
   }
   return ARGS_OK;
 }
@@ -126,20 +139,23 @@ static args_status_t validate_announce_rms_fus(config_t *cfg, const args_flags_t
 }
 
 static args_status_t validate_listen(config_t *cfg, const args_flags_t *fl) {
-  if (cfg->ret_enabled || fl->have_ret_rtx_time || fl->have_ret_rtx_pt || cfg->ret_mc || fl->have_ret_mc_port || cfg->ret_rsi_mc_ret) {
+  if (sds_ret_set(cfg)) {
     argerr("AS000191", "--ret-* options are announce-only");
     return ARGS_ERR;
   }
-  if (cfg->fcc_enabled || fl->have_fcc_rtx_time || fl->have_fcc_rtx_pt || cfg->fcc_resolve_by_port || cfg->fcc_resolve_base_port || fl->have_fcc_resolve_max_channels) {
+  if (sds_fcc_set(cfg)) {
     argerr("AS000192", "--fcc-* options are announce-only");
+    return ARGS_ERR;
+  }
+  if (sds_al_fec_set(cfg)) {
+    argerr("AS000699", "--al-fec-* options are announce-only");
     return ARGS_ERR;
   }
   if (cfg->metrics_id) {
     argerr("AS000112", "--metrics-id is announce-only");
     return ARGS_ERR;
   }
-  if (cfg->packages_path || cfg->cells_path || cfg->rms_enabled || fl->have_rms_lang || cfg->rms_location || cfg->rms_logo ||
-      cfg->fus_enabled || fl->have_fus_lang || fl->have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo) {
+  if (sds_disco_set(cfg)) {
     argerr("AS000193", "--packages/--cells/--rms-*/--fus-* options are announce-only");
     return ARGS_ERR;
   }

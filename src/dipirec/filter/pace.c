@@ -31,28 +31,32 @@ void pace_accumulate(uint64_t *last_raw, uint64_t *elapsed_ticks, uint64_t raw, 
   *last_raw = raw;
 }
 
-/* raw: sample, bits: its width, hz: tick rate. baselines on first call,
-   wrap-accumulates, sleeps to keep wall clock in step, resyncs on real jump instead of catching up */
-static void tick_step(pace_ctrl_t *p, uint64_t raw, unsigned bits, double hz) {
-  double now, target;
+double pace_step(pace_ctrl_t *p, uint64_t raw, unsigned bits, double hz, double now) {
+  double target;
   if (!p->have_baseline) {
     p->have_baseline = 1;
     p->last_raw = raw;
     p->elapsed_ticks = 0;
-    p->first_wall = mono_seconds();
-    return;
+    p->first_wall = now;
+    return 0.0;
   }
 
   pace_accumulate(&p->last_raw, &p->elapsed_ticks, raw, bits);
 
-  now = mono_seconds();
   target = p->first_wall + (double)p->elapsed_ticks / hz;
-  if (now < target) {
-    sleep_interruptible(target - now);
-  } else if (now - target > RESYNC_THRESHOLD_S) {
+  if (target - now > RESYNC_THRESHOLD_S || now - target > RESYNC_THRESHOLD_S) { /* jump either way: rebaseline */
     p->first_wall = now;
     p->elapsed_ticks = 0;
+    return 0.0;
   }
+  return target > now ? target - now : 0.0;
+}
+
+/* raw: sample, bits: its width, hz: tick rate. sleeps to keep wall clock in step */
+static void tick_step(pace_ctrl_t *p, uint64_t raw, unsigned bits, double hz) {
+  double wait = pace_step(p, raw, bits, hz, mono_seconds());
+  if (wait > 0.0)
+    sleep_interruptible(wait);
 }
 
 void pace_feed_rtp_ts(pace_ctrl_t *p, uint32_t rtp_ts_90k) {

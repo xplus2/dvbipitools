@@ -41,7 +41,13 @@ static void on_cue(void *ctx, const ttx_cue_t *cue) {
   for (int i = 0; i < m->ntrk; i++) {
     track_t *t = &m->trk[i];
     if (t->cls != PID_TELETEXT) continue;
+    if (t->sub_seen && start_ms > t->sub_end_ms) {
+      static const unsigned char empty[2];
+      p4_route(m, t, t->sub_end_ms, 0, empty, sizeof empty, 1, (uint32_t)(start_ms - t->sub_end_ms)); /* gap: durations carry timing */
+    }
     p4_route(m, t, start_ms, 0, buf, n + 2, 1, (uint32_t)dur);
+    t->sub_seen = 1;
+    t->sub_end_ms = start_ms + dur;
     return;
   }
 }
@@ -147,12 +153,14 @@ static void handle_audio(mp4_t *m, track_t *t, int has_pts, uint64_t pts, const 
     int64_t raw = pts_unwrap(&t->pts_uw, pts);
     t->ts_ms = raw - pts_disc_shift(&m->disc, raw, t->ts_seen ? t->ts_ms : PTS_DISC_NONE);
     t->ts_seen = 1;
+    aclk_anchor(&t->aclk, t->ts_ms);
   }
   if (t->remlen > MP4_REM_MAX) t->remlen = 0;
   if (esc_rem_append(&t->rem, &t->remlen, &t->remcap, data, len)) return;
 
   while (pos < t->remlen) {
     esc_frame_t f;
+    int64_t next_ms;
     int r = next_frame(&t->es, t->rem + pos, t->remlen - pos, &f);
     if (r > 0) break;
     if (r < 0) {
@@ -177,8 +185,13 @@ static void handle_audio(mp4_t *m, track_t *t, int has_pts, uint64_t pts, const 
       t->hdr_parsed = 1;
       p4_all_ready(m);
     }
-    if (f.outlen) p4_route(m, t, t->ts_ms, 0, f.out, f.outlen, t->es.codec == CODEC_AC4 ? f.ac4_iframe : 1, t->es.rate ? (uint32_t)(f.samples * 1000 / t->es.rate) : 0);
-    if (t->es.rate && f.samples) t->ts_ms += (int64_t)f.samples * 1000 / (int64_t)t->es.rate;
+    next_ms = t->ts_ms;
+    if (t->es.rate && f.samples) {
+      t->aclk.samples += f.samples;
+      next_ms = aclk_ms(&t->aclk, t->es.rate);
+    }
+    if (f.outlen) p4_route(m, t, t->ts_ms, 0, f.out, f.outlen, t->es.codec == CODEC_AC4 ? f.ac4_iframe : 1, (uint32_t)(next_ms - t->ts_ms));
+    t->ts_ms = next_ms;
     pos += f.consumed;
   }
   if (pos) {

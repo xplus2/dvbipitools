@@ -41,12 +41,13 @@ int main(int argc, char **argv) {
     out = stdout;
   }
   setvbuf(out, NULL, _IOLBF, 0);
-  signals_install();
+  signals_install_oneshot();
   rc = scan_run(&cfg, out);
-  if (out != stdout) {
-    int write_failed = ferror(out);
-    if ((fclose(out) || write_failed) && rc == 0) {
-      log_code("SE100102", "error writing %s", cfg.out_path);
+  {
+    int failed = fflush(out) != 0 || ferror(out);
+    if (out != stdout) failed |= fclose(out) != 0;
+    if (failed && rc == 0) {
+      log_code("SE100102", "error writing %s", out == stdout ? "stdout" : cfg.out_path);
       rc = 1;
     }
   }

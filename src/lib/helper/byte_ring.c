@@ -11,6 +11,7 @@ void byte_ring_reset(byte_ring_t *r, uint32_t cap) {
   r->cap = cap;
   atomic_store_explicit(&r->wpos, 0, memory_order_relaxed);
   atomic_store_explicit(&r->rpos, 0, memory_order_relaxed);
+  r->inflight = 0;
 }
 
 void byte_ring_free(byte_ring_t *r) {
@@ -67,6 +68,7 @@ const uint8_t *byte_ring_peek(const byte_ring_t *r, size_t *len) {
   if (!r->buf) return NULL;
   wpos = atomic_load_explicit(&r->wpos, memory_order_acquire);
   rpos = atomic_load_explicit(&r->rpos, memory_order_relaxed);
+  rpos += r->inflight;
   if (wpos == rpos) return NULL;
   idx = rpos & (r->cap - 1u);
   avail = wpos - rpos;
@@ -78,4 +80,18 @@ const uint8_t *byte_ring_peek(const byte_ring_t *r, size_t *len) {
 
 void byte_ring_advance(byte_ring_t *r, size_t n) {
   atomic_fetch_add_explicit(&r->rpos, (uint32_t)n, memory_order_release);
+}
+
+void byte_ring_hold(byte_ring_t *r, size_t n) {
+  r->inflight += (uint32_t)n;
+}
+
+void byte_ring_ack(byte_ring_t *r, size_t n) {
+  if (n > r->inflight) n = r->inflight;
+  r->inflight -= (uint32_t)n;
+  atomic_fetch_add_explicit(&r->rpos, (uint32_t)n, memory_order_release);
+}
+
+uint32_t byte_ring_unsent(const byte_ring_t *r) {
+  return atomic_load_explicit(&r->wpos, memory_order_acquire) - atomic_load_explicit(&r->rpos, memory_order_relaxed) - r->inflight;
 }

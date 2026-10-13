@@ -4,8 +4,9 @@
 #include "../helper/beutil.h"
 #include "rtp.h"
 
-size_t rtp_payload_offset(const unsigned char *p, size_t len) {
+size_t rtp_ts_payload(const unsigned char *p, size_t len, size_t *plen) {
   size_t off;
+  size_t pad = 0;
   unsigned cc;
 
   if (len < 12 || (p[0] >> 6) != 2) /* need RTP version 2 */
@@ -19,7 +20,17 @@ size_t rtp_payload_offset(const unsigned char *p, size_t len) {
   }
   if (off >= len || p[off] != 0x47) /* payload must be TS */
     return 0;
+  if (p[0] & 0x20) { /* padding: last octet counts itself */
+    pad = p[len - 1];
+    if (pad == 0 || pad > len - off) pad = len - off;
+  }
+  *plen = len - off - pad;
   return off;
+}
+
+size_t rtp_payload_offset(const unsigned char *p, size_t len) {
+  size_t plen;
+  return rtp_ts_payload(p, len, &plen);
 }
 
 int rtp_parse_header(const unsigned char *p, size_t len, rtp_hdr_t *h) {

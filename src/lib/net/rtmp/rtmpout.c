@@ -1,8 +1,11 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <poll.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,13 +21,24 @@
 #include "rtmpout.h"
 
 #define RTMPOUT_RETRY_S 3
+#define RTMPOUT_SETUP_TIMEOUT_S 10
 #define RTMPOUT_READBUF 4096
 #define RTMPOUT_SEQHDR_MAX 2048
 #define RTMPOUT_OUTQ_INIT 65536
 #define RTMPOUT_OUTQ_HWM (1u << 20)
 #define RTMPOUT_OUTQ_MAX (8u << 20)
 
-typedef enum { RTMPOUT_DOWN, RTMPOUT_TCP_CONNECTING, RTMPOUT_TLS_HANDSHAKING, RTMPOUT_PROTOCOL } rtmpout_phase_t;
+typedef enum { RTMPOUT_DOWN, RTMPOUT_RESOLVING, RTMPOUT_TCP_CONNECTING, RTMPOUT_TLS_HANDSHAKING, RTMPOUT_PROTOCOL } rtmpout_phase_t;
+
+enum { RESOLVE_RUNNING, RESOLVE_DONE, RESOLVE_ABANDONED };
+
+typedef struct {
+  atomic_int state;
+  char host[256];
+  unsigned port;
+  int fd;
+  netconnect_pending_t *pending;
+} resolve_job_t;
 
 struct rtmpout {
   char host[256];
@@ -34,12 +48,15 @@ struct rtmpout {
   char tcurl[512];
   char user[128];
   char pass[128];
+  char auth_query[400]; /* carried across reconnect after needauth */
   int use_tls;
   int insecure;
 
   rtmpout_phase_t phase;
   int fd;
   netconnect_pending_t *connect_pending;
+  resolve_job_t *job;
+  double deadline; /* 0: none */
   tls_t *tls;
   rtmp_t *rtmp;
   int ready;
@@ -59,6 +76,40 @@ struct rtmpout {
   size_t outq_off;
   size_t outq_len;
 };
+
+static void job_release(resolve_job_t *j) {
+  if (j->fd >= 0) close(j->fd);
+  netconnect_tcp_abort(j->pending);
+  free(j);
+}
+
+static void *resolve_thread(void *arg) {
+  resolve_job_t *j = arg;
+  net_err_reason_t reason;
+  j->fd = netconnect_tcp_start(j->host, j->port, &j->pending, &reason);
+  if (RESOLVE_ABANDONED == atomic_exchange(&j->state, RESOLVE_DONE))
+    job_release(j);
+  return NULL;
+}
+
+static void job_abandon(rtmpout_t *o) {
+  if (!o->job) return;
+  if (RESOLVE_DONE == atomic_exchange(&o->job->state, RESOLVE_ABANDONED))
+    job_release(o->job);
+  o->job = NULL;
+}
+
+static void close_link(rtmpout_t *o) {
+  if (o->tls) {
+    tls_close(o->tls);
+    o->tls = NULL;
+    o->fd = -1;
+  }
+  if (o->fd >= 0) {
+    close(o->fd);
+    o->fd = -1;
+  }
+}
 
 static ssize_t raw_send(const rtmpout_t *o, const unsigned char *p, size_t n) {
   for (;;) {
@@ -129,6 +180,7 @@ static void rtmp_transport_write(void *ctx, const unsigned char *data, size_t le
 static void on_ready(void *ctx) {
   rtmpout_t *o = ctx;
   o->ready = 1;
+  o->deadline = 0;
   o->need_keyframe = 1;
   if (o->meta_len) rtmp_send_data(o->rtmp, NULL, 0, o->meta, o->meta_len);
   if (o->vseq_len) rtmp_send_video(o->rtmp, 0, NULL, 0, o->vseq, o->vseq_len);
@@ -141,18 +193,18 @@ static void on_error(void *ctx, const char *msg) {
 }
 
 static void teardown(rtmpout_t *o) {
+  int auth_retry = 0;
   if (o->rtmp) {
+    auth_retry = rtmp_auth_carry(o->rtmp, o->auth_query, sizeof o->auth_query);
     rtmp_free(o->rtmp);
     o->rtmp = NULL;
   }
-  if (o->tls) {
-    tls_close(o->tls);
-    o->tls = NULL;
+  job_abandon(o);
+  if (o->connect_pending) {
+    netconnect_tcp_abort(o->connect_pending);
+    o->connect_pending = NULL;
   }
-  if (o->fd >= 0) {
-    close(o->fd);
-    o->fd = -1;
-  }
+  close_link(o);
   free(o->outq);
   o->outq = NULL;
   o->outq_cap = 0;
@@ -161,17 +213,49 @@ static void teardown(rtmpout_t *o) {
   o->phase = RTMPOUT_DOWN;
   o->ready = 0;
   o->failed = 0;
-  o->next_retry = mono_seconds() + RTMPOUT_RETRY_S;
+  o->deadline = 0;
+  o->next_retry = mono_seconds() + (auth_retry ? 0 : RTMPOUT_RETRY_S);
 }
 
-static void try_connect(rtmpout_t *o) {
+static void enter_phase(rtmpout_t *o, rtmpout_phase_t phase, double now) {
+  o->phase = phase;
+  o->deadline = now + RTMPOUT_SETUP_TIMEOUT_S;
+}
+
+static int host_is_numeric(const char *host) {
+  unsigned char a[sizeof(struct in6_addr)];
+  return 1 == inet_pton(AF_INET, host, a) || 1 == inet_pton(AF_INET6, host, a);
+}
+
+static void try_connect(rtmpout_t *o, double now) {
+  pthread_attr_t attr;
+  pthread_t th;
+  resolve_job_t *j;
   net_err_reason_t reason;
-  o->fd = netconnect_tcp_start(o->host, o->port, &o->connect_pending, &reason);
-  if (o->fd < 0) {
-    o->next_retry = mono_seconds() + RTMPOUT_RETRY_S;
+  int rc;
+
+  o->next_retry = now + RTMPOUT_RETRY_S;
+  if (host_is_numeric(o->host)) { /* no lookup, connect starts without blocking */
+    o->fd = netconnect_tcp_start(o->host, o->port, &o->connect_pending, &reason);
+    if (o->fd >= 0) enter_phase(o, RTMPOUT_TCP_CONNECTING, now);
     return;
   }
-  o->phase = RTMPOUT_TCP_CONNECTING;
+  j = calloc(1, sizeof *j);
+  if (!j) return;
+  atomic_init(&j->state, RESOLVE_RUNNING);
+  j->fd = -1;
+  j->port = o->port;
+  bufcpy(j->host, sizeof j->host, o->host);
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  rc = pthread_create(&th, &attr, resolve_thread, j);
+  pthread_attr_destroy(&attr);
+  if (rc) {
+    free(j);
+    return;
+  }
+  o->job = j;
+  o->phase = RTMPOUT_RESOLVING;
 }
 
 static void start_rtmp(rtmpout_t *o) {
@@ -182,6 +266,7 @@ static void start_rtmp(rtmpout_t *o) {
   cfg.stream_name = o->stream_key;
   cfg.user = o->user;
   cfg.password = o->pass;
+  cfg.auth_query = o->auth_query;
   cfg.write_cb = rtmp_transport_write;
   cfg.ready_cb = on_ready;
   cfg.error_cb = on_error;
@@ -191,7 +276,7 @@ static void start_rtmp(rtmpout_t *o) {
     teardown(o);
     return;
   }
-  o->phase = RTMPOUT_PROTOCOL;
+  enter_phase(o, RTMPOUT_PROTOCOL, mono_seconds());
   rtmp_start(o->rtmp);
 }
 
@@ -237,6 +322,10 @@ static void service(rtmpout_t *o) {
   double now = mono_seconds();
   struct pollfd pfd;
 
+  if (!o->failed && o->deadline > 0 && now >= o->deadline) {
+    log_code("LW600160", "rtmpout: %s: setup timed out after %us, reconnecting", o->host, RTMPOUT_SETUP_TIMEOUT_S);
+    o->failed = 1;
+  }
   if (o->failed) {
     teardown(o);
     return;
@@ -244,8 +333,25 @@ static void service(rtmpout_t *o) {
 
   switch (o->phase) {
     case RTMPOUT_DOWN:
-      if (now >= o->next_retry) try_connect(o);
+      if (now >= o->next_retry) try_connect(o, now);
       return;
+
+    case RTMPOUT_RESOLVING: {
+      resolve_job_t *j = o->job;
+      if (RESOLVE_DONE != atomic_load(&j->state))
+        return;
+      o->fd = j->fd;
+      o->connect_pending = j->pending;
+      free(j);
+      o->job = NULL;
+      if (o->fd < 0) {
+        o->phase = RTMPOUT_DOWN;
+        o->next_retry = now + RTMPOUT_RETRY_S;
+        return;
+      }
+      enter_phase(o, RTMPOUT_TCP_CONNECTING, now);
+      return;
+    }
 
     case RTMPOUT_TCP_CONNECTING: {
       net_err_reason_t reason;
@@ -260,6 +366,7 @@ static void service(rtmpout_t *o) {
       if (cr != 1) {
         o->fd = -1;
         o->phase = RTMPOUT_DOWN;
+        o->deadline = 0;
         o->next_retry = now + RTMPOUT_RETRY_S;
         return;
       }
@@ -269,13 +376,10 @@ static void service(rtmpout_t *o) {
       }
       o->tls = tls_connect_start(o->fd, o->host, o->insecure);
       if (!o->tls) {
-        close(o->fd);
-        o->fd = -1;
-        o->phase = RTMPOUT_DOWN;
-        o->next_retry = now + RTMPOUT_RETRY_S;
+        teardown(o);
         return;
       }
-      o->phase = RTMPOUT_TLS_HANDSHAKING;
+      enter_phase(o, RTMPOUT_TLS_HANDSHAKING, now);
       return;
     }
 
@@ -286,12 +390,7 @@ static void service(rtmpout_t *o) {
           start_rtmp(o);
           break;
         case TLS_HANDSHAKE_ERROR:
-          tls_close(o->tls);
-          o->tls = NULL;
-          close(o->fd);
-          o->fd = -1;
-          o->phase = RTMPOUT_DOWN;
-          o->next_retry = now + RTMPOUT_RETRY_S;
+          teardown(o);
           break;
         case TLS_HANDSHAKE_WANT_READ:
         case TLS_HANDSHAKE_WANT_WRITE:
@@ -486,12 +585,10 @@ void rtmpout_close(rtmpout_t *o) {
     return;
   if (o->rtmp)
     rtmp_free(o->rtmp);
-  if (o->tls)
-    tls_close(o->tls);
+  job_abandon(o);
   if (o->connect_pending)
     netconnect_tcp_abort(o->connect_pending);
-  if (o->fd >= 0)
-    close(o->fd);
+  close_link(o);
   free(o->outq);
   free(o);
 }

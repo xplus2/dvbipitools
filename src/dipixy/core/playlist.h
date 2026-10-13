@@ -18,6 +18,9 @@ int playlist_path_parse(const char *path, route_fmt_t *fmt, playlist_type_t *pty
 int playlist_fmt_disabled(const config_t *cfg, route_fmt_t fmt);
 int playlist_query_has_flag(const char *query, const char *name);
 
+/* Content-Type of rendered playlist, "plain" = text/plain */
+const char *playlist_mime(const char *query, playlist_type_t ptype);
+
 /* *out malloc'd via open_memstream, caller frees */
 int playlist_render(const config_t *cfg, const channels_t *ch, int is_tls, const char *host_hdr, const char *query, const pid_filter_t *filter,
                     const lcevc_select_t *lcevc, route_fmt_t fmt, playlist_type_t ptype, char **out, size_t *out_len);

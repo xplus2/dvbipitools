@@ -1,6 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <limits.h>
+#include <stdint.h>
 #include <check.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -115,23 +117,36 @@ static bcg_programme_t *add_programme(bcg_doc_t *d, const char *chan, const char
   return pr;
 }
 
-START_TEST(build_windowed_doc_copies_all_channels) {
+static int build_windowed(bcg_doc_t *src, bcg_doc_t *dst, long now, int64_t window_min) {
+  prog_time_t *times;
+  int *sel = NULL, n;
+  int rc;
+  if (prog_times_build(src, &times)) return -1;
+  if (src->programme_count > 0) sel = malloc(sizeof *sel * (size_t)src->programme_count);
+  window_select(src, times, now, window_min, sel, &n, NULL, NULL, NULL);
+  rc = window_view(src, sel, n, dst);
+  free(sel);
+  free(times);
+  return rc;
+}
+
+START_TEST(window_view_copies_all_channels) {
   bcg_doc_t src, dst;
   bcg_doc_init(&src);
   add_channel(&src, "ch1");
   add_channel(&src, "ch2");
 
-  ck_assert_int_eq(build_windowed_doc(&src, &dst, 1000, 60, NULL, NULL, NULL), 0);
+  ck_assert_int_eq(build_windowed(&src, &dst, 1000, 60), 0);
   ck_assert_int_eq(dst.channel_count, 2);
   ck_assert_str_eq(dst.channels[0].id, "ch1");
   ck_assert_str_eq(dst.channels[1].id, "ch2");
 
   bcg_doc_free(&src);
-  bcg_doc_free(&dst);
+  window_view_free(&dst);
 }
 END_TEST
 
-START_TEST(build_windowed_doc_filters_programmes_by_window) {
+START_TEST(window_view_filters_programmes_by_window) {
   bcg_doc_t src, dst;
   bcg_doc_init(&src);
   add_channel(&src, "ch1");
@@ -142,15 +157,29 @@ START_TEST(build_windowed_doc_filters_programmes_by_window) {
   /* malformed start: skipped */
   add_programme(&src, "ch1", "not-a-time", NULL);
 
-  ck_assert_int_eq(build_windowed_doc(&src, &dst, 1000, 60, NULL, NULL, NULL), 0);
+  ck_assert_int_eq(build_windowed(&src, &dst, 1000, 60), 0);
   ck_assert_int_eq(dst.programme_count, 0);
 
   bcg_doc_free(&src);
-  bcg_doc_free(&dst);
+  window_view_free(&dst);
 }
 END_TEST
 
-START_TEST(build_windowed_doc_includes_in_range_and_no_stop_programmes) {
+START_TEST(window_view_huge_window_does_not_overflow) {
+  bcg_doc_t src, dst;
+  bcg_doc_init(&src);
+  add_channel(&src, "ch1");
+  add_programme(&src, "ch1", "2020-01-02T12:00:00Z", NULL);
+
+  ck_assert_int_eq(build_windowed(&src, &dst, 1000, (int64_t)UINT_MAX * 60), 0);
+  ck_assert_int_eq(dst.programme_count, 1);
+
+  bcg_doc_free(&src);
+  window_view_free(&dst);
+}
+END_TEST
+
+START_TEST(window_view_includes_in_range_and_no_stop_programmes) {
   bcg_doc_t src, dst;
   long now = date_to_mjd(2020, 1, 1) * 1440L;
   char start_a[32], stop_a[32], start_b[32];
@@ -161,15 +190,81 @@ START_TEST(build_windowed_doc_includes_in_range_and_no_stop_programmes) {
   bufcpy(start_a, sizeof start_a, "2020-01-01T00:10:00Z");
   bufcpy(stop_a, sizeof stop_a, "2020-01-01T01:10:00Z");
   add_programme(&src, "ch1", start_a, stop_a);
-  /* within window, no stop: end defaults to start */
+  /* within window, no stop: open-ended */
   bufcpy(start_b, sizeof start_b, "2020-01-01T00:05:00Z");
   add_programme(&src, "ch1", start_b, NULL);
 
-  ck_assert_int_eq(build_windowed_doc(&src, &dst, now, 60, NULL, NULL, NULL), 0);
+  ck_assert_int_eq(build_windowed(&src, &dst, now, 60), 0);
   ck_assert_int_eq(dst.programme_count, 2);
 
   bcg_doc_free(&src);
-  bcg_doc_free(&dst);
+  window_view_free(&dst);
+}
+END_TEST
+
+START_TEST(window_view_keeps_running_programme_without_valid_stop) {
+  bcg_doc_t src, dst;
+  long now = date_to_mjd(2020, 1, 1) * 1440L + 600;
+
+  bcg_doc_init(&src);
+  add_channel(&src, "ch1");
+  add_programme(&src, "ch1", "2020-01-01T09:00:00Z", NULL);
+  add_programme(&src, "ch1", "2020-01-01T09:30:00Z", "garbage");
+  add_programme(&src, "ch1", "2020-01-01T08:00:00Z", "2020-01-01T09:00:00Z");
+
+  ck_assert_int_eq(build_windowed(&src, &dst, now, 60), 0);
+  ck_assert_int_eq(dst.programme_count, 1);
+  ck_assert_str_eq(dst.programmes[0].start, "2020-01-01T09:30:00Z");
+
+  bcg_doc_free(&src);
+  window_view_free(&dst);
+}
+END_TEST
+
+START_TEST(window_view_ends_stopless_programme_at_next_start) {
+  bcg_doc_t src, dst;
+  long now = date_to_mjd(2020, 1, 1) * 1440L + 600;
+
+  bcg_doc_init(&src);
+  add_channel(&src, "ch1");
+  add_channel(&src, "ch2");
+  add_programme(&src, "ch1", "2020-01-01T09:30:00Z", NULL);
+  add_programme(&src, "ch2", "2020-01-01T05:00:00Z", NULL);
+  add_programme(&src, "ch1", "2020-01-01T05:00:00Z", NULL);
+  add_programme(&src, "ch1", "2020-01-01T09:00:00Z", NULL);
+
+  ck_assert_int_eq(build_windowed(&src, &dst, now, 60), 0);
+  ck_assert_int_eq(dst.programme_count, 2);
+  ck_assert_str_eq(dst.programmes[0].start, "2020-01-01T09:30:00Z");
+  ck_assert_str_eq(dst.programmes[1].start, "2020-01-01T05:00:00Z");
+  ck_assert_str_eq(dst.programmes[1].channel_id, "ch2");
+
+  bcg_doc_free(&src);
+  window_view_free(&dst);
+}
+END_TEST
+
+START_TEST(window_select_reports_schedule_bounds_and_indices) {
+  bcg_doc_t src;
+  prog_time_t *times;
+  int sel[3], n, have;
+  long ss, se, now = date_to_mjd(2020, 1, 1) * 1440L + 600;
+
+  bcg_doc_init(&src);
+  add_channel(&src, "ch1");
+  add_programme(&src, "ch1", "2020-01-01T08:00:00Z", "2020-01-01T09:00:00Z");
+  add_programme(&src, "ch1", "2020-01-01T09:30:00Z", "2020-01-01T10:30:00Z");
+  add_programme(&src, "ch1", "bad", NULL);
+  ck_assert_int_eq(prog_times_build(&src, &times), 0);
+  ck_assert(!times[2].valid);
+  window_select(&src, times, now, 60, sel, &n, &ss, &se, &have);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(sel[0], 1);
+  ck_assert_int_eq(have, 1);
+  ck_assert_int_eq(se - ss, 60);
+
+  free(times);
+  bcg_doc_free(&src);
 }
 END_TEST
 
@@ -400,6 +495,43 @@ START_TEST(announce_run_counts_services_with_events_across_unsorted_channels) {
 }
 END_TEST
 
+START_TEST(announce_run_sends_one_container_per_channel) {
+  char xmltv_path[] = "/tmp/dvbipitools_test_bcg_xmltv_XXXXXX";
+  char map_path[] = "/tmp/dvbipitools_test_bcg_map_XXXXXX";
+  char text[GUIDE_BUF];
+  char msg[16384];
+  run_helper_t h;
+  config_t cfg;
+  sink_t ms;
+  int rc;
+
+  guide_text(&guide_unsorted, text, sizeof text);
+  write_temp_file(xmltv_path, text);
+  map_text(&guide_unsorted, text, sizeof text);
+  write_temp_file(map_path, text);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.input_path = xmltv_path;
+  cfg.map_path = map_path;
+  cfg.window_hours = 2;
+  cfg.verbose = 1;
+  cfg.family = AF_INET;
+  cfg.mcast_port = 3938;
+  run_helper_group(cfg.mcast_group, sizeof cfg.mcast_group, 83);
+  cfg.interval_s = 1;
+  h.path = xmltv_path;
+  h.rewrite = NULL;
+  h.rewrite_ms = 0;
+  h.stop_ms = 300;
+  sink_open(&ms, METRICS_COMPONENT_BCG, "bcg1", 0.1);
+  run_announce(&cfg, &h, &ms, &rc, msg, sizeof msg);
+  ck_assert_int_eq(rc, 0);
+  ck_assert_ptr_nonnull(strstr(msg, "in 3 containers"));
+  sink_close(&ms);
+  unlink(xmltv_path);
+  unlink(map_path);
+}
+END_TEST
+
 START_TEST(version_track_bumps_only_when_content_changes) {
   static const unsigned char a[] = {1, 2, 3};
   static const unsigned char b[] = {1, 2, 4};
@@ -409,9 +541,13 @@ START_TEST(version_track_bumps_only_when_content_changes) {
   memset(&v, 0, sizeof v);
   version_track(&v, a, sizeof a);
   ck_assert_uint_eq(v.version, 1u);
+  ck_assert_int_eq(v.unsent, 1);
+  v.unsent = 0;
   version_track(&v, a, sizeof a);
   ck_assert_uint_eq(v.version, 1u);
+  ck_assert_int_eq(v.unsent, 0);
   version_track(&v, b, sizeof b);
+  ck_assert_int_eq(v.unsent, 1);
   ck_assert_uint_eq(v.version, 2u);
   version_track(&v, c, sizeof c);
   ck_assert_uint_eq(v.version, 3u);
@@ -451,14 +587,19 @@ static Suite *announce_suite(void) {
   tcase_add_test(tc, iso8601_rejects_bad_separators);
   tcase_add_test(tc, iso8601_rejects_non_digit_fields);
   tcase_add_test(tc, iso8601_rejects_malformed_offset);
-  tcase_add_test(tc, build_windowed_doc_copies_all_channels);
-  tcase_add_test(tc, build_windowed_doc_filters_programmes_by_window);
-  tcase_add_test(tc, build_windowed_doc_includes_in_range_and_no_stop_programmes);
+  tcase_add_test(tc, window_view_copies_all_channels);
+  tcase_add_test(tc, window_view_filters_programmes_by_window);
+  tcase_add_test(tc, window_view_huge_window_does_not_overflow);
+  tcase_add_test(tc, window_view_includes_in_range_and_no_stop_programmes);
+  tcase_add_test(tc, window_view_keeps_running_programme_without_valid_stop);
+  tcase_add_test(tc, window_view_ends_stopless_programme_at_next_start);
+  tcase_add_test(tc, window_select_reports_schedule_bounds_and_indices);
   tcase_add_test(tc, load_doc_applies_mapping_to_matching_channel);
   tcase_add_test(tc, load_doc_rejects_missing_input);
   tcase_add_test(tc, load_doc_rejects_missing_map);
   tcase_add_loop_test(tc, announce_run_reloads_the_guide_on_sighup_or_keeps_the_previous_one, 0, (int)(sizeof reload_cases / sizeof reload_cases[0]));
   tcase_add_test(tc, announce_run_counts_services_with_events_across_unsorted_channels);
+  tcase_add_test(tc, announce_run_sends_one_container_per_channel);
   tcase_add_test(tc, version_track_bumps_only_when_content_changes);
   tcase_add_test(tc, version_track_wraps_from_255_to_1);
   suite_add_tcase(s, tc);

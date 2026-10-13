@@ -81,13 +81,27 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   }
   if (!cfg->input_path) cfg->input_path = "-";
   if (!cfg->output_path) cfg->output_path = "-";
-  if (cfg->suggest_scan_path) return ARGS_OK;
+  if (cfg->suggest_scan_path) {
+    if (have_format || cfg->map_path || cfg->revmap_path) {
+      argerr("XS000260", "-%c not allowed with -S", have_format ? 'f' : cfg->map_path ? 'M' : 'R');
+      return ARGS_ERR;
+    }
+    return ARGS_OK;
+  }
   if (!have_format) {
     argerr("XS000256", "missing -f format (xmltv|tva)");
     return ARGS_ERR;
   }
   if (cfg->format == FMT_XMLTV && !cfg->map_path) {
     argerr("XS000257", "missing -M map (required for -f xmltv)");
+    return ARGS_ERR;
+  }
+  if (cfg->format == FMT_TVA && cfg->map_path) {
+    argerr("XS000259", "-%c not allowed with -f %s", 'M', "tva");
+    return ARGS_ERR;
+  }
+  if (cfg->format == FMT_XMLTV && cfg->revmap_path) {
+    argerr("XS000259", "-%c not allowed with -f %s", 'R', "xmltv");
     return ARGS_ERR;
   }
   return ARGS_OK;

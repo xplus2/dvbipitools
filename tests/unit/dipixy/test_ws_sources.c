@@ -94,6 +94,44 @@ START_TEST(snapshot_m3u_source_lists_items) {
 }
 END_TEST
 
+START_TEST(snapshot_redacts_uri_credentials) {
+  config_t cfg;
+  source_def_t src;
+  char path[160];
+  channels_t *ch;
+  char *out = NULL;
+
+  write_temp_m3u(path,
+                  "#EXTINF:-1,A\n"
+                  "http://user:pw@host:8080/live/a.ts?token=SECRET#frag\n"
+                  "#EXTINF:-1,B\n"
+                  "rtp://@239.1.1.2:5001\n");
+
+  memset(&cfg, 0, sizeof cfg);
+  memset(&src, 0, sizeof src);
+  src.kind = SRC_M3U;
+  src.value = path;
+  src.ordinal = 1;
+  cfg.sources = &src;
+  cfg.n_sources = 1;
+
+  ch = channels_build(&cfg);
+  unlink(path);
+  ck_assert_ptr_nonnull(ch);
+
+  ck_assert_int_eq(ws_sources_build_snapshot(&cfg, ch, &out), 0);
+  ck_assert_ptr_null(strstr(out, "pw"));
+  ck_assert_ptr_null(strstr(out, "SECRET"));
+  ck_assert_ptr_nonnull(strstr(out, "\"uri\":\"http://host:8080/live/a.ts\""));
+  ck_assert_ptr_nonnull(strstr(out, "\"uri\":\"rtp://@239.1.1.2:5001\""));
+
+  ck_assert_int_eq(ws_sources_build_update(ch, &src, 1, &out), 0);
+  ck_assert_ptr_null(strstr(out, "SECRET"));
+
+  channels_free(ch);
+}
+END_TEST
+
 START_TEST(snapshot_orders_by_ordinal_and_carries_list_num_without_items_for_stdin_rist) {
   config_t cfg;
   source_def_t src;
@@ -223,6 +261,7 @@ static Suite *ws_sources_suite(void) {
   tcase_add_test(tc, snapshot_stdin_only_named);
   tcase_add_test(tc, snapshot_rist_only);
   tcase_add_test(tc, snapshot_m3u_source_lists_items);
+  tcase_add_test(tc, snapshot_redacts_uri_credentials);
   tcase_add_test(tc, snapshot_orders_by_ordinal_and_carries_list_num_without_items_for_stdin_rist);
   tcase_add_test(tc, update_wraps_single_source_with_items);
   tcase_add_test(tc, source_kind_names_cover_all_kinds);

@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -228,6 +229,42 @@ START_TEST(two_frames_in_one_feed_drain_in_order) {
   free(f1);
   free(f2);
   free(both);
+  ws_parser_free(&p);
+}
+END_TEST
+
+START_TEST(many_small_frames_with_partial_tail_across_feeds) {
+  ws_parser_t p;
+  uint8_t stream[64 * 11];
+  size_t slen = 0, fed = 0, got = 0;
+  int opcode;
+  const uint8_t *payload;
+  size_t payload_len;
+
+  for (int i = 0; i < 64; i++) {
+    char msg[8];
+    size_t flen;
+    size_t mlen = (size_t)snprintf(msg, sizeof msg, "m%03d", i);
+    uint8_t *f = build_client_frame(1, WS_OP_TEXT, msg, mlen, 0x01020304u + (uint32_t)i, &flen);
+    memcpy(stream + slen, f, flen);
+    slen += flen;
+    free(f);
+  }
+
+  ws_parser_init(&p);
+  while (fed < slen) {
+    size_t n = slen - fed < 7 ? slen - fed : 7;
+    ck_assert_int_eq(ws_parser_feed(&p, stream + fed, n), 0);
+    fed += n;
+    while (ws_parser_next(&p, &opcode, &payload, &payload_len) == 1) {
+      char want[8];
+      snprintf(want, sizeof want, "m%03d", (int)got);
+      ck_assert_uint_eq(payload_len, 4);
+      ck_assert_mem_eq(payload, want, 4);
+      got++;
+    }
+  }
+  ck_assert_uint_eq(got, 64);
   ws_parser_free(&p);
 }
 END_TEST
@@ -665,6 +702,7 @@ static Suite *ws_frame_suite(void) {
   tcase_add_loop_test(tc, empty_data_and_control_frames_are_delivered, 0, 5);
   tcase_add_test(tc, close_frame_carries_status_and_reason);
   tcase_add_test(tc, parser_recovers_message_state_after_a_completed_message);
+  tcase_add_test(tc, many_small_frames_with_partial_tail_across_feeds);
   suite_add_tcase(s, tc);
   return s;
 }

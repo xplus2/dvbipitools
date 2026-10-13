@@ -22,6 +22,8 @@
 typedef struct {
   unsigned payload_id;
   unsigned segment_id;
+  int has_provider_id;
+  unsigned provider_id;
   unsigned version;
   sds_service_t *entries; /* NULL for xml output */
   int count;
@@ -36,20 +38,31 @@ static void seg_free(listen_seg_t *s) {
   s->xml = NULL;
 }
 
+/* slot index of segment, n if absent */
+static int seg_find(const listen_seg_t *segs, int n, const dvbstp_header_t *h) {
+  int i;
+
+  for (i = 0; i < n; i++)
+    if (segs[i].payload_id == h->payload_id && segs[i].segment_id == h->segment_id && segs[i].has_provider_id == h->has_provider_id &&
+        segs[i].provider_id == h->provider_id)
+      break;
+  return i;
+}
+
 /* 1 stored or replaced, 0 same version already held, -1 table full or oom (old entry kept) */
 static int seg_store(listen_seg_t *segs, int *n, const dvbstp_header_t *h, const sds_service_t *entries, int count, const unsigned char *xml,
                      size_t xml_len) {
   listen_seg_t next;
-  int i;
+  int i = seg_find(segs, *n, h);
 
-  for (i = 0; i < *n; i++)
-    if (segs[i].payload_id == h->payload_id && segs[i].segment_id == h->segment_id) break;
   if (i < *n && segs[i].version == h->segment_version) return 0;
   if (i == *n && *n >= LISTEN_SEEN_MAX) return -1;
 
   memset(&next, 0, sizeof next);
   next.payload_id = h->payload_id;
   next.segment_id = h->segment_id;
+  next.has_provider_id = h->has_provider_id;
+  next.provider_id = h->provider_id;
   next.version = h->segment_version;
   next.count = count;
   if (entries && count > 0) {
@@ -78,10 +91,12 @@ int listen_run(const config_t *cfg) {
   mcast_t *m;
   dvbstp_reasm_t *r;
   listen_seg_t segs[LISTEN_SEEN_MAX];
+  sds_service_t *entries;
   int seg_count = 0;
   unsigned received = 0;
   unsigned total_services = 0;
   double deadline;
+  int recv_failed = 0;
 
   mcast_describe(cfg, mcast, sizeof mcast);
   f = fileutil_open_std(cfg->output_path, "w");
@@ -96,8 +111,11 @@ int listen_run(const config_t *cfg) {
     return 1;
   }
   r = dvbstp_reasm_new();
-  if (!r) {
+  entries = malloc(sizeof *entries * SDS_MAX_SERVICES);
+  if (!r || !entries) {
     log_code("AS500101", "out of memory");
+    free(entries);
+    dvbstp_reasm_free(r);
     mcast_close(m);
     if (f != stdout) fclose(f);
     return 1;
@@ -113,15 +131,21 @@ int listen_run(const config_t *cfg) {
     dvbstp_header_t hdr;
     const unsigned char *data;
     size_t len;
-    if (n <= 0) continue;
+    if (n < 0) {
+      log_code("AE500240", "receive on %s failed, giving up", mcast);
+      recv_failed = 1;
+      break;
+    }
+    if (n == 0) continue;
     if (!dvbstp_reasm_feed(r, buf, (size_t)n, &hdr, &data, &len)) continue;
     if (hdr.payload_id != DVBSTP_PAYLOAD_BROADCAST_DISCOVERY) continue;
 
     {
-      sds_service_t entries[SDS_MAX_SERVICES];
+      int known = seg_find(segs, seg_count, &hdr);
       int count;
       int truncated;
       int stored;
+      if (known < seg_count && segs[known].version == hdr.segment_version) continue;
       count = sds_parse_broadcast((const char *)data, entries, SDS_MAX_SERVICES, &truncated);
       stored = cfg->format == OUT_XML ? seg_store(segs, &seg_count, &hdr, NULL, count, data, len)
                                       : seg_store(segs, &seg_count, &hdr, entries, count, NULL, 0);
@@ -143,9 +167,10 @@ int listen_run(const config_t *cfg) {
   }
   format_out_close(f, cfg->format);
 
+  free(entries);
   dvbstp_reasm_free(r);
   mcast_close(m);
-  int rc = 0;
+  int rc = recv_failed;
   if (f != stdout && fclose(f)) {
     log_code("AE100102", "error writing %s", cfg->output_path);
     rc = 1;

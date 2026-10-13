@@ -57,7 +57,7 @@ hls_snapshot_t *snap_clone(const hls_snapshot_t *base) {
   atomic_store_explicit(&ns->cache_lcevc[0], NULL, memory_order_relaxed);
   atomic_store_explicit(&ns->cache_lcevc[1], NULL, memory_order_relaxed);
   atomic_store_explicit(&ns->cache_mpd, NULL, memory_order_relaxed);
-  atomic_store_explicit(&ns->cache_mpd_ll, NULL, memory_order_relaxed);
+  for (int i = 0; i < MPD_LL_VARIANTS; i++) atomic_store_explicit(&ns->cache_mpd_ll[i], NULL, memory_order_relaxed);
   return ns;
 }
 
@@ -93,18 +93,14 @@ void snap_free(hls_snapshot_t *ns) {
   cached_text_free(atomic_load_explicit(&ns->cache_lcevc[0], memory_order_relaxed));
   cached_text_free(atomic_load_explicit(&ns->cache_lcevc[1], memory_order_relaxed));
   cached_text_free(atomic_load_explicit(&ns->cache_mpd, memory_order_relaxed));
-  cached_text_free(atomic_load_explicit(&ns->cache_mpd_ll, memory_order_relaxed));
+  for (int i = 0; i < MPD_LL_VARIANTS; i++) cached_text_free(atomic_load_explicit(&ns->cache_mpd_ll[i], memory_order_relaxed));
   free(ns);
 }
 
-const cached_text_t *snapshot_cache_text(_Atomic(cached_text_t *) *slot, text_fmt_fn fmt, void *ctx, size_t buf_cap) {
-  const cached_text_t *cur = atomic_load_explicit(slot, memory_order_acquire);
-  cached_text_t *nc;
+static cached_text_t *cached_text_build(const char *key, text_fmt_fn fmt, void *ctx, size_t buf_cap) {
+  cached_text_t *nc = malloc(sizeof *nc);
   cached_text_hdr_t *h;
   char *buf;
-  cached_text_t *expected;
-  if (cur) return cur;
-  nc = malloc(sizeof *nc);
   if (!nc) return NULL;
   h = malloc(sizeof *h + buf_cap);
   if (!h) {
@@ -115,13 +111,46 @@ const cached_text_t *snapshot_cache_text(_Atomic(cached_text_t *) *slot, text_fm
   buf = (char *)(h + 1);
   nc->len = fmt(ctx, buf, buf_cap);
   nc->text = buf;
-  expected = NULL;
+  bufcpy(nc->key, sizeof nc->key, key);
   /* cppcheck-suppress memleak -- h escapes via buf=(char*)(h+1), freed by cached_text_unref/cached_text_free */
-  if (atomic_compare_exchange_strong_explicit(slot, &expected, nc, memory_order_release, memory_order_acquire)) return nc;
-  cached_text_unref(buf);
-  free(nc);
-  /* cppcheck-suppress memleak -- h freed above via cached_text_unref(buf) */
-  return expected;
+  return nc;
+}
+
+const cached_text_t *snapshot_cache_text(_Atomic(cached_text_t *) *slot, text_fmt_fn fmt, void *ctx, size_t buf_cap) {
+  int owned;
+  return snapshot_cache_text_keyed(slot, 1, "", fmt, ctx, buf_cap, &owned);
+}
+
+void cached_text_release(const cached_text_t *t) {
+  cached_text_free((cached_text_t *)t);
+}
+
+const cached_text_t *snapshot_cache_text_keyed(_Atomic(cached_text_t *) *slots, int n, const char *key, text_fmt_fn fmt, void *ctx, size_t buf_cap, int *owned) {
+  cached_text_t *nc = NULL;
+  *owned = 0;
+  for (int i = 0; i < n; i++) {
+    cached_text_t *cur = atomic_load_explicit(&slots[i], memory_order_acquire);
+    cached_text_t *expected = NULL;
+    if (cur) {
+      if (!strcmp(cur->key, key)) {
+        cached_text_free(nc);
+        return cur;
+      }
+      continue;
+    }
+    if (!nc) {
+      nc = cached_text_build(key, fmt, ctx, buf_cap);
+      if (!nc) return NULL;
+    }
+    if (atomic_compare_exchange_strong_explicit(&slots[i], &expected, nc, memory_order_release, memory_order_acquire)) return nc;
+    if (!strcmp(expected->key, key)) {
+      cached_text_free(nc);
+      return expected;
+    }
+  }
+  if (!nc) nc = cached_text_build(key, fmt, ctx, buf_cap);
+  *owned = nc != NULL;
+  return nc;
 }
 
 /* RFC8216 4.3.3.1: TARGETDURATION must not change. td_hw immune to ring eviction shrink. */

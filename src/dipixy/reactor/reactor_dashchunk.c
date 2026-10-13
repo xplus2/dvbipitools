@@ -22,6 +22,7 @@ void reactor_dashchunk_begin(int epfd, conn_t *c) {
   c->reactor_tid = t_reactor_tid;
   reactor_arm(epfd, c, 0);
   conn_publish(c);
+  dash_lldash_sub_attach(c->slot);
 }
 
 void reactor_dashchunk_close(int epfd, conn_t *c) {

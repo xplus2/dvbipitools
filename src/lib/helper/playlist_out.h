@@ -17,10 +17,10 @@ void playlist_out_stamp(char *buf, size_t n);
 /* M3U/XSPF header only, CSV/XML/NULL no-op. title_prefix before "<stamp> UTC" in XSPF title */
 void playlist_out_init(FILE *f, playlist_out_fmt_t fmt, const char *invocation, const char *title_prefix);
 
-/* M3U/XSPF footer only */
+/* XSPF footer only, M3U has none */
 void playlist_out_close(FILE *f, playlist_out_fmt_t fmt);
 
-/* #EXTINF line + uri line */
+/* #EXTINF line + uri line. control chars dropped, '"' dropped from logo */
 void playlist_out_m3u_item(FILE *f, const char *name, const char *uri, const char *icon_uri, unsigned tsid, unsigned onid, unsigned sid);
 
 /* name with any ',' stripped (field separator), then ,uri,tsid,onid,sid */

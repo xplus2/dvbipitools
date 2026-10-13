@@ -38,6 +38,8 @@ _Thread_local int t_close_deferred = 0;
 _Thread_local int t_tls_want_write = 0;
 _Thread_local int t_reactor_tid = -1;
 _Thread_local int t_reactor_epfd = -1;
+_Thread_local int t_open_replay = 0;
+_Thread_local int t_open_failed = 0;
 
 static const config_t *g_cfg;
 static const channels_t *g_channels;
@@ -56,8 +58,6 @@ void reactor_set_context(const config_t *cfg, const channels_t *channels, metric
   g_metrics = mx;
 }
 
-void reactor_reload_channels(void) { channels_reload_all((channels_t *)g_channels, reactor_cfg()); }
-
 long reactor_connections_total(void) { return __atomic_load_n(&g_connections_total, __ATOMIC_RELAXED); }
 
 static int g_workers;
@@ -67,15 +67,34 @@ int reactor_worker_count(void) { return __atomic_load_n(&g_workers, __ATOMIC_REL
 void reactor_arm(int epfd, conn_t *c, int want_out) { conn_epoll_mod(c, epfd, want_out); }
 
 void reactor_teardown_common(int epfd, conn_t *c) {
+  conn_unpublish(c); /* before close: fd number may be re-published at once */
+  pthread_mutex_lock(&c->out_lock);
+  c->torn_down = 1; /* sweeper checks under lock before touching fd */
+  c->dead = 1;
+  pthread_mutex_unlock(&c->out_lock);
   epoll_ctl(epfd, EPOLL_CTL_DEL, c->fd, NULL);
   tls_close_fd(c->fd);
   conn_free(c);
 }
 
+/* conn died before headers flushed: sub exists but push state never started */
+static void reactor_release_pending_slot(conn_t *c) {
+  switch ((conn_next_t)c->next_state) {
+    case CONN_NEXT_TSPUSH:    ts_push_unsubscribe_by_idx(c->slot); break;
+    case CONN_NEXT_DASHCHUNK: dash_lldash_sub_close(c->slot); break;
+    case CONN_NEXT_MP4PUSH:   mp4push_sub_close(c->slot); break;
+    case CONN_NEXT_WS:
+    case CONN_NEXT_NONE:      break;
+  }
+  c->next_state = CONN_NEXT_NONE;
+}
+
 void reactor_close(int epfd, conn_t *c) {
+  reactor_release_pending_slot(c);
   llhls_waiter_conn_closing(c);
   hls_cold_waiter_conn_closing(c);
   ts_cold_waiter_conn_closing(c);
+  open_waiter_conn_closing(c);
   reactor_teardown_common(epfd, c);
 }
 
@@ -173,9 +192,10 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   conn_table_init(conn_cap);
   ts_push_init(!(cfg->no_ts && cfg->no_spts && cfg->no_rawaudio), cfg->max_clients);
   ws_clients_init(cfg->max_clients);
-  hls_store_init(cfg->max_channels);
+  hls_store_init(cfg->max_channels * HLS_STORES_PER_SEG);
   hls_set_init_codecs_cb(dash_compute_codecs);
   hls_seg_init(cfg->max_channels);
+  hls_seg_set_max_variants(cfg->max_variants);
   if (!(cfg->no_hls && cfg->no_llhls && cfg->no_dash && cfg->no_lldash)) hls_set_seg_pool_cap(cfg->hls_seg_pool);
   if (!cfg->no_lldash) dash_lldash_init(cfg->max_clients);
   if (!cfg->no_mp4) mp4push_init(cfg->max_clients);
@@ -218,12 +238,15 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   channels_set_qsbr(g_reactor_qsbr);
   n_pump = workers > CAPTURE_PUMP_MAX_THREADS ? CAPTURE_PUMP_MAX_THREADS : workers;
   capture_pump_set_thread_count(n_pump);
+  capture_lifecycle_start(ts_push_wake_reactor);
 
   for (i = 0; i < n_pump; i++) {
     pumps_started[i] = pthread_create(&pumps[i], NULL, pump_thread, (void *)(intptr_t)i) == 0;
   }
+  reactor_startup_begin(workers);
   for (i = 1; i < workers; i++) {
     threads_started[i] = pthread_create(&threads[i], NULL, worker_thread, (void *)(intptr_t)i) == 0;
+    if (!threads_started[i]) reactor_startup_lost();
   }
   worker_thread((void *)(intptr_t)0);
   if (g_on_listening_thread_started) pthread_join(g_on_listening_thread, NULL);
@@ -233,11 +256,16 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   for (i = 0; i < n_pump; i++) {
     if (pumps_started[i]) pthread_join(pumps[i], NULL);
   }
+  /* After reactor and pump joins. Frees queued jobs */
+  capture_lifecycle_stop();
+  ts_push_close_reactor_efds();
+  dash_lldash_close_reactor_efds();
+  mp4push_close_reactor_efds();
   conn_graveyard_free();
 
 #ifdef HAVE_HTTP3
   h3_cleanup();
 #endif
   tls_cleanup();
-  return 0;
+  return reactor_startup_failed() ? -1 : 0;
 }

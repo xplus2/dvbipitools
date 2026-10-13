@@ -15,9 +15,11 @@ typedef struct {
   unsigned char *raw_xml; /* kind==INPUT_RAW_XML, malloc'd */
   size_t raw_xml_len;
   unsigned raw_payload_id;
+  int raw_provider_count; /* kind==INPUT_RAW_XML: ServiceProvider elements; service_count = SingleService elements */
+  int raw_version; /* root Version attr 0..255, -1 if absent or invalid */
 } input_t;
 
-/* format from path suffix: .csv/.m3u/.xspf -> services, .xml -> raw passthrough. 0 ok, -1 error on stderr */
+/* format from path suffix: .csv/.m3u/.m3u8/.xspf -> services (case-insensitive), .xml -> raw passthrough. 0 ok, -1 error on stderr */
 int input_load(const char *path, input_t *in);
 void input_free(input_t *in);
 

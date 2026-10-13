@@ -23,6 +23,7 @@ dipibcg -l -m <mcast>:<port> [options]
 | `-I` | `--iface`            | `<iface>`             | kernel route                                 |
 |      | `--dscp`             | `<v>`                 | announce: `signalling`                       |
 | `-t` | `--interval`         | `<s>`                 | announce: `5`                                |
+|      | `--refresh`          | `<n>`                 | announce: `1`                                |
 | `-t` | `--timeout`          | `<s>`                 | listen: `35`                                 |
 | `-o` | `--output`           | `<path>` / `-`        | listen: `-` (stdout)                         |
 | `-C` | `--csv-map`          | `<path>`              | listen: off                                  |
@@ -56,11 +57,18 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 Reads `-i` (xmltv) and `-M` (`id,uri,tsid,onid,sid` csv, same shape as dipixmltv/dipiscan) at
 startup, and again on SIGHUP (see [Reloading](#reloading-announce)). Every `-t`/`--interval`
 seconds (default 5): re-filters programmes against the current time, BiM-encodes what's left,
-wraps it in a container (one binary + one string data repository, TS 102 822-3-2 4.5.2.1), wraps
+wraps it in a container (TS 102 323 9.3 encapsulation, one binary + one string data repository, TS 102 822-3-2 4.5.2.1), wraps
 *that* in a `compression_wrapper` (TS 102 323 clause 7.3.1.5) and sends via DVBSTP payload 0xA3
 with `compr=001` (TS 102 539 table 3 - BiM/binary representation, mandatory for BCG payload ids).
+Each channel is its own container and DVBSTP segment (segment_id 1..n in channel order), each with its own version: a
+changed programme bumps only its channel's segment. Fragment pointers are 16 bit, so a single channel over 65535 bytes per
+repository is an error. With more than 65535 channels, channels share segments up to that limit.
 No TVAMain fragment - it's optional (TS 102 323 9.4.2.2) and pure overhead once every fragment
 carries its own type tag.
+
+Fragments are BiM against `urn:tva:metadata:2004` (no length-coded extension chunks). ServiceInformation carries
+one ServiceURL, so `-M` onid/tsid/sid and a no-name flag follow its own strings in its string buffer, where
+receivers don't look.
 
 `-w`/`--window` hours (default 24): only programmes starting within that window are included; past
 programmes drop off on their own as the wall clock moves, no need to re-read `-i`.
@@ -72,8 +80,8 @@ programmes drop off on their own as the wall clock moves, no need to re-read `-i
 
 Joins `-m`, reassembles DVBSTP segments, unwraps the `compression_wrapper` (inflating it first if
 compressed), and after `-t`/`--timeout` seconds (default 35) writes the most recently decoded
-container as xmltv to `-o` (default stdout). Each cycle is a complete snapshot, not incremental, so
-listen keeps the latest rather than merging across cycles. A segment whose wrapper this build can't
+container of each segment id, merged, as xmltv to `-o` (default stdout). Each cycle is a complete snapshot, not
+incremental, so a newer version of a segment replaces its older one. A segment whose wrapper this build can't
 decompress (no zlib) is skipped like any other malformed segment.
 
 `-C`/`--csv-map` also writes a companion mapping csv (real uri/tsid/onid/sid from the received

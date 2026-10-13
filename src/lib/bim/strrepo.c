@@ -58,6 +58,12 @@ int strrepo_reader_init(strrepo_reader_t *sr, const unsigned char *buf, size_t l
   return 0;
 }
 
+int strrepo_reader_seek(strrepo_reader_t *sr, size_t off) {
+  if (off < 1 || off > sr->len) return -1;
+  sr->pos = off;
+  return 0;
+}
+
 int strrepo_reader_next(strrepo_reader_t *sr, char *out, size_t outcap) {
   size_t start = sr->pos, i, oi = 0;
   if (start >= sr->len) return -1;
@@ -65,6 +71,22 @@ int strrepo_reader_next(strrepo_reader_t *sr, char *out, size_t outcap) {
   if (i >= sr->len) return -1;
   for (i = start; i < sr->len && sr->buf[i] != '\0' && oi + 1 < outcap; i++) out[oi++] = (char)sr->buf[i];
   out[oi] = '\0';
+  while (i < sr->len && sr->buf[i] != '\0') i++;
   sr->pos = i + 1;
+  return 0;
+}
+
+int strrepo_reader_next_dup(strrepo_reader_t *sr, char **out) {
+  size_t start = sr->pos, n;
+  char *s;
+  if (start >= sr->len) return -1;
+  for (n = 0; start + n < sr->len && sr->buf[start + n] != '\0'; n++);
+  if (start + n >= sr->len) return -1;
+  s = malloc(n + 1);
+  if (!s) return -1;
+  memcpy(s, sr->buf + start, n);
+  s[n] = '\0';
+  sr->pos = start + n + 1;
+  *out = s;
   return 0;
 }

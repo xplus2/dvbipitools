@@ -31,7 +31,7 @@ int http_listen(int family, const char *addr, unsigned port) {
 
   fd = socket(family, SOCK_STREAM, 0);
   if (fd < 0) {
-    log_code("MS500109", "dipimetrics: socket() failed: %s", strerror(errno));
+    log_code("MS500109", "socket() failed: %s", strerror(errno));
     return -1;
   }
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
@@ -42,7 +42,7 @@ int http_listen(int family, const char *addr, unsigned port) {
     a->sin6_family = AF_INET6;
     a->sin6_port = htons((unsigned short)port);
     if (inet_pton(AF_INET6, addr, &a->sin6_addr) != 1) {
-      log_code("MS000138", "dipimetrics: invalid listen address %s", addr);
+      log_code("MS000138", "invalid listen address %s", addr);
       close(fd);
       return -1;
     }
@@ -52,7 +52,7 @@ int http_listen(int family, const char *addr, unsigned port) {
     a->sin_family = AF_INET;
     a->sin_port = htons((unsigned short)port);
     if (inet_pton(AF_INET, addr, &a->sin_addr) != 1) {
-      log_code("MS000138", "dipimetrics: invalid listen address %s", addr);
+      log_code("MS000138", "invalid listen address %s", addr);
       close(fd);
       return -1;
     }
@@ -60,18 +60,18 @@ int http_listen(int family, const char *addr, unsigned port) {
   }
 
   if (bind(fd, (struct sockaddr *)&ss, sslen) < 0) {
-    log_code("MS500110", "dipimetrics: bind %s:%u failed: %s", addr, port, strerror(errno));
+    log_code("MS500110", "bind %s:%u failed: %s", addr, port, strerror(errno));
     close(fd);
     return -1;
   }
   if (listen(fd, HTTP_MAX_CONNS) < 0) {
-    log_code("MS500111", "dipimetrics: listen failed: %s", strerror(errno));
+    log_code("MS500111", "listen failed: %s", strerror(errno));
     close(fd);
     return -1;
   }
   flags = fcntl(fd, F_GETFL, 0);
   if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-    log_code("MS500106", "dipimetrics: fcntl O_NONBLOCK: %s", strerror(errno));
+    log_code("MS500106", "fcntl O_NONBLOCK: %s", strerror(errno));
     close(fd);
     return -1;
   }
@@ -85,6 +85,7 @@ typedef struct {
   tls_t *tls;
   int handshaking;
   int tls_want_write;
+  int write_wants_read; /* TLS send blocked on socket readability */
   int reading; /* 1 = still reading request, 0 = sending response */
   struct sockaddr_storage peer;
   unsigned long long seq; /* accept order, lower = older */
@@ -99,6 +100,7 @@ typedef struct {
 struct http_server {
   int listen_fd;
   int listen_pfd_idx;
+  int accept_paused; /* accept failed hard (EMFILE...): skip listen fd for one poll round */
   tls_server_ctx_t *tls_ctx;
   char http_auth[200];
   unsigned long long next_seq;
@@ -129,7 +131,7 @@ void http_server_free(http_server_t *hs) {
 
 void http_server_poll_fds(http_server_t *hs, struct pollfd *pfds, int cap, int *n) {
   hs->listen_pfd_idx = -1;
-  if (*n < cap) {
+  if (*n < cap && !hs->accept_paused) {
     hs->listen_pfd_idx = *n;
     pfds[*n].fd = hs->listen_fd;
     pfds[*n].events = POLLIN;
@@ -149,7 +151,8 @@ void http_server_poll_fds(http_server_t *hs, struct pollfd *pfds, int cap, int *
     c->pfd_idx = *n;
     pfds[*n].fd = c->fd;
     if (c->handshaking) pfds[*n].events = (short)(c->tls_want_write ? POLLOUT : POLLIN);
-    else                pfds[*n].events = (short)(c->reading ? POLLIN : POLLOUT);
+    else if (c->reading) pfds[*n].events = POLLIN;
+    else                 pfds[*n].events = (short)(c->write_wants_read ? POLLIN : POLLOUT);
     pfds[*n].revents = 0;
     (*n)++;
   }
@@ -162,12 +165,13 @@ static void conn_close(http_conn_t *c) {
   memset(c, 0, sizeof *c);
 }
 
+/* IPv6 peers compare by /64: one client holds a whole prefix */
 static int peer_same(const struct sockaddr_storage *a, const struct sockaddr_storage *b) {
   if (a->ss_family != b->ss_family) return 0;
   if (a->ss_family == AF_INET)
     return ((const struct sockaddr_in *)a)->sin_addr.s_addr == ((const struct sockaddr_in *)b)->sin_addr.s_addr;
   if (a->ss_family == AF_INET6)
-    return !memcmp(&((const struct sockaddr_in6 *)a)->sin6_addr, &((const struct sockaddr_in6 *)b)->sin6_addr, sizeof(struct in6_addr));
+    return !memcmp(&((const struct sockaddr_in6 *)a)->sin6_addr, &((const struct sockaddr_in6 *)b)->sin6_addr, 8);
   return 1;
 }
 
@@ -178,19 +182,33 @@ static int peer_count(const http_server_t *hs, const struct sockaddr_storage *pe
   return n;
 }
 
+/* conns per slot's peer, one scan per distinct peer */
+static void peer_counts(const http_server_t *hs, int *pcs) {
+  for (int i = 0; i < HTTP_MAX_CONNS; i++) {
+    int n = 0;
+    if (!hs->conns[i].used || pcs[i]) continue;
+    for (int j = i; j < HTTP_MAX_CONNS; j++)
+      if (hs->conns[j].used && peer_same(&hs->conns[j].peer, &hs->conns[i].peer)) n++;
+    for (int j = i; j < HTTP_MAX_CONNS; j++)
+      if (hs->conns[j].used && peer_same(&hs->conns[j].peer, &hs->conns[i].peer)) pcs[j] = n;
+  }
+}
+
 static http_conn_t *conn_victim(http_server_t *hs, const struct sockaddr_storage *peer, int same_peer_only) {
   http_conn_t *best = NULL;
+  int pcs[HTTP_MAX_CONNS] = {0};
   int best_w = 0;
   int best_pc = 0;
+
+  if (!same_peer_only) peer_counts(hs, pcs); /* same peer: counts tie, age decides */
 
   for (int i = 0; i < HTTP_MAX_CONNS; i++) {
     http_conn_t *c = &hs->conns[i];
     int w;
-    int pc;
+    int pc = pcs[i];
     if (!c->used) continue;
     if (same_peer_only && !peer_same(&c->peer, peer)) continue;
     w = !c->handshaking && !c->reading;
-    pc = peer_count(hs, &c->peer);
     if (!best || w < best_w || (w == best_w && (pc > best_pc || (pc == best_pc && c->seq < best->seq)))) {
       best = c;
       best_w = w;
@@ -311,46 +329,36 @@ static void set_response(http_conn_t *c, const char *hdr, size_t hdr_len, const 
   c->resplen = hdr_len + body_len;
 }
 
-static void build_metrics_response(http_conn_t *c, const store_t *st, double now_mono) {
+static void build_status_response(http_conn_t *c, const char *status, const char *extra_hdr, const char *body) {
+  char hdr[256];
+  size_t body_len = strlen(body);
+  int hdr_len = snprintf(hdr, sizeof hdr,
+    "HTTP/1.1 %s\r\n"
+    "%s"
+    "Content-Type: text/plain; charset=utf-8\r\n"
+    "Content-Length: %zu\r\n"
+    "Connection: close\r\n\r\n",
+    status, extra_hdr, body_len);
+  set_response(c, hdr, (size_t)hdr_len, body, body_len);
+}
+
+/* head: headers only, Content-Length still the GET body size */
+static int build_metrics_response(http_conn_t *c, const store_t *st, double now_mono, int head) {
   char *body;
   size_t body_len;
   char hdr[256];
   int hdr_len;
 
-  render_openmetrics(st, now_mono, &body, &body_len);
+  if (render_openmetrics(st, now_mono, &body, &body_len)) return -1;
   hdr_len = snprintf(hdr, sizeof hdr,
     "HTTP/1.1 200 OK\r\n"
     "Content-Type: application/openmetrics-text; version=1.0.0; charset=utf-8\r\n"
     "Content-Length: %zu\r\n"
     "Connection: close\r\n\r\n",
     body_len);
-  set_response(c, hdr, (size_t)hdr_len, body, body_len);
+  set_response(c, hdr, (size_t)hdr_len, body, head ? 0 : body_len);
   free(body);
-}
-
-static void build_404_response(http_conn_t *c) {
-  static const char body[] = "not found\n";
-  char hdr[160];
-  int hdr_len = snprintf(hdr, sizeof hdr,
-    "HTTP/1.1 404 Not Found\r\n"
-    "Content-Type: text/plain; charset=utf-8\r\n"
-    "Content-Length: %zu\r\n"
-    "Connection: close\r\n\r\n",
-    sizeof body - 1);
-  set_response(c, hdr, (size_t)hdr_len, body, sizeof body - 1);
-}
-
-static void build_401_response(http_conn_t *c) {
-  static const char body[] = "unauthorized\n";
-  char hdr[200];
-  int hdr_len = snprintf(hdr, sizeof hdr,
-    "HTTP/1.1 401 Unauthorized\r\n"
-    "WWW-Authenticate: Basic realm=\"metrics\"\r\n"
-    "Content-Type: text/plain; charset=utf-8\r\n"
-    "Content-Length: %zu\r\n"
-    "Connection: close\r\n\r\n",
-    sizeof body - 1);
-  set_response(c, hdr, (size_t)hdr_len, body, sizeof body - 1);
+  return 0;
 }
 
 static int authz_matches(const struct phr_header *headers, size_t num_headers, const char *expected) {
@@ -383,17 +391,27 @@ static void conn_try_parse_and_respond(http_conn_t *c, store_t *st, double now_m
     path[path_len] = '\0';
   }
 
-  if (!strcmp(method, "GET") && !strcmp(strip_query(path), "/metrics")) {
+  if (!strcmp(strip_query(path), "/metrics")) {
+    int head = !strcmp(method, "HEAD");
     if (http_auth[0] && !authz_matches(headers, num_headers, http_auth)) {
-      build_401_response(c);
+      st->stats.http_requests_401++;
+      build_status_response(c, "401 Unauthorized", "WWW-Authenticate: Basic realm=\"metrics\"\r\n", "unauthorized\n");
+    } else if (strcmp(method, "GET") && !head) {
+      if (verbose) log_code("MD700164", "405 %s %s", method, path);
+      st->stats.http_requests_405++;
+      build_status_response(c, "405 Method Not Allowed", "Allow: GET, HEAD\r\n", "method not allowed\n");
     } else {
-      st->stats.http_requests_200++;
-      build_metrics_response(c, st, now_mono);
+      st->stats.http_requests_200++; /* body counts itself */
+      if (build_metrics_response(c, st, now_mono, head)) {
+        st->stats.http_requests_200--;
+        st->stats.http_requests_500++;
+        build_status_response(c, "500 Internal Server Error", "", "internal error\n");
+      }
     }
   } else {
-    if (verbose && method[0]) log_code("MD700104", "dipimetrics: 404 %s %s", method, path);
+    if (verbose && method[0]) log_code("MD700104", "404 %s %s", method, path);
     st->stats.http_requests_404++;
-    build_404_response(c);
+    build_status_response(c, "404 Not Found", "", "not found\n");
   }
   c->reading = 0;
   c->respoff = 0;
@@ -413,7 +431,11 @@ static void conn_write_step(http_conn_t *c) {
       conn_close(c);
       return;
     }
-    if (sent == 0) return;
+    if (sent == 0) {
+      c->write_wants_read = tls_want_read(c->tls);
+      return;
+    }
+    c->write_wants_read = 0;
   } else {
     sent = send(c->fd, c->resp + c->respoff, c->resplen - c->respoff, MSG_NOSIGNAL);
     if (sent < 0) {
@@ -426,6 +448,7 @@ static void conn_write_step(http_conn_t *c) {
 }
 
 void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, store_t *st, double now_mono, int verbose) {
+  hs->accept_paused = 0;
   if (hs->listen_pfd_idx >= 0 && hs->listen_pfd_idx < n && (pfds[hs->listen_pfd_idx].revents & POLLIN)) {
     for (;;) {
       struct sockaddr_storage peer;
@@ -433,7 +456,10 @@ void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, st
       int fd;
       memset(&peer, 0, sizeof peer);
       fd = accept(hs->listen_fd, (struct sockaddr *)&peer, &plen);
-      if (fd < 0) break;
+      if (fd < 0) {
+        if (errno != EAGAIN && errno != EWOULDBLOCK && errno != ECONNABORTED && errno != EINTR) hs->accept_paused = 1;
+        break;
+      }
       conn_accept(hs, fd, &peer, now_mono);
     }
   }
@@ -448,7 +474,7 @@ void http_server_service(http_server_t *hs, const struct pollfd *pfds, int n, st
     } else if (c->reading) {
       if (rev & (POLLIN | POLLHUP | POLLERR)) conn_read_step(c);
       if (c->used && c->reading) conn_try_parse_and_respond(c, st, now_mono, verbose, hs->http_auth);
-    } else if (rev & (POLLOUT | POLLERR)) {
+    } else if (rev & (POLLOUT | POLLIN | POLLERR)) {
       conn_write_step(c);
     }
     if (c->used && now_mono >= c->deadline) conn_close(c);

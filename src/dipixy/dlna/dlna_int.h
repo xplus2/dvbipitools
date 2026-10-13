@@ -16,6 +16,7 @@
 
 /* OP=00: no byte/time seek, matches lack of Range support. FLAGS: streaming + sN-increasing + dlna v1.5, no seek bits */
 #define TS_PROTOCOL_INFO "http-get:*:video/mpeg:DLNA.ORG_OP=00;DLNA.ORG_FLAGS=05100000000000000000000000000000"
+#define RADIO_PROTOCOL_INFO "http-get:*:audio/mpeg:DLNA.ORG_OP=00;DLNA.ORG_FLAGS=05100000000000000000000000000000"
 #define MCAST_IGMP_PROTOCOL_INFO "dvb-igmp:*:33:*"
 #define MCAST_MLD_PROTOCOL_INFO "dvb-mld:*:33:*"
 
@@ -44,6 +45,13 @@ typedef struct {
 } soap_field_t;
 int soap_action_response(char **out, size_t *out_len, const char *service_urn, const char *action_response_tag, const soap_field_t *fields, int nfields);
 int soap_fault(char **out, size_t *out_len, int upnp_error_code, const char *desc);
+
+/* async NOTIFY, args copied. delay_ms: hold-off before send. 0 ok, -1 queue full/no thread */
+int gena_notify_enqueue(const char *host, unsigned port, const char *path, const char *sid, unsigned seq, const char *body, unsigned delay_ms);
+void gena_notify_stop(void);
+
+/* drops sid's subscription */
+void gena_delivery_failed(const char *sid);
 
 /* dlna_didl.c */
 int build_didl(const config_t *cfg, const channels_t *channels, const oid_t *oid, int metadata, unsigned starting_index, unsigned requested_count, char **out_didl, unsigned *number_returned, unsigned *total_matches);

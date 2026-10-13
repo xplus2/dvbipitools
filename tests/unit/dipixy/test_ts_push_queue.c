@@ -37,13 +37,14 @@ void ws_clients_add_bytes(int handle, size_t n) {
 static int g_pidlock_allow;
 static int g_pidlock_snapshots;
 static int g_pidlock_lcevc_applies;
+static int g_pidlock_snapshot_n;
 
 void pidlock_snapshot(const psi_t *psi, unsigned *allowed, int *n_allowed, int cap) {
   (void)psi;
-  (void)allowed;
   (void)cap;
   g_pidlock_snapshots++;
-  *n_allowed = 0;
+  if (g_pidlock_snapshot_n > 0) allowed[0] = 7;
+  *n_allowed = g_pidlock_snapshot_n;
 }
 
 int pidlock_allowed(const unsigned *allowed, int n_allowed, unsigned pid) {
@@ -62,12 +63,21 @@ void pidlock_apply_lcevc(const lcevc_select_t *lcevc, pid_filter_t *filter, cons
 }
 
 const unsigned char *pidlock_rewrite_pmt(const psi_t *tp, const pid_filter_t *filter, unsigned char *cc_pmt,
-                                         const unsigned char *pkt, unsigned pid, unsigned char *rw, unsigned char *out188) {
+                                         const unsigned char *pkt, unsigned pid, unsigned char *rw, unsigned char *out, size_t *n_pkts) {
   (void)tp;
   (void)filter;
   (void)cc_pmt;
   (void)pid;
   (void)rw;
+  (void)out;
+  *n_pkts = 1;
+  return pkt;
+}
+
+const unsigned char *pidlock_rewrite_pat(const psi_t *tp, unsigned char *cc_pat, const unsigned char *pkt, unsigned pid, unsigned char *out188) {
+  (void)tp;
+  (void)cc_pat;
+  (void)pid;
   (void)out188;
   return pkt;
 }
@@ -85,10 +95,18 @@ static int g_sent_calls[FAKE_FDS];
 static int g_h2_wakes;
 static int g_h3_wakes;
 static int g_last_wake;
+static int g_h2_resets;
+static int g_h3_resets;
 
-conn_t *conn_for_fd(int fd) {
+conn_t *conn_for_fd_gen(int fd, uint64_t gen) {
+  (void)gen;
   if (fd == g_gone_fd) return NULL;
   return (conn_t *)(intptr_t)(fd + 1);
+}
+
+uint64_t conn_gen_for_fd(int fd) {
+  (void)fd;
+  return 0;
 }
 
 int conn_send_buffered(conn_t *c, const void *a, size_t alen, const void *b, size_t blen) {
@@ -113,6 +131,16 @@ void h2_tspush_wake(int sub_idx) {
 
 void h3_tspush_wake(int sub_idx) {
   g_h3_wakes++;
+  g_last_wake = sub_idx;
+}
+
+void h2_tspush_reset(int sub_idx) {
+  g_h2_resets++;
+  g_last_wake = sub_idx;
+}
+
+void h3_tspush_reset(int sub_idx) {
+  g_h3_resets++;
   g_last_wake = sub_idx;
 }
 
@@ -275,6 +303,8 @@ static void reset_fakes(void) {
   memset(g_sent_calls, 0, sizeof g_sent_calls);
   g_h2_wakes = 0;
   g_h3_wakes = 0;
+  g_h2_resets = 0;
+  g_h3_resets = 0;
   g_last_wake = -1;
 }
 
@@ -564,6 +594,35 @@ START_TEST(h2_h3_enqueue_drops_on_a_full_ring_and_ignores_bad_input) {
 }
 END_TEST
 
+START_TEST(full_h2_h3_ring_flags_overrun_and_flush_resets_the_stream) {
+  conn_proto_t proto = _i ? CONN_PROTO_H3 : CONN_PROTO_H2;
+  ts_sub_t *a;
+  uint8_t chunk[1000];
+
+  fill(chunk, sizeof chunk, 31);
+  reset_fakes();
+  ts_push_init(0, 4);
+  a = attached_sub(0, proto, 0, 0);
+  for (int i = 0; i < 4; i++) {
+    if (_i) ts_push_h3_enqueue(0, chunk, sizeof chunk);
+    else ts_push_h2_enqueue(0, chunk, sizeof chunk);
+  }
+  ck_assert_int_eq(atomic_load(&a->pkt_overrun), 0);
+  if (_i) ts_push_h3_enqueue(0, chunk, sizeof chunk);
+  else ts_push_h2_enqueue(0, chunk, sizeof chunk);
+  ck_assert_int_eq(atomic_load(&a->pkt_overrun), 1);
+
+  ts_push_flush_ready(0);
+  ck_assert_int_eq(_i ? g_h3_resets : g_h2_resets, 1);
+  ck_assert_int_eq(_i ? g_h2_resets : g_h3_resets, 0);
+  ck_assert_int_eq(g_h2_wakes + g_h3_wakes, 0);
+  ck_assert_int_eq(g_last_wake, 0);
+  ck_assert_int_eq(atomic_load(&a->pkt_overrun), 0);
+  ts_push_flush_ready(0);
+  ck_assert_int_eq(_i ? g_h3_resets : g_h2_resets, 1);
+}
+END_TEST
+
 START_TEST(active_count_tracks_the_counter) {
   ts_push_init(0, 4);
   atomic_store(&g_ts_active_count, 0);
@@ -609,6 +668,7 @@ static void feed_pat_and_pmt(void) {
   unsigned char body[32];
   unsigned char sec[64];
   size_t n = 0;
+  size_t slen;
 
   body[n++] = 0x00;
   body[n++] = 0x01;
@@ -619,7 +679,8 @@ static void feed_pat_and_pmt(void) {
   body[n++] = 0x01;
   body[n++] = 0xE0 | (FEED_PMT_PID >> 8);
   body[n++] = (unsigned char)FEED_PMT_PID;
-  feed_psi_packet(0x0000, sec, feed_section(sec, 0x00, body, n));
+  slen = feed_section(sec, 0x00, body, n);
+  feed_psi_packet(0x0000, sec, slen);
 
   n = 0;
   body[n++] = 0x00;
@@ -636,7 +697,8 @@ static void feed_pat_and_pmt(void) {
   body[n++] = (unsigned char)FEED_VIDEO_PID;
   body[n++] = 0xF0;
   body[n++] = 0x00;
-  feed_psi_packet(FEED_PMT_PID, sec, feed_section(sec, 0x02, body, n));
+  slen = feed_section(sec, 0x02, body, n);
+  feed_psi_packet(FEED_PMT_PID, sec, slen);
 }
 
 static void feed_video_packet(void) {
@@ -663,6 +725,10 @@ static ts_sub_t *feed_sub(conn_proto_t proto, int spts) {
   s->lcevc_locked = 0;
   s->filter_psi = NULL;
   memset(&s->filter, 0, sizeof s->filter);
+  memset(&s->filter_base, 0, sizeof s->filter_base);
+  s->spts_pmt_seen = 0;
+  s->cc_pat = 0;
+  g_pidlock_snapshot_n = 0;
   g_pidlock_allow = 0;
   g_pidlock_snapshots = 0;
   g_pidlock_lcevc_applies = 0;
@@ -703,6 +769,35 @@ START_TEST(spts_feed_locks_on_pat_pmt_and_admits_the_locked_program) {
   g_pidlock_allow = 1;
   feed_video_packet();
   ck_assert_uint_eq(byte_ring_read(&a->pkt_ring, sink, sizeof sink), 188u);
+  psi_free(a->spts_psi);
+  a->spts_psi = NULL;
+}
+END_TEST
+
+START_TEST(spts_feed_relocks_when_the_pmt_layout_changes) {
+  ts_sub_t *a;
+
+  ts_push_init(0, 4);
+  a = feed_sub(CONN_PROTO_H1, 1);
+  pid_filter_add(&a->filter_base, 0x300);
+  a->filter = a->filter_base;
+  feed_pat_and_pmt();
+  ck_assert_int_eq(g_pidlock_snapshots, 1);
+  ck_assert_int_eq(g_pidlock_lcevc_applies, 1);
+
+  feed_pat_and_pmt();
+  ck_assert_int_eq(g_pidlock_snapshots, 2);
+  ck_assert_int_eq(g_pidlock_lcevc_applies, 1);
+
+  pid_filter_add(&a->filter, 0x999);
+  g_pidlock_snapshot_n = 1;
+  feed_pat_and_pmt();
+  ck_assert_int_eq(g_pidlock_snapshots, 4);
+  ck_assert_int_eq(g_pidlock_lcevc_applies, 2);
+  ck_assert_int_eq(a->lcevc_locked, 1);
+  ck_assert_int_eq(a->spts_n_allowed, 1);
+  ck_assert_int_eq(pid_filter_excludes(&a->filter, 0x300), 1);
+  ck_assert_int_eq(pid_filter_excludes(&a->filter, 0x999), 0);
   psi_free(a->spts_psi);
   a->spts_psi = NULL;
 }
@@ -784,9 +879,11 @@ static Suite *ts_push_queue_suite(void) {
   tcase_add_test(tc, flush_with_no_subs_on_the_reactor_is_a_noop);
   tcase_add_loop_test(tc, h2_h3_enqueue_fill_their_own_ring_and_wake_the_reactor, 0, 2);
   tcase_add_loop_test(tc, h2_h3_enqueue_drops_on_a_full_ring_and_ignores_bad_input, 0, 2);
+  tcase_add_loop_test(tc, full_h2_h3_ring_flags_overrun_and_flush_resets_the_stream, 0, 2);
   tcase_add_test(tc, active_count_tracks_the_counter);
   tcase_add_test(tc, spts_feed_drops_everything_until_the_program_locks);
   tcase_add_test(tc, spts_feed_locks_on_pat_pmt_and_admits_the_locked_program);
+  tcase_add_test(tc, spts_feed_relocks_when_the_pmt_layout_changes);
   tcase_add_loop_test(tc, feed_delivers_to_the_ring_of_the_subscriber_protocol, 0, 3);
   tcase_add_test(tc, feed_ignores_subscribers_of_unknown_protocol);
   tcase_add_loop_test(tc, rawaudio_emit_delivers_to_the_ring_of_the_subscriber_protocol, 0, 4);

@@ -41,10 +41,16 @@ track_t *find_track(mkv_t *m, unsigned pid) {
   return NULL;
 }
 
+static void patch_dur(mkv_t *m);
+
 void cluster_flush(mkv_t *m) {
   unsigned char buf[16]; /* eb_id max 4 bytes + eb_size max 8 bytes, always fits */
   ebuf_t hdr;
   if (!m->cl_open) return;
+  if (m->cl.err && !m->err) {
+    log_code("LE100123", "mkv write: %s", strerror(ENOMEM));
+    m->err = 1;
+  }
   if (m->cl_cue && m->seekable && !m->err) {
     if (growbuf_reserve((void **)&m->cue, &m->cuecap, sizeof *m->cue, m->ncue + 1, 64) < 0) {
       m->err = 1;
@@ -64,6 +70,7 @@ void cluster_flush(mkv_t *m) {
   wfd(m, m->cl.p, m->cl.len); /* straight to output, no throwaway copy of whole cluster */
   m->cl.len = 0;              /* keep m->cl's allocation, next cluster reuses it */
   m->cl_open = 0;
+  patch_dur(m); /* interrupted file keeps a valid Duration */
 }
 
 void put_block(mkv_t *m, int num, int64_t rel, const unsigned char *d, size_t n, int key, int64_t dur) {
@@ -232,6 +239,20 @@ static void patch(mkv_t *m, const void *p, size_t n, uint64_t pos) {
   }
 }
 
+static void patch_dur(mkv_t *m) {
+  unsigned char sz[8];
+  union {
+    double d;
+    uint64_t u;
+  } c;
+
+  if (!m->started || !m->seekable) return;
+  c.d = (double)m->dur_ms;
+  for (int i = 0; i < 8; i++)
+    sz[i] = (unsigned char)(c.u >> (56 - 8 * i));
+  patch(m, sz, sizeof sz, m->dur_pos);
+}
+
 static void seek_entry(ebuf_t *sh, uint32_t id, uint64_t pos) {
   unsigned char idb[4] = {(unsigned char)(id >> 24), (unsigned char)(id >> 16), (unsigned char)(id >> 8), (unsigned char)id};
   ebuf_t se;
@@ -270,11 +291,6 @@ void seg_finish(mkv_t *m) {
   unsigned char sz[8];
   uint64_t pos_cues = 0;
   uint64_t end;
-  double dur = (double)m->dur_ms;
-  union {
-    double d;
-    uint64_t u;
-  } c;
 
   if (!m->started || !m->seekable || m->err) return;
   if (m->ncue) {
@@ -282,10 +298,7 @@ void seg_finish(mkv_t *m) {
     write_cues(m);
   }
   end = *m->bytes;
-  c.d = dur;
-  for (int i = 0; i < 8; i++)
-    sz[i] = (unsigned char)(c.u >> (56 - 8 * i));
-  patch(m, sz, sizeof sz, m->dur_pos);
+  patch_dur(m);
   sz[0] = 0x01; /* 8 byte size vint */
   for (int i = 1; i < 8; i++)
     sz[i] = (unsigned char)((end - m->seg_data) >> (56 - 8 * i));
@@ -309,8 +322,36 @@ void seg_finish(mkv_t *m) {
   ebuf_free(&out);
 }
 
+void track_free(track_t *t) {
+  free(t->rem);
+  free(t->vbuf);
+  free(t->lcevc_rb);
+  free(t->lcevc_esc);
+  free(t->av1_rb);
+  ttx_free(t->ttx);
+}
+
+/* forced start: tracks without parsed header cannot be described, leave them out */
+static void drop_unready(mkv_t *m) {
+  int n = 0;
+  for (int i = 0; i < m->ntrk; i++) {
+    if (!m->trk[i].hdr_parsed) {
+      track_free(&m->trk[i]);
+      continue;
+    }
+    if (n != i)
+      m->trk[n] = m->trk[i];
+    n++;
+  }
+  m->ntrk = n;
+  m->last_trk_idx = -1;
+}
+
 void start(mkv_t *m) {
   if (m->started || !m->ntrk)
+    return;
+  drop_unready(m);
+  if (!m->ntrk)
     return;
   m->t0 = 0;
   m->cut_num = 0;

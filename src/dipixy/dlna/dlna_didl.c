@@ -79,7 +79,9 @@ static void didl_item(FILE *f, const config_t *cfg, const char *id, const char *
     fputs("</upnp:albumArtURI>", f);
   }
   if (didl_mcast_res(f, cfg, meta ? meta->src_uri : NULL, bitrate_bps)) {
-    fputs("<res protocolInfo=\"" TS_PROTOCOL_INFO "\"", f);
+    fputs("<res protocolInfo=\"", f);
+    fputs(media_type == MEDIA_RADIO ? RADIO_PROTOCOL_INFO : TS_PROTOCOL_INFO, f);
+    fputs("\"", f);
     if (bitrate_bps) fprintf(f, " bitrate=\"%u\"", bitrate_bps);
     fputs(">http://", f);
     xml_escape(f, cfg->dlna_host);

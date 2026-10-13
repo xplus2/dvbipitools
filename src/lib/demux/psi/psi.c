@@ -68,6 +68,15 @@ psi_t *psi_new(void) {
 
 void psi_free(psi_t *c) { free(c); }
 
+void psi_reset(psi_t *c) {
+  psi_section_asm_t *const top[] = {&c->pat, &c->sdt, &c->nit, &c->cat};
+  memset(c, 0, offsetof(struct psi, pat));
+  for (size_t i = 0; i < sizeof top / sizeof *top; i++) memset(top[i], 0, offsetof(psi_section_asm_t, buf));
+  memset(c->service_by_pid, 0, sizeof c->service_by_pid);
+  memset(c->pmt_wanted, 0, sizeof c->pmt_wanted);
+  rebuild_class_table(c);
+}
+
 void psi_set_label(psi_t *c, const char *label) {
   if (!c) return;
   if (label && *label) snprintf(c->tag, sizeof c->tag, "psi %s", label);
@@ -191,7 +200,7 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
       for (int got = psi_section_asm_feed(&c->nit, pl, plen, pusi); got; got = psi_section_asm_next(&c->nit, pl, plen)) {
         obs_note(c, PSI_OBS_NIT, c->nit.buf, c->nit.expect, 0x40, NULL);
         obs_note(c, PSI_OBS_NIT_OTHER, c->nit.buf, c->nit.expect, 0x41, NULL);
-        parse_nit(c);
+        if (c->nit.buf[0] != 0x41) parse_nit(c);
       }
       return;
     case TS_PID_SDT:
@@ -200,7 +209,7 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
         obs_note(c, PSI_OBS_SDT, c->sdt.buf, c->sdt.expect, 0x42, NULL);
         obs_note(c, PSI_OBS_SDT_OTHER, c->sdt.buf, c->sdt.expect, 0x46, NULL);
         obs_note(c, PSI_OBS_BAT, c->sdt.buf, c->sdt.expect, 0x4A, NULL);
-        parse_sdt(c);
+        if (c->sdt.buf[0] != 0x46 && c->sdt.buf[0] != 0x4A) parse_sdt(c);
       }
       return;
     case TS_PID_CAT:
@@ -216,7 +225,7 @@ void psi_feed(psi_t *c, const unsigned char *pkt) {
 
   if (c->pmt_locked && !c->multi_mode) {
     if (pid == c->pmt_pid) feed_pmt_pid(c, pid, pkt, pl, plen, pusi);
-  } else if (c->have_pat) {
+  } else if (c->have_pat && c->pmt_wanted[pid]) {
     feed_pmt_pid(c, pid, pkt, pl, plen, pusi);
   }
 }

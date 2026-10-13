@@ -154,6 +154,7 @@ ssize_t tls_read(tls_t *t, void *buf, size_t cap) {
   switch (err) {
     case SSL_ERROR_WANT_READ:
     case SSL_ERROR_WANT_WRITE:
+      t->want_read = err == SSL_ERROR_WANT_READ;
       return 0;
     default: break;
   }
@@ -162,6 +163,8 @@ ssize_t tls_read(tls_t *t, void *buf, size_t cap) {
 }
 
 int tls_pending(const tls_t *t) { return SSL_pending(t->ssl); }
+
+int tls_want_read(const tls_t *t) { return t->want_read; }
 
 ssize_t tls_write(tls_t *t, const void *buf, size_t len) {
   int n, err;
@@ -172,6 +175,7 @@ ssize_t tls_write(tls_t *t, const void *buf, size_t len) {
   switch (err) {
     case SSL_ERROR_WANT_READ:
     case SSL_ERROR_WANT_WRITE:
+      t->want_read = err == SSL_ERROR_WANT_READ;
       return 0;
     default: break;
   }

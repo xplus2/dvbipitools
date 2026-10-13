@@ -70,14 +70,7 @@ void mkv_close(mkv_t *m) {
   if (!m->started && m->ntrk) start(m);
   cluster_flush(m);
   seg_finish(m);
-  for (int i = 0; i < m->ntrk; i++) {
-    free(m->trk[i].rem);
-    free(m->trk[i].vbuf);
-    free(m->trk[i].lcevc_rb);
-    free(m->trk[i].lcevc_esc);
-    free(m->trk[i].av1_rb);
-    ttx_free(m->trk[i].ttx);
-  }
+  for (int i = 0; i < m->ntrk; i++) track_free(&m->trk[i]);
   ebuf_free(&m->cl);
   free(m->cue);
   pes_free(m->pes);

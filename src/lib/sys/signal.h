@@ -7,8 +7,14 @@
 /* SIGINT/SIGTERM stop. SIGHUP reload. SIGUSR1 TLS cert reload. SIGPIPE ignored */
 void signals_install(void);
 
+/* SIGINT/SIGTERM/SIGHUP stop. no reload signals. SIGPIPE ignored */
+void signals_install_oneshot(void);
+
 /* nonzero once stop requested */
 int signal_stop_requested(void);
+
+/* same as SIGTERM, async-signal-safe. for fatal startup errors on worker threads */
+void signal_request_stop(void);
 
 /* SIGHUP-triggered, clears on read (edge, not level) */
 int signal_reload_requested(void);

@@ -98,6 +98,32 @@ START_TEST(pace_feed_rtp_ts_baselines_on_first_call) {
 }
 END_TEST
 
+START_TEST(pace_step_sleeps_small_lead) {
+  pace_ctrl_t *p = pace_new();
+  ck_assert_double_eq(pace_step(p, 0, 32, 90000.0, 100.0), 0.0);
+  ck_assert_double_eq_tol(pace_step(p, 45000, 32, 90000.0, 100.0), 0.5, 1e-9);
+  pace_free(p);
+}
+END_TEST
+
+START_TEST(pace_step_resyncs_on_forward_jump) {
+  pace_ctrl_t *p = pace_new();
+  pace_step(p, 0, 32, 90000.0, 100.0);
+  ck_assert_double_eq(pace_step(p, 90000u * 3600u, 32, 90000.0, 100.0), 0.0); /* 1 h jump */
+  ck_assert_double_eq_tol(pace_step(p, 90000u * 3600u + 45000, 32, 90000.0, 100.0), 0.5, 1e-9);
+  pace_free(p);
+}
+END_TEST
+
+START_TEST(pace_step_resyncs_when_behind) {
+  pace_ctrl_t *p = pace_new();
+  pace_step(p, 0, 32, 90000.0, 100.0);
+  ck_assert_double_eq(pace_step(p, 90000, 32, 90000.0, 110.0), 0.0);
+  ck_assert_double_eq_tol(pace_step(p, 135000, 32, 90000.0, 110.0), 0.5, 1e-9);
+  pace_free(p);
+}
+END_TEST
+
 static Suite *pace_suite(void) {
   Suite *s = suite_create("pace");
   TCase *tc = tcase_create("core");
@@ -108,6 +134,9 @@ static Suite *pace_suite(void) {
   tcase_add_test(tc, pace_feed_pcr_pkt_ignores_wrong_pid_and_no_pcr_flag);
   tcase_add_test(tc, pace_feed_pcr_pkt_baselines_on_matching_pid);
   tcase_add_test(tc, pace_feed_rtp_ts_baselines_on_first_call);
+  tcase_add_test(tc, pace_step_sleeps_small_lead);
+  tcase_add_test(tc, pace_step_resyncs_on_forward_jump);
+  tcase_add_test(tc, pace_step_resyncs_when_behind);
   suite_add_tcase(s, tc);
   return s;
 }

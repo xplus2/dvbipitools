@@ -268,7 +268,7 @@ static void trak_build_dec3(mp4buf_t *out, const trak_meta_t *t) {
   memset(&b, 0, sizeof b);
   mb_u16(&b, (t->ac3_bitrate_code & 0x1FFF) << 3);
   mb_u8(&b, (fscod << 6) | t->ac3_bsid << 1 | 0);
-  mb_u8(&b, (unsigned)((t->ac3_bsmod << 5) | (t->ac3_acmod << 2) | (t->ac3_lfeon << 1)));
+  mb_u8(&b, (unsigned)((t->ac3_bsmod << 4) | (t->ac3_acmod << 1) | t->ac3_lfeon));
   mb_u8(&b, 0);
   mb_box(out, "dec3", &b);
 }

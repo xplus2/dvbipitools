@@ -51,6 +51,7 @@ typedef struct {
   const char *srt_streamid;      /* NULL/"" = none */
   const char *srt_packetfilter;  /* NULL/"" = none, raw SRTO_PACKETFILTER string */
   unsigned srt_latency_ms;       /* 0 = library default */
+  unsigned srt_connect_timeout_ms; /* caller connect. 0 = 3000 */
   int srt_verbose;
   metrics_exporter_t *srt_mx;    /* NULL = no stats push */
   const char *srt_tool_version;  /* required if srt_mx set */
@@ -89,13 +90,24 @@ mcast_t *tssrc_mcast(const tssrc_t *s);
 /* underlying fd, for caller's own poll(). valid for life of s. */
 int tssrc_fd(const tssrc_t *s);
 
+/* blocks up to timeout_ms. 1: tssrc_read() likely has data. 0: timeout/EINTR. -1: poll error.
+   unlike poll(tssrc_fd()): HLS/DASH covers every media, connect (POLLOUT), buffered data, timer-driven idle */
+int tssrc_wait(const tssrc_t *s, int timeout_ms);
+
 int tssrc_fec_fd(const tssrc_t *s);
 void tssrc_fec_poll(tssrc_t *s);
 
-/* TSSRC_FILE/TSSRC_STDIN, seekable underlying fd only (best-effort, silent no-op otherwise):
-   rewinds to byte 0, keeps already-decided raw/RTP framing.
-   for a caller that probed PAT/PMT first, consuming bytes, before real reading starts */
-void tssrc_rewind(tssrc_t *s);
+/* start recording everything tssrc_read() returns (64 MiB max, then recording is abandoned).
+   pair with tssrc_rewind() after a probe that consumed the head of the stream */
+void tssrc_capture_start(tssrc_t *s);
+
+/* 1 while tssrc_read() still serves recorded bytes. callers reading the transport directly must drain via tssrc_read() first */
+int tssrc_replay_pending(const tssrc_t *s);
+
+/* seekable TSSRC_FILE/TSSRC_STDIN: rewinds to byte 0, keeps raw/RTP framing decided so far.
+   anything else: replays bytes recorded since tssrc_capture_start() on following reads, then continues live.
+   1: stream restarts at the probed head. 0: head lost (not recording, nothing read, or cap exceeded) */
+int tssrc_rewind(tssrc_t *s);
 
 void tssrc_close(tssrc_t *s);
 

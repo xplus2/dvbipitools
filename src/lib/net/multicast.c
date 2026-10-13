@@ -35,6 +35,7 @@ struct mcast {
   int ts_on;
   uint64_t last_rx_ns;
   log_throttle_t send_fail_throttle;
+  log_throttle_t trunc_throttle;
 };
 
 /* socket+SO_REUSEADDR+SO_RCVBUF+iface resolve+bind, shared ASM/SSM open. binds group: same port same process inputs else all
@@ -223,6 +224,7 @@ static ssize_t recv_stamped(mcast_t *m, void *buf, size_t cap) {
   mh.msg_controllen = sizeof ctl.space;
   n = recvmsg(m->fd, &mh, 0);
   if (n < 0) return n;
+  if (mh.msg_flags & MSG_TRUNC) return -2;
   m->last_rx_ns = 0;
   for (struct cmsghdr *c = CMSG_FIRSTHDR(&mh); c; c = CMSG_NXTHDR(&mh, c)) {
     if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_TIMESTAMPNS && c->cmsg_len >= CMSG_LEN(sizeof(struct timespec))) {
@@ -235,7 +237,11 @@ static ssize_t recv_stamped(mcast_t *m, void *buf, size_t cap) {
 }
 
 ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_out) {
-  ssize_t n = m->ts_on ? recv_stamped(m, buf, cap) : recv(m->fd, buf, cap, 0);
+  ssize_t n = m->ts_on ? recv_stamped(m, buf, cap) : recv(m->fd, buf, cap, MSG_TRUNC);
+  if (n == -2 || n > (ssize_t)cap) {
+    log_throttled(&m->trunc_throttle, LOG_THROTTLE_WINDOW_S, "LW500148", "datagram larger than %zu byte buffer dropped", cap);
+    return 0;
+  }
   if (n < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) return 0;
     log_code("LE500145", "recv: %s", strerror(errno));
@@ -246,6 +252,8 @@ ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_o
 }
 
 int mcast_fd(const mcast_t *m) { return m->fd; }
+
+int mcast_family(const mcast_t *m) { return m->family; }
 
 int mcast_set_nonblock(const mcast_t *m) {
   int flags = fcntl(m->fd, F_GETFL, 0);

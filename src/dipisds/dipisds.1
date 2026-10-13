@@ -38,10 +38,10 @@ seconds).
 .PP
 The input format is inferred from the
 .B \-i
-suffix:
+suffix (matched case-insensitively):
 .B .csv
 and
-.B .m3u
+.BR .m3u / .m3u8
 use the same shapes as
 .BR dipiscan (1)'s
 own output,
@@ -82,6 +82,13 @@ SIGHUP re-reads
 .B \-i
 without restarting the process. On a parse error the previous input keeps
 being announced and the error is logged. No effect in listen mode.
+For raw
+.B .xml
+input the segment version is the root element's Version attribute, so it
+stays unchanged when the document does. Without the attribute it is bumped
+when the content changed.
+A reload that yields identical documents keeps the version and is logged as
+unchanged, so receivers see no new version.
 .PP
 In listen mode
 .B dipisds

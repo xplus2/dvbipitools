@@ -56,6 +56,7 @@ struct ttx {
   char cur[TTX_TEXT_MAX];               /* on screen now */
   int64_t cur_start;
   int have_cur;
+  int on_page;                          /* last header in magazine was ours */
   pts_unwrap_t pts;
 };
 
@@ -258,18 +259,30 @@ ttx_t *ttx_new(unsigned page, const char *lang, long lead_ms, ttx_cb cb, void *c
 
 void ttx_free(ttx_t *t) { free(t); }
 
+static void handle_header(ttx_t *t, const unsigned char *d) {
+  int units = unham[d[0]];
+  int tens = unham[d[1]];
+
+  if (t->nrows) group_done(t);
+  t->on_page = units >= 0 && tens >= 0 && (unsigned)tens == (t->page / 10) % 10 && (unsigned)units == t->page % 10;
+}
+
 /* handles one EBU teletext subtitle packet (id==0x03) starting at u, if its magazine matches */
 static void handle_ebu_subtitle_packet(ttx_t *t, const unsigned char *u) {
   unsigned char b[42];
   int h0;
   int h1;
   unsigned mag;
+  unsigned row;
   for (int k = 0; k < 42; k++) b[k] = rev8(u[2 + k]); /* mpag(2) + data(40) */
   h0 = unham[b[0]];
   h1 = unham[b[1]];
   if (h0 < 0 || h1 < 0) return;
   mag = (unsigned)h0 & 0x07;
-  if (mag == t->magazine) handle_packet(t, b + 2, t->last_ms);
+  if (mag != t->magazine) return;
+  row = ((unsigned)h0 >> 3) | ((unsigned)h1 << 1);
+  if (row == 0) handle_header(t, b + 2);
+  else if (row <= 24 && t->on_page) handle_packet(t, b + 2, t->last_ms);
 }
 
 void ttx_pes(ttx_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
@@ -282,7 +295,7 @@ void ttx_pes(ttx_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t
     unsigned ul = d[i + 1];
     const unsigned char *u = d + i + 2;
     if (i + 2 + ul > len) break;
-    if (id == 0x03 && ul >= 44 - 2) handle_ebu_subtitle_packet(t, u); /* EBU teletext subtitle */
+    if (id == 0x03 && ul >= 44) handle_ebu_subtitle_packet(t, u); /* EBU teletext subtitle */
     i += 2 + ul;
   }
 }

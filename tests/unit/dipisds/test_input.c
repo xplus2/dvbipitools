@@ -76,6 +76,27 @@ START_TEST(csv_rejects_bad_uri) {
 }
 END_TEST
 
+static const char *const bad_groups[] = {
+  "udp://example.com:5000",
+  "udp://10.0.0.1:5000",
+  "udp://239.1.1.:5000",
+  "udp://239.1.1.1\":5000",
+  "udp://a&b:5000",
+  "rtp://[2001:db8::1]:5000",
+  "rtp://[ff15::1\"]:5000",
+  "rtp://[239.1.1.1]:5000",
+};
+
+START_TEST(csv_rejects_invalid_group_address) {
+  char path[160], line[160];
+  input_t in;
+  snprintf(line, sizeof line, "Channel One,%s\n", bad_groups[_i]);
+  write_temp_file(path, ".csv", line);
+  ck_assert_int_eq(input_load(path, &in), -1);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(csv_parses_ipv6_address) {
   char path[160];
   input_t in;
@@ -141,6 +162,21 @@ START_TEST(m3u_pairs_extinf_attrs_with_following_uri) {
 }
 END_TEST
 
+START_TEST(m3u_name_starts_at_first_unquoted_comma) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".m3u",
+                   "#EXTINF:-1 tvg-id=\"x\" tvg-name=\"A,B\" sid=\"7\",News, Weather\n"
+                   "rtp://239.1.1.1:5000\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.service_count, 1);
+  ck_assert_str_eq(in.services[0].name, "News, Weather");
+  ck_assert_uint_eq(in.services[0].sid, 7u);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(m3u_uri_without_preceding_extinf_is_ignored) {
   char path[160];
   input_t in;
@@ -158,6 +194,22 @@ START_TEST(m3u_rejects_malformed_extinf) {
   write_temp_file(path, ".m3u", "#EXTINF:no-comma-here\n");
   ck_assert_int_eq(input_load(path, &in), -1);
   unlink(path);
+}
+END_TEST
+
+START_TEST(m3u8_and_uppercase_suffixes_are_recognized) {
+  static const char *const sfx[] = {".m3u8", ".M3U", ".M3U8", ".CSV"};
+  char path[160];
+  input_t in;
+  size_t i;
+  for (i = 0; i < sizeof sfx / sizeof sfx[0]; i++) {
+    write_temp_file(path, sfx[i], i == 3 ? "Channel,rtp://239.1.1.1:5000\n" : "#EXTINF:-1,Channel\nrtp://239.1.1.1:5000\n");
+    ck_assert_int_eq(input_load(path, &in), 0);
+    ck_assert_int_eq(in.service_count, 1);
+    ck_assert_str_eq(in.services[0].name, "Channel");
+    input_free(&in);
+    unlink(path);
+  }
 }
 END_TEST
 
@@ -220,6 +272,18 @@ START_TEST(xml_detects_service_provider_discovery_root) {
 }
 END_TEST
 
+START_TEST(xml_counts_services_and_providers) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".xml", "<ServiceDiscovery><ServiceProviderDiscovery><ServiceProvider/><ServiceProvider/></ServiceProviderDiscovery><BroadcastDiscovery><SingleService/><SingleService/><SingleService/></BroadcastDiscovery></ServiceDiscovery>\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.service_count, 3);
+  ck_assert_int_eq(in.raw_provider_count, 2);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(xml_detects_package_discovery_root) {
   char path[160];
   input_t in;
@@ -261,6 +325,38 @@ START_TEST(xml_rejects_unknown_root_element) {
   input_t in;
   write_temp_file(path, ".xml", "<SomethingElse/>\n");
   ck_assert_int_eq(input_load(path, &in), -1);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(xml_rejects_oversize_file) {
+  char path[160];
+  input_t in;
+  char *big = malloc(DVBSTP_MAX_SEGMENT + 2);
+  ck_assert_ptr_nonnull(big);
+  memset(big, ' ', DVBSTP_MAX_SEGMENT + 1);
+  big[DVBSTP_MAX_SEGMENT + 1] = '\0';
+  memcpy(big, "<BroadcastDiscovery>", 20);
+  write_temp_file(path, ".xml", big);
+  free(big);
+  ck_assert_int_eq(input_load(path, &in), -1);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(xml_accepts_file_at_size_limit) {
+  char path[160];
+  input_t in;
+  char *big = malloc(DVBSTP_MAX_SEGMENT + 1);
+  ck_assert_ptr_nonnull(big);
+  memset(big, ' ', DVBSTP_MAX_SEGMENT);
+  big[DVBSTP_MAX_SEGMENT] = '\0';
+  memcpy(big, "<BroadcastDiscovery>", 20);
+  write_temp_file(path, ".xml", big);
+  free(big);
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_uint_eq(in.raw_xml_len, DVBSTP_MAX_SEGMENT);
+  input_free(&in);
   unlink(path);
 }
 END_TEST
@@ -519,7 +615,14 @@ typedef struct {
 
 static const bad_pkg_t bad_pkgs[] = {
   {"bad id", "x,Bundle,eng,1,A\n", 4},
+  {"empty id", ",Bundle,eng,1,A\n", 4},
+  {"negative id", "-1,Bundle,eng,1,A\n", 4},
   {"short lang", "1,Bundle,en,1,A\n", 4},
+  {"visible true", "1,Bundle,eng,true,A\n", 4},
+  {"visible yes", "1,Bundle,eng,yes,A\n", 4},
+  {"visible 1x", "1,Bundle,eng,1x,A\n", 4},
+  {"visible 2", "1,Bundle,eng,2,A\n", 4},
+  {"duplicate id", "1,A,eng,1,S\n1,B,eng,0,S\n", 4},
   {"over the package limit", "1,A,eng,1,S\n2,B,eng,1,S\n", 1},
 };
 
@@ -565,6 +668,12 @@ static const bad_pkg_t bad_cells[] = {
   {"entry without a colon", "Paris,FR,IDF\n", 4},
   {"non numeric type", "Paris,FR,x:IDF\n", 4},
   {"over the cell limit", "A,FR,1:X\nB,FR,1:Y\n", 1},
+  {"empty id", ",FR,1:X\n", 4},
+  {"empty field before country", "A,,FR,1:X\n", 4},
+  {"empty ca entry", "A,FR,1:X,,2:Y\n", 4},
+  {"empty ca type", "A,FR,:X\n", 4},
+  {"negative ca type", "A,FR,-1:X\n", 4},
+  {"ca type above 255", "A,FR,256:X\n", 4},
   {"too many ca entries", "A,FR,1:a,1:b,1:c,1:d,1:e,1:f,1:g,1:h,1:i\n", 4},
 };
 
@@ -593,26 +702,137 @@ START_TEST(cells_file_skips_blank_lines_and_reports_a_missing_file) {
 }
 END_TEST
 
+START_TEST(long_lines_load_or_are_rejected_whole) {
+  char path[160];
+  input_t in;
+  sds_package_t pk[2];
+  int n = 0;
+  static char big[12000];
+  char *w = big;
+  int i;
+
+  w += sprintf(w, "#EXTINF:-1 tvg-logo=\"http://x/");
+  memset(w, 'a', 900);
+  w += 900;
+  w += sprintf(w, ".png\",Long One\nrtp://239.1.1.1:5000\n");
+  write_temp_file(path, ".m3u", big);
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.service_count, 1);
+  ck_assert_str_eq(in.services[0].name, "Long One");
+  input_free(&in);
+  unlink(path);
+
+  w = big;
+  w += sprintf(w, "Name,rtp://239.1.1.1:5000,");
+  memset(w, '1', 3000);
+  w += 3000;
+  strcpy(w, "\nB,rtp://239.1.1.2:5000\n");
+  write_temp_file(path, ".csv", big);
+  ck_assert_int_ne(input_load(path, &in), 0);
+  unlink(path);
+
+  w = big;
+  w += sprintf(w, "1,Pkg,eng,1,");
+  for (i = 0; i < 64; i++) {
+    memset(w, 'a' + i % 26, 127);
+    w += 127;
+    *w++ = i < 63 ? '|' : '\n';
+  }
+  *w = '\0';
+  write_temp_file(path, ".pkg", big);
+  ck_assert_int_eq(input_load_packages(path, pk, 2, &n), 0);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(pk[0].service_count, 64);
+  unlink(path);
+}
+END_TEST
+
+static const char *const bad_ids_csv[] = {
+  "A,rtp://239.1.1.1:5000,abc\n",
+  "A,rtp://239.1.1.1:5000,70000\n",
+  "A,rtp://239.1.1.1:5000,1,-1\n",
+  "A,rtp://239.1.1.1:5000,1,1,65536\n",
+  "A,rtp://239.1.1.1:5000,,1,1\n",
+  "A,rtp://239.1.1.1:5000,1x\n",
+};
+
+START_TEST(csv_rejects_bad_ids) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".csv", bad_ids_csv[_i]);
+  ck_assert_int_eq(input_load(path, &in), -1);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(csv_accepts_id_range_limits) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".csv", "A,rtp://239.1.1.1:5000,0,65535,65535\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_uint_eq(in.services[0].tsid, 0u);
+  ck_assert_uint_eq(in.services[0].onid, 65535u);
+  ck_assert_uint_eq(in.services[0].sid, 65535u);
+  unlink(path);
+}
+END_TEST
+
+static const char *const bad_ids_m3u[] = {
+  "#EXTINF:-1 tsid=\"abc\",A\nrtp://239.1.1.1:5000\n",
+  "#EXTINF:-1 onid=\"70000\",A\nrtp://239.1.1.1:5000\n",
+  "#EXTINF:-1 sid=\"\",A\nrtp://239.1.1.1:5000\n",
+};
+
+START_TEST(m3u_rejects_bad_ids) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".m3u", bad_ids_m3u[_i]);
+  ck_assert_int_eq(input_load(path, &in), -1);
+  unlink(path);
+}
+END_TEST
+
+static const char *const bad_ids_xspf[] = {
+  "<playlist><trackList><track tsid=\"abc\"><location>rtp://239.1.1.1:5000</location></track></trackList></playlist>",
+  "<playlist><trackList><track onid=\"70000\"><location>rtp://239.1.1.1:5000</location></track></trackList></playlist>",
+  "<playlist><trackList><track sid=\"-1\"><location>rtp://239.1.1.1:5000</location></track></trackList></playlist>",
+};
+
+START_TEST(xspf_rejects_bad_ids) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".xspf", bad_ids_xspf[_i]);
+  ck_assert_int_eq(input_load(path, &in), -1);
+  unlink(path);
+}
+END_TEST
+
 static Suite *input_suite(void) {
   Suite *s = suite_create("dipisds_input");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, csv_parses_name_uri_and_optional_ids);
   tcase_add_test(tc, csv_rejects_line_with_only_name);
   tcase_add_test(tc, csv_rejects_bad_uri);
+  tcase_add_loop_test(tc, csv_rejects_invalid_group_address, 0, (int)(sizeof bad_groups / sizeof bad_groups[0]));
   tcase_add_test(tc, csv_parses_ipv6_address);
   tcase_add_test(tc, csv_parses_ssm_source);
   tcase_add_test(tc, csv_rejects_source_of_wrong_family);
   tcase_add_test(tc, m3u_pairs_extinf_attrs_with_following_uri);
+  tcase_add_test(tc, m3u_name_starts_at_first_unquoted_comma);
   tcase_add_test(tc, m3u_uri_without_preceding_extinf_is_ignored);
   tcase_add_test(tc, m3u_rejects_malformed_extinf);
+  tcase_add_test(tc, m3u8_and_uppercase_suffixes_are_recognized);
   tcase_add_test(tc, xspf_parses_track_location_title_and_ids);
   tcase_add_test(tc, xspf_rejects_track_without_location);
   tcase_add_test(tc, xml_detects_broadcast_discovery_root);
   tcase_add_test(tc, xml_detects_service_provider_discovery_root);
+  tcase_add_test(tc, xml_counts_services_and_providers);
   tcase_add_test(tc, xml_detects_package_discovery_root);
   tcase_add_test(tc, xml_detects_regionalisation_discovery_root);
   tcase_add_test(tc, xml_detects_rms_fus_discovery_root);
   tcase_add_test(tc, xml_rejects_unknown_root_element);
+  tcase_add_test(tc, xml_rejects_oversize_file);
+  tcase_add_test(tc, xml_accepts_file_at_size_limit);
   tcase_add_test(tc, unrecognized_suffix_is_rejected);
   tcase_add_test(tc, missing_file_is_rejected);
   tcase_add_test(tc, packages_file_parses_id_name_lang_visible_and_services);
@@ -630,6 +850,11 @@ static Suite *input_suite(void) {
   tcase_add_test(tc, packages_file_handles_blank_lines_invisible_and_service_overflow);
   tcase_add_loop_test(tc, cells_file_rejects_bad_lines_and_overflow, 0, (int)(sizeof bad_cells / sizeof bad_cells[0]));
   tcase_add_test(tc, cells_file_skips_blank_lines_and_reports_a_missing_file);
+  tcase_add_test(tc, long_lines_load_or_are_rejected_whole);
+  tcase_add_loop_test(tc, csv_rejects_bad_ids, 0, (int)(sizeof bad_ids_csv / sizeof bad_ids_csv[0]));
+  tcase_add_test(tc, csv_accepts_id_range_limits);
+  tcase_add_loop_test(tc, m3u_rejects_bad_ids, 0, (int)(sizeof bad_ids_m3u / sizeof bad_ids_m3u[0]));
+  tcase_add_loop_test(tc, xspf_rejects_bad_ids, 0, (int)(sizeof bad_ids_xspf / sizeof bad_ids_xspf[0]));
   suite_add_tcase(s, tc);
   return s;
 }

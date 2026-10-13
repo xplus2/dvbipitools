@@ -13,9 +13,59 @@
 void bcg_doc_init(bcg_doc_t *d) { memset(d, 0, sizeof *d); }
 
 void bcg_doc_free(bcg_doc_t *d) {
+  for (int i = 0; i < d->programme_count; i++) bcg_programme_free_text(&d->programmes[i]);
   free(d->channels);
   free(d->programmes);
   memset(d, 0, sizeof *d);
+}
+
+int bcg_set_text(char **dst, const char *s) {
+  char *c = NULL;
+  if (s && s[0]) {
+    c = strdup(s);
+    if (!c) return -1;
+  }
+  free(*dst);
+  *dst = c;
+  return 0;
+}
+
+int bcg_elem_text(const char *s, const char *end, const char *tag, char **out) {
+  char *t = NULL;
+  int rc = xml_elem_text_dup(s, end, tag, &t);
+  if (rc == -2) return -1;
+  if (rc == 0 && !t[0]) {
+    free(t);
+    t = NULL;
+  }
+  free(*out);
+  *out = t;
+  return 0;
+}
+
+void bcg_programme_free_text(bcg_programme_t *pr) {
+  free(pr->title);
+  free(pr->desc);
+  free(pr->category);
+  pr->title = pr->desc = pr->category = NULL;
+}
+
+int bcg_programme_copy(bcg_programme_t *dst, const bcg_programme_t *src) {
+  *dst = *src;
+  dst->title = dst->desc = dst->category = NULL;
+  if (bcg_set_text(&dst->title, src->title) || bcg_set_text(&dst->desc, src->desc) || bcg_set_text(&dst->category, src->category)) {
+    bcg_programme_free_text(dst);
+    return -1;
+  }
+  return 0;
+}
+
+void bcg_progtext_free(bcg_progtext_t *pt) {
+  free(pt->crid);
+  free(pt->title);
+  free(pt->desc);
+  free(pt->category);
+  memset(pt, 0, sizeof *pt);
 }
 
 bcg_channel_t *bcg_add_channel(bcg_doc_t *d) {

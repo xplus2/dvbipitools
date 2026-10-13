@@ -63,14 +63,29 @@ done:
   return ret;
 }
 
+size_t pmt_filter_emit_packets(unsigned char *out, size_t out_cap, unsigned pid, unsigned char *cc, const unsigned char *sec, size_t seclen) {
+  size_t n = (seclen + 1 + 183) / 184;
+  size_t off = 0;
+  if (!seclen || n * 188 > out_cap) return 0;
+  for (size_t k = 0; k < n; k++) {
+    unsigned char *p = out + k * 188;
+    size_t room = k ? 184 : 183;
+    size_t take = seclen - off < room ? seclen - off : room;
+    *cc = (unsigned char)((*cc + 1) & 0x0F);
+    memset(p, 0xFF, 188);
+    p[0] = 0x47;
+    p[1] = (unsigned char)((k ? 0x00 : 0x40) | ((pid >> 8) & 0x1F));
+    p[2] = (unsigned char)(pid & 0xFF);
+    p[3] = (unsigned char)(0x10 | *cc);
+    if (!k) p[4] = 0x00;
+    memcpy(p + (k ? 4 : 5), sec + off, take);
+    off += take;
+  }
+  return n;
+}
+
 int pmt_filter_emit_packet(unsigned char *out188, unsigned pid, unsigned char cc, const unsigned char *sec, size_t seclen) {
+  unsigned char c = (unsigned char)((cc - 1) & 0x0F);
   if (seclen + 1 > 184) return 0;
-  memset(out188, 0xFF, 188);
-  out188[0] = 0x47;
-  out188[1] = 0x40 | (unsigned char)((pid >> 8) & 0x1F);
-  out188[2] = (unsigned char)(pid & 0xFF);
-  out188[3] = 0x10 | (cc & 0x0F);
-  out188[4] = 0x00;
-  memcpy(out188 + 5, sec, seclen);
-  return 1;
+  return pmt_filter_emit_packets(out188, 188, pid, &c, sec, seclen) == 1;
 }

@@ -3,7 +3,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -92,20 +91,20 @@ int src_open(const config_t *cfg, src_t *s) {
   return 0;
 }
 
+ssize_t src_read_reason(src_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason) {
+  *reason = NET_ERR_OTHER;
+  if (s->ret && !tssrc_replay_pending(s->t)) return ret_client_read(s->ret, tssrc_mcast(s->t), buf, cap);
+  return tssrc_read(s->t, buf, cap, reason);
+}
+
 ssize_t src_read(src_t *s, unsigned char *buf, size_t cap) {
-  if (s->ret) return ret_client_read(s->ret, tssrc_mcast(s->t), buf, cap);
-  return tssrc_read(s->t, buf, cap, NULL);
+  net_err_reason_t reason;
+  return src_read_reason(s, buf, cap, &reason);
 }
 
 int src_wait_readable(src_t *s, int timeout_ms) {
-  struct pollfd pfd;
-  int pr;
   if (s->ret) return 1; /* --ret already bounds its own poll */
-  pfd.fd = tssrc_fd(s->t);
-  pfd.events = POLLIN;
-  pr = poll(&pfd, 1, timeout_ms);
-  if (pr < 0) return errno == EINTR ? 0 : -1;
-  return pr > 0;
+  return tssrc_wait(s->t, timeout_ms);
 }
 
 void src_close(src_t *s) {
@@ -143,6 +142,7 @@ int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
   o->srt = NULL;
   o->net_had_error = 0;
   o->rist_had_error = 0;
+  o->srt_had_error = 0;
   o->srt_connected = 0;
   o->errors_total = 0;
   if (t->kind == OUT_FILE) {
@@ -189,9 +189,9 @@ int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
   tc.ttl = cfg->out_ttl;
   tc.pack = 1;
   if (t->kind == OUT_RTP) {
-    tc.al_fec_l = cfg->al_fec_l;
-    tc.al_fec_d = cfg->al_fec_d;
-    tc.al_fec_port = cfg->al_fec_port;
+    tc.al_fec_l = cfg->al_fec_out_l;
+    tc.al_fec_d = cfg->al_fec_out_d;
+    tc.al_fec_port = cfg->al_fec_out_port;
   }
   o->net = tssink_open(&tc);
   return o->net ? 0 : -1;
@@ -216,7 +216,7 @@ int sink_write(out_sink_t *o, const unsigned char *p, size_t n) {
       note_send_result(ristout_write(o->rist, p, n) >= 0, &o->rist_had_error, &o->errors_total, "rist");
       return 0;
     case OUT_SRT:
-      srtsink_write(o->srt, p, n);
+      note_send_result(srtsink_write(o->srt, p, n) >= 0, &o->srt_had_error, &o->errors_total, "srt");
       return 0;
     case OUT_RTP:
     case OUT_UDP:

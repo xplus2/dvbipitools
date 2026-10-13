@@ -30,6 +30,10 @@ run_expect_rc 1 "full device xmltv to tva" "$BIN" -f xmltv -M "$WORK/map.csv" -i
 assert_contains "$WORK/full1.err" "error writing /dev/full" "write failure message xmltv to tva"
 run_expect_rc 1 "full device tva to xmltv" "$BIN" -f tva -i "$WORK/big.tva.xml" -o /dev/full 2> "$WORK/full2.err"
 assert_contains "$WORK/full2.err" "error writing /dev/full" "write failure message tva to xmltv"
+run_expect_rc 1 "full stdout xmltv to tva" "$BIN" -f xmltv -M "$WORK/map.csv" -i "$WORK/big.xmltv" -o - > /dev/full 2> "$WORK/full3.err"
+assert_contains "$WORK/full3.err" "error writing" "write failure message stdout xmltv to tva"
+run_expect_rc 1 "full stdout tva to xmltv" "$BIN" -f tva -i "$WORK/big.tva.xml" -o - > /dev/full 2> "$WORK/full4.err"
+assert_contains "$WORK/full4.err" "error writing" "write failure message stdout tva to xmltv"
 
 echo "OK"
 

@@ -70,12 +70,16 @@ static int hls_fmp4_seg_filename(const char *s) {
   return n > 0 && !strcmp(s + 3 + n, ".m4s");
 }
 
-/* "dsegTTTT.m4s": DASH media segment, addressed by start time (ms). NOT like hls-fmp4 */
+/* "dsegTTTT.m4s": DASH media segment, addressed by start time (ms). NOT like hls-fmp4.
+   "dsegvTTTT.m4s"/"dsegaTTTT.m4s" and "dinitv.mp4"/"dinita.mp4": video/audio track of a split manifest */
 static int dash_seg_filename(const char *s) {
   size_t n;
+  if (!strcmp(s, "dinitv.mp4") || !strcmp(s, "dinita.mp4")) return 1;
   if (strncmp(s, "dseg", 4) != 0) return 0;
-  n = digit_run(s + 4);
-  return n > 0 && !strcmp(s + 4 + n, ".m4s");
+  s += 4;
+  if (*s == 'v' || *s == 'a') s++;
+  n = digit_run(s);
+  return n > 0 && !strcmp(s + n, ".m4s");
 }
 
 /* "segNNNNN.PP.ts": LL-HLS part, distinct from plain "segNNNNN.ts" */
@@ -87,6 +91,15 @@ static int llhls_part_filename(const char *s) {
   if (n == 0 || s[3 + n] != '.') return 0;
   n2 = digit_run(s + 3 + n + 1);
   return n2 > 0 && !strcmp(s + 3 + n + 1 + n2, ".ts");
+}
+
+unsigned route_file_fmts(const route_t *rt) {
+  const char *f = rt->hls_file;
+  unsigned own = 1u << rt->fmt;
+  if (rt->fmt == ROUTE_FMT_HLS && hls_ts_seg_filename(f)) return own | 1u << ROUTE_FMT_LLHLS;
+  if ((rt->fmt == ROUTE_FMT_DASH || rt->fmt == ROUTE_FMT_LLDASH) && strcmp(f, "manifest.mpd")) return 1u << ROUTE_FMT_DASH | 1u << ROUTE_FMT_LLDASH;
+  if (rt->fmt == ROUTE_FMT_HLS_FMP4 && !strcmp(f, "init.mp4")) return own | 1u << ROUTE_FMT_DASH;
+  return own;
 }
 
 /* playlist-referenced segment/init filenames carry no format token */
@@ -122,7 +135,7 @@ static int fmt_or_hls_file_parse(const char *s, route_t *out) {
   return 0;
 }
 
-static const char *const route_reserved_names[] = {"rtp", "udp", "srt", "rist", "stdin", "list", "metrics", "ui", "api", "dlna", "export"};
+static const char *const route_reserved_names[] = {"rtp", "udp", "srt", "rist", "stdin", "list", "metrics", "ui", "api", "dlna", "export", "time"};
 
 int route_name_valid(const char *name) {
   if (!name || !*name || strlen(name) > ROUTE_NAME_MAX) return 0;

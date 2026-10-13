@@ -355,7 +355,7 @@ typedef struct {
 
 static const opus_case_t opus_cases[] = {
     {"empty needs data", {0}, 0, 1, 0, 0},
-    {"control header prefix rejected", {0xFF, 0xE0, 0x00, 0x00}, 4, -1, 0, 0},
+    {"toc 0xFF with 32 frames rejected", {0xFF, 0xE0, 0x00, 0x00}, 4, -1, 0, 0},
     {"code0 mono 10ms silk", {0x00, 0xAA, 0, 0}, 2, 0, 480, 1},
     {"code0 stereo celt 20ms", {0x7C, 0xAA, 0, 0}, 2, 0, 960, 2},
     {"code1 two frames", {0x09, 0xAA, 0, 0}, 2, 0, 1920, 1},
@@ -387,6 +387,42 @@ START_TEST(opus_toc_cases) {
   ck_assert_int_eq(memcmp(t.cpriv, "OpusHead", 8), 0);
   ck_assert_uint_eq(t.cpriv[8], 1u);
   ck_assert_uint_eq(t.cpriv[9], c->ch);
+}
+END_TEST
+
+START_TEST(opus_ts_control_header_is_stripped) {
+  static const struct {
+    const char *name;
+    unsigned char d[300];
+    size_t len;
+    int ret;
+    size_t hdr;
+    size_t au;
+  } cases[] = {
+    {"plain size", {0x7F, 0xE0, 0x02, 0x7C, 0xAA}, 5, 0, 3, 2},
+    {"size extended by 0xFF", {0x7F, 0xE0, 0xFF, 0x03, 0x7C, 0xAA}, 6, 1, 0, 0},
+    {"start trim", {0x7F, 0xF0, 0x02, 0x00, 0x10, 0x7C, 0xAA}, 7, 0, 5, 2},
+    {"start and end trim", {0x7F, 0xF8, 0x02, 0x00, 0x10, 0x00, 0x20, 0x7C, 0xAA}, 9, 0, 7, 2},
+    {"extension", {0x7F, 0xE4, 0x02, 0x02, 0x11, 0x22, 0x7C, 0xAA}, 8, 0, 6, 2},
+    {"truncated payload", {0x7F, 0xE0, 0x05, 0x7C, 0xAA}, 5, 1, 0, 0},
+    {"truncated size", {0x7F, 0xE0}, 2, 1, 0, 0},
+    {"zero size", {0x7F, 0xE0, 0x00, 0x7C}, 4, -1, 0, 0},
+    {"followed by a second au", {0x7F, 0xE0, 0x02, 0x7C, 0xAA, 0x7F, 0xE0, 0x02, 0x7C, 0xBB}, 10, 0, 3, 2},
+  };
+  esc_track_t t;
+  esc_frame_t f;
+  int r;
+  memset(&t, 0, sizeof t);
+  memset(&f, 0, sizeof f);
+  t.codec = CODEC_OPUS;
+  r = next_frame(&t, cases[_i].d, cases[_i].len, &f);
+  ck_assert_msg(r == cases[_i].ret, "%s: got %d, want %d", cases[_i].name, r, cases[_i].ret);
+  if (r != 0) return;
+  ck_assert_msg(f.consumed == cases[_i].hdr + cases[_i].au, "%s: consumed %zu", cases[_i].name, f.consumed);
+  ck_assert_msg(f.outlen == cases[_i].au, "%s: outlen %zu", cases[_i].name, f.outlen);
+  ck_assert_ptr_eq(f.out, cases[_i].d + cases[_i].hdr);
+  ck_assert_uint_eq(f.ch, 2u);
+  ck_assert_uint_eq(f.samples, 960u);
 }
 END_TEST
 
@@ -461,7 +497,325 @@ static void ac4_put_single_substream_stereo_presentation(bitwriter_t *bw) {
   bitwriter_put(bw, 0, 1);
 }
 
+/* bitstream_version 2 TOC tail: one presentation, one substream group, frame_rate_index 3, fs_index 1 */
+static void ac4_put_v1_presentation(bitwriter_t *bw, unsigned mode_code, int mode_bits, unsigned flags, int flags_bits, int channel_coded, int add_ch_base) {
+  bitwriter_put(bw, 0, 1);  /* b_program_id */
+  bitwriter_put(bw, 1, 1);  /* b_single_substream_group */
+  bitwriter_put(bw, 0, 1);  /* presentation_version() */
+  bitwriter_put(bw, 0, 3);  /* md_compat */
+  bitwriter_put(bw, 0, 1);  /* b_presentation_id */
+  bitwriter_put(bw, 0, 1);  /* b_multiplier */
+  bitwriter_put(bw, 0, 10); /* emdf_info without payloads or protection bytes */
+  bitwriter_put(bw, 0, 1);  /* b_presentation_filter */
+  bitwriter_put(bw, 0, 3);  /* group_index */
+  bitwriter_put(bw, 0, 1);  /* b_pre_virtualized */
+  bitwriter_put(bw, 0, 1);  /* b_add_emdf_substreams */
+  bitwriter_put(bw, 0, 4);  /* ac4_presentation_substream_info() */
+  bitwriter_put(bw, 1, 1);  /* b_substreams_present */
+  bitwriter_put(bw, 0, 1);  /* b_hsf_ext */
+  bitwriter_put(bw, 1, 1);  /* b_single_substream */
+  bitwriter_put(bw, (unsigned)channel_coded, 1);
+  if (!channel_coded) return;
+  bitwriter_put(bw, mode_code, mode_bits);
+  if (flags_bits) bitwriter_put(bw, flags, flags_bits);
+  bitwriter_put(bw, 0, 1);  /* b_sf_multiplier */
+  bitwriter_put(bw, 0, 1);  /* b_bitrate_info */
+  if (add_ch_base) bitwriter_put(bw, 0, 1);
+  bitwriter_put(bw, 0, 1);  /* b_audio_ndot */
+  bitwriter_put(bw, 0, 2);  /* substream_index */
+  bitwriter_put(bw, 0, 1);  /* b_content_type */
+}
+
+static size_t ac4_v2_frame(unsigned char *d, size_t cap, unsigned mode_code, int mode_bits, unsigned flags, int flags_bits, int channel_coded, int add_ch_base) {
+  bitwriter_t bw;
+  bitwriter_init(&bw);
+  ac4_put_toc_head(&bw, 2, 0);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 0, 1);
+  ac4_put_v1_presentation(&bw, mode_code, mode_bits, flags, flags_bits, channel_coded, add_ch_base);
+  return finish_ac4_frame(&bw, d, cap);
+}
+
+typedef struct {
+  const char *name;
+  unsigned mode_code;
+  int mode_bits;
+  unsigned flags;
+  int flags_bits;
+  int add_ch_base;
+  unsigned value;
+  unsigned ch;
+} ac4_v2_case_t;
+
+/* flags: b_4_back_channels_present, b_centre_present, top_channels_present (2 bits). values: TS 103 190-2 table A.27, Dolby examples */
+static const ac4_v2_case_t ac4_v2_cases[] = {
+  {"mono", 0x0, 1, 0, 0, 0, 0x000002, 1},
+  {"stereo", 0x2, 2, 0, 0, 0, 0x000001, 2},
+  {"3.0", 0xC, 4, 0, 0, 0, 0x000003, 3},
+  {"5.0", 0xD, 4, 0, 0, 0, 0x000007, 5},
+  {"5.1", 0xE, 4, 0, 0, 0, 0x000047, 6},
+  {"7.0 3/4/0", 0x78, 7, 0, 0, 0, 0x00000F, 7},
+  {"7.1 3/4/0.1", 0x79, 7, 0, 0, 0, 0x00004F, 8},
+  {"7.0 5/2/0", 0x7A, 7, 0, 0, 1, 0x020007, 7},
+  {"7.1 5/2/0.1", 0x7B, 7, 0, 0, 1, 0x020047, 8},
+  {"7.0 3/2/2", 0x7C, 7, 0, 0, 1, 0x000017, 7},
+  {"7.1 3/2/2.1", 0x7D, 7, 0, 0, 1, 0x000057, 8},
+  {"5.1.2", 0xFD, 8, 0x5, 4, 0, 0x0000C7, 8},
+  {"5.1.4", 0xFD, 8, 0x7, 4, 0, 0x000077, 10},
+  {"7.1.2", 0xFD, 8, 0xD, 4, 0, 0x0000CF, 10},
+  {"7.1.4", 0xFD, 8, 0xF, 4, 0, 0x00007F, 12},
+  {"7.0.4", 0xFC, 8, 0xF, 4, 0, 0x00003F, 11},
+};
+
 static const unsigned ac4_variable_values[] = {0, 1, 3, 5, 9};
+
+START_TEST(ac4_v2_channel_modes_map_to_dolby_2015_speaker_groups) {
+  const ac4_v2_case_t *c = &ac4_v2_cases[_i];
+  unsigned char d[96];
+  esc_track_t t;
+  esc_frame_t f;
+  size_t len = ac4_v2_frame(d, sizeof d, c->mode_code, c->mode_bits, c->flags, c->flags_bits, 1, c->add_ch_base);
+
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AC4;
+  ck_assert_int_eq(next_frame(&t, d, len, &f), 0);
+  ck_assert_msg(f.chcfg_scheme == ESC_CHCFG_DOLBY_2015, "%s scheme %d", c->name, (int)f.chcfg_scheme);
+  ck_assert_msg(f.chcfg_value == c->value, "%s value %06X want %06X", c->name, f.chcfg_value, c->value);
+  ck_assert_msg(f.ch == c->ch, "%s channels %u want %u", c->name, f.ch, c->ch);
+}
+END_TEST
+
+START_TEST(ac4_v2_object_based_group_is_flagged_in_bit_23) {
+  unsigned char d[96];
+  esc_track_t t;
+  esc_frame_t f;
+  size_t len = ac4_v2_frame(d, sizeof d, 0, 0, 0, 0, 0, 0);
+
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AC4;
+  ck_assert_int_eq(next_frame(&t, d, len, &f), 0);
+  ck_assert_int_eq(f.chcfg_scheme, ESC_CHCFG_DOLBY_2015);
+  ck_assert_uint_eq(f.chcfg_value, 0x800000u);
+}
+END_TEST
+
+START_TEST(ac4_v0_streams_use_the_dolby_2011_location_masks) {
+  static const struct {
+    unsigned code;
+    int bits;
+    unsigned value;
+  } cases[] = {{0x0, 1, 0x4000}, {0x2, 2, 0xA000}, {0xD, 4, 0xF800}, {0xE, 4, 0xF802}, {0x78, 7, 0xFA00}, {0x79, 7, 0xFA02}, {0x7A, 7, 0xF820}, {0x7B, 7, 0xF822}, {0x7C, 7, 0xF810}, {0x7D, 7, 0xF812}};
+  bitwriter_t bw;
+  unsigned char d[64];
+  esc_track_t t;
+  esc_frame_t f;
+  size_t len;
+
+  bitwriter_init(&bw);
+  ac4_put_toc_head(&bw, 0, 0);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 1, 1);  /* b_single_substream */
+  bitwriter_put(&bw, 0, 1);  /* presentation_version() */
+  bitwriter_put(&bw, 0, 3);  /* md_compat */
+  bitwriter_put(&bw, 0, 1);  /* b_presentation_id */
+  bitwriter_put(&bw, 0, 1);  /* b_multiplier */
+  bitwriter_put(&bw, 0, 10); /* emdf_info */
+  bitwriter_put(&bw, cases[_i].code, cases[_i].bits);
+  len = finish_ac4_frame(&bw, d, sizeof d);
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AC4;
+  ck_assert_int_eq(next_frame(&t, d, len, &f), 0);
+  ck_assert_int_eq(f.chcfg_scheme, ESC_CHCFG_DOLBY_2011);
+  ck_assert_uint_eq(f.chcfg_value, cases[_i].value);
+}
+END_TEST
+
+START_TEST(ac4_v1_streams_with_a_v0_presentation_use_speaker_groups) {
+  bitwriter_t bw;
+  unsigned char d[64];
+  esc_track_t t;
+  esc_frame_t f;
+  size_t len;
+
+  bitwriter_init(&bw);
+  ac4_put_toc_head(&bw, 1, 0);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 0, 3);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 0, 10);
+  bitwriter_put(&bw, 0xE, 4);
+  len = finish_ac4_frame(&bw, d, sizeof d);
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AC4;
+  ck_assert_int_eq(next_frame(&t, d, len, &f), 0);
+  ck_assert_int_eq(f.chcfg_scheme, ESC_CHCFG_DOLBY_2015);
+  ck_assert_uint_eq(f.chcfg_value, 0x47u);
+}
+END_TEST
+
+START_TEST(ac3_and_eac3_report_dolby_2011_channel_locations) {
+  static const struct {
+    unsigned acmod;
+    unsigned lfe;
+    unsigned value;
+  } cases[] = {{0, 0, 0xA000}, {1, 0, 0x4000}, {2, 0, 0xA000}, {3, 0, 0xE000}, {4, 0, 0xA100}, {5, 1, 0xE101}, {6, 0, 0xB800}, {7, 1, 0xF801}, {7, 0, 0xF800}};
+  unsigned char d[128];
+  esc_track_t t;
+  esc_frame_t f;
+
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+    memset(&t, 0, sizeof t);
+    memset(d, 0, sizeof d);
+    d[0] = 0x0B;
+    d[1] = 0x77;
+    d[5] = 8 << 3;
+    d[6] = (unsigned char)(cases[i].acmod << 5);
+    {
+      unsigned nbits = 3; /* acmod, then optional cmixlev, surmixlev, dsurmod, then lfeon */
+      if ((cases[i].acmod & 1) && cases[i].acmod != 1) nbits += 2;
+      if (cases[i].acmod & 4) nbits += 2;
+      if (cases[i].acmod == 2) nbits += 2;
+      d[6] |= (unsigned char)(cases[i].lfe << (7 - nbits));
+    }
+    t.codec = CODEC_AC3;
+    ck_assert_int_eq(next_frame(&t, d, sizeof d, &f), 0);
+    ck_assert_uint_eq(f.acmod, cases[i].acmod);
+    ck_assert_uint_eq(f.lfeon, cases[i].lfe);
+    ck_assert_int_eq(f.chcfg_scheme, ESC_CHCFG_DOLBY_2011);
+    ck_assert_msg(f.chcfg_value == cases[i].value, "ac3 acmod %u lfe %u: %04X", cases[i].acmod, cases[i].lfe, f.chcfg_value);
+
+    memset(d, 0, sizeof d);
+    d[0] = 0x0B;
+    d[1] = 0x77;
+    d[3] = 63;
+    d[4] = (unsigned char)(0x30 | (cases[i].acmod << 1) | cases[i].lfe);
+    d[5] = 16 << 3;
+    t.codec = CODEC_EAC3;
+    ck_assert_int_eq(next_frame(&t, d, sizeof d, &f), 0);
+    ck_assert_int_eq(f.chcfg_scheme, ESC_CHCFG_DOLBY_2011);
+    ck_assert_msg(f.chcfg_value == cases[i].value, "eac3 acmod %u lfe %u: %04X", cases[i].acmod, cases[i].lfe, f.chcfg_value);
+  }
+}
+END_TEST
+
+static size_t dts_core_frame(unsigned char *d, size_t cap, unsigned amode, unsigned lff) {
+  bitwriter_t bw;
+  const unsigned char *p;
+  size_t plen;
+  bitwriter_init(&bw);
+  bitwriter_put(&bw, 0x7FFE8001u, 32);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 31, 5);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 15, 7);
+  bitwriter_put(&bw, 96, 14);
+  bitwriter_put(&bw, amode, 6);
+  bitwriter_put(&bw, 13, 4);
+  bitwriter_put(&bw, 0, 15);
+  bitwriter_put(&bw, lff, 2);
+  p = bitwriter_data(&bw, &plen);
+  ck_assert_uint_le(97, cap);
+  memset(d, 0, 97);
+  memcpy(d, p, plen);
+  bitwriter_free(&bw);
+  return 97;
+}
+
+START_TEST(dts_core_reports_total_channels_including_lfe) {
+  static const struct {
+    unsigned amode;
+    unsigned lff;
+    unsigned total;
+  } cases[] = {{0, 0, 1}, {2, 0, 2}, {9, 0, 5}, {9, 1, 6}, {9, 2, 6}, {12, 1, 7}, {15, 1, 9}};
+  unsigned char d[128];
+  esc_track_t t;
+  esc_frame_t f;
+  size_t len = dts_core_frame(d, sizeof d, cases[_i].amode, cases[_i].lff);
+
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_DTS;
+  ck_assert_int_eq(next_frame(&t, d, len, &f), 0);
+  ck_assert_int_eq(f.chcfg_scheme, ESC_CHCFG_DTS_2012);
+  ck_assert_uint_eq(f.chcfg_value, cases[_i].total);
+}
+END_TEST
+
+START_TEST(dts_extension_asset_overrides_the_core_channel_count) {
+  bitwriter_t bw;
+  const unsigned char *p;
+  size_t plen;
+  unsigned char d[160];
+  esc_track_t t;
+  esc_frame_t f;
+  size_t core = dts_core_frame(d, sizeof d, 9, 1);
+
+  bitwriter_init(&bw);
+  bitwriter_put(&bw, 0x64582025u, 32);
+  bitwriter_put(&bw, 0, 8);
+  bitwriter_put(&bw, 0, 2);  /* nExtSSIndex */
+  bitwriter_put(&bw, 0, 1);  /* short header */
+  bitwriter_put(&bw, 20, 8);
+  bitwriter_put(&bw, 39, 16);
+  bitwriter_put(&bw, 1, 1);  /* bStaticFieldsPresent */
+  bitwriter_put(&bw, 0, 2);
+  bitwriter_put(&bw, 0, 3);
+  bitwriter_put(&bw, 0, 1);  /* bTimeStampFlag */
+  bitwriter_put(&bw, 0, 3);
+  bitwriter_put(&bw, 0, 3);
+  bitwriter_put(&bw, 1, 1);  /* nuActiveExSSMask[0] */
+  bitwriter_put(&bw, 1, 8);  /* nuActiveAssetMask */
+  bitwriter_put(&bw, 0, 1);  /* bMixMetadataEnbl */
+  bitwriter_put(&bw, 20, 16);
+  bitwriter_put(&bw, 10, 9);
+  bitwriter_put(&bw, 0, 3);   /* nuAssetIndex */
+  bitwriter_put(&bw, 0, 1);   /* bAssetTypeDescrPresent */
+  bitwriter_put(&bw, 0, 1);   /* bLanguageDescrPresent */
+  bitwriter_put(&bw, 0, 1);   /* bInfoTextPresent */
+  bitwriter_put(&bw, 23, 5);
+  bitwriter_put(&bw, 9, 4);   /* nuMaxSampleRate */
+  bitwriter_put(&bw, 7, 8);
+  p = bitwriter_data(&bw, &plen);
+  ck_assert_uint_le(core + 40, sizeof d);
+  memset(d + core, 0, 40);
+  memcpy(d + core, p, plen);
+  bitwriter_free(&bw);
+
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_DTS_HD_MA;
+  ck_assert_int_eq(next_frame(&t, d, core + 40, &f), 0);
+  ck_assert_uint_eq(f.consumed, core + 40);
+  ck_assert_int_eq(f.chcfg_scheme, ESC_CHCFG_DTS_2012);
+  ck_assert_uint_eq(f.chcfg_value, 8u);
+}
+END_TEST
+
+START_TEST(truehd_arrangements_map_to_cicp_when_a_layout_exists) {
+  static const struct {
+    unsigned chanmap;
+    unsigned cicp;
+  } cases[] = {{0x1, 2}, {0x3, 3}, {0xF, 6}, {0x2F, 12}, {0x2, 1}, {0x13, 0}, {0x4, 0}};
+  unsigned char d[22] = {0x00, 0x0B, 0x00, 0x00, 0xF8, 0x72, 0x6F, 0xBA, 0x00, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x40, 0x81};
+  esc_track_t t;
+  esc_frame_t f;
+
+  d[10] = (unsigned char)(cases[_i].chanmap >> 8);
+  d[11] = (unsigned char)cases[_i].chanmap;
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_TRUEHD;
+  ck_assert_int_eq(next_frame(&t, d, sizeof d, &f), 0);
+  if (cases[_i].cicp) {
+    ck_assert_int_eq(f.chcfg_scheme, ESC_CHCFG_CICP);
+    ck_assert_uint_eq(f.chcfg_value, cases[_i].cicp);
+  } else {
+    ck_assert_int_eq(f.chcfg_scheme, ESC_CHCFG_NONE);
+  }
+}
+END_TEST
 
 START_TEST(ac4_bitstream_version_three_adds_variable_bits) {
   bitwriter_t bw;
@@ -474,7 +828,7 @@ START_TEST(ac4_bitstream_version_three_adds_variable_bits) {
   ac4_put_toc_head(&bw, 3, ac4_variable_values[_i]);
   bitwriter_put(&bw, 1, 1);
   bitwriter_put(&bw, 0, 1);
-  ac4_put_single_substream_stereo_presentation(&bw);
+  ac4_put_v1_presentation(&bw, 0x2, 2, 0, 0, 1, 0);
   len = finish_ac4_frame(&bw, d, sizeof d);
   memset(&t, 0, sizeof t);
   memset(&f, 0, sizeof f);
@@ -1067,8 +1421,17 @@ static Suite *audio_suite(void) {
   tcase_add_test(tc, ac4_5_1_reports_six_channels);
   tcase_add_test(tc, ac4_frame_needs_more_data_when_truncated);
   tcase_add_test(tc, ac4_frame_rejects_bad_sync);
+  tcase_add_loop_test(tc, ac4_v2_channel_modes_map_to_dolby_2015_speaker_groups, 0, (int)(sizeof ac4_v2_cases / sizeof ac4_v2_cases[0]));
+  tcase_add_test(tc, ac4_v2_object_based_group_is_flagged_in_bit_23);
+  tcase_add_loop_test(tc, ac4_v0_streams_use_the_dolby_2011_location_masks, 0, 10);
+  tcase_add_test(tc, ac4_v1_streams_with_a_v0_presentation_use_speaker_groups);
+  tcase_add_test(tc, ac3_and_eac3_report_dolby_2011_channel_locations);
+  tcase_add_loop_test(tc, dts_core_reports_total_channels_including_lfe, 0, 7);
+  tcase_add_test(tc, dts_extension_asset_overrides_the_core_channel_count);
+  tcase_add_loop_test(tc, truehd_arrangements_map_to_cicp_when_a_layout_exists, 0, 7);
   tcase_add_loop_test(tc, opus_toc_cases, 0, (int)(sizeof opus_cases / sizeof opus_cases[0]));
   tcase_add_test(tc, opus_head_is_built_once);
+  tcase_add_loop_test(tc, opus_ts_control_header_is_stripped, 0, 9);
   tcase_add_loop_test(tc, ac4_bitstream_version_three_adds_variable_bits, 0, (int)(sizeof ac4_variable_values / sizeof ac4_variable_values[0]));
   tcase_add_loop_test(tc, ac4_multiple_presentations_count_uses_variable_bits, 0, (int)(sizeof ac4_variable_values / sizeof ac4_variable_values[0]));
   tcase_add_loop_test(tc, ac4_payload_base_escape_consumes_variable_bits, 0, (int)(sizeof ac4_variable_values / sizeof ac4_variable_values[0]));

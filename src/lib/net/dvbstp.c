@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <time.h>
 
 #include "../demux/crc32.h"
@@ -55,22 +56,25 @@ int dvbstp_send_segment(mcast_t *m, const dvbstp_send_t *seg, const unsigned cha
   size_t i;
   unsigned last_section;
   uint32_t crc = 0;
+  long gap_ns = SECTION_GAP_NS;
+  size_t maxsec = mcast_family(m) == AF_INET6 ? DVBSTP_MAX_SECTION_V6 : DVBSTP_MAX_SECTION;
 
-  nsections = len ? (len + DVBSTP_MAX_SECTION - 1) / DVBSTP_MAX_SECTION : 1;
+  nsections = len ? (len + maxsec - 1) / maxsec : 1;
   if (nsections > 4096 || len > DVBSTP_MAX_SEGMENT) return -1; /* section_number is 12 bit */
 
   last_section = (unsigned)(nsections - 1);
+  if (seg->pacing_budget_ns > 0 && seg->pacing_budget_ns / (int64_t)nsections < gap_ns) gap_ns = (long)(seg->pacing_budget_ns / (int64_t)nsections);
   if (seg->want_crc) crc = crc32_mpeg(data, len);
 
   for (i = 0; i < nsections; i++) {
     unsigned char pkt[16 + DVBSTP_MAX_SECTION + 4];
-    size_t off = i * DVBSTP_MAX_SECTION;
+    size_t off = i * maxsec;
     size_t seclen = len - off;
     size_t hpos;
     int is_last = (i == last_section);
     int crc_here = seg->want_crc && is_last;
 
-    if (seclen > DVBSTP_MAX_SECTION) seclen = DVBSTP_MAX_SECTION;
+    if (seclen > maxsec) seclen = maxsec;
 
     pkt[0] = (unsigned char)(crc_here ? 0x01 : 0x00);
     pkt[1] = (unsigned char)((len >> 16) & 0xFF);
@@ -102,7 +106,7 @@ int dvbstp_send_segment(mcast_t *m, const dvbstp_send_t *seg, const unsigned cha
     }
     if (mcast_send(m, pkt, hpos) < 0) return -1;
     if (!is_last) {
-      struct timespec gap = {0, SECTION_GAP_NS};
+      struct timespec gap = {0, gap_ns};
       nanosleep(&gap, NULL);
     }
   }
@@ -217,7 +221,7 @@ int dvbstp_reasm_feed(dvbstp_reasm_t *r, const unsigned char *pkt, size_t len, d
     }
     paylen -= 4;
   }
-  if (paylen > DVBSTP_MAX_SECTION) {
+  if (paylen > DVBSTP_MAX_RX_SECTION) {
     log_malformed_once(r, "oversized section");
     return 0;
   }

@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <arpa/inet.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -33,7 +34,9 @@ static unsigned fcc_resolve_port(const sds_service_t *s, const sds_fcc_t *fcc) {
 }
 
 void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec) {
-  fprintf(f, "<SingleService><ServiceLocation><IPMulticastAddress Address=\"%s\" Port=\"%u\" Streaming=\"%s\"", s->address, s->port, s->rtp ? "rtp" : "udp");
+  fputs("<SingleService><ServiceLocation><IPMulticastAddress Address=\"", f);
+  xml_escape(f, s->address);
+  fprintf(f, "\" Port=\"%u\" Streaming=\"%s\"", s->port, s->rtp ? "rtp" : "udp");
   if (s->source[0]) {
     fputs(" Source=\"", f);
     xml_escape(f, s->source);
@@ -42,23 +45,32 @@ void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, c
   if (ret || fcc || fec) {
     fputs(">", f);
     if (fec) {
-      fprintf(f, "<FECBaseLayer Address=\"%s\" Port=\"%u\"", fec->addr, fec->port);
+      fputs("<FECBaseLayer Address=\"", f);
+      xml_escape(f, fec->addr);
+      fprintf(f, "\" Port=\"%u\"", fec->port);
       if (fec->pt != 96) fprintf(f, " PayloadTypeNumber=\"%u\"", fec->pt);
       fputs("/>", f);
     }
     if (ret) {
-      fprintf(f, "<RTPRetransmission><RTCPReporting DestinationAddress=\"%s\" DestinationPort=\"%u\"", ret->addr, ret->port);
+      fputs("<RTPRetransmission><RTCPReporting DestinationAddress=\"", f);
+      xml_escape(f, ret->addr);
+      fprintf(f, "\" DestinationPort=\"%u\"", ret->port);
       if (ret->rsi_mc_ret) fputs(" dvb-rsi-mc-ret=\"true\"", f);
       fputs("/>", f);
       fprintf(f, "<UnicastRET rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", ret->rtx_time_ms, ret->rtx_pt);
-      if (ret->mc)
-        fprintf(f, "<MulticastRET GroupAddress=\"%s\" DestinationPort=\"%u\" rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", s->address, ret->mc_port ? ret->mc_port : s->port, ret->rtx_time_ms, ret->rtx_pt);
+      if (ret->mc) {
+        fputs("<MulticastRET GroupAddress=\"", f);
+        xml_escape(f, s->address);
+        fprintf(f, "\" DestinationPort=\"%u\" rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", ret->mc_port ? ret->mc_port : s->port, ret->rtx_time_ms, ret->rtx_pt);
+      }
       fputs("</RTPRetransmission>", f);
     }
     if (fcc) {
       unsigned port = fcc->resolve_by_port ? fcc_resolve_port(s, fcc) : fcc->port;
       fputs("<ServerBasedEnhancementServiceInfo><EnhancementService>FCC</EnhancementService>", f);
-      fprintf(f, "<RTCPReporting DestinationAddress=\"%s\" DestinationPort=\"%u\"/>", fcc->addr, port);
+      fputs("<RTCPReporting DestinationAddress=\"", f);
+      xml_escape(f, fcc->addr);
+      fprintf(f, "\" DestinationPort=\"%u\"/>", port);
       fprintf(f, "<Retransmission_session DestinationPort=\"%u\" rtx-time=\"%u\" RTPPayloadTypeNumber=\"%u\"/>", port, fcc->rtx_time_ms, fcc->rtx_pt);
       fputs("</ServerBasedEnhancementServiceInfo>", f);
     }
@@ -75,7 +87,7 @@ void sds_broadcast_close(FILE *f) {
   fputs("</ServiceList>\n</BroadcastDiscovery>\n</ServiceDiscovery>\n", f);
 }
 
-size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned char *buf, size_t cap) {
+size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned char **out) {
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
@@ -84,17 +96,15 @@ size_t sds_build_broadcast(const char *domain, unsigned version, const sds_servi
   for (int i = 0; i < count; i++)
     sds_broadcast_item(f, &svcs[i], ret, fcc, fec);
   sds_broadcast_close(f);
-  fclose(f);
-  if (len > cap) {
+  if (fclose(f)) {
     free(ptr);
     return 0;
   }
-  memcpy(buf, ptr, len);
-  free(ptr);
+  *out = (unsigned char *)ptr;
   return len;
 }
 
-size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, const unsigned *extra_payload_ids, int extra_count, unsigned char *buf, size_t cap) {
+size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, const unsigned *extra_payload_ids, int extra_count, unsigned char **out) {
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
@@ -106,13 +116,11 @@ size_t sds_build_sp(const char *domain, const char *display_name, const char *la
   fprintf(f, "</Name>\n<Offering><Push Address=\"%s\" Port=\"%u\"><PayloadId Id=\"2\"/>", push_addr, push_port);
   for (int i = 0; i < extra_count; i++) fprintf(f, "<PayloadId Id=\"%u\"/>", extra_payload_ids[i]);
   fputs("</Push></Offering>\n</ServiceProvider>\n</ServiceProviderDiscovery>\n</ServiceDiscovery>\n", f);
-  fclose(f);
-  if (len > cap) {
+  if (fclose(f)) {
     free(ptr);
     return 0;
   }
-  memcpy(buf, ptr, len);
-  free(ptr);
+  *out = (unsigned char *)ptr;
   return len;
 }
 
@@ -148,7 +156,7 @@ void sds_package_close(FILE *f) {
   fputs("</PackageDiscovery>\n</ServiceDiscovery>\n", f);
 }
 
-size_t sds_build_package(const char *domain, unsigned version, const sds_package_t *pkgs, int pkg_count, const sds_service_t *svcs, int svc_count, unsigned char *buf, size_t cap) {
+size_t sds_build_package(const char *domain, unsigned version, const sds_package_t *pkgs, int pkg_count, const sds_service_t *svcs, int svc_count, unsigned char **out) {
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
@@ -156,13 +164,11 @@ size_t sds_build_package(const char *domain, unsigned version, const sds_package
   sds_package_open(f, domain, version);
   for (int i = 0; i < pkg_count; i++) sds_package_item(f, &pkgs[i], svcs, svc_count);
   sds_package_close(f);
-  fclose(f);
-  if (len > cap) {
+  if (fclose(f)) {
     free(ptr);
     return 0;
   }
-  memcpy(buf, ptr, len);
-  free(ptr);
+  *out = (unsigned char *)ptr;
   return len;
 }
 
@@ -191,7 +197,7 @@ void sds_regionalisation_close(FILE *f) {
   fputs("</RegionalisationDiscovery>\n</ServiceDiscovery>\n", f);
 }
 
-size_t sds_build_regionalisation(const char *domain, unsigned version, const sds_cell_t *cells, int count, unsigned char *buf, size_t cap) {
+size_t sds_build_regionalisation(const char *domain, unsigned version, const sds_cell_t *cells, int count, unsigned char **out) {
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
@@ -199,17 +205,15 @@ size_t sds_build_regionalisation(const char *domain, unsigned version, const sds
   sds_regionalisation_open(f, domain, version);
   for (int i = 0; i < count; i++) sds_regionalisation_item(f, &cells[i]);
   sds_regionalisation_close(f);
-  fclose(f);
-  if (len > cap) {
+  if (fclose(f)) {
     free(ptr);
     return 0;
   }
-  memcpy(buf, ptr, len);
-  free(ptr);
+  *out = (unsigned char *)ptr;
   return len;
 }
 
-size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *rms, int rms_count, const sds_fus_t *fus, int fus_count, unsigned char *buf, size_t cap) {
+size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *rms, int rms_count, const sds_fus_t *fus, int fus_count, unsigned char **out) {
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
@@ -244,13 +248,11 @@ size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *
     fputs("</FUSAnnouncement></FUSProvider>\n", f);
   }
   fputs("</RMSFUSDiscovery>\n</ServiceDiscovery>\n", f);
-  fclose(f);
-  if (len > cap) {
+  if (fclose(f)) {
     free(ptr);
     return 0;
   }
-  memcpy(buf, ptr, len);
-  free(ptr);
+  *out = (unsigned char *)ptr;
   return len;
 }
 

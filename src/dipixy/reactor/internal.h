@@ -6,11 +6,14 @@
 #ifndef DIPIXY_INTERNAL_H
 #define DIPIXY_INTERNAL_H
 
+#include <arpa/inet.h>
 #include <limits.h>
+#include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <time.h>
 
 #include "lib/sys/ioutil.h"
@@ -22,6 +25,7 @@
 #include "../ts/lcevcselect.h"
 #include "../hls/hls.h"
 #include "../core/route.h"
+#include "../core/time_ep.h"
 #include "../ws/ws_clients.h"
 #include "conn.h"
 #include "qsbr.h"
@@ -39,6 +43,8 @@
 extern long g_connections_total;
 extern _Thread_local int t_reactor_tid;
 extern _Thread_local int t_reactor_epfd;
+extern _Thread_local int t_open_replay; /* dispatch re-run after async open */
+extern _Thread_local int t_open_failed; /* that open failed: answer as missing source */
 
 void reactor_conn_flush(int epfd, conn_t *c);
 
@@ -47,9 +53,6 @@ const config_t *reactor_cfg(void);
 const channels_t *reactor_channels(void);
 qsbr_domain_t *reactor_qsbr(void);
 void reactor_set_context(const config_t *cfg, const channels_t *channels, metrics_exporter_t *mx);
-
-/* re-reads every source right now, same as channels_reload_all() from a SIGHUP */
-void reactor_reload_channels(void);
 
 typedef enum {
   RL_ACCEPT = 0,     /* TCP/TLS accept socket */
@@ -87,13 +90,19 @@ metrics_exporter_t *reactor_metrics(void);
 /* reactor.c. tid-0 worker calls this once its listeners are up: log listening ln + trigger on_listening callback */
 void reactor_notify_listening(void);
 
-/* reactor_listen.c */
-void reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid);
-void reactor_teardown_listeners(const reactor_listeners_t *rl, int tid);
+/* reactor_listen.c. 0 ok, -1 if a required TCP listener failed (logged, errno detail) */
+int reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid);
+void reactor_teardown_listeners(const reactor_listeners_t *rl);
 void reactor_raise_nofile_limit(void);
 
 /* reactor_loop.c: worker/pump thread entry points, spawned via pthread_create() from reactor_run() */
 void *worker_thread(void *arg);
+/* reactor_run() only, before spawning workers: n = worker threads expected, incl. tid 0 */
+void reactor_startup_begin(int n);
+/* a worker thread failed to spawn, will not report */
+void reactor_startup_lost(void);
+/* nonzero once any worker failed listener setup */
+int reactor_startup_failed(void);
 void *pump_thread(void *arg);
 void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, struct epoll_event *evp);
 
@@ -106,6 +115,11 @@ int route_disabled(const route_t *rt);
 /* out_list_num: resolved list_num for ROUTE_LIST_ITEM/NAME (direct or via src_name), NULL ok */
 capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num);
 
+typedef enum { OPEN_RES_OK, OPEN_RES_FAIL, OPEN_RES_PENDING } open_res_t;
+
+/* open_source() w/o block on join/connect. OK: *out_ctx owned. PENDING: *out_job, park it */
+open_res_t open_source_try(const route_t *rt, unsigned *out_list_num, capture_ctx_t **out_ctx, capture_open_job_t **out_job);
+
 /* caller's stack storage for route_client_info()'s out->item_name/src_proto/src_addr */
 typedef struct {
   char name[128];
@@ -115,8 +129,20 @@ typedef struct {
 
 /* fills *out from rt (post open_source, list_num = its out_list_num) */
 void route_client_info(const route_t *rt, unsigned list_num, const pid_filter_t *filter, unsigned pmt_pid, const char *client_ip, int http_ver, route_item_bufs_t *bufs, client_info_t *out);
-void strip_etag_quotes(char *v);
 int find_header(const struct phr_header *headers, size_t num_headers, const char *name, char *out, size_t outsz);
+
+/* peer IP text. v4-mapped v6 printed as plain v4 */
+static inline void sockaddr_ip_str(const struct sockaddr_storage *sa, char *buf, size_t bufsz) {
+  if (sa->ss_family == AF_INET6) {
+    const struct in6_addr *a6 = &((const struct sockaddr_in6 *)sa)->sin6_addr;
+    if (IN6_IS_ADDR_V4MAPPED(a6))
+      inet_ntop(AF_INET, &a6->s6_addr[12], buf, (socklen_t)bufsz);
+    else
+      inet_ntop(AF_INET6, a6, buf, (socklen_t)bufsz);
+  } else {
+    inet_ntop(AF_INET, &((const struct sockaddr_in *)sa)->sin_addr, buf, (socklen_t)bufsz);
+  }
+}
 
 static inline void hdr_value_copy(char *dst, size_t dst_cap, const uint8_t *value, size_t valuelen) {
   size_t n = valuelen < dst_cap - 1 ? valuelen : dst_cap - 1;
@@ -128,6 +154,13 @@ static inline void hdr_value_copy(char *dst, size_t dst_cap, const uint8_t *valu
 const char *cors_match(const config_t *cfg, const char *origin_hdr, int *vary);
 
 int http_auth_ok(const char *expected, const char *auth_hdr);
+/* credential a h1/h2/h3 path needs: cfg http_auth (ui paths), http_metrics_auth (/metrics), NULL if none or unset */
+const char *special_path_auth(const char *path);
+/* /ui/ws or /ui/ws/ */
+int path_is_ui_ws(const char *path);
+/* browser WS handshake guard: absent Origin ok. else Origin must equal Host, must be an IP, localhost, or a name from dlna.host,
+   cors_origins, ws_allowed_hosts. blocks rebinding */
+int ws_origin_ok(const config_t *cfg, const char *origin, const char *host);
 
 /* dispatch.c. runs each worker loop iteration, resumes CONN_DISPATCH-parked
    LL-HLS blocking-reload waits */
@@ -169,6 +202,7 @@ typedef struct {
   int keep_alive; /* h1 only, unused by h2/h3 */
   char inm[80];    /* h2/h3 only, empty for h1 */
   char origin[128];
+  char utc_url[TIME_EP_URL_MAX]; /* hls-cold HLS_COLD_DASH only */
   uint32_t want_seg;
   int want_part;
   hls_cold_kind_t kind;      /* hls-cold only */
@@ -212,6 +246,7 @@ typedef struct {
   const char *origin_hdr;
   int timeout_ms;
   int ws_handle;
+  const char *utc_url; /* HLS_COLD_DASH only */
 } hls_cold_park_req_t;
 
 static inline int llhls_ready_part(const hls_waiter_t *w) {
@@ -280,6 +315,7 @@ static inline int hls_cold_waiter_pool_try_park(hls_waiter_t *slots, int cap, in
     w->keep_alive = req->keep_alive;
     w->inm[0] = '\0';
     bufcpy(w->origin, sizeof w->origin, req->origin_hdr ? req->origin_hdr : "");
+    bufcpy(w->utc_url, sizeof w->utc_url, req->utc_url ? req->utc_url : "");
     w->deadline_ms = now_ms() + req->timeout_ms;
     w->active = 1;
     w->ws_handle = req->ws_handle;
@@ -319,9 +355,10 @@ void hls_cold_flush_waiters(void);
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees it */
 void hls_cold_waiter_conn_closing(const conn_t *c);
 
-/* ts/spts/rawaudio cold start. no packet yet. h1 only, no h2/h3 push */
+/* ts/spts/rawaudio cold start. no packet yet. stream_id: h2/h3 only, -1 for h1 */
 typedef struct {
   void *owner;
+  int64_t stream_id;
   int active;
   int64_t deadline_ms;
   capture_ctx_t *cap_ctx;
@@ -348,8 +385,128 @@ typedef struct {
   int timeout_ms;
 } ts_cold_park_req_t;
 
+typedef void (*ts_cold_finish_fn)(ts_cold_waiter_t *w);
+
+/* 1 parked (caller stops touching conn/stream), 0 table full */
+static inline int ts_cold_waiter_pool_try_park(ts_cold_waiter_t *slots, int cap, int *active_count, void *owner, int64_t stream_id, const ts_cold_park_req_t *req) {
+  for (int i = 0; i < cap; i++) {
+    ts_cold_waiter_t *w = &slots[i];
+    if (w->active) continue;
+    w->owner = owner;
+    w->stream_id = stream_id;
+    w->cap_ctx = req->cap_ctx;
+    w->rt = *req->rt;
+    w->list_num = req->list_num;
+    w->filter = *req->filter;
+    w->tp_pmt_pid = req->tp_pmt_pid;
+    w->lcevc = *req->lcevc;
+    w->spts = req->spts;
+    w->rawaudio = req->rawaudio;
+    w->keep_alive = req->keep_alive;
+    w->deadline_ms = now_ms() + req->timeout_ms;
+    w->active = 1;
+    (*active_count)++;
+    return 1;
+  }
+  return 0;
+}
+
+/* waiter owns a cap_ctx ref: released here. stream_id < 0: owner only, else owner + exact stream */
+static inline void ts_cold_waiter_pool_close_owner(ts_cold_waiter_t *slots, int cap, int *active_count, const void *owner, int64_t stream_id) {
+  for (int i = 0; i < cap; i++) {
+    if (slots[i].active && slots[i].owner == owner && (stream_id < 0 || slots[i].stream_id == stream_id)) {
+      capture_close(slots[i].cap_ctx);
+      slots[i].active = 0;
+      (*active_count)--;
+    }
+  }
+}
+
+/* ready or timed out: finish() takes over the cap_ctx ref */
+static inline void ts_cold_waiter_pool_flush(ts_cold_waiter_t *slots, int cap, int *active_count, ts_cold_finish_fn finish) {
+  int64_t now;
+  if (*active_count <= 0) return;
+  now = now_ms();
+  for (int i = 0; i < cap; i++) {
+    ts_cold_waiter_t *w = &slots[i];
+    if (!w->active) continue;
+    if (now < w->deadline_ms && !capture_ctx_bytes(w->cap_ctx)) continue;
+    w->active = 0;
+    (*active_count)--;
+    finish(w);
+  }
+}
+
 /* dispatch.c. runs on worker loop iteration, resume ts/spts/rawaudio cold start waits */
 void ts_cold_flush_waiters(void);
+
+/* request parked until its capture open finishes, then dispatched again. stream_id: h2/h3 only, -1 for h1 */
+typedef struct {
+  void *owner;
+  int64_t stream_id;
+  int active;
+  capture_open_job_t *job;
+} open_waiter_t;
+
+/* ctx: owned ref, NULL when open failed */
+typedef void (*open_resume_fn)(open_waiter_t *w, capture_ctx_t *ctx);
+
+static inline void open_replay_begin(const capture_ctx_t *ctx) {
+  t_open_replay = 1;
+  t_open_failed = ctx == NULL;
+}
+
+static inline void open_replay_end(capture_ctx_t *ctx) {
+  t_open_replay = 0;
+  t_open_failed = 0;
+  capture_close(ctx);
+}
+
+/* 1 parked, owns job. 0 table full */
+static inline int open_waiter_pool_try_park(open_waiter_t *slots, int cap, int *active_count, void *owner, int64_t stream_id, capture_open_job_t *job) {
+  for (int i = 0; i < cap; i++) {
+    open_waiter_t *w = &slots[i];
+    if (w->active) continue;
+    w->owner = owner;
+    w->stream_id = stream_id;
+    w->job = job;
+    w->active = 1;
+    (*active_count)++;
+    return 1;
+  }
+  return 0;
+}
+
+/* stream_id < 0: owner only, else owner + exact stream */
+static inline void open_waiter_pool_close_owner(open_waiter_t *slots, int cap, int *active_count, const void *owner, int64_t stream_id) {
+  for (int i = 0; i < cap; i++) {
+    if (slots[i].active && slots[i].owner == owner && (stream_id < 0 || slots[i].stream_id == stream_id)) {
+      capture_open_job_cancel(slots[i].job);
+      slots[i].active = 0;
+      (*active_count)--;
+    }
+  }
+}
+
+static inline void open_waiter_pool_flush(open_waiter_t *slots, int cap, int *active_count, open_resume_fn resume) {
+  if (*active_count <= 0) return;
+  for (int i = 0; i < cap; i++) {
+    open_waiter_t *w = &slots[i];
+    if (!w->active || !capture_open_job_done(w->job)) continue;
+    w->active = 0;
+    (*active_count)--;
+    resume(w, capture_open_job_take(w->job));
+  }
+}
+
+/* dispatch.c. 1 parked, 0 table full */
+int open_try_park(conn_t *c, capture_open_job_t *job);
+
+/* dispatch.c. runs on worker loop iteration, re-dispatches requests whose open finished */
+void open_flush_waiters(void);
+
+/* dispatch.c. cancels c's pending open, call before reactor_close() frees it */
+void open_waiter_conn_closing(const conn_t *c);
 
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees */
 void ts_cold_waiter_conn_closing(const conn_t *c);
@@ -357,6 +514,7 @@ void ts_cold_waiter_conn_closing(const conn_t *c);
 /* handshake.c: TLS handshake + accept */
 void reactor_handshake(int epfd, conn_t *c);
 void reactor_accept(int epfd, reactor_listener *L);
+void reactor_accept_fini(void);
 
 typedef void (*reactor_push_close_fn)(int epfd, conn_t *c);
 typedef void (*reactor_push_flush_fn)(int epfd, conn_t *c);

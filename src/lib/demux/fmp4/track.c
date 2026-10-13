@@ -157,9 +157,9 @@ void fmp4_parse_dec3(const unsigned char *p, const unsigned char *end, fmp4_stsd
   if (end - p < 4) return;
   out->ac3_bitrate_code = (fmp4_rb_u16(p) >> 3) & 0x1FFF;
   out->ac3_bsid = (unsigned char)((p[2] >> 1) & 0x1F);
-  out->ac3_bsmod = (unsigned char)((p[3] >> 5) & 0x7);
-  out->ac3_acmod = (unsigned char)((p[3] >> 2) & 0x7);
-  out->ac3_lfeon = (unsigned char)((p[3] >> 1) & 0x1);
+  out->ac3_bsmod = (unsigned char)((p[3] >> 4) & 0x7);
+  out->ac3_acmod = (unsigned char)((p[3] >> 1) & 0x7);
+  out->ac3_lfeon = (unsigned char)(p[3] & 0x1);
 }
 
 void fmp4_parse_dops(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {

@@ -59,6 +59,11 @@ int playlist_query_has_flag(const char *query, const char *name) {
   return 0;
 }
 
+const char *playlist_mime(const char *query, playlist_type_t ptype) {
+  if (playlist_query_has_flag(query, "plain")) return "text/plain; charset=utf-8";
+  return ptype == PLAYLIST_M3U ? "audio/x-mpegurl" : "application/xspf+xml";
+}
+
 static const char *fmt_str(route_fmt_t fmt) {
   switch (fmt) {
     case ROUTE_FMT_TS:       return "ts";
@@ -72,21 +77,6 @@ static const char *fmt_str(route_fmt_t fmt) {
     case ROUTE_FMT_MP4:      return "mp4";
   }
   return "ts";
-}
-
-static void pct_encode_seg(const char *s, char *out, size_t outcap) {
-  static const char *unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-  size_t oi = 0;
-  for (; *s && oi + 1 < outcap; s++) {
-    if (strchr(unreserved, *s)) {
-      out[oi++] = *s;
-    } else {
-      if (oi + 4 > outcap) break;
-      snprintf(out + oi, 4, "%%%02X", (unsigned char)*s);
-      oi += 3;
-    }
-  }
-  out[oi] = '\0';
 }
 
 static int has_port_suffix(const char *h) {

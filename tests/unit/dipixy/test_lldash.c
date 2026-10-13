@@ -43,11 +43,18 @@ static hls_store_t *open_store(unsigned pmt, seg_container_t container, int ll) 
   return hls_store_find(CTX, &f, pmt, &full, container);
 }
 
-static int subscribe(unsigned pmt, const char *name, conn_proto_t proto) {
+static int subscribe_detached(unsigned pmt, const char *name, conn_proto_t proto) {
   pid_filter_t f;
 
   no_filter(&f);
   return dash_lldash_subscribe(CTX, &f, pmt, &full, name, proto);
+}
+
+static int subscribe(unsigned pmt, const char *name, conn_proto_t proto) {
+  int idx = subscribe_detached(pmt, name, proto);
+
+  dash_lldash_sub_attach(idx);
+  return idx;
 }
 
 static void push_part(unsigned pmt) {
@@ -111,6 +118,51 @@ START_TEST(part_reaches_matching_subscriber) {
 }
 END_TEST
 
+START_TEST(attach_replays_parts_pushed_before_attach) {
+  int idx;
+
+  open_store(0, SEG_CONTAINER_FMP4, 1);
+  idx = subscribe_detached(0, SEG_NAME_0, CONN_PROTO_H2);
+  push_part(0);
+  push_part(0);
+  ck_assert_int_eq(dash_lldash_ring_pending(idx), 0);
+  dash_lldash_sub_attach(idx);
+  ck_assert_uint_eq(drain(idx), 2 * sizeof part_data);
+  push_part(0);
+  ck_assert_uint_eq(drain(idx), sizeof part_data);
+  dash_lldash_sub_attach(idx);
+  ck_assert_int_eq(dash_lldash_ring_pending(idx), 0);
+}
+END_TEST
+
+START_TEST(attach_after_segment_done_replays_and_finalizes) {
+  int idx;
+
+  open_store(0, SEG_CONTAINER_FMP4, 1);
+  idx = subscribe_detached(0, SEG_NAME_0, CONN_PROTO_H2);
+  push_part(0);
+  push_part(0);
+  push_segment(0);
+  ck_assert_int_eq(dash_lldash_sub_finalized(idx), 0);
+  dash_lldash_sub_attach(idx);
+  ck_assert_uint_eq(drain(idx), 2 * sizeof part_data);
+  ck_assert_int_eq(dash_lldash_sub_finalized(idx), 1);
+  ck_assert_int_eq(dash_lldash_ring_errored(idx), 0);
+}
+END_TEST
+
+START_TEST(attach_after_store_closing_aborts) {
+  hls_store_t *s = open_store(0, SEG_CONTAINER_FMP4, 1);
+  int idx = subscribe_detached(0, SEG_NAME_0, CONN_PROTO_H2);
+
+  on_store_closing(s);
+  ck_assert_int_eq(dash_lldash_sub_finalized(idx), 0);
+  dash_lldash_sub_attach(idx);
+  ck_assert_int_eq(dash_lldash_sub_finalized(idx), 1);
+  ck_assert_int_eq(dash_lldash_ring_errored(idx), 1);
+}
+END_TEST
+
 START_TEST(part_skips_subscriber_of_other_store) {
   int a;
   int b;
@@ -140,17 +192,45 @@ START_TEST(part_after_segment_done_skips_old_subscriber) {
 }
 END_TEST
 
+START_TEST(track_store_subscriber_gets_track_parts_only) {
+  pid_filter_t f;
+  hls_store_t *vs = open_store(0, SEG_CONTAINER_FMP4_VIDEO, 1);
+  int idx;
+
+  open_store(0, SEG_CONTAINER_FMP4, 1);
+  idx = subscribe(0, "dsegv0.m4s", CONN_PROTO_H2);
+  ck_assert_int_ge(idx, 0);
+  ck_assert_int_eq(chain_head(vs), idx);
+  push_part(0);
+  ck_assert_int_eq(dash_lldash_ring_pending(idx), 0);
+  no_filter(&f);
+  ck_assert_int_eq(hls_push_part(CTX, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO, part_data, sizeof part_data, 0.1, 1), 0);
+  ck_assert_uint_eq(drain(idx), sizeof part_data);
+  ck_assert_int_eq(hls_push_segment_ll(CTX, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO, 0.5), 0);
+  ck_assert_int_eq(dash_lldash_sub_finalized(idx), 1);
+}
+END_TEST
+
+START_TEST(track_subscribe_needs_its_own_store) {
+  open_store(0, SEG_CONTAINER_FMP4, 1);
+  ck_assert_int_eq(subscribe(0, "dsega0.m4s", CONN_PROTO_H2), -1);
+  ck_assert_int_eq(subscribe(0, "dinita.mp4", CONN_PROTO_H2), -1);
+  open_store(0, SEG_CONTAINER_FMP4_AUDIO, 1);
+  ck_assert_int_ge(subscribe(0, "dsega0.m4s", CONN_PROTO_H2), 0);
+}
+END_TEST
+
 START_TEST(part_pushed_ignores_ts_container) {
   hls_store_t *fm = open_store(0, SEG_CONTAINER_FMP4, 1);
   hls_store_t *ts = open_store(0, SEG_CONTAINER_TS, 0);
   int idx = subscribe(0, SEG_NAME_0, CONN_PROTO_H2);
 
   link_store_chain(ts, idx);
-  on_part_pushed(ts, live_msn(fm), part_data, sizeof part_data);
+  on_part_pushed(ts, live_msn(fm), 0, part_data, sizeof part_data);
   ck_assert_int_eq(dash_lldash_ring_pending(idx), 0);
   on_segment_done(ts, live_msn(fm));
   ck_assert_int_eq(dash_lldash_sub_finalized(idx), 0);
-  on_part_pushed(fm, live_msn(fm), part_data, sizeof part_data);
+  on_part_pushed(fm, live_msn(fm), 0, part_data, sizeof part_data);
   ck_assert_int_eq(dash_lldash_ring_pending(idx), 1);
 }
 END_TEST
@@ -301,7 +381,7 @@ static void *push_loop(void *arg) {
   race_t *r = arg;
 
   atomic_store_explicit(&r->started, 1, memory_order_release);
-  for (int i = 0; i < RACE_PUSHES; i++) on_part_pushed(r->store, r->seq, part_data, sizeof part_data);
+  for (int i = 0; i < RACE_PUSHES; i++) on_part_pushed(r->store, r->seq, i, part_data, sizeof part_data);
   return NULL;
 }
 
@@ -438,7 +518,8 @@ START_TEST(slot_accessors_ignore_out_of_range_slots) {
   ck_assert_int_eq(dash_lldash_ring_errored(-1), 0);
   ck_assert_ptr_null(dash_lldash_ring_peek(-1, &len));
   ck_assert_uint_eq(len, 0u);
-  dash_lldash_ring_advance(-1, 4);
+  dash_lldash_ring_hold(-1, 4);
+  dash_lldash_ring_ack(-1, 4);
   ck_assert_int_eq(dash_lldash_sub_finalized(-1), 1);
   ck_assert_int_eq(dash_lldash_sub_finalized(1000), 1);
   dash_lldash_h2_bind(-1, NULL, NULL, 0, 0);
@@ -484,8 +565,9 @@ START_TEST(ring_peek_and_advance_consume_a_part) {
   ck_assert_ptr_nonnull(p);
   ck_assert_uint_eq(len, sizeof part_data);
   ck_assert_mem_eq(p, part_data, sizeof part_data);
-  dash_lldash_ring_advance(idx, len);
+  dash_lldash_ring_hold(idx, len);
   ck_assert_int_eq(dash_lldash_ring_pending(idx), 0);
+  dash_lldash_ring_ack(idx, len);
 }
 END_TEST
 
@@ -528,12 +610,44 @@ START_TEST(try_attach_streams_chunked_framing_to_the_connection) {
   ck_assert(out_has(c, hdr_ka, sizeof hdr_ka - 1));
   ck_assert(out_has(c, "Access-Control-Allow-Origin", 27));
 
+  dash_lldash_sub_attach(slot);
   push_part(0);
   ck_assert(out_has(c, "\r\n40\r\n", 6) || out_has(c, "40\r\n", 4));
   ck_assert(out_has(c, part_data, sizeof part_data));
   ck_assert_int_eq(dash_lldash_sub_finalized(slot), 0);
 
   push_segment(0);
+  ck_assert(out_has(c, "0\r\n\r\n", 5));
+  ck_assert_int_eq(dash_lldash_sub_finalized(slot), 1);
+
+  dash_lldash_sub_close(slot);
+  conn_unpublish(c);
+  conn_free(c);
+  close(sv[0]);
+  close(sv[1]);
+}
+END_TEST
+
+START_TEST(h1_parts_and_terminator_in_publish_window_are_delivered) {
+  pid_filter_t f;
+  int sv[2];
+  conn_t *c;
+  int slot;
+
+  open_store(0, SEG_CONTAINER_FMP4, 1);
+  no_filter(&f);
+  c = plain_conn(sv);
+  ck_assert_int_eq(dash_lldash_try_attach(c, CTX, &f, 0, &full, SEG_NAME_0, 1, NULL, -1), 1);
+  slot = c->slot;
+
+  push_part(0);
+  push_segment(0);
+  ck_assert_int_eq(dash_lldash_sub_finalized(slot), 0);
+  ck_assert(!out_has(c, "0\r\n\r\n", 5));
+
+  conn_publish(c);
+  dash_lldash_sub_attach(slot);
+  ck_assert(out_has(c, part_data, sizeof part_data));
   ck_assert(out_has(c, "0\r\n\r\n", 5));
   ck_assert_int_eq(dash_lldash_sub_finalized(slot), 1);
 
@@ -563,8 +677,29 @@ START_TEST(try_attach_without_keep_alive_announces_close) {
 }
 END_TEST
 
+START_TEST(close_before_headers_flushed_releases_the_slot) {
+  pid_filter_t f;
+  int sv[2];
+  conn_t *c;
+  int slot;
+  int again;
+
+  open_store(0, SEG_CONTAINER_FMP4, 1);
+  no_filter(&f);
+  c = plain_conn(sv);
+  ck_assert_int_eq(dash_lldash_try_attach(c, CTX, &f, 0, &full, SEG_NAME_0, 1, NULL, -1), 1);
+  slot = c->slot;
+  reactor_close(-1, c);
+  capture_flush_deferred_quiescent();
+  again = dash_lldash_subscribe(CTX, &f, 0, &full, SEG_NAME_0, CONN_PROTO_H1);
+  ck_assert_int_eq(again, slot);
+  dash_lldash_sub_close(again);
+  close(sv[1]);
+}
+END_TEST
+
 START_TEST(oversized_part_flags_the_ring_as_errored) {
-  enum { BIG = 3 << 16 };
+  enum { BIG = 5 << 17 };
   pid_filter_t f;
   uint8_t *big = calloc(1, BIG);
   int idx;
@@ -592,9 +727,14 @@ static Suite *lldash_suite(void) {
   tcase_add_test(tc, transport_binding_is_recorded_per_slot);
   tcase_add_test(tc, ring_peek_and_advance_consume_a_part);
   tcase_add_test(tc, part_reaches_matching_subscriber);
+  tcase_add_test(tc, attach_replays_parts_pushed_before_attach);
+  tcase_add_test(tc, attach_after_segment_done_replays_and_finalizes);
+  tcase_add_test(tc, attach_after_store_closing_aborts);
   tcase_add_test(tc, part_skips_subscriber_of_other_store);
   tcase_add_test(tc, part_after_segment_done_skips_old_subscriber);
   tcase_add_test(tc, part_pushed_ignores_ts_container);
+  tcase_add_test(tc, track_store_subscriber_gets_track_parts_only);
+  tcase_add_test(tc, track_subscribe_needs_its_own_store);
   tcase_add_test(tc, segment_done_finalizes_matching_subscriber_only);
   tcase_add_test(tc, h1_subscriber_without_connection_still_finalizes);
   tcase_add_test(tc, store_close_aborts_h2_subscriber);
@@ -607,7 +747,9 @@ static Suite *lldash_suite(void) {
   tcase_add_test(tc, store_closing_races_in_flight_chunk_push);
   tcase_add_test(tc, store_close_races_segment_and_part_pushes);
   tcase_add_test(tc, try_attach_streams_chunked_framing_to_the_connection);
+  tcase_add_test(tc, h1_parts_and_terminator_in_publish_window_are_delivered);
   tcase_add_test(tc, try_attach_without_keep_alive_announces_close);
+  tcase_add_test(tc, close_before_headers_flushed_releases_the_slot);
   tcase_add_test(tc, oversized_part_flags_the_ring_as_errored);
 #ifdef HAVE_HTTP2
   tcase_add_test(tc, tid_chain_wakes_only_owned_live_subscribers);

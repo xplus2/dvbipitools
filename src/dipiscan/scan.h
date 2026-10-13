@@ -48,7 +48,8 @@ int probe_cb(void *v, const unsigned char *pkt);
 
 typedef ssize_t (*chan_read_fn)(void *ctx, unsigned char *buf, size_t cap);
 
-/* read until named (or, with multi, every PAT program resolved), timeout, or interrupted */
-void probe_common(chan_read_fn rf, void *rctx, int timeout_ms, int multi, probe_result_t *r);
+/* psi: caller-owned, reset on entry. read until named (or, with multi, every PAT program resolved), timeout, or interrupted.
+   detect_rtp: datagram transports only. stream reads have no datagram boundaries. rtp_wrapped by majority */
+void probe_common(psi_t *psi, chan_read_fn rf, void *rctx, int timeout_ms, int multi, int detect_rtp, probe_result_t *r);
 
 #endif

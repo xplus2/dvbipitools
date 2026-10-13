@@ -54,17 +54,17 @@ other one. Required unless \fB\-S\fR is given.
 .BR \-M ", " \-\-map " \fIpath\fR"
 Channel map, one \fIid\fR,\fIuri\fR,\fItsid\fR,\fIonid\fR,\fIsid\fR line
 per channel: dipiscan's own csv shape, with column 1 repurposed to the
-xmltv channel id. Required for \fB\-f xmltv\fR.
+xmltv channel id. Required for \fB\-f xmltv\fR, rejected with \fB\-f tva\fR.
 .TP
 .BR \-R ", " \-\-reverse\-map " \fIrevmap\fR"
-Reverse map, one \fIuri\fR,\fIid\fR line per channel. Optional, used
-only with \fB\-f tva\fR.
+Reverse map, one \fIuri\fR,\fIid\fR line per channel. Optional, only
+valid with \fB\-f tva\fR; rejected with \fB\-f xmltv\fR.
 .TP
 .BR \-S ", " \-\-suggest\-map " \fIpath\fR"
 Switch to suggest-map mode: read a dipiscan csv from \fIpath\fR and an
 xmltv guide from \fB\-i\fR, write a suggested \fB\-M\fR mapping to
 \fB\-o\fR. See DESCRIPTION for the matching rules. \fB\-f\fR is not
-required in this mode.
+required in this mode, and \fB\-f\fR, \fB\-M\fR and \fB\-R\fR are rejected.
 .TP
 .BR \-v ", " \-\-verbose
 Print one summary line to stderr: channels and programmes read. No

@@ -16,6 +16,7 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -47,6 +48,9 @@ static void conn_add_bytes_served(size_t len) {
 
 /* preallocated at conn_new: covers header-only requests/responses with no realloc */
 #define CONN_BUF_INITIAL 4096
+
+/* pooled conns keep buffers up to this, larger freed on reclaim */
+#define CONN_BUF_KEEP_MAX (64u * 1024)
 
 /* doubling growth. 0 ok, -1 OOM */
 static int buf_ensure(conn_buf *b, size_t need) {
@@ -97,16 +101,30 @@ typedef struct {
 static _Thread_local conn_retiree_t t_conn_retiring[CONN_POOL_MAX];
 static _Thread_local int t_conn_retiring_n;
 
+static void buf_release(conn_buf *b) {
+  free(b->buf);
+  memset(b, 0, sizeof *b);
+}
+
+static void buf_recycle(conn_buf *b) {
+  if (b->cap > CONN_BUF_KEEP_MAX) buf_release(b);
+  else b->len = b->off = 0;
+}
+
 static void conn_pool_reclaim(void) {
   for (int i = 0; i < t_conn_retiring_n;) {
     if (qsbr_mark_passed(reactor_qsbr(), t_conn_retiring[i].mark)) {
       conn_t *c = t_conn_retiring[i].c;
       t_conn_retiring[i] = t_conn_retiring[--t_conn_retiring_n];
-      free(c->in.buf);
-      free(c->out.buf);
       if (t_conn_pool_n < CONN_POOL_MAX) {
+        buf_recycle(&c->in);
+        buf_recycle(&c->out);
+        buf_recycle(&c->wire);
         t_conn_pool[t_conn_pool_n++] = c;
       } else {
+        free(c->in.buf);
+        free(c->out.buf);
+        free(c->wire.buf);
         pthread_mutex_destroy(&c->out_lock);
         free(c);
       }
@@ -116,33 +134,26 @@ static void conn_pool_reclaim(void) {
   }
 }
 
-typedef struct {
-  conn_t *c;
-  int has_bufs;
-} conn_grave_t;
-
-static conn_grave_t *g_grave;
+static conn_t **g_grave;
 static size_t g_grave_n;
 static size_t g_grave_cap;
 static pthread_mutex_t g_grave_mtx = PTHREAD_MUTEX_INITIALIZER;
 
-static void conn_grave_add(conn_t *c, int has_bufs) {
+static void conn_grave_add(conn_t *c) {
   if (g_grave_n == g_grave_cap) {
     size_t ncap = g_grave_cap ? g_grave_cap * 2 : 64;
-    conn_grave_t *p = realloc(g_grave, ncap * sizeof *p);
+    conn_t **p = realloc(g_grave, ncap * sizeof *p);
     if (!p) return;
     g_grave = p;
     g_grave_cap = ncap;
   }
-  g_grave[g_grave_n].c = c;
-  g_grave[g_grave_n].has_bufs = has_bufs;
-  g_grave_n++;
+  g_grave[g_grave_n++] = c;
 }
 
 void conn_retire_handoff(void) {
   pthread_mutex_lock(&g_grave_mtx);
-  for (int i = 0; i < t_conn_pool_n; i++) conn_grave_add(t_conn_pool[i], 0);
-  for (int i = 0; i < t_conn_retiring_n; i++) conn_grave_add(t_conn_retiring[i].c, 1);
+  for (int i = 0; i < t_conn_pool_n; i++) conn_grave_add(t_conn_pool[i]);
+  for (int i = 0; i < t_conn_retiring_n; i++) conn_grave_add(t_conn_retiring[i].c);
   pthread_mutex_unlock(&g_grave_mtx);
   t_conn_pool_n = 0;
   t_conn_retiring_n = 0;
@@ -151,11 +162,10 @@ void conn_retire_handoff(void) {
 void conn_graveyard_free(void) {
   pthread_mutex_lock(&g_grave_mtx);
   for (size_t i = 0; i < g_grave_n; i++) {
-    conn_t *c = g_grave[i].c;
-    if (g_grave[i].has_bufs) {
-      free(c->in.buf);
-      free(c->out.buf);
-    }
+    conn_t *c = g_grave[i];
+    free(c->in.buf);
+    free(c->out.buf);
+    free(c->wire.buf);
     pthread_mutex_destroy(&c->out_lock);
     free(c);
   }
@@ -166,11 +176,17 @@ void conn_graveyard_free(void) {
   pthread_mutex_unlock(&g_grave_mtx);
 }
 
+static _Atomic uint64_t g_conn_gen;
+
 conn_t *conn_new(int fd, void *ssl) {
   conn_t *c;
+  conn_buf in = {0}, out = {0}, wire = {0};
   conn_pool_reclaim();
   if (t_conn_pool_n > 0) {
     c = t_conn_pool[--t_conn_pool_n];
+    in = c->in;
+    out = c->out;
+    wire = c->wire;
   } else {
     c = malloc(sizeof *c);
     if (!c) return NULL;
@@ -178,16 +194,21 @@ conn_t *conn_new(int fd, void *ssl) {
   }
   memset(c, 0, offsetof(conn_t, out_lock));
   memset((char *)c + offsetof(conn_t, out_lock) + sizeof c->out_lock, 0, sizeof *c - offsetof(conn_t, out_lock) - sizeof c->out_lock);
+  c->in = in;
+  c->out = out;
+  c->wire = wire;
   c->fd = fd;
+  atomic_store_explicit(&c->gen, atomic_fetch_add_explicit(&g_conn_gen, 1, memory_order_relaxed) + 1, memory_order_relaxed);
   c->ssl = ssl;
   c->state = ssl ? CONN_TLS_HANDSHAKE : CONN_READING;
   c->slot = 0;
   c->epfd = -1;
   c->reactor_tid = -1;
-  c->last_active = time(NULL);
+  atomic_store_explicit(&c->last_active, time(NULL), memory_order_relaxed);
   if (buf_ensure(&c->in, CONN_BUF_INITIAL) < 0 || buf_ensure(&c->out, CONN_BUF_INITIAL) < 0) {
     free(c->in.buf);
     free(c->out.buf);
+    free(c->wire.buf);
     pthread_mutex_destroy(&c->out_lock);
     free(c);
     return NULL;
@@ -280,10 +301,21 @@ conn_t *conn_for_fd(int fd) {
   return __atomic_load_n(&g_fd_conn[fd], __ATOMIC_ACQUIRE);
 }
 
+conn_t *conn_for_fd_gen(int fd, uint64_t gen) {
+  conn_t *c = conn_for_fd(fd);
+  if (!c || !gen || atomic_load_explicit(&c->gen, memory_order_relaxed) != gen) return NULL;
+  return c;
+}
+
+uint64_t conn_gen_for_fd(int fd) {
+  const conn_t *c = conn_for_fd(fd);
+  return c ? atomic_load_explicit(&c->gen, memory_order_relaxed) : 0;
+}
+
 void conn_request_close(conn_t *c) {
   pthread_mutex_lock(&c->out_lock);
   atomic_store_explicit(&c->close_requested, 1, memory_order_release);
-  if (c->epfd >= 0 && !atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) { /* wake owner: flush, tear down */
+  if (!c->torn_down && c->epfd >= 0 && !atomic_exchange_explicit(&c->want_write, 1, memory_order_relaxed)) { /* wake owner: flush, tear down */
     struct epoll_event ev;
     memset(&ev, 0, sizeof(ev));
     ev.events = (atomic_load_explicit(&c->read_done, memory_order_relaxed) ? 0u : (uint32_t)EPOLLIN) | (uint32_t)EPOLLOUT;
@@ -293,16 +325,26 @@ void conn_request_close(conn_t *c) {
   pthread_mutex_unlock(&c->out_lock);
 }
 
+/* request close, then force EPOLLIN: EPOLLOUT alone never fires if send buffer is full + armed */
+static void conn_idle_close(conn_t *c) {
+  conn_request_close(c);
+  pthread_mutex_lock(&c->out_lock);
+  if (!c->torn_down) shutdown(c->fd, SHUT_RD);
+  pthread_mutex_unlock(&c->out_lock);
+}
+
 void conn_sweep_idle(unsigned idle_timeout_s) {
-  static time_t last_sweep = 0;
+  static _Atomic time_t last_sweep = 0;
   time_t now;
+  time_t prev;
   if (!idle_timeout_s || !g_fd_conn_max) return;
   now = time(NULL);
-  if (now == last_sweep) return; /* called on every epoll wake, cap scan rate to 1/s */
-  last_sweep = now;
+  prev = atomic_load_explicit(&last_sweep, memory_order_relaxed);
+  if (now == prev) return; /* called on every epoll wake, cap scan rate to 1/s */
+  if (!atomic_compare_exchange_strong_explicit(&last_sweep, &prev, now, memory_order_relaxed, memory_order_relaxed)) return; /* another thread won */
   for (int fd = 0; fd < g_fd_conn_max; fd++) {
     conn_t *c = __atomic_load_n(&g_fd_conn[fd], __ATOMIC_ACQUIRE);
-    if (c && (unsigned)(now - c->last_active) > idle_timeout_s) conn_request_close(c);
+    if (c && (unsigned)(now - atomic_load_explicit(&c->last_active, memory_order_relaxed)) > idle_timeout_s) conn_idle_close(c);
   }
 }
 
@@ -313,7 +355,7 @@ int conn_send_buffered3(conn_t *c, const void *a, size_t alen, const void *b, si
     pthread_mutex_unlock(&c->out_lock);
     return -1;
   }
-  size_t pending = c->out.len - c->out.off;
+  size_t pending = c->out.len - c->out.off + atomic_load_explicit(&c->wire_pending, memory_order_relaxed);
   if (pending + alen + blen + clen > CONN_OUT_MAX) {
     c->dead = 1; /* slow consumer: owner closes on next visit */
     rc = -1;
@@ -392,36 +434,40 @@ void conn_zc_drain(conn_t *c) {
   c->zc_await_count = w;
 }
 
-#define CONN_FLUSH_CHUNK 65536
-
 int conn_flush(conn_t *c, int epfd) {
   conn_zc_drain(c);
   for (;;) {
-    size_t pending;
-    size_t tocopy;
-    size_t sent = 0;
     int last_errno = 0;
-    pthread_mutex_lock(&c->out_lock);
-    pending = c->out.len - c->out.off;
-    if (pending == 0) {
+    if (c->wire.off == c->wire.len) {
+      pthread_mutex_lock(&c->out_lock);
+      if (c->out.len == c->out.off) {
+        c->out.off = 0;
+        c->out.len = 0; /* reset under lock that saw it empty: concurrent queuers must not be wiped */
+        pthread_mutex_unlock(&c->out_lock);
+        c->wire.off = 0;
+        c->wire.len = 0;
+        atomic_store_explicit(&c->wire_pending, 0, memory_order_relaxed);
+        break;
+      }
+      conn_buf drained = c->wire;
+      c->wire = c->out;
+      c->out = drained;
       c->out.off = 0;
-      c->out.len = 0; /* reset under the lock that saw it empty: concurrent queuers must not be wiped */
+      c->out.len = 0;
+      atomic_store_explicit(&c->wire_pending, c->wire.len - c->wire.off, memory_order_relaxed);
       pthread_mutex_unlock(&c->out_lock);
-      break;
     }
-    tocopy = pending < CONN_FLUSH_CHUNK ? pending : CONN_FLUSH_CHUNK;
-    while (sent < tocopy) {
-      ssize_t n = tls_net_send(c->fd, c->out.buf + c->out.off + sent, tocopy - sent);
+    while (c->wire.off < c->wire.len) {
+      ssize_t n = tls_net_send(c->fd, c->wire.buf + c->wire.off, c->wire.len - c->wire.off);
       if (n > 0) {
-        sent += (size_t)n;
+        c->wire.off += (size_t)n;
         continue;
       }
       last_errno = errno;
       break;
     }
-    c->out.off += sent;
-    pthread_mutex_unlock(&c->out_lock);
-    if (sent < tocopy) {
+    atomic_store_explicit(&c->wire_pending, c->wire.len - c->wire.off, memory_order_relaxed);
+    if (c->wire.off < c->wire.len) {
       /* tls_net_send maps SSL_WANT_READ/WRITE to EAGAIN. EPOLLIN stays armed: covers WANT_READ mid-renegotiation.
          EPOLLOUT added: full send buffer also wakes */
       if (last_errno == EAGAIN || last_errno == EWOULDBLOCK) {
@@ -432,7 +478,7 @@ int conn_flush(conn_t *c, int epfd) {
             return CONN_FLUSH_ERROR;
           }
         }
-        c->last_active = time(NULL);
+        atomic_store_explicit(&c->last_active, time(NULL), memory_order_relaxed);
         return CONN_FLUSH_MORE;
       }
       return CONN_FLUSH_ERROR;
@@ -472,14 +518,14 @@ int conn_flush(conn_t *c, int epfd) {
           return CONN_FLUSH_ERROR;
         }
       }
-      c->last_active = time(NULL);
+      atomic_store_explicit(&c->last_active, time(NULL), memory_order_relaxed);
       return CONN_FLUSH_MORE;
     }
     return CONN_FLUSH_ERROR;
   }
 
   /* drained: disarm EPOLLOUT if armed */
-  c->last_active = time(NULL);
+  atomic_store_explicit(&c->last_active, time(NULL), memory_order_relaxed);
   unsigned char want_expected = 1;
   if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 0, memory_order_relaxed, memory_order_relaxed)) {
     if (conn_epoll_mod(c, epfd, 0) < 0) {

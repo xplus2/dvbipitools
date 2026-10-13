@@ -54,6 +54,32 @@ START_TEST(bitreader_vluimsbf8_matches_known_encoding) {
 }
 END_TEST
 
+START_TEST(bitreader_vluimsbf8_rejects_overlong_and_overflowing_runs) {
+  static const unsigned char longrun[12] = {0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00};
+  static const unsigned char overflow[10] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F};
+  static const unsigned char max64[10] = {0x81, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F};
+  bitreader_t br;
+  uint64_t v;
+
+  bitreader_init(&br, longrun, sizeof longrun);
+  ck_assert_int_ne(bitreader_get_vluimsbf8(&br, &v), 0);
+  bitreader_init(&br, overflow, sizeof overflow);
+  ck_assert_int_ne(bitreader_get_vluimsbf8(&br, &v), 0);
+  bitreader_init(&br, max64, sizeof max64);
+  ck_assert_int_eq(bitreader_get_vluimsbf8(&br, &v), 0);
+  ck_assert_uint_eq(v, UINT64_MAX);
+}
+END_TEST
+
+START_TEST(bitreader_vluimsbf4_rejects_overlong_prefix) {
+  static const unsigned char buf[16] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+  bitreader_t br;
+  uint64_t v;
+  bitreader_init(&br, buf, sizeof buf);
+  ck_assert_int_ne(bitreader_get_vluimsbf4(&br, &v), 0);
+}
+END_TEST
+
 START_TEST(bitreader_vluimsbf4_matches_known_encoding) {
   /* value=20 needs 2 nibbles (1 nibble caps at 15): unary prefix "10" (continue once, then stop), then n*4=8 payload bits = 20 -> bits 1 0 0001 0100 */
   static const unsigned char d[] = {0x85, 0x00}; /* 1,0 prefix + 00010100 (20) payload */
@@ -72,6 +98,8 @@ static Suite *bitreader_suite(void) {
   tcase_add_test(tc, bitreader_bits_left_tracks_consumption);
   tcase_add_test(tc, bitreader_get_rejects_short_read);
   tcase_add_test(tc, bitreader_vluimsbf8_matches_known_encoding);
+  tcase_add_test(tc, bitreader_vluimsbf8_rejects_overlong_and_overflowing_runs);
+  tcase_add_test(tc, bitreader_vluimsbf4_rejects_overlong_prefix);
   tcase_add_test(tc, bitreader_vluimsbf4_matches_known_encoding);
   suite_add_tcase(s, tc);
   return s;

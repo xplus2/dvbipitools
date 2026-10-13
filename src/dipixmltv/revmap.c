@@ -20,27 +20,43 @@ static int split_first1(char *line, char **uri, char **id) {
 }
 
 static int revmap_idx_cmp(const void *a, const void *b) {
-  return strcmp(((const revmap_idx_t *)a)->uri, ((const revmap_idx_t *)b)->uri);
+  const revmap_idx_t *x = a;
+  const revmap_idx_t *y = b;
+  int c = strcmp(x->uri, y->uri);
+  if (c) return c;
+  return (x->idx > y->idx) - (x->idx < y->idx);
 }
 
 int revmap_load(const char *path, revmap_t *m) {
   FILE *f = fopen(path, "r");
   char line[1024];
-  int lineno = 0;
+  int lineno = 0, rc;
 
   memset(m, 0, sizeof *m);
   if (!f) {
     log_code("XS000261", TOOL_NAME ": cannot open reverse map file %s", path);
     return -1;
   }
-  while (fgets(line, sizeof line, f)) {
+  while ((rc = read_line(f, line, sizeof line)) != 0) {
     char *uri, *id;
     revmap_entry_t *e;
     lineno++;
+    if (rc < 0) {
+      log_code("XS400205", TOOL_NAME ": reverse map line %d: longer than %zu bytes", lineno, sizeof line - 1);
+      fclose(f);
+      revmap_free(m);
+      return -1;
+    }
     chomp(line);
     if (!line[0] || line[0] == '#') continue;
     if (split_first1(line, &uri, &id)) {
       log_code("XS400124", TOOL_NAME ": reverse map line %d: expected uri,id", lineno);
+      fclose(f);
+      revmap_free(m);
+      return -1;
+    }
+    if (strlen(uri) >= sizeof e->uri || strlen(id) >= sizeof e->id) {
+      log_code("XS400206", TOOL_NAME ": reverse map line %d: uri or id longer than %zu bytes", lineno, sizeof e->id - 1);
       fclose(f);
       revmap_free(m);
       return -1;
@@ -69,6 +85,10 @@ int revmap_load(const char *path, revmap_t *m) {
         m->idx[i].idx = i;
       }
       qsort(m->idx, (size_t)m->count, sizeof *m->idx, revmap_idx_cmp);
+      for (int i = 1; i < m->count; i++) {
+        if (!strcmp(m->idx[i].uri, m->idx[i - 1].uri))
+          log_code("XW400223", TOOL_NAME ": reverse map: duplicate uri %s, first entry wins", m->idx[i].uri);
+      }
     }
   }
   return 0;
@@ -83,13 +103,12 @@ void revmap_free(revmap_t *m) {
 const char *revmap_lookup(const revmap_t *m, const char *uri) {
   if (m->idx) {
     int lo = 0;
-    int hi = m->count - 1;
-    while (lo <= hi) {
-      int mid = (lo + hi) / 2;
-      int c = strcmp(uri, m->idx[mid].uri);
-      if (c == 0) return m->entries[m->idx[mid].idx].id;
-      if (c < 0) hi = mid - 1; else lo = mid + 1;
+    int hi = m->count;
+    while (lo < hi) {
+      int mid = lo + (hi - lo) / 2;
+      if (strcmp(m->idx[mid].uri, uri) < 0) lo = mid + 1; else hi = mid;
     }
+    if (lo < m->count && !strcmp(m->idx[lo].uri, uri)) return m->entries[m->idx[lo].idx].id;
     return NULL;
   }
   for (int i = 0; i < m->count; i++) {

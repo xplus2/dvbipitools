@@ -10,8 +10,24 @@
 #include "../ws/ws_sources.h"
 
 #include <string.h>
+#include <time.h>
+
+#define WS_RELOAD_MIN_INTERVAL_MS 5000
+
+/* reactor thread only, shared by all WS conns */
+static int reload_allowed(int64_t *last_ms) {
+  struct timespec ts;
+  int64_t now;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  now = (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+  if (*last_ms && now - *last_ms < WS_RELOAD_MIN_INTERVAL_MS) return 0;
+  *last_ms = now;
+  return 1;
+}
 
 void ws_dispatch_frame(void *ctx, ws_dispatch_queue_fn queue, int opcode, const uint8_t *payload, size_t plen) {
+  static int64_t last_playlists_ms;
+  static int64_t last_tls_ms;
   char *json;
   switch (opcode) {
     case WS_OP_PING:
@@ -22,11 +38,17 @@ void ws_dispatch_frame(void *ctx, ws_dispatch_queue_fn queue, int opcode, const 
       break;
     case WS_OP_TEXT:
       if (memmem(payload, plen, "\"type\":\"playlists.reload\"", sizeof "\"type\":\"playlists.reload\"" - 1)) {
-        reactor_reload_channels();
+        if (reload_allowed(&last_playlists_ms)) channels_request_reload();
         return;
       }
       if (memmem(payload, plen, "\"type\":\"tls.reload\"", sizeof "\"type\":\"tls.reload\"" - 1)) {
-        const char *resp = reload_tls() == 0 ? "{\"type\":\"tls.reload\",\"ok\":true}" : "{\"type\":\"tls.reload\",\"ok\":false}";
+        const char *resp;
+        if (!reload_allowed(&last_tls_ms)) {
+          resp = "{\"type\":\"tls.reload\",\"ok\":false}";
+          queue(ctx, WS_OP_TEXT, resp, strlen(resp));
+          return;
+        }
+        resp = reload_tls() == 0 ? "{\"type\":\"tls.reload\",\"ok\":true}" : "{\"type\":\"tls.reload\",\"ok\":false}";
         queue(ctx, WS_OP_TEXT, resp, strlen(resp));
         return;
       }

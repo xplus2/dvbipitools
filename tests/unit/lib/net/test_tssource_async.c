@@ -447,13 +447,24 @@ START_TEST(tssrc_fec_poll_feeds_repair_and_recovers_lost_packet) {
     build_rtp_ts(next, (uint16_t)(0x2000 + SRC_PKTS + i), (unsigned char)(SRC_PKTS + i));
     ck_assert_int_eq((int)sendto(src_sock, next, SRC_LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), SRC_LEN);
   }
-  for (unsigned i = 1; i <= 3; i++) {
-    struct pollfd pfd = {tssrc_fd(s), POLLIN, 0};
+  {
+    unsigned char all[8 * 188];
+    size_t got = 0;
 
-    ck_assert_int_eq(poll(&pfd, 1, 1000), 1);
-    ck_assert_int_eq((int)tssrc_read(s, buf, sizeof buf, NULL), 188);
-    ck_assert_uint_eq(buf[0], 0x47);
-    ck_assert_uint_eq(buf[1], i);
+    for (unsigned tries = 0; tries < 20 && got < 3 * 188; tries++) {
+      ssize_t n;
+      tssrc_wait(s, 1000);
+      n = tssrc_read(s, buf, sizeof buf, NULL);
+      if (n > 0) {
+        memcpy(all + got, buf, (size_t)n);
+        got += (size_t)n;
+      }
+    }
+    ck_assert_uint_eq(got, 3u * 188);
+    for (unsigned i = 1; i <= 3; i++) {
+      ck_assert_uint_eq(all[(i - 1) * 188], 0x47);
+      ck_assert_uint_eq(all[(i - 1) * 188 + 1], i);
+    }
   }
 
   fec2022_enc_free(enc);
@@ -521,13 +532,24 @@ START_TEST(tssrc_read_consumes_repair_without_explicit_fec_poll) {
     build_rtp_ts(next, (uint16_t)(0x2000 + SRC_PKTS + i), (unsigned char)(SRC_PKTS + i));
     ck_assert_int_eq((int)sendto(src_sock, next, SRC_LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), SRC_LEN);
   }
-  for (unsigned i = 1; i <= 3; i++) {
-    struct pollfd pfd = {tssrc_fd(s), POLLIN, 0};
+  {
+    unsigned char all[8 * 188];
+    size_t got = 0;
 
-    ck_assert_int_eq(poll(&pfd, 1, 1000), 1);
-    ck_assert_int_eq((int)tssrc_read(s, buf, sizeof buf, NULL), 188);
-    ck_assert_uint_eq(buf[0], 0x47);
-    ck_assert_uint_eq(buf[1], i);
+    for (unsigned tries = 0; tries < 20 && got < 3 * 188; tries++) {
+      ssize_t n;
+      tssrc_wait(s, 1000);
+      n = tssrc_read(s, buf, sizeof buf, NULL);
+      if (n > 0) {
+        memcpy(all + got, buf, (size_t)n);
+        got += (size_t)n;
+      }
+    }
+    ck_assert_uint_eq(got, 3u * 188);
+    for (unsigned i = 1; i <= 3; i++) {
+      ck_assert_uint_eq(all[(i - 1) * 188], 0x47);
+      ck_assert_uint_eq(all[(i - 1) * 188 + 1], i);
+    }
   }
 
   fec2022_enc_free(enc);

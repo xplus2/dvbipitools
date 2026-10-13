@@ -94,6 +94,29 @@ typedef struct {
   void *str_pool;
 } config_t;
 
+/* announce-only settings, shared by CLI and YAML checks */
+static inline int sds_ret_set(const config_t *c) {
+  return c->ret_enabled || c->fl.have_ret_rtx_time || c->fl.have_ret_rtx_pt || c->ret_mc || c->fl.have_ret_mc_port || c->ret_rsi_mc_ret;
+}
+
+static inline int sds_fcc_set(const config_t *c) {
+  return c->fcc_enabled || c->fl.have_fcc_rtx_time || c->fl.have_fcc_rtx_pt || c->fcc_resolve_by_port || c->fcc_resolve_base_port ||
+         c->fl.have_fcc_resolve_max_channels;
+}
+
+static inline int sds_al_fec_set(const config_t *c) {
+  return c->al_fec_enabled || c->fl.have_al_fec_pt;
+}
+
+static inline int sds_disco_set(const config_t *c) {
+  return c->packages_path || c->cells_path || c->rms_enabled || c->fl.have_rms_lang || c->rms_location || c->rms_logo || c->fus_enabled ||
+         c->fl.have_fus_lang || c->fl.have_fus_id || c->fus_announce_addr[0] || c->fus_logo;
+}
+
+static inline int sds_announce_only_set(const config_t *c) {
+  return sds_ret_set(c) || sds_fcc_set(c) || sds_al_fec_set(c) || c->metrics_id || sds_disco_set(c);
+}
+
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg);

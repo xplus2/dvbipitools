@@ -5,11 +5,18 @@
 #define DVBIPITOOLS_LIB_NET_DVBSTP_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "multicast.h"
 
-/* ETSI TS 102 034 clause 5.4.1. recommended max to stay under ethernet MTU */
+/* ETSI TS 102 034 clause 5.4.1. recommended max section payload, IPv4 send limit */
 #define DVBSTP_MAX_SECTION 1452
+
+/* receive cap: spec size is a recommendation, tolerate jumbo frames / other MTUs */
+#define DVBSTP_MAX_RX_SECTION 65535u
+
+/* IPv6 send limit: 1500 - 40 ip6 - 8 udp - 16 hdr w/ provider id - 4 crc */
+#define DVBSTP_MAX_SECTION_V6 1432
 
 /* byte cap per reassembled segment, enforced on send and receive */
 #define DVBSTP_MAX_SEGMENT (4u * 1024u * 1024u)
@@ -53,6 +60,7 @@ typedef struct {
   int has_provider_id;
   unsigned provider_id;
   int want_crc;
+  int64_t pacing_budget_ns; /* max total inter-section delay, 0 = fixed 1 ms gap */
 } dvbstp_send_t;
 
 /* splits data into sections, sends each. compr written into header as-is,

@@ -275,7 +275,7 @@ END_TEST
 START_TEST(unresolvable_sources_are_404_for_every_format) {
   static const char *const paths[] = {
     "/list/1/1", "/list/1/1/ts", "/list/1/1/spts", "/list/1/1/rawaudio", "/list/1/1/hls", "/list/1/1/hls-fmp4", "/list/1/1/llhls",
-    "/list/1/1/dash", "/list/1/1/lldash", "/list/1/1/mp4", "/list/1/1/seg00001.ts", "/list/1/1/dseg1000.m4s", "/list/1/1/init.mp4",
+    "/list/1/1/dash", "/list/1/1/lldash", "/list/1/1/mp4", "/list/1/item/1/seg00001.ts", "/list/1/item/1/dseg1000.m4s", "/list/1/item/1/init.mp4",
     "/stdin", "/stdin/ts", "/rist", "/rist/hls", "/nosuchname", "/nosuchname/ts", "/list/nosuchlist/nosuchitem", "/list/1/nosuchitem/ts",
   };
   run_t r;
@@ -651,9 +651,40 @@ START_TEST(route_disabled_follows_each_config_flag) {
   memset(&cfg, 0, sizeof cfg);
   reactor_set_context(&cfg, NULL, NULL);
   rt.fmt = dc->fmt;
+  if (dc->fmt == ROUTE_FMT_DASH || dc->fmt == ROUTE_FMT_LLDASH) strcpy(rt.hls_file, "manifest.mpd");
   ck_assert_int_eq(route_disabled(&rt), 0);
   *(int *)((char *)&cfg + dc->flag_off) = 1;
   ck_assert_int_eq(route_disabled(&rt), 1);
+}
+END_TEST
+
+typedef struct {
+  const char *path;
+  size_t off_a;
+  size_t off_b;
+} shared_case_t;
+
+static const shared_case_t shared_cases[] = {
+    {"/list/1/item/1/seg00001.ts", offsetof(config_t, no_hls), offsetof(config_t, no_llhls)},
+    {"/list/1/item/1/dseg1000.m4s", offsetof(config_t, no_dash), offsetof(config_t, no_lldash)},
+    {"/list/1/item/1/init.mp4", offsetof(config_t, no_hls), offsetof(config_t, no_dash)},
+};
+
+START_TEST(shared_segment_names_disabled_only_when_all_owners_are) {
+  const shared_case_t *sc = &shared_cases[_i];
+  config_t cfg;
+  route_t rt;
+
+  memset(&cfg, 0, sizeof cfg);
+  reactor_set_context(&cfg, NULL, NULL);
+  ck_assert_int_eq(route_parse(sc->path, &rt), 0);
+  ck_assert_int_eq(route_disabled(&rt), 0);
+  *(int *)((char *)&cfg + sc->off_a) = 1;
+  ck_assert_int_eq(route_disabled(&rt), 0);
+  *(int *)((char *)&cfg + sc->off_b) = 1;
+  ck_assert_int_eq(route_disabled(&rt), 1);
+  *(int *)((char *)&cfg + sc->off_a) = 0;
+  ck_assert_int_eq(route_disabled(&rt), 0);
 }
 END_TEST
 
@@ -893,6 +924,7 @@ static Suite *routes_suite(void) {
   tcase_add_test(tc, list_routes_resolve_by_ordinal_item_and_name);
   tcase_add_test(tc, open_source_without_matching_input_is_null);
   tcase_add_loop_test(tc, route_disabled_follows_each_config_flag, 0, (int)(sizeof disabled_cases / sizeof disabled_cases[0]));
+  tcase_add_loop_test(tc, shared_segment_names_disabled_only_when_all_owners_are, 0, (int)(sizeof shared_cases / sizeof shared_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

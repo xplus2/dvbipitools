@@ -23,7 +23,7 @@ void hls_store_set_qsbr(qsbr_domain_t *d) { g_segstore_qsbr = d; }
 
 void hls_store_init(int max_channels) {
   int n = max_channels > 0 ? max_channels : 1;
-  if (n > HLS_MAX_STORES) n = HLS_MAX_STORES;
+  if (n > HLS_MAX_STORES * HLS_STORES_PER_SEG) n = HLS_MAX_STORES * HLS_STORES_PER_SEG;
   g_stores = calloc((size_t)n, sizeof *g_stores);
   g_store_locks = calloc((size_t)n, sizeof *g_store_locks);
   g_slot_state = calloc((size_t)n, sizeof *g_slot_state);

@@ -28,7 +28,7 @@
 #define TS_PUSH_MAX_REACTOR_THREADS 32
 /* byte rings, not packet-count. ts/spts always push 188B/call.
    rawaudio push variable length. capacity stays ^2, wrap bitmask */
-#define TS_RING_H3_BYTES (1u << 16) /* 64 KiB */
+#define TS_RING_H3_BYTES (1u << 19) /* 512 KiB: holds the unacked QUIC window plus fresh data */
 #define TS_RING_H2_BYTES (1u << 16) /* 64 KiB, per-stream ring like h3_ring */
 #define TS_RING_PUSH_BYTES (1u << 20) /* 1 MiB */
 
@@ -44,6 +44,7 @@ typedef struct {
   _Atomic int alive;
   _Atomic int ready;
   int fd;
+  uint64_t conn_gen; /* H1: conn identity, fd may be reused after teardown */
   void *h2c;
   void *h2_slot;
   int reactor_tid; /* H3: owning reactor thread id */
@@ -62,6 +63,9 @@ typedef struct {
   int spts_n_allowed;
   psi_t *filter_psi; /* non-spts: tracks PMT when filter/lcevc may exclude */
   unsigned char cc_pmt; /* rewritten PMT packets' own cc, spts_psi/filter_psi share this: mutually exclusive */
+  unsigned char cc_pat; /* spts: rewritten PAT packets' own cc */
+  pid_filter_t filter_base; /* spts: client's own filter, b4 lcevc excludes */
+  unsigned long spts_pmt_seen; /* psi_pmt_parsed() at last lock check */
   lcevc_select_t lcevc;
   int lcevc_locked;
   rawaudio_demux_t *rawaudio; /* non-NULL = /rawaudio subscriber */
@@ -90,6 +94,8 @@ extern _Atomic int g_ts_active_count;
 void ts_push_init(int prealloc, int max_clients);
 
 void ts_push_register_reactor_efd(int tid, int efd);
+/* after all pump + reactor threads joined. efds outlive reactor threads, pumps still wake em */
+void ts_push_close_reactor_efds(void);
 void ts_push_flush_ready(int tid);
 
 void ts_push_wake_batch_begin(void);
@@ -98,6 +104,9 @@ void ts_push_wake_batch_end(void);
 /* records idx's tid, links into flush_ready(tid) chain.
    call once, from tid's own thread, when ready to send */
 void ts_push_set_reactor_tid(int idx, int tid);
+
+/* wakes tid's epoll loop. any thread */
+void ts_push_wake_reactor(int tid);
 
 /* allocs slot for ctx, ref freed in ts_push_unsubscribe_by_idx.
    filter: PID excludes.
@@ -117,6 +126,9 @@ int ts_push_active_count(void);
 
 void h2_tspush_wake(int sub_idx);
 void h3_tspush_wake(int sub_idx);
+/* ring overrun: reset the stream, unsubscribe comes with its close */
+void h2_tspush_reset(int sub_idx);
+void h3_tspush_reset(int sub_idx);
 void ts_push_h2_enqueue(int sub_idx, const uint8_t *pkt, size_t len);
 void ts_push_h3_enqueue(int sub_idx, const uint8_t *pkt, size_t len);
 

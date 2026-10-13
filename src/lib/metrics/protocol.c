@@ -100,6 +100,24 @@ static int writer_flush_part(metrics_writer_t *w) {
   return 0;
 }
 
+size_t metrics_utf8_seq_len(const unsigned char *s, size_t avail) {
+  size_t n, i;
+  unsigned cp;
+  if (!avail) return 0;
+  if (s[0] < 0x80) return 1;
+  if (s[0] >= 0xC2 && s[0] <= 0xDF) { n = 2; cp = s[0] & 0x1F; }
+  else if (s[0] >= 0xE0 && s[0] <= 0xEF) { n = 3; cp = s[0] & 0x0F; }
+  else if (s[0] >= 0xF0 && s[0] <= 0xF4) { n = 4; cp = s[0] & 0x07; }
+  else return 0;
+  if (avail < n) return 0;
+  for (i = 1; i < n; i++) {
+    if ((s[i] & 0xC0) != 0x80) return 0;
+    cp = (cp << 6) | (s[i] & 0x3F);
+  }
+  if ((n == 3 && cp < 0x800) || (n == 4 && cp < 0x10000) || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return 0;
+  return n;
+}
+
 int metrics_writer_put(metrics_writer_t *w, metrics_id_t id, const char *label, uint64_t value) {
   size_t label_len;
   size_t vlen;
@@ -110,6 +128,7 @@ int metrics_writer_put(metrics_writer_t *w, metrics_id_t id, const char *label, 
   if (label_len > METRICS_LABEL_MAX) {
     log_code("LW700125", "metrics: label for id %u truncated to %d bytes: %s", (unsigned)id, METRICS_LABEL_MAX, label);
     label_len = METRICS_LABEL_MAX;
+    while (label_len && ((unsigned char)label[label_len] & 0xC0) == 0x80) label_len--;
   }
   vlen = varint_len(value);
   same = w->grp && w->grp_count < GROUP_MAX_ENTRIES && w->buf[w->grp] == label_len && (!label_len || !memcmp(w->buf + w->grp + 1, label, label_len));
@@ -178,7 +197,7 @@ static int next_v1(metrics_reader_t *r, metrics_id_t *id, const char **label, si
   if (r->pos == r->len) return 0;
   if (r->len - r->pos < 3) return -1;
   ll = r->buf[r->pos + 2];
-  if (r->len - (r->pos + 3) < ll + 8) return -1;
+  if (ll > METRICS_LABEL_MAX || r->len - (r->pos + 3) < ll + 8) return -1;
   *id = (metrics_id_t)get_be16(r->buf + r->pos);
   *label = (const char *)r->buf + r->pos + 3;
   *label_len = ll;

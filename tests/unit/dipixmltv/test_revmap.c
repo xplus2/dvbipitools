@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "dipixmltv/revmap.h"
+#include "../log_capture.h"
 
 static void write_temp_csv(char *path, const char *content) {
   int fd = mkstemp(path);
@@ -58,9 +59,63 @@ START_TEST(revmap_load_rejects_malformed_line) {
 }
 END_TEST
 
+START_TEST(revmap_load_rejects_overlong_line_with_right_lineno) {
+  char path[] = "/tmp/dvbipitools_test_revmap_XXXXXX";
+  char logbuf[LOG_CAPTURE_BUF];
+  char content[1400];
+  revmap_t m;
+  size_t n = (size_t)snprintf(content, sizeof content, "u1,a\n");
+  memset(content + n, 'x', 1100);
+  strcpy(content + n + 1100, "\nu2,b\n");
+  write_temp_csv(path, content);
+
+  log_capture_begin();
+  ck_assert_int_eq(revmap_load(path, &m), -1);
+  log_capture_end(logbuf, sizeof logbuf);
+  ck_assert_int_eq(log_count_of(logbuf, "XS400205"), 1);
+  ck_assert_ptr_nonnull(strstr(logbuf, "line 2:"));
+  ck_assert_ptr_null(strstr(logbuf, "XS400124"));
+  unlink(path);
+}
+END_TEST
+
+START_TEST(revmap_load_rejects_overlong_id) {
+  char path[] = "/tmp/dvbipitools_test_revmap_XXXXXX";
+  char logbuf[LOG_CAPTURE_BUF];
+  char content[600];
+  revmap_t m;
+  strcpy(content, "u1,");
+  memset(content + 3, 'i', 256);
+  strcpy(content + 3 + 256, "\n");
+  write_temp_csv(path, content);
+
+  log_capture_begin();
+  ck_assert_int_eq(revmap_load(path, &m), -1);
+  log_capture_end(logbuf, sizeof logbuf);
+  ck_assert_int_eq(log_count_of(logbuf, "XS400206"), 1);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(revmap_load_rejects_missing_file) {
   revmap_t m;
   ck_assert_int_eq(revmap_load("/nonexistent/dvbipitools_test_revmap.csv", &m), -1);
+}
+END_TEST
+
+START_TEST(revmap_duplicate_uri_first_wins_and_warns) {
+  char path[] = "/tmp/dvbipitools_test_revmap_XXXXXX";
+  char logbuf[LOG_CAPTURE_BUF];
+  revmap_t m;
+  write_temp_csv(path, "u1,first\nu0,other\nu1,second\nu1,third\n");
+
+  log_capture_begin();
+  ck_assert_int_eq(revmap_load(path, &m), 0);
+  log_capture_end(logbuf, sizeof logbuf);
+  ck_assert_int_eq(log_count_of(logbuf, "XW400223"), 2);
+  ck_assert_str_eq(revmap_lookup(&m, "u1"), "first");
+  revmap_free(&m);
+  unlink(path);
 }
 END_TEST
 
@@ -71,6 +126,9 @@ static Suite *revmap_suite(void) {
   tcase_add_test(tc, revmap_load_id_may_contain_commas);
   tcase_add_test(tc, revmap_load_rejects_malformed_line);
   tcase_add_test(tc, revmap_load_rejects_missing_file);
+  tcase_add_test(tc, revmap_load_rejects_overlong_line_with_right_lineno);
+  tcase_add_test(tc, revmap_load_rejects_overlong_id);
+  tcase_add_test(tc, revmap_duplicate_uri_first_wins_and_warns);
   suite_add_tcase(s, tc);
   return s;
 }

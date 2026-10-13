@@ -165,9 +165,7 @@ Multicast TTL / hop limit for
 \fBrtp://\fR/\fBudp://\fR. Default: kernel default (1).
 .TP
 .BR \-\-al\-fec " " \fIL\fR:\fID\fR
-Annex E Layer 1 FEC (SMPTE 2022-1): sends (on
-.BR \-o " " rtp://)
-or expects (on
+Annex E Layer 1 FEC (SMPTE 2022-1): expects (on
 .BR \-i " " rtp://)
 a parity repair stream.
 .IR L " * " D " <= 400, " L " <= 40. Requires "
@@ -175,9 +173,24 @@ a parity repair stream.
 .TP
 .BR \-\-al\-fec\-port " " \fIport\fR
 Repair stream UDP port, same multicast group as
-.BR \-i / \-o .
+.BR \-i .
 Requires
 .BR \-\-al\-fec .
+.TP
+.BR \-\-al\-fec\-out " " \fIL\fR:\fID\fR
+Like
+.BR \-\-al\-fec ,
+but sends (on
+.BR \-o " " rtp://)
+a parity repair stream.
+Requires
+.BR \-\-al\-fec\-port\-out .
+.TP
+.BR \-\-al\-fec\-port\-out " " \fIport\fR
+Repair stream UDP port, same multicast group as
+.BR \-o .
+Requires
+.BR \-\-al\-fec\-out .
 .TP
 .B \-\-rist\-profile \fI<p>\fR
 .IR simple | main .

@@ -55,7 +55,7 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
     if (pktlen == 0) {
       if (nseg == 0) break;
       /* no room at gso size: send queued. retry at full size */
-      h3_udp_send(tx_fd, &dst, dstlen, buf, pos, seg);
+      h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg);
       pos = 0;
       seg = 0;
       nseg = 0;
@@ -66,6 +66,14 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
         if (ndatalen >= 0 && c->h3conn) nghttp3_conn_add_write_offset(c->h3conn, stream_id, (uint64_t)ndatalen);
         continue;
       }
+      if (pktlen == NGTCP2_ERR_STREAM_DATA_BLOCKED && c->h3conn && stream_id >= 0) {
+        nghttp3_conn_block_stream(c->h3conn, stream_id);
+        continue;
+      }
+      if (pktlen == NGTCP2_ERR_STREAM_SHUT_WR && c->h3conn && stream_id >= 0) {
+        nghttp3_conn_shutdown_stream_write(c->h3conn, stream_id);
+        continue;
+      }
       c->done = 1;
       break;
     }
@@ -73,7 +81,7 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
     if (plen > sizeof dst) plen = sizeof dst;
     if (nseg > 0 && (plen != dstlen || memcmp(ps.path.remote.addr, &dst, plen) != 0)) {
       /* validation probes to new path, rest to old */
-      h3_udp_send(tx_fd, &dst, dstlen, buf, pos, seg);
+      h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg);
       memmove(buf, buf + pos, (size_t)pktlen);
       pos = 0;
       seg = 0;
@@ -90,13 +98,13 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
     nseg++;
     if (ndatalen >= 0 && c->h3conn) nghttp3_conn_add_write_offset(c->h3conn, stream_id, (uint64_t)ndatalen);
     if ((size_t)pktlen < seg || nseg >= max_segs) {
-      h3_udp_send(tx_fd, &dst, dstlen, buf, pos, seg);
+      h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg);
       pos = 0;
       seg = 0;
       nseg = 0;
     }
   }
-  h3_udp_send(tx_fd, &dst, dstlen, buf, pos, seg);
+  h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg);
   ngtcp2_conn_update_pkt_tx_time(c->qconn, ts);
 }
 

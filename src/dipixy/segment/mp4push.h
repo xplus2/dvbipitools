@@ -30,11 +30,14 @@ int64_t mp4push_sub_h3_sid(int slot);
 
 size_t mp4push_ring_read(int slot, uint8_t *buf, size_t maxlen);
 const uint8_t *mp4push_ring_peek(int slot, size_t *len);
-void mp4push_ring_advance(int slot, size_t n);
+/* h3: peek, hold, then ack once peer acked bytes. peeked mem stays valid till ack */
+void mp4push_ring_hold(int slot, size_t n);
+void mp4push_ring_ack(int slot, size_t n);
 int mp4push_ring_pending(int slot);
 int mp4push_ring_errored(int slot);
 
 void mp4push_register_reactor_efd(int tid, int efd);
+void mp4push_close_reactor_efds(void);
 void mp4push_flush_ready(int tid);
 
 void h2_mp4push_wake(int sub_idx);

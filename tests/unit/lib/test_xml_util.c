@@ -19,6 +19,78 @@ START_TEST(xml_escape_escapes_all_five_entities) {
 }
 END_TEST
 
+START_TEST(xml_escape_drops_chars_invalid_in_xml_10) {
+  char *buf;
+  size_t len;
+  FILE *f = open_memstream(&buf, &len);
+  xml_escape(f, "a\x01" "b\tc\nd\x1f" "e\xEF\xBF\xBE" "f\xEF\xBF\xBF" "g\xC3\xA4");
+  fclose(f);
+  ck_assert_str_eq(buf, "ab\tc\nde" "fg\xC3\xA4");
+  free(buf);
+}
+END_TEST
+
+START_TEST(xml_elem_text_rejects_control_char_refs) {
+  static const char doc[] = "<t>a&#x1;b&#9;c&#xFFFE;</t>";
+  char out[32];
+  ck_assert_int_eq(xml_elem_text(doc, doc + strlen(doc), "t", out, sizeof out), 0);
+  ck_assert_str_eq(out, "a&#x1;b\tc&#xFFFE;");
+}
+END_TEST
+
+START_TEST(xml_to_utf8_converts_declared_latin1) {
+  static const char doc[] = "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><t>caf\xE9</t>";
+  char *buf = strdup(doc);
+  size_t len = sizeof doc - 1;
+  char enc[32];
+  ck_assert_int_eq(xml_to_utf8(&buf, &len, enc, sizeof enc), 0);
+  ck_assert_str_eq(enc, "ISO-8859-1");
+  ck_assert_ptr_nonnull(strstr(buf, "caf\xC3\xA9</t>"));
+  ck_assert_uint_eq(len, strlen(buf));
+  free(buf);
+}
+END_TEST
+
+START_TEST(xml_to_utf8_converts_windows_1252) {
+  static const char doc[] = "<?xml version='1.0' encoding = 'windows-1252'?><t>\x80\x93x\x94</t>";
+  char *buf = strdup(doc);
+  size_t len = sizeof doc - 1;
+  ck_assert_int_eq(xml_to_utf8(&buf, &len, NULL, 0), 0);
+  ck_assert_ptr_nonnull(strstr(buf, "\xE2\x82\xAC\xE2\x80\x9Cx\xE2\x80\x9D</t>"));
+  free(buf);
+}
+END_TEST
+
+START_TEST(xml_to_utf8_leaves_utf8_and_undeclared_alone) {
+  static const char a[] = "<?xml version=\"1.0\" encoding=\"utf-8\"?><t>\xC3\xA4</t>";
+  static const char b[] = "<t>\xE4</t>";
+  char *buf = strdup(a);
+  char *orig = buf;
+  size_t len = sizeof a - 1;
+  ck_assert_int_eq(xml_to_utf8(&buf, &len, NULL, 0), 0);
+  ck_assert_ptr_eq(buf, orig);
+  free(buf);
+  buf = strdup(b);
+  orig = buf;
+  len = sizeof b - 1;
+  ck_assert_int_eq(xml_to_utf8(&buf, &len, NULL, 0), 0);
+  ck_assert_ptr_eq(buf, orig);
+  free(buf);
+}
+END_TEST
+
+START_TEST(xml_to_utf8_rejects_unknown_encoding) {
+  static const char doc[] = "<?xml version=\"1.0\" encoding=\"no-such-enc\"?><t/>";
+  char *buf = strdup(doc);
+  size_t len = sizeof doc - 1;
+  char enc[32];
+  ck_assert_int_eq(xml_to_utf8(&buf, &len, enc, sizeof enc), -1);
+  ck_assert_str_eq(enc, "no-such-enc");
+  ck_assert_str_eq(buf, doc);
+  free(buf);
+}
+END_TEST
+
 START_TEST(xml_attr_extracts_and_decodes_quoted_value) {
   static const char doc[] = "<x id=\"a&amp;b\" other=\"skip\">";
   char out[32];
@@ -84,6 +156,31 @@ START_TEST(xml_elem_text_chk_reports_truncation) {
   cut = 1;
   ck_assert_int_eq(xml_elem_text_chk(doc, doc + strlen(doc), "d", big, sizeof big, &cut), 0);
   ck_assert_int_eq(cut, 0);
+}
+END_TEST
+
+START_TEST(xml_elem_text_dup_returns_full_decoded_text) {
+  static const char doc[] = "<d>a &amp; <![CDATA[<b>]]> &#228;</d><e/>";
+  char *out = NULL;
+  ck_assert_int_eq(xml_elem_text_dup(doc, doc + strlen(doc), "d", &out), 0);
+  ck_assert_str_eq(out, "a & <b> \xC3\xA4");
+  free(out);
+  ck_assert_int_eq(xml_elem_text_dup(doc, doc + strlen(doc), "e", &out), -1);
+  ck_assert_int_eq(xml_elem_text_dup(doc, doc + strlen(doc), "x", &out), -1);
+}
+END_TEST
+
+START_TEST(xml_elem_text_dup_keeps_text_past_1k) {
+  char doc[4096];
+  char *out = NULL;
+  size_t n = 0;
+  n += (size_t)snprintf(doc + n, sizeof doc - n, "<d>");
+  memset(doc + n, 'x', 3000);
+  n += 3000;
+  snprintf(doc + n, sizeof doc - n, "</d>");
+  ck_assert_int_eq(xml_elem_text_dup(doc, doc + strlen(doc), "d", &out), 0);
+  ck_assert_uint_eq(strlen(out), 3000u);
+  free(out);
 }
 END_TEST
 
@@ -215,6 +312,26 @@ START_TEST(for_each_xml_elem_ignores_unclosed_trailing_element) {
 }
 END_TEST
 
+START_TEST(for_each_xml_elem_chk_reports_unclosed_element) {
+  static const char doc[] = "<i id='a'/><i id='b'>text<i id='c'/>";
+  each_t e = {0};
+  const char *bad = NULL;
+  ck_assert_int_eq(for_each_xml_elem_chk(doc, doc + strlen(doc), "i", each_cb, &e, &bad), 0);
+  ck_assert_int_eq(e.n, 1);
+  ck_assert_ptr_eq(bad, doc + 11);
+}
+END_TEST
+
+START_TEST(for_each_xml_elem_chk_leaves_unclosed_alone_when_balanced) {
+  static const char doc[] = "<i id='a'/><i id='b'>t</i>";
+  each_t e = {0};
+  const char *bad = NULL;
+  ck_assert_int_eq(for_each_xml_elem_chk(doc, doc + strlen(doc), "i", each_cb, &e, &bad), 0);
+  ck_assert_int_eq(e.n, 2);
+  ck_assert_ptr_null(bad);
+}
+END_TEST
+
 START_TEST(xml_find_start_needs_no_close_tag) {
   static const char doc[] = "<?xml version='1.0'?><!DOCTYPE a [<!ENTITY e \">\">]><sd:Root a='1'>";
   ck_assert_ptr_nonnull(xml_find_start(doc, doc + strlen(doc), "Root"));
@@ -226,6 +343,12 @@ static Suite *xml_util_suite(void) {
   Suite *s = suite_create("xml_util");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, xml_escape_escapes_all_five_entities);
+  tcase_add_test(tc, xml_escape_drops_chars_invalid_in_xml_10);
+  tcase_add_test(tc, xml_elem_text_rejects_control_char_refs);
+  tcase_add_test(tc, xml_to_utf8_converts_declared_latin1);
+  tcase_add_test(tc, xml_to_utf8_converts_windows_1252);
+  tcase_add_test(tc, xml_to_utf8_leaves_utf8_and_undeclared_alone);
+  tcase_add_test(tc, xml_to_utf8_rejects_unknown_encoding);
   tcase_add_test(tc, xml_attr_extracts_and_decodes_quoted_value);
   tcase_add_test(tc, xml_attr_returns_error_when_missing);
   tcase_add_test(tc, xml_elem_text_extracts_and_decodes_body);
@@ -234,6 +357,8 @@ static Suite *xml_util_suite(void) {
   tcase_add_test(tc, xml_elem_text_does_not_match_prefix_tag_name);
   tcase_add_test(tc, xml_elem_text_truncation_keeps_utf8_whole);
   tcase_add_test(tc, xml_elem_text_chk_reports_truncation);
+  tcase_add_test(tc, xml_elem_text_dup_returns_full_decoded_text);
+  tcase_add_test(tc, xml_elem_text_dup_keeps_text_past_1k);
   tcase_add_test(tc, xml_attr_chk_reports_truncation);
   tcase_add_test(tc, xml_attr_accepts_single_quotes_and_spaced_equals);
   tcase_add_test(tc, xml_attr_ignores_longer_names_text_and_comments);
@@ -246,6 +371,8 @@ static Suite *xml_util_suite(void) {
   tcase_add_test(tc, xml_numeric_ref_rejects_invalid_code_points);
   tcase_add_test(tc, for_each_xml_elem_visits_elements_by_local_name);
   tcase_add_test(tc, for_each_xml_elem_ignores_unclosed_trailing_element);
+  tcase_add_test(tc, for_each_xml_elem_chk_reports_unclosed_element);
+  tcase_add_test(tc, for_each_xml_elem_chk_leaves_unclosed_alone_when_balanced);
   tcase_add_test(tc, xml_find_start_needs_no_close_tag);
   suite_add_tcase(s, tc);
   return s;

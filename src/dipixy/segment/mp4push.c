@@ -21,7 +21,7 @@
 #define MP4PUSH_SUBS_HEADROOM 16
 #define MP4PUSH_SUBS_FLOOR 32
 #define MP4PUSH_MAX_REACTOR_THREADS 32
-#define MP4PUSH_RING_BYTES (1u << 17)
+#define MP4PUSH_RING_BYTES (1u << 19)
 #define MP4PUSH_SUB_FREE 0
 #define MP4PUSH_SUB_ALIVE 1
 #define MP4PUSH_SUB_CLOSING 2
@@ -34,12 +34,13 @@ typedef struct {
   lcevc_select_t lcevc;
   conn_proto_t proto;
   int fd;
+  uint64_t conn_gen; /* H1: conn ident, fd may be reused after teardown */
   void *h2c;
   void *h2_slot;
   void *h3c;
   int64_t h3_sid;
   int ws_handle;
-  int reactor_tid;
+  _Atomic int reactor_tid;
   byte_ring_t ring;
   _Atomic int ring_errored;
   _Atomic int seg_next;
@@ -64,7 +65,7 @@ static void free_slot(int idx) {
 static void wake_reactor(int tid) {
   int efd;
   if (tid < 0 || tid >= MP4PUSH_MAX_REACTOR_THREADS) return;
-  efd = g_reactor_efds[tid];
+  efd = __atomic_load_n(&g_reactor_efds[tid], __ATOMIC_RELAXED);
   if (efd >= 0) {
     uint64_t one = 1;
     ssize_t r = write(efd, &one, sizeof one);
@@ -88,7 +89,7 @@ static void link_tid_chain(int idx, int tid) {
 
 static void unlink_tid_chain(int idx) {
   const mp4push_sub_t *s = &g_subs[idx];
-  int tid = s->reactor_tid;
+  int tid = atomic_load_explicit(&s->reactor_tid, memory_order_relaxed);
   int cur;
   if (tid < 0 || tid >= MP4PUSH_MAX_REACTOR_THREADS) return;
   if (g_tid_head[tid] == idx) {
@@ -137,14 +138,14 @@ void mp4push_deliver(const hls_seg_ctx_t *s, const unsigned char *data, size_t l
     int next = atomic_load_explicit(&sub->seg_next, memory_order_relaxed);
     if (atomic_load_explicit(&sub->alive, memory_order_acquire) == MP4PUSH_SUB_ALIVE) {
       if (sub->proto == CONN_PROTO_H1) {
-        conn_t *c = conn_for_fd(sub->fd);
+        conn_t *c = conn_for_fd_gen(sub->fd, sub->conn_gen);
         if (c) {
           conn_send_buffered(c, data, len, NULL, 0);
           ws_clients_add_bytes(sub->ws_handle, len);
         }
       } else {
         ring_enqueue(sub, data, len);
-        wake_reactor(sub->reactor_tid);
+        wake_reactor(atomic_load_explicit(&sub->reactor_tid, memory_order_acquire));
       }
     }
     i = next;
@@ -172,27 +173,27 @@ void mp4push_init(int max_clients) {
   }
 }
 
-int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, conn_proto_t proto) {
+static int subscribe_slot(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, conn_proto_t proto, int fd, uint64_t conn_gen, int ws_handle) {
   hls_seg_ctx_t *s;
   int idx = -1;
   pthread_mutex_lock(&g_free_lock);
   if (g_free_slots_n > 0) idx = g_free_slots[--g_free_slots_n];
   pthread_mutex_unlock(&g_free_lock);
   if (idx < 0) return -1;
-  atomic_store_explicit(&g_subs[idx].alive, MP4PUSH_SUB_ALIVE, memory_order_release);
 
   g_subs[idx].cap_ctx = ctx;
   g_subs[idx].filter = *filter;
   g_subs[idx].pmt_pid = pmt_pid;
   g_subs[idx].lcevc = *lcevc;
   g_subs[idx].proto = proto;
-  g_subs[idx].fd = -1;
+  g_subs[idx].fd = fd;
+  g_subs[idx].conn_gen = conn_gen;
   g_subs[idx].h2c = NULL;
   g_subs[idx].h2_slot = NULL;
   g_subs[idx].h3c = NULL;
   g_subs[idx].h3_sid = -1;
-  g_subs[idx].ws_handle = -1;
-  g_subs[idx].reactor_tid = -1;
+  g_subs[idx].ws_handle = ws_handle;
+  atomic_store_explicit(&g_subs[idx].reactor_tid, -1, memory_order_relaxed);
   g_subs[idx].tid_next = -1;
   atomic_store_explicit(&g_subs[idx].ring_errored, 0, memory_order_relaxed);
   if (proto == CONN_PROTO_H2 || proto == CONN_PROTO_H3) {
@@ -204,10 +205,11 @@ int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
     }
     if (hls_render(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4, "init.mp4", 0, NULL, &resp) && resp.status == 200) {
       ring_enqueue(&g_subs[idx], resp.body, resp.body_len);
-      hls_resp_body_release(resp.body, resp.zc);
+      hls_resp_body_release(resp.body, resp.owner, resp.zc);
     }
   }
 
+  atomic_store_explicit(&g_subs[idx].alive, MP4PUSH_SUB_ALIVE, memory_order_release);
   hls_seg_registry_lock();
   s = hls_seg_find_locked(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4);
   if (s) seg_link(s, idx);
@@ -217,6 +219,10 @@ int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
     return -1;
   }
   return idx;
+}
+
+int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, conn_proto_t proto) {
+  return subscribe_slot(ctx, filter, pmt_pid, lcevc, proto, -1, 0, -1);
 }
 
 int mp4push_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int ws_handle) {
@@ -231,12 +237,10 @@ int mp4push_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter
   conn_queue(c, hdr, b.len);
   if (hls_render(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4, "init.mp4", 0, NULL, &resp) && resp.status == 200) {
     conn_queue(c, resp.body, resp.body_len);
-    hls_resp_body_release(resp.body, resp.zc);
+    hls_resp_body_release(resp.body, resp.owner, resp.zc);
   }
-  idx = mp4push_subscribe(ctx, filter, pmt_pid, lcevc, CONN_PROTO_H1);
+  idx = subscribe_slot(ctx, filter, pmt_pid, lcevc, CONN_PROTO_H1, c->fd, atomic_load_explicit(&c->gen, memory_order_relaxed), ws_handle);
   if (idx < 0) return 0;
-  g_subs[idx].fd = c->fd;
-  g_subs[idx].ws_handle = ws_handle;
   c->slot = idx;
   c->next_state = CONN_NEXT_MP4PUSH;
   return 1;
@@ -246,7 +250,7 @@ void mp4push_h2_bind(int slot, void *h2c, void *h2_slot, int reactor_tid, int ws
   if (slot < 0 || slot >= g_subs_n) return;
   g_subs[slot].h2c = h2c;
   g_subs[slot].h2_slot = h2_slot;
-  g_subs[slot].reactor_tid = reactor_tid;
+  atomic_store_explicit(&g_subs[slot].reactor_tid, reactor_tid, memory_order_release);
   g_subs[slot].ws_handle = ws_handle;
   link_tid_chain(slot, reactor_tid);
 }
@@ -265,7 +269,7 @@ void mp4push_h3_bind(int slot, void *h3c, int64_t h3_sid, int reactor_tid, int w
   if (slot < 0 || slot >= g_subs_n) return;
   g_subs[slot].h3c = h3c;
   g_subs[slot].h3_sid = h3_sid;
-  g_subs[slot].reactor_tid = reactor_tid;
+  atomic_store_explicit(&g_subs[slot].reactor_tid, reactor_tid, memory_order_release);
   g_subs[slot].ws_handle = ws_handle;
   link_tid_chain(slot, reactor_tid);
 }
@@ -293,16 +297,21 @@ const uint8_t *mp4push_ring_peek(int slot, size_t *len) {
   return byte_ring_peek(&g_subs[slot].ring, len);
 }
 
-void mp4push_ring_advance(int slot, size_t n) {
+void mp4push_ring_hold(int slot, size_t n) {
   if (slot < 0 || slot >= g_subs_n) return;
-  byte_ring_advance(&g_subs[slot].ring, n);
+  byte_ring_hold(&g_subs[slot].ring, n);
+}
+
+void mp4push_ring_ack(int slot, size_t n) {
+  if (slot < 0 || slot >= g_subs_n) return;
+  byte_ring_ack(&g_subs[slot].ring, n);
 }
 
 int mp4push_ring_pending(int slot) {
   const mp4push_sub_t *s;
   if (slot < 0 || slot >= g_subs_n) return 0;
   s = &g_subs[slot];
-  return atomic_load_explicit(&s->ring.wpos, memory_order_acquire) != atomic_load_explicit(&s->ring.rpos, memory_order_relaxed);
+  return byte_ring_unsent(&s->ring) != 0;
 }
 
 int mp4push_ring_errored(int slot) {
@@ -312,7 +321,14 @@ int mp4push_ring_errored(int slot) {
 
 void mp4push_register_reactor_efd(int tid, int efd) {
   if (tid < 0 || tid >= MP4PUSH_MAX_REACTOR_THREADS) return;
-  g_reactor_efds[tid] = efd;
+  __atomic_store_n(&g_reactor_efds[tid], efd, __ATOMIC_RELAXED);
+}
+
+void mp4push_close_reactor_efds(void) {
+  for (int i = 0; i < MP4PUSH_MAX_REACTOR_THREADS; i++) {
+    int efd = __atomic_exchange_n(&g_reactor_efds[i], -1, __ATOMIC_RELAXED);
+    if (efd >= 0) close(efd);
+  }
 }
 
 void mp4push_flush_ready(int tid) {
@@ -338,22 +354,22 @@ void mp4push_flush_ready(int tid) {
 static void mp4push_finish_sub_close(void *arg) {
   int slot = (int)(intptr_t)arg;
   const mp4push_sub_t *s = &g_subs[slot];
-  hls_seg_ctx_t *seg;
-  hls_seg_registry_lock();
-  seg = hls_seg_find_locked(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, SEG_CONTAINER_FMP4);
-  if (seg) seg_unlink(seg, slot);
-  hls_seg_registry_unlock();
   if (s->proto == CONN_PROTO_H2 || s->proto == CONN_PROTO_H3) unlink_tid_chain(slot);
   free_slot(slot);
 }
 
 void mp4push_sub_close(int slot) {
   mp4push_sub_t *s;
+  hls_seg_ctx_t *seg;
   int expected;
   if (slot < 0 || slot >= g_subs_n) return;
   s = &g_subs[slot];
   expected = MP4PUSH_SUB_ALIVE;
   if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, MP4PUSH_SUB_CLOSING, memory_order_acquire, memory_order_relaxed)) return;
+  hls_seg_registry_lock();
+  seg = hls_seg_find_locked(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, SEG_CONTAINER_FMP4);
+  if (seg) seg_unlink(seg, slot);
+  hls_seg_registry_unlock();
   if (!capture_defer_after_quiescent(mp4push_finish_sub_close, (void *)(intptr_t)slot)) {
     capture_wait_pumps_quiescent();
     mp4push_finish_sub_close((void *)(intptr_t)slot);

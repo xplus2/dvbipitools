@@ -30,6 +30,19 @@ printf 'no-comma-on-this-line\n' > "$WORK/badrev.csv"
 run_expect_rc 1 "malformed reverse map" "$BIN" -f tva -R "$WORK/badrev.csv" -i "$WORK/in.tva.xml" -o "$WORK/out.xmltv" 2> "$WORK/badrev.err"
 assert_contains "$WORK/badrev.err" "reverse map line 1: expected uri,id" "malformed reverse map message"
 
+{ printf 'channel1,rtp://239.1.1.1:5000,1,2,101\n'; head -c 1100 /dev/zero | tr '\0' x; printf '\n'; } > "$WORK/longline.csv"
+run_expect_rc 1 "overlong mapping line" "$BIN" -f xmltv -M "$WORK/longline.csv" -i "$WORK/in.xmltv" -o "$WORK/out.xml" 2> "$WORK/longline.err"
+assert_contains "$WORK/longline.err" "mapping: line 2: longer than 1023 bytes" "overlong mapping line message"
+
+printf 'keep-me\n' > "$WORK/keep.out"
+run_expect_rc 1 "failed load keeps output" "$BIN" -f xmltv -M "$WORK/no-such-map.csv" -i "$WORK/in.xmltv" -o "$WORK/keep.out" 2> /dev/null
+assert_contains "$WORK/keep.out" "keep-me" "output untouched after failed load"
+
+cp "$WORK/in.xmltv" "$WORK/same.xml"
+printf 'channel1,rtp://239.1.1.1:5000,1,2,101\n' > "$WORK/ok.csv"
+run_expect_rc 0 "same file for input and output" "$BIN" -f xmltv -M "$WORK/ok.csv" -i "$WORK/same.xml" -o "$WORK/same.xml"
+assert_contains "$WORK/same.xml" "TVAMain" "in-place output not empty"
+
 echo "OK"
 
 #EOF

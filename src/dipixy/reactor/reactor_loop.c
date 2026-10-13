@@ -28,8 +28,10 @@
 #endif
 
 #include <errno.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/epoll.h>
 #include <unistd.h>
 
@@ -85,6 +87,11 @@ void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, struct epo
 
   c = ptr;
   e = evp->events;
+  if (atomic_load_explicit(&c->close_requested, memory_order_acquire) &&
+      (c->state == CONN_TLS_HANDSHAKE || c->state == CONN_READING || c->state == CONN_DISPATCH || c->state == CONN_WRITING)) {
+    reactor_close(epfd, c); /* idle sweep: nothing worth flushing */
+    return;
+  }
   if (e & EPOLLERR) conn_zc_drain(c);
   if ((e & EPOLLHUP || (e & EPOLLERR && socket_has_error(c->fd))) && !(e & EPOLLIN)) {
     switch (c->state) {
@@ -148,11 +155,31 @@ void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, struct epo
   }
 }
 
+static atomic_int g_setup_expect;
+static atomic_int g_setup_done;
+static atomic_int g_setup_failed;
+
+void reactor_startup_begin(int n) {
+  atomic_store(&g_setup_expect, n);
+  atomic_store(&g_setup_done, 0);
+  atomic_store(&g_setup_failed, 0);
+}
+
+void reactor_startup_lost(void) { atomic_fetch_sub(&g_setup_expect, 1); }
+
+int reactor_startup_failed(void) { return atomic_load(&g_setup_failed); }
+
+/* tid 0 only: every worker bound (or failed) before "listening" is announced */
+static void wait_setup_done(void) {
+  while (atomic_load(&g_setup_done) < atomic_load(&g_setup_expect) && !signal_stop_requested()) usleep(1000);
+}
+
 void *worker_thread(void *arg) {
   int tid = (int)(intptr_t)arg;
   const config_t *cfg = reactor_cfg();
   reactor_listeners_t rl;
   int epfd;
+  int setup_rc;
 
   t_reactor_tid = tid;
   if (cfg) {
@@ -161,15 +188,31 @@ void *worker_thread(void *arg) {
     cpuaff_pin(&cfg->cpu_affinity, (unsigned)tid, what);
   }
   epfd = epoll_create1(EPOLL_CLOEXEC);
-  if (epfd < 0) return NULL;
+  if (epfd < 0) {
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&g_setup_failed, &expected, 1))
+      log_code("YE500226", TOOL_NAME ": worker %d: epoll_create1: %s", tid, strerror(errno));
+    atomic_fetch_add(&g_setup_done, 1);
+    signal_request_stop();
+    return NULL;
+  }
   t_reactor_epfd = epfd;
-  reactor_setup_listeners(&rl, epfd, tid);
-  if (tid == 0) reactor_notify_listening();
+  setup_rc = reactor_setup_listeners(&rl, epfd, tid);
+  if (setup_rc != 0) {
+    atomic_store(&g_setup_failed, 1);
+    signal_request_stop();
+  }
+  atomic_fetch_add(&g_setup_done, 1);
+  if (tid == 0) {
+    wait_setup_done();
+    if (!atomic_load(&g_setup_failed)) reactor_notify_listening();
+  }
+  if (setup_rc != 0) goto out;
   for (;;) {
     struct epoll_event events[256];
     int nev, timeout_ms = 200;
     if (signal_stop_requested()) {
-      if (tid == 0) log_line(TOOL_NAME ": signal received, shutting down");
+      if (tid == 0 && !atomic_load(&g_setup_failed)) log_line(TOOL_NAME ": signal received, shutting down");
       break;
     }
 #ifdef HAVE_HTTP3
@@ -191,21 +234,27 @@ void *worker_thread(void *arg) {
     llhls_flush_waiters();
     hls_cold_flush_waiters();
     ts_cold_flush_waiters();
+    open_flush_waiters();
     htdocs_template_reload_check();
 #ifdef HAVE_HTTP2
     h2_llhls_flush_waiters();
     h2_hls_cold_flush_waiters();
+    h2_ts_cold_flush_waiters();
+    h2_open_flush_waiters();
 #endif
 #ifdef HAVE_HTTP3
     h3_llhls_flush_waiters();
     h3_hls_cold_flush_waiters();
+    h3_ts_cold_flush_waiters();
+    h3_open_flush_waiters();
     h3_ws_flush();
     h3_tick();
 #endif
     qsbr_worker_quiescent(reactor_qsbr(), tid); /* no store/snapshot ref held past this point */
   }
 
-  reactor_teardown_listeners(&rl, tid);
+out:
+  reactor_teardown_listeners(&rl);
   close(epfd);
   reactor_ws_pool_release();
   conn_retire_handoff();
@@ -247,7 +296,7 @@ void *pump_thread(void *arg) {
       }
       if (signal_tls_reload_requested()) {
         if (reload_tls() == 0) log_line(TOOL_NAME ": SIGUSR1: TLS cert reload ok");
-        else                   log_code("YW300106", TOOL_NAME ": SIGUSR1: TLS cert reload failed");
+        else                   log_code("YW300106", "SIGUSR1: TLS cert reload failed");
       }
       dipixy_metrics_push(reactor_metrics());
     }
