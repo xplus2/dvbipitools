@@ -171,7 +171,8 @@ int reactor_startup_failed(void) { return atomic_load(&g_setup_failed); }
 
 /* tid 0 only: every worker bound (or failed) before "listening" is announced */
 static void wait_setup_done(void) {
-  while (atomic_load(&g_setup_done) < atomic_load(&g_setup_expect) && !signal_stop_requested()) usleep(1000);
+  const struct timespec ts = {0, 1000000L};
+  while (atomic_load(&g_setup_done) < atomic_load(&g_setup_expect) && !signal_stop_requested()) nanosleep(&ts, NULL);
 }
 
 void *worker_thread(void *arg) {

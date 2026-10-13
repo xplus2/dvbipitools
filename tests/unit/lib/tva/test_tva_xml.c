@@ -135,7 +135,9 @@ START_TEST(tva_build_crid_percent_encodes_and_compacts_time) {
 END_TEST
 
 START_TEST(tva_build_crid_dst_overlap_distinct) {
-  char a[256], b[256], c[256];
+  char a[256];
+  char b[256];
+  char c[256];
   tva_build_crid("ch", "2026-10-25T02:30:00+02:00", a, sizeof a);
   tva_build_crid("ch", "2026-10-25T02:30:00+01:00", b, sizeof b);
   ck_assert_str_ne(a, b);

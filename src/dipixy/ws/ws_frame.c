@@ -48,7 +48,10 @@ int ws_parser_feed(ws_parser_t *p, const uint8_t *data, size_t len) {
 
 static void consume(ws_parser_t *p, size_t n) {
   p->off += n;
-  if (p->off == p->len) p->off = p->len = 0;
+  if (p->off == p->len) {
+    p->off = 0;
+    p->len = 0;
+  }
 }
 
 static void ws_unmask(uint8_t *dst, const uint8_t *body, const uint8_t *mask, size_t n) {

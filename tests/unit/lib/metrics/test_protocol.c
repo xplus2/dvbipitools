@@ -116,7 +116,8 @@ END_TEST
 static size_t put_read_len(const char *in) {
   metrics_writer_t w;
   metrics_reader_t r;
-  metrics_hdr_t hdr, out_hdr;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out_hdr;
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
   uint64_t value;

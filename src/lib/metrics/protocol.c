@@ -101,7 +101,7 @@ static int writer_flush_part(metrics_writer_t *w) {
 }
 
 size_t metrics_utf8_seq_len(const unsigned char *s, size_t avail) {
-  size_t n, i;
+  size_t n;
   unsigned cp;
   if (!avail) return 0;
   if (s[0] < 0x80) return 1;
@@ -110,7 +110,7 @@ size_t metrics_utf8_seq_len(const unsigned char *s, size_t avail) {
   else if (s[0] >= 0xF0 && s[0] <= 0xF4) { n = 4; cp = s[0] & 0x07; }
   else return 0;
   if (avail < n) return 0;
-  for (i = 1; i < n; i++) {
+  for (size_t i = 1; i < n; i++) {
     if ((s[i] & 0xC0) != 0x80) return 0;
     cp = (cp << 6) | (s[i] & 0x3F);
   }

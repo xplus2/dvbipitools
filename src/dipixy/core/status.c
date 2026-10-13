@@ -139,7 +139,8 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
 
   jbuf_key(&j, "exec_args");
   jbuf_str(&j, "[");
-  for (i = 0; i < g_argc; i++) {
+  i = 0;
+  while (i < g_argc) {
     int has_value;
     int secret = secret_opt(g_argv[i], &has_value);
 
@@ -158,6 +159,7 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
       jbuf_json_string(&j, "***");
       i++;
     }
+    i++;
   }
   jbuf_str(&j, "],");
 

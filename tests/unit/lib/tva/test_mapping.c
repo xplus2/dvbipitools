@@ -54,7 +54,9 @@ START_TEST(mapping_load_and_lookup_round_trips) {
   char path[] = "/tmp/dvbipitools_test_mapping_XXXXXX";
   mapping_t m;
   char uri[128];
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
 
   write_temp_csv(path, "# comment line, ignored\n\n"
                   "channel1,rtp://239.1.1.1:5000,1,2,101\n"
@@ -125,7 +127,9 @@ START_TEST(mapping_duplicate_id_first_wins_and_warns) {
   char path[] = "/tmp/dvbipitools_test_mapping_XXXXXX";
   char logbuf[LOG_CAPTURE_BUF];
   char uri[64];
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
   mapping_t m;
   write_temp_csv(path, "a,uri1,1,1,1\nb,uriB,2,2,2\na,uri2,3,3,3\na,uri3,4,4,4\n");
 
@@ -165,7 +169,9 @@ START_TEST(mapping_load_id_length_limit) {
   char logbuf[LOG_CAPTURE_BUF];
   char content[600];
   char uri[64];
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
   mapping_t m;
   size_t n;
 

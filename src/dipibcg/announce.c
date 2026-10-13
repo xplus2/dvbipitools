@@ -86,7 +86,8 @@ typedef struct {
 } prog_ord_t;
 
 static int prog_ord_cmp(const void *a, const void *b) {
-  const prog_ord_t *x = a, *y = b;
+  const prog_ord_t *x = a;
+  const prog_ord_t *y = b;
   int c = strcmp(x->pr->channel_id, y->pr->channel_id);
   if (c) return c;
   return (x->start > y->start) - (x->start < y->start);
@@ -126,7 +127,7 @@ int prog_times_build(const bcg_doc_t *doc, prog_time_t **out) {
     ord[n].end = ord[n].has_end ? e : 0;
     n++;
   }
-  qsort(ord, (size_t)n, sizeof *ord, prog_ord_cmp);
+  if (n > 1) qsort(ord, (size_t)n, sizeof *ord, prog_ord_cmp);
   resolve_open_ends(ord, n);
   for (int i = 0; i < n; i++) {
     prog_time_t *p = &t[ord[i].idx];
@@ -142,7 +143,8 @@ int prog_times_build(const bcg_doc_t *doc, prog_time_t **out) {
 
 void window_select(const bcg_doc_t *src, const prog_time_t *times, long now, int64_t window_min, int *sel, int *nsel, long *out_sched_start, long *out_sched_end, int *out_have_sched) {
   long sched_start = 0, sched_end = 0;
-  int have_sched = 0, n = 0;
+  int have_sched = 0;
+  int n = 0;
 
   for (int i = 0; i < src->programme_count; i++) {
     const prog_time_t *t = &times[i];
@@ -255,7 +257,7 @@ static int build_segment(bitwriter_t *bw, const strrepo_writer_t *sw, const acce
   if (wrapper_build(cont, cont_len, compress, &wrapped, &wrapped_len) != 0) {
     log_code("GE100142", "wrapper build failed");
   } else if (wrapped_len > DVBSTP_MAX_SEGMENT) {
-    log_code("GE100143", "guide too large (%zu bytes, max %u), reduce window or channels", wrapped_len, (unsigned)DVBSTP_MAX_SEGMENT);
+    log_code("GE100143", "guide too large (%zu bytes, max %u), reduce window or channels", wrapped_len, DVBSTP_MAX_SEGMENT);
     free(wrapped);
   } else {
     seg->buf = wrapped;
@@ -285,7 +287,9 @@ static size_t vlu8_len(size_t n) {
 static int plan_groups(accessunit_scratch_t *sc, const bcg_doc_t *doc, int **bounds, int *ngroups) {
   int n = doc->channel_count;
   int *b = malloc(sizeof *b * ((size_t)n + 2));
-  size_t grp_au_body = 0, grp_str_body = 0, grp_nfuu = 0;
+  size_t grp_au_body = 0;
+  size_t grp_str_body = 0;
+  size_t grp_nfuu = 0;
   int ng = 0;
   int per_channel = n <= (int)BCG_MAX_SEGMENTS;
   bitwriter_t bw;
@@ -297,7 +301,10 @@ static int plan_groups(accessunit_scratch_t *sc, const bcg_doc_t *doc, int **bou
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
   for (int c = 0; c < n; c++) {
-    size_t au_len, str_len, au_body, str_body;
+    size_t au_len;
+    size_t str_len;
+    size_t au_body;
+    size_t str_body;
     int nf = 0;
     bitwriter_reset(&bw);
     strrepo_writer_free(&sw);
@@ -308,16 +315,18 @@ static int plan_groups(accessunit_scratch_t *sc, const bcg_doc_t *doc, int **bou
     au_body = au_len - vlu8_len((size_t)nf);
     str_body = str_len - 1;
     if (vlu8_len((size_t)nf) + au_body > CONTAINER_MAX_REPO || 1 + str_body > CONTAINER_MAX_REPO) {
-      log_code("GE100145", "channel %s alone exceeds %u bytes per repository, reduce its programmes", doc->channels[c].id, (unsigned)CONTAINER_MAX_REPO);
+      log_code("GE100145", "channel %s alone exceeds %u bytes per repository, reduce its programmes", doc->channels[c].id, CONTAINER_MAX_REPO);
       goto done;
     }
     if (c > 0 && (per_channel || vlu8_len(grp_nfuu + (size_t)nf) + grp_au_body + au_body > CONTAINER_MAX_REPO || 1 + grp_str_body + str_body > CONTAINER_MAX_REPO)) {
       if ((unsigned)ng + 1 >= BCG_MAX_SEGMENTS) {
-        log_code("GE100147", "guide needs more than %u segments, reduce channels", (unsigned)BCG_MAX_SEGMENTS);
+        log_code("GE100147", "guide needs more than %u segments, reduce channels", BCG_MAX_SEGMENTS);
         goto done;
       }
       b[++ng] = c;
-      grp_au_body = grp_str_body = grp_nfuu = 0;
+      grp_au_body = 0;
+      grp_str_body = 0;
+      grp_nfuu = 0;
     }
     grp_au_body += au_body;
     grp_str_body += str_body;
@@ -369,9 +378,10 @@ static void ctx_drop_cache(bcg_announce_ctx_t *ctx) {
 }
 
 /* takes *nd on success. 0 ok, -1 oom (*nd untouched) */
-static int ctx_set_doc(bcg_announce_ctx_t *ctx, bcg_doc_t *nd) {
+static int ctx_set_doc(bcg_announce_ctx_t *ctx, const bcg_doc_t *nd) {
   prog_time_t *t;
-  int *a = NULL, *b = NULL;
+  int *a = NULL;
+  int *b = NULL;
 
   if (prog_times_build(nd, &t)) return -1;
   if (nd->programme_count > 0) {
@@ -461,7 +471,8 @@ static int cycle_build(bcg_announce_ctx_t *ctx) {
   for (int g = 0; g < ngroups; g++) {
     bitwriter_t bw;
     strrepo_writer_t sw;
-    int nfuu = 0, ncp = 0;
+    int nfuu = 0;
+    int ncp = 0;
     int rc;
     bitwriter_init(&bw);
     strrepo_writer_init(&sw);
@@ -489,9 +500,11 @@ static int cycle_build(bcg_announce_ctx_t *ctx) {
 
 static int bcg_announce_cycle(void *ctx_, mcast_t *m, unsigned cycle) {
   bcg_announce_ctx_t *ctx = ctx_;
-  int nnew, failed = 0;
+  int nnew;
+  int failed = 0;
   int refresh_due = ctx->cfg->refresh_cycles < 2 || (cycle - 1) % (unsigned)ctx->cfg->refresh_cycles == 0;
-  long ss, se;
+  long ss;
+  long se;
   int have;
   int *tmp;
 

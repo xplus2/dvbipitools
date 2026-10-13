@@ -69,7 +69,7 @@ typedef struct {
 } seg_slot_t;
 
 /* latest decode per (provider, segment_id) replaces the previous one. takes ownership of *doc on success, 0 ok, -1 oom */
-static int slot_store(seg_slot_t **slots, int *n, const dvbstp_header_t *h, bcg_doc_t *doc) {
+static int slot_store(seg_slot_t **slots, int *n, const dvbstp_header_t *h, const bcg_doc_t *doc) {
   for (int i = 0; i < *n; i++) {
     if ((*slots)[i].segment_id != h->segment_id || (*slots)[i].has_provider_id != h->has_provider_id || (*slots)[i].provider_id != h->provider_id) continue;
     bcg_doc_free(&(*slots)[i].doc);

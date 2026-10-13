@@ -19,7 +19,9 @@ int dvb_string_decode_dup(strrepo_reader_t *sr, char **out);
 /* reuse state of one fragment: locator prefix and day, dateTime date */
 typedef struct {
   int have_prefix;
-  unsigned onid, tsid, sid;
+  unsigned onid;
+  unsigned tsid;
+  unsigned sid;
   int have_day;
   unsigned day;
   int have_date;

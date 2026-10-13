@@ -578,8 +578,8 @@ static void ck_pwrite(mp4_t *m, const unsigned char *p, size_t n, size_t pos) {
   }
 }
 
-static void ck_flush_tab(mp4_t *m, ck_tab_t *c) {
-  unsigned char *img = m->ck_moov.p;
+static void ck_flush_tab(mp4_t *m, const ck_tab_t *c) {
+  const unsigned char *img = m->ck_moov.p;
   if (c->n > c->synced) ck_pwrite(m, img + c->pos + (size_t)c->synced * c->esz, (size_t)(c->n - c->synced) * c->esz, c->pos + (size_t)c->synced * c->esz);
   ck_pwrite(m, img + c->pos - 4, 4, c->pos - 4);
 }

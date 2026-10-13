@@ -156,7 +156,10 @@ typedef struct {
 } gena_hdrs_t;
 
 static void read_gena_headers(const struct phr_header *headers, size_t num_headers, gena_hdrs_t *g) {
-  g->sid[0] = g->callback[0] = g->nt[0] = g->timeout[0] = '\0';
+  g->sid[0] = '\0';
+  g->callback[0] = '\0';
+  g->nt[0] = '\0';
+  g->timeout[0] = '\0';
   find_header(headers, num_headers, "SID", g->sid, sizeof g->sid);
   find_header(headers, num_headers, "CALLBACK", g->callback, sizeof g->callback);
   find_header(headers, num_headers, "NT", g->nt, sizeof g->nt);

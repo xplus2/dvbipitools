@@ -33,8 +33,8 @@ int dvb_locator_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char *uri) {
   return dvb_string_encode(sw, uri);
 }
 
-static int sbuf_hex(char *out, size_t cap, size_t *n, const char *fmt, unsigned v) {
-  int w = snprintf(out + *n, *n < cap ? cap - *n : 0, fmt, v);
+static int sbuf_hex(char *out, size_t cap, size_t *n, const char *pre, unsigned v, const char *post) {
+  int w = snprintf(out + *n, *n < cap ? cap - *n : 0, "%s%x%s", pre, v, post);
   if (w < 0 || *n + (size_t)w >= cap) return -1;
   *n += (size_t)w;
   return 0;
@@ -46,12 +46,15 @@ static int locator_decode_optimized(bitreader_t *br, strrepo_reader_t *sr, dvb_c
   size_t n = 0;
   unsigned ctags[32];
   int nctag = 0;
-  uint64_t event_or_tva = 0, event_id = 0;
+  uint64_t event_or_tva = 0;
+  uint64_t event_id = 0;
   char path[256];
 
   if (bitreader_get(br, 1, &v)) return -1;
   if (v) {
-    uint64_t ts, on, sid;
+    uint64_t ts;
+    uint64_t on;
+    uint64_t sid;
     if (bitreader_get(br, 16, &ts) || bitreader_get(br, 16, &on) || bitreader_get(br, 16, &sid)) return -1;
     st->have_prefix = 1;
     st->tsid = (unsigned)ts;
@@ -63,35 +66,38 @@ static int locator_decode_optimized(bitreader_t *br, strrepo_reader_t *sr, dvb_c
   if (outcap < 8) return -1;
   memcpy(out, "dvb://", 7);
   n = 6;
-  if (sbuf_hex(out, outcap, &n, "%x.", st->onid)) return -1;
-  if (st->tsid && sbuf_hex(out, outcap, &n, "%x", st->tsid)) return -1;
-  if (sbuf_hex(out, outcap, &n, ".%x", st->sid)) return -1;
+  if (sbuf_hex(out, outcap, &n, "", st->onid, ".")) return -1;
+  if (st->tsid && sbuf_hex(out, outcap, &n, "", st->tsid, "")) return -1;
+  if (sbuf_hex(out, outcap, &n, ".", st->sid, "")) return -1;
   if (bitreader_get(br, 1, &v)) return -1;
   if (v) {
     do {
-      uint64_t tag, cont;
+      uint64_t tag;
+      uint64_t cont;
       if (bitreader_get(br, 8, &tag) || bitreader_get(br, 1, &cont)) return -1;
       if (nctag < 32) ctags[nctag++] = (unsigned)tag;
       v = cont;
     } while (v);
   }
   for (int i = 0; i < nctag; i++)
-    if (sbuf_hex(out, outcap, &n, ".%x", ctags[i])) return -1;
+    if (sbuf_hex(out, outcap, &n, ".", ctags[i], "")) return -1;
   if (bitreader_get(br, 1, &v)) return -1;
   if (v) {
     uint64_t cid;
     if (bitreader_get(br, 32, &cid)) return -1;
-    if (sbuf_hex(out, outcap, &n, ";cid=%x", (unsigned)cid)) return -1;
+    if (sbuf_hex(out, outcap, &n, ";cid=", (unsigned)cid, "")) return -1;
   }
   if (bitreader_get(br, 2, &event_or_tva)) return -1;
   if (event_or_tva == 3) return -1;
   if (event_or_tva) {
     if (bitreader_get(br, 16, &event_id)) return -1;
-    if (sbuf_hex(out, outcap, &n, event_or_tva == 1 ? ";%x" : ";tva=%x", (unsigned)event_id)) return -1;
+    if (sbuf_hex(out, outcap, &n, event_or_tva == 1 ? ";" : ";tva=", (unsigned)event_id, "")) return -1;
   }
   if (bitreader_get(br, 1, &v)) return -1;
   if (v) {
-    uint64_t day, tm, dur;
+    uint64_t day;
+    uint64_t tm;
+    uint64_t dur;
     if (bitreader_get(br, 1, &v)) return -1;
     if (v) {
       if (bitreader_get(br, 16, &day)) return -1;
@@ -101,9 +107,9 @@ static int locator_decode_optimized(bitreader_t *br, strrepo_reader_t *sr, dvb_c
       return -1;
     }
     if (bitreader_get(br, 17, &tm) || bitreader_get(br, 17, &dur)) return -1;
-    if (sbuf_hex(out, outcap, &n, "@%x", st->day)) return -1;
-    if (sbuf_hex(out, outcap, &n, ":%x", (unsigned)tm)) return -1;
-    if (sbuf_hex(out, outcap, &n, "--%x", (unsigned)dur)) return -1;
+    if (sbuf_hex(out, outcap, &n, "@", st->day, "")) return -1;
+    if (sbuf_hex(out, outcap, &n, ":", (unsigned)tm, "")) return -1;
+    if (sbuf_hex(out, outcap, &n, "--", (unsigned)dur, "")) return -1;
   }
   if (bitreader_get(br, 1, &v)) return -1;
   if (v) {
@@ -175,7 +181,9 @@ int dvb_datetime_encode(bitwriter_t *bw, const char *iso8601) {
 }
 
 static int fmt_iso(long mjd, long minute_of_day, int sec, char *out, size_t outcap) {
-  int y, mo, d;
+  int y;
+  int mo;
+  int d;
   mjd_to_date(mjd, &y, &mo, &d);
   if ((size_t)snprintf(out, outcap, "%04d-%02d-%02dT%02d:%02d:%02dZ", y, mo, d, (int)(minute_of_day / 60), (int)(minute_of_day % 60), sec) >= outcap) return -1;
   return 0;
@@ -188,7 +196,9 @@ int dvb_datetime_decode_st(bitreader_t *br, dvb_codec_state_t *st, char *out, si
 
   if (bitreader_get(br, 2, &flag)) return -1;
   if (flag == 1) {
-    uint64_t date_flag, date, minutes;
+    uint64_t date_flag;
+    uint64_t date;
+    uint64_t minutes;
     if (bitreader_get(br, 1, &date_flag)) return -1;
     if (date_flag) {
       long full;
@@ -224,7 +234,9 @@ int dvb_controlledterm_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char 
 int dvb_controlledterm_decode(bitreader_t *br, strrepo_reader_t *sr, char *out, size_t outcap) {
   uint64_t encoding_flag;
   uint64_t grouping;
-  uint64_t group = 0, cs, term;
+  uint64_t group = 0;
+  uint64_t cs;
+  uint64_t term;
   if (bitreader_get(br, 1, &encoding_flag)) return -1;
   if (!encoding_flag) return dvb_string_decode(sr, out, outcap);
   if (bitreader_get(br, 1, &grouping)) return -1;
@@ -288,7 +300,10 @@ const char *bim_node_attr(const bim_node_t *n, const char *name) {
 
 int bim_node_set_text(bim_node_t *n, const char *text) {
   char *t = NULL;
-  if (text && !(t = strdup(text))) return -1;
+  if (text) {
+    t = strdup(text);
+    if (!t) return -1;
+  }
   free(n->text);
   n->text = t;
   return 0;
@@ -459,7 +474,9 @@ static int decode_part(dec_t *d, const bim_part_t *p, bim_node_t *node);
 static int decode_one(dec_t *d, const bim_part_t *p, bim_node_t *node) {
   if (p->kind == BIM_PART_ELEM) {
     bim_node_t *k;
-    if (!p->type || ++d->nodes > MAX_NODES) return -1;
+    if (!p->type) return -1;
+    d->nodes++;
+    if (d->nodes > MAX_NODES) return -1;
     k = bim_node_new(p->name);
     if (!k) return -1;
     if (decode_body(d, p->type, k) || bim_node_add(node, k)) {

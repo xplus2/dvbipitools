@@ -30,7 +30,8 @@ static int revmap_idx_cmp(const void *a, const void *b) {
 int revmap_load(const char *path, revmap_t *m) {
   FILE *f = fopen(path, "r");
   char line[1024];
-  int lineno = 0, rc;
+  int lineno = 0;
+  int rc;
 
   memset(m, 0, sizeof *m);
   if (!f) {

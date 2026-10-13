@@ -947,7 +947,9 @@ int fragment_decode_service_information(bitreader_t *br, strrepo_reader_t *sr, b
   const bim_node_t *url;
   char dtt[64];
   char synth[8];
-  unsigned onid, tsid, sid;
+  unsigned onid;
+  unsigned tsid;
+  unsigned sid;
   int no_names = 0;
   memset(c_out, 0, sizeof *c_out);
   if (bim_decode_payload(tva_type_service_information, "ServiceInformation", br, sr, &root)) return -1;

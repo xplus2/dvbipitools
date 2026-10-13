@@ -51,7 +51,7 @@ first_t=$(grep -oE '<S t="[0-9]+"' "$mpd" | head -1 | grep -oE '[0-9]+')
 [ -n "$first_t" ] || fail "could not derive a segment time from SegmentTimeline"
 
 for track in v a; do
-    case $track in v) kind=video; other=audio ;; a) kind=audio; other=video ;; esac
+    case $track in v) kind=video; other=audio ;; a) kind=audio; other=video ;; *) fail "unexpected track $track" ;; esac
     timeout 10 curl -s -o "$WORK/init-$track.mp4" "$BASE/dinit$track.mp4"
     timeout 10 curl -s -o "$WORK/seg-$track.m4s" "$BASE/dseg$track$first_t.m4s"
     [ -s "$WORK/init-$track.mp4" ] || fail "empty dinit$track.mp4"

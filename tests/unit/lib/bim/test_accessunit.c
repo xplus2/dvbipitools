@@ -110,9 +110,12 @@ START_TEST(accessunit_decode_refs_follows_string_buffer_offsets) {
   accessunit_scratch_t sc;
   accessunit_ref_t refs[8];
   unsigned char *shifted;
-  const unsigned char *bwdata, *swdata;
-  size_t bwlen, swlen;
-  int nfuu, nfuu2;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  size_t bwlen;
+  size_t swlen;
+  int nfuu;
+  int nfuu2;
 
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
@@ -166,7 +169,10 @@ START_TEST(accessunit_encode_range_limits_output_to_given_channels) {
   bitwriter_t bw;
   strrepo_writer_t sw;
   accessunit_scratch_t sc;
-  int all, part = 0, none = 0, nprog = -1;
+  int all;
+  int part = 0;
+  int none = 0;
+  int nprog = -1;
 
   accessunit_scratch_init(&sc);
   bitwriter_init(&bw);

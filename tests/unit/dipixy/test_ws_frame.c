@@ -236,7 +236,9 @@ END_TEST
 START_TEST(many_small_frames_with_partial_tail_across_feeds) {
   ws_parser_t p;
   uint8_t stream[64 * 11];
-  size_t slen = 0, fed = 0, got = 0;
+  size_t slen = 0;
+  size_t fed = 0;
+  size_t got = 0;
   int opcode;
   const uint8_t *payload;
   size_t payload_len;

@@ -47,12 +47,16 @@ void bcg_programme_free_text(bcg_programme_t *pr) {
   free(pr->title);
   free(pr->desc);
   free(pr->category);
-  pr->title = pr->desc = pr->category = NULL;
+  pr->title = NULL;
+  pr->desc = NULL;
+  pr->category = NULL;
 }
 
 int bcg_programme_copy(bcg_programme_t *dst, const bcg_programme_t *src) {
   *dst = *src;
-  dst->title = dst->desc = dst->category = NULL;
+  dst->title = NULL;
+  dst->desc = NULL;
+  dst->category = NULL;
   if (bcg_set_text(&dst->title, src->title) || bcg_set_text(&dst->desc, src->desc) || bcg_set_text(&dst->category, src->category)) {
     bcg_programme_free_text(dst);
     return -1;

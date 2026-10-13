@@ -93,11 +93,12 @@ int wants_keepalive(int minor_version, const struct phr_header *headers, size_t 
   if (find_header(headers, num_headers, "Connection", conn, sizeof conn)) {
     char *save = NULL;
     for (char *tok = strtok_r(conn, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
-      while (*tok == ' ' || *tok == '\t') tok++;
-      size_t n = strlen(tok);
-      while (n && (tok[n - 1] == ' ' || tok[n - 1] == '\t')) tok[--n] = '\0';
-      if (!strcasecmp(tok, "close")) return 0;
-      if (!strcasecmp(tok, "keep-alive")) keep = 1;
+      char *word = tok;
+      while (*word == ' ' || *word == '\t') word++;
+      size_t n = strlen(word);
+      while (n && (word[n - 1] == ' ' || word[n - 1] == '\t')) word[--n] = '\0';
+      if (!strcasecmp(word, "close")) return 0;
+      if (!strcasecmp(word, "keep-alive")) keep = 1;
     }
   }
   return keep;

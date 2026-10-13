@@ -334,7 +334,8 @@ START_TEST(state_load_rejects_bad_packages_file) {
 END_TEST
 
 START_TEST(state_load_rejects_unknown_package_service) {
-  char csv_path[160], pkg_path[160];
+  char csv_path[160];
+  char pkg_path[160];
   config_t cfg;
   sds_state_t st;
 

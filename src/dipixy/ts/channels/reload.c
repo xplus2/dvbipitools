@@ -34,18 +34,18 @@ static void free_list_items(channel_list_t l) {
 }
 
 static uint64_t fnv_str(uint64_t h, const char *s) {
-  for (; s && *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211ull;
-  return (h ^ 0xff) * 1099511628211ull;
+  for (; s && *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211ULL;
+  return (h ^ 0xff) * 1099511628211ULL;
 }
 
 static uint64_t fnv_u(uint64_t h, unsigned v) {
-  for (int i = 0; i < 4; i++, v >>= 8) h = (h ^ (v & 0xff)) * 1099511628211ull;
+  for (int i = 0; i < 4; i++, v >>= 8) h = (h ^ (v & 0xff)) * 1099511628211ULL;
   return h;
 }
 
 /* content digest of fields DIDL is built from */
 static uint64_t list_digest(const channel_list_t *l) {
-  uint64_t h = fnv_u(14695981039346656037ull, (unsigned)l->count);
+  uint64_t h = fnv_u(14695981039346656037ULL, (unsigned)l->count);
   for (int i = 0; i < l->count; i++) {
     const channel_item_t *it = &l->items[i];
     h = fnv_str(fnv_str(fnv_str(h, it->name), it->uri), it->icon_uri);

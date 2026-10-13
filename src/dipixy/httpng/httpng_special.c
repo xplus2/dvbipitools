@@ -144,7 +144,10 @@ static void dlna_control(const httpng_ops_t *ops, void *conn, void *req, const h
 }
 
 static void dlna_gena_status(const httpng_ops_t *ops, void *conn, void *req, int status) {
-  ops->respond_status(conn, req, status == 400 ? "400" : status == 412 ? "412" : "503");
+  const char *text = "503";
+  if (status == 400) text = "400";
+  else if (status == 412) text = "412";
+  ops->respond_status(conn, req, text);
 }
 
 static void dlna_subscribe(const httpng_ops_t *ops, void *conn, void *req, const httpng_req_hdrs_t *hdrs, const char *client_ip, gena_svc_t svc) {

@@ -66,7 +66,9 @@ static void snapshot_nap(void) {
    epoch flip: publishers started before swap may hold any older snapshot */
 void ws_broadcast_unregister(ws_sink_fn fn, void *ctx) {
   sink_snapshot_t *old, *fresh;
-  int n, w = 0, drain;
+  int n;
+  int w = 0;
+  int drain;
   pthread_mutex_lock(&g_drain_mtx);
   for (;;) {
     pthread_mutex_lock(&g_mtx);
@@ -105,7 +107,8 @@ void ws_broadcast_publish(const char *msg) {
   static _Thread_local uint8_t *frame;
   static _Thread_local size_t frame_cap;
   sink_snapshot_t *snap;
-  int n, epoch;
+  int n;
+  int epoch;
   size_t mlen, flen;
 
   pthread_mutex_lock(&g_mtx);

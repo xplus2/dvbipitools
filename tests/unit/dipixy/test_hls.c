@@ -222,7 +222,8 @@ END_TEST
 START_TEST(llhls_large_part_is_served_by_reference) {
   pid_filter_t f;
   hls_resp_t r;
-  static uint8_t p0[40000], p1[40000];
+  static uint8_t p0[40000];
+  static uint8_t p1[40000];
   memset(p0, 0x11, sizeof p0);
   memset(p1, 0x22, sizeof p1);
   no_filter(&f);
@@ -1135,7 +1136,8 @@ START_TEST(llhls_full_window_keeps_live_edge_and_drops_old_parts) {
   static ll_playlist_snap_t snap;
   static char buf[16384];
   const char *p;
-  int parts = 0, extinf = 0;
+  int parts = 0;
+  int extinf = 0;
   size_t n;
   memset(&snap, 0, sizeof snap);
   snap.td = 6;

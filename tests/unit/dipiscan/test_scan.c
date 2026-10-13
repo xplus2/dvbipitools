@@ -348,11 +348,16 @@ END_TEST
 
 START_TEST(probe_common_reused_psi_carries_no_state_between_probes) {
   unsigned char sec[64];
-  unsigned char pat[188], pmt[188], sdt[188];
+  unsigned char pat[188];
+  unsigned char pmt[188];
+  unsigned char sdt[188];
   size_t slen;
-  const unsigned char *pkts[3], *none[1];
-  size_t lens[3], nlens[1] = {0};
-  stub_reader_t sr, empty;
+  const unsigned char *pkts[3];
+  const unsigned char *none[1];
+  size_t lens[3];
+  size_t nlens[1] = {0};
+  stub_reader_t sr;
+  stub_reader_t empty;
   probe_result_t r;
   psi_t *psi = psi_new();
 
@@ -887,7 +892,8 @@ START_TEST(scan_run_http_missing_stream_reports_no_stream) {
 END_TEST
 
 static size_t respond_stalled(const char *path, unsigned char *out, size_t cap, int *status) {
-  usleep(1500000);
+  const struct timespec ts = {1, 500000000L};
+  nanosleep(&ts, NULL);
   return respond_single(path, out, cap, status);
 }
 

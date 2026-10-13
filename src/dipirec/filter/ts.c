@@ -226,7 +226,8 @@ static int table_dropped(const ts_filter_t *f, unsigned pid, pid_class_t cls) {
 /* rewritten section of pid's table, valid only if psi.c parsed the very same one */
 static size_t rewrite_section(const ts_filter_t *f, unsigned pid, const unsigned char *sec, size_t sl, unsigned char *rw) {
   const unsigned char *known;
-  size_t kl, rl;
+  size_t kl;
+  size_t rl;
   if (pid == 0x0000) known = psi_pat_section(f->psi, &kl);
   else known = psi_pmt_section(f->psi, &kl);
   if (!known || kl != sl || memcmp(known, sec, sl)) return 0;
@@ -240,7 +241,8 @@ static size_t rewrite_section(const ts_filter_t *f, unsigned pid, const unsigned
 static size_t section_packets(ts_filter_t *f, psi_section_asm_t *a, const unsigned char *in, unsigned pid, unsigned char *cc, unsigned char *out) {
   unsigned char rw[PSI_SECTION_ASM_BUF_LEN]; /* output never larger than input */
   const unsigned char *pl;
-  size_t plen, total = 0;
+  size_t plen;
+  size_t total = 0;
   int pusi;
   if (!tspack_payload(in, &pl, &plen, &pusi) || !psi_section_asm_cc(a, in)) return 0;
   if (pid != 0x0000) rebuild_audio_drop(f);

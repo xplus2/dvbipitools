@@ -32,8 +32,10 @@ typedef struct {
 static pthread_mutex_t g_mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_cv = PTHREAD_COND_INITIALIZER;
 static job_t g_queue[QUEUE_MAX];
-static size_t g_head, g_count;
-static int g_started, g_stop;
+static size_t g_head;
+static size_t g_count;
+static int g_started;
+static int g_stop;
 static pthread_t g_thread;
 
 static int send_all(int fd, const char *p, size_t n) {
@@ -111,7 +113,10 @@ static void *worker(void *arg) {
     g_head = (g_head + 1) % QUEUE_MAX;
     g_count--;
     pthread_mutex_unlock(&g_mtx);
-    if (j.delay_ms) usleep(j.delay_ms * 1000u);
+    if (j.delay_ms) {
+      struct timespec ts = {(time_t)(j.delay_ms / 1000u), (long)(j.delay_ms % 1000u) * 1000000L};
+      nanosleep(&ts, NULL);
+    }
     if (deliver(&j)) {
       log_line(TOOL_NAME ": gena: NOTIFY to %s:%u failed, dropping subscription", j.host, j.port);
       gena_delivery_failed(j.sid);

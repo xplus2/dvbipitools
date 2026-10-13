@@ -95,7 +95,10 @@ int uriparse_rtmp_or_file(const char *uri, char *rtmp_buf, size_t rtmp_cap, char
 char *uriparse_redact_dup(const char *uri) {
   size_t len = strlen(uri);
   char *out = malloc(len + 1);
-  const char *auth, *end, *at, *cut;
+  char *auth;
+  const char *end;
+  const char *at;
+  char *cut;
   size_t n;
   if (!out) return NULL;
   memcpy(out, uri, len + 1);
@@ -106,9 +109,9 @@ char *uriparse_redact_dup(const char *uri) {
   at = memchr(auth, '@', (size_t)(end - auth));
   if (at && at > auth) {
     n = strlen(at + 1) + 1;
-    memmove((char *)auth, at + 1, n);
+    memmove(auth, at + 1, n);
   }
   cut = out + strcspn(out, "?#");
-  *(char *)cut = '\0';
+  *cut = '\0';
   return out;
 }

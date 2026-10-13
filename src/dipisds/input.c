@@ -125,7 +125,9 @@ static int dvb_id(const char *name, const char *v, unsigned *out) {
 
 static int load_csv(FILE *f, input_t *in) {
   char line[512];
-  int idx = 0, lineno = 0, rc;
+  int idx = 0;
+  int lineno = 0;
+  int rc;
 
   while ((rc = read_line(f, line, sizeof line)) != 0) {
     char *fields[5];
@@ -181,7 +183,10 @@ static int load_m3u(FILE *f, input_t *in) {
   char line[2048];
   char pending_name[SDS_MAX_NAME];
   unsigned pending_tsid = 1, pending_onid = 1, pending_sid = 0;
-  int have_pending = 0, idx = 0, lineno = 0, rc;
+  int have_pending = 0;
+  int idx = 0;
+  int lineno = 0;
+  int rc;
 
   while ((rc = read_line(f, line, sizeof line)) != 0) {
     sds_service_t *s;
@@ -193,7 +198,7 @@ static int load_m3u(FILE *f, input_t *in) {
     chomp(line);
     if (!line[0]) continue;
     if (!strncmp(line, "#EXTINF:", 8)) {
-      char *comma = extinf_comma(line);
+      const char *comma = extinf_comma(line);
       char tmp[32];
       if (!comma) {
         log_code("AE400111", "malformed #EXTINF line: %s", line);
@@ -316,7 +321,7 @@ int input_load(const char *path, input_t *in) {
       return -1;
     }
     if (len > DVBSTP_MAX_SEGMENT) {
-      log_code("AE000695", "%s: %zu bytes, max %u", path, len, (unsigned)DVBSTP_MAX_SEGMENT);
+      log_code("AE000695", "%s: %zu bytes, max %u", path, len, DVBSTP_MAX_SEGMENT);
       free(buf);
       return -1;
     }
@@ -388,7 +393,9 @@ void input_free(input_t *in) {
 int input_load_packages(const char *path, sds_package_t *out, int max, int *count) {
   FILE *f = fopen(path, "r");
   char line[9216];
-  int idx = 0, lineno = 0, rc;
+  int idx = 0;
+  int lineno = 0;
+  int rc;
 
   if (!f) {
     log_code("AE000100", "cannot open %s", path);
@@ -397,7 +404,8 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
   while ((rc = read_line(f, line, sizeof line)) != 0) {
     char *fields[5];
     size_t nf;
-    char *svc, *svc_save;
+    const char *svc;
+    char *svc_save;
     unsigned long pid;
     sds_package_t *pkg;
     lineno++;
@@ -468,7 +476,9 @@ fail:
 int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
   FILE *f = fopen(path, "r");
   char line[512];
-  int idx = 0, lineno = 0, rc;
+  int idx = 0;
+  int lineno = 0;
+  int rc;
 
   if (!f) {
     log_code("AE000100", "cannot open %s", path);

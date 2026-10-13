@@ -25,7 +25,7 @@ START_TEST(xml_escape_drops_chars_invalid_in_xml_10) {
   FILE *f = open_memstream(&buf, &len);
   xml_escape(f, "a\x01" "b\tc\nd\x1f" "e\xEF\xBF\xBE" "f\xEF\xBF\xBF" "g\xC3\xA4");
   fclose(f);
-  ck_assert_str_eq(buf, "ab\tc\nde" "fg\xC3\xA4");
+  ck_assert_str_eq(buf, "ab\tc\ndefg\xC3\xA4");
   free(buf);
 }
 END_TEST

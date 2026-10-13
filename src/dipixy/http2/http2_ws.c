@@ -56,7 +56,8 @@ static void ws_wake(h2_ws_stream_t *ws) {
 }
 
 static void queue_prebuilt_frame(h2_ws_stream_t *ws, const uint8_t *frame, size_t flen) {
-  int rc, dead;
+  int rc;
+  int dead;
   pthread_mutex_lock(&ws->pending_lock);
   rc = pending_reserve(ws, flen);
   if (!rc) {
@@ -70,7 +71,8 @@ static void queue_prebuilt_frame(h2_ws_stream_t *ws, const uint8_t *frame, size_
 
 static void queue_frame(h2_ws_stream_t *ws, int opcode, const void *payload, size_t len) {
   size_t flen = ws_frame_hdr_len(len) + len;
-  int rc, dead;
+  int rc;
+  int dead;
   pthread_mutex_lock(&ws->pending_lock);
   rc = pending_reserve(ws, flen);
   if (!rc) {

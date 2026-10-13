@@ -215,8 +215,10 @@ START_TEST(fragment_schedule_wire_layout_follows_ts102323_annex_b) {
   bcg_programme_t pr;
   bitwriter_t bw;
   strrepo_writer_t sw;
-  const unsigned char *b, *str;
-  size_t blen, slen;
+  const unsigned char *b;
+  const unsigned char *str;
+  size_t blen;
+  size_t slen;
 
   memset(&pr, 0, sizeof pr);
   bufcpy(pr.channel_id, sizeof pr.channel_id, "s");
@@ -240,13 +242,16 @@ START_TEST(fragment_schedule_wire_layout_follows_ts102323_annex_b) {
 END_TEST
 
 START_TEST(fragment_service_information_without_names_round_trips) {
-  bcg_channel_t c, out;
+  bcg_channel_t c;
+  bcg_channel_t out;
   bitwriter_t bw;
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bwdata, *swdata;
-  size_t bwlen, swlen;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  size_t bwlen;
+  size_t swlen;
 
   memset(&c, 0, sizeof c);
   bufcpy(c.id, sizeof c.id, "channel1");
@@ -272,13 +277,16 @@ START_TEST(fragment_service_information_without_names_round_trips) {
 END_TEST
 
 START_TEST(fragment_service_information_without_triplet_stays_zero) {
-  bcg_channel_t c, out;
+  bcg_channel_t c;
+  bcg_channel_t out;
   bitwriter_t bw;
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bwdata, *swdata;
-  size_t bwlen, swlen;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  size_t bwlen;
+  size_t swlen;
 
   memset(&c, 0, sizeof c);
   bufcpy(c.id, sizeof c.id, "channel1");
@@ -305,8 +313,10 @@ START_TEST(fragment_payload_decodes_published_time_optimized_locator_and_duratio
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *b, *str;
-  size_t blen, slen;
+  const unsigned char *b;
+  const unsigned char *str;
+  size_t blen;
+  size_t slen;
   bim_node_t *root;
   const bim_node_t *ev;
   unsigned mjd = (unsigned)date_to_mjd(2030, 1, 1) & 0xFFFFu;
@@ -384,11 +394,12 @@ START_TEST(fragment_payload_decode_rejects_type_casting_and_length_modes) {
   bitreader_t br;
   strrepo_reader_t sr;
   const unsigned char repo[] = {0x01, 's', 0};
+  const unsigned char first_byte[3] = {0x4F, 0x2F, 0x1F};
   bim_node_t *root = NULL;
   for (int m = 0; m < 3; m++) {
     unsigned char buf[3];
     memcpy(buf, bad_modes, sizeof buf);
-    buf[0] = (unsigned char)(m == 0 ? 0x4F : m == 1 ? 0x2F : 0x1F);
+    buf[0] = first_byte[m];
     bitreader_init(&br, buf, sizeof buf);
     strrepo_reader_init(&sr, repo, sizeof repo);
     ck_assert_int_eq(bim_decode_payload(tva_type_schedule, "Schedule", &br, &sr, &root), -1);

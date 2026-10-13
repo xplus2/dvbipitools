@@ -50,8 +50,10 @@ END_TEST
 START_TEST(wrapper_build_oversize_container_stays_uncompressed) {
   size_t len = 0x1000000;
   unsigned char *container = calloc(len, 1);
-  unsigned char *wrapped, *out;
-  size_t wrapped_len, out_len;
+  unsigned char *wrapped;
+  unsigned char *out;
+  size_t wrapped_len;
+  size_t out_len;
 
   ck_assert_ptr_nonnull(container);
   ck_assert_int_eq(wrapper_build(container, len, 1, &wrapped, &wrapped_len), 0);

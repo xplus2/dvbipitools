@@ -178,7 +178,9 @@ static int csv_fill(playlist_item_t *slot, char **fields, size_t nf) {
   slot->name = strdup(fields[0]);
   slot->uri = strdup(fields[1]);
   slot->icon_uri = nf >= 6 && fields[5][0] ? strdup(fields[5]) : NULL;
-  slot->tsid = slot->onid = slot->sid = 0;
+  slot->tsid = 0;
+  slot->onid = 0;
+  slot->sid = 0;
   slot->has_triplet = nf >= 5;
   if (!slot->name || !slot->uri || (nf >= 6 && fields[5][0] && !slot->icon_uri))
     return PLAYLIST_CSV_NOMEM;
@@ -190,14 +192,18 @@ static int csv_fill(playlist_item_t *slot, char **fields, size_t nf) {
 int playlist_in_read_csv(FILE *f, playlist_list_t **out, int *err_line) {
   char line[PLAYLIST_CSV_LINE_MAX];
   playlist_list_t *pl = calloc(1, sizeof *pl);
-  int lineno = 0, rc, err = 0;
+  int lineno = 0;
+  int rc;
+  int err = 0;
 
   if (!pl)
     return PLAYLIST_CSV_NOMEM;
-  while (!err && (rc = read_line(f, line, sizeof line)) != 0) {
+  while (!err) {
     char *fields[6];
     size_t nf;
     playlist_item_t *slot;
+    rc = read_line(f, line, sizeof line);
+    if (rc == 0) break;
     lineno++;
     if (rc < 0) {
       err = PLAYLIST_CSV_LONG_LINE;

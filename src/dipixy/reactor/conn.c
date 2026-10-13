@@ -108,7 +108,10 @@ static void buf_release(conn_buf *b) {
 
 static void buf_recycle(conn_buf *b) {
   if (b->cap > CONN_BUF_KEEP_MAX) buf_release(b);
-  else b->len = b->off = 0;
+  else {
+    b->len = 0;
+    b->off = 0;
+  }
 }
 
 static void conn_pool_reclaim(void) {
@@ -180,7 +183,9 @@ static _Atomic uint64_t g_conn_gen;
 
 conn_t *conn_new(int fd, void *ssl) {
   conn_t *c;
-  conn_buf in = {0}, out = {0}, wire = {0};
+  conn_buf in = {0};
+  conn_buf out = {0};
+  conn_buf wire = {0};
   conn_pool_reclaim();
   if (t_conn_pool_n > 0) {
     c = t_conn_pool[--t_conn_pool_n];

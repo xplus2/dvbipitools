@@ -133,7 +133,8 @@ static int ip_parse(const char *text, struct in6_addr *out) {
   if (inet_pton(AF_INET6, text, out) == 1) return 0;
   if (inet_pton(AF_INET, text, &a4) != 1) return -1;
   memset(out, 0, sizeof *out);
-  out->s6_addr[10] = out->s6_addr[11] = 0xff;
+  out->s6_addr[10] = 0xff;
+  out->s6_addr[11] = 0xff;
   memcpy(&out->s6_addr[12], &a4, sizeof a4);
   return 0;
 }
@@ -227,7 +228,9 @@ int gena_subscribe(const config_t *cfg, gena_svc_t svc, const char *peer_ip, con
     memset(&fresh, 0, sizeof fresh);
     if (parse_callback(callback, &peer, &fresh)) {
       status = 412;
-    } else if (peer_count(&peer) >= GENA_MAX_PER_PEER || !(s = free_slot())) {
+    } else if (peer_count(&peer) >= GENA_MAX_PER_PEER) {
+      status = 503;
+    } else if (!(s = free_slot())) {
       status = 503;
     } else {
       fresh.used = 1;

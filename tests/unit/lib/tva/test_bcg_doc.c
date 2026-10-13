@@ -96,7 +96,8 @@ START_TEST(bcg_set_text_copies_replaces_and_maps_empty_to_null) {
 END_TEST
 
 START_TEST(bcg_programme_copy_is_deep) {
-  bcg_programme_t a, b;
+  bcg_programme_t a;
+  bcg_programme_t b;
   memset(&a, 0, sizeof a);
   ck_assert_int_eq(bcg_set_text(&a.title, "T"), 0);
   ck_assert_int_eq(bcg_set_text(&a.desc, "D"), 0);

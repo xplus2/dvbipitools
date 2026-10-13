@@ -279,7 +279,8 @@ END_TEST
 START_TEST(sds_broadcast_fcc_resolve_by_port_is_deterministic) {
   sds_service_t svc;
   sds_fcc_t fcc;
-  unsigned char *buf1 = NULL, *buf2 = NULL;
+  unsigned char *buf1 = NULL;
+  unsigned char *buf2 = NULL;
   size_t len1, len2;
 
   memset(&svc, 0, sizeof svc);

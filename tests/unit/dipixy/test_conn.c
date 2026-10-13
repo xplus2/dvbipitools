@@ -403,7 +403,8 @@ START_TEST(sweep_idle_wakes_owner_when_epollout_already_armed) {
   int epfd = epoll_create1(0);
   int fds[2];
   conn_t *c;
-  struct epoll_event ev, out_ev;
+  struct epoll_event ev;
+  struct epoll_event out_ev;
 
   ck_assert_int_eq(conn_table_init(64), 0);
   nonblocking_socketpair(fds);

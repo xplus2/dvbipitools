@@ -41,7 +41,7 @@ static int split_last4(char *line, char **id, char **uri, char **a, char **b, ch
     if (!rest || rest[0] != ',') return -1;
     *uri = rest + 1;
     if ((*uri)[0] == '"') {
-      char *end = unquote_field(*uri);
+      const char *end = unquote_field(*uri);
       if (!end || *end) return -1;
     }
   } else {
@@ -68,7 +68,8 @@ static int mapping_idx_cmp(const void *a, const void *b) {
 int mapping_load(const char *path, mapping_t *m) {
   FILE *f = fopen(path, "r");
   char line[1024];
-  int lineno = 0, rc;
+  int lineno = 0;
+  int rc;
 
   memset(m, 0, sizeof *m);
   if (!f) {

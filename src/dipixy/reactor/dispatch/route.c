@@ -99,7 +99,8 @@ typedef struct {
 } hostport_t;
 
 static int hostport_parse(const char *s, hostport_t *out) {
-  const char *p, *colon;
+  const char *p;
+  const char *colon;
   size_t n;
   char *end;
   unsigned long port;
@@ -177,7 +178,8 @@ static int host_name_allowed(const config_t *cfg, const char *name) {
 }
 
 int ws_origin_ok(const config_t *cfg, const char *origin, const char *host) {
-  hostport_t oh, hh;
+  hostport_t oh;
+  hostport_t hh;
   unsigned def_port;
   if (!origin || !origin[0]) return 1;
   if (!strncasecmp(origin, "http://", 7)) {
@@ -198,8 +200,10 @@ int ws_origin_ok(const config_t *cfg, const char *origin, const char *host) {
 
 /* shared with http2.c/http3_req.c: those transports only ever guard /ui/ws/'s CONNECT */
 int http_auth_ok(const char *expected, const char *auth_hdr) {
-  const char *ep, *ap;
-  size_t slen, elen;
+  const char *ep;
+  const char *ap;
+  size_t slen;
+  size_t elen;
   if (!expected[0]) return 1;
   if (!auth_hdr) return 0;
   ep = strchr(expected, ' ');
@@ -231,8 +235,7 @@ int route_disabled(const route_t *rt) {
 {ROUTE_RTP, &cfg->no_url_rtp}, {ROUTE_UDP, &cfg->no_url_udp}, {ROUTE_SRT, &cfg->no_url_srt},
   };
   unsigned fmts = route_file_fmts(rt);
-  size_t i;
-  for (i = 0; i < sizeof kind_checks / sizeof kind_checks[0]; i++)
+  for (size_t i = 0; i < sizeof kind_checks / sizeof kind_checks[0]; i++)
     if (rt->kind == kind_checks[i].kind && *kind_checks[i].flag) return 1;
   for (int f = ROUTE_FMT_TS; f <= ROUTE_FMT_MP4; f++)
     if ((fmts & 1u << f) && !playlist_fmt_disabled(cfg, (route_fmt_t)f)) return 0;

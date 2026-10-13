@@ -255,7 +255,7 @@ static void enter_generation(fec2022_dec_t *dec, unsigned c, int64_t gen) {
 
 /* open slot for gen, entering it when newest. -1: late or already closed */
 static int select_gen(fec2022_dec_t *dec, unsigned c, int64_t gen) {
-  fec2022_col_t *cs = &dec->col[c];
+  const fec2022_col_t *cs = &dec->col[c];
   unsigned gs = (unsigned)(gen & 1);
 
   if (cs->gen_ever && gen < cs->gen)
@@ -281,7 +281,7 @@ static void expire_columns(fec2022_dec_t *dec) {
   int64_t ld = (int64_t)dec->l * dec->d;
 
   for (unsigned c = 0; c < dec->l; c++) {
-    fec2022_col_t *cs = &dec->col[c];
+    const fec2022_col_t *cs = &dec->col[c];
     if (!cs->start_valid) continue;
     for (unsigned gs = 0; gs < 2; gs++) {
       int64_t last;

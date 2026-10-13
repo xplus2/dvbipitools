@@ -25,7 +25,9 @@ int container_build(const unsigned char *access_unit, size_t au_len, const unsig
   size_t enc_len = nrefs > 0 ? ENCAP_HEADER_LEN + (size_t)nrefs * ENCAP_ENTRY_LEN : 0;
   size_t nstruct = nrefs > 0 ? 3 : 2;
   size_t header_len = 1 + nstruct * STRUCT_ENTRY_LEN;
-  size_t au_offset, sr_offset, total;
+  size_t au_offset;
+  size_t sr_offset;
+  size_t total;
   unsigned char *buf;
   unsigned char *p;
 

@@ -68,7 +68,8 @@ static int parse_uri(const char *uri, source_t *s) {
 /* userinfo, query, fragment dropped. rtmp: stream key dropped */
 static void describe_redacted(char *buf, size_t n, const char *uri) {
   char *safe = uriparse_redact_dup(uri);
-  char *auth, *app;
+  const char *auth;
+  char *app;
   if (!safe) {
     bufcpy(buf, n, "?");
     return;
@@ -76,7 +77,8 @@ static void describe_redacted(char *buf, size_t n, const char *uri) {
   auth = strstr(safe, "://");
   if (auth && strncmp(safe, "rtmp", 4) == 0) {
     app = strchr(auth + 3, '/');
-    if (app && (app = strchr(app + 1, '/'))) strcpy(app, "/***");
+    if (app) app = strchr(app + 1, '/');
+    if (app) strcpy(app, "/***");
   }
   bufcpy(buf, n, safe);
   free(safe);

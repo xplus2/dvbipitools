@@ -80,7 +80,8 @@ static int ci_contains(const char *hay, const char *needle) {
 static int load_scan(FILE *f, scan_entry_t **out, int *out_n) {
   playlist_list_t *pl;
   scan_entry_t *scan;
-  int line = 0, rc = playlist_in_read_csv(f, &pl, &line);
+  int line = 0;
+  int rc = playlist_in_read_csv(f, &pl, &line);
 
   if (rc == PLAYLIST_CSV_LONG_LINE)
     log_code("XS400207", "scan: line %d: longer than %d bytes", line, PLAYLIST_CSV_LINE_MAX - 1);
@@ -143,7 +144,8 @@ static int find_fuzzy_match(const bcg_channel_t *c, const scan_entry_t *scan, in
   for (int j = 0; j < scan_n; j++) {
     size_t sn = strlen(scan[j].name);
     for (int k = 0; k < c->name_count; k++) {
-      size_t nn = strlen(names[k]), diff = sn > nn ? sn - nn : nn - sn;
+      size_t nn = strlen(names[k]);
+      size_t diff = sn > nn ? sn - nn : nn - sn;
       if (best >= 0 && diff >= best_diff) continue;
       if (ci_contains(scan[j].name, names[k]) || ci_contains(names[k], scan[j].name)) {
         best = j;

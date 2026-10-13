@@ -77,7 +77,8 @@ int strrepo_reader_next(strrepo_reader_t *sr, char *out, size_t outcap) {
 }
 
 int strrepo_reader_next_dup(strrepo_reader_t *sr, char **out) {
-  size_t start = sr->pos, n;
+  size_t start = sr->pos;
+  size_t n;
   char *s;
   if (start >= sr->len) return -1;
   for (n = 0; start + n < sr->len && sr->buf[start + n] != '\0'; n++);

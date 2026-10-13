@@ -621,7 +621,7 @@ START_TEST(ts_head_answers_headers_only) {
   ck_assert_int_eq(g_fake.n_content, 1);
   ck_assert_int_eq(g_fake.content_status, 200);
   ck_assert_str_eq(g_fake.content_type, "video/mp2t");
-  ck_assert_int_eq((int)(g_fake.content_len == HTTPNG_NO_LENGTH), 1);
+  ck_assert_int_eq(g_fake.content_len == HTTPNG_NO_LENGTH, 1);
   ck_assert_int_eq(g_fake.content_has_body, 0);
   ck_assert_int_eq(g_fake.n_tspush, 0);
 }

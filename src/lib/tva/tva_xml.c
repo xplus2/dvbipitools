@@ -81,7 +81,10 @@ static void iso8601_compact_prefix(const char *iso, char *out, size_t outcap) {
 }
 
 static long days_from_civil(long y, int m, int d) {
-  long era, yoe, doy, doe;
+  long era;
+  long yoe;
+  long doy;
+  long doe;
   y -= m <= 2;
   era = (y >= 0 ? y : y - 399) / 400;
   yoe = y - era * 400;
@@ -91,7 +94,12 @@ static long days_from_civil(long y, int m, int d) {
 }
 
 static void civil_from_days(long z, int *y, int *m, int *d) {
-  long era, doe, yoe, doy, mp, yy;
+  long era;
+  long doe;
+  long yoe;
+  long doy;
+  long mp;
+  long yy;
   z += 719468;
   era = (z >= 0 ? z : z - 146096) / 146097;
   doe = z - era * 146097;
@@ -107,8 +115,12 @@ static void civil_from_days(long z, int *y, int *m, int *d) {
 /* "YYYYMMDDHHMMSS" in UTC: offset applied so equal instants give equal ids. 0 ok, -1 unparseable */
 static int iso8601_utc_compact(const char *iso, char *out, size_t outcap) {
   iso8601_t t;
-  long mins, days;
-  int y, mo, d, rem;
+  long mins;
+  long days;
+  int y;
+  int mo;
+  int d;
+  int rem;
   if (iso8601_split(iso, &t) != 0) return -1;
   mins = days_from_civil(t.y, t.mo, t.d) * 1440L + t.h * 60 + t.mi;
   if (t.offset_kind == ISO8601_OFF_NUMERIC) mins -= t.off_min;
@@ -436,7 +448,8 @@ static int parse_service_information(const char *buf, const char *end, bcg_doc_t
 
 /* strips surrounding XML whitespace in place */
 static void trim_ws(char *s) {
-  size_t n = strlen(s), a = 0;
+  size_t n = strlen(s);
+  size_t a = 0;
   while (n && isspace((unsigned char)s[n - 1])) n--;
   while (a < n && isspace((unsigned char)s[a])) a++;
   memmove(s, s + a, n - a);
@@ -445,8 +458,10 @@ static void trim_ws(char *s) {
 
 /* xs:duration "[-]PnDTnHnMn[.f]S" to seconds. years/months/negative/empty rejected. 0 ok, -1 bad */
 static int duration_to_secs(const char *s, long *out) {
-  long total = 0, n;
-  int in_time = 0, any = 0;
+  long total = 0;
+  long n;
+  int in_time = 0;
+  int any = 0;
   if (*s++ != 'P') return -1;
   while (*s) {
     if (*s == 'T' && !in_time) {
@@ -480,7 +495,10 @@ static int duration_to_secs(const char *s, long *out) {
 static int iso8601_add_secs(const char *start_iso, long secs, char *out, size_t outcap) {
   iso8601_t t;
   long tot;
-  int y, mo, d, n;
+  int y;
+  int mo;
+  int d;
+  int n;
   if (iso8601_split(start_iso, &t) != 0) return -1;
   tot = days_from_civil(t.y, t.mo, t.d) * 86400L + t.h * 3600L + t.mi * 60L + t.s + secs;
   civil_from_days(tot / 86400, &y, &mo, &d);

@@ -70,8 +70,11 @@ START_TEST(subscribe_returns_sid_and_timeout) {
 END_TEST
 
 START_TEST(initial_notify_is_sent_with_seq_zero) {
-  char cb[64], sid[64], req[2048];
-  unsigned port, t;
+  char cb[64];
+  char sid[64];
+  char req[2048];
+  unsigned port;
+  unsigned t;
   int lfd = listen_local(&port);
   callback_for(port, cb, sizeof cb);
   ck_assert_int_eq(gena_subscribe(&g_cfg, GENA_SVC_CD, PEER, NULL, cb, "upnp:event", NULL, sid, sizeof sid, &t), 200);
@@ -86,8 +89,11 @@ START_TEST(initial_notify_is_sent_with_seq_zero) {
 END_TEST
 
 START_TEST(cm_initial_notify_carries_protocol_info) {
-  char cb[64], sid[64], req[2048];
-  unsigned port, t;
+  char cb[64];
+  char sid[64];
+  char req[2048];
+  unsigned port;
+  unsigned t;
   int lfd = listen_local(&port);
   callback_for(port, cb, sizeof cb);
   ck_assert_int_eq(gena_subscribe(&g_cfg, GENA_SVC_CM, PEER, NULL, cb, "upnp:event", NULL, sid, sizeof sid, &t), 200);
@@ -99,8 +105,13 @@ START_TEST(cm_initial_notify_carries_protocol_info) {
 END_TEST
 
 START_TEST(update_bumps_id_and_notifies_subscriber) {
-  char cb[64], sid[64], req[2048], want[48];
-  unsigned port, t, before;
+  char cb[64];
+  char sid[64];
+  char req[2048];
+  char want[48];
+  unsigned port;
+  unsigned t;
+  unsigned before;
   int lfd = listen_local(&port);
   callback_for(port, cb, sizeof cb);
   ck_assert_int_eq(gena_subscribe(&g_cfg, GENA_SVC_CD, PEER, NULL, cb, "upnp:event", NULL, sid, sizeof sid, &t), 200);
@@ -129,8 +140,11 @@ START_TEST(renew_unknown_sid_is_412) {
 END_TEST
 
 START_TEST(renew_known_sid_keeps_it) {
-  char cb[64], sid[64], sid2[64];
-  unsigned port, t;
+  char cb[64];
+  char sid[64];
+  char sid2[64];
+  unsigned port;
+  unsigned t;
   int lfd = listen_local(&port);
   callback_for(port, cb, sizeof cb);
   ck_assert_int_eq(gena_subscribe(&g_cfg, GENA_SVC_CD, PEER, NULL, cb, "upnp:event", NULL, sid, sizeof sid, &t), 200);
@@ -160,8 +174,11 @@ START_TEST(subscribe_bad_input_is_412) {
 END_TEST
 
 START_TEST(sid_is_bound_to_service) {
-  char cb[64], sid[64], sid2[64];
-  unsigned port, t;
+  char cb[64];
+  char sid[64];
+  char sid2[64];
+  unsigned port;
+  unsigned t;
   int lfd = listen_local(&port);
   callback_for(port, cb, sizeof cb);
   ck_assert_int_eq(gena_subscribe(&g_cfg, GENA_SVC_CD, PEER, NULL, cb, "upnp:event", NULL, sid, sizeof sid, &t), 200);
@@ -171,8 +188,10 @@ START_TEST(sid_is_bound_to_service) {
 END_TEST
 
 START_TEST(unsubscribe_removes_then_412) {
-  char cb[64], sid[64];
-  unsigned port, t;
+  char cb[64];
+  char sid[64];
+  unsigned port;
+  unsigned t;
   int lfd = listen_local(&port);
   callback_for(port, cb, sizeof cb);
   ck_assert_int_eq(gena_subscribe(&g_cfg, GENA_SVC_CD, PEER, NULL, cb, "upnp:event", NULL, sid, sizeof sid, &t), 200);
@@ -201,7 +220,8 @@ START_TEST(callback_must_match_peer) {
 END_TEST
 
 START_TEST(sid_is_bound_to_peer) {
-  char sid[64], sid2[64];
+  char sid[64];
+  char sid2[64];
   unsigned t;
   ck_assert_int_eq(gena_subscribe(&g_cfg, GENA_SVC_CD, PEER, NULL, "<http://127.0.0.1:1/>", "upnp:event", NULL, sid, sizeof sid, &t), 200);
   ck_assert_int_eq(gena_subscribe(&g_cfg, GENA_SVC_CD, "192.0.2.7", sid, NULL, NULL, NULL, sid2, sizeof sid2, &t), 412);
@@ -213,7 +233,8 @@ END_TEST
 START_TEST(per_peer_limit_leaves_room_for_others) {
   char sid[64];
   unsigned t;
-  int n = 0, status = 200;
+  int n = 0;
+  int status = 200;
   while (status == 200 && n < 64) {
     status = gena_subscribe(&g_cfg, GENA_SVC_CD, PEER, NULL, "<http://127.0.0.1:1/>", "upnp:event", NULL, sid, sizeof sid, &t);
     if (status == 200) n++;
@@ -225,9 +246,12 @@ START_TEST(per_peer_limit_leaves_room_for_others) {
 END_TEST
 
 START_TEST(table_full_is_503) {
-  char sid[64], peer[24], cb[48];
+  char sid[64];
+  char peer[24];
+  char cb[48];
   unsigned t;
-  int status = 200, n = 0;
+  int status = 200;
+  int n = 0;
   while (status == 200 && n < 200) {
     snprintf(peer, sizeof peer, "192.0.2.%d", n % 250 + 1);
     snprintf(cb, sizeof cb, "<http://%s:1/>", peer);

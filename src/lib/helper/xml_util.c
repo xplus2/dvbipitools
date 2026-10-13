@@ -79,7 +79,8 @@ static int decl_encoding(const char *s, const char *end, char *out, size_t cap) 
   if (!p) return -1;
   p += 8;
   while (p < decl_end && isspace((unsigned char)*p)) p++;
-  if (p >= decl_end || *p++ != '=') return -1;
+  if (p >= decl_end || *p != '=') return -1;
+  p++;
   while (p < decl_end && isspace((unsigned char)*p)) p++;
   if (p >= decl_end || (*p != '"' && *p != '\'')) return -1;
   q = *p++;
@@ -93,11 +94,11 @@ static int is_utf8_name(const char *enc) {
   return !strcasecmp(enc, "UTF-8") || !strcasecmp(enc, "UTF8") || !strcasecmp(enc, "US-ASCII") || !strcasecmp(enc, "ASCII");
 }
 
-static int convert_to_utf8(iconv_t cd, const char *in, size_t len, char **out, size_t *out_len) {
+static int convert_to_utf8(iconv_t cd, char *in, size_t len, char **out, size_t *out_len) {
   size_t cap = len * 2 + 16;
   size_t used = 0;
   char *buf = malloc(cap);
-  char *ip = (char *)in;
+  char *ip = in;
   size_t left = len;
   if (!buf) return -2;
   while (left > 0) {
@@ -468,7 +469,8 @@ int xml_elem_text_chk(const char *s, const char *end, const char *tag, char *out
 int xml_elem_text_dup(const char *s, const char *end, const char *tag, char **out) {
   xml_span_t sp;
   size_t cap;
-  char *buf, *shrunk;
+  char *buf;
+  char *shrunk;
   if (xml_find_elem(s, end, tag, &sp)) return -1;
   cap = (size_t)(sp.end - sp.tag) + 1;
   buf = malloc(cap);

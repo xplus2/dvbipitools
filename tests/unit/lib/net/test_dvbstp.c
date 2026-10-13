@@ -582,7 +582,8 @@ static long send_elapsed_ms(int64_t budget_ns) {
   dvbstp_send_t desc = {.payload_id = DVBSTP_PAYLOAD_SP_DISCOVERY, .segment_id = 1, .want_crc = 1, .pacing_budget_ns = budget_ns};
   size_t seglen = 100 * DVBSTP_MAX_SECTION;
   unsigned char *seg = calloc(1, seglen);
-  struct timespec t0, t1;
+  struct timespec t0;
+  struct timespec t1;
   mcast_t *m = mcast_open_send(AF_INET, "127.0.0.1", 9, NULL, 0);
   ck_assert_ptr_nonnull(m);
   clock_gettime(CLOCK_MONOTONIC, &t0);

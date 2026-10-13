@@ -106,7 +106,8 @@ static void jitter_fill(tssrc_t *s) {
 static void jitter_rearm(tssrc_t *s, uint64_t now) {
   struct itimerspec its;
   int64_t ns = jitbuf_next_ns(s->jb, now);
-  int64_t due = ns < 0 ? 0 : (int64_t)now + (ns ? ns : 1);
+  int64_t step = ns ? ns : 1;
+  int64_t due = ns < 0 ? 0 : (int64_t)now + step;
 
   if (due == s->tfd_due) return;
   s->tfd_due = due;

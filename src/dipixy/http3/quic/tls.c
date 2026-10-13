@@ -60,7 +60,8 @@ void h3_init(const char *cert_path, const char *key_path) {
 
 /* new conns pick up fresh ctx, live conns keep theirs (SSL holds a ref) */
 int h3_reload(void) {
-  SSL_CTX *fresh, *old;
+  SSL_CTX *fresh;
+  SSL_CTX *old;
   if (!g_h3_ssl_ctx) return -1;
   fresh = h3_build_ctx(g_h3_cert, g_h3_key);
   if (!fresh) return -1;

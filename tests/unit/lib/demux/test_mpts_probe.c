@@ -208,7 +208,8 @@ START_TEST(mpts_probe_rewind_replays_consumed_head) {
   tssrc_t *src = open_recv(run_helper_group_n(5), run_helper_port(5));
   struct sockaddr_in dst;
   int sock = open_sender(run_helper_group_n(5), run_helper_port(5), &dst);
-  unsigned char sec[256], buf[188 * 4];
+  unsigned char sec[256];
+  unsigned char buf[188 * 4];
   size_t slen;
   ssize_t n;
   mpts_probe_result_t r;

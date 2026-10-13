@@ -116,7 +116,7 @@ int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_on) {
 /* caller holds g_mtx */
 static int ctx_variant_count(capture_ctx_t *ctx) {
   int n = 0;
-  hls_seg_ctx_t *cur = atomic_load_explicit(capture_hls_seg_head_ptr(ctx), memory_order_acquire);
+  const hls_seg_ctx_t *cur = atomic_load_explicit(capture_hls_seg_head_ptr(ctx), memory_order_acquire);
   for (; cur; cur = atomic_load_explicit(&cur->chain_next, memory_order_relaxed)) n++;
   return n;
 }

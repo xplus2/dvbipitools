@@ -229,7 +229,6 @@ int ssdp_msearch_parse(const char *buf, const char *uuid, ssdp_query_t *q) {
   char man[32];
   char mx[16];
   char want_uuid[192];
-  size_t i;
 
   if (strncmp(buf, "M-SEARCH", 8) != 0) return 0;
   line_end = strstr(buf, "\r\n");
@@ -252,7 +251,7 @@ int ssdp_msearch_parse(const char *buf, const char *uuid, ssdp_query_t *q) {
     q->mask = 1u;
     return 1;
   }
-  for (i = 0; i < SSDP_NTYPES; i++)
+  for (size_t i = 0; i < SSDP_NTYPES; i++)
     if (!strcmp(st, ssdp_types[i])) {
       q->mask = 2u << i;
       return 1;

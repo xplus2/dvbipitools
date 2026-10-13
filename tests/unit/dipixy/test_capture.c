@@ -525,7 +525,7 @@ static void wake_cb(int tid) { atomic_store(&g_woken_tid, tid); }
 static int wait_job(const capture_open_job_t *job) {
   for (int i = 0; i < 3000; i++) {
     if (capture_open_job_done(job)) return 1;
-    usleep(1000);
+    nanosleep(&(const struct timespec){0, 1000000L}, NULL);
   }
   return 0;
 }
@@ -539,7 +539,8 @@ END_TEST
 
 START_TEST(async_open_completes_wakes_and_dedups) {
   capture_open_job_t *job;
-  capture_ctx_t *ctx, *again;
+  capture_ctx_t *ctx;
+  capture_ctx_t *again;
 
   capture_pump_set_thread_count(1);
   ck_assert_int_eq(capture_lifecycle_start(wake_cb), 0);
@@ -580,7 +581,7 @@ START_TEST(cancelled_job_closes_its_result) {
   job = capture_open_async(0, AF_INET, "239.8.8.33", NULL, 15833, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(job);
   capture_open_job_cancel(job);
-  for (int i = 0; i < 3000 && capture_active_count() > 0; i++) usleep(1000);
+  for (int i = 0; i < 3000 && capture_active_count() > 0; i++) nanosleep(&(const struct timespec){0, 1000000L}, NULL);
   ck_assert_int_eq(capture_active_count(), 0);
   capture_lifecycle_stop();
 }

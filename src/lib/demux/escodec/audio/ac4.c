@@ -153,9 +153,10 @@ static unsigned ac4_frame_rate_multiply(br_t *b, unsigned frame_rate_index) {
 static void ac4_skip_frame_rate_fractions(br_t *b, unsigned frame_rate_index, unsigned factor) {
   if (frame_rate_index >= 5 && frame_rate_index <= 9) {
     if (factor == 1) br_u(b, 1);
-  } else if (frame_rate_index >= 10 && frame_rate_index <= 12) {
-    if (br_u(b, 1)) br_u(b, 1);
+    return;
   }
+  if (frame_rate_index < 10 || frame_rate_index > 12) return;
+  if (br_u(b, 1)) br_u(b, 1);
 }
 
 static int ac4_parse_presentation0(br_t *b, unsigned bitstream_version, unsigned frame_rate_index, esc_frame_t *f) {
@@ -221,7 +222,8 @@ static int ac4_parse_presentation_v1(br_t *b, unsigned frame_rate_index, int fir
     config = br_u(b, 3);
     if (config == 7) config += br_variable_bits(b, 2);
   }
-  while (br_u(b, 1) == 1 && !b->err) {
+  while (br_u(b, 1) == 1) {
+    if (b->err) break;
   }
   if (!single && config == 6) {
     if (first) return -1;

@@ -71,7 +71,7 @@ void psi_free(psi_t *c) { free(c); }
 void psi_reset(psi_t *c) {
   psi_section_asm_t *const top[] = {&c->pat, &c->sdt, &c->nit, &c->cat};
   memset(c, 0, offsetof(struct psi, pat));
-  for (size_t i = 0; i < sizeof top / sizeof *top; i++) memset(top[i], 0, offsetof(psi_section_asm_t, buf));
+  for (size_t i = 0; i < sizeof top / sizeof top[0]; i++) memset(top[i], 0, offsetof(psi_section_asm_t, buf));
   memset(c->service_by_pid, 0, sizeof c->service_by_pid);
   memset(c->pmt_wanted, 0, sizeof c->pmt_wanted);
   rebuild_class_table(c);

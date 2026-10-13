@@ -77,7 +77,8 @@ int accessunit_encode_range(accessunit_scratch_t *sc, const bcg_doc_t *doc, int 
     for (i = 0; i < doc->channel_count; i++) {
       cidx[i].id = doc->channels[i].id;
       cidx[i].idx = i;
-      first[i] = last[i] = -1;
+      first[i] = -1;
+      last[i] = -1;
     }
     qsort(cidx, (size_t)doc->channel_count, sizeof *cidx, channel_idx_cmp);
   }

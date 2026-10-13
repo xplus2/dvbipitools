@@ -175,7 +175,8 @@ START_TEST(recv_without_pktinfo_has_no_local) {
 END_TEST
 
 START_TEST(send_uses_requested_source) {
-  struct sockaddr_in w, src;
+  struct sockaddr_in w;
+  struct sockaddr_in src;
   struct sockaddr_storage s;
   uint8_t buf[2500];
   h3_rx_t rx[H3_RX_BATCH];

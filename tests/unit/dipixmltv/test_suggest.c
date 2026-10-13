@@ -44,7 +44,9 @@ START_TEST(suggest_map_classifies_exact_fuzzy_and_unmatched) {
 END_TEST
 
 START_TEST(suggest_map_fuzzy_prefers_smallest_length_difference) {
-  FILE *xmltv_f = tmpfile(), *scan_f = tmpfile(), *out_f;
+  FILE *xmltv_f = tmpfile();
+  FILE *scan_f = tmpfile();
+  FILE *out_f;
   char *buf;
   size_t len;
   ck_assert_ptr_nonnull(xmltv_f);
@@ -70,7 +72,9 @@ START_TEST(suggest_map_fuzzy_prefers_smallest_length_difference) {
 END_TEST
 
 START_TEST(suggest_map_ignores_empty_names) {
-  FILE *xmltv_f, *scan_f, *out_f;
+  FILE *xmltv_f;
+  FILE *scan_f;
+  FILE *out_f;
   char *buf;
   size_t len;
 
@@ -104,7 +108,9 @@ START_TEST(suggest_map_ignores_empty_names) {
 END_TEST
 
 START_TEST(suggest_map_matches_names_with_commas) {
-  FILE *xmltv_f = tmpfile(), *scan_f = tmpfile(), *out_f;
+  FILE *xmltv_f = tmpfile();
+  FILE *scan_f = tmpfile();
+  FILE *out_f;
   char *buf;
   size_t len;
   ck_assert_ptr_nonnull(xmltv_f);
@@ -127,7 +133,9 @@ START_TEST(suggest_map_matches_names_with_commas) {
 END_TEST
 
 static int suggest_with_scan(const char *scan, char *logbuf, size_t logcap) {
-  FILE *xmltv_f = tmpfile(), *scan_f = tmpfile(), *out_f;
+  FILE *xmltv_f = tmpfile();
+  FILE *scan_f = tmpfile();
+  FILE *out_f;
   char *buf;
   size_t len;
   int rc;
@@ -173,7 +181,7 @@ END_TEST
 START_TEST(suggest_map_rejects_bad_scan_numbers) {
   char logbuf[LOG_CAPTURE_BUF];
   const char *bad[] = {"One,u,abc,2,3\n", "One,u,1,2,70000\n", "One,u,1,-2,3\n", "One,u,1,2,3x\n", "One,u,1,2,\n", "One,u,99999999999999999999,2,3\n"};
-  for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
     ck_assert_int_eq(suggest_with_scan(bad[i], logbuf, sizeof logbuf), -1);
     ck_assert_int_eq(log_count_of(logbuf, "XS400209"), 1);
   }

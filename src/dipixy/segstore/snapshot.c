@@ -129,7 +129,7 @@ const cached_text_t *snapshot_cache_text_keyed(_Atomic(cached_text_t *) *slots, 
   cached_text_t *nc = NULL;
   *owned = 0;
   for (int i = 0; i < n; i++) {
-    cached_text_t *cur = atomic_load_explicit(&slots[i], memory_order_acquire);
+    const cached_text_t *cur = atomic_load_explicit(&slots[i], memory_order_acquire);
     cached_text_t *expected = NULL;
     if (cur) {
       if (!strcmp(cur->key, key)) {

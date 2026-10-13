@@ -145,8 +145,10 @@ START_TEST(container_refs_round_trip_through_parse_refs) {
   const accessunit_ref_t refs[] = {{1, 1}, {3, 3}};
   unsigned char *buf;
   size_t buf_len;
-  const unsigned char *out_au, *out_sr;
-  size_t out_au_len, out_sr_len;
+  const unsigned char *out_au;
+  const unsigned char *out_sr;
+  size_t out_au_len;
+  size_t out_sr_len;
   accessunit_ref_t *out_refs;
   int nrefs;
 

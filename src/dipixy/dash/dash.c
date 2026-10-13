@@ -30,7 +30,7 @@ static void iso8601_utc_ms(uint64_t ms, char *out, size_t outsz) {
 /* anchored wall time of media time 0, else store open */
 static void mpd_avail_time(const hls_store_t *s, const hls_snapshot_t *snap, char *out, size_t outsz) {
   if (snap->avail_ms) iso8601_utc_ms(snap->avail_ms, out, outsz);
-  else iso8601_utc((time_t)s->opened_at, out, outsz);
+  else iso8601_utc(s->opened_at, out, outsz);
 }
 
 static size_t xml_escaped_len(const char *s) {

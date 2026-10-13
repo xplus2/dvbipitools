@@ -410,7 +410,10 @@ static void retire_snapshots(void) {
 
 /* 1: entries left */
 static int reap_retired(void) {
-  capture_retired_t *r, *next, *keep = NULL, *keep_tail = NULL;
+  capture_retired_t *r;
+  capture_retired_t *next;
+  capture_retired_t *keep = NULL;
+  capture_retired_t *keep_tail = NULL;
   pthread_mutex_lock(&g_life_lock);
   r = g_retired_head;
   g_retired_head = NULL;
@@ -436,8 +439,7 @@ static int reap_retired(void) {
 
 /* caller holds g_life_lock. first job whose key nobody is opening */
 static capture_open_job_t **find_job_locked(void) {
-  capture_open_job_t **pp;
-  for (pp = &g_jobs_head; *pp; pp = &(*pp)->next) {
+  for (capture_open_job_t **pp = &g_jobs_head; *pp; pp = &(*pp)->next) {
     int busy = 0;
     for (int i = 0; i < LIFE_OPEN_WORKERS; i++)
       if (g_running_key[i] && !strcmp(g_running_key[i], (*pp)->key)) busy = 1;
@@ -499,7 +501,8 @@ static void life_wait_locked(int ms) {
 static void *lifecycle_thread(void *arg) {
   int slot = (int)(intptr_t)arg;
   for (;;) {
-    capture_open_job_t **pp, *job = NULL;
+    capture_open_job_t **pp;
+    capture_open_job_t *job = NULL;
     int skip = 0;
     int again;
     pthread_mutex_lock(&g_life_lock);
@@ -520,7 +523,12 @@ static void *lifecycle_thread(void *arg) {
       pthread_mutex_unlock(&g_life_lock);
       break;
     }
-    if (!find_job_locked()) life_wait_locked(again ? LIFE_REAP_POLL_MS : slot == 0 ? LIFE_IDLE_RECLAIM_MS : -1);
+    if (!find_job_locked()) {
+      int wait_ms = -1;
+      if (again) wait_ms = LIFE_REAP_POLL_MS;
+      else if (slot == 0) wait_ms = LIFE_IDLE_RECLAIM_MS;
+      life_wait_locked(wait_ms);
+    }
     pthread_mutex_unlock(&g_life_lock);
   }
   return NULL;
@@ -557,8 +565,10 @@ int capture_lifecycle_start(void (*wake)(int tid)) {
 }
 
 void capture_lifecycle_stop(void) {
-  capture_open_job_t *job, *jnext;
-  capture_retired_t *r, *rnext;
+  capture_open_job_t *job;
+  capture_open_job_t *jnext;
+  capture_retired_t *r;
+  capture_retired_t *rnext;
   capture_snapshot_t *snaps;
   int n;
   pthread_mutex_lock(&g_life_lock);
@@ -588,13 +598,15 @@ void capture_lifecycle_stop(void) {
   pthread_mutex_unlock(&g_lock);
   free_snapshots(snaps);
   /* Reactors and pumps must be joined before this. Else UAF on queued jobs */
-  for (; job; job = jnext) {
+  while (job) {
     jnext = job->next;
     free(job);
+    job = jnext;
   }
-  for (; r; r = rnext) {
+  while (r) {
     rnext = r->next;
     retired_free(r);
+    r = rnext;
   }
 }
 
@@ -623,7 +635,8 @@ static capture_open_job_t *job_submit(capture_open_job_t *job) {
     free(job);
     return NULL;
   }
-  for (pp = &g_jobs_head; *pp; pp = &(*pp)->next) {}
+  pp = &g_jobs_head;
+  while (*pp) pp = &(*pp)->next;
   job->next = NULL;
   *pp = job;
   g_jobs_n++;
@@ -679,7 +692,7 @@ capture_open_job_t *capture_open_srt_async(int wake_tid, const char *host, unsig
 }
 
 int capture_open_job_done(const capture_open_job_t *job) {
-  return atomic_load_explicit(&((capture_open_job_t *)job)->finished, memory_order_acquire);
+  return atomic_load_explicit(&job->finished, memory_order_acquire);
 }
 
 capture_ctx_t *capture_open_job_take(capture_open_job_t *job) {

@@ -2,7 +2,6 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <arpa/inet.h>
-#include <stdarg.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -72,7 +71,8 @@ void probe_common(psi_t *psi, chan_read_fn rf, void *rctx, int timeout_ms, int m
   tspack_t pz;
   probe_ctx_t pc;
   double deadline, quiet_deadline;
-  unsigned rtp_dgrams = 0, plain_dgrams = 0;
+  unsigned rtp_dgrams = 0;
+  unsigned plain_dgrams = 0;
 
   memset(&pz, 0, sizeof pz);
   memset(r, 0, sizeof *r);
@@ -314,34 +314,63 @@ static void *scan_worker(void *arg) {
   return NULL;
 }
 
-static void inv_add(char *buf, size_t n, const char *fmt, ...) {
+static void inv_str(char *buf, size_t n, const char *s) {
   size_t len = strlen(buf);
-  va_list ap;
   if (len >= n - 1) return;
-  va_start(ap, fmt);
-  vsnprintf(buf + len, n - len, fmt, ap);
-  va_end(ap);
+  bufcpy(buf + len, n - len, s);
+}
+
+static void inv_num(char *buf, size_t n, long v) {
+  char tmp[24];
+  snprintf(tmp, sizeof tmp, "%ld", v);
+  inv_str(buf, n, tmp);
+}
+
+static void inv_quoted(char *buf, size_t n, const char *opt, const char *val) {
+  inv_str(buf, n, opt);
+  inv_str(buf, n, val);
+  inv_str(buf, n, "'");
 }
 
 static void invocation_build(const config_t *cfg, const char *basestr, char *buf, size_t n) {
   static const char *const fmt_names[] = {"m3u", "csv", "xspf", "xml", "null"};
   buf[0] = '\0';
-  inv_add(buf, n, "%s --mcast %s --port ", TOOL_NAME, basestr);
-  if (cfg->port_lo == cfg->port_hi) inv_add(buf, n, "%u", cfg->port_lo);
-  else                              inv_add(buf, n, "%u-%u", cfg->port_lo, cfg->port_hi);
-  inv_add(buf, n, " --timeout %d", cfg->timeout_ms / 1000);
-  inv_add(buf, n, " -f %s", fmt_names[cfg->format]);
-  if (cfg->mpts) inv_add(buf, n, " -M");
-  if (cfg->http_proxy) {
-    if (strchr(cfg->http_proxy_host, ':')) inv_add(buf, n, " -u '[%s]:%u'", cfg->http_proxy_host, cfg->http_proxy_port);
-    else                                   inv_add(buf, n, " -u '%s:%u'", cfg->http_proxy_host, cfg->http_proxy_port);
+  inv_str(buf, n, TOOL_NAME);
+  inv_str(buf, n, " --mcast ");
+  inv_str(buf, n, basestr);
+  inv_str(buf, n, " --port ");
+  inv_num(buf, n, (long)cfg->port_lo);
+  if (cfg->port_lo != cfg->port_hi) {
+    inv_str(buf, n, "-");
+    inv_num(buf, n, (long)cfg->port_hi);
   }
-  if (cfg->http_path_tmpl) inv_add(buf, n, " -x '%s'", cfg->http_path_tmpl);
-  if (cfg->iface) inv_add(buf, n, " -I '%s'", cfg->iface);
+  inv_str(buf, n, " --timeout ");
+  inv_num(buf, n, (long)(cfg->timeout_ms / 1000));
+  inv_str(buf, n, " -f ");
+  inv_str(buf, n, fmt_names[cfg->format]);
+  if (cfg->mpts) inv_str(buf, n, " -M");
+  if (cfg->http_proxy) {
+    inv_str(buf, n, " -u '");
+    if (strchr(cfg->http_proxy_host, ':')) {
+      inv_str(buf, n, "[");
+      inv_str(buf, n, cfg->http_proxy_host);
+      inv_str(buf, n, "]");
+    } else {
+      inv_str(buf, n, cfg->http_proxy_host);
+    }
+    inv_str(buf, n, ":");
+    inv_num(buf, n, (long)cfg->http_proxy_port);
+    inv_str(buf, n, "'");
+  }
+  if (cfg->http_path_tmpl) inv_quoted(buf, n, " -x '", cfg->http_path_tmpl);
+  if (cfg->iface) inv_quoted(buf, n, " -I '", cfg->iface);
 }
 
 int scan_run(const config_t *cfg, FILE *out) {
-  char invocation[768], basestr[128], lo[64], hi[64];
+  char invocation[768];
+  char basestr[128];
+  char lo[64];
+  char hi[64];
   double start = mono_seconds();
   int interrupted;
   int af = cfg->family == AF_INET6 ? AF_INET6 : AF_INET;

@@ -219,7 +219,9 @@ static size_t build_pmt_1audio_with_ecm(unsigned char *out, unsigned prog_num, u
 }
 
 static void feed_pat_pmt(ts_filter_t *f) {
-  unsigned char sec[256], pkt[188], out[TS_FILTER_OUT_MAX];
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char out[TS_FILTER_OUT_MAX];
   size_t slen;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
@@ -260,7 +262,8 @@ static size_t build_pmt_with_lcevc(unsigned char *out, unsigned prog_num, unsign
 }
 
 static int filter_pid(ts_filter_t *f, unsigned pid) {
-  unsigned char pkt[188], out[TS_FILTER_OUT_MAX];
+  unsigned char pkt[188];
+  unsigned char out[TS_FILTER_OUT_MAX];
   memset(pkt, 0xCD, sizeof pkt);
   pkt[0] = 0x47;
   pkt[1] = (unsigned char)(0x00 | ((pid >> 8) & 0x1F));
@@ -332,7 +335,9 @@ START_TEST(ts_filter_flags_bad_track_when_out_of_range) {
 END_TEST
 
 START_TEST(ts_filter_tolerates_transient_audio_drop) {
-  unsigned char sec[256], pkt[188], out[TS_FILTER_OUT_MAX];
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char out[TS_FILTER_OUT_MAX];
   size_t slen;
   ts_filter_t *f = ts_filter_new(0, 2, 0, 0, STRIP_DEFAULT);
   feed_pat_pmt(f);
@@ -357,7 +362,9 @@ END_TEST
 
 START_TEST(ts_filter_preferred_pmt_pid_pins_non_first_candidate) {
   ts_filter_t *f = ts_filter_new(1, 0, 0, 0x0200, STRIP_DEFAULT); /* pin program 102, not the first-resolving one */
-  unsigned char sec[256], pkt[188], out[TS_FILTER_OUT_MAX];
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char out[TS_FILTER_OUT_MAX];
   size_t slen;
 
   slen = build_pat_2programs(sec, 0x1234, 101, 0x0100, 102, 0x0200);
@@ -382,7 +389,9 @@ END_TEST
 
 START_TEST(ts_filter_strip_none_keeps_nit_and_null) {
   ts_filter_t *f = ts_filter_new(1, 0, 0, 0, 0); /* strip nothing */
-  unsigned char sec[256], pkt[188], out[TS_FILTER_OUT_MAX];
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char out[TS_FILTER_OUT_MAX];
   size_t slen;
   psi_t *check;
 
@@ -404,7 +413,9 @@ END_TEST
 
 START_TEST(ts_filter_strip_cat_ecm_emm_drops_ca_pids) {
   ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_CAT | STRIP_ECM | STRIP_EMM);
-  unsigned char sec[256], pkt[188], out[TS_FILTER_OUT_MAX];
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char out[TS_FILTER_OUT_MAX];
   size_t slen;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
@@ -473,7 +484,9 @@ END_TEST
 
 START_TEST(ts_filter_strip_none_keeps_ca_pids) {
   ts_filter_t *f = ts_filter_new(1, 0, 0, 0, 0);
-  unsigned char sec[256], pkt[188], out[TS_FILTER_OUT_MAX];
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char out[TS_FILTER_OUT_MAX];
   size_t slen;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
@@ -522,7 +535,9 @@ END_TEST
 
 START_TEST(ts_filter_strip_int_drops_by_table_id_and_latches) {
   ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_INT);
-  unsigned char sec[16], pkt[188], out[TS_FILTER_OUT_MAX];
+  unsigned char sec[16];
+  unsigned char pkt[188];
+  unsigned char out[TS_FILTER_OUT_MAX];
   feed_pat_pmt(f);
 
   memset(sec, 0, sizeof sec);

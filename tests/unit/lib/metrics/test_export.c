@@ -28,7 +28,8 @@ START_TEST(disabled_without_metrics_id) {
 END_TEST
 
 START_TEST(start_time_distinguishes_rapid_restart) {
-  metrics_exporter_t a, b;
+  metrics_exporter_t a;
+  metrics_exporter_t b;
   metrics_exporter_init(&a, METRICS_COMPONENT_SDS, "inst1", NULL, 5.0);
   metrics_exporter_init(&b, METRICS_COMPONENT_SDS, "inst1", NULL, 5.0);
   ck_assert_uint_gt(a.process_start_time, 1000000000ULL * 1000000000ULL);

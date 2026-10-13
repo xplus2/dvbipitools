@@ -119,7 +119,8 @@ static bcg_programme_t *add_programme(bcg_doc_t *d, const char *chan, const char
 
 static int build_windowed(bcg_doc_t *src, bcg_doc_t *dst, long now, int64_t window_min) {
   prog_time_t *times;
-  int *sel = NULL, n;
+  int *sel = NULL;
+  int n;
   int rc;
   if (prog_times_build(src, &times)) return -1;
   if (src->programme_count > 0) sel = malloc(sizeof *sel * (size_t)src->programme_count);
@@ -166,7 +167,8 @@ START_TEST(window_view_filters_programmes_by_window) {
 END_TEST
 
 START_TEST(window_view_huge_window_does_not_overflow) {
-  bcg_doc_t src, dst;
+  bcg_doc_t src;
+  bcg_doc_t dst;
   bcg_doc_init(&src);
   add_channel(&src, "ch1");
   add_programme(&src, "ch1", "2020-01-02T12:00:00Z", NULL);
@@ -203,7 +205,8 @@ START_TEST(window_view_includes_in_range_and_no_stop_programmes) {
 END_TEST
 
 START_TEST(window_view_keeps_running_programme_without_valid_stop) {
-  bcg_doc_t src, dst;
+  bcg_doc_t src;
+  bcg_doc_t dst;
   long now = date_to_mjd(2020, 1, 1) * 1440L + 600;
 
   bcg_doc_init(&src);
@@ -222,7 +225,8 @@ START_TEST(window_view_keeps_running_programme_without_valid_stop) {
 END_TEST
 
 START_TEST(window_view_ends_stopless_programme_at_next_start) {
-  bcg_doc_t src, dst;
+  bcg_doc_t src;
+  bcg_doc_t dst;
   long now = date_to_mjd(2020, 1, 1) * 1440L + 600;
 
   bcg_doc_init(&src);
@@ -247,8 +251,12 @@ END_TEST
 START_TEST(window_select_reports_schedule_bounds_and_indices) {
   bcg_doc_t src;
   prog_time_t *times;
-  int sel[3], n, have;
-  long ss, se, now = date_to_mjd(2020, 1, 1) * 1440L + 600;
+  int sel[3];
+  int n;
+  int have;
+  long ss;
+  long se;
+  long now = date_to_mjd(2020, 1, 1) * 1440L + 600;
 
   bcg_doc_init(&src);
   add_channel(&src, "ch1");

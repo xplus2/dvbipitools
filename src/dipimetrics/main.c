@@ -24,11 +24,13 @@
 #define POLL_TIMEOUT_MS 1000
 #define UDS_DRAIN_MAX 256
 
-/* 0 = path free to bind. refuses non-sockets and live listeners */
-static int sock_path_clear(const char *path) {
+/* 0 = stale socket removed. refuses non-sockets and live listeners */
+static int sock_stale_remove(const char *path) {
   struct stat sb;
+  struct stat chk;
   struct sockaddr_un addr;
-  int fd, live;
+  int fd;
+  int live;
 
   if (lstat(path, &sb) < 0) {
     if (errno == ENOENT) return 0;
@@ -58,6 +60,16 @@ static int sock_path_clear(const char *path) {
     log_code("MS000714", "%s is in use by another process", path);
     return -1;
   }
+  /* same inode as probed, else path was replaced meanwhile */
+  if (lstat(path, &chk) < 0) {
+    if (errno == ENOENT) return 0;
+    log_code("MS500112", "stat %s failed: %s", path, strerror(errno));
+    return -1;
+  }
+  if (!S_ISSOCK(chk.st_mode) || chk.st_dev != sb.st_dev || chk.st_ino != sb.st_ino) {
+    log_code("MS000714", "%s changed during probe", path);
+    return -1;
+  }
   if (unlink(path) < 0 && errno != ENOENT) {
     log_code("MS500112", "unlink %s failed: %s", path, strerror(errno));
     return -1;
@@ -65,17 +77,23 @@ static int sock_path_clear(const char *path) {
   return 0;
 }
 
+static int uds_bind(int fd, const struct sockaddr_un *addr) {
+  mode_t old_umask = umask(0117); /* socket mode 0660: owner and group only */
+  int rc = bind(fd, (const struct sockaddr *)addr, (socklen_t)(sizeof addr->sun_family + strlen(addr->sun_path) + 1));
+  int saved = errno;
+  umask(old_umask);
+  errno = saved;
+  return rc;
+}
+
 static int uds_listen(const char *path) {
   int fd;
-  int rc;
-  mode_t old_umask;
   struct sockaddr_un addr;
 
   if (strlen(path) >= sizeof addr.sun_path) {
     log_code("MS000139", "socket path too long: %s", path);
     return -1;
   }
-  if (sock_path_clear(path)) return -1;
   fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
   if (fd < 0) {
     log_code("MS500109", "socket() failed: %s", strerror(errno));
@@ -84,15 +102,17 @@ static int uds_listen(const char *path) {
   memset(&addr, 0, sizeof addr);
   addr.sun_family = AF_UNIX;
   bufcpy(addr.sun_path, sizeof addr.sun_path, path);
-  old_umask = umask(0117); /* socket mode 0660: owner and group only */
-  rc = bind(fd, (struct sockaddr *)&addr, (socklen_t)(sizeof addr.sun_family + strlen(path) + 1));
-  umask(old_umask);
-  if (rc < 0) {
-    log_code("MS500112", "bind %s failed: %s", path, strerror(errno));
-    close(fd);
-    return -1;
+  if (uds_bind(fd, &addr) == 0) return fd;
+  if (errno == EADDRINUSE) {
+    if (sock_stale_remove(path)) {
+      close(fd);
+      return -1;
+    }
+    if (uds_bind(fd, &addr) == 0) return fd;
   }
-  return fd;
+  log_code("MS500112", "bind %s failed: %s", path, strerror(errno));
+  close(fd);
+  return -1;
 }
 
 /* capped: a datagram flood must not starve HTTP service */

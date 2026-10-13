@@ -711,10 +711,10 @@ START_TEST(long_lines_load_or_are_rejected_whole) {
   char *w = big;
   int i;
 
-  w += sprintf(w, "#EXTINF:-1 tvg-logo=\"http://x/");
+  w += snprintf(w, sizeof big - (size_t)(w - big), "#EXTINF:-1 tvg-logo=\"http://x/");
   memset(w, 'a', 900);
   w += 900;
-  w += sprintf(w, ".png\",Long One\nrtp://239.1.1.1:5000\n");
+  w += snprintf(w, sizeof big - (size_t)(w - big), ".png\",Long One\nrtp://239.1.1.1:5000\n");
   write_temp_file(path, ".m3u", big);
   ck_assert_int_eq(input_load(path, &in), 0);
   ck_assert_int_eq(in.service_count, 1);
@@ -723,7 +723,7 @@ START_TEST(long_lines_load_or_are_rejected_whole) {
   unlink(path);
 
   w = big;
-  w += sprintf(w, "Name,rtp://239.1.1.1:5000,");
+  w += snprintf(w, sizeof big - (size_t)(w - big), "Name,rtp://239.1.1.1:5000,");
   memset(w, '1', 3000);
   w += 3000;
   strcpy(w, "\nB,rtp://239.1.1.2:5000\n");
@@ -732,7 +732,7 @@ START_TEST(long_lines_load_or_are_rejected_whole) {
   unlink(path);
 
   w = big;
-  w += sprintf(w, "1,Pkg,eng,1,");
+  w += snprintf(w, sizeof big - (size_t)(w - big), "1,Pkg,eng,1,");
   for (i = 0; i < 64; i++) {
     memset(w, 'a' + i % 26, 127);
     w += 127;

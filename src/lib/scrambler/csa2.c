@@ -137,10 +137,12 @@ void csa2_key_free(csa2_key_t *k) {
 }
 
 void csa2_encrypt_block(csa2_key_t *k, unsigned char *data, size_t len) {
+  if (!k) return;
   p_dvbcsa_encrypt(k->k, data, (unsigned int)len);
 }
 
 void csa2_decrypt_block(csa2_key_t *k, unsigned char *data, size_t len) {
+  if (!k) return;
   p_dvbcsa_decrypt(k->k, data, (unsigned int)len);
 }
 
@@ -160,7 +162,9 @@ static unsigned int csa2_batch_maxlen(const csa2_batch_entry_t *entries, unsigne
 }
 
 void csa2_encrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) {
-  struct dvbcsa_bs_batch_s *batch = batch_scratch_reserve(k, n + 1);
+  struct dvbcsa_bs_batch_s *batch;
+  if (!k) return;
+  batch = batch_scratch_reserve(k, n + 1);
   if (!batch) return;
   for (unsigned i = 0; i < n; i++) {
     batch[i].data = entries[i].data;
@@ -171,7 +175,9 @@ void csa2_encrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) 
 }
 
 void csa2_decrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n) {
-  struct dvbcsa_bs_batch_s *batch = batch_scratch_reserve(k, n + 1);
+  struct dvbcsa_bs_batch_s *batch;
+  if (!k) return;
+  batch = batch_scratch_reserve(k, n + 1);
   if (!batch) return;
   for (unsigned i = 0; i < n; i++) {
     batch[i].data = entries[i].data;

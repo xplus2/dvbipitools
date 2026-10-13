@@ -31,7 +31,8 @@ int read_all(FILE *f, char **out, size_t *out_len) {
   buf = malloc(cap);
   if (!buf) return -1;
   for (;;) {
-    size_t room, n;
+    size_t room;
+    size_t n;
     if (len + 1 >= cap) {
       char *p;
       if (cap > SIZE_MAX / 2) {
