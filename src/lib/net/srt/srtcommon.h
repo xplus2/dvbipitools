@@ -28,6 +28,10 @@ typedef struct {
 
 void srtcommon_open_logging(int verbose);
 
+/* refcounted srt_startup()/srt_cleanup(). 0 ok, -1 error */
+int srtcommon_startup(void);
+void srtcommon_cleanup(void);
+
 /* is_group skips TRANSTYPE: rejected on group sockets, live forced already.
    timeo_optname/timeo_ms: SRTO_SNDTIMEO or SRTO_RCVTIMEO, direction-specific. 0 ok, -1 error */
 int srtcommon_apply_opts(SRTSOCKET s, const srtcommon_opts_t *o, int is_group, int timeo_optname, int timeo_ms);

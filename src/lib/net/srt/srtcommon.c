@@ -23,6 +23,30 @@ static void srt_log_cb(void *opaque, int level, const char *file, int line, cons
   else                           log_code("LD700011", "srt: %s", message);
 }
 
+/* libsrt <= 1.5.4: startup() skips refcount once GC runs, first cleanup() destroys all sockets.
+   a real pair per proc */
+static pthread_mutex_t srt_ref_lock = PTHREAD_MUTEX_INITIALIZER;
+static unsigned srt_refs;
+
+int srtcommon_startup(void) {
+  int rc = 0;
+
+  pthread_mutex_lock(&srt_ref_lock);
+  if (srt_refs == 0 && srt_startup() == SRT_ERROR)
+    rc = -1;
+  else
+    srt_refs++;
+  pthread_mutex_unlock(&srt_ref_lock);
+  return rc;
+}
+
+void srtcommon_cleanup(void) {
+  pthread_mutex_lock(&srt_ref_lock);
+  if (srt_refs > 0 && --srt_refs == 0)
+    srt_cleanup();
+  pthread_mutex_unlock(&srt_ref_lock);
+}
+
 void srtcommon_open_logging(int verbose) {
   srt_setloglevel(verbose ? LOG_DEBUG : LOG_WARNING);
   srt_setloghandler(NULL, srt_log_cb);

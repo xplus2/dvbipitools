@@ -336,7 +336,7 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
     return NULL;
   }
 
-  if (srt_startup() == SRT_ERROR) {
+  if (srtcommon_startup() != 0) {
     log_code("LE500166", "srt: startup failed: %s", srt_getlasterror_str());
     return NULL;
   }
@@ -344,7 +344,7 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
 
   s = open_srt_input(cfg, listeners, &n_listeners);
   if (s == SRT_INVALID_SOCK) {
-    srt_cleanup();
+    srtcommon_cleanup();
     return NULL;
   }
 
@@ -353,7 +353,7 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
     srt_close(s);
     for (int i = 0; i < n_listeners; i++)
       srt_close(listeners[i]);
-    srt_cleanup();
+    srtcommon_cleanup();
     return NULL;
   }
   r->sock = s;
@@ -456,6 +456,6 @@ void srtin_close(srtin_t *r) {
   if (!r) return;
   if (r->sock != SRT_INVALID_SOCK) srt_close(r->sock);
   for (int i = 0; i < r->n_listeners; i++) srt_close(r->listeners[i]);
-  srt_cleanup();
+  srtcommon_cleanup();
   free(r);
 }

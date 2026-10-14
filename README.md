@@ -80,7 +80,7 @@ cmake --build build
 * libsrt
   + Required to build `dipisrt` at all.
   + Optional: adds SRT support to `dipitvhead`, `dipiradiohead`, `dipirec`, `dipixy` and `dipidescramble`
-* libnghttp2, libngtcp2, libngtcp2_crypto_ossl and libnghttp3
+* libnghttp2, libngtcp2 (>= 1.22), libngtcp2_crypto_ossl and libnghttp3
   + HTTP/2 and HTTP/3 support in `dipixy`.
 
 ## Packaging

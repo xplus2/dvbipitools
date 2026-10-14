@@ -26,7 +26,7 @@ KBPS=6000
 cap="$WORK/regenerate_mpts.ts"
 report="$WORK/regenerate_mpts.json"
 
-tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --receive-timeout 60000 \
+tsp -I ip $MCAST:$PORT --local-address 127.0.0.1 --buffer-size 4194304 --receive-timeout 60000 \
     -O file "$cap" >"$WORK/tsp_capture.log" 2>&1 &
 TSPID=$!
 wait_until 30 udp_port_busy $PORT || fail "regenerate mpts: tsp capture never bound $PORT"
@@ -42,7 +42,7 @@ wait_until 30 udp_port_busy $BAD2_PORT || fail "regenerate mpts: receiver never 
 RELAYPIDS=
 for n in 1 2; do
     eval "raw=\$RAW$n bad=\$BAD$n raw_port=\$RAW${n}_PORT bad_port=\$BAD${n}_PORT"
-    tsp -I ip $raw:$raw_port --local-address 127.0.0.1 --receive-timeout 60000 \
+    tsp -I ip $raw:$raw_port --local-address 127.0.0.1 --buffer-size 4194304 --receive-timeout 60000 \
         -P pcredit --add-pcr 100000000 --random -P continuity --fix \
         -O ip $bad:$bad_port --local-address 127.0.0.1 --ttl 1 >"$WORK/tsp_relay$n.log" 2>&1 &
     RELAYPIDS="$RELAYPIDS $!"

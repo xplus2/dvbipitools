@@ -324,7 +324,7 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
     return NULL;
   }
 
-  if (srt_startup() == SRT_ERROR) {
+  if (srtcommon_startup() != 0) {
     log_code("LE500166", "srt: startup failed: %s", srt_getlasterror_str());
     return NULL;
   }
@@ -332,7 +332,7 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
 
   r = calloc(1, sizeof *r);
   if (!r) {
-    srt_cleanup();
+    srtcommon_cleanup();
     return NULL;
   }
   r->sock = SRT_INVALID_SOCK;
@@ -340,7 +340,7 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
   if (r->eid == SRT_ERROR) {
     log_code("LE500160", "srt: epoll create failed: %s", srt_getlasterror_str());
     free(r);
-    srt_cleanup();
+    srtcommon_cleanup();
     return NULL;
   }
   r->mx = cfg->mx;
@@ -363,7 +363,7 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
     free(r->pending_len);
     srt_epoll_release(r->eid);
     free(r);
-    srt_cleanup();
+    srtcommon_cleanup();
     return NULL;
   }
 
@@ -372,7 +372,7 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
     free(r->pending_len);
     srt_epoll_release(r->eid);
     free(r);
-    srt_cleanup();
+    srtcommon_cleanup();
     return NULL;
   }
   return r;
@@ -517,7 +517,7 @@ void srtout_close(srtout_t *r) {
     srt_close(r->sock);
   }
   srt_epoll_release(r->eid);
-  srt_cleanup();
+  srtcommon_cleanup();
   free(r->pending);
   free(r->pending_len);
   free(r);

@@ -283,7 +283,7 @@ else
 HAVE_HTTP2 := $(HAVE_LIBNGHTTP2)
 endif
 
-HAVE_LIBNGTCP2 := $(shell pkg-config --exists libngtcp2 libngtcp2_crypto_ossl libnghttp3 && echo yes)
+HAVE_LIBNGTCP2 := $(shell pkg-config --exists 'libngtcp2 >= 1.22.0' libngtcp2_crypto_ossl libnghttp3 && echo yes)
 
 # ngtcp2_crypto_ossl needs OpenSSL's QUIC APIs, added in 3.5
 HAVE_OPENSSL_QUIC := $(shell printf '#include <openssl/opensslv.h>\n#if OPENSSL_VERSION_NUMBER < 0x30500000L\n#error no quic\n#endif\nint main(void){return 0;}\n' | $(CC) -xc - $(shell pkg-config --cflags openssl) -o /dev/null >/dev/null 2>&1 && echo yes)
@@ -1509,7 +1509,7 @@ else
 dipixy_HTTP3_SRC :=
 ifeq ($(HAVE_LIBNGTCP2),yes)
 else ifneq ($(HTTP3),no)
-$(warning dipixy: libngtcp2/libnghttp3 not found via pkg-config, building without HTTP/3 support)
+$(warning dipixy: libngtcp2 >= 1.22.0, libngtcp2_crypto_ossl or libnghttp3 not found via pkg-config, building without HTTP/3 support)
 endif
 endif
 
