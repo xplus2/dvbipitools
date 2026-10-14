@@ -37,7 +37,8 @@ typedef struct {
 
 typedef struct {
   unsigned pid;
-  unsigned char cc;
+  unsigned char cc; /* last cc seen on pid, valid on have_cc */
+  int have_cc;
   int active;
   int have_last;
   uint64_t last_pcr;

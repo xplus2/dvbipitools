@@ -190,6 +190,7 @@ static void pcr_stage(out_ctx_t *o, unsigned char *pkt188) {
   if (i == ARGS_MAX_INPUTS) return;
   pp = &o->pcr_pids[i];
   pp->cc = pkt188[3] & 0x0F;
+  pp->have_cc = 1;
   if (!o->pcr_latched || !pcr_packet_read(pkt188, &src)) return;
   out = pcr_now(o);
   pcr_packet_write(pkt188, out);
@@ -231,7 +232,8 @@ static void pcr_inject(out_ctx_t *o) {
   now = pcr_now(o);
   for (unsigned i = 0; i < o->pcr_slots; i++) {
     out_pcr_pid_t *pp = &o->pcr_pids[i];
-    if (!pp->active) continue;
+    /* no cc to continue yet: injected pkg would precede 1st real with a bogus cc */
+    if (!pp->active || !pp->have_cc) continue;
     if (!pp->have_last) {
       pp->last_pcr = now;
       pp->have_last = 1;
