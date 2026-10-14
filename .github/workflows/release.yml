@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       label: ${{ steps.v.outputs.label }}
       version: ${{ steps.v.outputs.version }}
@@ -34,21 +34,21 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-26.04
             image: debian:trixie
           - arch: arm64
             runner: ubuntu-24.04-arm
             image: debian:trixie
           - arch: armhf
-            runner: ubuntu-latest
+            runner: ubuntu-26.04
             image: debian:bookworm
             platform: linux/arm/v7
           - arch: ppc64el
-            runner: ubuntu-latest
+            runner: ubuntu-26.04
             image: debian:trixie
             platform: linux/ppc64le
           - arch: riscv64
-            runner: ubuntu-latest
+            runner: ubuntu-26.04
             image: debian:trixie
             platform: linux/riscv64
     runs-on: ${{ matrix.runner }}
@@ -105,7 +105,7 @@ jobs:
             sysproc: aarch64
             crosspkg: crossbuild-essential-arm64
             mesoncpu: aarch64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -289,7 +289,7 @@ jobs:
             sysproc: riscv64
             crosspkg: crossbuild-essential-riscv64
             mesoncpu: riscv64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: build dependencies
@@ -423,7 +423,7 @@ jobs:
 
   release:
     needs: [deb, ipk, tgz]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:

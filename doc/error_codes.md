@@ -1135,6 +1135,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 600159  | YW    | --sds %s: no services discovered in %.0fs                         |
 | 600160  | LW    | rtmpout: %s: setup timed out after %us, reconnecting              |
 | 600161  | LE    | http: Location header longer than %zu bytes                       |
+| 600162  | LW    | rist: peer not connected yet, data may be lost                    |
 
 ### 7xxxxx Misc
 

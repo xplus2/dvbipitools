@@ -316,10 +316,8 @@ void id3_consume(id3_t *c, const unsigned char *p, size_t taglen) {
       dst = title;
     else if (!strcmp(id, version == 2 ? "TP1" : "TPE1"))
       dst = artist;
-    if (dst) {
-      if (frame_text(fbody, fsize, fflags, dst, 256))
-        found = 1;
-    }
+    if (dst && frame_text(fbody, fsize, fflags, dst, 256))
+      found = 1;
     cursor += hdr + fsize;
   }
   if (!found)

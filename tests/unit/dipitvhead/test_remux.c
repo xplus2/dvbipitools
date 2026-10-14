@@ -2232,9 +2232,13 @@ START_TEST(remux_non_standalone_eit_update_does_not_clobber_section_in_flight) {
   out_program_pids_t pids;
   unsigned char pkt[2][188];
   unsigned char single[188];
-  unsigned char old_sec[300], new_sec[300], got[300];
+  unsigned char old_sec[300];
+  unsigned char new_sec[300];
+  unsigned char got[300];
   unsigned char cc = 0;
-  size_t old_len, new_len, off;
+  size_t old_len;
+  size_t new_len;
+  size_t off;
 
   base_cfg(&cfg);
   base_input(&input);

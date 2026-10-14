@@ -22,7 +22,7 @@ jobs:
           - name: tsan
             sanitize: OFF
             tsan: ON
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: dependencies
@@ -32,7 +32,7 @@ jobs:
             libnghttp2-dev libngtcp2-dev libnghttp3-dev libdvbcsa1
       - name: install tsduck
         run: |
-          curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu24_amd64.deb
+          curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu26_amd64.deb
           sudo apt-get install -y ./tsduck.deb
       - name: configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DDVBIPITOOLS_SANITIZE=${{ matrix.sanitize }} -DDVBIPITOOLS_TSAN=${{ matrix.tsan }}
@@ -42,7 +42,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure -j"$(nproc)"
 
   coverage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: dependencies
@@ -53,7 +53,7 @@ jobs:
           pipx install gcovr
       - name: install tsduck
         run: |
-          curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu24_amd64.deb
+          curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu26_amd64.deb
           sudo apt-get install -y ./tsduck.deb
       - name: configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic -O0" -DCMAKE_EXE_LINKER_FLAGS=--coverage
@@ -97,7 +97,7 @@ jobs:
           if-no-files-found: ignore
 
   bonding-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: dependencies
@@ -106,7 +106,7 @@ jobs:
           sudo apt-get install -y build-essential cmake pkg-config libssl-dev check iproute2 curl librist-dev
       - name: build libsrt with bonding
         run: |
-          curl -fsSL -o srt.tar.gz https://github.com/Haivision/srt/archive/refs/tags/v1.5.3.tar.gz
+          curl -fsSL -o srt.tar.gz https://github.com/Haivision/srt/archive/refs/tags/v1.5.6.tar.gz
           mkdir srt-src
           tar xzf srt.tar.gz -C srt-src --strip-components=1
           cmake -S srt-src -B srt-src/bld -DENABLE_BONDING=ON -DENABLE_STATIC=OFF \
@@ -182,7 +182,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   static-analysis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: dependencies
@@ -203,7 +203,7 @@ jobs:
           path: cppcheck-report.txt
 
   fuzz-smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: dependencies

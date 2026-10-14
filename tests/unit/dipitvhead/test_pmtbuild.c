@@ -139,7 +139,7 @@ START_TEST(pmtbuild_add_pcr_only_maps_an_unlisted_pcr_pid_and_skips_the_pmt_loop
   ck_assert_uint_eq(out_es[1].in_pid, 0x0200u);
   ck_assert_uint_eq(out_es[1].out_pid, pids.es_pid_base);
   ck_assert_uint_eq(pcr_pid, pids.es_pid_base);
-  ck_assert_int_eq((int)out_es[1].is_ca, (int)CA_PASS_PCR);
+  ck_assert_int_eq(out_es[1].is_ca, CA_PASS_PCR);
 
   slen = pmtbuild_pmt(0, 1, pcr_pid, NULL, 0, out_es, n, NULL, 0, sec, sizeof sec, &trunc);
   ck_assert_uint_gt(slen, 0u);

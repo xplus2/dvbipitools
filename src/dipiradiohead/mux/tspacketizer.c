@@ -188,9 +188,10 @@ static size_t emit_cas_ecm_emm(tspacketizer_t *t, size_t vi, double now, unsigne
   return count;
 }
 
-static size_t emit_pmt(tspacketizer_t *t, unsigned char *sec, size_t seccap, unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
+static size_t emit_pmt(tspacketizer_t *t, unsigned char *sec, size_t seccap, const unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
   unsigned char prog_desc[64] = {0};
-  size_t n, prog_desc_len = 0;
+  size_t n;
+  size_t prog_desc_len = 0;
 
   if (t->cas) {
     prog_desc_len = cas_prog_desc(t->cas, prog_desc, sizeof prog_desc);
@@ -205,7 +206,7 @@ static size_t emit_pmt(tspacketizer_t *t, unsigned char *sec, size_t seccap, uns
   return ts_packet_emit(t->pmt_pid, &t->cc_pmt, ptr0, sec, n, 0, 0, cb, ctx);
 }
 
-static size_t emit_sdt(tspacketizer_t *t, unsigned char *sec, size_t seccap, unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
+static size_t emit_sdt(tspacketizer_t *t, unsigned char *sec, size_t seccap, const unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
   psi_sdt_entry_t e;
   size_t n;
 
@@ -214,7 +215,7 @@ static size_t emit_sdt(tspacketizer_t *t, unsigned char *sec, size_t seccap, uns
   return n ? ts_packet_emit(PID_SDT, &t->cc_sdt, ptr0, sec, n, 0, 0, cb, ctx) : 0;
 }
 
-static size_t emit_eit(tspacketizer_t *t, unsigned char *sec, size_t seccap, unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
+static size_t emit_eit(tspacketizer_t *t, unsigned char *sec, size_t seccap, const unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
   size_t n = tspacketizer_build_eit(t, sec, seccap);
   return n ? ts_packet_emit(PID_EIT, &t->cc_eit, ptr0, sec, n, 0, 0, cb, ctx) : 0;
 }
@@ -223,7 +224,8 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, 
   unsigned char sec[4096];
   unsigned char *pesbuf = t->pesbuf;
   unsigned char ptr0 = 0x00;
-  size_t n, count = 0;
+  size_t n;
+  size_t count = 0;
 
   count += pcr_drain(t, 1, now, cb, ctx);
   if (t->disc_pending) t->pts_base = t->pts_end - pts_90k;

@@ -33,7 +33,7 @@ static int eit_evict_candidate(remux_t *r) {
 /* queued sections of table_id with another version are stale, never emit mixed. head midsend kept */
 static void eit_drop_stale(remux_t *r, unsigned char table_id, unsigned char ver) {
   for (int i = r->eit_queue_count - 1; i >= (r->eit_drain_off > 0 ? 1 : 0); i--) {
-    eit_section_t *q = eit_at(r, i);
+    const eit_section_t *q = eit_at(r, i);
     if (q->table_id == table_id && ((q->data[5] >> 1) & 0x1F) != ver) eit_remove(r, i);
   }
 }
@@ -100,7 +100,7 @@ void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *
 
 size_t remux_emit_eit(remux_t *r, unsigned pid, unsigned char *cc, size_t max_packets, remux_packet_cb cb, void *ctx) {
   unsigned char ptr0 = 0x00;
-  eit_section_t *head;
+  const eit_section_t *head;
   size_t n;
 
   if (r->eit_queue_count == 0) return 0;

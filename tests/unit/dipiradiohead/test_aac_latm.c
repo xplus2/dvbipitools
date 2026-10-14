@@ -253,7 +253,9 @@ END_TEST
 
 START_TEST(aac_latm_probe_failed_config_keeps_stored_config) {
   aac_latm_t *c = aac_latm_new();
-  unsigned char good[32], bad[32], reuse[32];
+  unsigned char good[32];
+  unsigned char bad[32];
+  unsigned char reuse[32];
   size_t good_len = build_full_config_frame(good, sizeof good, 2);
   size_t bad_len;
   size_t reuse_len = build_reuse_config_frame(reuse, sizeof reuse);

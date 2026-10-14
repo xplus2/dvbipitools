@@ -46,7 +46,8 @@ void bitrate_pacer_start(bitrate_pacer_t *p) {
 }
 
 void bitrate_pace(bitrate_pacer_t *p) {
-  double target_s, now;
+  double target_s;
+  double now;
   if (!p || !p->burst_limit || p->target_bps <= 0.0) return;
   target_s = p->start + (double)p->bits_sent / p->target_bps;
   now = mono_seconds();

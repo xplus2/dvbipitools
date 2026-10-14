@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -23,6 +24,8 @@ struct ristout {
   const char *tool_version;
   unsigned drain_ms;
   int wrote;
+  int warned;
+  atomic_int connected;
 };
 
 static int add_peers(struct rist_ctx *ctx, const ristout_cfg_t *cfg) {
@@ -31,6 +34,12 @@ static int add_peers(struct rist_ctx *ctx, const ristout_cfg_t *cfg) {
       return -1;
   }
   return 0;
+}
+
+static void sender_conn_cb(void *arg, struct rist_peer *peer, enum rist_connection_status st) {
+  ristout_t *r = arg;
+  (void)peer;
+  if (st == RIST_CONNECTION_ESTABLISHED || st == RIST_CLIENT_CONNECTED) atomic_store(&r->connected, 1);
 }
 
 static int sender_stats_cb(void *arg, const struct rist_stats *stats) {
@@ -67,6 +76,7 @@ ristout_t *ristout_open(const ristout_cfg_t *cfg) {
     free(r);
     return NULL;
   }
+  rist_connection_status_callback_set(r->ctx, sender_conn_cb, r);
   if (add_peers(r->ctx, cfg) || rist_start(r->ctx) != 0) {
     rist_destroy(r->ctx);
     free(r);
@@ -77,6 +87,10 @@ ristout_t *ristout_open(const ristout_cfg_t *cfg) {
 }
 
 int ristout_write(ristout_t *r, const unsigned char *buf, size_t n) {
+  if (!r->warned && !atomic_load(&r->connected)) {
+    r->warned = 1;
+    log_code("LW600162", "rist: peer not connected yet, data may be lost");
+  }
   for (size_t off = 0; off < n; off += RIST_CHUNK) {
     struct rist_data_block db;
     size_t chunk = n - off < RIST_CHUNK ? n - off : RIST_CHUNK;

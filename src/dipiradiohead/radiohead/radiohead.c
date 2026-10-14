@@ -352,7 +352,8 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
 
   while (!signal_stop_requested()) {
     source_t *src;
-    double now, now_pcr;
+    double now;
+    double now_pcr;
     time_t now_t;
 
     single_wait(is, pace_deadline, tspacketizer_pcr_next_due(tsp));

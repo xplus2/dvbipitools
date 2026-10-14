@@ -185,7 +185,8 @@ START_TEST(playlist_sniffing_finds_extinf_behind_a_long_header) {
   static char body[4096];
   const char *head = "#EXTM3U\n#";
   const char *tail = "\n#EXTINF:6.0,\nseg.ts\n";
-  size_t n = strlen(head), t = strlen(tail);
+  size_t n = strlen(head);
+  size_t t = strlen(tail);
 
   memcpy(body, head, n);
   memset(body + n, 'x', 3000);

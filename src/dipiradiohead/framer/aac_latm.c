@@ -113,7 +113,10 @@ int aac_latm_probe(aac_latm_t *c, const unsigned char *p, size_t avail, aac_latm
   b.bit = 0;
   b.err = 0;
   if (!br_u(&b, 1)) { /* !useSameStreamMux: fresh StreamMuxConfig follows */
-    unsigned rate = 0, ch = 0, pl = 0, nsf = 0;
+    unsigned rate = 0;
+    unsigned ch = 0;
+    unsigned pl = 0;
+    unsigned nsf = 0;
     if (stream_mux_config(&b, &rate, &ch, &pl, &nsf) != 0) return -1;
     c->sample_rate = rate;
     c->channels = ch;

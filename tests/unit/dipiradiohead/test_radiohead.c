@@ -46,7 +46,8 @@ END_TEST
 
 START_TEST(meta_cb_truncates_on_utf8_boundary) {
   meta_state_t m;
-  char two[601], three[601];
+  char two[601];
+  char three[601];
   size_t i;
   memset(&m, 0, sizeof m);
   for (i = 0; i + 2 <= 600; i += 2) memcpy(two + i, "\xC3\xA9", 2);

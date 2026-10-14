@@ -33,19 +33,29 @@ size_t aitbuild_pmt_entry(unsigned ait_pid, unsigned char *out, size_t cap) {
 /* base = url through last '/' of the path, rest=orig path. no path: base=url */
 static size_t split_base(const char *url, size_t url_len) {
   const char *host = strstr(url, "://");
-  size_t limit = strcspn(url, "?#"), i;
+  size_t limit = strcspn(url, "?#");
   if (!host) return url_len;
-  for (i = limit; i > (size_t)(host - url) + 3; i--) {
+  for (size_t i = limit; i > (size_t)(host - url) + 3; i--) {
     if (url[i - 1] == '/') return i;
   }
   return url_len;
 }
 
 size_t aitbuild_ait(unsigned version, unsigned org_id, unsigned app_id, const char *url, const char *name, unsigned char *out, size_t cap) {
-  size_t n = 0, app_loop_len_pos, app_loop_start, adl_pos, ad_start;
-  size_t app_desc_len_pos, app_desc_start, tp_desc_len_pos, tp_desc_start;
-  size_t url_len = strlen(url), base_len = split_base(url, url_len), name_len;
-  unsigned adl, all;
+  size_t n = 0;
+  size_t app_loop_len_pos;
+  size_t app_loop_start;
+  size_t adl_pos;
+  size_t ad_start;
+  size_t app_desc_len_pos;
+  size_t app_desc_start;
+  size_t tp_desc_len_pos;
+  size_t tp_desc_start;
+  size_t url_len = strlen(url);
+  size_t base_len = split_base(url, url_len);
+  size_t name_len;
+  unsigned adl;
+  unsigned all;
 
   if (!name || !name[0]) name = "HbbTV";
   name_len = strlen(name);

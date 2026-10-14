@@ -158,7 +158,9 @@ START_TEST(discover_stays_pending_on_pmt_without_es) {
   discover_state_t ds;
   psi_t *psi = psi_new();
   input_metrics_t im;
-  unsigned char sec[64], pat[188], pmt[188];
+  unsigned char sec[64];
+  unsigned char pat[188];
+  unsigned char pmt[188];
   size_t slen;
 
   memset(&in, 0, sizeof in);

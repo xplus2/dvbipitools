@@ -27,7 +27,8 @@ START_TEST(aitbuild_pmt_entry_rejects_small_cap) {
 END_TEST
 
 static const unsigned char *find_desc(const unsigned char *sec, unsigned tag) {
-  size_t pos = 21, end = 21 + ((((size_t)sec[19] & 0x0F) << 8) | sec[20]);
+  size_t pos = 21;
+  size_t end = 21 + ((((size_t)sec[19] & 0x0F) << 8) | sec[20]);
   while (pos + 2 <= end) {
     if (sec[pos] == tag) return sec + pos;
     pos += 2 + sec[pos + 1];
@@ -106,7 +107,8 @@ END_TEST
 
 START_TEST(aitbuild_ait_max_url_and_name_fit_section) {
   unsigned char out[320];
-  char url[201], name[64];
+  char url[201];
+  char name[64];
   memset(url, 'a', sizeof url - 1);
   memcpy(url, "http://", 7);
   url[sizeof url - 1] = '\0';

@@ -642,7 +642,8 @@ START_TEST(cat_passthrough_ignores_programs_that_are_down) {
 END_TEST
 
 START_TEST(cat_passthrough_bumps_version_only_on_content_change) {
-  rig_t a, b;
+  rig_t a;
+  rig_t b;
   collect_t col;
   unsigned char cc = 0;
   psi_ver_track_t cv = {0};

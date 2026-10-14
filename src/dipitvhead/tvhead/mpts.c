@@ -53,6 +53,8 @@ typedef struct {
 } mpts_run_ctx_t;
 
 static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_run_ctx_t *c) {
+  const char *nit_text;
+
   c->n = cfg->n_inputs;
   c->cas_wanted = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled;
   c->cas_needs_discovery = c->cas_wanted && (cfg->cas_pids_video || cfg->cas_pids_audio || cfg->cas_pids_lcevc);
@@ -78,7 +80,8 @@ static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_ru
   }
 
   c->rs = retryset_new(c->n, c->slot_ctx_ptrs, NULL, &tv_retry_ops, cfg->error_retry_s);
-  c->mpts = c->rs ? mpts_new(cfg->tsid, cfg->onid, cfg->nit_mode == TABLE_OVERRIDE ? cfg->nit_text : "", c->entries, c->n, &mpts_program_ops) : NULL;
+  nit_text = cfg->nit_mode == TABLE_OVERRIDE ? cfg->nit_text : "";
+  c->mpts = c->rs ? mpts_new(cfg->tsid, cfg->onid, nit_text, c->entries, c->n, &mpts_program_ops) : NULL;
   if (!c->rs || !c->mpts) {
     c->rc = 1;
     return -1;
