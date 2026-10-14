@@ -196,7 +196,7 @@ START_TEST(srtin_single_caller_receives_from_listener) {
   ck_assert_ptr_nonnull(payload);
   ck_assert_ptr_nonnull(got_buf);
   for (size_t i = 0; i < total; i++) payload[i] = (unsigned char)(i * 11 + 5);
-  ck_assert_int_ne(srt_startup(), SRT_ERROR);
+  ck_assert_int_ne(srtcommon_startup(), SRT_ERROR);
   la.lsn = srt_create_socket();
   ck_assert_int_ne(la.lsn, SRT_INVALID_SOCK);
   memset(&addr, 0, sizeof addr);
@@ -236,7 +236,7 @@ START_TEST(srtin_single_caller_receives_from_listener) {
   atomic_store(&la.stop, 1);
   pthread_join(th, NULL);
   srt_close(la.lsn);
-  srt_cleanup();
+  srtcommon_cleanup();
   free(payload);
   free(got_buf);
 }
@@ -262,7 +262,7 @@ START_TEST(srtin_single_caller_redials_after_listener_drops) {
     ck_assert_ptr_nonnull(payload[k]);
     for (size_t i = 0; i < total; i++) payload[k][i] = (unsigned char)(i * 11 + 5 + k * 50);
   }
-  ck_assert_int_ne(srt_startup(), SRT_ERROR);
+  ck_assert_int_ne(srtcommon_startup(), SRT_ERROR);
   la[0].lsn = srt_create_socket();
   ck_assert_int_ne(la[0].lsn, SRT_INVALID_SOCK);
   la[1].lsn = la[0].lsn;
@@ -315,7 +315,7 @@ START_TEST(srtin_single_caller_redials_after_listener_drops) {
   pthread_join(th[0], NULL);
   pthread_join(th[1], NULL);
   srt_close(la[0].lsn);
-  srt_cleanup();
+  srtcommon_cleanup();
   free(payload[0]);
   free(payload[1]);
   free(got_buf);
