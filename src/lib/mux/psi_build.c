@@ -134,7 +134,7 @@ static size_t psi_put_sdt_entry(unsigned char *out, size_t n, size_t cap, const 
   out[n++] = (unsigned char)slen;
   n += psi_put_text(out + n, slen, e->service_name);
 
-  field16 = ((4u & 0x7) << 13) | (0u << 12) | ((unsigned)(size - 5) & 0x0FFF); /* running_status=running, free_CA=0 */
+  field16 = ((4u & 0x7) << 13) | ((e->ca_mode ? 1u : 0u) << 12) | ((unsigned)(size - 5) & 0x0FFF); /* running_status=running */
   out[f16_pos] = (unsigned char)(field16 >> 8);
   out[f16_pos + 1] = (unsigned char)field16;
   return n;
@@ -156,7 +156,7 @@ static size_t psi_put_sdt_header(unsigned char *out, unsigned version, unsigned 
 }
 
 size_t psi_build_sdt(unsigned version, unsigned tsid, unsigned onid, unsigned service_id, unsigned service_type, const char *provider, const char *service, unsigned char *out, size_t cap) {
-  psi_sdt_entry_t e = {service_id, service_type, provider, service};
+  psi_sdt_entry_t e = {service_id, service_type, provider, service, 0};
   size_t n;
 
   if (cap < 24) return 0;
@@ -269,4 +269,15 @@ size_t psi_build_nit(unsigned version, unsigned onid, unsigned tsid, const char 
   out[tsl_pos] = (unsigned char)(0xF0 | ((tsl >> 8) & 0x0F));
   out[tsl_pos + 1] = (unsigned char)tsl;
   return psi_finish_section(out, n, cap, 0xF0);
+}
+
+void psi_ver_track_stamp(psi_ver_track_t *t, unsigned char *sec, size_t n) {
+  uint32_t sig;
+  if (!t || n <= 4) return;
+  sig = crc32_mpeg(sec, n - 4);
+  if (t->primed && sig != t->sig) t->ver = (unsigned char)((t->ver + 1) & 0x1F);
+  t->sig = sig;
+  t->primed = 1;
+  sec[5] = (unsigned char)((sec[5] & 0xC1) | (t->ver << 1));
+  be32_put(sec + n - 4, crc32_mpeg(sec, n - 4));
 }

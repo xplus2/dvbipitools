@@ -10,8 +10,6 @@
 #include "lib/hls/m3u_lines.h"
 #include "playlist.h"
 
-#define SNIFF_CAP 4096
-
 /* ID3 tag or MPEG/ADTS sync at offset 0: audio, not a playlist */
 static int looks_binary(const unsigned char *b, size_t len) {
   if (len >= 3 && memcmp(b, "ID3", 3) == 0) return 1;
@@ -70,7 +68,7 @@ static int parse_pls(char *text, char *url, size_t n) {
 }
 
 int playlist_extract(const unsigned char *body, size_t len, const http_url_t *base, char *url, size_t n) {
-  char buf[SNIFF_CAP];
+  char buf[PLAYLIST_SNIFF_CAP];
   char *p;
   if (looks_binary(body, len)) return 0;
   sniff_copy(body, len, buf, sizeof buf);
@@ -80,10 +78,17 @@ int playlist_extract(const unsigned char *body, size_t len, const http_url_t *ba
 }
 
 int playlist_is_hls_media(const unsigned char *body, size_t len) {
-  char buf[SNIFF_CAP];
+  char buf[PLAYLIST_SNIFF_CAP];
   char *p;
 
   sniff_copy(body, len, buf, sizeof buf);
   p = playlist_skip_blank(buf);
   return !strncmp(p, "#EXTM3U", 7) && strstr(p, "#EXTINF:") != NULL;
+}
+
+int playlist_starts_extm3u(const unsigned char *body, size_t len) {
+  size_t i = 0;
+
+  while (i < len && (body[i] == ' ' || body[i] == '\t' || body[i] == '\r' || body[i] == '\n')) i++;
+  return len - i >= 7 && !memcmp(body + i, "#EXTM3U", 7);
 }

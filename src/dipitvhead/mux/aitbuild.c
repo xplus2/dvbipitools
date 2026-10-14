@@ -30,13 +30,26 @@ size_t aitbuild_pmt_entry(unsigned ait_pid, unsigned char *out, size_t cap) {
   return n;
 }
 
-size_t aitbuild_ait(unsigned version, unsigned org_id, unsigned app_id, const char *url, unsigned char *out, size_t cap) {
+/* base = url through last '/' of the path, rest=orig path. no path: base=url */
+static size_t split_base(const char *url, size_t url_len) {
+  const char *host = strstr(url, "://");
+  size_t limit = strcspn(url, "?#"), i;
+  if (!host) return url_len;
+  for (i = limit; i > (size_t)(host - url) + 3; i--) {
+    if (url[i - 1] == '/') return i;
+  }
+  return url_len;
+}
+
+size_t aitbuild_ait(unsigned version, unsigned org_id, unsigned app_id, const char *url, const char *name, unsigned char *out, size_t cap) {
   size_t n = 0, app_loop_len_pos, app_loop_start, adl_pos, ad_start;
   size_t app_desc_len_pos, app_desc_start, tp_desc_len_pos, tp_desc_start;
-  size_t url_len = strlen(url);
+  size_t url_len = strlen(url), base_len = split_base(url, url_len), name_len;
   unsigned adl, all;
 
-  if (url_len > 200 || cap < 60 + url_len) return 0;
+  if (!name || !name[0]) name = "HbbTV";
+  name_len = strlen(name);
+  if (url_len > 200 || name_len > 63 || cap < 56 + url_len + name_len) return 0;
 
   out[n++] = 0x74;  /* table_id: AIT */
   n += 2;           /* section_syntax_indicator/reserved/section_length, patched below */
@@ -86,10 +99,26 @@ size_t aitbuild_ait(unsigned version, unsigned org_id, unsigned app_id, const ch
   psi_put16(out + n, 0x0003);
   n += 2;
   out[n++] = 0x01; /* transport_protocol_label */
-  out[n++] = (unsigned char)url_len;
-  memcpy(out + n, url, url_len);
-  n += url_len;
+  out[n++] = (unsigned char)base_len; /* URL_base_length */
+  memcpy(out + n, url, base_len);
+  n += base_len;
+  out[n++] = 0; /* URL_extension_count */
   out[tp_desc_len_pos] = (unsigned char)(n - tp_desc_start);
+
+  /* application_name_descriptor (tag 0x01) */
+  out[n++] = 0x01;
+  out[n++] = (unsigned char)(3 + 1 + name_len);
+  memcpy(out + n, "und", 3); /* ISO_639_language_code */
+  n += 3;
+  out[n++] = (unsigned char)name_len;
+  memcpy(out + n, name, name_len);
+  n += name_len;
+
+  /* simple_application_location_descriptor (tag 0x15) */
+  out[n++] = 0x15;
+  out[n++] = (unsigned char)(url_len - base_len);
+  memcpy(out + n, url + base_len, url_len - base_len);
+  n += url_len - base_len;
 
   adl = (unsigned)(n - ad_start);
   out[adl_pos] = (unsigned char)(0xF0 | ((adl >> 8) & 0x0F));

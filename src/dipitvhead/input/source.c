@@ -25,33 +25,37 @@ static tssrc_kind_t tssrc_kind_of(src_kind_t k) {
   return TSSRC_STDIN;
 }
 
+static void fill_cfg(tssrc_cfg_t *tc_out, const config_t *cfg, const dipitvhead_input_t *input) {
+  memset(tc_out, 0, sizeof *tc_out);
+  tc_out->kind = tssrc_kind_of(input->input.kind);
+  tc_out->family = input->input.family;
+  tc_out->group = input->input.group;
+  tc_out->source = input->input.source;
+  tc_out->port = input->input.port;
+  tc_out->iface = input->iface_in;
+  tc_out->http = input->input.http;
+  tc_out->insecure_tls = cfg->insecure_tls;
+  tc_out->user_agent = TOOL_NAME "/" TOOL_VERSION;
+  tc_out->rist_uri = input->input.rist_uri;
+  tc_out->rist_profile_main = input->rist_profile_main;
+  tc_out->rist_key_size = input->rist_key_size_in;
+  tc_out->srt_host = input->input.srt_host;
+  tc_out->srt_port = input->input.srt_port;
+  tc_out->srt_listen = input->input.srt_listen;
+  tc_out->srt_passphrase = input->srt_passphrase_in;
+  tc_out->srt_pbkeylen = input->srt_pbkeylen_in;
+  tc_out->srt_streamid = input->srt_streamid_in;
+  tc_out->srt_packetfilter = input->srt_packetfilter_in;
+  tc_out->srt_latency_ms = input->srt_latency_in_ms;
+  tc_out->jitter_ms = input->jitter_ms;
+  tc_out->srt_verbose = cfg->verbose;
+}
+
 tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_err_reason_t *reason_out) {
   tssrc_cfg_t tc;
   tvsrc_t *s = calloc(1, sizeof *s);
   if (!s) return NULL;
-  memset(&tc, 0, sizeof tc);
-  tc.kind = tssrc_kind_of(input->input.kind);
-  tc.family = input->input.family;
-  tc.group = input->input.group;
-  tc.source = input->input.source;
-  tc.port = input->input.port;
-  tc.iface = input->iface_in;
-  tc.http = input->input.http;
-  tc.insecure_tls = cfg->insecure_tls;
-  tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
-  tc.rist_uri = input->input.rist_uri;
-  tc.rist_profile_main = input->rist_profile_main;
-  tc.rist_key_size = input->rist_key_size_in;
-  tc.srt_host = input->input.srt_host;
-  tc.srt_port = input->input.srt_port;
-  tc.srt_listen = input->input.srt_listen;
-  tc.srt_passphrase = input->srt_passphrase_in;
-  tc.srt_pbkeylen = input->srt_pbkeylen_in;
-  tc.srt_streamid = input->srt_streamid_in;
-  tc.srt_packetfilter = input->srt_packetfilter_in;
-  tc.srt_latency_ms = input->srt_latency_in_ms;
-  tc.jitter_ms = input->jitter_ms;
-  tc.srt_verbose = cfg->verbose;
+  fill_cfg(&tc, cfg, input);
 
   s->t = tssrc_open(&tc, reason_out);
   if (!s->t) {
@@ -62,6 +66,8 @@ tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_er
 }
 
 ssize_t tvsrc_read(tvsrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) { return tssrc_read(s->t, buf, cap, reason_out); }
+
+int tvsrc_wait(const tvsrc_t *s, int timeout_ms) { return tssrc_wait(s->t, timeout_ms); }
 
 int tvsrc_fd(const tvsrc_t *s) { return tssrc_fd(s->t); }
 
@@ -86,29 +92,7 @@ tvsrc_open_t *tvsrc_open_async_start(const config_t *cfg, const dipitvhead_input
   tvsrc_open_t *o = calloc(1, sizeof *o);
   if (!o) return NULL;
 
-  memset(&tc, 0, sizeof tc);
-  tc.kind = tssrc_kind_of(input->input.kind);
-  tc.family = input->input.family;
-  tc.group = input->input.group;
-  tc.source = input->input.source;
-  tc.port = input->input.port;
-  tc.iface = input->iface_in;
-  tc.http = input->input.http;
-  tc.insecure_tls = cfg->insecure_tls;
-  tc.user_agent = TOOL_NAME "/" TOOL_VERSION;
-  tc.rist_uri = input->input.rist_uri;
-  tc.rist_profile_main = input->rist_profile_main;
-  tc.rist_key_size = input->rist_key_size_in;
-  tc.srt_host = input->input.srt_host;
-  tc.srt_port = input->input.srt_port;
-  tc.srt_listen = input->input.srt_listen;
-  tc.srt_passphrase = input->srt_passphrase_in;
-  tc.srt_pbkeylen = input->srt_pbkeylen_in;
-  tc.srt_streamid = input->srt_streamid_in;
-  tc.srt_packetfilter = input->srt_packetfilter_in;
-  tc.srt_latency_ms = input->srt_latency_in_ms;
-  tc.jitter_ms = input->jitter_ms;
-  tc.srt_verbose = cfg->verbose;
+  fill_cfg(&tc, cfg, input);
 
   o->o = tssrc_open_async_start(&tc, reason_out);
   if (!o->o) {

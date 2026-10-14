@@ -94,16 +94,12 @@ args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
       if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg, "--srt-passphrase"))
         return ARGS_ERR;
       break;
-    case OPT_SRT_PBKEYLEN: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
+    case OPT_SRT_PBKEYLEN:
+      if (tvh_set_pbkeylen(&cfg->srt_pbkeylen, optarg, err, sizeof err)) {
         argerr("TS000361", "invalid --srt-pbkeylen: %s (16|24|32)", optarg);
         return ARGS_ERR;
       }
-      cfg->srt_pbkeylen = (int)v;
       break;
-    }
     case OPT_SRT_STREAMID:
       if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid, sizeof cfg->srt_streamid, optarg, "--srt-streamid"))
         return ARGS_ERR;

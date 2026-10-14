@@ -137,7 +137,7 @@ START_TEST(playlist_extract_pls_file_key_variants) {
 }
 END_TEST
 
-#define SNIFF_WINDOW 4096
+#define SNIFF_WINDOW PLAYLIST_SNIFF_CAP
 
 static size_t build_padded_body(char *out, const char *head, const char *tail) {
   size_t n = strlen(head);
@@ -181,6 +181,21 @@ START_TEST(playlist_sniffing_still_finds_entries_inside_the_sniff_window) {
 }
 END_TEST
 
+START_TEST(playlist_sniffing_finds_extinf_behind_a_long_header) {
+  static char body[4096];
+  const char *head = "#EXTM3U\n#";
+  const char *tail = "\n#EXTINF:6.0,\nseg.ts\n";
+  size_t n = strlen(head), t = strlen(tail);
+
+  memcpy(body, head, n);
+  memset(body + n, 'x', 3000);
+  n += 3000;
+  memcpy(body + n, tail, t);
+  n += t;
+  ck_assert_int_eq(playlist_is_hls_media((const unsigned char *)body, n), 1);
+}
+END_TEST
+
 START_TEST(playlist_sniffing_cuts_a_line_that_straddles_the_window) {
   static char body[SNIFF_WINDOW + 64];
   const char *head = "#EXTM3U\nhttp://example.com/";
@@ -209,6 +224,7 @@ static Suite *playlist_suite(void) {
   tcase_add_loop_test(tc, playlist_extract_pls_file_key_variants, 0, (int)(sizeof pls_key_cases / sizeof pls_key_cases[0]));
   tcase_add_test(tc, playlist_sniffing_ignores_everything_past_the_sniff_window);
   tcase_add_test(tc, playlist_sniffing_still_finds_entries_inside_the_sniff_window);
+  tcase_add_test(tc, playlist_sniffing_finds_extinf_behind_a_long_header);
   tcase_add_test(tc, playlist_sniffing_cuts_a_line_that_straddles_the_window);
   suite_add_tcase(s, tc);
   return s;

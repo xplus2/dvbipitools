@@ -73,6 +73,7 @@ typedef struct {
   const char *hbbtv_url;   /* --hbbtv right after this -i; NULL = no AIT for this program */
   unsigned hbbtv_org_id;   /* --hbbtv-org-id right after this -i; required with --hbbtv */
   unsigned hbbtv_app_id;   /* --hbbtv-app-id right after this -i; required with --hbbtv */
+  char hbbtv_name[64];     /* --hbbtv-name right after this -i; empty = "HbbTV" */
   int rist_profile_main;  /* --rist-profile-in right after this -i; SRC_RIST only */
   int rist_key_size_in;   /* --rist-encryption-type-in right after this -i; SRC_RIST + main only, 0 = default */
   char srt_passphrase_in[128];   /* --srt-passphrase-in right after this -i; SRC_SRT only, "" = no encryption */

@@ -205,7 +205,9 @@ is not configured for that run.
 For the
 .B \-i
 right before this: inject an AIT signalling this HbbTV application's
-entry-point URL. Default: none.
+entry-point URL. Split after the last
+.B /
+of the path into URL base and initial path. Default: none.
 .TP
 .B \-\-hbbtv\-org\-id \fIn\fR
 For the
@@ -218,6 +220,15 @@ For the
 .B \-i
 right before this: HbbTV application_id. Required with
 .BR \-\-hbbtv .
+.TP
+.B \-\-hbbtv\-name \fItext\fR
+For the
+.B \-i
+right before this: HbbTV application name
+(application_name_descriptor). Max 63 bytes.
+Needs
+.BR \-\-hbbtv .
+Default: HbbTV.
 .SS RIST input (per-input)
 .TP
 .B \-\-rist\-profile\-in \fIsimple\fR|\fImain\fR
@@ -417,7 +428,8 @@ while idle, at most one tick's worth each. Needs
 .BR \-B ", " \-\-burst\-limit
 Sleeps per datagram (7 packets) when ahead of
 .BR \-b 's
-target. In MPTS this stalls the shared loop, so all inputs. Needs
+target. After an input gap the lag is capped at 100 ms.
+In MPTS this stalls the shared loop, so all inputs. Needs
 .BR \-b .
 Combinable with
 .BR \-S .
@@ -516,7 +528,8 @@ dvbipi_tv_release_lead_min_microseconds / _max_microseconds.
 .TP
 .BR \-e ", " \-\-error " " \fIseconds\fR
 On input error, reconnect after N seconds. Default: fail once and stop
-(single input only); with more than one
+(single input only). An incompatible source PMT change always reconnects
+immediately regardless of this flag. With more than one
 .B \-i
 every input always retries independently regardless of this flag,
 defaulting to 5 seconds when

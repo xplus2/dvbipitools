@@ -29,9 +29,13 @@
 #define PCR_MAX_GAP_90K 3150UL   /* 35ms, DVB limit is 40ms */
 #define PCR_QUEUE_MAX 64
 #define IDLE_INTERVAL_PAT_CAT_S 0.1
+#define IDLE_INTERVAL_SDT_S 2.0
 #define IDLE_INTERVAL_NIT_S 10.0
+#define IDLE_INTERVAL_EIT_S 1.0
 #define EIT_DURATION_S 180       /* nominal placeholder, real remaining time is unknown */
 #define EIT_DURATION_MAX_S 86400
+#define PES_HDR_LEN 14
+#define PES_FRAME_MAX 65527      /* pes_build limit */
 
 struct tspacketizer {
   tspacketizer_cfg_t cfg;
@@ -47,6 +51,8 @@ struct tspacketizer {
   unsigned char cc_ecm[ARGS_MAX_CAS_VENDORS];
   unsigned char cc_emm[ARGS_MAX_CAS_VENDORS];
   log_throttle_t cas_desc_throttle;
+  log_throttle_t pes_drop_throttle;
+  unsigned char pesbuf[PES_HDR_LEN + PES_FRAME_MAX];
   unsigned ver_pat;
   unsigned ver_pmt;
   unsigned ver_sdt;
@@ -56,8 +62,6 @@ struct tspacketizer {
   char title[256];
   int meta_changed;
   time_t event_start;
-  char prev_artist[256];
-  char prev_title[256];
   unsigned eit_event_id;
   unsigned eit_duration_s;
   uint64_t last_pat;
@@ -68,6 +72,10 @@ struct tspacketizer {
   double idle_last_pat;
   double idle_last_cat;
   double idle_last_nit;
+  double idle_last_pmt;
+  double idle_last_sdt;
+  double idle_last_eit;
+  int pmt_empty_sent;
   int disc_pending;
   uint64_t pts_base;
   uint64_t pts_end;
@@ -95,7 +103,7 @@ tspacketizer_t *tspacketizer_new(const tspacketizer_cfg_t *cfg) {
   tspacketizer_t *t = calloc(1, sizeof *t);
   if (!t) return NULL;
   t->cfg = *cfg;
-  t->pmt_pid = cfg->pmt_pid ? cfg->pmt_pid : 0x0100;
+  t->pmt_pid = cfg->pmt_pid ? cfg->pmt_pid : TSPACKETIZER_PID_PMT;
   t->audio_pid = cfg->audio_pid ? cfg->audio_pid : TSPACKETIZER_PID_AUDIO;
   t->last_pat = UINT64_MAX;
   t->last_sdt = UINT64_MAX;
@@ -104,6 +112,9 @@ tspacketizer_t *tspacketizer_new(const tspacketizer_cfg_t *cfg) {
   t->idle_last_pat = -1.0;
   t->idle_last_cat = -1.0;
   t->idle_last_nit = -1.0;
+  t->idle_last_pmt = -1.0;
+  t->idle_last_sdt = -1.0;
+  t->idle_last_eit = -1.0;
   return t;
 }
 
@@ -115,9 +126,6 @@ int tspacketizer_set_metadata(tspacketizer_t *t, const char *artist, const char 
   bufcpy(a, sizeof a, artist);
   bufcpy(ti, sizeof ti, title);
   if (!strcmp(a, t->artist) && !strcmp(ti, t->title)) return 0;
-  if (!strcmp(a, t->prev_artist) && !strcmp(ti, t->prev_title)) return 0;
-  memcpy(t->prev_artist, t->artist, sizeof t->prev_artist);
-  memcpy(t->prev_title, t->title, sizeof t->prev_title);
   memcpy(t->artist, a, sizeof t->artist);
   memcpy(t->title, ti, sizeof t->title);
   t->meta_changed = 1;
@@ -180,27 +188,52 @@ static size_t emit_cas_ecm_emm(tspacketizer_t *t, size_t vi, double now, unsigne
   return count;
 }
 
+static size_t emit_pmt(tspacketizer_t *t, unsigned char *sec, size_t seccap, unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
+  unsigned char prog_desc[64] = {0};
+  size_t n, prog_desc_len = 0;
+
+  if (t->cas) {
+    prog_desc_len = cas_prog_desc(t->cas, prog_desc, sizeof prog_desc);
+    if (!prog_desc_len) {
+      log_throttled(&t->cas_desc_throttle, LOG_THROTTLE_WINDOW_S, "RW300160", "PMT: CA descriptor build failed, PMT not sent");
+      return 0;
+    }
+  }
+  n = psi_build_pmt(t->ver_pmt, t->cfg.sid, t->audio_pid, t->cfg.stream_type, t->audio_pid, t->cfg.aac_profile_level, prog_desc, prog_desc_len, sec, seccap);
+  if (!n) return 0;
+  if (!t->cfg.stream_type) t->pmt_empty_sent = 1;
+  return ts_packet_emit(t->pmt_pid, &t->cc_pmt, ptr0, sec, n, 0, 0, cb, ctx);
+}
+
+static size_t emit_sdt(tspacketizer_t *t, unsigned char *sec, size_t seccap, unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
+  psi_sdt_entry_t e;
+  size_t n;
+
+  tspacketizer_get_sdt_info(t, &e);
+  n = psi_build_sdt_section(t->ver_sdt, t->cfg.tsid, t->cfg.onid, &e, 1, 0, sec, seccap);
+  return n ? ts_packet_emit(PID_SDT, &t->cc_sdt, ptr0, sec, n, 0, 0, cb, ctx) : 0;
+}
+
+static size_t emit_eit(tspacketizer_t *t, unsigned char *sec, size_t seccap, unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
+  size_t n = tspacketizer_build_eit(t, sec, seccap);
+  return n ? ts_packet_emit(PID_EIT, &t->cc_eit, ptr0, sec, n, 0, 0, cb, ctx) : 0;
+}
+
 size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, double now, const unsigned char *frame, size_t frame_len, ts_packet_cb cb, void *ctx) {
   unsigned char sec[4096];
-  unsigned char pesbuf[8192];
-  unsigned char prog_desc[64] = {0};
+  unsigned char *pesbuf = t->pesbuf;
   unsigned char ptr0 = 0x00;
-  size_t n, count = 0, prog_desc_len = 0;
+  size_t n, count = 0;
 
   count += pcr_drain(t, 1, now, cb, ctx);
   if (t->disc_pending) t->pts_base = t->pts_end - pts_90k;
   pts_90k += t->pts_base;
   if (due(pts_90k, &t->last_pat, INTERVAL_PAT_PMT)) {
-    if (t->cas) {
-      prog_desc_len = cas_prog_desc(t->cas, prog_desc, sizeof prog_desc);
-      if (!prog_desc_len) log_throttled(&t->cas_desc_throttle, LOG_THROTTLE_WINDOW_S, "RW300160", "PMT: CA descriptor build failed, PMT not sent");
-    }
     if (t->cfg.standalone) {
       n = psi_build_pat(t->cfg.tsid, t->ver_pat, t->cfg.sid, t->pmt_pid, sec, sizeof sec);
       if (n) count += ts_packet_emit(PID_PAT, &t->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
-    n = (t->cas && !prog_desc_len) ? 0 : psi_build_pmt(t->ver_pmt, t->cfg.sid, t->pmt_pid, t->cfg.stream_type, t->audio_pid, t->cfg.aac_profile_level, prog_desc, prog_desc_len, sec, sizeof sec);
-    if (n) count += ts_packet_emit(t->pmt_pid, &t->cc_pmt, &ptr0, sec, n, 0, 0, cb, ctx);
+    count += emit_pmt(t, sec, sizeof sec, &ptr0, cb, ctx);
   }
   if (t->cfg.standalone) {
     int timer_due;
@@ -210,10 +243,7 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, 
       n = cas_build_cat(t->cas, sec, sizeof sec);
       if (n) count += ts_packet_emit(PID_CAT, &t->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);
     }
-    if (due(pts_90k, &t->last_sdt, INTERVAL_SDT)) {
-      n = psi_build_sdt(t->ver_sdt, t->cfg.tsid, t->cfg.onid, t->cfg.sid, 0x02, provider_name(t), t->cfg.service_name, sec, sizeof sec);
-      if (n) count += ts_packet_emit(PID_SDT, &t->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
-    }
+    if (due(pts_90k, &t->last_sdt, INTERVAL_SDT)) count += emit_sdt(t, sec, sizeof sec, &ptr0, cb, ctx);
     if (t->cfg.network_name[0] && due(pts_90k, &t->last_nit, INTERVAL_NIT)) {
       n = psi_build_nit(t->ver_nit, t->cfg.onid, t->cfg.tsid, t->cfg.network_name, sec, sizeof sec);
       if (n) count += ts_packet_emit(PID_NIT, &t->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
@@ -221,17 +251,15 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, 
 
     timer_due = due(pts_90k, &t->last_eit, INTERVAL_EIT);
     meta_due = t->meta_changed || timer_due;
-    if (meta_due) {
-      n = tspacketizer_build_eit(t, sec, sizeof sec);
-      if (n) count += ts_packet_emit(PID_EIT, &t->cc_eit, &ptr0, sec, n, 0, 0, cb, ctx);
-    }
+    if (meta_due) count += emit_eit(t, sec, sizeof sec, &ptr0, cb, ctx);
     if (t->cas) {
       size_t n_vendors = cas_vendor_count(t->cas);
       for (size_t vi = 0; vi < n_vendors; vi++) count += emit_cas_ecm_emm(t, vi, now, sec, sizeof sec, &ptr0, cb, ctx);
     }
   }
-  n = pes_build(pts_90k + PTS_DELAY_90K, frame, frame_len, pesbuf, sizeof pesbuf);
-  if (n) {
+  n = pes_build(pts_90k + PTS_DELAY_90K, frame, frame_len, pesbuf, sizeof t->pesbuf);
+  if (!n) log_throttled(&t->pes_drop_throttle, LOG_THROTTLE_WINDOW_S, "RW400226", "audio frame of %zu bytes exceeds PES limit, dropped", frame_len);
+  else {
     if (t->cas) {
       cas_relay_t relay = {t->cas, t->audio_pid, now, cb, ctx};
       count += ts_packet_emit_pcr(t->audio_pid, &t->cc_audio, pesbuf, n, pts_90k, t->disc_pending, cas_relay_cb, &relay);
@@ -257,7 +285,7 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, 
 
 int tspacketizer_set_codec(tspacketizer_t *t, unsigned stream_type, unsigned aac_profile_level) {
   if (t->cfg.stream_type == stream_type && t->cfg.aac_profile_level == aac_profile_level) return 0;
-  if (t->cfg.stream_type) t->ver_pmt = (t->ver_pmt + 1) & 0x1F;
+  if (t->cfg.stream_type || t->pmt_empty_sent) t->ver_pmt = (t->ver_pmt + 1) & 0x1F;
   t->cfg.stream_type = stream_type;
   t->cfg.aac_profile_level = aac_profile_level;
   return 1;
@@ -274,6 +302,7 @@ size_t tspacketizer_idle(tspacketizer_t *t, double now, ts_packet_cb cb, void *c
     n = psi_build_pat(t->cfg.tsid, t->ver_pat, t->cfg.sid, t->pmt_pid, sec, sizeof sec);
     if (n) count += ts_packet_emit(PID_PAT, &t->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
   }
+  if (due_s(now, &t->idle_last_pmt, IDLE_INTERVAL_PAT_CAT_S)) count += emit_pmt(t, sec, sizeof sec, &ptr0, cb, ctx);
   if (t->cas && due_s(now, &t->idle_last_cat, IDLE_INTERVAL_PAT_CAT_S)) {
     n = cas_build_cat(t->cas, sec, sizeof sec);
     if (n) count += ts_packet_emit(PID_CAT, &t->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);
@@ -282,6 +311,8 @@ size_t tspacketizer_idle(tspacketizer_t *t, double now, ts_packet_cb cb, void *c
     n = psi_build_nit(t->ver_nit, t->cfg.onid, t->cfg.tsid, t->cfg.network_name, sec, sizeof sec);
     if (n) count += ts_packet_emit(PID_NIT, &t->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
   }
+  if (due_s(now, &t->idle_last_sdt, IDLE_INTERVAL_SDT_S)) count += emit_sdt(t, sec, sizeof sec, &ptr0, cb, ctx);
+  if (due_s(now, &t->idle_last_eit, IDLE_INTERVAL_EIT_S) || t->meta_changed) count += emit_eit(t, sec, sizeof sec, &ptr0, cb, ctx);
   if (t->cas) {
     size_t n_vendors = cas_vendor_count(t->cas);
     for (size_t vi = 0; vi < n_vendors; vi++) count += emit_cas_ecm_emm(t, vi, now, sec, sizeof sec, &ptr0, cb, ctx);
@@ -294,6 +325,7 @@ int tspacketizer_get_sdt_info(tspacketizer_t *t, psi_sdt_entry_t *out) {
   out->service_type = 0x02;
   out->provider = provider_name(t);
   out->service_name = t->cfg.service_name;
+  out->ca_mode = t->cas != NULL;
   return 0;
 }
 
@@ -319,7 +351,7 @@ size_t tspacketizer_build_eit(tspacketizer_t *t, unsigned char *out, size_t cap)
   }
   t->meta_changed = 0;
   if (changed) t->ver_eit = (t->ver_eit + 1) & 0x1F;
-  n = psi_build_eit(t->ver_eit, t->cfg.sid, t->cfg.tsid, t->cfg.onid, t->eit_event_id, t->artist, t->title, t->eit_duration_s, t->event_start, out, cap);
+  n = psi_build_eit(t->ver_eit, t->cfg.sid, t->cfg.tsid, t->cfg.onid, t->eit_event_id, t->artist, t->title, t->eit_duration_s, t->event_start, t->cas != NULL, out, cap);
   if (!n) return 0;
   f = psi_build_eit_following(t->ver_eit, t->cfg.sid, t->cfg.tsid, t->cfg.onid, out + n, cap - n);
   if (!f) return 0;

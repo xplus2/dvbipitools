@@ -212,6 +212,65 @@ START_TEST(aac_latm_probe_rejects_reuse_before_any_config_seen) {
 }
 END_TEST
 
+static size_t build_escape_rate_frame(unsigned char *out, unsigned rate) {
+  bitwriter_t bw;
+  const unsigned char *payload;
+  size_t plen;
+  bitwriter_init(&bw);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 0, 1);
+  bitwriter_put(&bw, 1, 1);
+  bitwriter_put(&bw, 0, 6);
+  bitwriter_put(&bw, 0, 4);
+  bitwriter_put(&bw, 0, 3);
+  bitwriter_put(&bw, 2, 5);
+  bitwriter_put(&bw, 0xF, 4);
+  bitwriter_put(&bw, rate, 24);
+  bitwriter_put(&bw, 2, 4);
+  payload = bitwriter_data(&bw, &plen);
+  out[0] = 0x56;
+  out[1] = (unsigned char)(0xE0 | ((plen >> 8) & 0x1F));
+  out[2] = (unsigned char)plen;
+  memcpy(out + 3, payload, plen);
+  bitwriter_free(&bw);
+  return 3 + plen;
+}
+
+START_TEST(aac_latm_probe_rejects_escape_rate_out_of_range) {
+  aac_latm_t *c = aac_latm_new();
+  unsigned char frame[32];
+  aac_latm_info_t info;
+  size_t len = build_escape_rate_frame(frame, 0);
+  ck_assert_int_eq(aac_latm_probe(c, frame, len, &info), -1);
+  len = build_escape_rate_frame(frame, 0xFFFFFF);
+  ck_assert_int_eq(aac_latm_probe(c, frame, len, &info), -1);
+  len = build_escape_rate_frame(frame, 44100);
+  ck_assert_int_eq(aac_latm_probe(c, frame, len, &info), 1);
+  ck_assert_uint_eq(info.sample_rate, 44100);
+  aac_latm_free(c);
+}
+END_TEST
+
+START_TEST(aac_latm_probe_failed_config_keeps_stored_config) {
+  aac_latm_t *c = aac_latm_new();
+  unsigned char good[32], bad[32], reuse[32];
+  size_t good_len = build_full_config_frame(good, sizeof good, 2);
+  size_t bad_len;
+  size_t reuse_len = build_reuse_config_frame(reuse, sizeof reuse);
+  aac_latm_info_t info;
+
+  bad_len = build_escape_rate_frame(bad, 0);
+  bad[3] |= 0x01; /* numSubFrames = 2, would leak if stored */
+  ck_assert_int_eq(aac_latm_probe(c, good, good_len, &info), 1);
+  ck_assert_int_eq(aac_latm_probe(c, bad, bad_len, &info), -1);
+  ck_assert_int_eq(aac_latm_probe(c, reuse, reuse_len, &info), 1);
+  ck_assert_uint_eq(info.sample_rate, 44100u);
+  ck_assert_uint_eq(info.channels, 2u);
+  ck_assert_uint_eq(info.samples_per_frame, 1024u);
+  aac_latm_free(c);
+}
+END_TEST
+
 START_TEST(aac_latm_is_sync_checks_header_bits) {
   unsigned char good[2] = {0x56, 0xE0};
   unsigned char bad[2] = {0x56, 0x00};
@@ -275,6 +334,8 @@ static Suite *aac_latm_suite(void) {
   tcase_add_test(tc, aac_latm_probe_ignores_trailing_bits_after_plain_config);
   tcase_add_test(tc, aac_latm_probe_reuses_config_across_frames);
   tcase_add_test(tc, aac_latm_probe_rejects_reuse_before_any_config_seen);
+  tcase_add_test(tc, aac_latm_probe_rejects_escape_rate_out_of_range);
+  tcase_add_test(tc, aac_latm_probe_failed_config_keeps_stored_config);
   tcase_add_test(tc, aac_latm_is_sync_checks_header_bits);
   tcase_add_test(tc, aac_latm_probe_needs_more_bytes);
   tcase_add_loop_test(tc, aac_latm_probe_maps_channels_and_profile_level, 0, (int)(sizeof profile_cases / sizeof profile_cases[0]));

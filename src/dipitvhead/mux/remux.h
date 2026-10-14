@@ -63,7 +63,7 @@ typedef struct {
   long long release_lead_max_us;
 } ts_metrics_t;
 
-/* pids: borrowed. standalone: SPTS, +PAT/CAT/SDT/NIT/AIT/ECM/EMM. non-standalone (MPTS): only
+/* cfg, pids: borrowed, must outlive r. standalone: SPTS, +PAT/CAT/SDT/NIT/AIT/ECM/EMM. non-standalone (MPTS): only
    PMT/AIT/ES, SDT via remux_get_sdt_info(). EIT: see remux_emit_eit(). NULL: failed */
 remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const psi_t *psi, const out_program_pids_t *pids, int standalone);
 void remux_free(remux_t *r);
@@ -82,7 +82,7 @@ size_t remux_source_ca_descriptor(const remux_t *r, unsigned char *out, size_t c
 size_t remux_source_emm_descriptor(const remux_t *r, unsigned char *out, size_t cap);
 
 struct cas;
-/* NULL detaches */
+/* NULL detaches. else registers current ES pids with cas (idempotent) */
 void remux_set_cas(remux_t *r, struct cas *cas);
 
 void remux_set_timemap(remux_t *r, timemap_t *tm);

@@ -43,7 +43,8 @@ read -r jit_n jit_gap <"$WORK/jitter.res"
 [ "$ctl_n" -gt 50 ] || fail "control: only $ctl_n datagrams"
 [ "$jit_n" -gt 50 ] || fail "jitter: only $jit_n datagrams"
 
-awk -v g="$ctl_gap" 'BEGIN { exit !(g > 1.0) }' || fail "control: expected stall gap > 1.0 s, got $ctl_gap s"
+# stall 2 s minus 1 s burst lead minus 0.3 s pace tolerance, ~0.7 s
+awk -v g="$ctl_gap" 'BEGIN { exit !(g > 0.6) }' || fail "control: expected stall gap > 0.6 s, got $ctl_gap s"
 awk -v g="$jit_gap" 'BEGIN { exit !(g < 0.5) }' || fail "jitter: stall not bridged, longest gap $jit_gap s"
 
 command -v ffmpeg >/dev/null 2>&1 || fail "'ffmpeg' not in PATH"

@@ -558,7 +558,7 @@ START_TEST(config_inputs_take_keyed_items) {
   char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
   char *argv[] = {"dipitvhead", "-c", path, NULL};
   config_t cfg = {0};
-  write_cfg(path, "input:\n  - udp://@239.1.1.1:5000\n  - udp://@239.1.1.2:5000:\n      sid: 7\n      sdt: A\n      provider: P\n      pmt-pid: 0x0100\n      strip-eit: on\n      hbbtv: http://h/app\n      hbbtv-org-id: 5\n      hbbtv-app-id: 6\nmcast: 239.1.3.1:5000\n");
+  write_cfg(path, "input:\n  - udp://@239.1.1.1:5000\n  - udp://@239.1.1.2:5000:\n      sid: 7\n      sdt: A\n      provider: P\n      pmt-pid: 0x0100\n      strip-eit: on\n      hbbtv: http://h/app\n      hbbtv-org-id: 5\n      hbbtv-app-id: 6\n      hbbtv-name: My App\nmcast: 239.1.3.1:5000\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_uint_eq(cfg.n_inputs, 2u);
@@ -572,6 +572,7 @@ START_TEST(config_inputs_take_keyed_items) {
   ck_assert_str_eq(cfg.inputs[1].hbbtv_url, "http://h/app");
   ck_assert_uint_eq(cfg.inputs[1].hbbtv_org_id, 5u);
   ck_assert_uint_eq(cfg.inputs[1].hbbtv_app_id, 6u);
+  ck_assert_str_eq(cfg.inputs[1].hbbtv_name, "My App");
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST

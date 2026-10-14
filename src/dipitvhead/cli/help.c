@@ -100,6 +100,7 @@ void tvh_print_help(void) {
   "      --hbbtv <url>              inject an AIT (default: none)\n"
   "      --hbbtv-org-id <n>         HbbTV organisation_id (required with --hbbtv)\n"
   "      --hbbtv-app-id <n>         HbbTV application_id (required with --hbbtv)\n"
+  "      --hbbtv-name <text>        HbbTV application name, max 63 bytes (default: HbbTV)\n"
   "      --rist-profile-in <p>      simple|main, -i rist:// only (default: simple)\n"
   "      --rist-encryption-type-in <b> AES key size 128|256, input (--rist-profile-in main)\n"
   "      --srt-passphrase-in <p>    passphrase, 10..79 chars.  -i srt:// only\n"

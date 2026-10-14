@@ -5,6 +5,11 @@ dipiradiohead_resolve_sources()
 
 add_executable(dipiradiohead ${DIPIRADIOHEAD_SRCS})
 
+if (DIPIRADIOHEAD_HAVE_ZLIB)
+    target_link_libraries(dipiradiohead PRIVATE ZLIB::ZLIB)
+    target_compile_definitions(dipiradiohead PRIVATE DIPIRADIOHEAD_ZLIB)
+endif ()
+
 if (DIPIRADIOHEAD_HAVE_TLS)
     target_link_libraries(dipiradiohead PRIVATE OpenSSL::SSL OpenSSL::Crypto ${DIPIRADIOHEAD_ATOMIC_LIB})
 endif ()

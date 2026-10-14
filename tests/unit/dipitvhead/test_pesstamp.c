@@ -314,6 +314,17 @@ START_TEST(headers_cut_by_the_packet_end_are_reported_as_split) {
 }
 END_TEST
 
+START_TEST(stamps_that_fit_are_shifted_when_only_header_padding_is_cut) {
+  spec_t s = {.stream_id = 0xE0, .has_pts = 1, .pts = 42, .hdr_extra = 20, .start_override = 165};
+  unsigned char pkt[188];
+  pes_stamp_t st;
+  build(pkt, &s);
+  ck_assert_int_eq(pesstamp_shift(pkt, 5), PESSTAMP_FOUND);
+  ck_assert_int_eq(pesstamp_read(pkt, &st), PESSTAMP_FOUND);
+  ck_assert_uint_eq(st.pts, 47u);
+}
+END_TEST
+
 START_TEST(scrambled_packets_are_reported_and_left_alone) {
   spec_t s = {.stream_id = 0xE0, .af_len = -1, .has_pts = 1, .pts = 42};
   unsigned char pkt[188];
@@ -504,6 +515,7 @@ static Suite *pesstamp_suite(void) {
   tcase_add_test(tc, header_length_too_small_for_the_flags_is_ignored);
   tcase_add_test(tc, mpeg1_style_header_is_ignored);
   tcase_add_test(tc, headers_cut_by_the_packet_end_are_reported_as_split);
+  tcase_add_test(tc, stamps_that_fit_are_shifted_when_only_header_padding_is_cut);
   tcase_add_test(tc, scrambled_packets_are_reported_and_left_alone);
   tcase_add_test(tc, af_shift_moves_dts_next_au_and_keeps_the_splice_type);
   tcase_add_test(tc, af_shift_skips_pcr_opcr_countdown_private_data_ltw_and_piecewise_rate);

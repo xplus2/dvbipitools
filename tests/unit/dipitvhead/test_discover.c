@@ -16,9 +16,9 @@
 #include "dipitvhead/tvhead/priv.h"
 #include "../run_helper.h"
 
-/* zero-ES PMT section (table_id 0x02), CRC included */
-static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid) {
-  unsigned char body[16];
+/* PMT section (table_id 0x02), CRC included. with_es: one MPEG audio ES on pcr_pid */
+static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid, int with_es) {
+  unsigned char body[24];
   size_t n = 0, hdr, crc_at;
   uint32_t crc;
 
@@ -31,6 +31,13 @@ static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid)
   body[n++] = (unsigned char)pcr_pid;
   body[n++] = 0xF0;
   body[n++] = 0x00;
+  if (with_es) {
+    body[n++] = 0x03;
+    body[n++] = (unsigned char)(0xE0 | ((pcr_pid >> 8) & 0x1F));
+    body[n++] = (unsigned char)pcr_pid;
+    body[n++] = 0xF0;
+    body[n++] = 0x00;
+  }
 
   hdr = n + 4;
   out[0] = 0x02;
@@ -122,7 +129,7 @@ START_TEST(discover_completes_once_pat_pmt_sdt_arrive) {
 
   slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
   wrap_ts_packet(pat, 0x0000, sec, slen);
-  slen = build_pmt(sec, 7, 0x0101);
+  slen = build_pmt(sec, 7, 0x0101, 1);
   wrap_ts_packet(pmt, 0x0100, sec, slen);
   slen = psi_build_sdt(0, 0x1234, 5, 7, 0x01, "Provider", "Channel One", sec, sizeof sec);
   wrap_ts_packet(sdt, 0x0011, sec, slen);
@@ -137,6 +144,38 @@ START_TEST(discover_completes_once_pat_pmt_sdt_arrive) {
 
   ck_assert_int_eq(rc, 1);
   ck_assert_int_eq(psi_program_number(psi), 7u);
+
+  psi_free(psi);
+  tvsrc_close(src);
+}
+END_TEST
+
+START_TEST(discover_stays_pending_on_pmt_without_es) {
+  tvsrc_t *src = open_recv(run_helper_group_n(44), run_helper_port(44));
+  struct sockaddr_in dst;
+  int sock = open_sender(run_helper_group_n(44), run_helper_port(44), &dst);
+  dipitvhead_input_t in;
+  discover_state_t ds;
+  psi_t *psi = psi_new();
+  input_metrics_t im;
+  unsigned char sec[64], pat[188], pmt[188];
+  size_t slen;
+
+  memset(&in, 0, sizeof in);
+  memset(&ds, 0, sizeof ds);
+  memset(&im, 0, sizeof im);
+  ck_assert_ptr_nonnull(src);
+
+  slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
+  wrap_ts_packet(pat, 0x0000, sec, slen);
+  slen = build_pmt(sec, 7, 0x0101, 0);
+  wrap_ts_packet(pmt, 0x0100, sec, slen);
+
+  sendto(sock, pat, sizeof pat, 0, (const struct sockaddr *)&dst, sizeof dst);
+  sendto(sock, pmt, sizeof pmt, 0, (const struct sockaddr *)&dst, sizeof dst);
+  ck_assert_int_eq(discover_step(&ds, src, &in, psi, &im), 0);
+  ck_assert_int_eq(discover_step(&ds, src, &in, psi, &im), 0);
+  close(sock);
 
   psi_free(psi);
   tvsrc_close(src);
@@ -179,6 +218,7 @@ static Suite *discover_suite(void) {
   tcase_set_timeout(tc, 15);
   tcase_add_test(tc, discover_step_returns_zero_with_no_data_yet);
   tcase_add_test(tc, discover_completes_once_pat_pmt_sdt_arrive);
+  tcase_add_test(tc, discover_stays_pending_on_pmt_without_es);
   tcase_add_test(tc, discover_fails_when_requested_pmt_pid_absent_from_pat);
   suite_add_tcase(s, tc);
   return s;

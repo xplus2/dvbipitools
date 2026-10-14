@@ -37,92 +37,6 @@ static void build_pcr_packet(unsigned char pkt[188], int with_pcr, uint64_t base
   pkt[11] = (unsigned char)ext;
 }
 
-START_TEST(parse_pcr_recovers_known_value) {
-  unsigned char pkt[188];
-  uint64_t pcr27;
-  build_pcr_packet(pkt, 1, 12345678ULL, 150);
-  ck_assert_int_eq(cas_parse_pcr(pkt, &pcr27), 1);
-  ck_assert_uint_eq(pcr27, 12345678ULL * 300 + 150);
-}
-END_TEST
-
-START_TEST(parse_pcr_zero_extension) {
-  unsigned char pkt[188];
-  uint64_t pcr27;
-  build_pcr_packet(pkt, 1, 1, 0);
-  ck_assert_int_eq(cas_parse_pcr(pkt, &pcr27), 1);
-  ck_assert_uint_eq(pcr27, 300ULL);
-}
-END_TEST
-
-START_TEST(parse_pcr_no_adaptation_field) {
-  unsigned char pkt[188];
-  uint64_t pcr27;
-  build_pcr_packet(pkt, 0, 0, 0);
-  ck_assert_int_eq(cas_parse_pcr(pkt, &pcr27), 0);
-}
-END_TEST
-
-START_TEST(parse_pcr_flag_not_set) {
-  unsigned char pkt[188];
-  uint64_t pcr27;
-  build_pcr_packet(pkt, 1, 999, 1);
-  pkt[5] = 0x00; /* clear PCR_flag */
-  ck_assert_int_eq(cas_parse_pcr(pkt, &pcr27), 0);
-}
-END_TEST
-
-START_TEST(parse_pcr_adaptation_field_too_short) {
-  unsigned char pkt[188];
-  uint64_t pcr27;
-  build_pcr_packet(pkt, 1, 999, 1);
-  pkt[4] = 1; /* only the flags byte, no room for the 6-byte PCR field */
-  ck_assert_int_eq(cas_parse_pcr(pkt, &pcr27), 0);
-}
-END_TEST
-
-START_TEST(pcr_plausible_normal_delta_accepted) {
-  double delta_s;
-  uint64_t last27 = 27000000ULL * 10; /* 10s */
-  uint64_t new27 = 27000000ULL * 11;  /* 11s: 1s later */
-  ck_assert_int_eq(cas_pcr_plausible(last27, new27, 1.0, &delta_s), 1);
-  ck_assert_double_eq_tol(delta_s, 1.0, 0.01);
-}
-END_TEST
-
-START_TEST(pcr_plausible_wraparound_accepted) {
-  double delta_s;
-  uint64_t last27 = CAS_PCR_MODULUS - 27000000ULL; /* 1s before wrap */
-  uint64_t new27 = 27000000ULL;                    /* 1s after wrap: 2s total elapsed */
-  ck_assert_int_eq(cas_pcr_plausible(last27, new27, 2.0, &delta_s), 1);
-  ck_assert_double_eq_tol(delta_s, 2.0, 0.01);
-}
-END_TEST
-
-START_TEST(pcr_plausible_rejects_huge_discontinuity) {
-  double delta_s;
-  uint64_t last27 = 27000000ULL * 10;
-  uint64_t new27 = 27000000ULL * 10000; /* implies ~9990s elapsed */
-  ck_assert_int_eq(cas_pcr_plausible(last27, new27, 1.0, &delta_s), 0);
-}
-END_TEST
-
-START_TEST(pcr_plausible_rejects_backward_jump) {
-  double delta_s;
-  uint64_t last27 = 27000000ULL * 100;
-  uint64_t new27 = 27000000ULL * 50; /* wraparound-"corrects" to a huge forward delta */
-  ck_assert_int_eq(cas_pcr_plausible(last27, new27, 1.0, &delta_s), 0);
-}
-END_TEST
-
-START_TEST(pcr_plausible_rejects_zero_wall_delta) {
-  double delta_s;
-  uint64_t last27 = 27000000ULL * 10;
-  uint64_t new27 = 27000000ULL * 11;
-  ck_assert_int_eq(cas_pcr_plausible(last27, new27, 0.0, &delta_s), 0);
-}
-END_TEST
-
 static void set_es(out_es_t *es, psi_es_t *psi_es, unsigned out_pid, pid_class_t cls) {
   memset(psi_es, 0, sizeof *psi_es);
   psi_es->cls = cls;
@@ -314,7 +228,7 @@ START_TEST(resolve_pids_multi_dedupes_across_programs) {
 
   memset(&cfg, 0, sizeof cfg);
   cfg.cas_pid_count = 1;
-  cfg.cas_pids[0] = 0x1300; /* same pid program 1 also resolves via --cas-pids-video */
+  cfg.cas_pids[0] = 0x1300; /* same pid program 1 also resolves via --cas-pids video */
   cfg.cas_pids_video = 1;
   set_es(&es0[0], &pe0[0], 0x1400, PID_VIDEO);
   set_es(&es1[0], &pe1[0], 0x1300, PID_VIDEO);
@@ -923,16 +837,6 @@ END_TEST
 static Suite *cas_suite(void) {
   Suite *s = suite_create("cas");
   TCase *tc = tcase_create("core");
-  tcase_add_test(tc, parse_pcr_recovers_known_value);
-  tcase_add_test(tc, parse_pcr_zero_extension);
-  tcase_add_test(tc, parse_pcr_no_adaptation_field);
-  tcase_add_test(tc, parse_pcr_flag_not_set);
-  tcase_add_test(tc, parse_pcr_adaptation_field_too_short);
-  tcase_add_test(tc, pcr_plausible_normal_delta_accepted);
-  tcase_add_test(tc, pcr_plausible_wraparound_accepted);
-  tcase_add_test(tc, pcr_plausible_rejects_huge_discontinuity);
-  tcase_add_test(tc, pcr_plausible_rejects_backward_jump);
-  tcase_add_test(tc, pcr_plausible_rejects_zero_wall_delta);
   tcase_add_test(tc, resolve_pids_explicit_only);
   tcase_add_test(tc, resolve_pids_video_keyword);
   tcase_add_test(tc, resolve_pids_audio_keyword_multiple);

@@ -15,6 +15,7 @@
 
 #define INTERVAL_CAT_S 0.1 /* matches remux.c's own INTERVAL_PAT_PMT_S cadence */
 #define MPTS_POLL_MAX_MS 100
+#define MPTS_FEED_BURST 8 /* backlog chunks per input per wakeup */
 
 typedef struct {
   unsigned n;
@@ -32,6 +33,7 @@ typedef struct {
   unsigned char eit_cc;
   int eit_busy; /* program idx mid-section on shared EIT pid, -1: none */
   unsigned char cat_cc;
+  psi_ver_track_t cat_ver;
   double last_cat;
   unsigned rr_start;
   double run_start;
@@ -53,7 +55,7 @@ typedef struct {
 static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_run_ctx_t *c) {
   c->n = cfg->n_inputs;
   c->cas_wanted = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled;
-  c->cas_needs_discovery = c->cas_wanted && (cfg->cas_pids_video || cfg->cas_pids_audio);
+  c->cas_needs_discovery = c->cas_wanted && (cfg->cas_pids_video || cfg->cas_pids_audio || cfg->cas_pids_lcevc);
   c->eit_busy = -1;
   c->last_cat = -1.0;
   c->metrics_on = metrics_exporter_enabled(mx);
@@ -76,7 +78,7 @@ static int mpts_setup(const config_t *cfg, const metrics_exporter_t *mx, mpts_ru
   }
 
   c->rs = retryset_new(c->n, c->slot_ctx_ptrs, NULL, &tv_retry_ops, cfg->error_retry_s);
-  c->mpts = c->rs ? mpts_new(cfg->tsid, cfg->onid, cfg->nit_text, c->entries, c->n, &mpts_program_ops) : NULL;
+  c->mpts = c->rs ? mpts_new(cfg->tsid, cfg->onid, cfg->nit_mode == TABLE_OVERRIDE ? cfg->nit_text : "", c->entries, c->n, &mpts_program_ops) : NULL;
   if (!c->rs || !c->mpts) {
     c->rc = 1;
     return -1;
@@ -193,6 +195,7 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     for (unsigned i = 0; i < n; i++) {
       int due = c->progs[i].rx ? remux_hold_due_ms(c->progs[i].rx) : -1;
       if (due >= 0 && due < timeout_ms) timeout_ms = due;
+      if (input_backlog_pending(&c->progs[i])) timeout_ms = 0;
     }
     poll(npfd ? pfds : NULL, npfd, timeout_ms);
     if (signal_stop_requested()) break;
@@ -230,15 +233,22 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
       unsigned i = mpts_service_index(c->rr_start, k, n);
       src = retryset_result(c->rs, i);
       if (!src) continue;
-      if (!input_poll_ready(i, ready_mask)) continue;
-      if (!c->progs[i].rx) discover_input(&tk, i, src);
-      else feed_input(&tk, i, src);
+      if (!input_poll_ready(i, ready_mask) && !input_backlog_pending(&c->progs[i])) {
+        if (!c->progs[i].rx) discover_idle(&tk, i, src);
+        continue;
+      }
+      if (!c->progs[i].rx) {
+        discover_input(&tk, i, src);
+        continue;
+      }
+      feed_input(&tk, i, src);
+      for (unsigned burst = 1; burst < MPTS_FEED_BURST && input_backlog_pending(&c->progs[i]); burst++) feed_input(&tk, i, src);
     }
     c->rr_start = mpts_advance_rr(c->rr_start, n);
 
     mpts_emit_eit(c->progs, n, &c->eit_busy, &c->eit_cc, packet_cb, &c->out);
 
-    if (mpts_cat_due(c->cas != NULL, now, &c->last_cat)) emit_source_cat_passthrough(c->progs, n, &c->cat_cc, c->tsm_p, packet_cb, &c->out);
+    if (mpts_cat_due(c->cas != NULL, now, &c->last_cat)) emit_source_cat_passthrough(c->progs, n, &c->cat_cc, &c->cat_ver, c->tsm_p, packet_cb, &c->out);
 
     if (c->cas_needs_discovery && !c->cas && check_cas_discovery_gate(cfg, c->progs, n, c->mpts, c->cas_gate_deadline, &c->cas) != 0) {
       c->rc = 1;

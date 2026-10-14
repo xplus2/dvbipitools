@@ -390,10 +390,11 @@ START_TEST(service_descriptor_truncation) {
   unsigned char *p = dup_exact(c->data, c->len);
   char provider[PSI_NAME];
   char service[PSI_NAME];
+  unsigned type = 0;
 
   strcpy(provider, "keep");
   strcpy(service, "keep");
-  decode_service_desc(p, c->len, provider, service);
+  decode_service_desc(p, c->len, provider, service, &type);
   ck_assert_msg(strcmp(provider, c->provider) == 0, "%s: provider '%s'", c->name, provider);
   ck_assert_msg(strcmp(service, c->service) == 0, "%s: service '%s'", c->name, service);
   free(p);

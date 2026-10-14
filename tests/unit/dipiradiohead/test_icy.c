@@ -294,6 +294,21 @@ START_TEST(valid_utf8_title_is_kept) {
 }
 END_TEST
 
+START_TEST(title_containing_quote_semicolon_is_not_cut) {
+  unsigned char out[16];
+  meta_capture_t m;
+  icy_t *c;
+
+  memset(&m, 0, sizeof m);
+  c = icy_new(2, meta_cb, &m);
+  feed_one_block(c, "StreamTitle='Rock 'n'; Roll - It's';StreamUrl='';", out, sizeof out);
+  ck_assert_int_eq(m.calls, 1);
+  ck_assert_str_eq(m.artist, "Rock 'n'; Roll");
+  ck_assert_str_eq(m.title, "It's");
+  icy_free(c);
+}
+END_TEST
+
 static Suite *icy_suite(void) {
   Suite *s = suite_create("dipiradiohead_icy");
   TCase *tc = tcase_create("core");
@@ -310,6 +325,7 @@ static Suite *icy_suite(void) {
   tcase_add_test(tc, null_callback_still_strips_metadata);
   tcase_add_test(tc, latin1_title_is_converted_to_utf8);
   tcase_add_test(tc, valid_utf8_title_is_kept);
+  tcase_add_test(tc, title_containing_quote_semicolon_is_not_cut);
   suite_add_tcase(s, tc);
   return s;
 }

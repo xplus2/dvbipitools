@@ -61,7 +61,7 @@ int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, unsigne
     for (unsigned i = 0; i < n; i++) remux_set_cas(progs[i].rx, cas);
     *cas_out = cas;
   } else if (mono_seconds() >= cas_gate_deadline) {
-    log_code("TE000612", "cas: --cas-pids-video/--cas-pids-audio need every -i discovered within %.0fs:", CAS_KEYWORD_DISCOVERY_TIMEOUT_S);
+    log_code("TE000612", "cas: --cas-pids video/audio/lcevc need every -i discovered within %.0fs:", CAS_KEYWORD_DISCOVERY_TIMEOUT_S);
     for (unsigned i = 0; i < n; i++) {
       if (!progs[i].rx) log_code_ansi("TE000613", "  input \e[1;30m%u\e[0m: %s", i, progs[i].psi ? "still discovering" : "not connected");
     }
@@ -70,7 +70,7 @@ int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, unsigne
   return 0;
 }
 
-void emit_source_cat_passthrough(const mpts_program_t *progs, unsigned n, unsigned char *cat_cc, ts_metrics_t *tsm_p, remux_packet_cb cb, void *ctx) {
+void emit_source_cat_passthrough(const mpts_program_t *progs, unsigned n, unsigned char *cat_cc, psi_ver_track_t *cat_ver, ts_metrics_t *tsm_p, remux_packet_cb cb, void *ctx) {
   unsigned char cat_desc[ARGS_MAX_INPUTS * 6];
   size_t cat_desc_len = 0;
   int have_desc = 0;
@@ -89,6 +89,7 @@ void emit_source_cat_passthrough(const mpts_program_t *progs, unsigned n, unsign
   if (!have_desc) return;
   sl = psi_build_cat(0, cat_desc, cat_desc_len, sec, sizeof sec);
   if (sl) {
+    psi_ver_track_stamp(cat_ver, sec, sl);
     ts_packet_emit(OUT_PID_CAT, cat_cc, &ptr0, sec, sl, 0, 0, cb, ctx);
     if (tsm_p) tsm_p->psi_sections_total[PSI_TABLE_CAT]++;
   } else if (tsm_p) {

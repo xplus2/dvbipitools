@@ -154,7 +154,14 @@ int try_parse_response(struct http *h, size_t *gotp, net_err_reason_t *reason_ou
     memcpy(h->hdr[i].name, headers[i].name, nlen);
     h->hdr[i].name[nlen] = '\0';
     hdr_lower(h->hdr[i].name);
-    if (vlen >= sizeof h->hdr[0].value) vlen = sizeof h->hdr[0].value - 1;
+    if (vlen >= sizeof h->hdr[0].value) {
+      if (nlen == 8 && !strncasecmp(headers[i].name, "location", 8)) {
+        log_code("LE600161", "http: Location header longer than %zu bytes", sizeof h->hdr[0].value - 1);
+        if (reason_out) *reason_out = NET_ERR_FORMAT;
+        return -1;
+      }
+      vlen = sizeof h->hdr[0].value - 1;
+    }
     memcpy(h->hdr[i].value, headers[i].value, vlen);
     h->hdr[i].value[vlen] = '\0';
   }

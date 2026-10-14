@@ -72,7 +72,7 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
     int desc_truncated;
     size_t prog_desc_len = r->cas ? cas_prog_desc(r->cas, prog_desc, sizeof prog_desc) : remux_source_ca_descriptor(r, prog_desc, sizeof prog_desc);
     if (r->standalone) {
-      n = psi_build_pat(r->cfg.tsid, 0, r->input.sid, r->pids.pmt_pid, sec, sizeof sec);
+      n = psi_build_pat(r->cfg->tsid, 0, r->input.sid, r->pids.pmt_pid, sec, sizeof sec);
       psi_note(tsm, PSI_TABLE_PAT, n);
       stamp_version(r->pv, PSI_TABLE_PAT, sec, n);
       if (n)
@@ -113,13 +113,13 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
   }
   if (r->standalone) {
     if (r->send_sdt && due(now, &r->last_sdt, INTERVAL_SDT_S)) {
-      n = psi_build_sdt(0, r->cfg.tsid, r->cfg.onid, r->input.sid, 0x01, r->provider_name, r->service_name, sec, sizeof sec);
+      n = psi_build_sdt(0, r->cfg->tsid, r->cfg->onid, r->input.sid, r->service_type, r->provider_name, r->service_name, sec, sizeof sec);
       psi_note(tsm, PSI_TABLE_SDT, n);
       stamp_version(r->pv, PSI_TABLE_SDT, sec, n);
       if (n) ts_packet_emit(OUT_PID_SDT, &r->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     if (r->send_nit && due(now, &r->last_nit, INTERVAL_NIT_S)) {
-      n = psi_build_nit(0, r->cfg.onid, r->cfg.tsid, r->network_name, sec, sizeof sec);
+      n = psi_build_nit(0, r->cfg->onid, r->cfg->tsid, r->network_name, sec, sizeof sec);
       psi_note(tsm, PSI_TABLE_NIT, n);
       stamp_version(r->pv, PSI_TABLE_NIT, sec, n);
       if (n) ts_packet_emit(OUT_PID_NIT, &r->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);

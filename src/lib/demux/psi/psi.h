@@ -89,6 +89,7 @@ typedef struct {
   int resolved; /* own PMT parsed ok */
   char service_name[PSI_NAME]; /* "" until SDT seen */
   char provider_name[PSI_NAME];
+  unsigned service_type; /* 0 until SDT seen */
 } psi_multi_program_t;
 
 typedef struct psi psi_t;
@@ -184,6 +185,8 @@ int psi_audio_count(const psi_t *c);
 
 const char *psi_service_name(const psi_t *c);
 const char *psi_provider_name(const psi_t *c);
+/* SDT service_descriptor service_type of selected program, 0 if unknown */
+unsigned psi_service_type(const psi_t *c);
 const char *psi_network_name(const psi_t *c);
 
 pid_class_t psi_classify(const psi_t *c, unsigned pid);

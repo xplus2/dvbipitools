@@ -1,8 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
-#include <poll.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -147,12 +145,18 @@ void out_pcr_pid_set(out_ctx_t *o, unsigned slot, unsigned pid) {
   memset(pp, 0, sizeof *pp);
   pp->pid = pid;
   pp->active = pid != 0;
+  memset(o->pcr_slot_by_pid, 0, sizeof o->pcr_slot_by_pid);
+  o->pcr_slots = 0;
+  for (unsigned i = ARGS_MAX_INPUTS; i-- > 0;) {
+    if (!o->pcr_pids[i].active) continue;
+    if (!o->pcr_slots) o->pcr_slots = i + 1;
+    o->pcr_slot_by_pid[o->pcr_pids[i].pid & 0x1FFF] = (unsigned char)(i + 1);
+  }
 }
 
 static unsigned pcr_slot_of(const out_ctx_t *o, unsigned pid) {
-  for (unsigned i = 0; i < ARGS_MAX_INPUTS; i++)
-    if (o->pcr_pids[i].active && o->pcr_pids[i].pid == pid) return i;
-  return ARGS_MAX_INPUTS;
+  unsigned s = o->pcr_slot_by_pid[pid & 0x1FFF];
+  return s ? s - 1 : ARGS_MAX_INPUTS;
 }
 
 static uint64_t pcr_now(const out_ctx_t *o) { return pcrclock_at(&o->pcr_clock, o->packets - o->pcr_start_index); }
@@ -194,11 +198,26 @@ static void pcr_stage(out_ctx_t *o, unsigned char *pkt188) {
   o->pcr_rewritten++;
 }
 
+/* gap: payload packet neither repeats nor follows last cc of its pid */
+static void check_output_cc(out_ctx_t *o, const unsigned char *pkt188) {
+  unsigned pid = (unsigned)((pkt188[1] & 0x1F) << 8) | pkt188[2];
+  unsigned cc = pkt188[3] & 0x0F;
+  unsigned st;
+  int disc;
+  if (pid == 0x1FFF || !(pkt188[3] & 0x10)) return;
+  st = o->cc_seen[pid];
+  disc = (pkt188[3] & 0x20) && pkt188[4] >= 1 && (pkt188[5] & 0x80);
+  if ((st & 0x10) && !disc && cc != (st & 0x0F) && cc != ((st + 1) & 0x0F))
+    log_throttled(&o->cc_gap_throttle, LOG_THROTTLE_WINDOW_S, "TW100148", "output continuity gap on pid 0x%04x, cc %u after %u", pid, cc, st & 0x0F);
+  o->cc_seen[pid] = (unsigned char)(0x10 | cc);
+}
+
 static void put_packet(out_ctx_t *o, const unsigned char *pkt188, int own) {
   unsigned char *slot = o->batch + 12 + (size_t)o->batch_count * 188;
   if (o->batch_count == 0) o->batch_open_time = mono_seconds();
   memcpy(slot, pkt188, 188);
   if (!own && o->pcr_mode == PCR_MODE_REGENERATE) pcr_stage(o, slot);
+  check_output_cc(o, slot);
   if (o->insp) tsinspect_packet(o->insp, slot);
   o->batch_count++;
   o->packets++;
@@ -208,11 +227,11 @@ static void put_packet(out_ctx_t *o, const unsigned char *pkt188, int own) {
 static void pcr_inject(out_ctx_t *o) {
   unsigned char pkt[188];
   uint64_t now;
-  if (o->pcr_mode != PCR_MODE_REGENERATE || !o->pcr_latched) return;
-  for (unsigned i = 0; i < ARGS_MAX_INPUTS; i++) {
+  if (o->pcr_mode != PCR_MODE_REGENERATE || !o->pcr_latched || !o->pcr_slots) return;
+  now = pcr_now(o);
+  for (unsigned i = 0; i < o->pcr_slots; i++) {
     out_pcr_pid_t *pp = &o->pcr_pids[i];
     if (!pp->active) continue;
-    now = pcr_now(o);
     if (!pp->have_last) {
       pp->last_pcr = now;
       pp->have_last = 1;
@@ -223,6 +242,7 @@ static void pcr_inject(out_ctx_t *o) {
     pp->last_pcr = now;
     put_packet(o, pkt, 1);
     o->pcr_injected++;
+    now = pcr_now(o);
   }
 }
 
@@ -358,17 +378,14 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
   fc.insp = insp;
 
   while (!signal_stop_requested()) {
-    struct pollfd pfd;
     int stuff_n;
     double now;
     ssize_t n;
     int pr;
     tvhead_srt_service(out);
-    pfd.fd = tvsrc_fd(src);
-    pfd.events = POLLIN;
-    pr = poll(&pfd, 1, poll_timeout_ms(rx)); /* bounded: keeps srt service + stuffing/stats below ticking on quiet input too */
+    pr = tvsrc_wait(src, poll_timeout_ms(rx)); /* bounded: keeps srt service + stuffing/stats below ticking on quiet input too */
     flush_batch_if_stale(out);
-    if (pr < 0 && errno != EINTR) {
+    if (pr < 0) {
       cas_flush(cas, packet_cb, out);
       return -1;
     }

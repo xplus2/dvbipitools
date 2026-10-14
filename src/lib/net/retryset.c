@@ -130,8 +130,17 @@ void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
         case RETRYSET_OPEN_DONE:
           sl->result = rs->ops->open_take(sl->opening);
           sl->opening = NULL;
-          sl->state = RETRYSET_CONNECTED;
-          log_slot(idx, sl->label, NULL, "connected");
+          if (sl->result) {
+            sl->state = RETRYSET_CONNECTED;
+            log_slot(idx, sl->label, NULL, "connected");
+            return;
+          }
+          sl->state = RETRYSET_DOWN;
+          sl->retry_deadline = next_retry_deadline(rs, now);
+          if (sl->retry_deadline != RETRYSET_NEVER)
+            log_slot(idx, sl->label, "LW600132", "connect failed, retrying in %lds", rs->retry_interval_s);
+          else
+            log_slot(idx, sl->label, "LW600133", "connect failed, not retrying");
           return;
         case RETRYSET_OPEN_ERROR:
           break;

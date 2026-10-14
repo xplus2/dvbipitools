@@ -326,6 +326,23 @@ START_TEST(mpts_tick_bumps_sdt_version_only_when_active_set_changes) {
 }
 END_TEST
 
+START_TEST(mpts_set_program_same_ctx_does_not_force_sdt_resend) {
+  psi_pat_entry_t entries[1] = {{101, 0x1000}};
+  mpts_t *m = mpts_new(1, 1, "", entries, 1, &mock_program_ops);
+  mock_program_t prog0 = {101, 0};
+
+  mpts_set_program(m, 0, &prog0);
+  mpts_tick(m, 0.0, capture_cb, NULL);
+
+  mpts_set_program(m, 0, &prog0); /* unchanged: per-frame call must be a no-op */
+  g_count = 0;
+  mpts_tick(m, 0.05, capture_cb, NULL);
+  ck_assert(!saw_pid(0x0011));
+
+  mpts_free(m);
+}
+END_TEST
+
 START_TEST(mpts_tick_emits_cat_ecm_emm_via_cas_ops) {
   psi_pat_entry_t entries[1] = {{101, 0x1000}};
   mpts_t *m = mpts_new(1, 1, "", entries, 1, &mock_program_ops);
@@ -371,6 +388,7 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, mpts_tick_resends_eit_immediately_on_metadata_change);
   tcase_add_test(tc, mpts_tick_emits_one_composite_sdt_section_for_all_active_programs);
   tcase_add_test(tc, mpts_tick_bumps_sdt_version_only_when_active_set_changes);
+  tcase_add_test(tc, mpts_set_program_same_ctx_does_not_force_sdt_resend);
   tcase_add_test(tc, mpts_tick_emits_cat_ecm_emm_via_cas_ops);
   tcase_add_test(tc, mpts_tick_without_cas_emits_no_cat_ecm_emm);
   suite_add_tcase(s, tc);

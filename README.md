@@ -45,16 +45,17 @@ cmake --build build
 ```
 
 ### Options
-| CMake                                        | configure                                    |                                             |
-|----------------------------------------------|----------------------------------------------|---------------------------------------------|
-| `-DCMAKE_BUILD_TYPE=Debug\|Release`          | `--debug` / `--release`                      | Build type                                  |
-| `-DDVBIPITOOLS_STATIC=ON`                    | `--static`                                   | Static linking                              |
-| `-DDVBIPITOOLS_TLS=OFF`                      | `--no-tls`                                   | Build without TLS support                   |
-| `-DDVBIPITOOLS_CSA=OFF`                      | `--no-csa`                                   | Build without CSA1/CSA2/BISS1               | 
-| `-DDIPIBCG_ZLIB=OFF`                         | `--no-zlib`                                  | Build `dipibcg` without compression support |
-| `-DDVBIPITOOLS_RIST=OFF`                     | `--no-rist`                                  | Skip librist detection, disable rist://     |
-| `-DDVBIPITOOLS_SRT=OFF`                      | `--no-srt`                                   | Skip libsrt detection, disable srt://       |
-| `-DDIPIXY_HTTP3=OFF` / `-DDIPIXY_HTTP2=OFF`  | `--no-http3` / `--no-http2` / `--no-nghttp2` | Build `dipixy` without HTTP/2/3 support     |
+| CMake                                        | configure                                    |                                           |
+|----------------------------------------------|----------------------------------------------|-------------------------------------------|
+| `-DCMAKE_BUILD_TYPE=Debug\|Release`          | `--debug` / `--release`                      | Build type                                |
+| `-DDVBIPITOOLS_STATIC=ON`                    | `--static`                                   | Static linking                            |
+| `-DDVBIPITOOLS_TLS=OFF`                      | `--no-tls`                                   | Build without TLS support                 |
+| `-DDVBIPITOOLS_CSA=OFF`                      | `--no-csa`                                   | Build without CSA1/CSA2/BISS1             | 
+| `-DDIPIBCG_ZLIB=OFF`                         | `--no-zlib`                                  | Build `dipibcg` w/o compression support   |
+| `-DDIPIRADIOHEAD_ZLIB=OFF`                   | `--no-zlib`                                  | Build `dipiradiohead` w/o ID3 compression |
+| `-DDVBIPITOOLS_RIST=OFF`                     | `--no-rist`                                  | Skip librist detection, disable rist://   |
+| `-DDVBIPITOOLS_SRT=OFF`                      | `--no-srt`                                   | Skip libsrt detection, disable srt://     |
+| `-DDIPIXY_HTTP3=OFF` / `-DDIPIXY_HTTP2=OFF`  | `--no-http3` / `--no-http2` / `--no-nghttp2` | Build `dipixy` without HTTP/2/3 support   |
 
 > Note: The build automatically disables TLS support if OpenSSL is not found.
 
@@ -70,6 +71,7 @@ cmake --build build
   + Required for `dipimetrics` and `dipixy` to serve HTTPS.
 * zlib
   * Optional: `-Z`/`--compress` in `dipibcg` (zlib/RFC 1950 compression of BCG containers)
+  * Optional: `dipiradiohead` decodes compressed ID3v2.3 frames (ICY/HLS timed metadata)
 * libdvbcsa
   + Not a build dependency: If present, `dipitvhead`, `dipiradiohead` and `dipidescramble` can use it to enable CSA1/CSA2/BISS1 support.
 * librist

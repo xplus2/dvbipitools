@@ -300,12 +300,13 @@ void link_lcevc(psi_es_t *es, int count) {
   }
 }
 
-/* service_descriptor (0x48): provider then service name, DVB-text
-   length-prefixed. dst untouched if absent/malformed. */
-void decode_service_desc(const unsigned char *d, size_t dll, char *provider_dst, char *service_dst) {
+/* service_descriptor (0x48): service_type, provider then service name,
+   DVB-text length-prefixed. dst untouched if absent/malformed. */
+void decode_service_desc(const unsigned char *d, size_t dll, char *provider_dst, char *service_dst, unsigned *type_dst) {
   size_t l, pnl, snl;
   const unsigned char *sd = find_desc(d, dll, 0x48, &l);
   if (!sd || l < 2) return;
+  *type_dst = sd[0];
   pnl = sd[1];
   if (2 + pnl > l) return;
   copy_name(provider_dst, PSI_NAME, sd + 2, pnl);

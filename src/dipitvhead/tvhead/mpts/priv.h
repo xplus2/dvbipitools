@@ -15,7 +15,7 @@
 #include "../../input/source.h"
 #include "../priv.h"
 
-/* --cas-pids-video/audio: wait this long for every input's live ES discovery,
+/* --cas-pids video/audio/lcevc: wait this long for every input's live ES discovery,
    then fail fast naming stragglers, vs partial pid list or blocking forever.
    numeric --cas-pids skips this, starts eagerly at t=0, dipiradiohead's scheme */
 #define CAS_KEYWORD_DISCOVERY_TIMEOUT_S 15.0
@@ -73,12 +73,19 @@ int poll_fd_for_input(const retryset_t *rs, unsigned i, short *events_out);
 uint32_t input_poll_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd);
 int input_poll_ready(unsigned i, uint32_t ready_mask);
 
+/* unconsumed read bytes left: input needs service without fd readiness */
+int input_backlog_pending(const mpts_program_t *p);
+
 /* runs (or continues) PSI discovery for input i until a remux_t can be built. always
    settles this visit (never falls through to feed_input() in the same tick) */
 void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src);
 
-/* feeds already-buffered/newly-read bytes for input i's live remux_t into tspack_feed() */
-void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src);
+/* no data this tick: starts the discovery clock if needed, gives up once it expires */
+void discover_idle(mpts_tick_t *tk, unsigned i, tvsrc_t *src);
+
+/* feeds already-buffered/newly-read bytes for input i's live remux_t into tspack_feed().
+   1: fed a chunk. 0: nothing read, or input went down (rx gone) */
+int feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src);
 
 extern const mpts_program_ops_t mpts_program_ops;
 
@@ -96,6 +103,6 @@ int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, unsigne
 
 /* EMM passthrough: mux-wide CAT, merged from each program's descriptor.
    exclusive with own CAS (remux_new()). mp version of remux.c send_psi_tables()'s CAT handler */
-void emit_source_cat_passthrough(const mpts_program_t *progs, unsigned n, unsigned char *cat_cc, ts_metrics_t *tsm_p, remux_packet_cb cb, void *ctx);
+void emit_source_cat_passthrough(const mpts_program_t *progs, unsigned n, unsigned char *cat_cc, psi_ver_track_t *cat_ver, ts_metrics_t *tsm_p, remux_packet_cb cb, void *ctx);
 
 #endif

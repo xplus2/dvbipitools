@@ -36,7 +36,8 @@ usage: ./configure [options]
   --no-csa       build dipitvhead, dipiradiohead, dipidescramble w/o CSA1/CSA2/BISS1
   --no-rist      skip dipirist (default: auto-detect librist)
   --no-srt       skip dipisrt (default: auto-detect libsrt)
-  --no-zlib      build dipibcg without BCG container compression support
+  --no-zlib      build dipibcg without BCG container compression support and
+                 dipiradiohead without compressed ID3 frame support
   --no-http2     build dipixy without HTTP/2 support (default: auto-detect
                  libnghttp2)
   --no-http3     build dipixy without HTTP/3 support (default: auto-detect

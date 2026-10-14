@@ -113,6 +113,63 @@ START_TEST(pmtbuild_map_es_picks_video_when_the_source_declares_no_pcr_pid) {
 }
 END_TEST
 
+START_TEST(pmtbuild_add_pcr_only_maps_an_unlisted_pcr_pid_and_skips_the_pmt_loop) {
+  psi_es_t es[1];
+  out_es_t out_es[4];
+  out_program_pids_t pids;
+  unsigned pcr_pid;
+  unsigned char sec[256];
+  size_t slen;
+  int n;
+  int dropped;
+  int trunc;
+
+  out_program_pids(0, &pids);
+  memset(es, 0, sizeof es);
+  es[0].pid = 0x0101;
+  es[0].cls = PID_VIDEO;
+  es[0].codec = CODEC_H264;
+  n = pmtbuild_map_es(es, 1, 0, 0x0200, pids.video_pid, pids.es_pid_base, out_es, 4, &pcr_pid, &dropped);
+  ck_assert_int_eq(n, 1);
+  ck_assert_uint_eq(pcr_pid, pids.video_pid);
+
+  pmtbuild_add_pcr_only(0x0200, pids.es_pid_base, pids.video_pid, out_es, &n, 4, &pcr_pid, &dropped);
+  ck_assert_int_eq(n, 2);
+  ck_assert_int_eq(dropped, 0);
+  ck_assert_uint_eq(out_es[1].in_pid, 0x0200u);
+  ck_assert_uint_eq(out_es[1].out_pid, pids.es_pid_base);
+  ck_assert_uint_eq(pcr_pid, pids.es_pid_base);
+  ck_assert_int_eq((int)out_es[1].is_ca, (int)CA_PASS_PCR);
+
+  slen = pmtbuild_pmt(0, 1, pcr_pid, NULL, 0, out_es, n, NULL, 0, sec, sizeof sec, &trunc);
+  ck_assert_uint_gt(slen, 0u);
+  ck_assert_uint_eq(((unsigned)(sec[8] & 0x1F) << 8) | sec[9], pids.es_pid_base);
+  ck_assert_uint_eq(slen, 12u + 5u + 4u); /* header, one ES entry, CRC */
+}
+END_TEST
+
+START_TEST(pmtbuild_add_pcr_only_ignores_mapped_and_absent_pcr_pids) {
+  out_es_t out_es[4];
+  out_program_pids_t pids;
+  unsigned pcr_pid = 0x1234;
+  int n = 1;
+  int dropped = 0;
+
+  out_program_pids(0, &pids);
+  memset(out_es, 0, sizeof out_es);
+  out_es[0].in_pid = 0x0101;
+  out_es[0].out_pid = pids.video_pid;
+  pmtbuild_add_pcr_only(0x0101, pids.es_pid_base, pids.video_pid, out_es, &n, 4, &pcr_pid, &dropped);
+  pmtbuild_add_pcr_only(0x1FFF, pids.es_pid_base, pids.video_pid, out_es, &n, 4, &pcr_pid, &dropped);
+  pmtbuild_add_pcr_only(0, pids.es_pid_base, pids.video_pid, out_es, &n, 4, &pcr_pid, &dropped);
+  ck_assert_int_eq(n, 1);
+  ck_assert_uint_eq(pcr_pid, 0x1234u);
+  pmtbuild_add_pcr_only(0x0200, pids.es_pid_base, pids.video_pid, out_es, &n, 1, &pcr_pid, &dropped);
+  ck_assert_int_eq(n, 1);
+  ck_assert_int_eq(dropped, 1);
+}
+END_TEST
+
 START_TEST(pmtbuild_map_es_picks_the_first_es_for_audio_only_without_a_pcr_pid) {
   psi_es_t es[2];
   out_es_t out_es[4];
@@ -506,6 +563,8 @@ static Suite *pmtbuild_suite(void) {
   tcase_add_test(tc, pmtbuild_map_es_picks_video_first_and_drops_unsupported);
   tcase_add_test(tc, pmtbuild_map_es_defaults_pcr_to_first_es_when_no_match);
   tcase_add_test(tc, pmtbuild_map_es_picks_video_when_the_source_declares_no_pcr_pid);
+  tcase_add_test(tc, pmtbuild_add_pcr_only_maps_an_unlisted_pcr_pid_and_skips_the_pmt_loop);
+  tcase_add_test(tc, pmtbuild_add_pcr_only_ignores_mapped_and_absent_pcr_pids);
   tcase_add_test(tc, pmtbuild_map_es_picks_the_first_es_for_audio_only_without_a_pcr_pid);
   tcase_add_test(tc, pmtbuild_map_es_reports_dropped_beyond_cap);
   tcase_add_test(tc, pmtbuild_pmt_round_trips_video_audio_subtitle_teletext);

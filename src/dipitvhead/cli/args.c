@@ -28,6 +28,7 @@ static const struct option longopts[] = {
   {"hbbtv", required_argument, 0, OPT_HBBTV},
   {"hbbtv-org-id", required_argument, 0, OPT_HBBTV_ORG_ID},
   {"hbbtv-app-id", required_argument, 0, OPT_HBBTV_APP_ID},
+  {"hbbtv-name", required_argument, 0, OPT_HBBTV_NAME},
   {"error", required_argument, 0, 'e'},
   {"insecure", no_argument, 0, 'k'},
   {"tsid", required_argument, 0, OPT_TSID},
@@ -101,7 +102,7 @@ static const struct option longopts[] = {
 
 static void report_cli(void *ud, int fatal, const char *code, const char *msg) {
   (void)ud;
-  if (fatal) argerr("TS000584", code, "%s", msg);
+  if (fatal) argerr(code, "%s", msg);
   else       log_code(code, TOOL_NAME ": %s", msg);
 }
 

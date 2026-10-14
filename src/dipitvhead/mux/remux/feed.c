@@ -38,16 +38,25 @@ static int es_carries_pes(const out_es_t *es) {
 }
 
 static void count_shift(remux_t *r, int sr) {
+  if (sr == PESSTAMP_SPLIT)
+    log_throttled(&r->retime_skip_throttle, LOG_THROTTLE_WINDOW_S, "TW700165", "program %u: PES header split across packets, timestamps not shifted", r->src_service_id);
   if (!r->tsm_cur) return;
   if (sr == PESSTAMP_FOUND) r->tsm_cur->pes_retimed_total++;
   else if (sr == PESSTAMP_SPLIT || sr == PESSTAMP_SCRAMBLED) r->tsm_cur->pes_retime_skipped_total++;
 }
 
+static void note_relatch(remux_t *r) {
+  log_throttled(&r->relatch_throttle, LOG_THROTTLE_WINDOW_S, "TW700166", "program %u: time offset re-latched after PCR or timestamp jump", r->src_service_id);
+}
+
+static int pcr_disc_flag(const unsigned char pkt188[188]) { return (pkt188[3] & 0x20) && pkt188[4] >= 1 && (pkt188[5] & 0x80); }
+
 static void rebase_packet(remux_t *r, const out_es_t *es, unsigned out_pid, unsigned char *out, double now) {
   uint64_t pcr;
   if (out_pid == r->pcr_pid_out && pcr_packet_read(out, &pcr)) {
     unsigned long long before = r->tm->relatches;
-    pcr_packet_write(out, timemap_pcr(r->tm, pcr, now));
+    pcr_packet_write(out, timemap_pcr_flagged(r->tm, pcr, now, pcr_disc_flag(out)));
+    if (r->tm->relatches != before) note_relatch(r);
     if (r->tsm_cur) {
       r->tsm_cur->pcr_rewritten_total++;
       r->tsm_cur->retime_relatches_total += r->tm->relatches - before;
@@ -92,6 +101,7 @@ static int hold_enqueue(remux_t *r, const out_es_t *es, const unsigned char *out
   if (releaseq_push(r->hold[idx], out, r->hold_has_tag[idx], r->hold_tag[idx])) {
     release_head(r, idx, now, cb, ctx);
     r->hold_forced++;
+    log_throttled(&r->hold_forced_throttle, LOG_THROTTLE_WINDOW_S, "TW700167", "program %u: hold queue full, packet released early", r->src_service_id);
     if (r->tsm_cur) r->tsm_cur->hold_forced_total++;
     releaseq_push(r->hold[idx], out, r->hold_has_tag[idx], r->hold_tag[idx]);
   }
@@ -127,13 +137,14 @@ static void regen_stage(remux_t *r, const out_es_t *es, unsigned char *out, doub
   if ((int)(es - r->es) == r->hold_ref) {
     unsigned long long before = r->tm->rg_relatches;
     timemap_regen_sample(r->tm, stamp, p27 / 300, r->hold_lead90);
+    if (r->tm->rg_relatches != before) note_relatch(r);
     if (r->tsm_cur) r->tsm_cur->retime_relatches_total += r->tm->rg_relatches - before;
   }
   count_shift(r, pesstamp_shift(out, (int64_t)timemap_k90(r->tm)));
 }
 
 static void finish_stamps(const remux_t *r, unsigned char *out) {
-  if (!r->tm || r->cfg.pcr_mode == PCR_MODE_PRESERVE) return;
+  if (!r->tm || r->cfg->pcr_mode == PCR_MODE_PRESERVE) return;
   afstamp_clear_discontinuity(out);
   afstamp_shift(out, (int64_t)timemap_k90(r->tm));
 }
@@ -171,8 +182,8 @@ static void forward_packet(remux_t *r, const out_es_t *es, unsigned out_pid, con
   memcpy(out, pkt188, 188);
   out[1] = (unsigned char)((out[1] & 0xE0) | ((out_pid >> 8) & 0x1F));
   out[2] = (unsigned char)out_pid;
-  if (r->tm && r->cfg.pcr_mode == PCR_MODE_REBASE) rebase_packet(r, es, out_pid, out, now);
-  if (r->cfg.pcr_mode == PCR_MODE_REGENERATE) regen_stage(r, es, out, now);
+  if (r->tm && r->cfg->pcr_mode == PCR_MODE_REBASE) rebase_packet(r, es, out_pid, out, now);
+  if (r->cfg->pcr_mode == PCR_MODE_REGENERATE) regen_stage(r, es, out, now);
   finish_stamps(r, out);
   remap_cc(r, out_pid, out);
   if (es && r->scte[es - r->es] && r->tm) {
@@ -248,20 +259,16 @@ static void track_continuity(remux_t *r, unsigned pid, const unsigned char pkt18
 
   if (disc_flag && tsm) tsm->ts_discontinuities++;
   if (!has_payload) return;
-  if ((state & 0x10) && !disc_flag && tsm && cc != (unsigned char)((state + 1) & 0x0F)) tsm->ts_continuity_errors++;
+  if ((state & 0x10) && !disc_flag && tsm && cc != (unsigned char)((state + 1) & 0x0F)) {
+    tsm->ts_continuity_errors++;
+    log_throttled(&r->cc_error_throttle, LOG_THROTTLE_WINDOW_S, "TW700168", "program %u: source continuity error on pid 0x%04x, cc %u after %u", r->src_service_id, pid, cc, state & 0x0F);
+  }
   r->cc_state[pid] = (unsigned char)(0x10 | cc);
 }
 
 static void track_pcr(remux_t *r, double now_s, const unsigned char pkt188[188], ts_metrics_t *tsm) {
-  unsigned afc = (pkt188[3] >> 4) & 0x3;
-  uint64_t base;
   uint64_t pcr27;
-  unsigned ext;
-  if (afc != 0x2 && afc != 0x3) return;
-  if (pkt188[4] < 1 || !(pkt188[5] & 0x10) || pkt188[4] < 7) return;
-  base = ((uint64_t)pkt188[6] << 25) | ((uint64_t)pkt188[7] << 17) | ((uint64_t)pkt188[8] << 9) | ((uint64_t)pkt188[9] << 1) | (pkt188[10] >> 7);
-  ext = ((unsigned)(pkt188[10] & 0x01) << 8) | pkt188[11];
-  pcr27 = base * 300 + ext;
+  if (!pcr_packet_read(pkt188, &pcr27)) return;
 
   if (r->have_last_pcr && tsm && !tsm->ts_checks_off && !timemap_pcr_plausible(r->last_pcr27, pcr27, now_s - r->last_pcr_wall)) tsm->pcr_discontinuities++;
   r->last_pcr27 = pcr27;

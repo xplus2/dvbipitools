@@ -99,7 +99,7 @@ int rdh_cfg_test(const char *path, int strict) {
   pwlen = strlen(cfg.srt_passphrase);
 
   warn_if(&y, cfg.n_inputs == 0, "RA000363", "input not set (required unless given on the command line)");
-  warn_if(&y, !cfg.mcast_port && cfg.n_rist == 0 && cfg.n_srt == 0, "RA000513", "mcast or rist not set (one is required unless given on the command line)");
+  warn_if(&y, !cfg.mcast_port && cfg.n_rist == 0 && cfg.n_srt == 0, "RA000513", "mcast, rist or srt not set (one is required unless given on the command line)");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "RA000120", "metrics.sock and metrics.interval require metrics.id");
   warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "RA000161", "metrics.inspect-ts requires metrics.id");
   warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "RA000162", "al-fec requires al-fec-port");

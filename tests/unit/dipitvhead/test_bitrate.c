@@ -83,6 +83,20 @@ START_TEST(bitrate_pace_sleeps_when_far_ahead_of_schedule) {
 }
 END_TEST
 
+START_TEST(bitrate_pace_caps_catchup_burst_after_gap) {
+  bitrate_pacer_t *p = bitrate_pacer_new(100000, 0, 1); /* 100 kbps */
+  struct timespec ts = {0, 400000000}; /* 400ms input gap */
+  double t0;
+  nanosleep(&ts, NULL);
+  bitrate_pace(p); /* first send after the gap */
+  bitrate_account_n(p, 20); /* ~300ms of data at target */
+  t0 = mono();
+  bitrate_pace(p);
+  ck_assert_msg(mono() - t0 > 0.1, "backlog burst unpaced: %.3f", mono() - t0);
+  bitrate_pacer_free(p);
+}
+END_TEST
+
 START_TEST(bitrate_pacer_shares_budget_regardless_of_source_order) {
   /* one pacer instance, fed packets "from" two different programs in different interleavings -
      only the total count should matter, never which program or in what order */
@@ -258,6 +272,7 @@ static Suite *bitrate_suite(void) {
   tcase_add_test(tc, bitrate_pace_disabled_when_burst_limit_zero);
   tcase_add_test(tc, bitrate_stuff_due_disabled_when_stuff_zero);
   tcase_add_test(tc, bitrate_stuff_due_reports_deficit_after_falling_behind);
+  tcase_add_test(tc, bitrate_pace_caps_catchup_burst_after_gap);
   tcase_add_test(tc, bitrate_pace_sleeps_when_far_ahead_of_schedule);
   tcase_add_test(tc, bitrate_pacer_shares_budget_regardless_of_source_order);
   tcase_add_test(tc, bitrate_pacer_logs_sustained_overage_without_crashing);

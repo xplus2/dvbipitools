@@ -14,6 +14,7 @@
 #define OVERAGE_THRESHOLD_S 2.0     /* sustained backlog before it's a real misconfiguration, not a burst */
 #define OVERAGE_LOG_COOLDOWN_S 30.0 /* don't spam if it stays misconfigured */
 #define STUFF_TICK_S 0.1
+#define CATCHUP_MAX_S 0.1 /* max lag the pacer will burst back after a gap */
 
 struct bitrate_pacer {
   double target_bps;
@@ -45,10 +46,15 @@ void bitrate_pacer_start(bitrate_pacer_t *p) {
 }
 
 void bitrate_pace(bitrate_pacer_t *p) {
-  double target_s;
+  double target_s, now;
   if (!p || !p->burst_limit || p->target_bps <= 0.0) return;
   target_s = p->start + (double)p->bits_sent / p->target_bps;
-  if (target_s > mono_seconds()) {
+  now = mono_seconds();
+  if (now - target_s > CATCHUP_MAX_S) {
+    p->start += now - target_s - CATCHUP_MAX_S;
+    target_s = now - CATCHUP_MAX_S;
+  }
+  if (target_s > now) {
     struct timespec ts = {(time_t)target_s, (long)((target_s - (time_t)target_s) * 1e9)};
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL);
   }

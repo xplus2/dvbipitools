@@ -23,6 +23,8 @@
     #hbbtv-org-id: <n>
     # --hbbtv-app-id [not set] # required with hbbtv
     #hbbtv-app-id: <n>
+    # --hbbtv-name ["HbbTV"]
+    #hbbtv-name: <text>
     # --rist-profile-in simple # simple|main, rist:// only
     #rist-profile-in: simple
     # --rist-encryption-type-in [not set] # 128|256

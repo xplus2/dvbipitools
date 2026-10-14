@@ -9,42 +9,23 @@
 #include "lib/cas/ecmg_client/ecmg_client.h"
 #include "lib/helper/log.h"
 
+#include "../mux/pcrclock.h"
+#include "../mux/timemap.h"
 #include "../version.h"
 
 #include "cas.h"
 
 #define CAS_PCR_DETECT_TIMEOUT_S CAS_CORE_CLOCK_DETECT_TIMEOUT_S /* startup grace period to observe a real PCR */
-#define PCR_CLOCK_HZ 27000000ULL
+#define PCR_TICKS_PER_MS (PCR_CLOCK_HZ / 1000)
 
 struct cas {
   unsigned pcr_out_pid;
   int have_pcr;
   uint64_t last_pcr27;
   double last_pcr_wall;
+  uint64_t pcr_rem_ticks;
   cas_core_t core;
 };
-
-int cas_parse_pcr(const unsigned char pkt188[188], uint64_t *pcr27) {
-  unsigned afc = (pkt188[3] >> 4) & 0x3;
-  uint64_t base;
-  unsigned ext;
-  if (afc != 0x2 && afc != 0x3) return 0;
-  if (pkt188[4] < 7 || !(pkt188[5] & 0x10)) return 0;
-  base = ((uint64_t)pkt188[6] << 25) | ((uint64_t)pkt188[7] << 17) | ((uint64_t)pkt188[8] << 9) | ((uint64_t)pkt188[9] << 1) | (pkt188[10] >> 7);
-  ext = ((unsigned)(pkt188[10] & 0x01) << 8) | pkt188[11];
-  *pcr27 = base * 300 + ext;
-  return 1;
-}
-
-int cas_pcr_plausible(uint64_t last_pcr27, uint64_t new_pcr27, double wall_delta_s, double *pcr_delta_s_out) {
-  uint64_t delta_ticks = (new_pcr27 + CAS_PCR_MODULUS - last_pcr27) % CAS_PCR_MODULUS;
-  double pcr_delta_s = (double)delta_ticks / (double)PCR_CLOCK_HZ;
-  if (wall_delta_s > 0.0 && pcr_delta_s > 0.0 && pcr_delta_s < 60.0 && pcr_delta_s < wall_delta_s * 5.0 + 0.5 && pcr_delta_s > wall_delta_s * 0.2 - 0.1) {
-    *pcr_delta_s_out = pcr_delta_s;
-    return 1;
-  }
-  return 0;
-}
 
 static void deliver_clock_tick(cas_t *c, unsigned long delta_ms) {
   if (c->core.biss_ca)
@@ -62,11 +43,13 @@ static void pcr_sample(cas_t *c, uint64_t pcr27) {
     log_line(TOOL_NAME ": cas: first PCR observed on pid 0x%x, starting ECMG/EMMG", c->pcr_out_pid);
     deliver_clock_tick(c, 0);
   } else {
-    double pcr_delta_s;
     double wall_delta_s = now - c->last_pcr_wall;
-    if (cas_pcr_plausible(c->last_pcr27, pcr27, wall_delta_s, &pcr_delta_s)) {
-      deliver_clock_tick(c, (unsigned long)(pcr_delta_s * 1000.0 + 0.5));
+    if (wall_delta_s > 0.0 && timemap_pcr_plausible(c->last_pcr27, pcr27, wall_delta_s)) {
+      uint64_t ticks = c->pcr_rem_ticks + pcr_sub(pcr27, c->last_pcr27);
+      c->pcr_rem_ticks = ticks % PCR_TICKS_PER_MS;
+      deliver_clock_tick(c, (unsigned long)(ticks / PCR_TICKS_PER_MS));
     } else {
+      c->pcr_rem_ticks = 0;
       log_code("TW400199", TOOL_NAME ": cas: PCR discontinuity on pid 0x%x, resyncing", c->pcr_out_pid);
     }
   }
@@ -87,6 +70,7 @@ static void add_pid(unsigned *pids, size_t *count, size_t cap, unsigned pid) {
 
 static void add_program_cas_pids(const config_t *cfg, const out_es_t *es, int es_count, unsigned *out, size_t *count, size_t cap) {
   for (int i = 0; i < es_count; i++) {
+    if (!es[i].src) continue;
     switch (es[i].src->cls) {
       case PID_VIDEO: if (cfg->cas_pids_video) add_pid(out, count, cap, es[i].out_pid); break;
       case PID_AUDIO: if (cfg->cas_pids_audio) add_pid(out, count, cap, es[i].out_pid); break;
@@ -134,124 +118,73 @@ static cas_biss_ca_cfg_t biss_ca_cfg_of(const config_t *cfg) {
   return bc;
 }
 
-cas_t *cas_start(const config_t *cfg, const psi_t *psi, const out_es_t *es, int es_count, unsigned pcr_out_pid) {
-  cas_t *c;
-  cas_group_cfg_t gcfg;
-
+static void log_no_pids(const config_t *cfg, int multi) {
   if (cfg->biss2_enabled || cfg->biss1_enabled) {
-    unsigned pids[CAS_CORE_MAX_PIDS];
-    cas_biss_cfg_t bc = biss_cfg_of(cfg);
-    size_t pid_count = cas_resolve_pids(cfg, es, es_count, pids, CAS_CORE_MAX_PIDS);
-    if (pid_count == 0) {
+    if (multi)
+      log_code("TA000581", TOOL_NAME ": biss: --cas-pids resolved to no pids across any program, nothing to scramble");
+    else
       log_code("TA000577", TOOL_NAME ": biss: --cas-pids resolved to no pids, nothing to scramble");
-      return NULL;
-    }
-    c = calloc(1, sizeof *c);
-    if (!c) return NULL;
-    c->pcr_out_pid = pcr_out_pid;
-    if (cas_core_start_biss_dispatch(&bc, pids, pid_count, pcr_out_pid, TOOL_NAME ": ", &c->core) != 0) {
-      free(c);
-      return NULL;
-    }
-    return c;
-  }
-  if (cfg->biss2_ca_enabled) {
-    unsigned pids[CAS_CORE_MAX_PIDS];
-    cas_biss_ca_cfg_t bc = biss_ca_cfg_of(cfg);
-    size_t pid_count = cas_resolve_pids(cfg, es, es_count, pids, CAS_CORE_MAX_PIDS);
-    if (pid_count == 0) {
+  } else if (cfg->biss2_ca_enabled) {
+    if (multi)
+      log_code("TA000582", TOOL_NAME ": biss-ca: --cas-pids resolved to no pids across any program, nothing to scramble");
+    else
       log_code("TA000578", TOOL_NAME ": biss-ca: --cas-pids resolved to no pids, nothing to scramble");
-      return NULL;
-    }
-    c = calloc(1, sizeof *c);
-    if (!c) return NULL;
-    c->pcr_out_pid = pcr_out_pid;
-    if (cas_core_start_biss_ca_dispatch(&bc, pids, pid_count, pcr_out_pid, TOOL_NAME ": ", &c->core) != 0) {
-      free(c);
-      return NULL;
-    }
-    return c;
+  } else if (multi) {
+    log_code("TA000583", TOOL_NAME ": cas: --cas-pids resolved to no pids across any program, nothing to scramble");
+  } else {
+    log_code("TA000580", TOOL_NAME ": cas: --cas-pids resolved to no pids, nothing to scramble");
   }
+}
 
-  if (psi_pcr_pid(psi) == 0x1FFF) {
-    log_code("TA000579", TOOL_NAME ": cas: source declares no PCR_PID, cannot drive crypto-period timing");
+/* pcr_out_pid 0x1FFF for MPTS: no single pid drives clock, see cas_wall_tick() */
+static cas_t *start_resolved(const config_t *cfg, const unsigned *pids, size_t pid_count, unsigned pcr_out_pid, int multi) {
+  cas_t *c;
+  int rc;
+
+  if (pid_count == 0) {
+    log_no_pids(cfg, multi);
     return NULL;
   }
   c = calloc(1, sizeof *c);
   if (!c) return NULL;
   c->pcr_out_pid = pcr_out_pid;
-  fill_group_cfg(cfg, &gcfg);
-  gcfg.pid_count = cas_resolve_pids(cfg, es, es_count, gcfg.pids, CAS_CORE_MAX_PIDS);
-  if (gcfg.pid_count == 0) {
-    log_code("TA000580", TOOL_NAME ": cas: --cas-pids resolved to no pids, nothing to scramble");
-    free(c);
-    return NULL;
+  if (cfg->biss2_enabled || cfg->biss1_enabled) {
+    cas_biss_cfg_t bc = biss_cfg_of(cfg);
+    rc = cas_core_start_biss_dispatch(&bc, pids, pid_count, pcr_out_pid, TOOL_NAME ": ", &c->core);
+  } else if (cfg->biss2_ca_enabled) {
+    cas_biss_ca_cfg_t bc = biss_ca_cfg_of(cfg);
+    rc = cas_core_start_biss_ca_dispatch(&bc, pids, pid_count, pcr_out_pid, TOOL_NAME ": ", &c->core);
+  } else {
+    cas_group_cfg_t gcfg;
+    fill_group_cfg(cfg, &gcfg);
+    memcpy(gcfg.pids, pids, pid_count * sizeof *pids);
+    gcfg.pid_count = pid_count;
+    c->core.group = cas_group_start(&gcfg, pcr_out_pid);
+    rc = c->core.group ? 0 : -1;
   }
-
-  c->core.group = cas_group_start(&gcfg, pcr_out_pid);
-  if (!c->core.group) {
+  if (rc != 0) {
     free(c);
     return NULL;
   }
   return c;
 }
 
+cas_t *cas_start(const config_t *cfg, const psi_t *psi, const out_es_t *es, int es_count, unsigned pcr_out_pid) {
+  unsigned pids[CAS_CORE_MAX_PIDS];
+  size_t pid_count;
+
+  if (!cfg->biss2_enabled && !cfg->biss1_enabled && !cfg->biss2_ca_enabled && psi_pcr_pid(psi) == 0x1FFF) {
+    log_code("TA000579", TOOL_NAME ": cas: source declares no PCR_PID, cannot drive crypto-period timing");
+    return NULL;
+  }
+  pid_count = cas_resolve_pids(cfg, es, es_count, pids, CAS_CORE_MAX_PIDS);
+  return start_resolved(cfg, pids, pid_count, pcr_out_pid, 0);
+}
+
 cas_t *cas_start_multi(const config_t *cfg, const out_es_t *const *es_lists, const int *es_counts, unsigned n_programs) {
-  cas_t *c;
-  cas_group_cfg_t gcfg;
-
-  if (cfg->biss2_enabled || cfg->biss1_enabled) {
-    unsigned pids[CAS_CORE_MAX_PIDS];
-    cas_biss_cfg_t bc = biss_cfg_of(cfg);
-    size_t pid_count = cas_resolve_pids_multi(cfg, es_lists, es_counts, n_programs, pids, CAS_CORE_MAX_PIDS);
-    if (pid_count == 0) {
-      log_code("TA000581", TOOL_NAME ": biss: --cas-pids resolved to no pids across any program, nothing to scramble");
-      return NULL;
-    }
-    c = calloc(1, sizeof *c);
-    if (!c) return NULL;
-    c->pcr_out_pid = 0x1FFF; /* MPTS, no single pid drives clock: see cas_wall_tick() */
-    if (cas_core_start_biss_dispatch(&bc, pids, pid_count, 0x1FFF, TOOL_NAME ": ", &c->core) != 0) {
-      free(c);
-      return NULL;
-    }
-    return c;
-  }
-  if (cfg->biss2_ca_enabled) {
-    unsigned pids[CAS_CORE_MAX_PIDS];
-    cas_biss_ca_cfg_t bc = biss_ca_cfg_of(cfg);
-    size_t pid_count = cas_resolve_pids_multi(cfg, es_lists, es_counts, n_programs, pids, CAS_CORE_MAX_PIDS);
-    if (pid_count == 0) {
-      log_code("TA000582", TOOL_NAME ": biss-ca: --cas-pids resolved to no pids across any program, nothing to scramble");
-      return NULL;
-    }
-    c = calloc(1, sizeof *c);
-    if (!c) return NULL;
-    c->pcr_out_pid = 0x1FFF;
-    if (cas_core_start_biss_ca_dispatch(&bc, pids, pid_count, 0x1FFF, TOOL_NAME ": ", &c->core) != 0) {
-      free(c);
-      return NULL;
-    }
-    return c;
-  }
-  c = calloc(1, sizeof *c);
-  if (!c) return NULL;
-  c->pcr_out_pid = 0x1FFF; /* MPTS, no single pid drives clock: see cas_wall_tick() */
-
-  fill_group_cfg(cfg, &gcfg);
-  gcfg.pid_count = cas_resolve_pids_multi(cfg, es_lists, es_counts, n_programs, gcfg.pids, CAS_CORE_MAX_PIDS);
-  if (gcfg.pid_count == 0) {
-    log_code("TA000583", TOOL_NAME ": cas: --cas-pids resolved to no pids across any program, nothing to scramble");
-    free(c);
-    return NULL;
-  }
-
-  c->core.group = cas_group_start(&gcfg, 0x1FFF);
-  if (!c->core.group) {
-    free(c);
-    return NULL;
-  }
-  return c;
+  unsigned pids[CAS_CORE_MAX_PIDS];
+  size_t pid_count = cas_resolve_pids_multi(cfg, es_lists, es_counts, n_programs, pids, CAS_CORE_MAX_PIDS);
+  return start_resolved(cfg, pids, pid_count, 0x1FFF, 1);
 }
 
 void cas_stop(cas_t *c) {
@@ -268,21 +201,28 @@ void cas_pcr_tick(cas_t *c, unsigned out_pid, const unsigned char pkt188[188]) {
   uint64_t pcr27;
   if (c->core.biss_engine) return; /* fixed-key BISS: no crypto period */
   if (!c->core.biss_ca) cas_group_tick_alive(c->core.group);
-  if (out_pid != c->pcr_out_pid || !cas_parse_pcr(pkt188, &pcr27)) return;
+  if (out_pid != c->pcr_out_pid || !pcr_packet_read(pkt188, &pcr27)) return;
   pcr_sample(c, pcr27);
 }
 
 void cas_wall_tick(cas_t *c, double now_s) {
+  double delta_s;
   if (c->core.biss_engine) return;
   if (!c->core.biss_ca) cas_group_tick_alive(c->core.group);
   if (!c->have_pcr) {
     c->have_pcr = 1;
+    c->last_pcr_wall = now_s;
     deliver_clock_tick(c, 0);
-  } else {
-    double delta_s = now_s - c->last_pcr_wall;
-    if (delta_s > 0.0) deliver_clock_tick(c, (unsigned long)(delta_s * 1000.0 + 0.5));
+    return;
   }
-  c->last_pcr_wall = now_s;
+  delta_s = now_s - c->last_pcr_wall;
+  if (delta_s < 0.0) {
+    c->last_pcr_wall = now_s;
+  } else if (delta_s >= 0.001) {
+    unsigned long ms = (unsigned long)(delta_s * 1000.0);
+    deliver_clock_tick(c, ms);
+    c->last_pcr_wall += (double)ms / 1000.0; /* keep sub-ms remainder */
+  }
 }
 
 void cas_scramble_packet(cas_t *c, unsigned out_pid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx) {

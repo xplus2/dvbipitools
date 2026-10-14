@@ -16,6 +16,9 @@
    -e-not-given contract (fail once, don't reconnect) for whichever slot hits it */
 #define INPUTSET_NEVER RETRYSET_NEVER
 
+#define INPUTSET_PMT_PID_BASE 0x1000   /* like ffmpeg mpegts muxer's pmt_start_pid default */
+#define INPUTSET_AUDIO_PID_BASE 0x0100 /* like ffmpeg mpegts muxer's start_pid default */
+
 typedef struct inputset inputset_t;
 
 /* slot per cfg->inputs[i], retried independently. cfg must outlive inputset (borrowed uri/service_name).

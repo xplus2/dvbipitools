@@ -79,6 +79,11 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
         return ARGS_ERR;
       }
       break;
+    case OPT_HBBTV_NAME:
+      REQUIRE_INPUT("--hbbtv-name");
+      if (argutil_bufcpy_opt(TOOL_NAME, in->hbbtv_name, sizeof in->hbbtv_name, optarg, "--hbbtv-name text"))
+        return ARGS_ERR;
+      break;
     case OPT_SID:
       REQUIRE_INPUT("--sid");
       if (tvh_id_parse(optarg, &in->sid)) {
@@ -109,18 +114,13 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
       if (argutil_bufcpy_opt(TOOL_NAME, in->srt_passphrase_in, sizeof in->srt_passphrase_in, optarg, "--srt-passphrase-in"))
         return ARGS_ERR;
       break;
-    case OPT_SRT_PBKEYLEN_IN: {
-      char *end;
-      unsigned long v;
+    case OPT_SRT_PBKEYLEN_IN:
       REQUIRE_INPUT("--srt-pbkeylen-in");
-      v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
+      if (tvh_set_pbkeylen(&in->srt_pbkeylen_in, optarg, err, sizeof err)) {
         argerr("TS000359", "invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
         return ARGS_ERR;
       }
-      in->srt_pbkeylen_in = (int)v;
       break;
-    }
     case OPT_SRT_STREAMID_IN:
       REQUIRE_INPUT("--srt-streamid-in");
       if (argutil_bufcpy_opt(TOOL_NAME, in->srt_streamid_in, sizeof in->srt_streamid_in, optarg, "--srt-streamid-in"))

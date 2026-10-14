@@ -52,7 +52,6 @@ static int locate(const unsigned char *pkt188, fields_t *f) {
   pts_dts = (f->flags >> 6) & 0x3;
   if (pts_dts == 0x1) return PESSTAMP_NONE;
   if (!pts_dts && !(f->flags & 0x20)) return PESSTAMP_NONE;
-  if (start + PES_FIXED_HEADER + hdr_len > TS_PAYLOAD_END) return PESSTAMP_SPLIT;
   f->pts = -1;
   f->dts = -1;
   f->escr = -1;
@@ -74,6 +73,7 @@ static int locate(const unsigned char *pkt188, fields_t *f) {
       used += 6;
     }
     if (used > hdr_len) return PESSTAMP_NONE;
+    if (start + PES_FIXED_HEADER + used > TS_PAYLOAD_END) return PESSTAMP_SPLIT;
   }
   return PESSTAMP_FOUND;
 }

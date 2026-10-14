@@ -18,6 +18,7 @@ static const yamlcfg_key_t keys[] = {
 {"input.hbbtv", tvh_apply_input_hbbtv, 0, 0},
 {"input.hbbtv-org-id", tvh_apply_input_hbbtv_org_id, 0, 0},
 {"input.hbbtv-app-id", tvh_apply_input_hbbtv_app_id, 0, 0},
+{"input.hbbtv-name", tvh_apply_input_hbbtv_name, 0, 0},
 {"input.rist-profile-in", tvh_apply_input_rist_profile, 0, 0},
 {"input.rist-encryption-type-in", tvh_apply_input_rist_encryption_type, 0, 0},
 {"input.srt-passphrase-in", tvh_apply_input_srt_passphrase, 0, 0},
@@ -122,7 +123,7 @@ int tvh_cfg_test(const char *path, int strict) {
   tvh_cfg_defaults(&cfg);
   if (yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg, tvh_item_hook) != YAMLCFG_LOADED) return -1;
   warn_if(&y, cfg.n_inputs == 0, "TA000363", "input not set (required unless given on the command line)");
-  warn_if(&y, !cfg.mcast_port && cfg.n_rist == 0 && cfg.n_srt == 0, "TA000513", "mcast or rist not set (one is required unless given on the command line)");
+  warn_if(&y, !cfg.mcast_port && cfg.n_rist == 0 && cfg.n_srt == 0, "TA000513", "mcast, rist or srt not set (one is required unless given on the command line)");
   fatal = tvh_cfg_check(&cfg, 1, warn_report, &r);
   if (fatal > r.fatal) y.warnings += (unsigned)(fatal - r.fatal);
   return yamlcfg_report(&y);

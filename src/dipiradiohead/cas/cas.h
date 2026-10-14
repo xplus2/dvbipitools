@@ -22,7 +22,10 @@ void cas_stop(cas_t *c);
 /* 1 once grace period passed with no frame seen: fatal, caller must stop */
 int cas_failed(const cas_t *c);
 
-/* call once per audio frame, before tspacketizer_feed(). pts_90k: radiohead's own sample clock.
+/* call every loop pass, frames or not. arms the no-frame grace check behind cas_failed() */
+void cas_poll(cas_t *c);
+
+/* call on audio frames only, before tspacketizer_feed(). pts_90k: radiohead's own sample clock.
    first call lazy-starts ECMG/EMMG. */
 void cas_clock_tick(cas_t *c, uint64_t pts_90k);
 

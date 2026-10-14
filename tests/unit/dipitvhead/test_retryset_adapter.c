@@ -78,6 +78,12 @@ int tvsrc_fd(const tvsrc_t *s) {
   return FAKE_FD;
 }
 
+int tvsrc_wait(const tvsrc_t *s, int timeout_ms) {
+  (void)s;
+  (void)timeout_ms;
+  return 1;
+}
+
 void tvsrc_close(tvsrc_t *s) {
   (void)s;
   fake.closed++;

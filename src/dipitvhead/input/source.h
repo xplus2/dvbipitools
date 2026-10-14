@@ -21,6 +21,10 @@ tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_er
    reason_out: nullable, set only on -1 */
 ssize_t tvsrc_read(tvsrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out);
 
+/* waits for readable data, up to timeout_ms. 1 readable, 0 timeout/EINTR, -1 error.
+   handles buffered and multi-fd http sources */
+int tvsrc_wait(const tvsrc_t *s, int timeout_ms);
+
 /* underlying fd, for caller's own poll(); valid for life of s */
 int tvsrc_fd(const tvsrc_t *s);
 int tvsrc_enable_rx_timestamps(tvsrc_t *s);

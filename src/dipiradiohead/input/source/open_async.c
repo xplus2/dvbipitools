@@ -26,7 +26,7 @@ struct source_open {
   source_insp_t si;
   http_async_t *ha; /* during SO_FETCHING */
   http_t *h;        /* during SO_SNIFFING */
-  unsigned char sniff[SRC_SNIFF_CAP];
+  unsigned char sniff[SRC_SNIFF_BUF];
   size_t sniff_got;
   source_t *result; /* set on SOURCE_OPEN_DONE */
   double started;
@@ -100,8 +100,9 @@ source_open_state_t source_open_async_step(source_open_t *o, net_err_reason_t *r
 
   for (;;) {
     ssize_t n;
-    if (o->sniff_got >= sizeof o->sniff) break; /* buffer full: enough to sniff regardless of what else might follow */
-    n = http_read(o->h, o->sniff + o->sniff_got, sizeof o->sniff - o->sniff_got, reason_out);
+    size_t want = src_sniff_want(o->sniff, o->sniff_got);
+    if (o->sniff_got >= want) break; /* enough, regardless of what might follow */
+    n = http_read(o->h, o->sniff + o->sniff_got, want - o->sniff_got, reason_out);
     if (n < 0) {
       if (o->sniff_got > 0) break; /* connection close after a full small (e.g. playlist) body is not an error */
       log_code_ansi("RE000525", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mempty response\e[0m from %s", o->idx, o->label ? o->label : "?", o->cur_uri);

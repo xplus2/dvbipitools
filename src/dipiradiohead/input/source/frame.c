@@ -17,12 +17,20 @@ unsigned long long source_bytes_total(const source_t *s) { return s->bytes_total
 /* queue fill must not block on wire */
 static int would_block(const source_t *s) {
   struct pollfd p;
-  int buffered = s->hls ? hls_live_has_buffered(s->hls) : http_has_buffered(s->http);
+  if (!s->fq) return 0;
+  if (s->hls ? hls_live_has_buffered(s->hls) : http_has_buffered(s->http)) return 0;
   p.fd = source_fd(s);
+  if (p.fd < 0) return 0;
   p.events = s->hls ? hls_live_poll_events(s->hls) : POLLIN;
   p.revents = 0;
-  if (!s->fq || buffered || p.fd < 0) return 0;
   return poll(&p, 1, 0) <= 0;
+}
+
+static unsigned char *data(source_t *s) { return s->buf + s->buf_off; }
+
+static void compact(source_t *s) {
+  memmove(s->buf, s->buf + s->buf_off, s->buf_len);
+  s->buf_off = 0;
 }
 
 static int refill(source_t *s, net_err_reason_t *reason_out) {
@@ -32,7 +40,8 @@ static int refill(source_t *s, net_err_reason_t *reason_out) {
   size_t want;
   size_t produced;
 
-  clean_cap = SRC_BUF_CAP - s->buf_len;
+  if (s->buf_off && SRC_BUF_CAP - s->buf_off - s->buf_len < sizeof tmp) compact(s);
+  clean_cap = SRC_BUF_CAP - s->buf_off - s->buf_len;
   if (clean_cap == 0) {
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
@@ -46,18 +55,19 @@ static int refill(source_t *s, net_err_reason_t *reason_out) {
   s->bytes_total += (unsigned long long)n;
   s->last_rx = mono_seconds();
   if (s->icy) {
-    produced = icy_feed(s->icy, tmp, (size_t)n, s->buf + s->buf_len, clean_cap);
+    produced = icy_feed(s->icy, tmp, (size_t)n, data(s) + s->buf_len, clean_cap);
   } else {
     produced = (size_t)n;
-    memcpy(s->buf + s->buf_len, tmp, produced);
+    memcpy(data(s) + s->buf_len, tmp, produced);
   }
   s->buf_len += produced;
   return 1;
 }
 
 static void drop_front(source_t *s, size_t n) {
-  memmove(s->buf, s->buf + n, s->buf_len - n);
+  s->buf_off += n;
   s->buf_len -= n;
+  if (!s->buf_len) s->buf_off = 0;
 }
 
 /* 0: not a tag, 1: tag, need more bytes, 2: tag consumed or skipped */
@@ -69,20 +79,19 @@ static int try_consume_tag(source_t *s) {
     s->tag_skip -= n;
     return s->tag_skip ? 1 : 2;
   }
-  if (!id3_is_tag(s->buf, s->buf_len)) return 0;
+  if (!id3_is_tag(data(s), s->buf_len)) return 0;
   if (s->buf_len < 10) return 1;
-  need = id3_tag_size(s->buf, s->buf_len);
+  need = id3_tag_size(data(s), s->buf_len);
   if (need > SRC_BUF_CAP) {
     if (s->buf_len < SRC_BUF_CAP) return 1;
-    id3_consume(s->id3, s->buf, s->buf_len);
+    id3_consume(s->id3, data(s), s->buf_len);
     s->tag_skip = need - s->buf_len;
-    s->buf_len = 0;
+    drop_front(s, s->buf_len);
     return 2;
   }
   if (s->buf_len < need) return 1;
-  id3_consume(s->id3, s->buf, need);
-  memmove(s->buf, s->buf + need, s->buf_len - need);
-  s->buf_len -= need;
+  id3_consume(s->id3, data(s), need);
+  drop_front(s, need);
   return 2;
 }
 
@@ -93,15 +102,15 @@ static int codec_is_sync(source_codec_t codec, const unsigned char *p, size_t av
 }
 
 /* confirms a sync word at buf+frame_len too, since an 11/12-bit sync can appear by chance in compressed audio */
-static int next_sync_ok(const source_t *s, size_t frame_len) {
-  return codec_is_sync(s->codec, s->buf + frame_len, s->buf_len - frame_len);
+static int next_sync_ok(source_t *s, size_t frame_len) {
+  return codec_is_sync(s->codec, data(s) + frame_len, s->buf_len - frame_len);
 }
 
 /* first accepted sync offset in buf[1..buf_len), cheap codec_is_sync() per byte,
    no repeated probe() calls. buf_len if none: caller drops buffer, waits for more data */
-static size_t find_resync_offset(const source_t *s) {
+static size_t find_resync_offset(source_t *s) {
   for (size_t i = 1; i < s->buf_len; i++) {
-    if (codec_is_sync(s->codec, s->buf + i, s->buf_len - i)) return i;
+    if (codec_is_sync(s->codec, data(s) + i, s->buf_len - i)) return i;
   }
   return s->buf_len;
 }
@@ -126,7 +135,7 @@ static int probe_len(source_t *s, source_codec_t codec, const unsigned char *p, 
 
 /* 1: valid frame at off followed by another sync word, 0: need more bytes, -1: no */
 static int confirm_codec(source_t *s, source_codec_t codec, size_t off) {
-  const unsigned char *p = s->buf + off;
+  const unsigned char *p = data(s) + off;
   size_t avail = s->buf_len - off;
   size_t len = 0;
   int r;
@@ -159,7 +168,7 @@ static int detect_at(source_t *s, size_t off) {
   for (int i = 0; i < 3; i++) {
     int r;
     if (order[i] == SRC_AAC_LATM) {
-      if (!aac_latm_is_sync(s->buf + off, s->buf_len - off)) continue;
+      if (!aac_latm_is_sync(data(s) + off, s->buf_len - off)) continue;
       if (!s->latm) {
         s->latm = aac_latm_new();
         if (!s->latm) return -2;
@@ -172,8 +181,7 @@ static int detect_at(source_t *s, size_t off) {
     }
     if (r == 0) pending = 1;
     else if (order[i] == SRC_AAC_LATM) {
-      aac_latm_free(s->latm); /* rejected probe may leave stale mux config */
-      s->latm = NULL;
+      aac_latm_reset(s->latm); /* rejected probe may leave stale mux config */
     }
   }
   return pending ? 0 : -1;
@@ -250,14 +258,6 @@ static int handle_probe_result(source_t *s, net_err_reason_t *reason_out, int r,
     resync(s);
     return PROBE_STEP_CONTINUE;
   }
-  if (frame_len > s->buf_len) {
-    int rf = refill(s, reason_out);
-    if (rf <= 0) {
-      *ret = rf;
-      return PROBE_STEP_RETURN;
-    }
-    return PROBE_STEP_CONTINUE;
-  }
   if (s->buf_len < frame_len + 2) {
     int rf = refill(s, reason_out);
     if (rf <= 0) {
@@ -271,8 +271,7 @@ static int handle_probe_result(source_t *s, net_err_reason_t *reason_out, int r,
 
 static int pull_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason_out) {
   if (s->pending_consume) {
-    memmove(s->buf, s->buf + s->pending_consume, s->buf_len - s->pending_consume);
-    s->buf_len -= s->pending_consume;
+    drop_front(s, s->pending_consume);
     s->pending_consume = 0;
   }
 
@@ -303,7 +302,7 @@ static int pull_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
 
       if (s->codec == SRC_MPEG_AUDIO) {
         mpegaudio_info_t info;
-        r = mpegaudio_probe(s->buf, s->buf_len, &info);
+        r = mpegaudio_probe(data(s), s->buf_len, &info);
         if (r == 1) {
           frame_len = info.frame_len;
           sample_rate = info.sample_rate;
@@ -312,7 +311,7 @@ static int pull_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
         }
       } else if (s->codec == SRC_AAC_ADTS) {
         aac_adts_info_t info;
-        r = aac_adts_probe(s->buf, s->buf_len, &info);
+        r = aac_adts_probe(data(s), s->buf_len, &info);
         if (r == 1) {
           frame_len = info.frame_len;
           sample_rate = info.sample_rate;
@@ -321,7 +320,7 @@ static int pull_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
         }
       } else {
         aac_latm_info_t info;
-        r = aac_latm_probe(s->latm, s->buf, s->buf_len, &info);
+        r = aac_latm_probe(s->latm, data(s), s->buf_len, &info);
         if (r == 1) {
           frame_len = info.frame_len;
           sample_rate = info.sample_rate;
@@ -344,7 +343,7 @@ static int pull_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason
       out->sample_rate = sample_rate;
       out->samples = samples;
       out->aac_profile_level = aac_profile_level;
-      out->data = s->buf;
+      out->data = data(s);
       out->len = frame_len;
       s->pending_consume = frame_len;
       return 1;
@@ -370,10 +369,19 @@ int source_take_resumed(source_t *s) {
 
 static int next_frame_queued(source_t *s, source_frame_t *out, net_err_reason_t *reason_out) {
   if (!s->fq) return pull_frame(s, out, reason_out);
-  while (framequeue_ms(s->fq) < 2 * s->prefill_ms && framequeue_count(s->fq) < FQ_MAX_FRAMES) {
+  while (!s->fq_failed && framequeue_ms(s->fq) < 2 * s->prefill_ms && framequeue_count(s->fq) < FQ_MAX_FRAMES) {
     source_frame_t f;
-    int r = pull_frame(s, &f, reason_out);
-    if (r < 0) return -1;
+    net_err_reason_t why = NET_ERR_OTHER;
+    int r = pull_frame(s, &f, &why);
+    if (r < 0) {
+      if (!framequeue_count(s->fq)) {
+        if (reason_out) *reason_out = why;
+        return -1;
+      }
+      s->fq_failed = 1;
+      s->fq_reason = why;
+      break;
+    }
     if (r == 0) break;
     if (framequeue_push(s->fq, &f) < 0) {
       if (reason_out) *reason_out = NET_ERR_OTHER;
@@ -381,8 +389,12 @@ static int next_frame_queued(source_t *s, source_frame_t *out, net_err_reason_t 
     }
   }
   if (s->insp_slot && *s->insp_slot) tsinspect_set_buffer_ms(*s->insp_slot, framequeue_ms(s->fq));
+  if (s->fq_failed && !framequeue_count(s->fq)) {
+    if (reason_out) *reason_out = s->fq_reason;
+    return -1;
+  }
   if (!s->fq_running) {
-    if (framequeue_ms(s->fq) < s->prefill_ms) return 0;
+    if (!s->fq_failed && framequeue_ms(s->fq) < s->prefill_ms) return 0;
     s->fq_running = 1;
     s->fq_resumed = 1;
   }

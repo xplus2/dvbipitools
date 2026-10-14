@@ -25,7 +25,7 @@ typedef struct {
 } eit_section_t;
 
 struct remux {
-  config_t cfg;
+  const config_t *cfg; /* borrowed */
   dipitvhead_input_t input;
   out_program_pids_t pids;
   int standalone;
@@ -52,12 +52,13 @@ struct remux {
   int send_sdt;
   int send_nit;
   int send_ait;
+  unsigned service_type;
   char service_name[256];
   char provider_name[PSI_NAME];
   char network_name[256];
   unsigned char ait_pmt_entry[16];
   size_t ait_pmt_entry_len;
-  unsigned char ait_section[300];
+  unsigned char ait_section[320];
   size_t ait_section_len;
 
   psi_versions_t *pv;
@@ -75,6 +76,10 @@ struct remux {
   int have_last_pmt;
   log_throttle_t pmt_desc_truncated_throttle;
   log_throttle_t cas_desc_throttle;
+  log_throttle_t retime_skip_throttle;
+  log_throttle_t relatch_throttle;
+  log_throttle_t hold_forced_throttle;
+  log_throttle_t cc_error_throttle;
 
   unsigned char cc_pat;
   unsigned char cc_pmt;
@@ -101,9 +106,10 @@ struct remux {
   uint64_t last_pcr27;
   double last_pcr_wall;
 
-  /* source EIT reassembled into drainable queue (remux_emit_eit()). eit_drain_off: offset into eit_queue[0] mid-emit */
+  /* source EIT reassembled into drainable queue (remux_emit_eit()). eit_drain_off: offset into head section mid-emit */
   psi_section_asm_t eit_asm;
   eit_section_t eit_queue[EIT_QUEUE_CAP];
+  unsigned char eit_order[EIT_QUEUE_CAP]; /* permutation of slots: [0,count) queued oldest first, rest free */
   int eit_queue_count;
   size_t eit_drain_off;
 };

@@ -331,6 +331,32 @@ START_TEST(discovery_gives_up_after_the_timeout) {
 }
 END_TEST
 
+START_TEST(silent_source_times_out_without_readable_fd) {
+  rig_t g;
+  tvsrc_t *src;
+  capture_t cap;
+  char log[2048];
+  int wfd;
+
+  rig_init(&g, 1);
+  wfd = stdin_pipe();
+  src = open_stdin_source(&g);
+  discover_idle(&g.tk, 0, src);
+  ck_assert_ptr_nonnull(g.progs[0].psi);
+  discover_idle(&g.tk, 0, src);
+  ck_assert_ptr_nonnull(g.progs[0].psi);
+  g.progs[0].discover_start -= DISCOVERY_TIMEOUT_S + 1.0;
+  capture_begin(&cap);
+  discover_idle(&g.tk, 0, src);
+  capture_end(&cap, log, sizeof log);
+  ck_assert_ptr_null(g.progs[0].psi);
+  ck_assert_ptr_nonnull(strstr(log, "no live PMT found"));
+  tvsrc_close(src);
+  close(wfd);
+  rig_free(&g);
+}
+END_TEST
+
 START_TEST(discovery_resets_the_slot_when_remux_setup_fails) {
   rig_t g;
   tvsrc_t *src;
@@ -375,9 +401,11 @@ START_TEST(feed_splits_a_large_read_across_calls) {
   write_stream(wfd, NULL, 0, BACKLOG_PACKETS);
   bl = &g.progs[0].backlog;
 
+  ck_assert_int_eq(input_backlog_pending(&g.progs[0]), 0);
   feed_input(&g.tk, 0, src);
   ck_assert_uint_eq(bl->len, 0u);
   feed_input(&g.tk, 0, src);
+  ck_assert_int_ne(input_backlog_pending(&g.progs[0]), 0);
   total = bl->len;
   ck_assert_uint_gt(total, (size_t)FEED_CHUNK_BYTES);
   ck_assert_uint_eq(bl->off, (size_t)FEED_CHUNK_BYTES);
@@ -388,6 +416,7 @@ START_TEST(feed_splits_a_large_read_across_calls) {
   }
   ck_assert_int_eq((size_t)calls, (total + FEED_CHUNK_BYTES - 1) / FEED_CHUNK_BYTES - 1);
   ck_assert_uint_eq(bl->off, 0u);
+  ck_assert_int_eq(input_backlog_pending(&g.progs[0]), 0);
   tvsrc_close(src);
   close(wfd);
   rig_free(&g);
@@ -549,6 +578,7 @@ START_TEST(cat_passthrough_merges_descriptors_of_programs_that_have_one) {
   rig_t g;
   collect_t col;
   unsigned char cc = 0;
+  psi_ver_track_t cv = {0};
   unsigned char got[64];
   unsigned char want[64];
   size_t want_len = 0;
@@ -562,7 +592,7 @@ START_TEST(cat_passthrough_merges_descriptors_of_programs_that_have_one) {
   for (unsigned i = 0; i < 3; i++) want_len += remux_source_emm_descriptor(g.progs[i].rx, want + want_len, sizeof want - want_len);
   ck_assert_uint_eq(want_len, 12u);
 
-  emit_source_cat_passthrough(g.progs, 3, &cc, &g.tsm, collect_cb, &col);
+  emit_source_cat_passthrough(g.progs, 3, &cc, &cv, &g.tsm, collect_cb, &col);
   ck_assert_int_eq(col.count, 1);
   ck_assert_uint_eq(g.tsm.psi_sections_total[PSI_TABLE_CAT], 1ULL);
   ck_assert_uint_eq(g.tsm.psi_errors_total[PSI_TABLE_CAT], 0ULL);
@@ -570,7 +600,7 @@ START_TEST(cat_passthrough_merges_descriptors_of_programs_that_have_one) {
   ck_assert_uint_eq(got_len, want_len);
   ck_assert_mem_eq(got, want, want_len);
 
-  emit_source_cat_passthrough(g.progs, 3, &cc, NULL, collect_cb, &col);
+  emit_source_cat_passthrough(g.progs, 3, &cc, &cv, NULL, collect_cb, &col);
   ck_assert_int_eq(col.count, 2);
   ck_assert_uint_eq(col.pkts[1][3] & 0x0F, (col.pkts[0][3] + 1) & 0x0F);
   rig_free(&g);
@@ -581,12 +611,13 @@ START_TEST(cat_passthrough_skips_when_no_program_carries_emm) {
   rig_t g;
   collect_t col;
   unsigned char cc = 0;
+  psi_ver_track_t cv = {0};
 
   rig_init(&g, 2);
   rig_attach_program(&g, 0, programme_with_emm(101, 0, 0));
   rig_attach_program(&g, 1, programme_with_emm(102, 0, 0));
   memset(&col, 0, sizeof col);
-  emit_source_cat_passthrough(g.progs, 2, &cc, &g.tsm, collect_cb, &col);
+  emit_source_cat_passthrough(g.progs, 2, &cc, &cv, &g.tsm, collect_cb, &col);
   ck_assert_int_eq(col.count, 0);
   ck_assert_uint_eq(g.tsm.psi_sections_total[PSI_TABLE_CAT], 0ULL);
   rig_free(&g);
@@ -597,15 +628,39 @@ START_TEST(cat_passthrough_ignores_programs_that_are_down) {
   rig_t g;
   collect_t col;
   unsigned char cc = 0;
+  psi_ver_track_t cv = {0};
   unsigned char got[64];
 
   rig_init(&g, 2);
   rig_attach_program(&g, 1, programme_with_emm(102, 0x0963, 0x0301));
   memset(&col, 0, sizeof col);
-  emit_source_cat_passthrough(g.progs, 2, &cc, &g.tsm, collect_cb, &col);
+  emit_source_cat_passthrough(g.progs, 2, &cc, &cv, &g.tsm, collect_cb, &col);
   ck_assert_int_eq(col.count, 1);
   ck_assert_uint_eq(cat_descriptors(&col, got, sizeof got), 6u);
   rig_free(&g);
+}
+END_TEST
+
+START_TEST(cat_passthrough_bumps_version_only_on_content_change) {
+  rig_t a, b;
+  collect_t col;
+  unsigned char cc = 0;
+  psi_ver_track_t cv = {0};
+
+  rig_init(&a, 1);
+  rig_init(&b, 1);
+  rig_attach_program(&a, 0, programme_with_emm(101, 0x4A75, 0x0300));
+  rig_attach_program(&b, 0, programme_with_emm(101, 0x0963, 0x0300));
+  memset(&col, 0, sizeof col);
+  emit_source_cat_passthrough(a.progs, 1, &cc, &cv, NULL, collect_cb, &col);
+  emit_source_cat_passthrough(a.progs, 1, &cc, &cv, NULL, collect_cb, &col);
+  emit_source_cat_passthrough(b.progs, 1, &cc, &cv, NULL, collect_cb, &col);
+  ck_assert_int_eq(col.count, 3);
+  ck_assert_uint_eq((section_start(&col, 0)[5] >> 1) & 0x1F, 0u);
+  ck_assert_uint_eq((section_start(&col, 1)[5] >> 1) & 0x1F, 0u);
+  ck_assert_uint_eq((section_start(&col, 2)[5] >> 1) & 0x1F, 1u);
+  rig_free(&a);
+  rig_free(&b);
 }
 END_TEST
 
@@ -683,6 +738,7 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, eit_drain_with_nothing_pending_emits_nothing);
   tcase_add_test(tc, discovery_builds_a_remux_once_pat_and_pmt_arrive);
   tcase_add_test(tc, discovery_gives_up_after_the_timeout);
+  tcase_add_test(tc, silent_source_times_out_without_readable_fd);
   tcase_add_test(tc, discovery_resets_the_slot_when_remux_setup_fails);
   tcase_add_test(tc, feed_splits_a_large_read_across_calls);
   tcase_add_test(tc, feed_keeps_state_when_the_source_has_nothing_yet);
@@ -694,6 +750,7 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, cat_passthrough_merges_descriptors_of_programs_that_have_one);
   tcase_add_test(tc, cat_passthrough_skips_when_no_program_carries_emm);
   tcase_add_test(tc, cat_passthrough_ignores_programs_that_are_down);
+  tcase_add_test(tc, cat_passthrough_bumps_version_only_on_content_change);
   tcase_add_loop_test(tc, run_mpts_sets_up_and_tears_down_for_each_configuration, 0, (int)(sizeof run_cases / sizeof run_cases[0]));
   suite_add_tcase(s, tc);
   return s;

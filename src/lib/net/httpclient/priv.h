@@ -25,7 +25,7 @@ struct http {
   int minor_version;
   struct {
     char name[64];
-    char value[512];
+    char value[2048];
   } hdr[HTTP_HDR_MAX];
   int hdr_count;
   int chunked;

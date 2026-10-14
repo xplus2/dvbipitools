@@ -6,6 +6,8 @@ pkg_check_modules(CHECK REQUIRED IMPORTED_TARGET check)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
+find_package(ZLIB)
+
 function(dvbipitools_add_unit_test name)
     add_executable(test_${name} ${ARGN})
     target_link_libraries(test_${name} PRIVATE PkgConfig::CHECK Threads::Threads)
@@ -1680,6 +1682,11 @@ dvbipitools_add_unit_test(dipiradiohead_id3
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/id3.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
 
+if (ZLIB_FOUND)
+    target_link_libraries(test_dipiradiohead_id3 PRIVATE ZLIB::ZLIB)
+    target_compile_definitions(test_dipiradiohead_id3 PRIVATE DIPIRADIOHEAD_ZLIB)
+endif ()
+
 dvbipitools_add_unit_test(dipiradiohead_icy
     unit/dipiradiohead/test_icy.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/icy.c
@@ -1914,6 +1921,7 @@ dvbipitools_add_unit_test(dipiradiohead_source_async
 dvbipitools_add_unit_test(dipiradiohead_source_frame
     unit/dipiradiohead/input/test_frame.c
     ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open.c
+    ${CMAKE_SOURCE_DIR}/src/dipiradiohead/input/source/open_async.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
@@ -3233,6 +3241,8 @@ dvbipitools_add_unit_test(dipitvhead_emmg_server
 dvbipitools_add_unit_test(dipitvhead_cas
     unit/dipitvhead/test_cas.c
     ${CMAKE_SOURCE_DIR}/src/dipitvhead/cas/cas.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/pcrclock.c
+    ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/timemap.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/ecmg_client.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/protocol.c
@@ -4158,7 +4168,6 @@ dvbipitools_add_unit_test(dipibcg_announce
     ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
-find_package(ZLIB)
 if (ZLIB_FOUND)
     set(DIPIBCG_LISTEN_WRAPPER wrapper.c)
 else ()

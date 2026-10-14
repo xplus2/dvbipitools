@@ -125,14 +125,14 @@ void flush_batch(out_ctx_t *o) {
       if (o->fec_enc) {
         unsigned char repair[FEC2022_MAX_REPAIR];
         size_t rlen = fec2022_enc_feed(o->fec_enc, o->batch, 12 + n, (uint32_t)o->cur_pts, repair, sizeof repair);
-        if (rlen) mcast_send(o->fec_mc, repair, rlen);
+        if (rlen) note_send_result(mcast_send(o->fec_mc, repair, rlen) >= 0, &o->fec_had_error, &o->errors, "fec");
       }
     } else {
       note_send_result(mcast_send(o->mc, o->batch + 12, n) >= 0, &o->mc_had_error, &o->errors, "mcast");
     }
   }
   if (o->rist) note_send_result(ristout_write(o->rist, o->batch + 12, n) >= 0, &o->rist_had_error, &o->errors, "rist");
-  if (o->srt) srtsink_write(o->srt, o->batch + 12, n);
+  if (o->srt) note_send_result(srtsink_write(o->srt, o->batch + 12, n) >= 0, &o->srt_had_error, &o->errors, "srt");
   o->batch_count = 0;
 }
 
@@ -172,6 +172,16 @@ static int single_tsp_new(const config_t *cfg, cas_t *cas, tspacketizer_t **tsp)
   *tsp = tspacketizer_new(&tc);
   if (!*tsp) return -1;
   if (cas) tspacketizer_set_cas(*tsp, cas);
+  return 0;
+}
+
+int radiohead_cas_service(cas_t *cas) {
+  cas_poll(cas);
+  if (cas_failed(cas)) {
+    log_code_ansi("RE300162", "cas: \e[0;31mfatal, stopping\e[0m");
+    return -1;
+  }
+  if (signal_reload_requested()) cas_reload_receivers(cas);
   return 0;
 }
 
@@ -216,12 +226,8 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
     timeline_add(tk->timeline, f.samples, f.sample_rate);
     *tk->pace_deadline += (double)f.samples / (double)f.sample_rate;
     if (tk->cas) {
-      cas_clock_tick(tk->cas, (uint64_t)(now * 90000.0));
-      if (cas_failed(tk->cas)) {
-        log_code_ansi("RE300162", "cas: \e[0;31mfatal, stopping\e[0m");
-        return -2;
-      }
-      if (signal_reload_requested()) cas_reload_receivers(tk->cas);
+      cas_clock_tick(tk->cas, timeline_pts(*tk->timeline));
+      if (radiohead_cas_service(tk->cas)) return -2;
     }
     tspacketizer_feed(*tk->tsp, pts, (uint32_t)((uint64_t)f.samples * 90000ULL / f.sample_rate), now, f.data, f.len, tk->out->insp ? &packet_cb_inspect : &packet_cb, tk->out);
     if (tk->cfg->verbose && now - *tk->last_stat >= 1.0) {
@@ -236,8 +242,8 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
         *tk->last_synced_bytes = sb;
       }
     }
-    emit_metrics(tk->mx, now, tk->out, 1, 1, tk->im, 1, tk->rm, tk->cas);
   }
+  if (frames_this_visit) emit_metrics(tk->mx, now, tk->out, 1, 1, tk->im, 1, tk->rm, tk->cas);
   return 0;
 }
 
@@ -312,7 +318,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     unsigned audio_pid = TSPACKETIZER_PID_AUDIO;
     cas = cas_start(cfg, &audio_pid, 1);
     if (!cas) {
-      log_code("RS300163", "cas: failed to start");
+      log_code_ansi("RS300163", "cas: \e[0;31mfailed to start\e[0m");
       rc = 1;
       goto done;
     }
@@ -346,7 +352,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
 
   while (!signal_stop_requested()) {
     source_t *src;
-    double now;
+    double now, now_pcr;
     time_t now_t;
 
     single_wait(is, pace_deadline, tspacketizer_pcr_next_due(tsp));
@@ -354,6 +360,7 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     radiohead_srt_service(&out);
     now = mono_seconds();
     now_t = time(NULL);
+    out.cur_pts = (uint64_t)(now * 90000.0);
     inputset_service(is, 0, now_t);
     if (out.insp) tsinspect_tick(out.insp, now);
 
@@ -365,6 +372,10 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
       last_synced_bytes = 0;
     }
     was_connected = src != NULL;
+    if (cas && radiohead_cas_service(cas)) {
+      rc = 1;
+      goto done;
+    }
     if (src) {
       int step = process_single_frame(&tk, src);
 
@@ -384,7 +395,9 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
       rc = 1;
       break;
     }
-    if (tspacketizer_pcr_flush(tsp, mono_seconds(), out.insp ? &packet_cb_inspect : &packet_cb, &out)) flush_batch(&out);
+    now_pcr = mono_seconds();
+    out.cur_pts = (uint64_t)(now_pcr * 90000.0);
+    if (tspacketizer_pcr_flush(tsp, now_pcr, out.insp ? &packet_cb_inspect : &packet_cb, &out)) flush_batch(&out);
     if (!src || now > pace_deadline + RADIOHEAD_PACE_TOLERANCE_S) {
       tspacketizer_idle(tsp, now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
       flush_batch(&out);

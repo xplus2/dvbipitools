@@ -5,6 +5,7 @@
 #define DVBIPITOOLS_LIB_MUX_PSI_BUILD_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 /* section framing helpers, shared with tool-private PMT/EIT builders */
 void psi_put16(unsigned char *p, unsigned v);
@@ -39,6 +40,7 @@ typedef struct {
   unsigned service_type;
   const char *provider;
   const char *service_name;
+  unsigned ca_mode; /* free_CA_mode: 1 = scrambled */
 } psi_sdt_entry_t;
 
 size_t psi_sdt_section_count(const psi_sdt_entry_t *services, size_t n_services);
@@ -48,5 +50,15 @@ size_t psi_build_sdt_multi(unsigned version, unsigned tsid, unsigned onid, const
 size_t psi_build_nit(unsigned version, unsigned onid, unsigned tsid, const char *network_name, unsigned char *out, size_t cap);
 /* table_id 0x01, program-level descriptor loop only (CA_descriptor etc). desc/desc_len: NULL/0 if none */
 size_t psi_build_cat(unsigned version, const unsigned char *desc, size_t desc_len, unsigned char *out, size_t cap);
+
+/* version bump on content change only. sec built at version 0 */
+typedef struct {
+  uint32_t sig;
+  unsigned char ver;
+  unsigned char primed;
+} psi_ver_track_t;
+
+/* stamps version into sec[5], recomputes CRC. n: whole section incl. CRC */
+void psi_ver_track_stamp(psi_ver_track_t *t, unsigned char *sec, size_t n);
 
 #endif

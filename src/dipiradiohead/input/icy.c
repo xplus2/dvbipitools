@@ -72,6 +72,22 @@ static void to_utf8(char *dst, size_t cap, const char *src) {
   dst[o] = '\0';
 }
 
+static int is_field_start(const char *p) {
+  const char *q = p;
+  while ((*q >= 'A' && *q <= 'Z') || (*q >= 'a' && *q <= 'z')) q++;
+  return q > p && q[0] == '=';
+}
+
+/* end quote must be followed by ';' then end or next Key= field */
+static char *find_value_end(char *start) {
+  char *p = start;
+  while ((p = strstr(p, "';")) != NULL) {
+    if (p[2] == '\0' || is_field_start(p + 2)) return p;
+    p++;
+  }
+  return NULL;
+}
+
 /* "StreamTitle='...';" -> split on first " - " into artist/title */
 static void handle_meta_block(icy_t *c) {
   const char *tag = "StreamTitle='";
@@ -86,7 +102,7 @@ static void handle_meta_block(icy_t *c) {
   start = strstr((char *)c->meta_buf, tag);
   if (!start) return;
   start += strlen(tag);
-  end = strstr(start, "';");
+  end = find_value_end(start);
   if (!end) return;
   len = (size_t)(end - start);
   if (len >= sizeof c->last_title) len = sizeof c->last_title - 1;

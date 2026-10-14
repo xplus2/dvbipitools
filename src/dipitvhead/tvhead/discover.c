@@ -44,7 +44,7 @@ void print_discovered(const psi_t *psi, unsigned idx) {
   if (*psi_network_name(psi)) log_line_ansi("  NIT: network=\"\e[0;33m%s\e[0m\"", psi_network_name(psi));
 }
 
-/* one non-blocking increment of discovery. 1 ready, 0 still pending, -1 hard error or -p pid
+/* one non-blocking increment of discovery. PMT w/o ES stays pending. 1 ready, 0 still pending, -1 hard error or -p pid
    not in PAT. caller tracks its own timeout and calls psi_select_pmt_pid() up front if wanted. */
 int discover_step(discover_state_t *ds, tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_metrics_t *im) {
   unsigned char buf[65536];
@@ -78,9 +78,15 @@ int discover_step(discover_state_t *ds, tvsrc_t *src, const dipitvhead_input_t *
     }
     ds->checked_pmt_pid = 1;
   }
-  if (psi_ready(psi)) return 1;
+  if (psi_ready(psi)) {
+    int es_n;
+    psi_es(psi, &es_n);
+    if (es_n > 0) return 1;
+  }
   return 0;
 }
+
+#define DISCOVER_WAIT_MS 100
 
 /* 1 ready, 0 timeout, -1 hard error or -p pid not in PAT */
 int discover_insp(tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, input_metrics_t *im, tsinspect_t *insp) {
@@ -92,9 +98,12 @@ int discover_insp(tvsrc_t *src, const dipitvhead_input_t *input, psi_t *psi, inp
     psi_select_pmt_pid(psi, input->pmt_pid);
 
   while (!signal_stop_requested()) {
-    int r = discover_step(&ds, src, input, psi, im);
+    int r;
+    double left = DISCOVERY_TIMEOUT_S - (mono_seconds() - start);
+    if (left <= 0) return 0;
+    if (tvsrc_wait(src, left < DISCOVER_WAIT_MS / 1000.0 ? (int)(left * 1000.0) + 1 : DISCOVER_WAIT_MS) < 0) return -1;
+    r = discover_step(&ds, src, input, psi, im);
     if (r) return r;
-    if (mono_seconds() - start >= DISCOVERY_TIMEOUT_S) return 0;
   }
   return -1;
 }

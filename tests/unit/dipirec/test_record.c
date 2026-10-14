@@ -1453,7 +1453,7 @@ static void fill_mpts_aac_file(const char *path) {
   static const unsigned pmts[] = {MPTS_PMT_A, MPTS_PMT_B};
   static const unsigned audio[] = {MPTS_AUDIO_A, MPTS_AUDIO_B};
   static const psi_pat_entry_t pat[2] = {{1, MPTS_PMT_A}, {2, MPTS_PMT_B}};
-  static const psi_sdt_entry_t sdt[2] = {{1, 0x02, "prov", "svc one"}, {2, 0x02, "prov", "svc two"}};
+  static const psi_sdt_entry_t sdt[2] = {{1, 0x02, "prov", "svc one", 0}, {2, 0x02, "prov", "svc two", 0}};
   unsigned char sec[256];
   unsigned char adts[AAC_FRAME_LEN];
   unsigned char pes[256];

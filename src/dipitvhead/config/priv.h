@@ -9,7 +9,6 @@
 #include "../config.h"
 
 int tvh_set_buf(char *dst, size_t sz, const char *v, char *e, size_t n);
-int tvh_set_pbkeylen(int *dst, const char *v, char *e, size_t n);
 int tvh_set_key_size(int *dst, const char *v, char *e, size_t n);
 int tvh_set_table(table_mode_t *mode, char *text, size_t sz, const char *v, char *e, size_t n);
 int tvh_item_hook(void *c, const char *list, int begin, char *e, size_t n);
@@ -27,6 +26,7 @@ int tvh_apply_input_strip(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_hbbtv(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_hbbtv_org_id(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_hbbtv_app_id(void *c, const char *v, char *e, size_t n);
+int tvh_apply_input_hbbtv_name(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_rist_profile(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_rist_encryption_type(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_passphrase(void *c, const char *v, char *e, size_t n);

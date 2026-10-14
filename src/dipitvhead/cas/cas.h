@@ -80,13 +80,4 @@ size_t cas_resolve_pids(const config_t *cfg, const out_es_t *es, int es_count, u
 /* same, across programs (video/audio keywords resolved per program) */
 size_t cas_resolve_pids_multi(const config_t *cfg, const out_es_t *const *es_lists, const int *es_counts, unsigned n_programs, unsigned *out, size_t cap);
 
-/* ISO/IEC 13818-1 2.4.3.5. 1: filled pcr27. 0: no PCR in packet */
-int cas_parse_pcr(const unsigned char pkt188[188], uint64_t *pcr27);
-
-#define CAS_PCR_MODULUS (((uint64_t)1 << 33) * 300ULL)
-
-/* wraparound-corrects (new-last), sanity-bounds against wall_delta_s (plausibility fence,
-   never primary clock). 1: plausible, fills pcr_delta_s_out. 0: discontinuity */
-int cas_pcr_plausible(uint64_t last_pcr27, uint64_t new_pcr27, double wall_delta_s, double *pcr_delta_s_out);
-
 #endif

@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "lib/demux/bitreader.h"
 
@@ -19,10 +20,14 @@ aac_latm_t *aac_latm_new(void) { return calloc(1, sizeof(struct aac_latm)); }
 
 void aac_latm_free(aac_latm_t *c) { free(c); }
 
+void aac_latm_reset(aac_latm_t *c) { memset(c, 0, sizeof *c); }
+
 int aac_latm_is_sync(const unsigned char *p, size_t avail) {
   if (avail < 2) return 0;
   return p[0] == 0x56 && (p[1] & 0xE0) == 0xE0;
 }
+
+#define AAC_LATM_MAX_RATE 192000u
 
 static unsigned get_audio_object_type(br_t *b) {
   unsigned t = br_u(b, 5);
@@ -66,6 +71,7 @@ static int audio_specific_config(br_t *b, unsigned *sample_rate, unsigned *chann
   if (sr_idx == 0x0F)   *sample_rate = br_u(b, 24);
   else if (sr_idx < 13) *sample_rate = rates[sr_idx];
   else return -1;
+  if (!*sample_rate || *sample_rate > AAC_LATM_MAX_RATE) return -1;
   chcfg = br_u(b, 4);
 
   if (aot == 5 || aot == 29) {
@@ -107,7 +113,12 @@ int aac_latm_probe(aac_latm_t *c, const unsigned char *p, size_t avail, aac_latm
   b.bit = 0;
   b.err = 0;
   if (!br_u(&b, 1)) { /* !useSameStreamMux: fresh StreamMuxConfig follows */
-    if (stream_mux_config(&b, &c->sample_rate, &c->channels, &c->aac_profile_level, &c->num_sub_frames) != 0) return -1;
+    unsigned rate = 0, ch = 0, pl = 0, nsf = 0;
+    if (stream_mux_config(&b, &rate, &ch, &pl, &nsf) != 0) return -1;
+    c->sample_rate = rate;
+    c->channels = ch;
+    c->aac_profile_level = pl;
+    c->num_sub_frames = nsf;
     c->have_config = 1;
   }
   if (!c->have_config) return -1;

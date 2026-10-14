@@ -38,6 +38,7 @@ across every input.
 |      | `--hbbtv`                    | `<url>`                        | none (no AIT sent)                   | per-input |
 |      | `--hbbtv-org-id`             | `<n>`                          | required with `--hbbtv`              | per-input |
 |      | `--hbbtv-app-id`             | `<n>`                          | required with `--hbbtv`              | per-input |
+|      | `--hbbtv-name`               | `<text>`                       | `HbbTV`                              | per-input |
 | `-m` | `--mcast`                    | `<group(6)>:<port>`            | required unless `-R` given           |           |
 | `-O` | `--out-iface`                | `<iface>`                      | kernel route (outgoing)              |           |
 | `-u` | `--udp`                      |                                | off (RTP)                            |           |
@@ -292,7 +293,8 @@ Both would need the same CAT pid, and re-scrambling is not supported.
   This setting alone only logs a warning when content runs more than 2 s ahead of target.
 * `-S`|`--stuff`: add CBR stuffing when behind target, inserted ahead of the next packet and once per poll tick
   (<=100 ms) while idle, at most one tick's worth each.
-* `-B`|`--burst-limit`: sleeps per datagram (7 packets) when ahead of target. In MPTS this stalls the shared loop, so all inputs.
+* `-B`|`--burst-limit`: sleeps per datagram (7 packets) when ahead of target.
+  After an input gap the lag is capped at 100 ms. In MPTS this stalls the shared loop, so all inputs.
 
 The rate holds to the packet position, but departure is datagram-granular: output leaves in 7-packet bursts.
 
@@ -374,8 +376,11 @@ Requires RTP output.
 ### HbbTV signalling (`--hbbtv`)
 
 Injects an AIT (table_id 0x74), one AUTOSTART application: `--hbbtv-org-id`/`--hbbtv-app-id`
-identify it, `--hbbtv` is its entry-point URL (`transport_protocol_descriptor`, protocol_id
-0x0003). Not a passthrough of any source AIT - that references carousel PIDs we don't carry.
+identify it, `--hbbtv` is its entry-point URL: split after the last `/` of the path into
+URL_base (`transport_protocol_descriptor`, protocol_id 0x0003) and initial path
+(`simple_application_location_descriptor`).
+`--hbbtv-name` sets the `application_name_descriptor` text (max 63 bytes, language `und`).
+Not a passthrough of any source AIT - that references carousel PIDs we don't carry.
 
 ### Identifiers (`--tsid`, `--onid`, `--sid`)
 
@@ -386,7 +391,7 @@ integer not already used explicitly by another `-i`; explicit duplicates are a s
 ### Reconnecting (`-e`)
 
 SPTS: no `-e` means any input error stops the tool. `-e <seconds>` reopens after the
-delay.
+delay. An incompatible source PMT change always reconnects at once, with or without `-e`.
 
 MPTS: every input always retries independently. Default: 5 seconds.
 One input being down never stops output for the others. Output socket and

@@ -513,6 +513,15 @@ endif
 
 dipiradiohead_EXTRA_LDFLAGS += $(dipiradiohead_CSA2_EXTRA_LDFLAGS)
 
+ifeq ($(HAVE_ZLIB),yes)
+dipiradiohead_EXTRA_CFLAGS += $(shell pkg-config --cflags zlib) -DDIPIRADIOHEAD_ZLIB
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs zlib)
+else
+dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --libs zlib)
+endif
+endif
+
 # ECMG client thread: pthread is a hard dependency from here on, not optional
 dipiradiohead_EXTRA_CFLAGS += -pthread
 dipiradiohead_EXTRA_LDFLAGS += -pthread
@@ -4062,6 +4071,16 @@ dipiradiohead_id3_SRCS := \
 	tests/unit/dipiradiohead/test_id3.c \
 	src/dipiradiohead/input/id3.c \
 	src/lib/sys/ioutil.c
+ifeq ($(HAVE_ZLIB),yes)
+dipiradiohead_id3_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib) -DDIPIRADIOHEAD_ZLIB
+dipiradiohead_id3_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib)
+dipiradiohead_radiohead_EXTRA_LDFLAGS := $(dipiradiohead_id3_EXTRA_LDFLAGS)
+dipiradiohead_source_async_EXTRA_LDFLAGS := $(dipiradiohead_id3_EXTRA_LDFLAGS)
+dipiradiohead_source_frame_EXTRA_LDFLAGS := $(dipiradiohead_id3_EXTRA_LDFLAGS)
+dipiradiohead_source_hls_EXTRA_LDFLAGS := $(dipiradiohead_id3_EXTRA_LDFLAGS)
+dipiradiohead_inputset_EXTRA_LDFLAGS := $(dipiradiohead_id3_EXTRA_LDFLAGS)
+dipiradiohead_mpts_EXTRA_LDFLAGS := $(dipiradiohead_id3_EXTRA_LDFLAGS)
+endif
 
 dipiradiohead_icy_BIN := tests/unit/dipiradiohead/test_icy
 dipiradiohead_icy_SRCS := \
@@ -4450,6 +4469,7 @@ dipiradiohead_source_frame_BIN := tests/unit/dipiradiohead/input/test_frame
 dipiradiohead_source_frame_SRCS := \
 	tests/unit/dipiradiohead/input/test_frame.c \
 	src/dipiradiohead/input/source/open.c \
+	src/dipiradiohead/input/source/open_async.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -5627,6 +5647,8 @@ dipitvhead_cas_BIN := tests/unit/dipitvhead/test_cas
 dipitvhead_cas_SRCS := \
 	tests/unit/dipitvhead/test_cas.c \
 	src/dipitvhead/cas/cas.c \
+	src/dipitvhead/mux/pcrclock.c \
+	src/dipitvhead/mux/timemap.c \
 	src/lib/sys/ioutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \

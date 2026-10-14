@@ -28,6 +28,13 @@ static int has_duplicate_sid(const config_t *cfg) {
   return 0;
 }
 
+/* ecm/emm pid vs fixed SI PIDs, per-program PMT pids + per-program ES blocks */
+static int cas_pid_collides(unsigned pid, unsigned n_programs) {
+  if (pid == OUT_PID_PAT || pid == OUT_PID_CAT || pid == OUT_PID_NIT || pid == OUT_PID_SDT || pid == OUT_PID_EIT) return 1;
+  if (pid >= OUT_PID_PMT_BASE && pid < OUT_PID_PMT_BASE + n_programs) return 1;
+  return pid >= OUT_PROGRAM_BLOCK_BASE && pid < OUT_PROGRAM_BLOCK_BASE + n_programs * OUT_MAX_ES;
+}
+
 int tvh_cfg_check(const config_t *cfg, int partial, tvh_report_fn rep, void *ud) {
   int fatal = 0;
   unsigned n_rist_in = 0;
@@ -78,13 +85,22 @@ int tvh_cfg_check(const config_t *cfg, int partial, tvh_report_fn rep, void *ud)
     if (in->jitter_ms && in->input.kind != SRC_RTP && in->input.kind != SRC_UDP && in->input.kind != SRC_RIST && in->input.kind != SRC_SRT)
       NOTE("TA000597", "--jitter-ms has no effect, that -i isn't rtp/udp/rist/srt");
     if (in->hbbtv_url && (!in->hbbtv_org_id || !in->hbbtv_app_id)) FATAL("TS000598", "--hbbtv requires --hbbtv-org-id and --hbbtv-app-id");
-    if ((in->hbbtv_org_id || in->hbbtv_app_id) && !in->hbbtv_url) FATAL("TS000599", "--hbbtv-org-id/--hbbtv-app-id need --hbbtv");
+    if ((in->hbbtv_org_id || in->hbbtv_app_id || in->hbbtv_name[0]) && !in->hbbtv_url) FATAL("TS000599", "--hbbtv-org-id/--hbbtv-app-id/--hbbtv-name need --hbbtv");
   }
   if (cfg->any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE && !cfg->biss2_enabled && !cfg->biss1_enabled && !cfg->biss2_ca_enabled)
     FATAL("TS000600", "--cas-* options require --cas-algo (or --cas-pids alone under --biss2-sw/--biss1-sw/--biss2-ca-receivers)");
   if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
     cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms}) != 0)
     fatal++;
+  if (cfg->cas_algo != CAS_ALGO_NONE) {
+    unsigned n_programs = cfg->n_inputs ? cfg->n_inputs : 1;
+    for (unsigned vi = 0; vi < cfg->n_cas_vendors; vi++) {
+      if (cas_pid_collides(cfg->cas_vendors[vi].ecm_pid, n_programs))
+        FATAL("TS000718", "--cas-ecm-pid 0x%04X collides with a PID the muxer emits (PAT, CAT, NIT, SDT, EIT, PMT, program ES block)", cfg->cas_vendors[vi].ecm_pid);
+      if (cas_pid_collides(cfg->cas_vendors[vi].emm_pid, n_programs))
+        FATAL("TS000718", "--cas-emm-pid 0x%04X collides with a PID the muxer emits (PAT, CAT, NIT, SDT, EIT, PMT, program ES block)", cfg->cas_vendors[vi].emm_pid);
+    }
+  }
   if (has_duplicate_sid(cfg)) FATAL("TS000601", "duplicate --sid");
 #undef FATAL
 #undef NOTE

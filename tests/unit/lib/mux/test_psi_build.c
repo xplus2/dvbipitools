@@ -185,7 +185,7 @@ START_TEST(psi_build_sdt_round_trips_through_psi_feed) {
   psi_t *p;
 
   /* service_id 0 deliberately matches psi_t's default program_number(0) so parse_sdt's service_id==program_number gate passes without a PMT */
-  slen = psi_build_sdt(1, 0x1111, 0x2222, 0, 0x01, "MyProvider", "MyService", section, sizeof section);
+  slen = psi_build_sdt(1, 0x1111, 0x2222, 0, 0x19, "MyProvider", "MyService", section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
 
@@ -195,6 +195,7 @@ START_TEST(psi_build_sdt_round_trips_through_psi_feed) {
 
   ck_assert_str_eq(psi_provider_name(p), "MyProvider");
   ck_assert_str_eq(psi_service_name(p), "MyService");
+  ck_assert_uint_eq(psi_service_type(p), 0x19u);
   psi_free(p);
 }
 END_TEST
@@ -207,8 +208,8 @@ START_TEST(psi_build_sdt_multi_round_trips_through_psi_feed) {
   const psi_multi_program_t *progs;
   psi_pat_entry_t entries[2] = {{101, 0x1000}, {102, 0x1001}};
   psi_sdt_entry_t services[2] = {
-      {101, 0x01, "ProviderOne", "Channel One"},
-      {102, 0x01, "ProviderTwo", "Channel Two"},
+      {101, 0x01, "ProviderOne", "Channel One", 0},
+      {102, 0x01, "ProviderTwo", "Channel Two", 0},
   };
 
   slen = psi_build_sdt_multi(1, 0x1111, 0x2222, services, 2, sdtsec, sizeof sdtsec);
@@ -239,7 +240,7 @@ END_TEST
 
 START_TEST(psi_build_sdt_multi_rejects_small_cap) {
   unsigned char section[8];
-  psi_sdt_entry_t services[1] = {{1, 0x01, "P", "S"}};
+  psi_sdt_entry_t services[1] = {{1, 0x01, "P", "S", 0}};
   ck_assert_uint_eq(psi_build_sdt_multi(0, 1, 1, services, 1, section, sizeof section), 0u);
 }
 END_TEST

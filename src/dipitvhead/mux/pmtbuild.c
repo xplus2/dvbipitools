@@ -108,6 +108,28 @@ int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned strip_mask, un
   return n;
 }
 
+void pmtbuild_add_pcr_only(unsigned src_pcr_pid, unsigned es_pid_base, unsigned video_pid, out_es_t *out_es, int *n, int cap, unsigned *pcr_pid, int *dropped) {
+  int non_video = 0;
+
+  if (src_pcr_pid == 0 || src_pcr_pid >= 0x1FFF) return;
+  for (int i = 0; i < *n; i++) {
+    if (out_es[i].in_pid == src_pcr_pid) return;
+    if (out_es[i].out_pid != video_pid) non_video++;
+  }
+  if (*n >= cap) {
+    (*dropped)++;
+    return;
+  }
+  out_es[*n].in_pid = src_pcr_pid;
+  out_es[*n].out_pid = es_pid_base + (unsigned)non_video;
+  out_es[*n].stream_type = 0;
+  out_es[*n].src = NULL;
+  out_es[*n].is_ca = CA_PASS_PCR;
+  out_es[*n].ca_system_id = 0;
+  *pcr_pid = out_es[*n].out_pid;
+  (*n)++;
+}
+
 void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, unsigned emm_pid, unsigned emm_ca_system_id, unsigned es_pid_base, unsigned video_pid, out_es_t *out_es, int *n, int cap, int *dropped) {
   int non_video = 0;
   unsigned next_pid;

@@ -12,13 +12,26 @@
 #include "../../version.h"
 #include "priv.h"
 
+static unsigned resolve_service_type(const psi_t *psi) {
+  int n = 0;
+  int audio = 0;
+  const psi_es_t *es = psi_es(psi, &n);
+  if (psi_service_type(psi)) return psi_service_type(psi);
+  for (int i = 0; i < n; i++) {
+    if (es[i].cls == PID_VIDEO) return 0x01;
+    if (es[i].cls == PID_AUDIO) audio = 1;
+  }
+  return audio ? 0x02 : 0x01;
+}
+
 static void resolve_sdt(remux_t *r, const psi_t *psi) {
+  r->service_type = resolve_service_type(psi);
   if (r->input.sdt_mode == TABLE_DROP) {
     r->send_sdt = 0;
   } else if (r->input.sdt_mode == TABLE_OVERRIDE) {
     const char *prov = r->input.provider_text;
     bufcpy(r->service_name, sizeof r->service_name, r->input.sdt_text);
-    if (!prov[0]) prov = r->cfg.default_provider_text;
+    if (!prov[0]) prov = r->cfg->default_provider_text;
     if (!prov[0]) prov = TOOL_NAME;
     bufcpy(r->provider_name, sizeof r->provider_name, prov);
     r->send_sdt = 1;
@@ -30,10 +43,10 @@ static void resolve_sdt(remux_t *r, const psi_t *psi) {
 }
 
 static void resolve_nit(remux_t *r, const psi_t *psi) {
-  if (r->cfg.nit_mode == TABLE_DROP) {
+  if (r->cfg->nit_mode == TABLE_DROP) {
     r->send_nit = 0;
-  } else if (r->cfg.nit_mode == TABLE_OVERRIDE) {
-    bufcpy(r->network_name, sizeof r->network_name, r->cfg.nit_text);
+  } else if (r->cfg->nit_mode == TABLE_OVERRIDE) {
+    bufcpy(r->network_name, sizeof r->network_name, r->cfg->nit_text);
     r->send_nit = 1;
   } else {
     bufcpy(r->network_name, sizeof r->network_name, psi_network_name(psi));
@@ -52,13 +65,14 @@ static int build_es_map(const remux_t *r, const psi_t *psi, out_es_t *es, unsign
   int count;
   const psi_es_t *in_es = psi_es(psi, &count);
   int n = pmtbuild_map_es(in_es, count, r->input.strip_mask, psi_pcr_pid(psi), r->pids.video_pid, r->pids.es_pid_base, es, OUT_PROGRAM_ES_CAP, pcr_out, dropped);
-  int own_cas = r->cfg.cas_algo != CAS_ALGO_NONE || r->cfg.biss1_enabled || r->cfg.biss2_enabled || r->cfg.biss2_ca_enabled;
+  int own_cas = r->cfg->cas_algo != CAS_ALGO_NONE || r->cfg->biss1_enabled || r->cfg->biss2_enabled || r->cfg->biss2_ca_enabled;
   unsigned ecm_pid = 0;
   unsigned ecm_sysid = 0;
   unsigned emm_pid = 0;
   unsigned emm_sysid = 0;
 
   if (n <= 0) return n;
+  if (r->cfg->pcr_mode != PCR_MODE_REGENERATE && psi_pcr_pid(psi) != psi_pmt_pid(psi)) pmtbuild_add_pcr_only(psi_pcr_pid(psi), r->pids.es_pid_base, r->pids.video_pid, es, &n, OUT_PROGRAM_ES_CAP, pcr_out, dropped);
   if (!own_cas && !(r->input.strip_mask & TVSTRIP_ECM)) {
     if (psi_pmt_ca_pid(psi)) {
       ecm_pid = psi_pmt_ca_pid(psi);
@@ -84,7 +98,8 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
   const unsigned char *pmt_sec;
 
   if (!r) return NULL;
-  r->cfg = *cfg;
+  r->cfg = cfg;
+  for (int i = 0; i < EIT_QUEUE_CAP; i++) r->eit_order[i] = (unsigned char)i;
   r->input = *input;
   r->pids = *pids;
   r->standalone = standalone;
@@ -111,7 +126,7 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
   r->send_ait = r->input.hbbtv_url != NULL;
   if (r->send_ait) {
     r->ait_pmt_entry_len = aitbuild_pmt_entry(r->pids.ait_pid, r->ait_pmt_entry, sizeof r->ait_pmt_entry);
-    r->ait_section_len = aitbuild_ait(0, r->input.hbbtv_org_id, r->input.hbbtv_app_id, r->input.hbbtv_url, r->ait_section, sizeof r->ait_section);
+    r->ait_section_len = aitbuild_ait(0, r->input.hbbtv_org_id, r->input.hbbtv_app_id, r->input.hbbtv_url, r->input.hbbtv_name, r->ait_section, sizeof r->ait_section);
     r->send_ait = r->ait_pmt_entry_len && r->ait_section_len;
     if (!r->send_ait) log_code("TE400200", "--hbbtv: AIT build failed (url too long?)");
   }
@@ -212,7 +227,7 @@ static void keep_out_pids(const remux_t *r, out_es_t *neu, int n) {
 }
 
 static int want_scte(const remux_t *r, const out_es_t *e) {
-  return r->cfg.pcr_mode != PCR_MODE_PRESERVE && e->stream_type == 0x86 && e->is_ca == CA_PASS_NONE;
+  return r->cfg->pcr_mode != PCR_MODE_PRESERVE && e->stream_type == 0x86 && e->is_ca == CA_PASS_NONE;
 }
 
 static void migrate_slots(remux_t *r, const out_es_t *neu, int n) {
@@ -251,20 +266,21 @@ static void migrate_slots(remux_t *r, const out_es_t *neu, int n) {
   memcpy(r->hold_has_tag, has_tag, sizeof has_tag);
 }
 
+static void cas_add_streams(remux_t *r, const out_es_t *es, int n) {
+  unsigned pids[CAS_CORE_MAX_PIDS];
+  size_t np = cas_resolve_pids(r->cfg, es, n, pids, CAS_CORE_MAX_PIDS);
+  size_t failed = np ? cas_add_pids(r->cas, pids, np) : 0;
+  if (failed) log_code("TW300165", "program %u: cas pid set full, %zu new stream%s go out unscrambled", r->src_service_id, failed, failed == 1 ? "" : "s");
+}
+
 static void cas_add_new_streams(remux_t *r, const out_es_t *neu, int n) {
   out_es_t added[OUT_PROGRAM_ES_CAP];
-  unsigned pids[CAS_CORE_MAX_PIDS];
   int na = 0;
-  size_t np;
-  size_t failed;
   if (!r->cas) return;
   for (int i = 0; i < n; i++) {
     if (find_old_es(r, &neu[i]) < 0) added[na++] = neu[i];
   }
-  if (!na) return;
-  np = cas_resolve_pids(&r->cfg, added, na, pids, CAS_CORE_MAX_PIDS);
-  failed = np ? cas_add_pids(r->cas, pids, np) : 0;
-  if (failed) log_code("TW300165", "program %u: cas pid set full, %zu new stream%s go out unscrambled", r->src_service_id, failed, failed == 1 ? "" : "s");
+  if (na) cas_add_streams(r, added, na);
 }
 
 static void remap_es(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm) {
@@ -373,14 +389,20 @@ size_t remux_source_emm_descriptor(const remux_t *r, unsigned char *out, size_t 
   return cadescbuild_ca_descriptor(e->ca_system_id, e->out_pid, out, cap);
 }
 
-void remux_set_cas(remux_t *r, cas_t *cas) { r->cas = cas; }
+void remux_set_cas(remux_t *r, cas_t *cas) {
+  r->cas = cas;
+  if (cas && r->es_count > 0) cas_add_streams(r, r->es, r->es_count);
+}
 
-void remux_set_timemap(remux_t *r, timemap_t *tm) { r->tm = tm; }
+void remux_set_timemap(remux_t *r, timemap_t *tm) {
+  r->tm = tm;
+  if (tm) timemap_arm(tm);
+}
 
 int remux_get_sdt_info(const remux_t *r, psi_sdt_entry_t *out) {
   if (!r->send_sdt) return -1;
   out->service_id = r->input.sid;
-  out->service_type = 0x01;
+  out->service_type = r->service_type;
   out->provider = r->provider_name;
   out->service_name = r->service_name;
   return 0;

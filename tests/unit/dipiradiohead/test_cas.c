@@ -175,6 +175,20 @@ START_TEST(cas_reports_failure_when_the_emmg_port_is_taken) {
 }
 END_TEST
 
+START_TEST(poll_without_frames_neither_fails_nor_starts_the_clock) {
+  config_t cfg;
+  unsigned pids[] = {AUDIO_PID};
+  cas_t *c;
+
+  init_cas_cfg(&cfg, 1);
+  c = cas_start(&cfg, pids, 1);
+  ck_assert_ptr_nonnull(c);
+  for (int i = 0; i < 100; i++) cas_poll(c);
+  ck_assert_int_eq(cas_failed(c), 0);
+  cas_stop(c);
+}
+END_TEST
+
 START_TEST(clock_tick_is_safe_for_every_engine_and_clock_step) {
   config_t cfg;
   unsigned pids[] = {AUDIO_PID};
@@ -341,6 +355,7 @@ static Suite *cas_suite(void) {
   tcase_add_test(tc, cas_start_rejects_too_many_audio_pids);
   tcase_add_loop_test(tc, cas_start_dispatches_each_mode_and_round_trips, 0, (int)(sizeof dispatch_cases / sizeof dispatch_cases[0]));
   tcase_add_test(tc, cas_reports_failure_when_the_emmg_port_is_taken);
+  tcase_add_test(tc, poll_without_frames_neither_fails_nor_starts_the_clock);
   tcase_add_test(tc, clock_tick_is_safe_for_every_engine_and_clock_step);
   tcase_add_test(tc, flush_and_stop_are_safe_in_every_order);
   tcase_add_test(tc, metrics_are_zero_for_missing_or_unstarted_instances);

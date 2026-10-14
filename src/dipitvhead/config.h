@@ -26,6 +26,7 @@ int tvh_cfg_cas_pids(config_t *cfg, const char *s);
 int tvh_cfg_strip(unsigned *mask, const char *s);
 int tvh_cfg_add_peer(config_t *cfg, const char *uri, char *err, size_t errsz);
 int tvh_cfg_profile(config_t *cfg, const char *val, char *err, size_t errsz);
+int tvh_set_pbkeylen(int *dst, const char *v, char *e, size_t n);
 int tvh_cfg_group_mode(config_t *cfg, const char *val, char *err, size_t errsz);
 int tvh_cfg_pcr_mode(config_t *cfg, const char *val, char *err, size_t errsz);
 int tvh_cfg_pcr_lead_ms(config_t *cfg, const char *val, char *err, size_t errsz);

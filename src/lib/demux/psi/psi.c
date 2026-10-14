@@ -286,6 +286,7 @@ int psi_audio_count(const psi_t *c) { return c->audio_count; }
 
 const char *psi_service_name(const psi_t *c) { return c->service_name; }
 const char *psi_provider_name(const psi_t *c) { return c->provider_name; }
+unsigned psi_service_type(const psi_t *c) { return c->service_type; }
 const char *psi_network_name(const psi_t *c) { return c->network_name; }
 
 pid_class_t psi_classify(const psi_t *c, unsigned pid) { return c->class_by_pid[pid]; }

@@ -14,11 +14,13 @@
 #include "../../framer/aac_latm.h"
 #include "../framequeue.h"
 #include "../icy.h"
+#include "../playlist.h"
 #include "../id3.h"
 #include "../source.h"
 
 #define SRC_BUF_CAP 16384
-#define SRC_SNIFF_CAP 2048
+#define SRC_SNIFF_CAP 2048 /* audio: fill target */
+#define SRC_SNIFF_BUF PLAYLIST_SNIFF_CAP /* #EXTM3U bodies: HLS detection needs more */
 #define SRC_MAX_HOPS 5
 #define SRC_STALL_TIMEOUT_S 20.0
 #define SRC_OPEN_TIMEOUT_S 30.0
@@ -42,7 +44,8 @@ struct source {
   unsigned resync_fails;   /* consecutive bad frames, codec re-detected at SRC_REDETECT_FAILS */
   size_t detect_skipped;   /* bytes dropped without a confirmed sync */
   unsigned char buf[SRC_BUF_CAP];
-  size_t buf_len;
+  size_t buf_off; /* consumed prefix, compacted lazily on refill */
+  size_t buf_len; /* valid bytes at buf + buf_off */
   size_t tag_skip; /* oversize ID3 tag bytes still to discard */
   size_t pending_consume; /* last returned frame's byte count, dropped next call */
   unsigned long long bytes_total;
@@ -52,10 +55,16 @@ struct source {
   unsigned prefill_ms;
   int fq_running;   /* 0: filling to prefill_ms before release */
   int fq_resumed;   /* set on release (re)start */
+  int fq_failed;    /* read error latched: drain queue, then fail */
+  net_err_reason_t fq_reason;
   tsinspect_t **insp_slot;
 };
 
 /* h absorbed either way: closed on failure, owned by returned source_t on success */
+static inline size_t src_sniff_want(const unsigned char *b, size_t got) {
+  return playlist_starts_extm3u(b, got) ? SRC_SNIFF_BUF : SRC_SNIFF_CAP;
+}
+
 source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigned char *sniff, size_t got, source_meta_cb cb, void *ctx);
 
 /* NULL on OOM */

@@ -61,6 +61,7 @@ static void add_pmt_candidate(psi_t *c, unsigned prog, unsigned pid) {
       if (n) {
         memcpy(m->provider_name, n->provider_name, PSI_NAME);
         memcpy(m->service_name, n->service_name, PSI_NAME);
+        m->service_type = n->service_type;
       }
       c->multi_count++;
     }
@@ -189,6 +190,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n) {
   if (sn) {
     memcpy(c->provider_name, sn->provider_name, PSI_NAME);
     memcpy(c->service_name, sn->service_name, PSI_NAME);
+    c->service_type = sn->service_type;
   }
   c->pmt_pid = cand->pmt_pid;
   c->pcr_pid = (((unsigned)b[8] & 0x1F) << 8) | b[9];
@@ -298,11 +300,11 @@ void parse_sdt(psi_t *c) {
       memset(cache, 0, sizeof *cache);
       cache->sid = sid;
     }
-    if (cache) decode_service_desc(d, dll, cache->provider_name, cache->service_name);
-    if (sid == c->program_number) decode_service_desc(d, dll, c->provider_name, c->service_name);
+    if (cache) decode_service_desc(d, dll, cache->provider_name, cache->service_name, &cache->service_type);
+    if (sid == c->program_number) decode_service_desc(d, dll, c->provider_name, c->service_name, &c->service_type);
     if (c->multi_mode) {
       int k = find_multi_index(c, sid);
-      if (k >= 0) decode_service_desc(d, dll, c->multi[k].provider_name, c->multi[k].service_name);
+      if (k >= 0) decode_service_desc(d, dll, c->multi[k].provider_name, c->multi[k].service_name, &c->multi[k].service_type);
     }
     i += 5 + dll;
   }

@@ -8,6 +8,7 @@
 
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
+#include "lib/helper/log.h"
 #include "lib/metrics/export.h"
 #include "lib/mux/fec2022.h"
 #include "lib/mux/rtpheader.h"
@@ -66,8 +67,12 @@ typedef struct {
   uint64_t pcr_start_index;
   int pcr_latched;
   out_pcr_pid_t pcr_pids[ARGS_MAX_INPUTS];
+  unsigned char pcr_slot_by_pid[8192]; /* slot+1 of first active slot per pid, 0 none */
+  unsigned pcr_slots;                  /* highest active slot+1 */
   unsigned long long pcr_rewritten;
   unsigned long long pcr_injected;
+  unsigned char cc_seen[8192]; /* 0x10 = seen, low nibble = last payload cc */
+  log_throttle_t cc_gap_throttle;
 } out_ctx_t;
 
 typedef struct {

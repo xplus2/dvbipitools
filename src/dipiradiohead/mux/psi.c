@@ -29,24 +29,26 @@ size_t psi_build_pmt(unsigned version, unsigned program_number, unsigned pcr_pid
     n += prog_desc_len;
   }
 
-  out[n++] = (unsigned char)stream_type;
-  psi_put16(out + n, 0xE000 | (es_pid & 0x1FFF));
-  n += 2;
-  es_info_pos = n;
-  n += 2;
-  out[n++] = 0x0A; /* ISO_639_language_descriptor */
-  out[n++] = 4;
-  memcpy(out + n, lang, 3);
-  n += 3;
-  out[n++] = 0x00; /* audio_type: undefined */
-  if (aac_profile_level) {
-    out[n++] = 0x7C; /* AAC_descriptor */
-    out[n++] = 1;
-    out[n++] = (unsigned char)aac_profile_level;
+  if (stream_type) {
+    out[n++] = (unsigned char)stream_type;
+    psi_put16(out + n, 0xE000 | (es_pid & 0x1FFF));
+    n += 2;
+    es_info_pos = n;
+    n += 2;
+    out[n++] = 0x0A; /* ISO_639_language_descriptor */
+    out[n++] = 4;
+    memcpy(out + n, lang, 3);
+    n += 3;
+    out[n++] = 0x00; /* audio_type: undefined */
+    if (aac_profile_level) {
+      out[n++] = 0x7C; /* AAC_descriptor */
+      out[n++] = 1;
+      out[n++] = (unsigned char)aac_profile_level;
+    }
+    esinfo = (unsigned)(n - (es_info_pos + 2));
+    out[es_info_pos] = (unsigned char)(0xF0 | ((esinfo >> 8) & 0x0F));
+    out[es_info_pos + 1] = (unsigned char)esinfo;
   }
-  esinfo = (unsigned)(n - (es_info_pos + 2));
-  out[es_info_pos] = (unsigned char)(0xF0 | ((esinfo >> 8) & 0x0F));
-  out[es_info_pos + 1] = (unsigned char)esinfo;
   return psi_finish_section(out, n, cap, 0xB0);
 }
 
@@ -63,7 +65,7 @@ unsigned char bcd(unsigned v) { return (unsigned char)((((v / 10) % 10) << 4) | 
    overhead, so event_name (psi_put_text's 0x15 prefix included) must be <=250 */
 #define EIT_MAX_EVENT_NAME 249
 
-size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, unsigned event_id, const char *artist, const char *title, unsigned duration_s, time_t start, unsigned char *out, size_t cap) {
+size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, unsigned event_id, const char *artist, const char *title, unsigned duration_s, time_t start, unsigned ca_mode, unsigned char *out, size_t cap) {
   size_t n = 0, dll_pos, desc_start, dlen_pos, enl_pos, enl;
   unsigned dll, h, m, sec;
   char combined[EIT_MAX_EVENT_NAME + 1];
@@ -84,7 +86,7 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   n += 2;
   psi_put16(out + n, onid);
   n += 2;
-  out[n++] = 0x00; /* segment_last_section_number */
+  out[n++] = 0x01; /* segment_last_section_number */
   out[n++] = 0x4E; /* last_table_id */
 
   psi_put16(out + n, event_id);
@@ -117,7 +119,10 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   alen = psi_utf8_clamp(artist, alen, sizeof combined - 1);
   memcpy(combined, artist, alen);
   o = alen;
-  if (alen && tlen && o + 1 < sizeof combined) combined[o++] = ' ';
+  if (alen && tlen && o + 3 < sizeof combined) {
+    memcpy(combined + o, " - ", 3);
+    o += 3;
+  }
   if (tlen && o < sizeof combined - 1) {
     size_t room = sizeof combined - 1 - o;
     tlen = psi_utf8_clamp(title, tlen, room);
@@ -133,7 +138,7 @@ size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsig
   out[n++] = 0x00; /* text_length: no extended text */
   out[dlen_pos] = (unsigned char)(n - (dlen_pos + 1));
   dll = (unsigned)(n - desc_start);
-  out[dll_pos] = (unsigned char)(0x80 | ((dll >> 8) & 0x0F));
+  out[dll_pos] = (unsigned char)(0x80 | (ca_mode ? 0x10 : 0) | ((dll >> 8) & 0x0F));
   out[dll_pos + 1] = (unsigned char)dll;
   return psi_finish_section(out, n, cap, 0xF0);
 }

@@ -19,16 +19,17 @@ cas_t *tvhead_single_cas_start(const config_t *cfg, const psi_t *psi, const remu
 }
 
 /* rx is already built (discovery succeeded): sets up pacing/cas and runs until this
-   connection ends, then tears rx back down */
-static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi, out_ctx_t *out, remux_t *rx, timemap_t *tm, metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p, tsinspect_t *insp) {
+   connection ends, then tears rx back down. returns 1 if source PMT change forced the end */
+static int run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi, out_ctx_t *out, remux_t *rx, timemap_t *tm, metrics_exporter_t *mx, input_metrics_t *im_p, ts_metrics_t *tsm_p, tsinspect_t *insp) {
   cas_t *cas = NULL;
   int cas_wanted;
+  int reconnect = 0;
 
   out->pacer = bitrate_pacer_new(cfg->bitrate_kbps ? (double)cfg->bitrate_kbps * 1000.0 : 0.0, cfg->stuff, cfg->burst_limit);
   if (!out->pacer) {
     log_code("TS500194", "bitrate pacer setup failed");
     remux_free(rx);
-    return;
+    return 0;
   }
   cas_wanted = cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled;
   if (cas_wanted) {
@@ -42,6 +43,7 @@ static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi
     if (cfg->pcr_mode == PCR_MODE_REGENERATE && remux_set_hold(rx, out_pcr_clock, out_pcr_latch, out, cfg->pcr_lead_ms)) log_code("TS500198", "hold-back queue setup failed");
     out_pcr_pid_set(out, 0, remux_pcr_pid_out(rx));
     run_output(src, rx, out, cfg, cas, mx, im_p, tsm_p, insp);
+    reconnect = remux_reconnect_wanted(rx);
     remux_release(rx, mono_seconds(), packet_cb, out, 1, tsm_p);
     if (cas) cas_flush(cas, packet_cb, out);
     if (cas) cas_stop(cas);
@@ -50,6 +52,7 @@ static void run_single_input(const config_t *cfg, tvsrc_t *src, const psi_t *psi
   bitrate_pacer_free(out->pacer);
   out->pacer = NULL;
   remux_free(rx);
+  return reconnect;
 }
 
 int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
@@ -93,6 +96,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     tvsrc_t *src = tvsrc_open(cfg, &cfg->inputs[0], &reason);
     psi_t *psi;
     int r;
+    int reconnect = 0;
     if (!src) {
       if (metrics_on) {
         im.up = 0;
@@ -132,7 +136,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
       } else {
         remux_set_psi_versions(rx, &psiv);
         remux_set_cc_offsets(rx, &ccm);
-        run_single_input(cfg, src, psi, &out, rx, &tm, mx, im_p, tsm_p, insp_in);
+        reconnect = run_single_input(cfg, src, psi, &out, rx, &tm, mx, im_p, tsm_p, insp_in);
       }
     } else if (r == 0) {
       log_code("TW000616", "no live PMT found within %.0fs (use -p to select one, or check the source)", DISCOVERY_TIMEOUT_S);
@@ -141,6 +145,7 @@ int tvhead_run_single(const config_t *cfg, metrics_exporter_t *mx) {
     tvsrc_close(src);
     if (metrics_on) im.up = 0;
     if (signal_stop_requested()) break;
+    if (reconnect) continue;
     if (cfg->error_retry_s <= 0) {
       rc = 1;
       break;

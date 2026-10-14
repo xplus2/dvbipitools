@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef DIPIRADIOHEAD_ZLIB
+#include <zlib.h>
+#endif
+
 #include "lib/sys/ioutil.h"
 
 #include "id3.h"
@@ -182,27 +186,72 @@ static size_t unsync_inplace(unsigned char *b, size_t len) {
 
 static unsigned be24(const unsigned char *b) { return ((unsigned)b[0] << 16) | ((unsigned)b[1] << 8) | (unsigned)b[2]; }
 
-static void frame_text(const unsigned char *body, size_t len, unsigned fflags, char *out, size_t cap) {
+#ifdef DIPIRADIOHEAD_ZLIB
+#define INFLATE_MAX 4096
+
+/* returns inflated length, 0 on error or overflow */
+static size_t inflate_frame(const unsigned char *in, size_t len, unsigned char *out) {
+  uLongf olen = INFLATE_MAX;
+  if (uncompress(out, &olen, in, (uLong)len) != Z_OK)
+    return 0;
+  return (size_t)olen;
+}
+#endif
+
+/* fflags in v2.4 layout. returns 1 if frame was decoded */
+static int frame_text(const unsigned char *body, size_t len, unsigned fflags, char *out, size_t cap) {
   unsigned char *tmp = NULL;
+#ifdef DIPIRADIOHEAD_ZLIB
+  unsigned char *inf = NULL;
+#endif
   out[0] = '\0';
+#ifdef DIPIRADIOHEAD_ZLIB
+  if (fflags & 0x04)
+    return 0; /* encrypted */
+#else
   if (fflags & 0x0C)
-    return; /* compressed or encrypted */
+    return 0; /* compressed or encrypted */
+#endif
+  if (fflags & 0x40) { /* grouping id */
+    if (len < 1)
+      return 0;
+    body++;
+    len--;
+  }
   if (fflags & 0x01) {
     if (len < 4)
-      return;
+      return 0;
     body += 4;
     len -= 4;
   }
   if (fflags & 0x02) {
     tmp = malloc(len ? len : 1);
     if (!tmp)
-      return;
+      return 0;
     memcpy(tmp, body, len);
     len = unsync_inplace(tmp, len);
     body = tmp;
   }
+#ifdef DIPIRADIOHEAD_ZLIB
+  if (fflags & 0x08) {
+    size_t n;
+    inf = malloc(INFLATE_MAX);
+    n = inf ? inflate_frame(body, len, inf) : 0;
+    if (n == 0) {
+      free(inf);
+      free(tmp);
+      return 0;
+    }
+    body = inf;
+    len = n;
+  }
+#endif
   text_frame(body, len, out, cap);
+#ifdef DIPIRADIOHEAD_ZLIB
+  free(inf);
+#endif
   free(tmp);
+  return 1;
 }
 
 void id3_consume(id3_t *c, const unsigned char *p, size_t taglen) {
@@ -255,6 +304,9 @@ void id3_consume(id3_t *c, const unsigned char *p, size_t taglen) {
       fflags = p[cursor + 9];
       if (flags & 0x80)
         fflags |= 0x02;
+    } else if (version == 3) {
+      unsigned raw = p[cursor + 9];
+      fflags = ((raw & 0x80) ? 0x09 : 0) | ((raw & 0x40) ? 0x04 : 0) | ((raw & 0x20) ? 0x40 : 0);
     }
     fbody = p + cursor + hdr;
     if (fsize > taglen - cursor - hdr)
@@ -265,8 +317,8 @@ void id3_consume(id3_t *c, const unsigned char *p, size_t taglen) {
     else if (!strcmp(id, version == 2 ? "TP1" : "TPE1"))
       dst = artist;
     if (dst) {
-      frame_text(fbody, fsize, fflags, dst, 256);
-      found = 1;
+      if (frame_text(fbody, fsize, fflags, dst, 256))
+        found = 1;
     }
     cursor += hdr + fsize;
   }

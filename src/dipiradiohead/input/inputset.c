@@ -9,9 +9,6 @@
 
 #include "inputset.h"
 
-#define INPUTSET_PMT_PID_BASE 0x1000   /* matches ffmpeg mpegts muxer's pmt_start_pid default */
-#define INPUTSET_AUDIO_PID_BASE 0x0100 /* matches ffmpeg mpegts muxer's start_pid default */
-
 typedef struct {
   const char *uri;
   unsigned idx;
@@ -99,6 +96,11 @@ static void *slot_open_take(void *o) {
   if (s && source_set_prefill_ms(s, w->ctx->jitter_ms) < 0) {
     source_close(s);
     s = NULL;
+    w->ctx->have_resolved = 0;
+    if (w->im) {
+      w->im->up = 0;
+      w->im->errors_total[NET_ERR_OTHER]++;
+    }
   }
   free(w);
   return s;

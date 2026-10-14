@@ -28,6 +28,8 @@ aac_latm_t *aac_latm_new(void) { return latm_new_fails ? NULL : calloc(1, sizeof
 
 void aac_latm_free(aac_latm_t *c) { free(c); }
 
+void aac_latm_reset(aac_latm_t *c) { (void)c; }
+
 int aac_latm_is_sync(const unsigned char *p, size_t avail) { return avail >= 2 && p[0] == 0x56 && (p[1] & 0xE0) == 0xE0; }
 
 int aac_latm_probe(aac_latm_t *c, const unsigned char *p, size_t avail, aac_latm_info_t *info) {
@@ -277,6 +279,26 @@ START_TEST(codec_is_redetected_after_repeated_bad_frames) {
 }
 END_TEST
 
+START_TEST(read_error_plays_out_queued_frames_first) {
+  static unsigned char body[512];
+  rig_t *r = calloc(1, sizeof *r);
+  source_frame_t f;
+  size_t n = 0;
+  int got = 0;
+  int rc;
+
+  if (!r) abort();
+  for (unsigned char m = 0x11; m <= 0x55; m += 0x11) n += put_adts(body + n, m);
+  rig_open(r, body, n);
+  ck_assert_int_eq(source_set_prefill_ms(r->src, 5000), 0);
+  while ((rc = next_frame(r, &f, NULL)) == 1) got++;
+  ck_assert_int_eq(rc, -1);
+  ck_assert_int_ge(got, 4);
+  rig_close(r);
+  free(r);
+}
+END_TEST
+
 static Suite *frame_suite(void) {
   Suite *s = suite_create("frame");
   TCase *tc = tcase_create("core");
@@ -287,6 +309,7 @@ static Suite *frame_suite(void) {
   tcase_add_test(tc, latm_state_allocation_failure_is_a_hard_error);
   tcase_add_test(tc, stray_sync_bytes_do_not_lock_the_wrong_codec);
   tcase_add_test(tc, codec_is_redetected_after_repeated_bad_frames);
+  tcase_add_test(tc, read_error_plays_out_queued_frames_first);
   suite_add_tcase(s, tc);
   return s;
 }

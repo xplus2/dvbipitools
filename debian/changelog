@@ -24,7 +24,10 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + hls
       - #EXT-X-KEY AES128 segment decryption, SAMPLE-AES, foreign KEYFORMAT and encrypted init segments are rejected
       - protocol-relative //host/path URIs resolver fixed (on DASH too)
-    * al-fec recovery fixed
+    + al-fec recovery fixed
+    + http client: handle long uris
+    + sdt writer: service type (auto)
+    + eit: discontinuity fix
   * dipitvhead
     + eit+scte35 input crc32 verification
     + checking scte35 continuation packet adaptation length
@@ -34,16 +37,20 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + PSI table versions get bumped on content change and kept
     + detect tracks added to the source PMT mid-stream
     + teletext+subs descriptors passthrough fixed
-    * --cas-emmg-port becomes --cas-emmg-listen and allows a bind address
+    + --cas-emmg-port becomes --cas-emmg-listen and allows a bind address
+    + added --hbbtv-name
+    + handle empty PMT properly
   * dipiradiohead
     + PMT lost CA descriptors with 5+ CAS vendors
     + shoutcast v1 support
     + ADTS to TS conversion
     + handle 8859-1 icy tags
     + fixed 5s shutdown delay
-    * ID3v2.2 tag support
-    * stabilized generated EIT (+e2e)
-    * --cas-emmg-port becomes --cas-emmg-listen and allows a bind address
+    + ID3v2.2 tag support
+    + stabilized generated EIT (+e2e)
+    + --cas-emmg-port becomes --cas-emmg-listen and allows a bind address
+    + fixed crash on malformed input latm
+    + ID3v2.3 decompression (optional when built with zlib)
   * dipidescramble
     + last cw and ecm/biss-ca keys were not properly wiped
   * dipiscan

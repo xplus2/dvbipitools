@@ -18,6 +18,7 @@ typedef struct {
 
 aac_latm_t *aac_latm_new(void);
 void aac_latm_free(aac_latm_t *c);
+void aac_latm_reset(aac_latm_t *c);
 
 /* LOAS sync 0x2B7 (0x56, top 3 bits of next byte set) at p[0..1] */
 int aac_latm_is_sync(const unsigned char *p, size_t avail);

@@ -12,6 +12,7 @@
 
 #include "../cas/cas.h"
 
+#define TSPACKETIZER_PID_PMT 0x0100   /* default single-program-out pmt pid */
 #define TSPACKETIZER_PID_AUDIO 0x0101 /* default single-program-out audio ES pid */
 
 typedef struct {
@@ -21,7 +22,7 @@ typedef struct {
   const char *network_name; /* "" = no NIT network_name descriptor; pointer must outlive packetizer */
   const char *service_name; /* pointer must outlive packetizer */
   const char *provider_name; /* SDT service_provider_name; NULL or "" = TOOL_NAME. pointer must outlive packetizer */
-  unsigned pmt_pid;   /* 0 = default 0x0100 */
+  unsigned pmt_pid;   /* 0 = default TSPACKETIZER_PID_PMT (0x0100) */
   unsigned audio_pid; /* 0 = default TSPACKETIZER_PID_AUDIO (0x0101) */
   /* 1: self-contained SPTS, emits PAT/CAT/NIT/SDT/EIT/ECM/EMM too (today's behavior).
      0: MPTS program, only PMT+audio PES; mux pulls SDT/EIT via build_sdt()/build_eit(). */

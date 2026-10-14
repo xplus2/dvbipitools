@@ -51,6 +51,8 @@ typedef struct {
   int batch_count;
   int mc_had_error;   /* edge-log gate; a send failure here never stops process */
   int rist_had_error; /* edge-log gate; a write failure here never stops process */
+  int fec_had_error;  /* edge-log gate */
+  int srt_had_error;  /* edge-log gate */
   int srt_connected;  /* edge-log gate for connect/link-down transitions */
   unsigned long long packets;
   unsigned long long errors;
@@ -102,6 +104,10 @@ typedef struct {
   unsigned long long *last_synced_bytes;
 } single_tick_t;
 int process_single_frame(single_tick_t *tk, source_t *src);
+
+/* every loop pass: no-frame grace, failure, SIGHUP reload. -1: cas failed.
+   caller must abort */
+int radiohead_cas_service(cas_t *cas);
 
 /* metrics.c */
 void emit_metrics(metrics_exporter_t *mx, double now, const out_ctx_t *out, unsigned configured_services, unsigned active_services,

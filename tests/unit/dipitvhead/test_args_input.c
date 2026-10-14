@@ -30,6 +30,7 @@ static const opt_case_t BAD_VALUE[] = {
 static const opt_case_t OVERSIZED_VALUE[] = {
   {"-s", NULL},
   {"--provider", NULL},
+  {"--hbbtv-name", NULL},
   {"--srt-passphrase-in", NULL},
   {"--srt-streamid-in", NULL},
   {"--srt-packetfilter-in", NULL},
@@ -45,6 +46,7 @@ static const opt_case_t BEFORE_INPUT[] = {
   {"--hbbtv", "http://app.example/"},
   {"--hbbtv-org-id", "1"},
   {"--hbbtv-app-id", "1"},
+  {"--hbbtv-name", "App"},
   {"--sid", "1"},
   {"--rist-encryption-type-in", "128"},
   {"--rist-profile-in", "main"},
@@ -119,6 +121,7 @@ START_TEST(input_options_fill_the_current_input) {
     "--hbbtv", "http://app.example/",
     "--hbbtv-org-id", "12",
     "--hbbtv-app-id", "34",
+    "--hbbtv-name", "My App",
     "--sid", "56",
     "--jitter-ms", "250",
     NULL};
@@ -137,6 +140,7 @@ START_TEST(input_options_fill_the_current_input) {
   ck_assert_str_eq(in->hbbtv_url, "http://app.example/");
   ck_assert_uint_eq(in->hbbtv_org_id, 12u);
   ck_assert_uint_eq(in->hbbtv_app_id, 34u);
+  ck_assert_str_eq(in->hbbtv_name, "My App");
   ck_assert_uint_eq(in->sid, 56u);
   ck_assert_uint_eq(in->jitter_ms, 250u);
   yamlcfg_strpool_free(cfg.str_pool);

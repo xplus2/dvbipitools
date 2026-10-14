@@ -35,8 +35,6 @@ uint32_t compute_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds,
   return mask;
 }
 
-/* processes one input slot for this poll tick: reads up to RADIOHEAD_MAX_FRAMES_PER_TICK frames,
-   feeds the packetizer, updates metrics. -1: fatal (tspacketizer_new() OOM), caller must abort */
 static void sync_input_bytes(mpts_tick_t *tk, const source_t *src, unsigned i) {
   unsigned long long sb;
 
@@ -48,6 +46,8 @@ static void sync_input_bytes(mpts_tick_t *tk, const source_t *src, unsigned i) {
   }
 }
 
+/* processes one input slot for this tick: reads up to RADIOHEAD_MAX_FRAMES_PER_TICK frames,
+   feeds packetizer, updates metrics. -1: fatal (tspacketizer_new() OOM), caller must abort */
 int process_input_slot(mpts_tick_t *tk, unsigned i) {
   source_t *src;
   int connected_now;
@@ -91,6 +91,7 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
     }
     if (!tk->tsps[i]) {
       tspacketizer_cfg_t tc;
+      memset(&tc, 0, sizeof tc);
       tc.tsid = tk->cfg->tsid;
       tc.onid = tk->cfg->onid;
       tc.sid = inputset_sid(tk->is, i);
@@ -131,6 +132,8 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   void *meta_ctxs[RADIOHEAD_MAX_INPUTS] = {0};
   tspacketizer_t *tsps[RADIOHEAD_MAX_INPUTS];
   uint64_t timeline[RADIOHEAD_MAX_INPUTS];
+  uint64_t cas_prev_pts[RADIOHEAD_MAX_INPUTS]; /* leading input advance drives the shared CAS clock */
+  uint64_t cas_clock = 0;
   double pace_deadline[RADIOHEAD_MAX_INPUTS];
   int was_connected[RADIOHEAD_MAX_INPUTS];
   psi_pat_entry_t entries[RADIOHEAD_MAX_INPUTS];
@@ -153,6 +156,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
   memset(metas, 0, sizeof metas);
   memset(tsps, 0, sizeof tsps);
   memset(timeline, 0, sizeof timeline);
+  memset(cas_prev_pts, 0, sizeof cas_prev_pts);
   memset(pace_deadline, 0, sizeof pace_deadline);
   memset(was_connected, 0, sizeof was_connected);
   memset(input_stats, 0, sizeof input_stats);
@@ -194,7 +198,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     for (unsigned i = 0; i < n; i++) audio_pids[i] = inputset_audio_pid(is, i);
     cas = cas_start(cfg, audio_pids, n);
     if (!cas) {
-      log_code_ansi("RS300161", "cas: \e[0;31mfailed to start\e[0m");
+      log_code_ansi("RS300163", "cas: \e[0;31mfailed to start\e[0m");
       rc = 1;
       goto done;
     }
@@ -290,13 +294,20 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     if (out.insp) tsinspect_tick(out.insp, now);
     mpts_tick(mpts, now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
     if (cas) {
-      cas_clock_tick(cas, (uint64_t)(now * 90000.0));
-      if (cas_failed(cas)) {
-        log_code("RE300162", "cas: \e[0;31mfatal, stopping\e[0m");
+      uint64_t adv = 0;
+      for (unsigned i = 0; i < n; i++) {
+        uint64_t cur = timeline_pts(timeline[i]);
+        if (cur > cas_prev_pts[i] && cur - cas_prev_pts[i] > adv) adv = cur - cas_prev_pts[i];
+        cas_prev_pts[i] = cur;
+      }
+      if (adv) {
+        cas_clock += adv;
+        cas_clock_tick(cas, cas_clock);
+      }
+      if (radiohead_cas_service(cas)) {
         rc = 1;
         goto done;
       }
-      if (signal_reload_requested()) cas_reload_receivers(cas);
     }
     if (cfg->verbose && now - last_stat >= 1.0) {
       fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, out.packets);
@@ -305,7 +316,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     }
     active = 0;
     for (unsigned i = 0; i < n; i++) {
-      if (tsps[i]) active++;
+      if (was_connected[i]) active++;
     }
     emit_metrics(mx, now, &out, n, active, input_stats, n, &rm, cas);
   }

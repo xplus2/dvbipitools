@@ -21,14 +21,49 @@ int timemap_pcr_plausible(uint64_t last27, uint64_t cur27, double wall_delta_s) 
 
 uint64_t timemap_k90(const timemap_t *t) { return t->k90; }
 
-uint64_t timemap_pcr(timemap_t *t, uint64_t src27, double now_s) {
+/* new source on this map: first implausible step relatches at once */
+void timemap_arm(timemap_t *t) { t->arm = 1; }
+
+static uint64_t bridged(const timemap_t *t, double now_s) {
+  double wall = now_s - t->last_wall;
+  uint64_t wall_ticks = wall > 0.0 ? (uint64_t)(wall * (double)PCR_CLOCK_HZ) % PCR_MODULUS : 0;
+  return pcr_add(t->last_out, wall_ticks);
+}
+
+static void relatch_to(timemap_t *t, uint64_t src27, uint64_t out27) {
+  t->k90 = ((pcr_sub(out27, src27) + 150) / 300) % K90_MODULUS;
+  t->relatches++;
+}
+
+/* implausible step: hold offset until next PCR agrees. lone glitch never moves offset */
+uint64_t timemap_pcr_flagged(timemap_t *t, uint64_t src27, double now_s, int disc) {
   uint64_t out;
+  if (t->arm) {
+    disc = 1;
+    t->arm = 0;
+    t->pend = 0;
+  }
+  if (t->pend) {
+    t->pend = 0;
+    if (timemap_pcr_plausible(t->last_src, src27, now_s - t->last_wall)) {
+      t->pcr_glitches++;
+    } else if (timemap_pcr_plausible(t->pend_src, src27, now_s - t->pend_wall)) {
+      relatch_to(t, t->pend_src, t->pend_out);
+      t->last_src = t->pend_src;
+      t->last_out = t->pend_out;
+      t->last_wall = t->pend_wall;
+    }
+  }
   if (t->have_pcr && !timemap_pcr_plausible(t->last_src, src27, now_s - t->last_wall)) {
-    double wall = now_s - t->last_wall;
-    uint64_t wall_ticks = wall > 0.0 ? (uint64_t)(wall * (double)PCR_CLOCK_HZ) % PCR_MODULUS : 0;
-    uint64_t want = pcr_sub(pcr_add(t->last_out, wall_ticks), src27);
-    t->k90 = ((want + 150) / 300) % K90_MODULUS;
-    t->relatches++;
+    out = bridged(t, now_s);
+    if (!disc) {
+      t->pend = 1;
+      t->pend_src = src27;
+      t->pend_out = out;
+      t->pend_wall = now_s;
+      return out;
+    }
+    relatch_to(t, src27, out);
   }
   out = pcr_add(src27, t->k90 * 300ULL);
   t->have_pcr = 1;
@@ -37,6 +72,8 @@ uint64_t timemap_pcr(timemap_t *t, uint64_t src27, double now_s) {
   t->last_wall = now_s;
   return out;
 }
+
+uint64_t timemap_pcr(timemap_t *t, uint64_t src27, double now_s) { return timemap_pcr_flagged(t, src27, now_s, 0); }
 
 #define STAMP_MODULUS ((uint64_t)1 << 33)
 #define JUMP_MAX90 (2 * 90000)

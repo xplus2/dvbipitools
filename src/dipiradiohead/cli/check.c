@@ -9,6 +9,11 @@
 #include "lib/helper/log.h"
 
 #include "priv.h"
+#include "../input/inputset.h"
+#include "../mux/tspacketizer.h"
+
+#define RDH_PID_NIT 0x0010
+#define RDH_PID_SDT 0x0011
 
 static int is_sid_used(const unsigned *used, unsigned n_used, unsigned sid) {
   for (unsigned j = 0; j < n_used; j++) {
@@ -37,6 +42,28 @@ static int assign_missing_sids(config_t *cfg) {
     cfg->inputs[i].sid = next;
     used[n_used++] = next;
     next++;
+  }
+  return 0;
+}
+
+/* ecm/emm pid vs pids by muxer: PAT, NIT, SDT, per-program PMT + audio */
+static int cas_pids_collide(const config_t *cfg) {
+  for (unsigned vi = 0; vi < cfg->n_cas_vendors; vi++) {
+    const unsigned pids[2] = {cfg->cas_vendors[vi].ecm_pid, cfg->cas_vendors[vi].emm_pid};
+    for (unsigned k = 0; k < 2; k++) {
+      unsigned pid = pids[k];
+      int hit = pid == RDH_PID_NIT || pid == RDH_PID_SDT;
+      if (cfg->n_inputs == 1) {
+        hit = hit || pid == TSPACKETIZER_PID_PMT || pid == TSPACKETIZER_PID_AUDIO;
+      } else {
+        hit = hit || (pid >= INPUTSET_AUDIO_PID_BASE && pid < INPUTSET_AUDIO_PID_BASE + cfg->n_inputs) ||
+              (pid >= INPUTSET_PMT_PID_BASE && pid < INPUTSET_PMT_PID_BASE + cfg->n_inputs);
+      }
+      if (hit) {
+        argerr("RS000718", "--cas-%s-pid 0x%04X collides with a PID the muxer emits (PAT, NIT, SDT, PMT, audio)", k ? "emm" : "ecm", pid);
+        return 1;
+      }
+    }
   }
   return 0;
 }
@@ -130,6 +157,7 @@ args_status_t rdh_cli_check(config_t *cfg, const rdh_opt_t *p) {
   if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
     cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms}) != 0)
     return ARGS_ERR;
+  if (cfg->cas_algo != CAS_ALGO_NONE && cas_pids_collide(cfg)) return ARGS_ERR;
   if (assign_missing_sids(cfg) != 0) return ARGS_ERR;
   for (unsigned i = 0; i < cfg->n_inputs; i++) {
     if (cfg->inputs[i].sdt_text[0]) continue;

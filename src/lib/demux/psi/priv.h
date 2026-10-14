@@ -29,6 +29,7 @@ typedef struct {
 
 typedef struct {
   unsigned sid;
+  unsigned service_type; /* 0 = unknown */
   char provider_name[PSI_NAME];
   char service_name[PSI_NAME];
 } sdt_name_t;
@@ -57,6 +58,7 @@ struct psi {
   int ecm_count;
   char service_name[PSI_NAME];
   char provider_name[PSI_NAME];
+  unsigned service_type; /* SDT service_descriptor, 0 = unknown */
   char network_name[PSI_NAME];
   int pat_program_count;
   int pat_version;
@@ -117,7 +119,7 @@ void copy_name(char *dst, size_t dstsz, const unsigned char *src, size_t len);
 void add_ecm(psi_t *c, unsigned pid);
 void classify(psi_es_t *e, const unsigned char *desc, size_t dlen, int hdmv);
 void link_lcevc(psi_es_t *es, int count);
-void decode_service_desc(const unsigned char *d, size_t dll, char *provider_dst, char *service_dst);
+void decode_service_desc(const unsigned char *d, size_t dll, char *provider_dst, char *service_dst, unsigned *type_dst);
 
 /* parse.c */
 void obs_version(psi_t *c, psi_obs_id_t id, const unsigned char *b, pmt_cand_t *cand);

@@ -26,7 +26,7 @@ TSPID=$!
 wait_until 30 udp_port_busy $PORT || fail "tsp capture never bound $PORT"
 
 "$BIN" -O lo -u -m $MCAST:$PORT -i - -s "Ait Channel" \
-    --hbbtv http://example.invalid/app.html --hbbtv-org-id 1 --hbbtv-app-id 2 <"$clip" >"$WORK/dipitvhead.log" 2>&1
+    --hbbtv http://example.invalid/app.html --hbbtv-org-id 1 --hbbtv-app-id 2 --hbbtv-name "Ait App" <"$clip" >"$WORK/dipitvhead.log" 2>&1
 
 sleep 0.5
 kill $TSPID 2>/dev/null
@@ -47,7 +47,9 @@ ait_pid=$(jq -r '[.pids[]? | select(.description | test("AIT")) | .id][0]' "$rep
 tstables --pid "$ait_pid" --tid 0x74 --all-once "$cap" >"$ait" 2>&1
 assert_contains "$ait" "Organization id: 0x00000001" "hbbtv organisation id"
 assert_contains "$ait" "Application id: 0x0002" "hbbtv application id"
-assert_contains "$ait" 'URL base: "http://example.invalid/app.html"' "hbbtv url"
+assert_contains "$ait" 'URL base: "http://example.invalid/"' "hbbtv url base"
+assert_contains "$ait" 'Initial path: "app.html"' "hbbtv initial path"
+assert_contains "$ait" 'name: "Ait App"' "hbbtv application name"
 
 echo "OK"
 

@@ -487,6 +487,131 @@ START_TEST(id3_v24_unsynchronised_frame_is_restored) {
 }
 END_TEST
 
+START_TEST(id3_v23_compressed_frame_is_skipped_or_inflated) {
+  static const unsigned char tag[] = {
+    'I', 'D', '3', 3, 0, 0, 0, 0, 0, 28,
+    'T', 'I', 'T', '2', 0, 0, 0, 18, 0x00, 0x80,
+    0x00, 0x00, 0x00, 0x06,
+    120, 156, 99, 240, 72, 205, 201, 201, 7, 0, 5, 141, 1, 245,
+  };
+  capture_t cap;
+  id3_t *c;
+
+  memset(&cap, 0, sizeof cap);
+  c = id3_new(on_meta, &cap);
+  id3_consume(c, tag, sizeof tag);
+#ifdef DIPIRADIOHEAD_ZLIB
+  ck_assert_int_eq(cap.calls, 1);
+  ck_assert_str_eq(cap.title, "Hello");
+#else
+  ck_assert_int_eq(cap.calls, 0);
+#endif
+  id3_free(c);
+}
+END_TEST
+
+START_TEST(id3_v24_compressed_frame_is_skipped_or_inflated) {
+  static const unsigned char tag[] = {
+    'I', 'D', '3', 4, 0, 0, 0, 0, 0, 28,
+    'T', 'I', 'T', '2', 0, 0, 0, 18, 0x00, 0x09,
+    0x00, 0x00, 0x00, 0x06,
+    120, 156, 99, 240, 72, 205, 201, 201, 7, 0, 5, 141, 1, 245,
+  };
+  capture_t cap;
+  id3_t *c;
+
+  memset(&cap, 0, sizeof cap);
+  c = id3_new(on_meta, &cap);
+  id3_consume(c, tag, sizeof tag);
+#ifdef DIPIRADIOHEAD_ZLIB
+  ck_assert_int_eq(cap.calls, 1);
+  ck_assert_str_eq(cap.title, "Hello");
+#else
+  ck_assert_int_eq(cap.calls, 0);
+#endif
+  id3_free(c);
+}
+END_TEST
+
+START_TEST(id3_corrupt_compressed_frame_is_skipped) {
+  static const unsigned char tag[] = {
+    'I', 'D', '3', 3, 0, 0, 0, 0, 0, 20,
+    'T', 'I', 'T', '2', 0, 0, 0, 10, 0x00, 0x80,
+    0x00, 0x00, 0x00, 0x06,
+    1, 2, 3, 4, 5, 6,
+  };
+  capture_t cap;
+  id3_t *c;
+
+  memset(&cap, 0, sizeof cap);
+  c = id3_new(on_meta, &cap);
+  id3_consume(c, tag, sizeof tag);
+  ck_assert_int_eq(cap.calls, 0);
+  id3_free(c);
+}
+END_TEST
+
+START_TEST(id3_v23_grouping_byte_is_skipped) {
+  static const unsigned char tag[] = {
+    'I', 'D', '3', 3, 0, 0, 0, 0, 0, 26,
+    'T', 'I', 'T', '2', 0, 0, 0, 4, 0x00, 0x20, 0x07, 0x00, 'A', 'B',
+    'T', 'P', 'E', '1', 0, 0, 0, 2, 0, 0, 0x00, 'X',
+  };
+  capture_t cap;
+  id3_t *c;
+
+  memset(&cap, 0, sizeof cap);
+  c = id3_new(on_meta, &cap);
+  id3_consume(c, tag, sizeof tag);
+  ck_assert_int_eq(cap.calls, 1);
+  ck_assert_str_eq(cap.title, "AB");
+  ck_assert_str_eq(cap.artist, "X");
+  id3_free(c);
+}
+END_TEST
+
+START_TEST(id3_v24_grouping_byte_is_skipped) {
+  static const unsigned char tag[] = {
+    'I', 'D', '3', 4, 0, 0, 0, 0, 0, 26,
+    'T', 'I', 'T', '2', 0, 0, 0, 4, 0x00, 0x40, 0x07, 0x00, 'A', 'B',
+    'T', 'P', 'E', '1', 0, 0, 0, 2, 0, 0, 0x00, 'X',
+  };
+  capture_t cap;
+  id3_t *c;
+
+  memset(&cap, 0, sizeof cap);
+  c = id3_new(on_meta, &cap);
+  id3_consume(c, tag, sizeof tag);
+  ck_assert_int_eq(cap.calls, 1);
+  ck_assert_str_eq(cap.title, "AB");
+  ck_assert_str_eq(cap.artist, "X");
+  id3_free(c);
+}
+END_TEST
+
+START_TEST(id3_skipped_frame_does_not_wipe_metadata) {
+  static const unsigned char good[] = {
+    'I', 'D', '3', 4, 0, 0, 0, 0, 0, 24,
+    'T', 'I', 'T', '2', 0, 0, 0, 3, 0, 0, 0x00, 'A', 'B',
+    'T', 'P', 'E', '1', 0, 0, 0, 2, 0, 0, 0x00, 'X',
+  };
+  static const unsigned char enc[] = {
+    'I', 'D', '3', 4, 0, 0, 0, 0, 0, 14,
+    'T', 'I', 'T', '2', 0, 0, 0, 3, 0, 0x04, 0x00, 'A', 'B',
+  };
+  capture_t cap;
+  id3_t *c;
+
+  memset(&cap, 0, sizeof cap);
+  c = id3_new(on_meta, &cap);
+  id3_consume(c, good, sizeof good);
+  id3_consume(c, enc, sizeof enc);
+  ck_assert_int_eq(cap.calls, 1);
+  ck_assert_str_eq(cap.title, "AB");
+  id3_free(c);
+}
+END_TEST
+
 static Suite *id3_suite(void) {
   Suite *s = suite_create("id3");
   TCase *tc = tcase_create("core");
@@ -510,6 +635,12 @@ static Suite *id3_suite(void) {
   tcase_add_test(tc, id3_v22_three_byte_frames_are_parsed);
   tcase_add_test(tc, id3_v23_unsynchronised_tag_is_restored);
   tcase_add_test(tc, id3_v24_unsynchronised_frame_is_restored);
+  tcase_add_test(tc, id3_v23_compressed_frame_is_skipped_or_inflated);
+  tcase_add_test(tc, id3_v24_compressed_frame_is_skipped_or_inflated);
+  tcase_add_test(tc, id3_corrupt_compressed_frame_is_skipped);
+  tcase_add_test(tc, id3_v23_grouping_byte_is_skipped);
+  tcase_add_test(tc, id3_v24_grouping_byte_is_skipped);
+  tcase_add_test(tc, id3_skipped_frame_does_not_wipe_metadata);
   suite_add_tcase(s, tc);
   return s;
 }

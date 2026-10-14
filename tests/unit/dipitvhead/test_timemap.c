@@ -42,8 +42,11 @@ START_TEST(forward_jump_is_bridged_with_wall_clock_progress) {
   timemap_init(&t);
   before = timemap_pcr(&t, TICKS(100), 10.0);
   out = timemap_pcr(&t, TICKS(100) + TICKS(37), 10.04);
-  ck_assert_uint_eq((unsigned)t.relatches, 1u);
+  ck_assert_uint_eq((unsigned)t.relatches, 0u);
   ck_assert_int_le(llabs(signed_diff(out, before) - (int64_t)TICKS(0.04)), 150);
+  out = timemap_pcr(&t, TICKS(100) + TICKS(37.04), 10.08);
+  ck_assert_uint_eq((unsigned)t.relatches, 1u);
+  ck_assert_int_le(llabs(signed_diff(out, before) - (int64_t)TICKS(0.08)), 150);
 }
 END_TEST
 
@@ -54,8 +57,11 @@ START_TEST(backward_jump_is_bridged_with_wall_clock_progress) {
   timemap_init(&t);
   before = timemap_pcr(&t, TICKS(500), 10.0);
   out = timemap_pcr(&t, TICKS(20), 10.04);
-  ck_assert_uint_eq((unsigned)t.relatches, 1u);
+  ck_assert_uint_eq((unsigned)t.relatches, 0u);
   ck_assert_int_le(llabs(signed_diff(out, before) - (int64_t)TICKS(0.04)), 150);
+  out = timemap_pcr(&t, TICKS(20.04), 10.08);
+  ck_assert_uint_eq((unsigned)t.relatches, 1u);
+  ck_assert_int_le(llabs(signed_diff(out, before) - (int64_t)TICKS(0.08)), 150);
 }
 END_TEST
 
@@ -65,11 +71,12 @@ START_TEST(offset_is_kept_after_a_relatch) {
   uint64_t o2;
   timemap_init(&t);
   timemap_pcr(&t, TICKS(100), 10.0);
-  o1 = timemap_pcr(&t, TICKS(5000), 10.04);
-  o2 = timemap_pcr(&t, TICKS(5000) + TICKS(0.04), 10.08);
+  timemap_pcr(&t, TICKS(5000), 10.04);
+  o1 = timemap_pcr(&t, TICKS(5000) + TICKS(0.04), 10.08);
+  o2 = timemap_pcr(&t, TICKS(5000) + TICKS(0.08), 10.12);
   ck_assert_uint_eq((unsigned)t.relatches, 1u);
   ck_assert_uint_eq(pcr_sub(o2, o1), TICKS(0.04));
-  ck_assert_uint_eq(pcr_sub(o2, TICKS(5000) + TICKS(0.04)), timemap_k90(&t) * 300u);
+  ck_assert_uint_eq(pcr_sub(o2, TICKS(5000) + TICKS(0.08)), timemap_k90(&t) * 300u);
 }
 END_TEST
 
@@ -81,6 +88,9 @@ START_TEST(outage_advances_output_by_the_wall_clock_gap) {
   before = timemap_pcr(&t, TICKS(100), 10.0);
   out = timemap_pcr(&t, TICKS(7), 15.0);
   ck_assert_int_le(llabs(signed_diff(out, before) - (int64_t)TICKS(5.0)), 150);
+  out = timemap_pcr(&t, TICKS(7.04), 15.04);
+  ck_assert_uint_eq((unsigned)t.relatches, 1u);
+  ck_assert_int_le(llabs(signed_diff(out, before) - (int64_t)TICKS(5.04)), 150);
 }
 END_TEST
 
@@ -100,6 +110,32 @@ START_TEST(same_instant_samples_use_a_small_step_fence) {
   timemap_pcr(&t, TICKS(100.04), 10.0);
   ck_assert_uint_eq((unsigned)t.relatches, 0u);
   timemap_pcr(&t, TICKS(110), 10.0);
+  timemap_pcr(&t, TICKS(110.04), 10.0);
+  ck_assert_uint_eq((unsigned)t.relatches, 1u);
+}
+END_TEST
+
+START_TEST(lone_glitch_never_moves_the_offset) {
+  timemap_t t;
+  uint64_t src = TICKS(100);
+  timemap_init(&t);
+  for (int i = 0; i < 10; i++) {
+    timemap_pcr(&t, src, 10.0 + i * 0.04);
+    src += TICKS(0.04);
+  }
+  timemap_pcr(&t, TICKS(5000), 10.4);
+  ck_assert_uint_eq(timemap_pcr(&t, src + TICKS(0.04), 10.44), src + TICKS(0.04));
+  ck_assert_uint_eq((unsigned)t.relatches, 0u);
+  ck_assert_uint_eq((unsigned)t.pcr_glitches, 1u);
+  ck_assert_uint_eq(timemap_k90(&t), 0u);
+}
+END_TEST
+
+START_TEST(flagged_discontinuity_relatches_at_once) {
+  timemap_t t;
+  timemap_init(&t);
+  timemap_pcr(&t, TICKS(100), 10.0);
+  timemap_pcr_flagged(&t, TICKS(900), 10.04, 1);
   ck_assert_uint_eq((unsigned)t.relatches, 1u);
 }
 END_TEST
@@ -261,6 +297,8 @@ static Suite *timemap_suite(void) {
   tcase_add_test(tc, offset_stays_within_the_33_bit_range);
   tcase_add_test(tc, same_instant_samples_use_a_small_step_fence);
   tcase_add_test(tc, plausibility_fence_matches_the_documented_bounds);
+  tcase_add_test(tc, lone_glitch_never_moves_the_offset);
+  tcase_add_test(tc, flagged_discontinuity_relatches_at_once);
   tcase_add_test(tc, regen_without_drift_keeps_the_offset_constant);
   tcase_add_test(tc, regen_slow_source_clock_is_compensated_without_steps);
   tcase_add_test(tc, regen_fast_source_clock_is_compensated_without_steps);

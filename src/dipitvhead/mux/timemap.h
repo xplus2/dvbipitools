@@ -13,6 +13,12 @@ typedef struct {
   uint64_t last_out;
   double last_wall;
   unsigned long long relatches;
+  unsigned long long pcr_glitches;
+  int arm;
+  int pend;
+  uint64_t pend_src;
+  uint64_t pend_out;
+  double pend_wall;
   int rg_active;
   int rg_have_last;
   uint64_t rg_last_stamp;
@@ -27,7 +33,9 @@ typedef struct {
 void timemap_init(timemap_t *t);
 int timemap_pcr_plausible(uint64_t last27, uint64_t cur27, double wall_delta_s);
 uint64_t timemap_pcr(timemap_t *t, uint64_t src27, double now_s);
+uint64_t timemap_pcr_flagged(timemap_t *t, uint64_t src27, double now_s, int disc);
 uint64_t timemap_k90(const timemap_t *t);
+void timemap_arm(timemap_t *t);
 
 void timemap_regen_first(timemap_t *t, uint64_t k90);
 int timemap_regen_active(const timemap_t *t);

@@ -41,33 +41,56 @@ int input_poll_ready(unsigned i, uint32_t ready_mask) {
   return (int)((ready_mask >> i) & 1u);
 }
 
+int input_backlog_pending(const mpts_program_t *p) {
+  return p->rx && p->backlog.len > p->backlog.off;
+}
+
+static int discover_begin(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
+  char label[24];
+  if (tk->progs[i].psi) return 0;
+  tk->progs[i].psi = psi_new();
+  if (!tk->progs[i].psi) {
+    log_code_ansi("TW500195", "input \e[1;30m%u\e[0m: \e[0;31mout of memory allocating psi state, retrying next poll\e[0m", i);
+    return -1;
+  }
+  snprintf(label, sizeof label, "input %u discovery", i);
+  psi_set_label(tk->progs[i].psi, label);
+  tk->progs[i].discover_start = mono_seconds();
+  if (tk->insp && tsinspect_wants_rx_ns(tk->insp[i])) tvsrc_enable_rx_timestamps(src);
+  if (tk->cfg->inputs[i].pmt_pid) psi_select_pmt_pid(tk->progs[i].psi, tk->cfg->inputs[i].pmt_pid);
+  return 0;
+}
+
+static void discover_fail(mpts_tick_t *tk, unsigned i) {
+  program_reset(&tk->progs[i]);
+  retryset_mark_down(tk->rs, i, tk->now_t);
+  if (tk->metrics_on) tk->input_stats[i].up = 0;
+}
+
+static void discover_timed_out(mpts_tick_t *tk, unsigned i) {
+  log_code_ansi("TW000614", "input \e[1;30m%u\e[0m: \e[0;31mno live PMT found within %.0fs\e[0m", i, DISCOVERY_TIMEOUT_S);
+  discover_fail(tk, i);
+}
+
+void discover_idle(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
+  if (discover_begin(tk, i, src) != 0) return;
+  if (mono_seconds() - tk->progs[i].discover_start >= DISCOVERY_TIMEOUT_S) discover_timed_out(tk, i);
+}
+
 void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   int r;
   out_program_pids_t pids;
-  if (!tk->progs[i].psi) {
-    tk->progs[i].psi = psi_new();
-    if (!tk->progs[i].psi) {
-      log_code_ansi("TW500195", "input \e[1;30m%u\e[0m: \e[0;31mout of memory allocating psi state, retrying next poll\e[0m", i);
-      return;
-    }
-    {
-      char label[24];
-      snprintf(label, sizeof label, "input %u discovery", i);
-      psi_set_label(tk->progs[i].psi, label);
-    }
-    tk->progs[i].discover_start = mono_seconds();
-    if (tk->insp && tsinspect_wants_rx_ns(tk->insp[i])) tvsrc_enable_rx_timestamps(src);
-    if (tk->cfg->inputs[i].pmt_pid) psi_select_pmt_pid(tk->progs[i].psi, tk->cfg->inputs[i].pmt_pid);
-  }
+  if (discover_begin(tk, i, src) != 0) return;
   tk->progs[i].ds.insp = tk->insp ? tk->insp[i] : NULL;
   tk->progs[i].ds.idx = i;
   r = discover_step(&tk->progs[i].ds, src, &tk->cfg->inputs[i], tk->progs[i].psi, tk->metrics_on ? &tk->input_stats[i] : NULL);
   if (r == 0 && mono_seconds() - tk->progs[i].discover_start < DISCOVERY_TIMEOUT_S) return;
-  if (r <= 0) {
-    if (r == 0) log_code_ansi("TW000614", "input \e[1;30m%u\e[0m: \e[0;31mno live PMT found within %.0fs\e[0m", i, DISCOVERY_TIMEOUT_S);
-    program_reset(&tk->progs[i]);
-    retryset_mark_down(tk->rs, i, tk->now_t);
-    if (tk->metrics_on) tk->input_stats[i].up = 0;
+  if (r == 0) {
+    discover_timed_out(tk, i);
+    return;
+  }
+  if (r < 0) {
+    discover_fail(tk, i);
     return;
   }
 
@@ -98,7 +121,7 @@ static int fc_insp_ready(const mpts_tick_t *tk, unsigned i) {
   return tk->insp && tk->insp[i];
 }
 
-void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
+int feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   feed_ctx_t fc;
   read_backlog_t *bl = &tk->progs[i].backlog;
   size_t remaining = bl->len - bl->off;
@@ -114,9 +137,9 @@ void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
       program_reset(&tk->progs[i]);
       retryset_mark_down(tk->rs, i, tk->now_t);
       if (tk->metrics_on) tk->input_stats[i].up = 0;
-      return;
+      return 0;
     }
-    if (rn == 0) return;
+    if (rn == 0) return 0;
     if (fc_insp_ready(tk, i)) {
       tsinspect_set_rx_ns(tk->insp[i], tvsrc_last_rx_ns(src));
       tsinspect_set_buffer_ms(tk->insp[i], tvsrc_buffer_ms(src));
@@ -142,10 +165,11 @@ void feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
     program_reset(&tk->progs[i]);
     retryset_mark_down(tk->rs, i, tk->now_t);
     if (tk->metrics_on) tk->input_stats[i].up = 0;
-    return;
+    return 0;
   }
   if (bl->off >= bl->len) {
     bl->off = 0;
     bl->len = 0;
   }
+  return 1;
 }

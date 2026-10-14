@@ -99,9 +99,13 @@ void cas_stop(cas_t *c) {
 
 int cas_failed(const cas_t *c) { return cas_core_failed(&c->core); }
 
+void cas_poll(cas_t *c) {
+  if (c->core.biss_engine || c->core.biss_ca) return;
+  cas_group_tick_alive(c->core.group);
+}
+
 void cas_clock_tick(cas_t *c, uint64_t pts_90k) {
   if (c->core.biss_engine) return; /* fixed-key BISS: no crypto period */
-  if (!c->core.biss_ca) cas_group_tick_alive(c->core.group);
   if (!c->have_clock) {
     c->have_clock = 1;
     if (c->core.biss_ca)

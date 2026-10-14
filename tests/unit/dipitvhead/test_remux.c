@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dipitvhead/cas/cas.h"
 #include "dipitvhead/mux/pcrclock.h"
 #include "dipitvhead/mux/pesstamp.h"
 #include "dipitvhead/mux/remux.h"
@@ -188,6 +189,71 @@ START_TEST(remux_forwards_mapped_es_and_sends_pat_pmt_on_first_feed) {
   ck_assert_uint_eq(g_cc[video_idx], 0u); /* source cc kept */
 
   remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+static void emit_discard(void *ctx, const unsigned char *pkt) {
+  (void)ctx;
+  (void)pkt;
+}
+
+START_TEST(remux_set_cas_registers_existing_es_pids) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  psi_es_t pe;
+  out_es_t seed;
+  const out_es_t *lists[1];
+  int counts[1] = {1};
+  unsigned char pkt[188];
+  cas_metrics_t before;
+  cas_metrics_t after;
+  cas_t *c;
+
+  base_cfg(&cfg);
+  base_input(&input);
+  cfg.cas_algo = CAS_ALGO_CSA2;
+  cfg.cas_cp_duration_ms = 10000;
+  cfg.cas_pids_video = 1;
+  cfg.cas_pid_count = 1;
+  cfg.cas_pids[0] = 0x0999;
+  cfg.n_cas_vendors = 1;
+  strcpy(cfg.cas_vendors[0].ecmg_host, "127.0.0.1");
+  cfg.cas_vendors[0].ecmg_port = 1;
+  cfg.cas_vendors[0].super_cas_id = (0x4A75u << 16) | 0x0001u;
+  cfg.cas_vendors[0].ecm_id = 1;
+  cfg.cas_vendors[0].ecm_pid = 0x1FF0;
+  cfg.cas_vendors[0].emm_pid = 0x1FF1;
+  memset(&pe, 0, sizeof pe);
+  memset(&seed, 0, sizeof seed);
+  seed.out_pid = 0x0999;
+  seed.src = &pe;
+  lists[0] = &seed;
+  c = cas_start_multi(&cfg, lists, counts, 1);
+  ck_assert_ptr_nonnull(c);
+
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+
+  memset(pkt, 0xFF, sizeof pkt);
+  pkt[0] = 0x47;
+  pkt[1] = 0x01;
+  pkt[2] = 0x00;
+  pkt[3] = 0x10;
+  cas_scramble_packet(c, 0x0100, 1.0, pkt, emit_discard, NULL);
+  cas_get_metrics(c, &before);
+  remux_set_cas(r, c);
+  cas_scramble_packet(c, 0x0100, 2.0, pkt, emit_discard, NULL);
+  cas_get_metrics(c, &after);
+  ck_assert_uint_gt(after.unexpected_clear_packets_total, before.unexpected_clear_packets_total);
+
+  remux_set_cas(r, NULL);
+  remux_free(r);
+  cas_stop(c);
   psi_free(psi);
 }
 END_TEST
@@ -537,18 +603,21 @@ START_TEST(remux_rebase_shifts_pcr_and_timestamps_by_one_offset_after_a_source_j
 
   write_pcr_packet(pkt, 0x0101, 2, 27000000ULL * 5000);
   remux_feed(r, 0.04, pkt, capture_last_cb, NULL, NULL);
+  ck_assert_uint_eq((unsigned)tm.relatches, 0u);
+  write_pcr_packet(pkt, 0x0101, 3, 27000000ULL * 5000 + 1080000);
+  remux_feed(r, 0.08, pkt, capture_last_cb, NULL, NULL);
   pcr_after = last_pcr();
   ck_assert_uint_eq((unsigned)tm.relatches, 1u);
   {
-    int64_t err = (int64_t)(pcr_after - pcr_before) - (int64_t)(27000000ULL * 4 / 100);
+    int64_t err = (int64_t)(pcr_after - pcr_before) - (int64_t)(27000000ULL * 8 / 100);
     ck_assert_int_le((int)(err < 0 ? -err : err), 150);
   }
 
   k90 = timemap_k90(&tm);
-  write_pes_packet(pkt, 0x0101, 3, 123456789);
-  remux_feed(r, 0.05, pkt, capture_last_cb, NULL, NULL);
+  write_pes_packet(pkt, 0x0101, 4, 123456789);
+  remux_feed(r, 0.09, pkt, capture_last_cb, NULL, NULL);
   ck_assert_uint_eq(last_pts(), (123456789ULL + k90) % ((uint64_t)1 << 33));
-  ck_assert_uint_eq(pcr_sub(pcr_after, 27000000ULL * 5000), k90 * 300u);
+  ck_assert_uint_eq(pcr_sub(pcr_after, 27000000ULL * 5000 + 1080000), k90 * 300u);
 
   remux_free(r);
   psi_free(psi);
@@ -579,13 +648,15 @@ START_TEST(remux_rebase_applies_the_same_offset_to_every_elementary_stream) {
   remux_feed(r, 0.0, pkt, capture_last_cb, NULL, NULL);
   write_pcr_packet(pkt, 0x0101, 1, 27000000ULL * 900);
   remux_feed(r, 0.04, pkt, capture_last_cb, NULL, NULL);
+  write_pcr_packet(pkt, 0x0101, 2, 27000000ULL * 900 + 1080000);
+  remux_feed(r, 0.08, pkt, capture_last_cb, NULL, NULL);
   ck_assert_uint_eq((unsigned)tm.relatches, 1u);
 
-  write_pes_packet(pkt, 0x0101, 2, 1000000);
-  remux_feed(r, 0.05, pkt, capture_last_cb, NULL, NULL);
+  write_pes_packet(pkt, 0x0101, 3, 1000000);
+  remux_feed(r, 0.09, pkt, capture_last_cb, NULL, NULL);
   video_pts = last_pts();
   write_pes_packet(pkt, 0x0102, 0, 1000000);
-  remux_feed(r, 0.05, pkt, capture_last_cb, NULL, NULL);
+  remux_feed(r, 0.09, pkt, capture_last_cb, NULL, NULL);
   audio_pts = last_pts();
   ck_assert_uint_eq(video_pts, audio_pts);
   ck_assert_uint_ne(video_pts, 1000000u);
@@ -1279,6 +1350,43 @@ START_TEST(remux_uses_the_video_pid_as_pcr_pid_when_the_source_has_none) {
 }
 END_TEST
 
+START_TEST(remux_forwards_a_pcr_only_pid_in_preserve_and_rebase) {
+  static const pcr_mode_t modes[] = {PCR_MODE_PRESERVE, PCR_MODE_REBASE};
+  for (size_t m = 0; m < sizeof modes / sizeof modes[0]; m++) {
+    unsigned char pkts[2][188];
+    unsigned char pkt[188];
+    psi_t *psi = psi_new();
+    config_t cfg;
+    dipitvhead_input_t input;
+    out_program_pids_t pids;
+    timemap_t tm;
+    remux_t *r;
+
+    fixture_programme_packets(1, 0x0200, 0x1B, 0x0300, pkts);
+    psi_feed(psi, pkts[0]);
+    psi_feed(psi, pkts[1]);
+    base_cfg(&cfg);
+    cfg.pcr_mode = modes[m];
+    base_input(&input);
+    out_program_pids(0, &pids);
+    r = remux_new(&cfg, &input, psi, &pids, 1);
+    ck_assert_ptr_nonnull(r);
+    ck_assert_uint_ne(remux_pcr_pid_out(r), pids.video_pid);
+    if (modes[m] == PCR_MODE_REBASE) {
+      timemap_init(&tm);
+      remux_set_timemap(r, &tm);
+    }
+    memset(g_last, 0, sizeof g_last);
+    write_pcr_packet(pkt, 0x0200, 0, 27000000ULL * 100);
+    remux_feed(r, 0.0, pkt, capture_last_cb, NULL, NULL);
+    ck_assert_uint_eq((unsigned)(((g_last[1] & 0x1F) << 8) | g_last[2]), remux_pcr_pid_out(r));
+    ck_assert_uint_eq(last_pcr(), 27000000ULL * 100);
+    remux_free(r);
+    psi_free(psi);
+  }
+}
+END_TEST
+
 START_TEST(remux_rebase_counts_rewrites_retimed_skipped_and_relatches) {
   psi_t *psi = build_discovery_psi();
   config_t cfg;
@@ -1303,13 +1411,15 @@ START_TEST(remux_rebase_counts_rewrites_retimed_skipped_and_relatches) {
   remux_feed(r, 0.0, pkt, capture_last_cb, NULL, &tsm);
   write_pcr_packet(pkt, 0x0101, 1, 27000000ULL * 5000);
   remux_feed(r, 0.04, pkt, capture_last_cb, NULL, &tsm);
-  write_pes_packet(pkt, 0x0101, 2, 9000000);
-  remux_feed(r, 0.05, pkt, capture_last_cb, NULL, &tsm);
+  write_pcr_packet(pkt, 0x0101, 2, 27000000ULL * 5000 + 1080000);
+  remux_feed(r, 0.08, pkt, capture_last_cb, NULL, &tsm);
   write_pes_packet(pkt, 0x0101, 3, 9000000);
+  remux_feed(r, 0.09, pkt, capture_last_cb, NULL, &tsm);
+  write_pes_packet(pkt, 0x0101, 4, 9000000);
   pkt[3] |= 0x80;
-  remux_feed(r, 0.06, pkt, capture_last_cb, NULL, &tsm);
+  remux_feed(r, 0.10, pkt, capture_last_cb, NULL, &tsm);
 
-  ck_assert_uint_eq((unsigned)tsm.pcr_rewritten_total, 2u);
+  ck_assert_uint_eq((unsigned)tsm.pcr_rewritten_total, 3u);
   ck_assert_uint_eq((unsigned)tsm.retime_relatches_total, 1u);
   ck_assert_uint_eq((unsigned)tsm.pes_retimed_total, 1u);
   ck_assert_uint_eq((unsigned)tsm.pes_retime_skipped_total, 1u);
@@ -1934,6 +2044,7 @@ START_TEST(remux_get_sdt_info_returns_service_regardless_of_mode) {
   ck_assert_int_eq(remux_get_sdt_info(r, &info), 0);
   ck_assert_uint_eq(info.service_id, input.sid);
   ck_assert_str_eq(info.service_name, "Test Service");
+  ck_assert_uint_eq(info.service_type, 0x01u);
 
   remux_free(r);
   psi_free(psi);
@@ -2113,6 +2224,71 @@ START_TEST(remux_non_standalone_eit_spans_ticks_when_bounded) {
 }
 END_TEST
 
+START_TEST(remux_non_standalone_eit_update_does_not_clobber_section_in_flight) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  unsigned char pkt[2][188];
+  unsigned char single[188];
+  unsigned char old_sec[300], new_sec[300], got[300];
+  unsigned char cc = 0;
+  size_t old_len, new_len, off;
+
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 0);
+  ck_assert_ptr_nonnull(r);
+
+  old_len = build_fake_eit_section(old_sec, 101, 0x00, 200); /* 2 packets */
+  memset(pkt, 0xFF, sizeof pkt);
+  pkt[0][0] = 0x47;
+  pkt[0][1] = 0x40;
+  pkt[0][2] = 0x12;
+  pkt[0][3] = 0x10;
+  pkt[0][4] = 0x00;
+  memcpy(pkt[0] + 5, old_sec, 183);
+  pkt[1][0] = 0x47;
+  pkt[1][1] = 0x00;
+  pkt[1][2] = 0x12;
+  pkt[1][3] = 0x11;
+  memcpy(pkt[1] + 4, old_sec + 183, old_len - 183);
+  for (size_t i = 0; i < 2; i++)
+    remux_feed(r, 0.0, pkt[i], capture_cb, NULL, NULL);
+
+  g_eit_count = 0;
+  ck_assert_uint_eq(remux_emit_eit(r, 0x0012, &cc, 1, eit_capture_cb, NULL), 1u);
+  ck_assert_int_eq(remux_eit_mid_section(r), 1);
+
+  new_len = build_fake_eit_section(new_sec, 101, 0x00, 20); /* same key, shorter */
+  new_sec[10] ^= 0xFF;
+  be32_put(new_sec + new_len - 4, crc32_mpeg(new_sec, new_len - 4));
+  wrap_eit_packet(single, new_sec, new_len);
+  remux_feed(r, 0.0, single, capture_cb, NULL, NULL);
+
+  ck_assert_uint_eq(remux_emit_eit(r, 0x0012, &cc, 1, eit_capture_cb, NULL), 1u);
+  ck_assert_int_eq(g_eit_count, 2);
+  memcpy(got, g_eit_pkts[0] + 5, 183);
+  off = ((g_eit_pkts[1][3] >> 4) & 0x3) == 3 ? 5 + (size_t)g_eit_pkts[1][4] : 4;
+  memcpy(got + 183, g_eit_pkts[1] + off, old_len - 183);
+  rewrite_eit_expected(old_sec, old_len, &cfg, &input);
+  ck_assert_mem_eq(got, old_sec, old_len);
+
+  ck_assert_int_eq(remux_eit_pending(r), 1); /* update queued behind it */
+  g_eit_count = 0;
+  ck_assert_uint_eq(remux_emit_eit(r, 0x0012, &cc, 1, eit_capture_cb, NULL), 1u);
+  rewrite_eit_expected(new_sec, new_len, &cfg, &input);
+  off = ((g_eit_pkts[0][3] >> 4) & 0x3) == 3 ? 5 + (size_t)g_eit_pkts[0][4] : 4;
+  ck_assert_mem_eq(g_eit_pkts[0] + off + 1, new_sec, new_len);
+  ck_assert_int_eq(remux_eit_pending(r), 0);
+
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
 START_TEST(remux_non_standalone_eit_drops_other_service_ids) {
   psi_t *psi = build_discovery_psi();
   config_t cfg;
@@ -2132,6 +2308,71 @@ START_TEST(remux_non_standalone_eit_drops_other_service_ids) {
   wrap_eit_packet(pkt, section, 23);
   remux_feed(r, 0.0, pkt, capture_cb, NULL, NULL);
   ck_assert_int_eq(remux_eit_pending(r), 0);
+
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+static void feed_eit(remux_t *r, unsigned char table_id, unsigned char section_number, ts_metrics_t *tsm) {
+  unsigned char pkt[188];
+  unsigned char section[40];
+
+  build_fake_eit_section(section, 101, section_number, 20);
+  section[0] = table_id;
+  be32_put(section + 23 - 4, crc32_mpeg(section, 23 - 4));
+  wrap_eit_packet(pkt, section, 23);
+  remux_feed(r, 0.0, pkt, capture_cb, NULL, tsm);
+}
+
+START_TEST(remux_non_standalone_eit_drops_other_ts_table_ids) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 0);
+  ck_assert_ptr_nonnull(r);
+
+  feed_eit(r, 0x4F, 0, NULL);
+  feed_eit(r, 0x60, 0, NULL);
+  feed_eit(r, 0x6F, 0, NULL);
+  ck_assert_int_eq(remux_eit_pending(r), 0);
+  feed_eit(r, 0x50, 0, NULL);
+  ck_assert_int_eq(remux_eit_pending(r), 1);
+
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+START_TEST(remux_non_standalone_eit_present_following_evicts_schedule) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  ts_metrics_t tsm;
+
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 0);
+  ck_assert_ptr_nonnull(r);
+  memset(&tsm, 0, sizeof tsm);
+
+  for (int i = 0; i < 16; i++)
+    feed_eit(r, 0x50, (unsigned char)i, &tsm);
+  ck_assert_uint_eq(tsm.eit_queue_drops_total, 0u);
+  feed_eit(r, 0x4E, 0, &tsm);
+  ck_assert_uint_eq(tsm.eit_queue_drops_total, 1u);
+  ck_assert_int_eq(remux_eit_pending(r), 1);
+  feed_eit(r, 0x50, 16, &tsm); /* schedule into full queue still dropped */
+  ck_assert_uint_eq(tsm.eit_queue_drops_total, 2u);
 
   remux_free(r);
   psi_free(psi);
@@ -2594,11 +2835,13 @@ static Suite *remux_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, remux_forwards_mapped_es_and_sends_pat_pmt_on_first_feed);
   tcase_add_test(tc, remux_es_exposes_output_pid_mapping);
+  tcase_add_test(tc, remux_set_cas_registers_existing_es_pids);
   tcase_add_test(tc, remux_keeps_source_cc_including_duplicates_and_gaps);
   tcase_add_test(tc, remux_cc_offsets_continue_counter_across_reconnect_without_flag);
   tcase_add_test(tc, remux_feed_counts_ts_packets_and_sync_errors);
   tcase_add_test(tc, remux_feed_detects_continuity_gap_and_signaled_discontinuity);
   tcase_add_test(tc, remux_feed_detects_pcr_discontinuity_on_source_pcr_pid);
+  tcase_add_test(tc, remux_forwards_a_pcr_only_pid_in_preserve_and_rebase);
   tcase_add_test(tc, remux_rebase_shifts_pcr_and_timestamps_by_one_offset_after_a_source_jump);
   tcase_add_test(tc, remux_rebase_applies_the_same_offset_to_every_elementary_stream);
   tcase_add_test(tc, remux_without_rebase_mode_leaves_timestamps_alone);
@@ -2644,7 +2887,10 @@ static Suite *remux_suite(void) {
   tcase_add_test(tc, remux_get_sdt_info_fails_when_sdt_dropped);
   tcase_add_test(tc, remux_non_standalone_emits_reassembled_eit);
   tcase_add_test(tc, remux_non_standalone_eit_spans_ticks_when_bounded);
+  tcase_add_test(tc, remux_non_standalone_eit_update_does_not_clobber_section_in_flight);
   tcase_add_test(tc, remux_non_standalone_eit_drops_other_service_ids);
+  tcase_add_test(tc, remux_non_standalone_eit_drops_other_ts_table_ids);
+  tcase_add_test(tc, remux_non_standalone_eit_present_following_evicts_schedule);
   tcase_add_test(tc, remux_non_standalone_eit_queues_distinct_sections);
   tcase_add_loop_test(tc, remux_source_ca_passthrough_descriptors_follow_source_and_strip_settings, 0, (int)(sizeof ca_source_cases / sizeof ca_source_cases[0]));
   tcase_add_loop_test(tc, remux_eit_section_content_survives_every_path, 0, 7);

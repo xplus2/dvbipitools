@@ -68,6 +68,11 @@ int tvh_apply_input_hbbtv(void *c, const char *v, char *e, size_t n) {
   return in ? yamlcfg_set_str(&cfg->str_pool, &in->hbbtv_url, v, e, n) : -1;
 }
 
+int tvh_apply_input_hbbtv_name(void *c, const char *v, char *e, size_t n) {
+  dipitvhead_input_t *in = tvh_cur_input(c, e, n);
+  return in ? tvh_set_buf(in->hbbtv_name, sizeof in->hbbtv_name, v, e, n) : -1;
+}
+
 int tvh_apply_input_hbbtv_org_id(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
   return in ? yamlcfg_set_uint(&in->hbbtv_org_id, v, 1, UINT_MAX, e, n) : -1;

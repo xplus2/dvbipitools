@@ -44,6 +44,24 @@ START_TEST(meta_cb_copies_artist_and_title_and_marks_dirty) {
 }
 END_TEST
 
+START_TEST(meta_cb_truncates_on_utf8_boundary) {
+  meta_state_t m;
+  char two[601], three[601];
+  size_t i;
+  memset(&m, 0, sizeof m);
+  for (i = 0; i + 2 <= 600; i += 2) memcpy(two + i, "\xC3\xA9", 2);
+  two[i] = '\0';
+  for (i = 0; i + 3 <= 600; i += 3) memcpy(three + i, "\xE2\x82\xAC", 3);
+  three[i] = '\0';
+
+  meta_cb(&m, two, three);
+  ck_assert_uint_eq(strlen(m.artist), 254u);
+  ck_assert_uint_eq(strlen(m.title), 255u);
+  ck_assert_uint_eq((unsigned char)m.artist[strlen(m.artist) - 1], 0xA9u);
+  ck_assert_uint_eq((unsigned char)m.title[strlen(m.title) - 1], 0xACu);
+}
+END_TEST
+
 START_TEST(meta_cb_tolerates_null_metrics) {
   meta_state_t m;
   memset(&m, 0, sizeof m);
@@ -832,6 +850,7 @@ static Suite *radiohead_suite(void) {
   tcase_set_timeout(tc, 10);
   tcase_add_test(tc, meta_cb_copies_artist_and_title_and_marks_dirty);
   tcase_add_test(tc, meta_cb_tolerates_null_metrics);
+  tcase_add_test(tc, meta_cb_truncates_on_utf8_boundary);
   tcase_add_test(tc, source_codec_name_maps_every_known_codec);
   tcase_add_test(tc, packet_cb_batches_until_ts_per_dgram_then_flushes);
   tcase_add_test(tc, flush_batch_is_a_no_op_when_empty);

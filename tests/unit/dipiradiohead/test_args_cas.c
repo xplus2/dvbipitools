@@ -123,11 +123,11 @@ START_TEST(vendor_options_fill_the_current_vendor) {
     "--cas-ecmg-version", "3",
     "--cas-super-id", "0x12345678",
     "--cas-ecm-id", "7",
-    "--cas-ecm-pid", "0x0100",
+    "--cas-ecm-pid", "0x0200",
     "--cas-emmg-listen", "9000",
     "--cas-emmg-version", "2",
     "--cas-emmg-max-conns", "4",
-    "--cas-emm-pid", "0x0101",
+    "--cas-emm-pid", "0x0201",
     "--cas-resilience", "cycling",
     "--cas-required",
     "--cas-cp-duration", "5000",
@@ -144,12 +144,12 @@ START_TEST(vendor_options_fill_the_current_vendor) {
   ck_assert_uint_eq(v->ecmg_version, 3u);
   ck_assert_uint_eq(v->super_cas_id, 0x12345678u);
   ck_assert_uint_eq(v->ecm_id, 7u);
-  ck_assert_uint_eq(v->ecm_pid, 0x0100u);
+  ck_assert_uint_eq(v->ecm_pid, 0x0200u);
   ck_assert_uint_eq(v->emmg_port, 9000u);
   ck_assert_int_eq(v->emmg_listen_given, 1);
   ck_assert_uint_eq(v->emmg_version, 2u);
   ck_assert_uint_eq(v->emmg_max_conns, 4u);
-  ck_assert_uint_eq(v->emm_pid, 0x0101u);
+  ck_assert_uint_eq(v->emm_pid, 0x0201u);
   ck_assert_int_eq(v->resilience, CAS_OUTAGE_CYCLING);
   ck_assert_int_eq(v->required, 1);
   ck_assert_uint_eq(cfg.cas_cp_duration_ms, 5000u);
@@ -282,6 +282,55 @@ START_TEST(biss1_sw_enables_and_stores_key) {
 }
 END_TEST
 
+static const opt_case_t MUXER_PID_SINGLE[] = {
+  {"--cas-ecm-pid", "0x0010"},
+  {"--cas-ecm-pid", "0x0011"},
+  {"--cas-ecm-pid", "0x0100"},
+  {"--cas-ecm-pid", "0x0101"},
+  {"--cas-emm-pid", "0x0010"},
+  {"--cas-emm-pid", "0x0011"},
+  {"--cas-emm-pid", "0x0100"},
+  {"--cas-emm-pid", "0x0101"},
+};
+
+static const opt_case_t MUXER_PID_MULTI[] = {
+  {"--cas-ecm-pid", "0x0100"},
+  {"--cas-ecm-pid", "0x0101"},
+  {"--cas-ecm-pid", "0x1000"},
+  {"--cas-ecm-pid", "0x1001"},
+  {"--cas-emm-pid", "0x0100"},
+  {"--cas-emm-pid", "0x0101"},
+  {"--cas-emm-pid", "0x1000"},
+  {"--cas-emm-pid", "0x1001"},
+};
+
+START_TEST(single_input_muxer_pid_collision_is_rejected) {
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_fixture_parse_with(&cfg, VENDOR, &MUXER_PID_SINGLE[_i]), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(multi_input_muxer_pid_collision_is_rejected) {
+  const char *prefix[] = {"-i", "http://b", "--cas-algo", "csa2", "--cas-ecmg", "ecmg.example:1234", "--cas-super-id", "0x1234", "--cas-ecm-id", "7", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_fixture_parse_with(&cfg, prefix, &MUXER_PID_MULTI[_i]), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(single_input_uses_second_program_pids_freely) {
+  const char *extra[] = {"--cas-algo", "csa2", "--cas-ecmg", "ecmg.example:1234", "--cas-super-id", "0x1234", "--cas-ecm-id", "7",
+                         "--cas-ecm-pid", "0x1000", "--cas-emm-pid", "0x0102", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 static Suite *args_cas_suite(void) {
   Suite *s = suite_create("dipiradiohead_args_cas");
   TCase *tc = tcase_create("core");
@@ -300,6 +349,9 @@ static Suite *args_cas_suite(void) {
   tcase_add_test(tc, biss2_sw_enables_and_stores_key);
   tcase_add_test(tc, biss2_emit_esw_stores_id_with_sw);
   tcase_add_test(tc, biss1_sw_enables_and_stores_key);
+  tcase_add_loop_test(tc, single_input_muxer_pid_collision_is_rejected, 0, (int)ARRAY_LEN(MUXER_PID_SINGLE));
+  tcase_add_loop_test(tc, multi_input_muxer_pid_collision_is_rejected, 0, (int)ARRAY_LEN(MUXER_PID_MULTI));
+  tcase_add_test(tc, single_input_uses_second_program_pids_freely);
   suite_add_tcase(s, tc);
   return s;
 }

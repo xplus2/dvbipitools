@@ -36,6 +36,7 @@ struct mpts {
   unsigned ver_pat;
   unsigned ver_nit;
   unsigned ver_sdt;
+  psi_ver_track_t cat_ver;
   uint32_t sdt_sig;  /* crc of composed service list - version bumps only on real change, EN 300 468 5.2.3 */
   int sdt_primed;    /* 0 until the first composite SDT has actually gone out */
   double last_pat;
@@ -85,7 +86,7 @@ mpts_t *mpts_new(unsigned tsid, unsigned onid, const char *network_name, const p
 void mpts_free(mpts_t *m) { free(m); }
 
 void mpts_set_program(mpts_t *m, unsigned idx, void *program_ctx) {
-  if (idx >= m->n_programs) return;
+  if (idx >= m->n_programs || m->program_ctx[idx] == program_ctx) return;
   m->program_ctx[idx] = program_ctx;
   m->last_sdt = -1.0; /* active set changed: force immediate composite-SDT resend */
   if (!program_ctx)
@@ -114,6 +115,7 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
   }
   if (m->cas_ops && due_s(now_s, &m->last_cat, MPTS_INTERVAL_PAT_CAT)) {
     n = m->cas_ops->build_cat(m->cas_ctx, sec, sizeof sec);
+    psi_ver_track_stamp(&m->cat_ver, sec, n);
     if (n)
       count += ts_packet_emit(0x0001, &m->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);
   }
@@ -126,7 +128,9 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
     unsigned n_sdt = 0;
     for (unsigned i = 0; i < m->n_programs; i++) {
       void *pctx = m->program_ctx[i];
-      if (pctx && m->program_ops->get_sdt_info(pctx, &sdt_entries[n_sdt]) == 0) n_sdt++;
+      if (!pctx) continue;
+      memset(&sdt_entries[n_sdt], 0, sizeof sdt_entries[n_sdt]);
+      if (m->program_ops->get_sdt_info(pctx, &sdt_entries[n_sdt]) == 0) n_sdt++;
     }
     if (n_sdt) {
       uint32_t sig = 0;

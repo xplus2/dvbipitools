@@ -31,8 +31,9 @@ typedef struct {
    ait_pid moves off old 0x0020 default (collided with default --cas-ecm-pid) to per-program block */
 void out_program_pids(unsigned idx, out_program_pids_t *out);
 
-/* neither passthrough kind gets its own PMT stream_type entry */
-typedef enum { CA_PASS_NONE, CA_PASS_ECM, CA_PASS_EMM } ca_pass_t;
+/* none of the non-NONE kinds gets its own PMT stream_type entry. CA_PASS_PCR: source PCR pid
+   without an ES, carried only so the PCR survives */
+typedef enum { CA_PASS_NONE, CA_PASS_ECM, CA_PASS_EMM, CA_PASS_PCR } ca_pass_t;
 
 typedef struct {
   unsigned in_pid;  /* source pid, for remux's packet -> out_es_t lookup */
@@ -48,8 +49,12 @@ typedef struct {
    retval: count, *pcr_pid = mapped output pid of PCR ES (or first ES fallback), *dropped = supported ES beyond cap, left unmapped */
 int pmtbuild_map_es(const psi_es_t *in_es, int in_count, unsigned strip_mask, unsigned src_pcr_pid, unsigned video_pid, unsigned es_pid_base, out_es_t *out_es, int cap, unsigned *pcr_pid, int *dropped);
 
+/* src_pcr_pid carried by no out_es[0..n): appends a CA_PASS_PCR entry at next free pid, *pcr_pid = its out pid.
+   no-op if src_pcr_pid is 0/0x1FFF or already mapped */
+void pmtbuild_add_pcr_only(unsigned src_pcr_pid, unsigned es_pid_base, unsigned video_pid, out_es_t *out_es, int *n, int cap, unsigned *pcr_pid, int *dropped);
+
 /* appends up to 2 synthetic out_es[] entries (CA_PASS_ECM/CA_PASS_EMM), ECM/EMM at next free pid
-   after out_es[0..n). ecm_pid/emm_pid 0 = none. same cap/overflow bookkeeping as pmtbuild_map_es(). */
+   after out_es[0..n). ecm_pid/emm_pid 0 = none */
 void pmtbuild_add_ca_passthrough(unsigned ecm_pid, unsigned ecm_ca_system_id, unsigned emm_pid, unsigned emm_ca_system_id, unsigned es_pid_base, unsigned video_pid, out_es_t *out_es, int *n, int cap, int *dropped);
 
 /* build multi-ES PMT section. prog_desc/prog_desc_len: program_info descriptor bytes (e.g. cadescbuild_ca_descriptor()), NULL/0 if none.
