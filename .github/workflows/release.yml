@@ -122,7 +122,7 @@ jobs:
           echo "deb [arch=${{ matrix.dpkgarch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-security main universe restricted multiverse"
         } | sudo tee /etc/apt/sources.list.d/ports-${{ matrix.dpkgarch }}.list
         sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/ports-${{ matrix.dpkgarch }}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
-        sudo apt-get install -y libssl-dev:${{ matrix.dpkgarch }}
+        sudo apt-get install -y libssl-dev:${{ matrix.dpkgarch }} zlib1g-dev:${{ matrix.dpkgarch }} libzstd-dev:${{ matrix.dpkgarch }} libjitterentropy3-dev:${{ matrix.dpkgarch }}
     - name: build librist (static, ubuntu ports arch)
       if: matrix.container == ''
       run: |
@@ -162,7 +162,7 @@ jobs:
       if: matrix.container == ''
       run: |
         CROSS_ARGS="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_LIBRARY_ARCHITECTURE=${{ matrix.triplet }}"
-        TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a"
+        TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include;/usr/include/${{ matrix.triplet }} -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a"
         export PKG_CONFIG_PATH="${{ github.workspace }}/librist-static/lib/pkgconfig:${{ github.workspace }}/srt-static/lib/pkgconfig:/usr/lib/${{ matrix.triplet }}/pkgconfig:$PKG_CONFIG_PATH"
         cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS $TLS_ARGS
     - name: make (ubuntu ports arch)
@@ -267,7 +267,7 @@ jobs:
           - arch: armel
             triplet: arm-linux-gnueabi
             sysproc: arm
-            crosspkg: crossbuild-essential-armel
+            crosspkg: gcc-arm-linux-gnueabi g++-arm-linux-gnueabi libc6-dev-armel-cross
             mesoncpu: arm
           - arch: armhf
             triplet: arm-linux-gnueabihf
@@ -295,7 +295,7 @@ jobs:
     - name: build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libssl-dev ${{ matrix.crosspkg }}
+        sudo apt-get install -y build-essential cmake libssl-dev zlib1g-dev libzstd-dev libjitterentropy3-dev ${{ matrix.crosspkg }}
         case "${{ matrix.arch }}" in
           i386|armel|amd64) ;;
           *)
@@ -307,7 +307,7 @@ jobs:
               echo "deb [arch=${{ matrix.arch }}] http://ports.ubuntu.com/ubuntu-ports $CODENAME-security main universe restricted multiverse"
             } | sudo tee /etc/apt/sources.list.d/ports-${{ matrix.arch }}.list
             sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/ports-${{ matrix.arch }}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
-            sudo apt-get install -y libssl-dev:${{ matrix.arch }}
+            sudo apt-get install -y libssl-dev:${{ matrix.arch }} zlib1g-dev:${{ matrix.arch }} libzstd-dev:${{ matrix.arch }} libjitterentropy3-dev:${{ matrix.arch }}
             ;;
         esac
     - name: build librist (static)
@@ -340,8 +340,8 @@ jobs:
     - name: build mbedtls (static, armel)
       if: matrix.arch == 'armel'
       run: |
-        curl -sSLf "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.2/mbedtls-3.6.2.tar.bz2" | tar xj -C /tmp
-        cmake -S /tmp/mbedtls-3.6.2 -B /tmp/mbedtls-build -DCMAKE_BUILD_TYPE=Release \
+        curl -sSLf "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2" | tar xj -C /tmp
+        cmake -S /tmp/mbedtls-3.6.7 -B /tmp/mbedtls-build -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/mbedtls-static -DENABLE_PROGRAMS=OFF -DENABLE_TESTING=OFF \
           -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} \
           -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc
@@ -388,7 +388,7 @@ jobs:
         case "${{ matrix.arch }}" in
           i386|armel) TLS_ARGS="-DDVBIPITOOLS_TLS=OFF -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON" ;;
           amd64) ;;
-          *) TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a" ;;
+          *) TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include;/usr/include/${{ matrix.triplet }} -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a" ;;
         esac
         export PKG_CONFIG_PATH="${{ github.workspace }}/librist-static/lib/pkgconfig:${{ github.workspace }}/srt-static/lib/pkgconfig:${FOREIGN_PKGCONFIG}$PKG_CONFIG_PATH"
         cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS $TLS_ARGS

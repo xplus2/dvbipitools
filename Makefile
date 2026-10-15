@@ -322,7 +322,7 @@ src/lib/helper/pipereader.c \
 src/lib/net/rist/ristpeer.c
 dipirec_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipirec_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+dipirec_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
 dipirec_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
@@ -336,7 +336,7 @@ src/lib/helper/pipereader.c \
 	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
 dipirec_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipirec_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt)
+dipirec_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt) -latomic
 else
 dipirec_EXTRA_LDFLAGS += $(shell pkg-config --libs srt)
 endif
@@ -531,7 +531,7 @@ dipiradiohead_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristlog.c 
 src/lib/net/rist/ristpeer.c
 dipiradiohead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
 dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
@@ -543,7 +543,7 @@ ifeq ($(HAVE_SRT),yes)
 dipiradiohead_SRT_SRC := src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
 dipiradiohead_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt)
+dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt) -latomic
 else
 dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --libs srt)
 endif
@@ -718,7 +718,7 @@ src/lib/helper/pipereader.c \
 src/lib/net/rist/ristpeer.c
 dipitvhead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
 dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
@@ -732,7 +732,7 @@ src/lib/helper/pipereader.c \
 	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
 dipitvhead_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt)
+dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt) -latomic
 else
 dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --libs srt)
 endif
@@ -1005,7 +1005,7 @@ src/lib/helper/pipereader.c \
 src/lib/net/rist/ristpeer.c
 dipidescramble_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
 dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
@@ -1019,7 +1019,7 @@ src/lib/helper/pipereader.c \
 	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
 dipidescramble_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt)
+dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt) -latomic
 else
 dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --libs srt)
 endif
@@ -1169,7 +1169,7 @@ ifeq ($(HAVE_RIST),yes)
 TOOLS += dipirist
 dipirist_EXTRA_CFLAGS := $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipirist_EXTRA_LDFLAGS := $(shell pkg-config --static --libs librist)
+dipirist_EXTRA_LDFLAGS := $(shell pkg-config --static --libs librist) -latomic
 else
 dipirist_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
 endif
@@ -1203,7 +1203,7 @@ dipirist_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c src/lib/net
 src/lib/helper/pipereader.c
 dipirist_EXTRA_CFLAGS += -pthread $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipirist_EXTRA_LDFLAGS += -pthread $(shell pkg-config --static --libs srt)
+dipirist_EXTRA_LDFLAGS += -pthread $(shell pkg-config --static --libs srt) -latomic
 else
 dipirist_EXTRA_LDFLAGS += -pthread $(shell pkg-config --libs srt)
 endif
@@ -1302,7 +1302,7 @@ ifeq ($(HAVE_SRT),yes)
 TOOLS += dipisrt
 dipisrt_EXTRA_CFLAGS := -pthread $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipisrt_EXTRA_LDFLAGS := -pthread $(shell pkg-config --static --libs srt)
+dipisrt_EXTRA_LDFLAGS := -pthread $(shell pkg-config --static --libs srt) -latomic
 else
 dipisrt_EXTRA_LDFLAGS := -pthread $(shell pkg-config --libs srt)
 endif
@@ -1333,7 +1333,7 @@ src/lib/helper/pipereader.c \
 src/lib/net/rist/ristpeer.c
 dipisrt_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipisrt_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+dipisrt_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
 dipisrt_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
@@ -1460,7 +1460,7 @@ src/lib/helper/pipereader.c \
 src/lib/net/rist/ristpeer.c
 dipixy_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist)
+dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --libs librist)
 endif
@@ -1474,7 +1474,7 @@ src/lib/helper/pipereader.c \
 	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
 dipixy_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
-dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt)
+dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt) -latomic
 else
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --libs srt)
 endif
