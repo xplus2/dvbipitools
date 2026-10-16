@@ -2,11 +2,13 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "lib/helper/log.h"
+#include "lib/sys/signal.h"
 #include "../channel/channel.h"
 #include "../listen.h"
 #include "../version.h"
@@ -17,6 +19,8 @@
 
 #define FCC_ASSUMED_MAX_BITRATE_BPS 20000000.0
 #define FCC_ASSUMED_TS_PACKET_BYTES 1316.0
+
+#define RET_RING_MAX_SLOTS 65536 /* ring indexed by 16-bit seq, more is dead weight */
 
 static size_t cache_cap_from_gop_ms(unsigned gop_cap_ms) {
   double packets_per_sec = FCC_ASSUMED_MAX_BITRATE_BPS / 8.0 / FCC_ASSUMED_TS_PACKET_BYTES;
@@ -39,13 +43,14 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   ratelimit_t *fcc_limiter = NULL;
   capture_t *cap = NULL;
   char errbuf[256];
-  ret_send_ctx_t ret_send_ctx = {NULL, -1};
-  ret_send_ctx_t rsi_send_ctx = {NULL, -1};
+  ret_send_ctx_t ret_send_ctx = {NULL};
+  ret_send_ctx_t rsi_send_ctx = {NULL};
   dispatch_ctx_t dispatch_ctx;
   listen_pool_t *pool = NULL;
   listen_multi_t *resolve_pool = NULL;
   unsigned resolve_base_port;
   int rc = 0;
+  int rsi_mc = 0;
   unsigned cpu_next = 0;
   pacer_ctx_t pacer_ctx;
   pthread_t pacer_thread;
@@ -58,7 +63,8 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   int metrics_started = 0;
 
   max_channels = cfg->max_channels ? cfg->max_channels : CHANNEL_DEFAULT_MAX;
-  ring_slots = cfg->no_ret ? 0 : cfg->buffer_ms; /* ring_slots ~= buffer_ms: ~1 packet/ms assumption */
+  ring_slots = cfg->no_ret ? 0 : cfg->buffer_ms; /* 1 slot per ms, ~1000 packets/s */
+  if (ring_slots > RET_RING_MAX_SLOTS) ring_slots = RET_RING_MAX_SLOTS;
   cache_cap = cfg->no_fcc ? 0 : cache_cap_from_gop_ms(cfg->gop_cap_ms);
   channels = channel_table_new(max_channels, ring_slots, cache_cap);
   if (!channels) {
@@ -78,7 +84,9 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   if (!cfg->no_ret && !cfg->no_rsi) {
     if (cfg->listen_family == AF_INET6) {
       log_code("FA700140", TOOL_NAME ": RSI self-announcement needs an IPv4 -l address (F.5.3 IPv6 unicast feedback is not supported in DVB), disabling it");
-    } else if (!cfg->rsi_mc_ret) {
+    } else if (cfg->rsi_mc_ret) {
+      rsi_mc = mt != NULL;
+    } else {
       rsi_mt = mcsend_table_new(max_channels, cfg->iface, MC_SEND_TTL);
       if (!rsi_mt) {
         log_code("FS500183", "%s: out of memory allocating RSI announcement table", TOOL_NAME);
@@ -108,12 +116,7 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
 
   cap = open_capture(cfg, errbuf, sizeof errbuf);
   if (!cap) {
-    log_code("FS500186", "%s: %s", TOOL_NAME, errbuf);
-    rc = 1;
-    goto cleanup;
-  }
-  if (capture_drop_privileges(cfg->user) != 0) {
-    log_code("FS300157", "%s: failed to drop privileges to -u %s", TOOL_NAME, cfg->user);
+    log_code("FS500186", "%s: cannot open capture: %s", TOOL_NAME, errbuf);
     rc = 1;
     goto cleanup;
   }
@@ -144,7 +147,7 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
     .mt = mt,
     .ff_port = cfg->ff_port,
     .rsi_mt = rsi_mt,
-    .rsi_active = rsi_mt != NULL || (cfg->rsi_mc_ret && mt != NULL),
+    .rsi_active = rsi_mt != NULL || rsi_mc,
     .ret = ret,
     .bursts = bursts,
     .burst_multiplier = cfg->burst_multiplier,
@@ -180,8 +183,14 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
     }
   }
 
+  if (capture_drop_privileges(cfg->user) != 0) { /* after all binds: -l below 1024 needs root */
+    log_code("FS300157", "%s: failed to drop privileges to -u %s", TOOL_NAME, cfg->user);
+    rc = 1;
+    goto cleanup;
+  }
+
   if (bursts) {
-    pacer_ctx = (pacer_ctx_t){.bursts = bursts, .duration_cap_ms = cfg->duration_cap_ms, .cpuaff = &cfg->cpu_affinity, .cpu_idx = cpu_next++};
+    pacer_ctx =(pacer_ctx_t){.bursts = bursts, .duration_cap_ms = cfg->duration_cap_ms, .cpuaff = &cfg->cpu_affinity, .cpu_idx = cpu_next++};
     if (pthread_create(&pacer_thread, NULL, pacer_main, &pacer_ctx) != 0) {
       log_code("FS500191", "%s: failed to start burst pacing thread", TOOL_NAME);
       rc = 1;
@@ -190,7 +199,7 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
     pacer_started = 1;
   }
 
-  if (rsi_mt || (cfg->rsi_mc_ret && mt)) {
+  if (rsi_mt || rsi_mc) {
     if (!cfg->rsi_mc_ret) rsi_send_ctx.mt = rsi_mt;
     rsi_ctx = (rsi_pacer_ctx_t){
       .channels = channels,
@@ -227,11 +236,15 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
     metrics_started = 1;
   }
 
-  log_line(TOOL_NAME ": capturing, %u worker(s) on %s:%u, %zu channel slots [%s%s%s%s]", cfg->workers, cfg->listen_addr, cfg->listen_port, max_channels,
+  log_line(TOOL_NAME ": capturing, %u worker(s) on %s:%u, %zu channel slots [%s%s%s%s]", cfg->workers ? cfg->workers : 1u, cfg->listen_addr, cfg->listen_port, max_channels,
       cfg->no_ret ? "no RET" : (mt ? "RET+MC" : "RET unicast-only"), cfg->no_ret || cfg->no_fcc ? "" : ", ", cfg->no_fcc ? "no FCC" : "FCC", rsi_started ? "+RSI" : "");
-  capture_run(cap, capture_cb, &dispatch_ctx);
+  if (capture_run(cap, capture_cb, &dispatch_ctx) != 0) {
+    log_code("FE500244", "%s: capture poll failed: %s", TOOL_NAME, strerror(errno));
+    rc = 1;
+  }
 
 cleanup:
+  signal_request_stop(); /* threads exit only on stop */
   if (cap) capture_close(cap);
   if (pacer_started) pthread_join(pacer_thread, NULL);
   if (rsi_started) pthread_join(rsi_thread, NULL);

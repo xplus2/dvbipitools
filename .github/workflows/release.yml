@@ -54,7 +54,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3 # v3.0.0
+    - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       if: matrix.platform
     - name: build in container
       run: |
@@ -465,7 +465,7 @@ jobs:
         sha256sum -- *.tar.gz *.deb *.ipk > SHA256SUMS
     - name: assets
       if: github.ref_type == 'tag'
-      uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+      uses: softprops/action-gh-release@e598afbe1493e6b1bafb1f389cabb956eab91231 # v3.0.3
       with:
         files: |
           dist/*.deb

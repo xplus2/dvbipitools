@@ -50,13 +50,10 @@ args_status_t srt_opt_srt(srt_opt_t *p, int c) {
         return ARGS_ERR;
       break;
     case OPT_PBKEYLEN: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
+      if (argutil_srt_pbkeylen(optarg, &cfg->pbkeylen)) {
         argerr("HS000244", "invalid --pbkeylen: %s (16|24|32)", optarg);
         return ARGS_ERR;
       }
-      cfg->pbkeylen = (int)v;
       break;
     }
     case OPT_STREAMID:

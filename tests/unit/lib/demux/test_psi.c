@@ -1401,6 +1401,42 @@ START_TEST(psi_links_multiple_lcevc_enhancement_layers) {
 }
 END_TEST
 
+START_TEST(psi_lcevc_links_capped_with_duplicate_tags) {
+  psi_t *p = psi_new();
+  unsigned char section[256];
+  unsigned char pkt[188];
+  size_t slen;
+  int count;
+  const psi_es_t *es;
+  static const unsigned char video_desc[] = {0x3F, 0x03, 0x18, 0x01, 0x07};
+  static const unsigned char lcevc_desc[] = {0x3F, 0x02, 0x17, 0x07};
+  es_spec_t spec[7] = {
+    {0x1B, 0x0101, video_desc, sizeof video_desc},
+    {0x36, 0x0102, lcevc_desc, sizeof lcevc_desc},
+    {0x36, 0x0103, lcevc_desc, sizeof lcevc_desc},
+    {0x36, 0x0104, lcevc_desc, sizeof lcevc_desc},
+    {0x36, 0x0105, lcevc_desc, sizeof lcevc_desc},
+    {0x36, 0x0106, lcevc_desc, sizeof lcevc_desc},
+    {0x36, 0x0107, lcevc_desc, sizeof lcevc_desc},
+  };
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt_es(section, 1, 0x0101, spec, 7);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+
+  es = psi_es(p, &count);
+  ck_assert_int_eq(count, 7);
+  ck_assert_int_eq(es[0].lcevc_pid_count, PSI_LCEVC_MAX_LINKS);
+  for (int i = 0; i < PSI_LCEVC_MAX_LINKS; i++) ck_assert_uint_eq(es[0].lcevc_pid[i], 0x0102u + (unsigned)i);
+
+  psi_free(p);
+}
+END_TEST
+
 START_TEST(psi_lcevc_unpaired_when_tags_dont_match) {
   psi_t *p = psi_new();
   unsigned char section[256];
@@ -1779,8 +1815,8 @@ START_TEST(psi_obs_oldest_section_empty_returns_zero) {
 }
 END_TEST
 
-static const pid_class_t all_pid_classes[] = {PID_UNKNOWN, PID_PAT, PID_CAT, PID_PMT, PID_NIT, PID_SDT, PID_EIT, PID_OTHER_SI, PID_NULL, PID_PCR, PID_VIDEO, PID_AUDIO, PID_TELETEXT, PID_SUBTITLE, PID_AIT, PID_ECM, PID_DATA, PID_LCEVC};
-static const char *const all_pid_class_names[] = {"unknown", "PAT", "CAT", "PMT", "NIT", "SDT", "EIT", "SI", "null", "PCR", "video", "audio", "teletext", "subtitle", "AIT", "ECM", "data", "LCEVC"};
+static const pid_class_t all_pid_classes[] = {PID_UNKNOWN, PID_PAT, PID_CAT, PID_PMT, PID_NIT, PID_SDT, PID_EIT, PID_OTHER_SI, PID_NULL, PID_PCR, PID_VIDEO, PID_AUDIO, PID_TELETEXT, PID_SUBTITLE, PID_AIT, PID_ECM, PID_DATA, PID_LCEVC, PID_EMM};
+static const char *const all_pid_class_names[] = {"unknown", "PAT", "CAT", "PMT", "NIT", "SDT", "EIT", "SI", "null", "PCR", "video", "audio", "teletext", "subtitle", "AIT", "ECM", "data", "LCEVC", "EMM"};
 
 START_TEST(psi_pid_class_name_covers_every_class) {
   ck_assert_str_eq(pid_class_name(all_pid_classes[_i]), all_pid_class_names[_i]);
@@ -1843,12 +1879,144 @@ START_TEST(psi_pat_and_pmt_section_return_the_stored_section) {
 }
 END_TEST
 
+/* overwrite one section byte, refresh CRC */
+static void section_patch(unsigned char *sec, size_t len, size_t at, unsigned char val) {
+  uint32_t crc;
+  sec[at] = val;
+  crc = crc32_mpeg(sec, len - 4);
+  sec[len - 4] = (unsigned char)(crc >> 24);
+  sec[len - 3] = (unsigned char)(crc >> 16);
+  sec[len - 2] = (unsigned char)(crc >> 8);
+  sec[len - 1] = (unsigned char)crc;
+}
+
+static size_t build_nit_named(unsigned char *out, const char *name) {
+  size_t nlen = strlen(name);
+  size_t n = 0;
+  uint32_t crc;
+  size_t ndl = 2 + nlen;
+  size_t sl = 5 + 2 + ndl + 2 + 4;
+  out[n++] = 0x40;
+  out[n++] = (unsigned char)(0xB0 | ((sl >> 8) & 0x0F));
+  out[n++] = (unsigned char)sl;
+  out[n++] = 0x00;
+  out[n++] = 0x01;
+  out[n++] = 0xC1;
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  out[n++] = (unsigned char)(0xF0 | ((ndl >> 8) & 0x0F));
+  out[n++] = (unsigned char)ndl;
+  out[n++] = 0x40;
+  out[n++] = (unsigned char)nlen;
+  memcpy(out + n, name, nlen);
+  n += nlen;
+  out[n++] = 0xF0;
+  out[n++] = 0x00;
+  crc = crc32_mpeg(out, n);
+  out[n++] = (unsigned char)(crc >> 24);
+  out[n++] = (unsigned char)(crc >> 16);
+  out[n++] = (unsigned char)(crc >> 8);
+  out[n++] = (unsigned char)crc;
+  return n;
+}
+
+START_TEST(psi_pmt_not_current_or_nonzero_section_ignored) {
+  psi_t *p = psi_new();
+  unsigned char section[128];
+  unsigned char pkt[188];
+  size_t slen;
+
+  slen = build_pat(section, 0x1234, 1, 0x0100);
+  wrap_ts_packet(pkt, 0x0000, 0, section, slen);
+  psi_feed(p, pkt);
+
+  slen = build_pmt(section, 1, 0x0101, 0x0101, 0x1B, 0x0102, 0x0F);
+  section_patch(section, slen, 5, 0xC0);
+  wrap_ts_packet(pkt, 0x0100, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_have_pmt(p), 0);
+
+  section_patch(section, slen, 5, 0xC1);
+  section_patch(section, slen, 6, 0x01);
+  wrap_ts_packet(pkt, 0x0100, 1, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_have_pmt(p), 0);
+
+  section_patch(section, slen, 6, 0x00);
+  wrap_ts_packet(pkt, 0x0100, 2, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_have_pmt(p), 1);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_sdt_not_current_ignored) {
+  psi_t *p = psi_new();
+  unsigned char section[128];
+  unsigned char pkt[188];
+  size_t slen = build_sdt2(section, 0x0055, 1, "One", 2, "Two");
+
+  section_patch(section, slen, 5, 0xC0);
+  wrap_ts_packet(pkt, 0x0011, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_have_sdt(p), 0);
+
+  section_patch(section, slen, 5, 0xC1);
+  wrap_ts_packet(pkt, 0x0011, 1, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_have_sdt(p), 1);
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_nit_not_current_ignored) {
+  psi_t *p = psi_new();
+  unsigned char section[128];
+  unsigned char pkt[188];
+  size_t slen = build_nit_named(section, "Net");
+
+  section_patch(section, slen, 5, 0xC0);
+  wrap_ts_packet(pkt, 0x0010, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_str_eq(psi_network_name(p), "");
+
+  section_patch(section, slen, 5, 0xC1);
+  wrap_ts_packet(pkt, 0x0010, 1, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_str_eq(psi_network_name(p), "Net");
+  psi_free(p);
+}
+END_TEST
+
+START_TEST(psi_cat_not_current_ignored) {
+  psi_t *p = psi_new();
+  unsigned char section[64];
+  unsigned char pkt[188];
+  size_t slen = build_cat(section, 0x0B00, 0x0300);
+
+  section_patch(section, slen, 5, 0xC0);
+  wrap_ts_packet(pkt, 0x0001, 0, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_have_cat(p), 0);
+
+  section_patch(section, slen, 5, 0xC1);
+  wrap_ts_packet(pkt, 0x0001, 1, section, slen);
+  psi_feed(p, pkt);
+  ck_assert_int_eq(psi_have_cat(p), 1);
+  psi_free(p);
+}
+END_TEST
+
 static Suite *psi_suite(void) {
   Suite *s = suite_create("psi");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, psi_parses_pat_and_pmt);
   tcase_add_test(tc, psi_pat_accumulates_programs_across_sections);
   tcase_add_test(tc, psi_pat_ignores_next_section);
+  tcase_add_test(tc, psi_pmt_not_current_or_nonzero_section_ignored);
+  tcase_add_test(tc, psi_sdt_not_current_ignored);
+  tcase_add_test(tc, psi_nit_not_current_ignored);
+  tcase_add_test(tc, psi_cat_not_current_ignored);
   tcase_add_test(tc, psi_pmt_parsed_counts_each_good_pmt_section);
   tcase_add_test(tc, psi_rejects_pat_with_bad_crc);
   tcase_add_test(tc, psi_ignores_pointer_field_beyond_payload);
@@ -1880,6 +2048,7 @@ static Suite *psi_suite(void) {
   tcase_add_test(tc, psi_links_lcevc_enhancement_to_base_video);
   tcase_add_test(tc, psi_links_multiple_lcevc_enhancement_layers);
   tcase_add_test(tc, psi_lcevc_unpaired_when_tags_dont_match);
+  tcase_add_test(tc, psi_lcevc_links_capped_with_duplicate_tags);
   tcase_add_test(tc, psi_classifies_dts_via_current_descriptor);
   tcase_add_test(tc, psi_classifies_dts_via_legacy_descriptor);
   tcase_add_test(tc, psi_classifies_dts_via_registration_descriptor);

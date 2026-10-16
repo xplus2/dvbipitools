@@ -55,6 +55,7 @@ void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigne
   fcc_ring_entry_t *ring = (fcc_ring_entry_t *)rc->entries;
   fcc_ring_entry_t *e;
   uint64_t wc;
+  size_t nwords = (payload_len + 7) / 8;
   uint64_t words[FCC_PAYLOAD_WORDS];
   unsigned g;
 
@@ -71,9 +72,9 @@ void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigne
   atomic_store_explicit(&e->seq, seq, memory_order_relaxed);
   atomic_store_explicit(&e->timestamp, timestamp, memory_order_relaxed);
   atomic_store_explicit(&e->dscp, dscp, memory_order_relaxed);
-  memset(words, 0, sizeof words);
+  memset(words, 0, nwords * sizeof words[0]);
   memcpy(words, payload, payload_len);
-  for (size_t i = 0; i < FCC_PAYLOAD_WORDS; i++) atomic_store_explicit(&e->payload[i], words[i], memory_order_relaxed);
+  for (size_t i = 0; i < nwords; i++) atomic_store_explicit(&e->payload[i], words[i], memory_order_relaxed);
   atomic_store_explicit(&e->payload_len, payload_len, memory_order_relaxed);
   seqlock_commit_write(&e->gen, g);
 
@@ -82,7 +83,8 @@ void rap_cache_append(rap_cache_t *rc, uint16_t seq, uint32_t timestamp, unsigne
 
 int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out) {
   const ret_ring_entry_t *slot;
-  uint64_t words[RET_PAYLOAD_WORDS] = {0};
+  uint64_t words[RET_PAYLOAD_WORDS];
+  size_t nwords;
   unsigned g;
 
   if (c->ring_size == 0) return 0;
@@ -92,12 +94,13 @@ int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out) {
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
     out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
     out->dscp = atomic_load_explicit(&slot->dscp, memory_order_relaxed);
-    for (size_t i = 0; i < RET_PAYLOAD_WORDS; i++)
-      words[i] = atomic_load_explicit(&slot->payload[i], memory_order_relaxed);
     out->payload_len = atomic_load_explicit(&slot->payload_len, memory_order_relaxed);
+    nwords = out->payload_len > CHANNEL_MAX_PAYLOAD ? RET_PAYLOAD_WORDS : (out->payload_len + 7) / 8; /* torn len clamped, read discarded */
+    for (size_t i = 0; i < nwords; i++)
+      words[i] = atomic_load_explicit(&slot->payload[i], memory_order_relaxed);
     out->valid = atomic_load_explicit(&slot->valid, memory_order_relaxed);
     if (SEQLOCK_READ_OK(&slot->gen, g)) {
-      memcpy(out->payload, words, sizeof out->payload);
+      memcpy(out->payload, words, nwords * sizeof words[0]);
       return out->valid && out->seq == seq;
     }
   }
@@ -148,17 +151,19 @@ size_t channel_cache_count(const channel_t *c) {
 static int cache_read_abs(const channel_t *c, uint64_t abs_pos, rap_cache_entry_t *out) {
   const fcc_ring_entry_t *ring = (const fcc_ring_entry_t *)c->cache.entries;
   const fcc_ring_entry_t *slot = &ring[abs_pos % c->cache.cap];
-  uint64_t words[FCC_PAYLOAD_WORDS] = {0};
+  uint64_t words[FCC_PAYLOAD_WORDS];
+  size_t nwords;
   unsigned g;
 
   SEQLOCK_READ_LOOP(&slot->gen, g) {
     out->seq = atomic_load_explicit(&slot->seq, memory_order_relaxed);
     out->timestamp = atomic_load_explicit(&slot->timestamp, memory_order_relaxed);
     out->dscp = atomic_load_explicit(&slot->dscp, memory_order_relaxed);
-    for (size_t i = 0; i < FCC_PAYLOAD_WORDS; i++) words[i] = atomic_load_explicit(&slot->payload[i], memory_order_relaxed);
     out->payload_len = atomic_load_explicit(&slot->payload_len, memory_order_relaxed);
+    nwords = out->payload_len > CHANNEL_MAX_PAYLOAD ? FCC_PAYLOAD_WORDS : (out->payload_len + 7) / 8; /* torn len clamped, read discarded */
+    for (size_t i = 0; i < nwords; i++) words[i] = atomic_load_explicit(&slot->payload[i], memory_order_relaxed);
     if (SEQLOCK_READ_OK(&slot->gen, g)) {
-      memcpy(out->payload, words, sizeof out->payload);
+      memcpy(out->payload, words, nwords * sizeof words[0]);
       return 1;
     }
   }

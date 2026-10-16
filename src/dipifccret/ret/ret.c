@@ -107,10 +107,8 @@ static void repair_one(ret_ctx_t *r, channel_t *c, const channel_slot_t *slot) {
 
 static void repair_one_unicast(ret_ctx_t *r, const channel_t *c, const channel_slot_t *slot, int fd, const struct sockaddr *from, socklen_t fromlen) {
   unsigned char out[12 + 2 + CHANNEL_MAX_PAYLOAD];
-  rtx_session_slot_t *session = rtx_session_table_get(r->rtx_clients, from, fromlen);
-  size_t n;
-  if (!session) return;
-  n = rtx_build(&session->seq, c->ssrc, r->rtx_pt, slot->timestamp, slot->seq, slot->payload, slot->payload_len, out, sizeof out);
+  _Atomic uint16_t seq = rtx_session_table_next_seq(r->rtx_clients, from, fromlen);
+  size_t n = rtx_build(&seq, c->ssrc, r->rtx_pt, slot->timestamp, slot->seq, slot->payload, slot->payload_len, out, sizeof out);
   if (n > 0) r->send_unicast(fd, from, fromlen, out, n, slot->dscp, r->send_unicast_user);
 }
 
@@ -118,10 +116,11 @@ static int take_budget(ret_ctx_t *r, const struct sockaddr *from, int64_t now) {
   return ratelimit_take(r->limiter, from, r->client_rate, r->client_rate * RET_BUCKET_SECONDS, 1, now) == 1;
 }
 
-static int repair_seq(ret_ctx_t *r, channel_t *c, uint16_t seq, int fd, const struct sockaddr *from, socklen_t fromlen, int64_t now) {
+static int repair_seq(ret_ctx_t *r, channel_t *c, uint16_t seq, int fd, const struct sockaddr *from, socklen_t fromlen, int64_t now, int *prepaid) {
   channel_slot_t slot;
   if (!channel_find(c, seq, &slot)) return 1;
-  if (!take_budget(r, from, now)) return 0;
+  if (*prepaid) *prepaid = 0;
+  else if (!take_budget(r, from, now)) return 0;
   repair_one_unicast(r, c, &slot, fd, from, fromlen);
   if (!mc_recently_repaired(r, c->ssrc, seq, now)) repair_one(r, c, &slot);
   return 1;
@@ -142,9 +141,11 @@ void ret_handle_nack(ret_ctx_t *r, const rtcp_nack_t *nack, int fd, const struct
   unsigned char ff[12 + 4 * RTCP_NACK_MAX_ENTRIES];
   size_t ff_len;
   int64_t now;
+  int prepaid = 1;
   if (!c) return;
 
   now = now_ms();
+  /* gate token covers first repair */
   if (!take_budget(r, from, now)) {
     note_limited(r);
     return;
@@ -158,11 +159,11 @@ void ret_handle_nack(ret_ctx_t *r, const rtcp_nack_t *nack, int fd, const struct
     uint16_t blp = nack->entry[i].blp;
 
     /* F.3.1/Figure F.2: always reply directly to requester */
-    if (!repair_seq(r, c, pid, fd, from, fromlen, now)) goto limited;
+    if (!repair_seq(r, c, pid, fd, from, fromlen, now, &prepaid)) goto limited;
     for (unsigned bit = 0; bit < 16; bit++) {
       if (blp & (1u << bit)) {
         uint16_t seq = (uint16_t)(pid + bit + 1);
-        if (!repair_seq(r, c, seq, fd, from, fromlen, now)) goto limited;
+        if (!repair_seq(r, c, seq, fd, from, fromlen, now, &prepaid)) goto limited;
       }
     }
   }

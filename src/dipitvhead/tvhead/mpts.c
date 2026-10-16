@@ -16,6 +16,7 @@
 #define INTERVAL_CAT_S 0.1 /* matches remux.c's own INTERVAL_PAT_PMT_S cadence */
 #define MPTS_POLL_MAX_MS 100
 #define MPTS_FEED_BURST 8 /* backlog chunks per input per wakeup */
+#define MPTS_EIT_BURST 8  /* EIT packets per loop pass */
 
 typedef struct {
   unsigned n;
@@ -149,21 +150,21 @@ int mpts_cat_due(int have_cas, double now, double *last_cat) {
   return 1;
 }
 
-void mpts_emit_eit(mpts_program_t *progs, unsigned n, int *eit_busy, unsigned char *eit_cc, remux_packet_cb cb, void *ctx) {
+size_t mpts_emit_eit(mpts_program_t *progs, unsigned n, int *eit_busy, unsigned char *eit_cc, remux_packet_cb cb, void *ctx) {
   if (*eit_busy >= 0 && progs[*eit_busy].rx && remux_eit_pending(progs[*eit_busy].rx)) {
-    remux_emit_eit(progs[*eit_busy].rx, OUT_PID_EIT, eit_cc, 1, cb, ctx);
+    size_t sent = remux_emit_eit(progs[*eit_busy].rx, OUT_PID_EIT, eit_cc, 1, cb, ctx);
     if (!remux_eit_mid_section(progs[*eit_busy].rx)) *eit_busy = -1;
-    return;
+    return sent;
   }
   *eit_busy = -1;
   for (unsigned i = 0; i < n; i++) {
+    size_t sent;
     if (!progs[i].rx || !remux_eit_pending(progs[i].rx)) continue;
-    remux_emit_eit(progs[i].rx, OUT_PID_EIT, eit_cc, 1, cb, ctx);
-    if (remux_eit_mid_section(progs[i].rx)) {
-      *eit_busy = (int)i;
-      break;
-    }
+    sent = remux_emit_eit(progs[i].rx, OUT_PID_EIT, eit_cc, 1, cb, ctx);
+    if (remux_eit_mid_section(progs[i].rx)) *eit_busy = (int)i;
+    return sent;
   }
+  return 0;
 }
 
 static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_ctx_t *c) {
@@ -183,7 +184,7 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
 
     deadline = retryset_next_deadline(c->rs);
     if (deadline != RETRYSET_NEVER) {
-      long remain_s = (long)(deadline - time(NULL));
+      long remain_s = (long)(deadline - (time_t)mono_seconds());
       int remain_ms = remain_s <= 0 ? 0 : (int)(remain_s * 1000);
       if (remain_ms < timeout_ms) timeout_ms = remain_ms;
     }
@@ -199,13 +200,14 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
       int due = c->progs[i].rx ? remux_hold_due_ms(c->progs[i].rx) : -1;
       if (due >= 0 && due < timeout_ms) timeout_ms = due;
       if (input_backlog_pending(&c->progs[i])) timeout_ms = 0;
+      if (input_timer_driven(c->rs, i) && timeout_ms > TVSRC_TIMER_WAIT_MS) timeout_ms = TVSRC_TIMER_WAIT_MS;
     }
     poll(npfd ? pfds : NULL, npfd, timeout_ms);
     if (signal_stop_requested()) break;
     tvhead_srt_service(&c->out);
     flush_batch_if_stale(&c->out);
     now = mono_seconds();
-    now_t = time(NULL);
+    now_t = (time_t)now;
     if (c->insp_on) {
       for (unsigned i = 0; i < n; i++) {
         if (c->insp_in[i]) tsinspect_tick(c->insp_in[i], now);
@@ -236,7 +238,7 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
       unsigned i = mpts_service_index(c->rr_start, k, n);
       src = retryset_result(c->rs, i);
       if (!src) continue;
-      if (!input_poll_ready(i, ready_mask) && !input_backlog_pending(&c->progs[i])) {
+      if (!input_poll_ready(i, ready_mask) && !input_backlog_pending(&c->progs[i]) && !tvsrc_timer_driven(src)) {
         if (!c->progs[i].rx) discover_idle(&tk, i, src);
         continue;
       }
@@ -249,7 +251,9 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     }
     c->rr_start = mpts_advance_rr(c->rr_start, n);
 
-    mpts_emit_eit(c->progs, n, &c->eit_busy, &c->eit_cc, packet_cb, &c->out);
+    for (unsigned b = 0; b < MPTS_EIT_BURST; b++) {
+      if (!mpts_emit_eit(c->progs, n, &c->eit_busy, &c->eit_cc, packet_cb, &c->out)) break;
+    }
 
     if (mpts_cat_due(c->cas != NULL, now, &c->last_cat)) emit_source_cat_passthrough(c->progs, n, &c->cat_cc, &c->cat_ver, c->tsm_p, packet_cb, &c->out);
 
@@ -258,6 +262,9 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
       return;
     }
 
+    for (unsigned i = 0; i < n; i++) {
+      if (c->progs[i].rx) remux_tick(c->progs[i].rx, now, packet_cb, &c->out, c->tsm_p);
+    }
     mpts_tick(c->mpts, now, packet_cb, &c->out);
     if (c->cas) {
       cas_wall_tick(c->cas, now);

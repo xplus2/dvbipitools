@@ -15,7 +15,7 @@
 
 /* banner prints before parsing: --color read early */
 int main(int argc, char **argv) {
-  config_t cfg;
+  config_t cfg = {0};
   char mcast[80];
   metrics_exporter_t mx;
   int rc;

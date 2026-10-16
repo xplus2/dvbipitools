@@ -17,8 +17,8 @@ static unsigned out_stream_type(codec_t c) {
     case CODEC_MP2A:     return 0x03;
     case CODEC_AAC:      return 0x0F;
     case CODEC_AAC_LATM: return 0x11;
-    case CODEC_AC3:      return 0x81;
-    case CODEC_EAC3:     return 0x87;
+    case CODEC_AC3:      return 0x06; /* DVB: AC-3_descriptor 0x6A, see put_dvb_audio_desc */
+    case CODEC_EAC3:     return 0x06; /* DVB: enhanced_AC-3_descriptor 0x7A */
     case CODEC_OPUS:     return 0x06;
     case CODEC_LCEVC:    return 0x36;
     case CODEC_DTS:      return 0x06; /* ETSI TS 101 154 annex F.4.1.2 */
@@ -187,6 +187,35 @@ static size_t put_opaque_descriptors(unsigned char *out, size_t n, size_t cap, c
   return n;
 }
 
+static int has_desc(const psi_es_t *src, unsigned char tag) {
+  size_t i = 0;
+  while (i + 2 <= src->desc_len) {
+    size_t l = src->desc[i + 1];
+    if (i + 2 + l > src->desc_len) break;
+    if (src->desc[i] == tag) return 1;
+    i += 2 + l;
+  }
+  return 0;
+}
+
+/* DVB AC-3/E-AC-3 ride private stream_type 0x06, told apart by descriptor (EN 300 468 annex D).
+   ATSC-style sources (0x81/0x87) carry none: add empty one (flags byte 0) */
+static size_t put_dvb_audio_desc(unsigned char *out, size_t n, size_t cap, const psi_es_t *src, int *truncated) {
+  unsigned char tag;
+  if (src->codec == CODEC_AC3) tag = 0x6A;
+  else if (src->codec == CODEC_EAC3) tag = 0x7A;
+  else return n;
+  if (has_desc(src, tag)) return n;
+  if (n + 3 > cap) {
+    *truncated = 1;
+    return n;
+  }
+  out[n++] = tag;
+  out[n++] = 1;
+  out[n++] = 0;
+  return n;
+}
+
 size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, const unsigned char *prog_desc, size_t prog_desc_len, const out_es_t *es, int es_count, const unsigned char *extra, size_t extra_len, unsigned char *out, size_t cap, int *desc_truncated) {
   size_t n = 0;
 
@@ -221,6 +250,7 @@ size_t pmtbuild_pmt(unsigned version, unsigned program_number, unsigned pcr_pid,
     n += 2;
 
     n = put_opaque_descriptors(out, n, cap - 4, e->src, desc_truncated); /* -4: leave room for psi_finish_section's CRC */
+    if (e->stream_type == 0x06 && e->src->cls == PID_AUDIO) n = put_dvb_audio_desc(out, n, cap - 4, e->src, desc_truncated);
     esinfo = (unsigned)(n - (es_info_pos + 2));
     out[es_info_pos] = (unsigned char)(0xF0 | ((esinfo >> 8) & 0x0F));
     out[es_info_pos + 1] = (unsigned char)esinfo;

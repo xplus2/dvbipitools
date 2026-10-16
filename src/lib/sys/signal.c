@@ -47,7 +47,7 @@ static void on_tls_reload(int sig) {
 }
 
 static void install_stop(struct sigaction *sa) {
-  g_wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+  if (g_wake_fd < 0) g_wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
   memset(sa, 0, sizeof *sa);
   sa->sa_handler = on_stop;
   sigaction(SIGINT, sa, NULL);

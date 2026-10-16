@@ -37,7 +37,7 @@ static const char *sub_name(sub_mode_t s) {
 
 /* banner prints before parsing: --color read early */
 int main(int argc, char **argv) {
-  config_t cfg;
+  config_t cfg = {0};
   char src[1024];
   dstrbuf_t sb_out;
   dstrbuf_t sb_line;

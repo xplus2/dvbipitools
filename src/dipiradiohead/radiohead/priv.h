@@ -35,8 +35,17 @@ static inline void timeline_add(uint64_t *t, unsigned samples, unsigned rate) {
 }
 
 #define RADIOHEAD_POLL_MAX_MS 100
+#define RADIOHEAD_IDLE_WAIT_MS 20 /* connected HLS idle on timers: no fd to poll */
 #define RADIOHEAD_MAX_FRAMES_PER_TICK 32 /* per input, per tick. caps one input's backlog delaying others */
 #define RADIOHEAD_PACE_TOLERANCE_S 0.3
+#define RADIOHEAD_STALL_REANCHOR_S 1.0 /* lag beyond: re-anchor, no catch-up burst */
+
+/* backlog plays at real time, PCR discontinuity */
+static inline void pace_reanchor(double *pace_deadline, double now, tspacketizer_t *tsp) {
+  if (*pace_deadline >= now - RADIOHEAD_STALL_REANCHOR_S) return;
+  *pace_deadline = now;
+  tspacketizer_mark_discontinuity(tsp);
+}
 
 typedef struct {
   mcast_t *mc; /* NULL unless -m given */

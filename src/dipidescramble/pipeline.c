@@ -60,6 +60,10 @@ void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const
   for (int i = 0; i < lc->n_rtmp; i++) descramble_rtmp_note_result(rtmpout_write(lc->rtmp[i], type, timestamp_ms, hdr, hn, payload, pn) >= 0, &lc->rtmp_had_error[i], i);
 }
 
+void rtmp_service_all(loop_ctx_t *lc) {
+  for (int i = 0; i < lc->n_rtmp; i++) rtmpout_service(lc->rtmp[i]);
+}
+
 void srt_service_all(loop_ctx_t *lc) {
   for (int i = 0; i < lc->n_srt; i++) {
     srtsink_status_t st;
@@ -72,9 +76,14 @@ void srt_service_all(loop_ctx_t *lc) {
   }
 }
 
+void pipeline_ecm_cache_invalidate(loop_ctx_t *lc) {
+  lc->last_ecm_len[0] = lc->last_ecm_len[1] = 0;
+}
+
 static void handle_ecm_section(loop_ctx_t *lc) {
   const unsigned char *sec = lc->ecm_asm.buf;
   size_t seclen = lc->ecm_asm.expect;
+  unsigned srvid = psi_program_number(lc->psi);
   int parity;
   unsigned char cw[16];
 
@@ -82,30 +91,43 @@ static void handle_ecm_section(loop_ctx_t *lc) {
   else if (sec[0] == SC_SECTION_TID_ECM_ODD) parity = SCRAMBLE_PARITY_ODD;
   else return;
 
-  if (device_resolve_cw(lc->dev, sec, seclen, psi_program_number(lc->psi), lc->cw_len, lc->ecm_pid, cw) != 0) {
+  if (lc->last_ecm_len[parity] == seclen && lc->last_ecm_srvid[parity] == srvid && memcmp(lc->last_ecm[parity], sec, seclen) == 0) return;
+
+  if (device_resolve_cw(lc->dev, sec, seclen, srvid, lc->cw_len, lc->ecm_pid, cw) != 0) {
     if (lc->cfg->ecm_profile.set) log_code("DE300148", TOOL_NAME ": ecm_profile: CW resolve failed for this ECM section");
     lc->ecm_errors_total++;
     return;
   }
-  if (lc->have_cw[parity] && memcmp(lc->last_cw[parity], cw, sizeof cw) == 0) { /* unchanged, same crypto period repeat */
-    secure_zero(cw, sizeof cw);
-    return;
+  if (!(lc->have_cw[parity] && memcmp(lc->last_cw[parity], cw, sizeof cw) == 0)) { /* changed CW: new crypto period */
+    if (scrambler_set_key(lc->scr, parity, cw, (size_t)lc->cw_len, EMIT(lc), lc) != 0) {
+      log_code("DE300174", TOOL_NAME ": scrambler rejected CW (parity=%s), keeping previous key", parity == SCRAMBLE_PARITY_EVEN ? "even" : "odd");
+      lc->ecm_errors_total++;
+      secure_zero(cw, sizeof cw);
+      return;
+    }
+    memcpy(lc->last_cw[parity], cw, sizeof cw);
+    lc->have_cw[parity] = 1;
+    lc->cryptoperiod_transitions_total++;
+    log_line(TOOL_NAME ": CW updated (parity=%s)", parity == SCRAMBLE_PARITY_EVEN ? "even" : "odd");
   }
-
-  memcpy(lc->last_cw[parity], cw, sizeof cw);
-  lc->have_cw[parity] = 1;
-  lc->cryptoperiod_transitions_total++;
-  scrambler_set_key(lc->scr, parity, cw, (size_t)lc->cw_len, EMIT(lc), lc);
+  if (seclen <= sizeof lc->last_ecm[parity]) { /* cached once CW accepted: rejected ECM retried on repeat */
+    memcpy(lc->last_ecm[parity], sec, seclen);
+    lc->last_ecm_len[parity] = seclen;
+    lc->last_ecm_srvid[parity] = srvid;
+  }
   secure_zero(cw, sizeof cw);
-  log_line(TOOL_NAME ": CW updated (parity=%s)", parity == SCRAMBLE_PARITY_EVEN ? "even" : "odd");
 }
 
 static void update_biss_ca_cw(loop_ctx_t *lc, int parity, const unsigned char sw[BISS_CA_SW_LEN]) {
   if (lc->have_cw[parity] && memcmp(lc->last_cw[parity], sw, BISS_CA_SW_LEN) == 0) return;
+  if (scrambler_set_key(lc->scr, parity, sw, BISS_CA_SW_LEN, EMIT(lc), lc) != 0) {
+    log_code("DE300174", TOOL_NAME ": biss-ca: scrambler rejected CW (parity=%s), keeping previous key", parity == SCRAMBLE_PARITY_EVEN ? "even" : "odd");
+    lc->ecm_errors_total++;
+    return;
+  }
   memcpy(lc->last_cw[parity], sw, BISS_CA_SW_LEN);
   lc->have_cw[parity] = 1;
   lc->cryptoperiod_transitions_total++;
-  scrambler_set_key(lc->scr, parity, sw, BISS_CA_SW_LEN, EMIT(lc), lc);
   log_line(TOOL_NAME ": biss-ca: CW updated (parity=%s)", parity == SCRAMBLE_PARITY_EVEN ? "even" : "odd");
 }
 
@@ -211,7 +233,10 @@ void pipeline_service_unicast_emm(loop_ctx_t *lc) {
   st = ipiclient_poll_step(lc->ipi_pending);
   if (st == IPICLIENT_POLL_PENDING) return;
   if (st == IPICLIENT_POLL_DONE) {
-    if (ipiclient_poll_take(lc->ipi_pending, lc->cache, lc->dev)) lc->emmcache_dirty = 1;
+    if (ipiclient_poll_take(lc->ipi_pending, lc->cache, lc->dev)) {
+      lc->emmcache_dirty = 1;
+      pipeline_ecm_cache_invalidate(lc);
+    }
   } else {
     ipiclient_poll_free(lc->ipi_pending);
   }
@@ -234,6 +259,15 @@ void pipeline_flush_emmcache(loop_ctx_t *lc) {
   if (!lc->emmcache_dirty) return;
   emmcache_save(lc->cache, lc->emm_file);
   lc->emmcache_dirty = 0;
+}
+
+/* detect_cas_scheme() result depends only on these: skip rerun per packet on clear streams */
+static int cas_probe_changed(loop_ctx_t *lc) {
+  uint64_t key = (uint64_t)psi_pmt_ca_system_id(lc->psi) | (uint64_t)lc->ecm_pid << 16 | (uint64_t)psi_emm_pid(lc->psi) << 32 | (uint64_t)psi_scrambling_mode(lc->psi) << 48 | (uint64_t)(psi_have_cat(lc->psi) ? 1 : 0) << 56;
+  if (lc->cas_probe_valid && lc->cas_probe_key == key) return 0;
+  lc->cas_probe_key = key;
+  lc->cas_probe_valid = 1;
+  return 1;
 }
 
 static int detect_cas_scheme(loop_ctx_t *lc) {
@@ -289,8 +323,13 @@ static int detect_cas_scheme(loop_ctx_t *lc) {
         return 1;
       }
       lc->cw_len = (int)scrambler_cw_len(algo);
-      scrambler_set_key(lc->scr, SCRAMBLE_PARITY_EVEN, cw, cw_len, NULL, NULL);
-      scrambler_set_key(lc->scr, SCRAMBLE_PARITY_ODD, cw, cw_len, NULL, NULL);
+      if (scrambler_set_key(lc->scr, SCRAMBLE_PARITY_EVEN, cw, cw_len, NULL, NULL) != 0 ||
+          scrambler_set_key(lc->scr, SCRAMBLE_PARITY_ODD, cw, cw_len, NULL, NULL) != 0) {
+        log_code("DE300175", TOOL_NAME ": BISS descrambler rejected the key (no libdvbcsa/OpenSSL in this build?)");
+        lc->key_load_errors_total++;
+        lc->fatal = 1;
+        return 1;
+      }
       lc->cas_mode = "biss1e";
       break;
     }
@@ -316,6 +355,11 @@ static int detect_cas_scheme(loop_ctx_t *lc) {
         if (lc->cfg->unicast_emm_uri) setup_unicast_emm(lc);
         if (algo_from_mode(psi_scrambling_mode(lc->psi), &algo)) {
           lc->scr = scrambler_new(algo);
+          if (!lc->scr) {
+            log_code("DE300176", TOOL_NAME ": failed to set up CAS descrambler");
+            lc->fatal = 1;
+            return 1;
+          }
           lc->cw_len = (int)scrambler_cw_len(algo);
         } else {
           log_code("DE400194", TOOL_NAME ": unrecognized scrambling_mode 0x%02x", psi_scrambling_mode(lc->psi));
@@ -351,7 +395,7 @@ int pkt_cb(void *v, const unsigned char *pkt) {
   pid = tspack_pid(pkt);
   if (!lc->ecm_pid && psi_classify(lc->psi, pid) == PID_ECM) lc->ecm_pid = pid;
   if (!lc->emm_pid && psi_have_cat(lc->psi)) lc->emm_pid = psi_emm_pid(lc->psi);
-  if (!lc->cas_logged && psi_ready(lc->psi) && detect_cas_scheme(lc)) return 1;
+  if (!lc->cas_logged && psi_ready(lc->psi) && cas_probe_changed(lc) && detect_cas_scheme(lc)) return 1;
 
   /* BISS 1/E signaling pid also classifies PID_ECM. guard lc->dev, not just lc->biss_ca */
   if (lc->ecm_pid && pid == lc->ecm_pid && tspack_payload(pkt, &pl, &plen, &pusi) && psi_section_asm_cc(&lc->ecm_asm, pkt)) {
@@ -370,16 +414,17 @@ int pkt_cb(void *v, const unsigned char *pkt) {
         biss_ca_state_on_emm(lc->biss_ca, lc->emm_asm.buf, lc->emm_asm.expect);
       } else if (lc->dev && emmcache_feed(lc->cache, lc->dev, lc->emm_asm.buf, lc->emm_asm.expect)) {
         lc->emmcache_dirty = 1;
+        pipeline_ecm_cache_invalidate(lc);
       }
     }
   }
 
   /* pkt is always genuinely mutable (tspack_t's acc[] or main()'s buffer). const is just tspack_feed()'s callback contract */
   if (lc->scr) {
-    /* -1: reserved control value or key not loaded yet. fwd as-is */
+    /* -1: reserved control value or key not loaded yet. fwd as-is, in queue order */
     if (scrambler_decrypt_packet_queued(lc->scr, (unsigned char *)pkt, EMIT(lc), lc) != 0) {
       lc->unexpected_clear_packets_total++;
-      EMIT(lc)(lc, pkt);
+      scrambler_passthrough_queued(lc->scr, pkt, EMIT(lc), lc);
     } else {
       lc->scrambled_packets_total++;
     }
@@ -389,11 +434,15 @@ int pkt_cb(void *v, const unsigned char *pkt) {
   return lc->emit_failed ? 1 : 0;
 }
 
-/* drains scrambler_set_key()'s queued last batch packets through emit_downstream() at shutdown,
+/* drains queued scrambler batch through emit_downstream() at shutdown or idle input,
    then flushes any bytes still sitting in raw-fd output batch buffers */
 void pipeline_flush(loop_ctx_t *lc) {
   scrambler_flush(lc->scr, EMIT(lc), lc);
-  if (!lc->mkv) flush_all_outfd(lc);
+  if (!lc->mkv && lc->n_outfd > 0 && lc->outbuf_len > 0 && flush_all_outfd(lc) < 0) {
+    log_code("DE100132", TOOL_NAME ": output write failed: %s", strerror(errno));
+    lc->emit_failed = 1;
+    lc->output_errors_total++;
+  }
 }
 
 void pipeline_push_metrics(metrics_exporter_t *mx, const loop_ctx_t *lc) {

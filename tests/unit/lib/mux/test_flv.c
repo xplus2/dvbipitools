@@ -57,6 +57,30 @@ static int has_tag_type(const tag_capture_t *c, flv_tag_type_t type) {
   return 0;
 }
 
+static void check_meta_count(const tag_capture_t *c) {
+  for (int i = 0; i < c->n; i++) {
+    const unsigned char *p;
+    const unsigned char *end;
+    unsigned declared;
+    unsigned keys = 0;
+    if (c->tags[i].type != FLV_TAG_SCRIPT) continue;
+    p = c->tags[i].data + 13; /* 02 len16 "onMetaData" */
+    end = c->tags[i].data + c->tags[i].len;
+    ck_assert_int_eq(p[0], 0x08);
+    declared = ((unsigned)p[1] << 24) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 8) | p[4];
+    p += 5;
+    while (p + 3 <= end && !(p[0] == 0 && p[1] == 0 && p[2] == 9)) {
+      p += 2 + (((unsigned)p[0] << 8) | p[1]);
+      ck_assert_int_eq(p[0], 0x00);
+      p += 9;
+      keys++;
+    }
+    ck_assert_uint_eq(declared, keys);
+    return;
+  }
+  ck_abort_msg("no script tag");
+}
+
 START_TEST(flv_emits_metadata_and_audio_tags_for_audio_only) {
   unsigned long long bytes = 0;
   flv_opts_t opts;
@@ -85,6 +109,7 @@ START_TEST(flv_emits_metadata_and_audio_tags_for_audio_only) {
   ck_assert(cap.n > 0);
   ck_assert(has_tag_type(&cap, FLV_TAG_SCRIPT));
   ck_assert(has_tag_type(&cap, FLV_TAG_AUDIO));
+  check_meta_count(&cap);
 
   for (int i = 0; i < cap.n; i++) {
     if (cap.tags[i].type == FLV_TAG_SCRIPT) {
@@ -513,6 +538,7 @@ START_TEST(flv_waits_for_every_track_header_before_emitting) {
   size_t alen;
   size_t plen;
   int audio_tags = 0;
+  int zero_audio = 0;
 
   memset(&opts, 0, sizeof opts);
   memset(&cap, 0, sizeof cap);
@@ -530,7 +556,7 @@ START_TEST(flv_waits_for_every_track_header_before_emitting) {
 
   alen = build_adts_frame(adts, 50);
   alen += build_adts_frame(adts + alen, 50);
-  plen = build_pes_with_pts(pes, 90000, adts, alen);
+  plen = build_pes_with_pts(pes, 86400, adts, alen);
   wrap_ts_packet(pkt, 0x0102, 1, pes, plen);
   flv_feed(f, pkt);
   ck_assert(!has_tag_type(&cap, FLV_TAG_AUDIO));
@@ -552,10 +578,14 @@ START_TEST(flv_waits_for_every_track_header_before_emitting) {
   flv_feed(f, pkt);
   ck_assert_int_eq(flv_error(f), 0);
   ck_assert(has_tag_type(&cap, FLV_TAG_SCRIPT));
+  check_meta_count(&cap);
   flv_close(f);
   for (int i = 0; i < cap.n; i++)
     if (cap.tags[i].type == FLV_TAG_AUDIO) audio_tags++;
   ck_assert_int_ge(audio_tags, 1);
+  for (int i = 0; i < cap.n; i++)
+    if (cap.tags[i].type == FLV_TAG_AUDIO && cap.tags[i].len > 4 && cap.tags[i].timestamp_ms == 0) zero_audio++; /* len 4: AAC seqhdr */
+  ck_assert_int_eq(zero_audio, 0);
 }
 END_TEST
 

@@ -20,6 +20,12 @@ unsigned esbuild_assign_pids(const codec_t *codecs, unsigned n, esbuild_es_t *ou
   return n;
 }
 
+unsigned esbuild_pcr_pid(const esbuild_es_t *es, unsigned n_es) {
+  for (unsigned i = 0; i < n_es; i++)
+    if (is_video_codec(es[i].codec)) return es[i].pid;
+  return es[0].pid;
+}
+
 size_t esbuild_build_pat(unsigned tsid, unsigned version, unsigned program_number, unsigned char *out, size_t cap) {
   return psi_build_pat(tsid, version, program_number, ESBUILD_PMT_PID, out, cap);
 }
@@ -35,8 +41,8 @@ static unsigned stream_type_for(codec_t c) {
     case CODEC_MP2A: return 0x03;
     case CODEC_AAC: return 0x0F;
     case CODEC_AAC_LATM: return 0x11;
-    case CODEC_AC3: return 0x81;
-    case CODEC_EAC3: return 0x87;
+    case CODEC_AC3: return 0x06;
+    case CODEC_EAC3: return 0x06;
     case CODEC_OPUS: return 0x06;
     case CODEC_LCEVC: return 0x36;
     case CODEC_DTS: return 0x06;
@@ -59,6 +65,13 @@ static size_t build_registration_desc(unsigned char *out, const char id[4]) {
   size_t n = put_desc_hdr(out, 0x05, 4);
   memcpy(out + n, id, 4);
   return n + 4;
+}
+
+/* EN 300 468 annex D: AC-3 0x6A / E-AC-3 0x7A, empty body (flags byte 0) */
+static size_t build_dvb_audio_desc(unsigned char *out, unsigned tag) {
+  size_t n = put_desc_hdr(out, tag, 1);
+  out[n++] = 0x00;
+  return n;
 }
 
 static size_t build_ext_desc_ac4(unsigned char *out) {
@@ -88,6 +101,8 @@ static size_t build_es_descriptor(codec_t codec, unsigned char *out, size_t cap)
     case CODEC_AV1: return cap >= 6 ? build_registration_desc(out, "AV01") : 0;
     case CODEC_OPUS: return cap >= 6 ? build_registration_desc(out, "Opus") : 0;
     case CODEC_DTS: return cap >= 6 ? build_registration_desc(out, "DTS2") : 0;
+    case CODEC_AC3: return cap >= 3 ? build_dvb_audio_desc(out, 0x6A) : 0;
+    case CODEC_EAC3: return cap >= 3 ? build_dvb_audio_desc(out, 0x7A) : 0;
     case CODEC_AC4: return cap >= 3 ? build_ext_desc_ac4(out) : 0;
     case CODEC_DTS_HD: return cap >= 9 ? build_ext_desc_dts_hd(out, 6) : 0;
     case CODEC_DTS_HD_MA: return cap >= 9 ? build_ext_desc_dts_hd(out, 14) : 0;
@@ -101,12 +116,7 @@ size_t esbuild_build_pmt(unsigned version, unsigned program_number, const esbuil
   unsigned i;
 
   if (!n_es || n_es > ESBUILD_MAX_ES || cap < 32) return 0;
-  pcr_pid = es[0].pid;
-  for (i = 0; i < n_es; i++)
-    if (is_video_codec(es[i].codec)) {
-      pcr_pid = es[i].pid;
-      break;
-    }
+  pcr_pid = esbuild_pcr_pid(es, n_es);
 
   out[n++] = 0x02;
   n += 2;

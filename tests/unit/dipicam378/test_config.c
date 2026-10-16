@@ -3,6 +3,7 @@
 
 #include <check.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -29,7 +30,7 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "algo: cissa\n", CFG_INT, cw_len, 16, NULL),
   CFG_FIELD(config_t, "verbose: on\n", CFG_INT, verbose, 1, NULL),
   CFG_FIELD(config_t, "color: never\n", CFG_INT, color_mode, LOG_COLOR_NEVER, NULL),
-  CFG_FIELD(config_t, "metrics: /tmp/m.sock\n", CFG_STRPTR, metrics_sock, 0, "/tmp/m.sock"),
+  CFG_FIELD(config_t, "metrics:\n  sock: /tmp/m.sock\n", CFG_STRPTR, metrics_sock, 0, "/tmp/m.sock"),
   CFG_FIELD(config_t, "metrics:\n  id: cam1\n", CFG_STRPTR, metrics_id, 0, "cam1"),
   CFG_FIELD(config_t, "metrics:\n  interval: 42\n", CFG_UINT, metrics_interval_s, 42, NULL),
   CFG_FIELD(config_t, "daemonize: 1\n", CFG_INT, daemonize, 1, NULL),
@@ -145,17 +146,35 @@ typedef struct {
 } cfgtest_case_t;
 
 static const cfgtest_case_t cfgtest_cases[] = {
-  {"key: /dev/null\n", 0},
+  {"key: /dev/null\nserial: s1\n", 0},
   {"port: 15378\n", -1},
-  {"key: /dev/null\nmetrics: /tmp/x.sock\n", -1},
-  {"key: /dev/null\nmetrics:\n  interval: 10\n", -1},
-  {"key: /dev/null\nmetrics:\n  id: cam1\n  interval: 10\n", 0},
+  {"key: /dev/null\n", -1},
+  {"key: /dev/null\nserial: s1\nmetrics:\n  sock: /tmp/x.sock\n", -1},
+  {"key: /dev/null\nserial: s1\nmetrics:\n  interval: 10\n", -1},
+  {"key: /dev/null\nserial: s1\nmetrics:\n  id: cam1\n  interval: 10\n", 0},
 };
 
 START_TEST(config_test_reports_warnings_and_fails_only_in_strict_mode) {
   cfg_fixture_write(&g_fx, cfgtest_cases[_i].yaml);
   ck_assert_int_eq(cam378_cfg_test(g_fx.path, 0), 0);
   ck_assert_int_eq(cam378_cfg_test(g_fx.path, 1), cfgtest_cases[_i].strict_result);
+  cfg_fixture_remove(&g_fx);
+}
+END_TEST
+
+START_TEST(config_test_flags_overlong_serial) {
+  char yaml[320];
+  char serial[257];
+  memset(serial, 'x', 256);
+  serial[256] = '\0';
+  snprintf(yaml, sizeof yaml, "key: /dev/null\nserial: %s\n", serial);
+  cfg_fixture_write(&g_fx, yaml);
+  ck_assert_int_eq(cam378_cfg_test(g_fx.path, 0), 0);
+  ck_assert_int_eq(cam378_cfg_test(g_fx.path, 1), -1);
+  serial[255] = '\0';
+  snprintf(yaml, sizeof yaml, "key: /dev/null\nserial: %s\n", serial);
+  cfg_fixture_write(&g_fx, yaml);
+  ck_assert_int_eq(cam378_cfg_test(g_fx.path, 1), 0);
   cfg_fixture_remove(&g_fx);
 }
 END_TEST
@@ -176,6 +195,7 @@ static Suite *config_suite(void) {
   tcase_add_test(tc, unknown_key_is_rejected_in_strict_mode_only);
   tcase_add_test(tc, missing_explicit_file_fails);
   tcase_add_loop_test(tc, config_test_reports_warnings_and_fails_only_in_strict_mode, 0, (int)(sizeof cfgtest_cases / sizeof cfgtest_cases[0]));
+  tcase_add_test(tc, config_test_flags_overlong_serial);
   tcase_add_test(tc, config_test_missing_file_fails);
   suite_add_tcase(s, tc);
   return s;

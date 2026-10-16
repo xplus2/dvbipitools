@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -10,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -127,6 +129,12 @@ static int wait_writable(int fd) {
   return poll(&pfd, 1, 2000);
 }
 
+static int wait_pending(int fd, const netconnect_pending_t *pending) {
+  struct pollfd pfd = {fd, netconnect_tcp_events(pending), 0};
+
+  return poll(&pfd, 1, 5000);
+}
+
 static int first_candidate_is_ipv6(const char *host, unsigned port, int *count) {
   struct addrinfo hints;
   struct addrinfo *res;
@@ -150,6 +158,20 @@ START_TEST(netconnect_tcp_refused_reports_connect_error) {
 
   ck_assert_int_eq(netconnect_tcp("127.0.0.1", (unsigned)free_loopback_tcp_port(), 2000, &reason), -1);
   ck_assert_int_eq(reason, NET_ERR_CONNECT);
+}
+END_TEST
+
+START_TEST(netconnect_tcp_rejects_out_of_range_port) {
+  net_err_reason_t reason = NET_ERR_COUNT;
+  netconnect_pending_t *pending = NULL;
+
+  ck_assert_int_eq(netconnect_tcp("127.0.0.1", 65536, 300, &reason), -1);
+  ck_assert_int_eq(reason, NET_ERR_CONNECT);
+  ck_assert_int_eq(errno, EINVAL);
+  reason = NET_ERR_COUNT;
+  ck_assert_int_eq(netconnect_tcp_start("127.0.0.1", 100000, &pending, &reason), -1);
+  ck_assert_int_eq(reason, NET_ERR_CONNECT);
+  ck_assert_ptr_null(pending);
 }
 END_TEST
 
@@ -180,6 +202,46 @@ START_TEST(dscp_is_applied_to_v4_and_v6_sockets) {
 }
 END_TEST
 
+START_TEST(sendto_tos_marks_each_packet_without_socket_state) {
+  struct sockaddr_in to;
+  socklen_t tolen = sizeof to;
+  int rx = socket(AF_INET, SOCK_DGRAM, 0);
+  int tx = socket(AF_INET, SOCK_DGRAM, 0);
+  int on = 1;
+  int want[2] = {NET_DSCP_VIDEO_HIGH, NET_DSCP_SIGNALLING};
+
+  ck_assert_int_ge(rx, 0);
+  ck_assert_int_ge(tx, 0);
+  memset(&to, 0, sizeof to);
+  to.sin_family = AF_INET;
+  to.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ck_assert_int_eq(bind(rx, (struct sockaddr *)&to, sizeof to), 0);
+  ck_assert_int_eq(getsockname(rx, (struct sockaddr *)&to, &tolen), 0);
+  ck_assert_int_eq(setsockopt(rx, IPPROTO_IP, IP_RECVTOS, &on, sizeof on), 0);
+  for (int i = 0; i < 2; i++) {
+    char data[4];
+    char ctl[64];
+    struct iovec iov = {data, sizeof data};
+    struct msghdr msg;
+    struct cmsghdr *cm;
+    int got = -1;
+
+    ck_assert_int_eq(net_sendto_tos(tx, "abcd", 4, (struct sockaddr *)&to, sizeof to, want[i]), 4);
+    memset(&msg, 0, sizeof msg);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = ctl;
+    msg.msg_controllen = sizeof ctl;
+    ck_assert_int_eq(recvmsg(rx, &msg, 0), 4);
+    for (cm = CMSG_FIRSTHDR(&msg); cm; cm = CMSG_NXTHDR(&msg, cm))
+      if (cm->cmsg_level == IPPROTO_IP && cm->cmsg_type == IP_TOS) got = *(unsigned char *)CMSG_DATA(cm);
+    ck_assert_int_eq(got, want[i]);
+  }
+  close(rx);
+  close(tx);
+}
+END_TEST
+
 START_TEST(netconnect_tcp_start_finish_refused_single_candidate) {
   netconnect_pending_t *pending = NULL;
   net_err_reason_t reason = NET_ERR_COUNT;
@@ -191,6 +253,58 @@ START_TEST(netconnect_tcp_start_finish_refused_single_candidate) {
   ck_assert_int_eq(netconnect_tcp_finish(&pending, &fd, &reason), -1);
   ck_assert_ptr_null(pending);
   ck_assert_int_eq(fd, -1);
+}
+END_TEST
+
+START_TEST(netconnect_tcp_start_hostname_resolves_without_blocking) {
+  netconnect_pending_t *pending = NULL;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  int fd = netconnect_tcp_start("localhost", 1, &pending, &reason);
+
+  ck_assert_int_ge(fd, 0);
+  ck_assert_ptr_nonnull(pending);
+  ck_assert_int_eq(netconnect_tcp_events(pending), POLLIN);
+  ck_assert_int_eq(wait_pending(fd, pending), 1);
+  ck_assert_int_eq(netconnect_tcp_finish(&pending, &fd, &reason), 0);
+  ck_assert_int_eq(netconnect_tcp_events(pending), POLLOUT);
+  netconnect_tcp_abort(pending);
+  close(fd);
+}
+END_TEST
+
+START_TEST(netconnect_tcp_start_literal_skips_resolver) {
+  netconnect_pending_t *pending = NULL;
+  int fd = netconnect_tcp_start("127.0.0.1", (unsigned)free_loopback_tcp_port(), &pending, NULL);
+
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq(netconnect_tcp_events(pending), POLLOUT);
+  netconnect_tcp_abort(pending);
+  close(fd);
+}
+END_TEST
+
+START_TEST(netconnect_tcp_abort_while_resolving_is_clean) {
+  for (int i = 0; i < 20; i++) {
+    netconnect_pending_t *pending = NULL;
+    int fd = netconnect_tcp_start("localhost", 1, &pending, NULL);
+
+    ck_assert_int_ge(fd, 0);
+    netconnect_tcp_abort(pending);
+    close(fd);
+  }
+}
+END_TEST
+
+START_TEST(netconnect_tcp_start_slow_lookup_does_not_block) {
+  netconnect_pending_t *pending = NULL;
+  double t0 = mono();
+  int fd = netconnect_tcp_start("nonexistent.invalid", 80, &pending, NULL);
+
+  ck_assert_double_lt(mono() - t0, 0.5);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq(netconnect_tcp_events(pending), POLLIN);
+  netconnect_tcp_abort(pending);
+  close(fd);
 }
 END_TEST
 
@@ -238,7 +352,7 @@ START_TEST(netconnect_tcp_finish_falls_through_to_next_candidate) {
 
   ck_assert_int_ge(fd, 0);
   for (;;) {
-    ck_assert_int_eq(wait_writable(fd), 1);
+    ck_assert_int_eq(wait_pending(fd, pending), 1);
     r = netconnect_tcp_finish(&pending, &fd, &reason);
     if (r != 0) break;
     fallbacks++;
@@ -260,7 +374,7 @@ START_TEST(netconnect_tcp_finish_reports_error_after_all_candidates_fail) {
 
   ck_assert_int_ge(fd, 0);
   for (;;) {
-    ck_assert_int_eq(wait_writable(fd), 1);
+    ck_assert_int_eq(wait_pending(fd, pending), 1);
     r = netconnect_tcp_finish(&pending, &fd, &reason);
     if (r != 0) break;
   }
@@ -273,13 +387,19 @@ END_TEST
 static Suite *netconnect_suite(void) {
   Suite *s = suite_create("netconnect");
   TCase *tc = tcase_create("core");
+  tcase_add_test(tc, sendto_tos_marks_each_packet_without_socket_state);
   tcase_add_test(tc, netconnect_tcp_succeeds_against_local_listener);
   tcase_add_test(tc, netconnect_tcp_bounded_time_on_unreachable);
   tcase_add_test(tc, netconnect_tcp_refused_reports_connect_error);
+  tcase_add_test(tc, netconnect_tcp_rejects_out_of_range_port);
   tcase_add_test(tc, netaddr_fill_builds_v4_and_v6_addresses);
   tcase_add_test(tc, dscp_is_applied_to_v4_and_v6_sockets);
   tcase_add_test(tc, netconnect_tcp_start_finish_refused_single_candidate);
   tcase_add_test(tc, netconnect_tcp_times_out_against_full_backlog);
+  tcase_add_test(tc, netconnect_tcp_start_hostname_resolves_without_blocking);
+  tcase_add_test(tc, netconnect_tcp_start_literal_skips_resolver);
+  tcase_add_test(tc, netconnect_tcp_abort_while_resolving_is_clean);
+  tcase_add_test(tc, netconnect_tcp_start_slow_lookup_does_not_block);
   tcase_add_test(tc, netconnect_tcp_finish_falls_through_to_next_candidate);
   tcase_add_test(tc, netconnect_tcp_finish_reports_error_after_all_candidates_fail);
   tcase_add_test(tc, dscp_parse_symbolic_names);

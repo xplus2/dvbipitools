@@ -13,6 +13,7 @@ static const struct option longopts[] = {
   {"out", required_argument, 0, 'o'},
   {"iface", required_argument, 0, 'I'},
   {"insecure", no_argument, 0, 'k'},
+  {"pace", no_argument, 0, OPT_PACE},
   {"group-mode", required_argument, 0, OPT_GROUP_MODE},
   {"rendezvous", no_argument, 0, OPT_RENDEZVOUS},
   {"local", required_argument, 0, OPT_LOCAL},

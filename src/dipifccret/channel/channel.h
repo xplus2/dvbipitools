@@ -84,7 +84,7 @@ typedef struct {
   size_t addr_len;
   char group[64]; /* printable form of addr, for logging / mcsend.c's mcast_open_send */
   unsigned port;
-  size_t resolve_slot; /* hash(family,addr,port) % max_channels, see channel_lookup_by_resolve_slot() */
+  size_t resolve_slot; /* hash(family,addr,port) % max_channels, linear probe to a free slot, unique per live channel */
   _Atomic uint32_t ssrc;
   _Atomic int ssrc_known;
   _Atomic time_t last_seen;
@@ -99,7 +99,7 @@ typedef struct {
   void *ring; /* RET ring */
   size_t ring_size;
   rap_cache_t cache;
-  pthread_mutex_t hned_lock; /* guards hned/hned_collisions below, cross-thread: multiple RTCP workers per channel */
+  pthread_mutex_t hned_lock; /* guards hned/hned_collisions below, cross-thread: multiple RTCP workers per channel. reclaim memsets up to here, keep last 2 members after it */
   hned_track_entry_t hned[CHANNEL_HNED_TRACK_MAX];
   hned_collision_entry_t hned_collisions[CHANNEL_HNED_COLLISION_MAX];
 } channel_t;
@@ -116,7 +116,7 @@ channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size
 
 channel_t *channel_find_by_ssrc(channel_table_t *t, uint32_t ssrc);
 
-/* NULL if slot not in use, no probe on collision */
+/* NULL if slot unowned or owner not in use */
 channel_t *channel_lookup_by_resolve_slot(channel_table_t *t, size_t slot);
 
 size_t channel_table_capacity(const channel_table_t *t);

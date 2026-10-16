@@ -155,6 +155,9 @@ START_TEST(tssrc_http_dispatches_hls_ts_segmented_media_playlist) {
   got = drive_read(s, out, sizeof ts_seg, 300);
   ck_assert_uint_eq(got, sizeof ts_seg);
   ck_assert_int_eq(memcmp(out, ts_seg, sizeof ts_seg), 0);
+  ck_assert_int_lt(tssrc_fd(s), 0);
+  ck_assert_int_ne(tssrc_timer_driven(s), 0);
+  ck_assert_int_eq(tssrc_poll_events(s), POLLIN);
 
   tssrc_close(s);
   pthread_join(pl_th, NULL);

@@ -8,6 +8,7 @@
 
 #include "lib/cas/cas_args.h"
 #include "lib/config/yamlcfg.h"
+#include "lib/scrambler/cissa.h"
 
 #include "dipitvhead/cli/priv.h"
 
@@ -199,6 +200,18 @@ START_TEST(cwenc_options_are_recorded_before_validation) {
 }
 END_TEST
 
+/* CISSA/BISS-2 need OpenSSL: stub builds must reject at parse */
+#define PARSE_OK_OR_NO_OPENSSL(rc_expr)           \
+  do {                                            \
+    int rc_ = (rc_expr);                          \
+    if (!cissa_available()) {                     \
+      ck_assert_int_ne(rc_, ARGS_OK);             \
+      yamlcfg_strpool_free(cfg.str_pool);         \
+      return;                                     \
+    }                                             \
+    ck_assert_int_eq(rc_, ARGS_OK);               \
+  } while (0)
+
 START_TEST(biss_options_enable_and_store_keys) {
   const char *extra[] = {
     "--biss2-sw", "00112233445566778899aabbccddeeff",
@@ -206,7 +219,7 @@ START_TEST(biss_options_enable_and_store_keys) {
     NULL};
   config_t cfg = {0};
 
-  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_OK);
+  PARSE_OK_OR_NO_OPENSSL(args_fixture_parse_list(&cfg, extra));
   ck_assert_int_eq(cfg.biss2_enabled, 1);
   ck_assert_uint_eq(cfg.biss2_sw[15], 0xffu);
   ck_assert_int_eq(cfg.biss2_emit_esw, 1);
@@ -233,7 +246,7 @@ START_TEST(biss2_ca_options_fill_config) {
     NULL};
   config_t cfg = {0};
 
-  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_OK);
+  PARSE_OK_OR_NO_OPENSSL(args_fixture_parse_list(&cfg, extra));
   ck_assert_int_eq(cfg.biss2_ca_enabled, 1);
   ck_assert_str_eq(cfg.biss2_ca_receivers_dir, "/etc/biss-ca/receivers");
   ck_assert_int_eq(cfg.biss2_ca_session_id_given, 1);

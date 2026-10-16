@@ -195,6 +195,38 @@ START_TEST(https_async_untrusted_certificate_reports_tls_error) {
 }
 END_TEST
 
+START_TEST(https_clean_close_reports_eof_not_tls_error) {
+  unsigned port;
+  int listen_fd = make_listener(&port);
+  tls_server_ctx_t *sc = tls_server_ctx_new(g_cert, g_key);
+  tls_server_arg_t sarg = {listen_fd, sc, "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nBODYBYTES"};
+  pthread_t th;
+  http_async_t *a;
+  http_t *h;
+  char buf[32];
+  ssize_t n = 0;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  net_err_reason_t drive_reason = NET_ERR_COUNT;
+
+  ck_assert_ptr_nonnull(sc);
+  ck_assert_int_eq(pthread_create(&th, NULL, tls_serve_once, &sarg), 0);
+  a = start_https(port, 1);
+  ck_assert_ptr_nonnull(a);
+  ck_assert_int_eq(drive(a, &drive_reason), HTTP_ASYNC_DONE);
+  h = http_async_take(a);
+  for (int i = 0; i < 400 && n >= 0; i++) {
+    n = http_read(h, buf, sizeof buf, &reason);
+    if (n == 0) usleep(5000);
+  }
+  ck_assert_int_eq(n, -1);
+  ck_assert_int_eq(reason, NET_ERR_EOF);
+  http_close(h);
+  pthread_join(th, NULL);
+  tls_server_ctx_free(sc);
+  close(listen_fd);
+}
+END_TEST
+
 static Suite *httpclient_async_tls_suite(void) {
   Suite *s = suite_create("httpclient_async_tls");
   TCase *tc = tcase_create("tls");
@@ -202,6 +234,7 @@ static Suite *httpclient_async_tls_suite(void) {
   tcase_add_checked_fixture(tc, setup, teardown);
   tcase_add_test(tc, https_async_connects_and_reads_body);
   tcase_add_test(tc, https_async_untrusted_certificate_reports_tls_error);
+  tcase_add_test(tc, https_clean_close_reports_eof_not_tls_error);
   suite_add_tcase(s, tc);
   return s;
 }

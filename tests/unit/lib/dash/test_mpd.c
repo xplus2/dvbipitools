@@ -228,6 +228,171 @@ START_TEST(dash_effective_availability_ms_subtracts_offset) {
 }
 END_TEST
 
+START_TEST(dash_media_url_expands_identifier_bandwidth_and_widths) {
+  dash_representation_t r;
+  char out[256];
+  memset(&r, 0, sizeof r);
+  strcpy(r.id, "v1");
+  r.bandwidth = 2500000;
+  strcpy(r.media_url_tmpl, "http://h/$RepresentationID$/$Bandwidth$/s$Number%05d$_$Time%08d$$$.m4s");
+  strcpy(r.init_url, "http://h/$RepresentationID$/init-$Bandwidth$.mp4");
+  ck_assert_int_eq(dash_media_url(&r, 42, 6000, out, sizeof out), 1);
+  ck_assert_str_eq(out, "http://h/v1/2500000/s00042_00006000$.m4s");
+  ck_assert_int_eq(dash_init_url(&r, out, sizeof out), 1);
+  ck_assert_str_eq(out, "http://h/v1/init-2500000.mp4");
+}
+END_TEST
+
+START_TEST(dash_mpd_parse_timeline_with_repeats_and_implicit_times) {
+  char body[] =
+    "<MPD type=\"dynamic\"><Period><AdaptationSet mimeType=\"video/mp4\">"
+    "<SegmentTemplate initialization=\"i.mp4\" media=\"s$Time$.m4s\" timescale=\"1000\" startNumber=\"5\" presentationTimeOffset=\"250\">"
+    "<SegmentTimeline><S t=\"1000\" d=\"2000\" r=\"2\"/><S d=\"3000\"/><S t=\"12000\" d=\"2000\" r=\"-1\"/><S t=\"16000\" d=\"1000\"/></SegmentTimeline>"
+    "</SegmentTemplate><Representation id=\"a\" bandwidth=\"1\"/></AdaptationSet></Period></MPD>";
+  dash_mpd_t mpd;
+  const dash_representation_t *r;
+  unsigned long long t, d, k;
+  ck_assert_int_eq(dash_mpd_parse(body, NULL, &mpd), 1);
+  r = &mpd.periods[0].adaptation_sets[0].representations[0];
+  ck_assert_uint_eq(r->n_timeline, 4u);
+  ck_assert_uint_eq(r->timeline[1].t, 7000ULL);
+  ck_assert_uint_eq(r->timeline[2].r, 1ULL);
+  ck_assert_uint_eq(r->presentation_time_offset, 250ULL);
+  ck_assert_uint_eq(dash_timeline_first(r), 1000ULL);
+  ck_assert_int_eq(dash_timeline_last(r, &t, &d, &k), 1);
+  ck_assert_uint_eq(t, 16000ULL);
+  ck_assert_uint_eq(d, 1000ULL);
+  ck_assert_uint_eq(k, 6ULL);
+  ck_assert_int_eq(dash_timeline_find(r, 5000, &d, &k), 1);
+  ck_assert_uint_eq(k, 2ULL);
+  ck_assert_uint_eq(d, 2000ULL);
+  ck_assert_int_eq(dash_timeline_find(r, 14000, &d, &k), 1);
+  ck_assert_uint_eq(k, 5ULL);
+  ck_assert_int_eq(dash_timeline_find(r, 5500, &d, &k), 0);
+  ck_assert_uint_eq(dash_segment_duration_ms(r), 1000ULL);
+}
+END_TEST
+
+START_TEST(dash_mpd_parse_timeline_drops_oldest_beyond_capacity) {
+  char *body = malloc(DASH_MAX_TIMELINE * 40 + 512);
+  char *p = body;
+  dash_mpd_t *mpd = malloc(sizeof *mpd);
+  const dash_representation_t *r;
+  unsigned long long d, k;
+  p += sprintf(p, "<MPD><Period><AdaptationSet><SegmentTemplate media=\"s$Time$\" timescale=\"1\"><SegmentTimeline>");
+  for (unsigned i = 0; i < DASH_MAX_TIMELINE + 3; i++) p += sprintf(p, "<S t=\"%u\" d=\"1\"/>", i * 10);
+  sprintf(p, "</SegmentTimeline></SegmentTemplate><Representation id=\"a\"/></AdaptationSet></Period></MPD>");
+  ck_assert_int_eq(dash_mpd_parse(body, NULL, mpd), 1);
+  r = &mpd->periods[0].adaptation_sets[0].representations[0];
+  ck_assert_uint_eq(r->n_timeline, (unsigned)DASH_MAX_TIMELINE);
+  ck_assert_uint_eq(r->timeline_skipped, 3ULL);
+  ck_assert_int_eq(dash_timeline_find(r, 30, &d, &k), 1);
+  ck_assert_uint_eq(k, 3ULL);
+  ck_assert_int_eq(dash_timeline_find(r, 20, &d, &k), 0);
+  free(mpd);
+  free(body);
+}
+END_TEST
+
+START_TEST(dash_mpd_parse_reads_availability_start_and_buffer_depth) {
+  char body[] =
+    "<MPD type=\"dynamic\" availabilityStartTime=\"2024-03-05T10:20:30.250Z\" timeShiftBufferDepth=\"PT1M30S\" minimumUpdatePeriod=\"PT2.5S\">"
+    "<Period><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>";
+  dash_mpd_t mpd;
+  ck_assert_int_eq(dash_mpd_parse(body, NULL, &mpd), 1);
+  ck_assert_int_eq(mpd.has_availability_start, 1);
+  ck_assert_uint_eq(mpd.availability_start_ms, 1709634030250ULL);
+  ck_assert_uint_eq(mpd.time_shift_buffer_ms, 90000ULL);
+  ck_assert_uint_eq(mpd.minimum_update_period_ms, 2500u);
+}
+END_TEST
+
+START_TEST(dash_mpd_parse_offset_availability_start_is_converted_to_utc) {
+  char body[] = "<MPD type=\"dynamic\" availabilityStartTime=\"2024-03-05T11:20:30+01:00\"><Period><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>";
+  dash_mpd_t mpd;
+  ck_assert_int_eq(dash_mpd_parse(body, NULL, &mpd), 1);
+  ck_assert_uint_eq(mpd.availability_start_ms, 1709634030000ULL);
+}
+END_TEST
+
+START_TEST(dash_mpd_parse_resolves_base_url_levels) {
+  char body[] =
+    "<MPD><BaseURL>http://cdn.example/root/</BaseURL><Period><BaseURL>p1/</BaseURL>"
+    "<AdaptationSet mimeType=\"video/mp4\"><BaseURL>v/</BaseURL>"
+    "<SegmentTemplate initialization=\"init.mp4\" media=\"s$Number$.m4s\"/>"
+    "<Representation id=\"a\"/><Representation id=\"b\"><BaseURL>b/</BaseURL></Representation></AdaptationSet></Period></MPD>";
+  http_url_t base = make_base("origin.example", 80, "/live/stream.mpd");
+  dash_mpd_t mpd;
+  const dash_adaptation_set_t *as;
+  ck_assert_int_eq(dash_mpd_parse(body, &base, &mpd), 1);
+  as = &mpd.periods[0].adaptation_sets[0];
+  ck_assert_str_eq(as->representations[0].init_url, "http://cdn.example/root/p1/v/init.mp4");
+  ck_assert_str_eq(as->representations[0].media_url_tmpl, "http://cdn.example/root/p1/v/s$Number$.m4s");
+  ck_assert_str_eq(as->representations[1].media_url_tmpl, "http://cdn.example/root/p1/v/b/s$Number$.m4s");
+  ck_assert_uint_eq(as->representations[0].start_number, 1ULL);
+}
+END_TEST
+
+START_TEST(dash_mpd_parse_period_starts_chain) {
+  char body[] =
+    "<MPD type=\"dynamic\" availabilityStartTime=\"2024-03-05T10:00:00Z\">"
+    "<Period id=\"a\" start=\"PT0S\" duration=\"PT1M\"><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period>"
+    "<Period id=\"b\" duration=\"PT30S\"><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period>"
+    "<Period id=\"c\" start=\"PT2M\"><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>";
+  dash_mpd_t mpd;
+  ck_assert_int_eq(dash_mpd_parse(body, NULL, &mpd), 1);
+  ck_assert_uint_eq(mpd.n_periods, 3u);
+  ck_assert_uint_eq(mpd.periods[0].start_ms, 0ULL);
+  ck_assert_uint_eq(mpd.periods[1].start_ms, 60000ULL);
+  ck_assert_uint_eq(mpd.periods[2].start_ms, 120000ULL);
+}
+END_TEST
+
+START_TEST(dash_edge_index_follows_wall_clock) {
+  dash_representation_t r;
+  unsigned long long idx = 99;
+  memset(&r, 0, sizeof r);
+  r.timescale = 1000;
+  r.duration = 2000;
+  ck_assert_int_eq(dash_edge_index(&r, 1999, &idx), 0);
+  ck_assert_int_eq(dash_edge_index(&r, 2000, &idx), 1);
+  ck_assert_uint_eq(idx, 0ULL);
+  ck_assert_int_eq(dash_edge_index(&r, 5000, &idx), 1);
+  ck_assert_uint_eq(idx, 1ULL);
+  r.availability_time_offset_ms = 1000;
+  ck_assert_int_eq(dash_edge_index(&r, 5000, &idx), 1);
+  ck_assert_uint_eq(idx, 2ULL);
+  ck_assert_uint_eq(dash_index_available_ms(&r, 2), 5000ULL);
+  ck_assert_uint_eq(dash_index_available_ms(&r, 0), 1000ULL);
+  r.presentation_time_offset = 500;
+  ck_assert_uint_eq(dash_index_time(&r, 3), 6500ULL);
+}
+END_TEST
+
+START_TEST(dash_mpd_live_period_picks_by_wall_clock) {
+  dash_mpd_t mpd;
+  memset(&mpd, 0, sizeof mpd);
+  mpd.is_dynamic = 1;
+  mpd.n_periods = 3;
+  mpd.periods[1].start_ms = 1000;
+  mpd.periods[2].start_ms = 2000;
+  ck_assert_uint_eq(dash_mpd_live_period(&mpd), 2u);
+  mpd.has_availability_start = 1;
+  mpd.availability_start_ms = dash_wall_ms() - 1500;
+  ck_assert_uint_eq(dash_mpd_live_period(&mpd), 1u);
+  mpd.is_dynamic = 0;
+  ck_assert_uint_eq(dash_mpd_live_period(&mpd), 0u);
+}
+END_TEST
+
+START_TEST(dash_mpd_parse_reads_multi_unit_durations) {
+  char body[] = "<MPD type=\"dynamic\" minimumUpdatePeriod=\"PT1M30.5S\"><Period><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>";
+  dash_mpd_t mpd;
+  ck_assert_int_eq(dash_mpd_parse(body, NULL, &mpd), 1);
+  ck_assert_uint_eq(mpd.minimum_update_period_ms, 90500u);
+}
+END_TEST
+
 static Suite *dash_mpd_suite(void) {
   Suite *s = suite_create("dash_mpd");
   TCase *tc = tcase_create("core");
@@ -243,6 +408,16 @@ static Suite *dash_mpd_suite(void) {
   tcase_add_test(tc, dash_effective_availability_ms_subtracts_offset);
   tcase_add_test(tc, dash_mpd_parse_reads_type_and_minimum_update_period);
   tcase_add_test(tc, dash_mpd_parse_static_type);
+  tcase_add_test(tc, dash_media_url_expands_identifier_bandwidth_and_widths);
+  tcase_add_test(tc, dash_mpd_parse_timeline_with_repeats_and_implicit_times);
+  tcase_add_test(tc, dash_mpd_parse_timeline_drops_oldest_beyond_capacity);
+  tcase_add_test(tc, dash_mpd_parse_reads_availability_start_and_buffer_depth);
+  tcase_add_test(tc, dash_mpd_parse_offset_availability_start_is_converted_to_utc);
+  tcase_add_test(tc, dash_mpd_parse_resolves_base_url_levels);
+  tcase_add_test(tc, dash_mpd_parse_period_starts_chain);
+  tcase_add_test(tc, dash_edge_index_follows_wall_clock);
+  tcase_add_test(tc, dash_mpd_live_period_picks_by_wall_clock);
+  tcase_add_test(tc, dash_mpd_parse_reads_multi_unit_durations);
   suite_add_tcase(s, tc);
   return s;
 }

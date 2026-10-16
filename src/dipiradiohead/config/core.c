@@ -9,7 +9,36 @@
 #include "lib/helper/uriparse.h"
 #include "lib/net/netconnect.h"
 #include "../config.h"
+#include "../input/inputset.h"
+#include "../mux/tspacketizer.h"
 #include "priv.h"
+
+#define RDH_PID_CAT 0x0001
+#define RDH_PID_NIT 0x0010
+#define RDH_PID_SDT 0x0011
+#define RDH_PID_EIT 0x0012
+#define RDH_PID_TDT 0x0014 /* MPTS only */
+
+static int pid_emitted(const config_t *cfg, unsigned pid) {
+  unsigned n = cfg->n_inputs;
+  if (pid == RDH_PID_CAT || pid == RDH_PID_NIT || pid == RDH_PID_SDT || pid == RDH_PID_EIT) return 1;
+  if (n <= 1) return pid == TSPACKETIZER_PID_PMT || pid == TSPACKETIZER_PID_AUDIO;
+  return pid == RDH_PID_TDT || (pid >= INPUTSET_AUDIO_PID_BASE && pid < INPUTSET_AUDIO_PID_BASE + n) ||
+         (pid >= INPUTSET_PMT_PID_BASE && pid < INPUTSET_PMT_PID_BASE + n);
+}
+
+int rdh_cas_pid_clash(const config_t *cfg, unsigned *pid_out, int *is_emm) {
+  for (unsigned vi = 0; vi < cfg->n_cas_vendors; vi++) {
+    const unsigned pids[2] = {cfg->cas_vendors[vi].ecm_pid, cfg->cas_vendors[vi].emm_pid};
+    for (int k = 0; k < 2; k++) {
+      if (!pid_emitted(cfg, pids[k])) continue;
+      *pid_out = pids[k];
+      *is_emm = k;
+      return 1;
+    }
+  }
+  return 0;
+}
 
 void rdh_cfg_defaults(config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);

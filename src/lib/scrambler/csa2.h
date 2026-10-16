@@ -29,10 +29,10 @@ typedef struct {
   size_t len;
 } csa2_batch_entry_t;
 
-/* SIMD bitslice CSA: encrypts n entries in place, all under k's key. all entries share one key/parity. n must not exceed csa2_batch_size() */
-void csa2_encrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n);
+/* SIMD bitslice CSA: encrypts n entries in place, all under k's key. all entries share one key/parity. n must not exceed csa2_batch_size(). 0: ok. -1: failed (no key or OOM), entries untouched */
+int csa2_encrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n);
 
 /* inverse of csa2_encrypt_batch */
-void csa2_decrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n);
+int csa2_decrypt_batch(csa2_key_t *k, csa2_batch_entry_t *entries, unsigned n);
 
 #endif

@@ -18,7 +18,9 @@ struct device_state {
 };
 
 device_state_t *device_state_new(const char *key_path, int cw_len, const char *serial, unsigned caid) {
-  device_state_t *d = device_core_alloc(sizeof *d, key_path, serial, 0);
+  device_state_t *d;
+  if (!serial || !*serial) return NULL;
+  d = device_core_alloc(sizeof *d, key_path, serial, 0);
   if (!d) return NULL;
   d->cw_len = cw_len;
   d->caid = caid;
@@ -26,6 +28,8 @@ device_state_t *device_state_new(const char *key_path, int cw_len, const char *s
 }
 
 void device_state_free(device_state_t *d) { device_core_free_state(d); }
+
+int device_caid_matches(const device_state_t *d, unsigned caid) { return !d->caid || caid == d->caid; }
 
 void device_on_emm(device_state_t *d, const unsigned char *emm, size_t emm_len) {
   device_core_on_emm(&d->core, emm, emm_len, TOOL_NAME ": ");
@@ -38,7 +42,7 @@ int device_resolve_cw(device_state_t *d, const unsigned char *ecm, size_t ecm_le
   unsigned char sk_copy[CRYPTO_KEY_LEN];
   unsigned char cw[16];
 
-  if (d->caid && caid != d->caid) return -2; /* permanent: wrong caid, never answerable regardless of EMM state */
+  if (!device_caid_matches(d, caid)) return -2; /* permanent: wrong caid, never answerable regardless of EMM state */
 
   /* section header(3) + CP_CW_COMBINATION's cp_number(2), then encrypted CW block */
   if (ecm_len < 5 + CRYPTO_CW_ENC_LEN) return -1;

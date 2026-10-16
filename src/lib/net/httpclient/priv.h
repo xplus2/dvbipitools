@@ -13,6 +13,8 @@
 #define HTTP_REDIRECT_MAX 5
 #define HTTP_CONNECT_TIMEOUT_MS 5000
 #define HTTP_HEADER_TIMEOUT_MS 5000
+#define HTTP_ASYNC_STAGE_TIMEOUT_S 10
+#define HTTP_BODY_IDLE_TIMEOUT_S 10
 
 struct http {
   int fd;
@@ -52,11 +54,15 @@ struct http_async {
   char reqbuf[2048];
   size_t req_len;
   size_t req_sent;
+  double deadline; /* mono, current stage */
   size_t hdr_got; /* bytes accumulated in h->hold while headers aren't complete yet */
 };
 
 /* url.c */
 int resolve_location(http_url_t *u, const char *loc);
+
+/* 0 ok, -1 https http downgrade (logged, reason_out set) */
+int check_redirect_scheme(const http_url_t *from, const http_url_t *to, net_err_reason_t *reason_out);
 
 /* httpclient.c */
 ssize_t raw_recv(struct http *h, void *buf, size_t cap, net_err_reason_t *reason_out);

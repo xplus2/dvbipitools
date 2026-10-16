@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "lib/helper/argutil.h"
@@ -54,12 +55,19 @@ static int source_parse(const char *uri, source_t *s) {
     const char *rest = uri + 6;
     int listen = *rest == '@';
     if (listen) rest++;
-    if (argutil_addrport_parse(rest, &s->srt_family, s->srt_host, sizeof s->srt_host, &s->srt_port)) return -1;
+    if (argutil_hostport_parse(rest, &s->srt_family, s->srt_host, sizeof s->srt_host, &s->srt_port)) return -1;
     s->kind = SRC_SRT;
     s->srt_listen = listen;
     return 0;
   }
   return -1;
+}
+
+/* userinfo, query, fragment dropped */
+static void describe_redacted(char *buf, size_t n, const char *uri) {
+  char *safe = uriparse_redact_dup(uri);
+  bufcpy(buf, n, safe ? safe : "?");
+  free(safe);
 }
 
 void source_describe(const source_t *s, char *buf, size_t n) {
@@ -70,14 +78,17 @@ void source_describe(const source_t *s, char *buf, size_t n) {
     case SRC_UDP:
       uriparse_mcast_src_uri(buf, n, "udp", s->family, s->source, s->group, s->port);
       break;
-    case SRC_HTTP:
-      describe_http_uri(buf, n, s->http.tls, s->http.host, s->http.port, s->http.path);
+    case SRC_HTTP: {
+      char full[sizeof s->http.path + 300];
+      describe_http_uri(full, sizeof full, s->http.tls, s->http.host, s->http.port, s->http.path);
+      describe_redacted(buf, n, full);
       break;
+    }
     case SRC_STDIN:
       bufcpy(buf, n, "-");
       break;
     case SRC_RIST:
-      bufcpy(buf, n, s->rist_uri);
+      describe_redacted(buf, n, s->rist_uri);
       break;
     case SRC_SRT:
       describe_srt_uri(buf, n, s->srt_family, s->srt_listen, s->srt_host, s->srt_port);
@@ -142,7 +153,7 @@ int tvh_cfg_add_peer(config_t *cfg, const char *uri, char *err, size_t errsz) {
       bufcpy(err, errsz, "srt:// output always calls out, no listener mode");
       return -1;
     }
-    if (argutil_addrport_parse(uri + 6, &cfg->srt_family[cfg->n_srt], cfg->srt_host[cfg->n_srt], sizeof cfg->srt_host[0], &cfg->srt_port[cfg->n_srt])) {
+    if (argutil_hostport_parse(uri + 6, &cfg->srt_family[cfg->n_srt], cfg->srt_host[cfg->n_srt], sizeof cfg->srt_host[0], &cfg->srt_port[cfg->n_srt])) {
       snprintf(err, errsz, "invalid srt uri '%s'", uri);
       return -1;
     }

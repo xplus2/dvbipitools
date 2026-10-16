@@ -206,15 +206,14 @@ START_TEST(rtp_with_al_fec_sends_repair_on_fec_port) {
   ck_assert_ptr_nonnull(s);
   ck_assert_int_eq(tssink_write(s, data, sizeof data), 0);
   for (unsigned i = 0; i < 4; i++) ck_assert_int_eq((int)recv(rx, buf, sizeof buf, 0), 12 + DGRAM_TS);
-  for (unsigned i = 0; i < 2; i++) {
-    ck_assert_int_eq((int)recv(fec_rx, buf, sizeof buf, 0), 28 + DGRAM_TS);
-    ck_assert_uint_eq(buf[0] & 0xC0, 0x80);
-    ck_assert_uint_eq(buf[1] & 0x7F, 96);
-    ck_assert_uint_eq(buf[25], 2);
-    ck_assert_uint_eq(buf[26], 2);
-  }
+  ck_assert_int_eq((int)recv(fec_rx, buf, sizeof buf, 0), 28 + DGRAM_TS);
   ck_assert_int_lt((int)recv(fec_rx, buf, sizeof buf, MSG_DONTWAIT), 0);
   tssink_close(s);
+  ck_assert_int_eq((int)recv(fec_rx, buf, sizeof buf, 0), 28 + DGRAM_TS);
+  ck_assert_uint_eq(buf[0] & 0xC0, 0x80);
+  ck_assert_uint_eq(buf[1] & 0x7F, 96);
+  ck_assert_uint_eq(buf[25], 2);
+  ck_assert_uint_eq(buf[26], 2);
   close(rx);
   close(fec_rx);
 }

@@ -37,7 +37,7 @@ args_status_t dscr_cli_check(const config_t *cfg) {
     argerr("DS000330", "-f mkv/mka requires exactly one -o file target (plus optional rtmp(s) targets)");
     return ARGS_ERR;
   }
-  if (cfg->insecure_tls && !has_rtmps && !cfg->unicast_emm_uri) log_code("DS000331", TOOL_NAME ": --insecure needs -u or -o rtmps://");
+  if (cfg->insecure_tls && !has_rtmps && !cfg->unicast_emm_uri) log_code("DA000331", TOOL_NAME ": --insecure has no effect without -u or -o rtmps://");
   if (cfg->strip_lcevc && cfg->format == FMT_TS && !has_rtmp) log_code("DA000332", TOOL_NAME ": --strip-lcevc has no effect, no -f mkv/mka or -o rtmp(s):// target");
   if (cfg->biss2_sw_given && cfg->biss2_esw_given) {
     argerr("DS000333", "--biss2-sw and --biss2-esw are mutually exclusive");
@@ -57,8 +57,8 @@ args_status_t dscr_cli_check(const config_t *cfg) {
     argutil_err(TOOL_NAME, "DS000336", "--metrics-inspect-ts-pids requires --metrics-inspect-ts full");
     return ARGS_ERR;
   }
-  if (cfg->profile_given && cfg->input.kind != INPUT_RIST) log_code("DS000337", TOOL_NAME ": --rist-profile needs -i rist://");
-  if (cfg->rist_key_size && cfg->input.kind != INPUT_RIST) log_code("DS000338", TOOL_NAME ": --rist-encryption-type needs -i rist://");
+  if (cfg->profile_given && cfg->input.kind != INPUT_RIST) log_code("DA000337", TOOL_NAME ": --rist-profile has no effect, -i isn't rist://");
+  if (cfg->rist_key_size && cfg->input.kind != INPUT_RIST) log_code("DA000338", TOOL_NAME ": --rist-encryption-type has no effect, -i isn't rist://");
   if (cfg->rist_key_size && cfg->input.kind == INPUT_RIST && !cfg->rist_profile_main) {
     argerr("DS000339", "--rist-encryption-type requires --rist-profile main");
     return ARGS_ERR;
@@ -69,7 +69,7 @@ args_status_t dscr_cli_check(const config_t *cfg) {
     return ARGS_ERR;
   }
   if (cfg->input.kind != INPUT_SRT && (cfg->srt_passphrase_in[0] || cfg->srt_pbkeylen_in || cfg->srt_streamid_in[0] || cfg->srt_packetfilter_in[0] || cfg->srt_latency_in_ms))
-    log_code("DS000341", TOOL_NAME ": --srt-*-in needs -i srt://");
+    log_code("DA000341", TOOL_NAME ": --srt-*-in has no effect, -i isn't srt://");
   if (argutil_srt_passphrase_opt(TOOL_NAME, cfg->srt_passphrase, "--srt-passphrase")) return ARGS_ERR;
   if (cfg->srt_pbkeylen && !cfg->srt_passphrase[0]) {
     argerr("DS000342", "--srt-pbkeylen requires --srt-passphrase");
@@ -80,6 +80,6 @@ args_status_t dscr_cli_check(const config_t *cfg) {
     if (cfg->out[i].kind == OUT_SRT) has_srt_out = 1;
   }
   if (!has_srt_out && (cfg->srt_passphrase[0] || cfg->srt_pbkeylen || cfg->srt_streamid[0] || cfg->srt_packetfilter[0] || cfg->srt_latency_ms))
-    log_code("DS000343", TOOL_NAME ": --srt-* needs -o srt://");
+    log_code("DA000343", TOOL_NAME ": --srt-* has no effect without -o srt://");
   return ARGS_OK;
 }

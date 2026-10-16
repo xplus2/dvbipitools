@@ -5,6 +5,14 @@
 
 #include <string.h>
 
+#define FMP4_OPT_U32_NOFLAG(flag_bit, bail, dest, valexpr) { \
+  if (flags & (flag_bit)) { \
+    if (end - p < 4) { bail; } \
+    (dest) = (valexpr); \
+    p += 4; \
+  } \
+}
+
 #define FMP4_OPT_U32(flag_bit, bail, dest, valexpr, have) { \
   if (flags & (flag_bit)) { \
     if (end - p < 4) { bail; } \
@@ -64,7 +72,8 @@ unsigned fmp4_parse_trun_samples(const unsigned char *trun_body, size_t trun_len
   int have_data_offset = 0;
   uint32_t first_sample_flags = 0;
   int have_first_sample_flags = 0;
-  const unsigned char *cursor;
+  int64_t rel;
+  size_t off;
   unsigned n = 0;
 
   if (trun_len < 8) return 0;
@@ -75,8 +84,9 @@ unsigned fmp4_parse_trun_samples(const unsigned char *trun_body, size_t trun_len
   FMP4_OPT_U32(0x000001, return 0, data_offset, (int32_t)fmp4_rb_u32(p), have_data_offset = 1);
   FMP4_OPT_U32(0x000004, return 0, first_sample_flags, fmp4_rb_u32(p), have_first_sample_flags = 1);
   if (tfhd->have_base_data_offset && !tfhd->default_base_is_moof) return 0;
-  cursor = moof->start + (have_data_offset ? data_offset : 0);
-  if (cursor < mdat_body || (size_t)(cursor - mdat_body) > mdat_len) return 0;
+  rel = (int64_t)(have_data_offset ? data_offset : 0) - (int64_t)(mdat_body - moof->start);
+  if (rel < 0 || (uint64_t)rel > mdat_len) return 0;
+  off = (size_t)rel;
 
   for (unsigned i = 0; i < sample_count && n < max; i++) {
     fmp4_dec_sample_t *s = &out[n];
@@ -85,17 +95,17 @@ unsigned fmp4_parse_trun_samples(const unsigned char *trun_body, size_t trun_len
     uint32_t sflags = tfhd->have_default_sample_flags ? tfhd->default_sample_flags : 0;
     int32_t cts = 0;
     if (have_first_sample_flags && i == 0) sflags = first_sample_flags;
-    FMP4_OPT_U32(0x000100, break, duration, fmp4_rb_u32(p), (void)0);
-    FMP4_OPT_U32(0x000200, break, size, fmp4_rb_u32(p), (void)0);
-    FMP4_OPT_U32(0x000400, break, sflags, fmp4_rb_u32(p), (void)0);
-    FMP4_OPT_U32(0x000800, break, cts, (int32_t)fmp4_rb_u32(p), (void)0);
-    if ((size_t)(cursor - mdat_body) + size > mdat_len) break;
-    s->data = cursor;
+    FMP4_OPT_U32_NOFLAG(0x000100, break, duration, fmp4_rb_u32(p));
+    FMP4_OPT_U32_NOFLAG(0x000200, break, size, fmp4_rb_u32(p));
+    FMP4_OPT_U32_NOFLAG(0x000400, break, sflags, fmp4_rb_u32(p));
+    FMP4_OPT_U32_NOFLAG(0x000800, break, cts, (int32_t)fmp4_rb_u32(p));
+    if (size > mdat_len - off) break;
+    s->data = mdat_body + off;
     s->size = size;
     s->duration = duration;
     s->cts_offset = cts;
     s->flags = sflags;
-    cursor += size;
+    off += size;
     n++;
   }
   return n;

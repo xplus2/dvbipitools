@@ -226,7 +226,7 @@ static void update_mgb(tsinspect_t *t) {
     t->mgb1_start = t->now;
     t->mgb1_pk = pk;
   }
-  if (t->mgb2_n == 0 || t->now - t->mgb2_t[(t->mgb2_head + MGB2_SLICES) % (MGB2_SLICES + 1)] >= MGB2_SLICE_S) {
+  if (t->mgb2_n == 0 || t->now - t->mgb2_t[(t->mgb2_head + t->mgb2_n - 1) % (MGB2_SLICES + 1)] >= MGB2_SLICE_S) {
     int slot = (t->mgb2_head + t->mgb2_n) % (MGB2_SLICES + 1);
     if (t->mgb2_n == MGB2_SLICES + 1) {
       t->mgb2_head = (t->mgb2_head + 1) % (MGB2_SLICES + 1);
@@ -258,10 +258,16 @@ static void check_stall(tsinspect_t *t) {
 }
 
 static void tick_psi(tsinspect_t *t) {
+  unsigned pcr;
   check_tables(t);
   if (t->x->obs.t[PSI_OBS_PMT].last_seen != 0.0) check_pts_gaps(t);
-  t->pcr_pid = psi_pcr_pid(t->psi);
-  if (t->pcr_pid == 0) t->pcr_pid = PID_NONE;
+  pcr = psi_pcr_pid(t->psi);
+  if (pcr == 0) pcr = PID_NONE;
+  if (pcr != t->pcr_pid) {
+    t->pcr_pid = pcr;
+    t->pcr_have = 0;
+    t->pcr_rx_last = 0;
+  }
   if (t->now - t->win_start >= PID_WINDOW_S) {
     check_referenced_pids(t);
     t->win_start = t->now;

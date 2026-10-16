@@ -14,13 +14,14 @@
 
 #define HLS_ETAG_MAX 128
 #define HLS_PLAYLIST_BUF_CAP (64 * 1024)
-#define HLS_SEGMENT_BUF_CAP (512 * 1024)
-#define HLS_OUT_BUF_CAP (256 * 1024)
-#define HLS_OUT_BUF_PREFETCH_HEADROOM (96 * 1024)
+#define HLS_SEGMENT_BUF_CAP (8 * 1024 * 1024)
+#define HLS_OUT_BUF_CAP (12 * 1024 * 1024)
+#define HLS_OUT_BUF_PREFETCH_HEADROOM (HLS_SEGMENT_BUF_CAP)
 #define HLS_DEFAULT_TARGET_DURATION 6
 #define HLS_MAX_REUSE_AGE_S 15
 #define HLS_JOIN_BACK_SEGMENTS 3
 #define HLS_KEY_LEN 16
+#define HLS_MAX_SEGMENT_FAILS 10
 
 typedef enum { HLS_LIVE_IDLE, HLS_LIVE_FETCHING_PLAYLIST, HLS_LIVE_FETCHING_SEGMENT, HLS_LIVE_FETCHING_KEY, HLS_LIVE_FETCHING_INIT } hls_live_phase_t;
 
@@ -39,6 +40,7 @@ struct hls_live {
 
   hls_live_phase_t phase;
   http_fetch_t *fetch;
+  int fetch_reused; /* kept-alive conn, server may have closed it */
   http_t *reuse;
   double reuse_established_at;
   double next_poll_at;
@@ -49,6 +51,10 @@ struct hls_live {
   hls_playlist_t pl;
   hls_playlist_t *parse_scratch;
   unsigned pending_idx;
+  log_throttle_t drop_throttle;
+  log_throttle_t trunc_throttle;
+  log_throttle_t fail_throttle;
+  unsigned seg_fail_count;
 
   int have_key;
   char key_url[2048];
@@ -66,9 +72,10 @@ struct hls_live {
 void hls_live_emit(hls_live_t *h, const unsigned char *data, size_t len) {
   size_t room = sizeof h->out_buf - h->out_len;
   size_t n = len < room ? len : room;
+  if (len % 188 == 0) n -= n % 188; /* never end on a partial TS packet */
   memcpy(h->out_buf + h->out_len, data, n);
   h->out_len += n;
-  if (room < len) log_code_ansi("LW100122", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS output buffer full, dropped bytes\e[0m", h->idx, h->label ? h->label : "?");
+  if (room < len) log_throttled(&h->drop_throttle, LOG_THROTTLE_WINDOW_S, "LW100122", "input %u (%s): HLS output buffer full, dropped bytes", h->idx, h->label ? h->label : "?");
 }
 
 hls_live_t *hls_live_new(const http_url_t *playlist_url, const char *user_agent, int insecure, unsigned idx, const char *label, const hls_insp_t *si, hls_segment_cb cb, void *cb_ctx) {
@@ -119,7 +126,11 @@ hls_segment_kind_t hls_live_segment_kind(const unsigned char *d, size_t len) {
   if (len && d[0] == 0x47) return HLS_SEG_TS;
   if (len >= 3 && !memcmp(d, "ID3", 3)) return HLS_SEG_PACKED_AUDIO;
   if (len >= 2 && ((d[0] == 0xFF && (d[1] & 0xE0) == 0xE0) || (d[0] == 0x0B && d[1] == 0x77))) return HLS_SEG_PACKED_AUDIO;
-  if (len >= 8 && (!memcmp(d + 4, "ftyp", 4) || !memcmp(d + 4, "styp", 4) || !memcmp(d + 4, "moof", 4))) return HLS_SEG_FMP4;
+  if (len >= 8) { /* CMAF: emsg/prft/sidx may precede moof */
+    static const char boxes[][4] = {{'f', 't', 'y', 'p'}, {'s', 't', 'y', 'p'}, {'m', 'o', 'o', 'f'}, {'e', 'm', 's', 'g'}, {'p', 'r', 'f', 't'}, {'s', 'i', 'd', 'x'}};
+    for (size_t i = 0; i < sizeof boxes / sizeof boxes[0]; i++)
+      if (!memcmp(d + 4, boxes[i], 4)) return HLS_SEG_FMP4;
+  }
   for (size_t i = 1; i < 188 && i + 2 * 188 < len; i++)
     if (d[i] == 0x47 && d[i + 188] == 0x47 && d[i + 2 * 188] == 0x47) return HLS_SEG_TS;
   return HLS_SEG_UNKNOWN;
@@ -129,6 +140,7 @@ int hls_live_uses_fmp4(const hls_live_t *h) { return h->pl.map_uri[0] != '\0'; }
 
 static int start_playlist_fetch(hls_live_t *h) {
   http_t *reuse = http_take_reuse(&h->reuse, &h->reuse_established_at, HLS_MAX_REUSE_AGE_S);
+  h->fetch_reused = reuse != NULL;
   h->fetch = http_fetch_start(&h->playlist_url, h->user_agent, h->insecure, NULL, h->etag[0] ? h->etag : NULL, h->playlist_buf, sizeof h->playlist_buf - 1, reuse, NULL);
   h->phase = HLS_LIVE_FETCHING_PLAYLIST;
   return h->fetch != NULL;
@@ -141,6 +153,7 @@ static int start_segment_fetch(hls_live_t *h, const char *url) {
     if (reuse) http_close(reuse);
     return 0;
   }
+  h->fetch_reused = reuse != NULL;
   h->fetch = http_fetch_start(&u, h->user_agent, h->insecure, NULL, NULL, h->segment_buf, sizeof h->segment_buf, reuse, NULL);
   h->phase = HLS_LIVE_FETCHING_SEGMENT;
   return h->fetch != NULL;
@@ -154,6 +167,7 @@ static int start_key_fetch(hls_live_t *h, const char *url) {
     return 0;
   }
   h->have_key = 0;
+  h->fetch_reused = reuse != NULL;
   h->fetch = http_fetch_start(&u, h->user_agent, h->insecure, NULL, NULL, h->key_buf, sizeof h->key_buf, reuse, NULL);
   h->phase = HLS_LIVE_FETCHING_KEY;
   return h->fetch != NULL;
@@ -166,9 +180,27 @@ static int start_init_fetch(hls_live_t *h) {
     if (reuse) http_close(reuse);
     return 0;
   }
+  h->fetch_reused = reuse != NULL;
   h->fetch = http_fetch_start(&u, h->user_agent, h->insecure, NULL, NULL, h->segment_buf, sizeof h->segment_buf, reuse, NULL);
   h->phase = HLS_LIVE_FETCHING_INIT;
   return h->fetch != NULL;
+}
+
+/* same request, fresh conn */
+static int restart_fetch(hls_live_t *h, hls_live_phase_t phase) {
+  const hls_segment_t *seg;
+  switch (phase) {
+    case HLS_LIVE_FETCHING_PLAYLIST: return start_playlist_fetch(h);
+    case HLS_LIVE_FETCHING_INIT:     return start_init_fetch(h);
+    case HLS_LIVE_FETCHING_KEY:
+      seg = &h->pl.segments[h->pending_idx];
+      return start_key_fetch(h, h->pl.keys[seg->key - 1].url);
+    case HLS_LIVE_FETCHING_SEGMENT:
+      seg = &h->pl.segments[h->pending_idx];
+      return start_segment_fetch(h, seg->url);
+    case HLS_LIVE_IDLE: break;
+  }
+  return 0;
 }
 
 static double poll_interval(const hls_live_t *h) {
@@ -185,6 +217,11 @@ static int handle_playlist_done(hls_live_t *h, net_err_reason_t *reason_out) {
   http_fetch_take(h->fetch, &len, &status, etag, sizeof etag, &truncated, &h->reuse);
   h->fetch = NULL;
   h->phase = HLS_LIVE_IDLE;
+  if (truncated) {
+    log_code_ansi("LE400230", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mHLS playlist exceeds %d bytes\e[0m", h->idx, h->label ? h->label : "?", HLS_PLAYLIST_BUF_CAP);
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
+    return -1;
+  }
   if (status == 304 || len == 0) {
     h->next_poll_at = mono_seconds() + poll_interval(h);
     return 1;
@@ -239,10 +276,16 @@ static int handle_key_done(hls_live_t *h, net_err_reason_t *reason_out) {
 
 static int handle_init_done(hls_live_t *h, net_err_reason_t *reason_out) {
   size_t len;
+  int truncated;
 
-  http_fetch_take(h->fetch, &len, NULL, NULL, 0, NULL, &h->reuse);
+  http_fetch_take(h->fetch, &len, NULL, NULL, 0, &truncated, &h->reuse);
   h->fetch = NULL;
   h->phase = HLS_LIVE_IDLE;
+  if (truncated) {
+    log_code_ansi("LE400230", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mHLS init segment exceeds %d bytes\e[0m", h->idx, h->label ? h->label : "?", HLS_SEGMENT_BUF_CAP);
+    if (reason_out) *reason_out = NET_ERR_FORMAT;
+    return -1;
+  }
   if (!len || !h->init_cb(h->init_ctx, h, h->segment_buf, len)) {
     log_code_ansi("LE400155", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;31mHLS init segment unusable\e[0m", h->idx, h->label ? h->label : "?");
     if (reason_out) *reason_out = NET_ERR_FORMAT;
@@ -269,10 +312,18 @@ static int segment_decrypt(hls_live_t *h, size_t *len) {
 
 static int handle_segment_done(hls_live_t *h) {
   size_t len;
+  int truncated;
 
-  http_fetch_take(h->fetch, &len, NULL, NULL, 0, NULL, &h->reuse);
+  http_fetch_take(h->fetch, &len, NULL, NULL, 0, &truncated, &h->reuse);
   h->fetch = NULL;
   h->phase = HLS_LIVE_IDLE;
+  h->seg_fail_count = 0;
+  if (truncated) {
+    log_throttled(&h->trunc_throttle, LOG_THROTTLE_WINDOW_S, "LW400229", "input %u (%s): HLS segment exceeds %d bytes, skipped", h->idx, h->label ? h->label : "?", HLS_SEGMENT_BUF_CAP);
+    h->pending_idx++;
+    h->next_seq++;
+    return 1;
+  }
   if (h->pl.segments[h->pending_idx].key && segment_decrypt(h, &len)) {
     log_code_ansi("LW300134", "input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): \e[0;33mHLS segment decrypt failed, skipped\e[0m", h->idx, h->label ? h->label : "?");
     h->pending_idx++;
@@ -308,9 +359,23 @@ ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_rea
   if (h->phase != HLS_LIVE_IDLE) {
     http_fetch_state_t st = http_fetch_step(h->fetch, reason_out);
     if (st == HTTP_FETCH_ERROR) {
+      hls_live_phase_t failed = h->phase;
+      int seg = failed == HLS_LIVE_FETCHING_SEGMENT;
       http_fetch_free(h->fetch);
       h->fetch = NULL;
-      return -1;
+      h->phase = HLS_LIVE_IDLE;
+      if (h->fetch_reused) {
+        if (!restart_fetch(h, failed)) {
+          if (reason_out) *reason_out = NET_ERR_OTHER;
+          return -1;
+        }
+        return 0;
+      }
+      if (!seg || ++h->seg_fail_count >= HLS_MAX_SEGMENT_FAILS) return -1;
+      log_throttled(&h->fail_throttle, LOG_THROTTLE_WINDOW_S, "LW400238", "input %u (%s): HLS segment unavailable, skipped", h->idx, h->label ? h->label : "?");
+      h->pending_idx++;
+      h->next_seq++;
+      return 0;
     }
     if (st == HTTP_FETCH_DONE) {
       if (h->phase == HLS_LIVE_FETCHING_PLAYLIST) {

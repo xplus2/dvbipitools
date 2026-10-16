@@ -20,6 +20,7 @@ typedef struct {
   codec_t codec;
   unsigned width;
   unsigned height;
+  unsigned nal_len_size;
   unsigned rate;
   unsigned channels;
   fmp4_nal_t vps[FMP4_PS_MAX];

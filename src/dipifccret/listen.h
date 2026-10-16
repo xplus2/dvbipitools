@@ -15,7 +15,7 @@ typedef void (*listen_rtcp_cb)(const unsigned char *pkt, size_t len, int fd, con
    on partial failure, already-started workers get stopped and joined before returning NULL */
 listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, unsigned workers, listen_rtcp_cb cb, void *user);
 
-/* joins all worker threads (they poll signal_stop_requested()), closes sockets */
+/* wakes and joins all worker threads, closes sockets */
 void listen_pool_stop(listen_pool_t *p);
 
 typedef struct listen_multi listen_multi_t;

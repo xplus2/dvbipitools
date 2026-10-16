@@ -92,7 +92,7 @@ static const bim_type_t t_xs_STRING = {NULL, 0, BIM_CONTENT_SIMPLE, BIM_STRING, 
 static const bim_type_t t_xs_DURATION = {NULL, 0, BIM_CONTENT_SIMPLE, BIM_DURATION, NULL};
 static const bim_type_t t_xs_DATETIME = {NULL, 0, BIM_CONTENT_SIMPLE, BIM_DATETIME, NULL};
 static const bim_attr_t t_TitleType_attrs[] = {
-  {"type", BIM_UNSUPPORTED, 0, NULL, 0},
+  {"type", BIM_TERMREF, 0, NULL, 0},
   {"xml:lang", BIM_STRING, 0, NULL, 0},
 };
 static const bim_type_t t_TitleType = {t_TitleType_attrs, 2, BIM_CONTENT_SIMPLE, BIM_STRING, NULL};
@@ -214,8 +214,8 @@ static const bim_part_t t_TitleMediaType_top = {BIM_PART_SEQ, NULL, NULL, 1, 1, 
 static const bim_type_t t_TitleMediaType = {NULL, 0, BIM_CONTENT_SEQ, BIM_UNSUPPORTED, &t_TitleMediaType_top};
 
 static const bim_attr_t t_ShortTitleType_attrs[] = {
-  {"length", BIM_UNSUPPORTED, 1, NULL, 0},
-  {"type", BIM_UNSUPPORTED, 0, NULL, 0},
+  {"length", BIM_UVLU8, 1, NULL, 0},
+  {"type", BIM_TERMREF, 0, NULL, 0},
   {"xml:lang", BIM_STRING, 0, NULL, 0},
 };
 static const bim_type_t t_ShortTitleType = {t_ShortTitleType_attrs, 3, BIM_CONTENT_SIMPLE, BIM_STRING, NULL};
@@ -709,15 +709,19 @@ static const bim_part_t t_ProgramInformationType_top = {BIM_PART_SEQ, NULL, NULL
 static const bim_type_t t_ProgramInformationType = {t_ProgramInformationType_attrs, 3, BIM_CONTENT_SEQ, BIM_UNSUPPORTED, &t_ProgramInformationType_top};
 
 static const bim_part_t t_InstanceDescriptionType_k1[] = {
-  {BIM_PART_ELEM, "Title", &t_TitleType, 0, 1, NULL, 0},
-  {BIM_PART_ELEM, "Synopsis", &t_SynopsisType, 0, 1, NULL, 0},
+  {BIM_PART_ELEM, "Title", &t_TitleType, 0, BIM_UNBOUNDED, NULL, 0},
+  {BIM_PART_ELEM, "Synopsis", &t_SynopsisType, 0, BIM_UNBOUNDED, NULL, 0},
   {BIM_PART_ELEM, "Genre", &t_GenreType, 0, BIM_UNBOUNDED, NULL, 0},
   {BIM_PART_ELEM, "PurchaseList", &t_PurchaseListType, 0, 1, NULL, 0},
+  {BIM_PART_ELEM, "CaptionLanguage", &t_CaptionLanguageType, 0, BIM_UNBOUNDED, NULL, 0},
+  {BIM_PART_ELEM, "SignLanguage", &t_SignLanguageType, 0, BIM_UNBOUNDED, NULL, 0},
+  {BIM_PART_ELEM, "ParentalGuidance", &t_ParentalGuidanceType, 0, BIM_UNBOUNDED, NULL, 0},
   {BIM_PART_ELEM, "AVAttributes", &t_AVAttributesType, 0, 1, NULL, 0},
   {BIM_PART_ELEM, "MemberOf", &t_BaseMemberOfType, 0, BIM_UNBOUNDED, NULL, 0},
-  {BIM_PART_ELEM, "PurchaseList", &t_PurchaseListType, 0, 1, NULL, 0},
+  {BIM_PART_ELEM, "OtherIdentifier", &t_UniqueIDType, 0, BIM_UNBOUNDED, NULL, 0},
+  {BIM_PART_ELEM, "RelatedMaterial", &t_RelatedMaterialType, 0, BIM_UNBOUNDED, NULL, 0},
 };
-static const bim_part_t t_InstanceDescriptionType_top = {BIM_PART_SEQ, NULL, NULL, 1, 1, t_InstanceDescriptionType_k1, 7};
+static const bim_part_t t_InstanceDescriptionType_top = {BIM_PART_SEQ, NULL, NULL, 1, 1, t_InstanceDescriptionType_k1, 11};
 static const bim_type_t t_InstanceDescriptionType = {NULL, 0, BIM_CONTENT_SEQ, BIM_UNSUPPORTED, &t_InstanceDescriptionType_top};
 
 static const bim_attr_t t_FlagType_attrs[] = {
@@ -816,11 +820,10 @@ static int encode_tree(const bim_type_t *t, bim_node_t *root, bitwriter_t *bw, s
 }
 
 int fragment_encode_program_information(const bcg_programme_t *pr, bitwriter_t *bw, strrepo_writer_t *sw) {
-  char crid[BCG_ID_LEN * 3 + 64];
+  char buf[TVA_CRID_BUF];
   bim_node_t *root = bim_node_new("ProgramInformation");
   bim_node_t *bd;
-  tva_build_crid(pr->channel_id, pr->start, crid, sizeof crid);
-  if (!root || bim_node_set_attr(root, "programId", crid)) goto fail;
+  if (!root || bim_node_set_attr(root, "programId", tva_programme_crid(pr, buf, sizeof buf))) goto fail;
   bd = add_leaf(root, "BasicDescription", NULL);
   if (!bd) goto fail;
   if (pr->title && !add_leaf(bd, "Title", pr->title)) goto fail;
@@ -869,13 +872,10 @@ int fragment_encode_schedule(const char *channel_id, const bcg_programme_t *prog
   if (!root || bim_node_set_attr(root, "serviceIDRef", channel_id)) goto fail;
   for (int j = first; j != -1; j = next[j]) {
     const bcg_programme_t *pr = &programmes[j];
-    char crid[BCG_ID_LEN * 3 + 64];
-    bim_node_t *ev;
-    bim_node_t *p;
-    tva_build_crid(pr->channel_id, pr->start, crid, sizeof crid);
-    ev = add_leaf(root, "ScheduleEvent", NULL);
-    p = ev ? add_leaf(ev, "Program", NULL) : NULL;
-    if (!p || bim_node_set_attr(p, "crid", crid)) goto fail;
+    char buf[TVA_CRID_BUF];
+    bim_node_t *ev = add_leaf(root, "ScheduleEvent", NULL);
+    bim_node_t *p = ev ? add_leaf(ev, "Program", NULL) : NULL;
+    if (!p || bim_node_set_attr(p, "crid", tva_programme_crid(pr, buf, sizeof buf))) goto fail;
     if (!add_leaf(ev, "PublishedStartTime", pr->start)) goto fail;
     if (pr->stop[0] && !add_leaf(ev, "PublishedEndTime", pr->stop)) goto fail;
   }
@@ -951,6 +951,8 @@ int fragment_decode_service_information(bitreader_t *br, strrepo_reader_t *sr, b
   unsigned tsid;
   unsigned sid;
   int no_names = 0;
+  int dropped = 0;
+  size_t tail_pos;
   memset(c_out, 0, sizeof *c_out);
   if (bim_decode_payload(tva_type_service_information, "ServiceInformation", br, sr, &root)) return -1;
   id = bim_node_attr(root, "serviceId");
@@ -958,18 +960,27 @@ int fragment_decode_service_information(bitreader_t *br, strrepo_reader_t *sr, b
   memcpy(c_out->id, id, strlen(id) + 1);
   url = bim_node_child(root, "ServiceURL");
   if (url && url->text && strlen(url->text) < sizeof c_out->uri) memcpy(c_out->uri, url->text, strlen(url->text) + 1);
-  if (!dvb_string_decode(sr, dtt, sizeof dtt) && !dvb_string_decode(sr, synth, sizeof synth) && (!strcmp(synth, "0") || !strcmp(synth, "1"))) {
+  tail_pos = sr->pos;
+  if (!dvb_string_decode(sr, dtt, sizeof dtt) && !dvb_string_decode(sr, synth, sizeof synth) && (!strcmp(synth, "0") || !strcmp(synth, "1")) &&
+      (!dtt[0] || !strncmp(dtt, "dvb://", 6))) {
     no_names = synth[0] == '1';
     if (sscanf(dtt, "dvb://%x.%x.%x", &onid, &tsid, &sid) == 3) {
       c_out->onid = onid;
       c_out->tsid = tsid;
       c_out->sid = sid;
     }
+  } else {
+    sr->pos = tail_pos; /* foreign: strings belong to next fragment */
   }
   for (int i = 0; !no_names && i < root->nkids; i++) {
-    if (!strcmp(root->kids[i]->name, "Name") && root->kids[i]->text && strlen(root->kids[i]->text) < BCG_ID_LEN)
-      bcg_channel_add_name(c_out, root->kids[i]->text);
+    if (strcmp(root->kids[i]->name, "Name") || !root->kids[i]->text) continue;
+    if (strlen(root->kids[i]->text) >= BCG_ID_LEN) {
+      dropped++;
+    } else if (bcg_channel_add_name(c_out, root->kids[i]->text)) {
+      dropped++;
+    }
   }
+  if (dropped) log_code("LW400234", "bcg: channel %s: %d <Name> dropped (max %d names, %d bytes each)", c_out->id, dropped, BCG_MAX_NAMES, BCG_ID_LEN - 1);
   bim_node_free(root);
   return 0;
 fail:

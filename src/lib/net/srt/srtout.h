@@ -5,6 +5,7 @@
 #define DVBIPITOOLS_LIB_NET_SRT_SRTOUT_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "lib/helper/argutil.h"
 #include "lib/metrics/export.h"
@@ -19,7 +20,7 @@ typedef struct {
   const char *local_host;      /* NULL = wildcard. required when rendezvous set */
   unsigned local_port;         /* 0 = ephemeral; rendezvous wants a fixed port */
   srtcommon_opts_t opts;
-  int verbose;                 /* gates libsrt's own NOTICE/DEBUG logging */
+  int verbose;                 /* gates libsrt's own NOTICE logging */
   metrics_exporter_t *mx;      /* NULL = no stats push */
   const char *tool_version;    /* required if mx set */
   unsigned safety_mult;        /* 0 = default 4; clamped to 32. pending-queue latency-window multiplier */
@@ -41,7 +42,8 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg);
    writable. call once per loop iteration regardless of other activity */
 void srtout_service(srtout_t *r, srtout_status_t *out);
 
-/* never blocks: chunks at SRT live payload size, queues what can't send yet
+/* never blocks: chunks at SRT live payload size, carries a partial tail
+   over to next write (sent short by service() after 20ms or on close), queues what can't send yet
    (not connected, backpressure) up to a bitrate/latency-sized bound, drops
    oldest on overflow. 0 ok, -1 if send failed or a chunk was dropped */
 int srtout_write(srtout_t *r, const unsigned char *buf, size_t n);
@@ -58,6 +60,21 @@ typedef struct {
 
 void srtout_queue_stats(const srtout_t *r, srtout_queue_stats_t *out);
 
+typedef struct {
+  int connected;
+  uint64_t packets;
+  uint64_t retransmitted;
+  uint64_t lost;
+  uint64_t dropped;
+  double rtt_ms;
+  double mbps;
+} srtout_link_stats_t;
+
+/* totals over connection/group. connected 0: rest zero */
+void srtout_link_stats(const srtout_t *r, srtout_link_stats_t *out);
+
 void srtout_close(srtout_t *r);
+/* no flush, no drain. for stop signals */
+void srtout_close_now(srtout_t *r);
 
 #endif

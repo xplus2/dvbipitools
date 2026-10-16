@@ -276,6 +276,66 @@ START_TEST(http_async_decodes_chunked_body) {
 }
 END_TEST
 
+/* terminal chunk in own TCP segment, conn kept open: EOF must not come from close */
+static void *serve_split_chunked(void *arg) {
+  server_arg_t *a = arg;
+  static const char head[] = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nDATA\r\n";
+  static const char tail[] = "0\r\n\r\n";
+  struct timespec gap = {0, 100000000L};
+  struct timespec hold = {0, 400000000L};
+  int cfd = accept(a->listen_fd, NULL, NULL);
+  char buf[4096];
+  size_t got = 0;
+
+  if (cfd < 0) return NULL;
+  for (;;) {
+    ssize_t n = recv(cfd, buf + got, sizeof buf - got, 0);
+    if (n <= 0) break;
+    got += (size_t)n;
+    if (got >= 4 && memcmp(buf + got - 4, "\r\n\r\n", 4) == 0) break;
+  }
+  send(cfd, head, sizeof head - 1, 0);
+  nanosleep(&gap, NULL);
+  send(cfd, tail, sizeof tail - 1, 0);
+  nanosleep(&hold, NULL);
+  close(cfd);
+  return NULL;
+}
+
+START_TEST(http_read_reports_eof_on_bare_terminal_chunk) {
+  unsigned port;
+  int listen_fd = make_listener(&port);
+  pthread_t th;
+  server_arg_t sarg = {listen_fd, NULL, 0};
+  char uri[64];
+  http_url_t url;
+  http_async_t *a;
+  http_t *h;
+  char buf[64];
+  struct pollfd pfd;
+  net_err_reason_t why = NET_ERR_OTHER;
+
+  ck_assert_int_eq(pthread_create(&th, NULL, serve_split_chunked, &sarg), 0);
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/stream", port);
+  ck_assert_int_eq(http_url_parse(uri, &url), 0);
+  a = http_async_start(&url, "test-agent", 0, NULL, NULL);
+  ck_assert_ptr_nonnull(a);
+  ck_assert_int_eq(drive(a, 200), HTTP_ASYNC_DONE);
+  h = http_async_take(a);
+  ck_assert_uint_eq(drain_body(h, buf, sizeof buf, 4), 4u);
+  pfd.fd = http_fd(h);
+  pfd.events = POLLIN;
+  pfd.revents = 0;
+  ck_assert_int_eq(poll(&pfd, 1, 1000), 1);
+  ck_assert_int_eq((int)http_read(h, buf, sizeof buf, &why), -1);
+  ck_assert_int_eq(why, NET_ERR_EOF);
+  ck_assert_int_eq(http_can_reuse(h), 1);
+  http_close(h);
+  pthread_join(th, NULL);
+  close(listen_fd);
+}
+END_TEST
+
 START_TEST(http_get_decodes_chunked_body) {
   unsigned port;
   int listen_fd = make_listener(&port);
@@ -349,6 +409,7 @@ static Suite *httpclient_async_suite(void) {
   tcase_add_test(tc, http_async_reports_error_on_refused_connection);
   tcase_add_test(tc, http_async_decodes_chunked_body);
   tcase_add_test(tc, http_get_decodes_chunked_body);
+  tcase_add_test(tc, http_read_reports_eof_on_bare_terminal_chunk);
   tcase_add_test(tc, http_get_rejects_unsupported_transfer_encoding);
   suite_add_tcase(s, tc);
   return s;

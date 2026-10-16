@@ -8,8 +8,20 @@
 #include "lib/cas/cas_group.h"
 #include "lib/cas/ecmg_client/ecmg_client.h"
 #include "lib/helper/log.h"
+#include "lib/net/retryset.h"
 
 #include "cas.h"
+
+#define CAS_CLOCK_MARGIN_S 10.0 /* HLS: playlist, key, first segment */
+
+/* first frame: input open + jitter prefill */
+static double clock_detect_timeout_s(const config_t *cfg) {
+  unsigned jitter_ms = 0;
+  for (unsigned i = 0; i < cfg->n_inputs; i++) {
+    if (cfg->inputs[i].jitter_ms > jitter_ms) jitter_ms = cfg->inputs[i].jitter_ms;
+  }
+  return RETRYSET_OPEN_TIMEOUT_S + (double)jitter_ms / 1000.0 + CAS_CLOCK_MARGIN_S;
+}
 
 struct cas {
   int have_clock;
@@ -83,6 +95,7 @@ cas_t *cas_start(const config_t *cfg, const unsigned *audio_pids, size_t n_audio
   cas_core_fill_group_cfg(cfg->cas_algo, cfg->cas_cp_duration_ms, cfg->cas_fallback_clear, cfg->cas_vendors, cfg->n_cas_vendors, "", &gcfg);
   for (size_t i = 0; i < n_audio_pids; i++) gcfg.pids[i] = audio_pids[i];
   gcfg.pid_count = n_audio_pids;
+  gcfg.clock_detect_timeout_s = clock_detect_timeout_s(cfg);
   c->core.group = cas_group_start(&gcfg, audio_pids[0]);
   if (!c->core.group) {
     free(c);

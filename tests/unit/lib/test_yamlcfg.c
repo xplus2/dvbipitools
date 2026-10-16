@@ -448,18 +448,19 @@ END_TEST
 START_TEST(load_invalid_value_is_error) {
   yamlcfg_t y;
   tcfg_t t = {0};
-  ck_assert_int_eq(load_text(&y, &t, 0, "count: 999\n", NULL), YAMLCFG_ERROR);
-  ck_assert_int_eq(load_text(&y, &t, 0, "on: maybe\n", NULL), YAMLCFG_ERROR);
-  ck_assert_int_eq(load_text(&y, &t, 0, "name: \"\"\n", NULL), YAMLCFG_ERROR);
+  ck_assert_int_eq(load_text(&y, &t, YAMLCFG_STRICT, "count: 999\n", NULL), YAMLCFG_ERROR);
+  ck_assert_int_eq(load_text(&y, &t, YAMLCFG_STRICT, "on: maybe\n", NULL), YAMLCFG_ERROR);
+  ck_assert_int_eq(load_text(&y, &t, YAMLCFG_STRICT, "name: \"\"\n", NULL), YAMLCFG_ERROR);
   yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
 
-START_TEST(load_invalid_value_is_warning_in_check_mode) {
+START_TEST(load_invalid_value_is_counted_error_in_check_mode) {
   yamlcfg_t y;
   tcfg_t t = {0};
   ck_assert_int_eq(load_text(&y, &t, YAMLCFG_CHECK, "count: 999\non: maybe\nname: ok\n", NULL), YAMLCFG_LOADED);
-  ck_assert_uint_eq(y.warnings, 2u);
+  ck_assert_uint_eq(y.errors, 2u);
+  ck_assert_uint_eq(y.warnings, 0u);
   ck_assert_str_eq(t.str, "ok");
   yamlcfg_strpool_free(t.str_pool);
 }
@@ -471,6 +472,25 @@ START_TEST(load_duplicate_key_warns_and_last_wins) {
   ck_assert_int_eq(load_text(&y, &t, 0, "count: 1\ncount: 2\n", NULL), YAMLCFG_LOADED);
   ck_assert_uint_eq(t.num, 2u);
   ck_assert_uint_eq(y.warnings, 1u);
+  yamlcfg_strpool_free(t.str_pool);
+}
+END_TEST
+
+START_TEST(load_duplicate_list_key_accumulates) {
+  yamlcfg_t y;
+  tcfg_t t = {0};
+  ck_assert_int_eq(load_text(&y, &t, 0, "list: [a]\nlist: [b, c]\n", NULL), YAMLCFG_LOADED);
+  ck_assert_uint_eq(y.warnings, 0u);
+  ck_assert_uint_eq(t.nlist, 3u);
+  yamlcfg_strpool_free(t.str_pool);
+}
+END_TEST
+
+START_TEST(load_invalid_value_is_error_by_default) {
+  yamlcfg_t y;
+  tcfg_t t = {0};
+  ck_assert_int_eq(load_text(&y, &t, 0, "count: 999\ncount: 5\n", NULL), YAMLCFG_ERROR);
+  ck_assert_uint_ge(y.errors, 1u);
   yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
@@ -521,7 +541,7 @@ END_TEST
 START_TEST(load_list_for_scalar_key_is_error) {
   yamlcfg_t y;
   tcfg_t t = {0};
-  ck_assert_int_eq(load_text(&y, &t, 0, "name:\n  - a\n", NULL), YAMLCFG_ERROR);
+  ck_assert_int_eq(load_text(&y, &t, YAMLCFG_STRICT, "name:\n  - a\n", NULL), YAMLCFG_ERROR);
   yamlcfg_strpool_free(t.str_pool);
 }
 END_TEST
@@ -573,7 +593,7 @@ START_TEST(load_keyed_item_callback_failure_is_error) {
   memset(&t, 0, sizeof t);
   t.item_fail = 1;
   write_cfg(path, "items:\n  - first:\n      opt: 5\n");
-  rc = yamlcfg_load_items(&y, TOOL, 0, path, NULL, KEYS, NKEYS(KEYS), &t, item_cb);
+  rc = yamlcfg_load_items(&y, TOOL, YAMLCFG_STRICT, path, NULL, KEYS, NKEYS(KEYS), &t, item_cb);
   unlink(path);
   ck_assert_int_eq(rc, YAMLCFG_ERROR);
   yamlcfg_strpool_free(t.str_pool);
@@ -745,13 +765,15 @@ static Suite *yamlcfg_suite(void) {
   tcase_add_test(tc, load_unknown_key_fails_in_strict_mode);
   tcase_add_test(tc, load_unknown_key_in_check_mode_is_loaded);
   tcase_add_test(tc, load_invalid_value_is_error);
-  tcase_add_test(tc, load_invalid_value_is_warning_in_check_mode);
+  tcase_add_test(tc, load_invalid_value_is_counted_error_in_check_mode);
   tcase_add_test(tc, load_duplicate_key_warns_and_last_wins);
   tcase_add_test(tc, load_strict_duplicate_key_is_error);
   tcase_add_test(tc, load_collects_list_values);
   tcase_add_test(tc, load_accepts_flow_list_and_scalar_for_list_key);
   tcase_add_test(tc, load_skips_null_list_items);
   tcase_add_test(tc, load_list_for_scalar_key_is_error);
+  tcase_add_test(tc, load_duplicate_list_key_accumulates);
+  tcase_add_test(tc, load_invalid_value_is_error_by_default);
   tcase_add_test(tc, load_list_for_scalar_key_is_warning_in_check_mode);
   tcase_add_test(tc, load_nested_lists_are_error);
   tcase_add_test(tc, load_mapping_in_plain_list_is_error);

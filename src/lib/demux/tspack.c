@@ -53,22 +53,40 @@ static inline int feed_core(tspack_t *pz, const unsigned char *d, size_t len, in
       d += need;
       len -= need;
       if (pz->acclen < 188) continue;
+      if (!pz->locked && len && d[0] != 0x47) {
+        size_t k = resync_skip(pz->acc, 188);
+        if (sync) sync_boundary(sync, 0);
+        memmove(pz->acc, pz->acc + k, 188 - k);
+        pz->acclen = 188 - k;
+        continue;
+      }
+      if (len && d[0] == 0x47) pz->locked = 1;
       pz->acclen = 0;
       p = pz->acc;
-      if (sync) sync_boundary(sync, p[0] == 0x47);
+      if (sync) sync_boundary(sync, 1);
     } else if (len >= 188) {
-      if (d[0] != 0x47) {
+      if (d[0] != 0x47 || (!pz->locked && len > 188 && d[188] != 0x47)) {
         size_t k = resync_skip(d, len);
+        pz->locked = 0;
         if (sync) sync_boundary(sync, 0);
         d += k;
         len -= k;
         continue;
       }
+      if (len > 188 && d[188] == 0x47) pz->locked = 1;
       if (sync) sync_boundary(sync, 1);
       p = d;
       d += 188;
       len -= 188;
     } else {
+      if (d[0] != 0x47) {
+        size_t k = resync_skip(d, len);
+        pz->locked = 0;
+        if (sync) sync_boundary(sync, 0);
+        d += k;
+        len -= k;
+        continue;
+      }
       memcpy(pz->acc, d, len);
       pz->acclen = len;
       len = 0;

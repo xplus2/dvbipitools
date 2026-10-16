@@ -219,7 +219,8 @@ void *accept_main(void *arg) {
       pfds[1].revents = 0;
       npfd = 2;
     }
-    pret = poll(pfds, (nfds_t)npfd, npfd == 2 ? -1 : EMMG_POLL_INTERVAL_MS);
+    /* bounded: emmg_server_stop() sets flag only, no wake */
+    pret = poll(pfds, (nfds_t)npfd, EMMG_POLL_INTERVAL_MS);
     if (pret <= 0) continue;
     if (!(pfds[0].revents & POLLIN)) continue;
 

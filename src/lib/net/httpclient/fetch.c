@@ -6,8 +6,11 @@
 #include <stdlib.h>
 #include <strings.h>
 
+#include "../../helper/log.h"
 #include "../../sys/ioutil.h"
+#include "../../sys/signal.h"
 #include "httpclient.h"
+#include "priv.h"
 
 #define HTTP_FETCH_ETAG_MAX 128
 
@@ -20,6 +23,7 @@ struct http_fetch {
   unsigned char *buf;
   size_t cap;
   size_t len;
+  double idle_deadline; /* mono, body progress */
   int status;
   int truncated;
   char etag[HTTP_FETCH_ETAG_MAX];
@@ -82,12 +86,25 @@ http_fetch_state_t http_fetch_step(http_fetch_t *f, net_err_reason_t *reason_out
     if (etag) bufcpy(f->etag, sizeof f->etag, etag);
     if (f->status == 304) return HTTP_FETCH_DONE;
     f->phase = HF_READING;
+    f->idle_deadline = mono_seconds() + HTTP_BODY_IDLE_TIMEOUT_S;
   }
 
   for (;;) {
-    ssize_t n = http_read(f->h, f->buf + f->len, f->cap - f->len, NULL);
-    if (n < 0) return HTTP_FETCH_DONE;
-    if (n == 0) return HTTP_FETCH_PENDING;
+    net_err_reason_t rr = NET_ERR_OTHER;
+    ssize_t n = http_read(f->h, f->buf + f->len, f->cap - f->len, &rr);
+    if (n < 0) {
+      if (rr == NET_ERR_EOF) return HTTP_FETCH_DONE;
+      log_code("LE600168", "http: body read failed after %zu bytes", f->len);
+      if (reason_out) *reason_out = rr;
+      return HTTP_FETCH_ERROR;
+    }
+    if (n == 0) {
+      if (mono_seconds() <= f->idle_deadline) return HTTP_FETCH_PENDING;
+      log_code("LE600167", "http: body read stalled for %ds", HTTP_BODY_IDLE_TIMEOUT_S);
+      if (reason_out) *reason_out = NET_ERR_TIMEOUT;
+      return HTTP_FETCH_ERROR;
+    }
+    f->idle_deadline = mono_seconds() + HTTP_BODY_IDLE_TIMEOUT_S;
     f->len += (size_t)n;
     if (f->len >= f->cap) {
       f->truncated = 1;

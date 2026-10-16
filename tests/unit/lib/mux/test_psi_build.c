@@ -179,6 +179,44 @@ START_TEST(psi_build_nit_round_trips_through_psi_feed) {
 }
 END_TEST
 
+START_TEST(psi_build_tdt_encodes_mjd_and_bcd_time) {
+  unsigned char sec[16];
+  /* 2026-10-16 13:45:09 UTC, MJD 61329 */
+  ck_assert_uint_eq(psi_build_tdt(1792158309, sec, sizeof sec), 8u);
+  ck_assert_uint_eq(sec[0], 0x70);
+  ck_assert_uint_eq(sec[1], 0x70);
+  ck_assert_uint_eq(sec[2], 0x05);
+  ck_assert_uint_eq((sec[3] << 8) | sec[4], 61329u);
+  ck_assert_uint_eq(sec[5], 0x13);
+  ck_assert_uint_eq(sec[6], 0x45);
+  ck_assert_uint_eq(sec[7], 0x09);
+  ck_assert_uint_eq(psi_build_tdt(0, sec, 7), 0u);
+}
+END_TEST
+
+START_TEST(psi_build_tot_has_valid_crc) {
+  unsigned char sec[32];
+  size_t n = psi_build_tot(1792158309, sec, sizeof sec);
+  ck_assert_uint_eq(n, 14u);
+  ck_assert_uint_eq(sec[0], 0x73);
+  ck_assert_uint_eq(sec[1] & 0xF0, 0x70);
+  ck_assert_uint_eq(crc32_mpeg(sec, n), 0u);
+  ck_assert_uint_eq(psi_build_tot(0, sec, 13), 0u);
+}
+END_TEST
+
+START_TEST(psi_build_sdt_entry_clears_eit_pf_flag_on_request) {
+  psi_sdt_entry_t on = {101, 0x01, "P", "S", 0, 0};
+  psi_sdt_entry_t off = {101, 0x01, "P", "S", 0, 1};
+  unsigned char sec[64];
+
+  ck_assert_uint_ne(psi_build_sdt_multi(0, 1, 1, &on, 1, sec, sizeof sec), 0u);
+  ck_assert_uint_eq(sec[13] & 0x03, 0x01u);
+  ck_assert_uint_ne(psi_build_sdt_multi(0, 1, 1, &off, 1, sec, sizeof sec), 0u);
+  ck_assert_uint_eq(sec[13] & 0x03, 0x00u);
+}
+END_TEST
+
 START_TEST(psi_build_sdt_round_trips_through_psi_feed) {
   unsigned char section[64], pkt[188];
   size_t slen;
@@ -208,8 +246,8 @@ START_TEST(psi_build_sdt_multi_round_trips_through_psi_feed) {
   const psi_multi_program_t *progs;
   psi_pat_entry_t entries[2] = {{101, 0x1000}, {102, 0x1001}};
   psi_sdt_entry_t services[2] = {
-      {101, 0x01, "ProviderOne", "Channel One", 0},
-      {102, 0x01, "ProviderTwo", "Channel Two", 0},
+      {101, 0x01, "ProviderOne", "Channel One", 0, 0},
+      {102, 0x01, "ProviderTwo", "Channel Two", 0, 0},
   };
 
   slen = psi_build_sdt_multi(1, 0x1111, 0x2222, services, 2, sdtsec, sizeof sdtsec);
@@ -240,7 +278,7 @@ END_TEST
 
 START_TEST(psi_build_sdt_multi_rejects_small_cap) {
   unsigned char section[8];
-  psi_sdt_entry_t services[1] = {{1, 0x01, "P", "S", 0}};
+  psi_sdt_entry_t services[1] = {{1, 0x01, "P", "S", 0, 0}};
   ck_assert_uint_eq(psi_build_sdt_multi(0, 1, 1, services, 1, section, sizeof section), 0u);
 }
 END_TEST
@@ -361,6 +399,9 @@ static Suite *psi_build_suite(void) {
   tcase_add_test(tc, psi_build_pat_multi_rejects_small_cap);
   tcase_add_test(tc, psi_build_pat_multi_with_zero_programs_is_still_a_valid_empty_pat);
   tcase_add_test(tc, psi_build_nit_round_trips_through_psi_feed);
+  tcase_add_test(tc, psi_build_tdt_encodes_mjd_and_bcd_time);
+  tcase_add_test(tc, psi_build_tot_has_valid_crc);
+  tcase_add_test(tc, psi_build_sdt_entry_clears_eit_pf_flag_on_request);
   tcase_add_test(tc, psi_build_sdt_round_trips_through_psi_feed);
   tcase_add_test(tc, psi_build_sdt_multi_round_trips_through_psi_feed);
   tcase_add_test(tc, psi_build_sdt_multi_rejects_small_cap);

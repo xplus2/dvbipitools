@@ -22,6 +22,12 @@ int argutil_rist_key_size(const char *s, int *out);
 
 int argutil_bufcpy_opt(const char *tool, char *dst, size_t dstsz, const char *val, const char *optname);
 
+/* srt passphrase length 10..79; empty ok. 1 if valid */
+int argutil_srt_passphrase_valid(const char *passphrase);
+
+/* srt AES key size: 16|24|32. 0 ok, -1 invalid */
+int argutil_srt_pbkeylen(const char *s, int *out);
+
 int argutil_srt_passphrase_opt(const char *tool, const char *passphrase, const char *optname);
 
 int argutil_metrics_interval_opt(const char *tool, const char *val, unsigned *out);
@@ -65,5 +71,8 @@ int map_lookup(const enum_map_t *m, size_t n, const char *s, int *out);
 
 /* [addr]:<port> or <addr4>:<port>. no multicast/unicast restriction, caller's own job */
 int argutil_addrport_parse(const char *s, int *family, char *addr_out, size_t addr_out_sz, unsigned *port_out);
+
+/* same, plus <hostname>:<port> (family AF_UNSPEC, name not resolved here) */
+int argutil_hostport_parse(const char *s, int *family, char *host_out, size_t host_out_sz, unsigned *port_out);
 
 #endif

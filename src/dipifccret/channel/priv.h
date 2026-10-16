@@ -64,7 +64,7 @@ struct channel_table {
   size_t ssrc_hash_used;
   _Atomic unsigned ssrc_gen;
 
-  /* hash(family,addr,port)%max_channels -> slot+1, no probe, sized max_channels,
+  /* resolve slot -> chan index+1, linear probe from hash, sized max_channels,
      not padded. single-word publish, read cross-thread by resolve-by-port listeners. */
   _Atomic size_t *resolve_hash;
 

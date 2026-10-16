@@ -144,6 +144,8 @@ static int run_cp_loop(ecmg_client_t *c, int fd, unsigned char version, unsigned
   atomic_store_explicit(&c->connected, 1, memory_order_relaxed);
   if (c->cfg.cw_source.on_connected) cp_number = c->cfg.cw_source.on_connected(c->cfg.cw_source.ctx);
   cp_number--; /* first provision is for the CP in force */
+  atomic_store_explicit(&c->ecm_valid_from, 0, memory_order_release);
+  atomic_store_explicit(&c->hold_prev_ecm, cw_per_msg == 1, memory_order_release);
 
   while (!ecmg_stopping(c)) {
     unsigned long cur = atomic_load_explicit(c->packet_counter, memory_order_relaxed);
@@ -179,6 +181,7 @@ static int run_cp_loop(ecmg_client_t *c, int fd, unsigned char version, unsigned
       }
       if (hdr.type == ECMG_MSG_ECM_RESPONSE) {
         publish_ecm_response(c, cp_number, payload, hdr.payload_len);
+        atomic_store_explicit(&c->ecm_valid_from, first ? 0 : next_boundary, memory_order_release);
       } else {
         unsigned short err = 0;
         ecmg_find_error_status(payload, hdr.payload_len, &err);

@@ -78,6 +78,16 @@ int tvsrc_fd(const tvsrc_t *s) {
   return FAKE_FD;
 }
 
+short tvsrc_poll_events(const tvsrc_t *s) {
+  (void)s;
+  return POLLIN;
+}
+
+int tvsrc_timer_driven(const tvsrc_t *s) {
+  (void)s;
+  return 0;
+}
+
 int tvsrc_wait(const tvsrc_t *s, int timeout_ms) {
   (void)s;
   (void)timeout_ms;

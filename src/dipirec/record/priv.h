@@ -14,12 +14,12 @@
 #include "lib/net/rist/ristout.h"
 #include "lib/net/rtmp/rtmpout.h"
 #include "lib/net/srt/srtsink.h"
+#include "lib/net/ts/pace.h"
 #include "lib/net/ts/sink.h"
 #include "lib/net/ts/source.h"
 #include "lib/tsinspect/inspect.h"
 
 #include "../cli/args.h"
-#include "../filter/pace.h"
 #include "../record.h"
 #include "lib/fccret/ret_client.h"
 
@@ -79,6 +79,8 @@ typedef struct {
 
 int rtmp_fanout_open(const config_t *cfg, rtmp_fanout_t *r);
 void rtmp_fanout_close(const rtmp_fanout_t *r);
+/* call every loop iteration, also on quiet input */
+void rtmp_fanout_service(const rtmp_fanout_t *r);
 void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn);
 
 void push_metrics(metrics_exporter_t *mx, const config_t *cfg, const out_sink_t *sinks, int n_sinks, const rtmp_fanout_t *rf, unsigned long long bytes, double start);

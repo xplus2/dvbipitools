@@ -70,6 +70,9 @@ typedef struct {
    its live source fd (POLLIN only) */
 int poll_fd_for_input(const retryset_t *rs, unsigned i, short *events_out);
 
+/* connected source only wakes on timers (HLS/DASH): caller caps its poll and reads every tick */
+int input_timer_driven(const retryset_t *rs, unsigned i);
+
 uint32_t input_poll_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd);
 int input_poll_ready(unsigned i, uint32_t ready_mask);
 
@@ -92,7 +95,7 @@ extern const mpts_program_ops_t mpts_program_ops;
 unsigned mpts_service_index(unsigned rr_start, unsigned k, unsigned n);
 unsigned mpts_advance_rr(unsigned rr_start, unsigned n);
 int mpts_cat_due(int have_cas, double now, double *last_cat);
-void mpts_emit_eit(mpts_program_t *progs, unsigned n, int *eit_busy, unsigned char *eit_cc, remux_packet_cb cb, void *ctx);
+size_t mpts_emit_eit(mpts_program_t *progs, unsigned n, int *eit_busy, unsigned char *eit_cc, remux_packet_cb cb, void *ctx);
 
 void tvhead_mpts_set_cas(mpts_t *mpts, cas_t *cas);
 

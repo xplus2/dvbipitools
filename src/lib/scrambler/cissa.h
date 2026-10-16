@@ -11,6 +11,9 @@
 
 typedef struct cissa_key cissa_key_t;
 
+/* 1: built with OpenSSL, CISSA usable */
+int cissa_available(void);
+
 /* AES-128 key schedule for one CW, built once, reused per packet. NULL on error / no OpenSSL. */
 cissa_key_t *cissa_key_new(const unsigned char cw[CISSA_CW_LEN]);
 void cissa_key_free(cissa_key_t *k);

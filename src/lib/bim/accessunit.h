@@ -35,7 +35,19 @@ void accessunit_scratch_free(accessunit_scratch_t *sc);
 /* TS 102 323 table 56/57 DVBBiMAccessUnit for every channel/programme with non-empty uri. bw/sw must be initialized */
 int accessunit_encode(accessunit_scratch_t *sc, const bcg_doc_t *doc, bitwriter_t *bw, strrepo_writer_t *sw, int *out_nfuu);
 
-int accessunit_encode_range(accessunit_scratch_t *sc, const bcg_doc_t *doc, int ch_from, int ch_to, bitwriter_t *bw, strrepo_writer_t *sw, int *out_nfuu, int *out_nchan_prog);
+/* programme-to-channel map of one doc, valid while doc is unchanged. zero-init not needed, accessunit_index_free() when done */
+typedef struct {
+  int *nprog; /* per channel */
+  int *first; /* per channel, -1 none */
+  int *next;  /* per programme, next of same channel, -1 ends */
+} accessunit_index_t;
+
+/* 0 ok, -1 oom */
+int accessunit_index_build(accessunit_index_t *ix, const bcg_doc_t *doc);
+void accessunit_index_free(accessunit_index_t *ix);
+
+/* ix from accessunit_index_build(doc). programmes are emitted grouped by channel */
+int accessunit_encode_range(accessunit_scratch_t *sc, const bcg_doc_t *doc, const accessunit_index_t *ix, int ch_from, int ch_to, bitwriter_t *bw, strrepo_writer_t *sw, int *out_nfuu, int *out_nchan_prog);
 
 /* 0 ok, -1 malformed */
 int accessunit_decode(accessunit_scratch_t *sc, bitreader_t *br, strrepo_reader_t *sr, bcg_doc_t *doc, int *out_nfuu);

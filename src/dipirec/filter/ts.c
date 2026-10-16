@@ -214,6 +214,7 @@ static int table_dropped(const ts_filter_t *f, unsigned pid, pid_class_t cls) {
     case PID_TELETEXT:
     case PID_SUBTITLE:
     case PID_DATA:
+    case PID_EMM:
       break;
   }
   /* raw-pid checks below apply regardless of cls, switch above only covers class-based ones */

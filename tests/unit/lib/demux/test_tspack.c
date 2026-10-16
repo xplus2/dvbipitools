@@ -26,7 +26,7 @@ static int capture_cb(void *ctx, const unsigned char *pkt) {
 }
 
 START_TEST(tspack_feed_single_call) {
-  tspack_t pz = {{0}, 0};
+  tspack_t pz = {{0}, 0, 0};
   unsigned char pkt[188];
   fill_packet(pkt);
   g_calls = 0;
@@ -39,7 +39,7 @@ START_TEST(tspack_feed_single_call) {
 END_TEST
 
 START_TEST(tspack_feed_reassembles_split_input) {
-  tspack_t pz = {{0}, 0};
+  tspack_t pz = {{0}, 0, 0};
   unsigned char pkt[188];
   fill_packet(pkt);
   g_calls = 0;
@@ -54,7 +54,7 @@ START_TEST(tspack_feed_reassembles_split_input) {
 END_TEST
 
 START_TEST(tspack_feed_resyncs_past_garbage) {
-  tspack_t pz = {{0}, 0};
+  tspack_t pz = {{0}, 0, 0};
   unsigned char buf[3 + 188];
   unsigned char pkt[188];
   fill_packet(pkt);
@@ -72,7 +72,7 @@ START_TEST(tspack_feed_resyncs_past_garbage) {
 END_TEST
 
 START_TEST(tspack_feed_stops_when_callback_returns_nonzero) {
-  tspack_t pz = {{0}, 0};
+  tspack_t pz = {{0}, 0, 0};
   unsigned char buf[2 * 188];
   unsigned char pkt[188];
   fill_packet(pkt);
@@ -87,7 +87,7 @@ START_TEST(tspack_feed_stops_when_callback_returns_nonzero) {
 END_TEST
 
 START_TEST(tspack_feed_sync_counts_resync_once) {
-  tspack_t pz = {{0}, 0};
+  tspack_t pz = {{0}, 0, 0};
   tspack_sync_t sync;
   unsigned char buf[188 * 13];
 
@@ -106,8 +106,24 @@ START_TEST(tspack_feed_sync_counts_resync_once) {
 }
 END_TEST
 
+START_TEST(tspack_feed_resyncs_in_short_chunks) {
+  tspack_t pz = {{0}, 0, 0};
+  unsigned char pkt[188];
+  unsigned char junk[3] = {0x00, 0x11, 0x22};
+  fill_packet(pkt);
+  g_calls = 0;
+  g_stop_after_first = 0;
+
+  ck_assert_int_eq(tspack_feed(&pz, junk, sizeof junk, capture_cb, NULL), 0);
+  ck_assert_int_eq(tspack_feed(&pz, pkt, 100, capture_cb, NULL), 0);
+  ck_assert_int_eq(tspack_feed(&pz, pkt + 100, 88, capture_cb, NULL), 0);
+  ck_assert_int_eq(g_calls, 1);
+  ck_assert_mem_eq(g_last, pkt, 188);
+}
+END_TEST
+
 START_TEST(tspack_feed_sync_clean_stream_has_no_errors) {
-  tspack_t pz = {{0}, 0};
+  tspack_t pz = {{0}, 0, 0};
   tspack_sync_t sync;
   unsigned char buf[188 * 8];
 
@@ -125,6 +141,45 @@ START_TEST(tspack_feed_sync_clean_stream_has_no_errors) {
 }
 END_TEST
 
+START_TEST(tspack_feed_rejects_false_sync) {
+  tspack_t pz = {{0}, 0, 0};
+  unsigned char buf[188 * 4 + 40];
+  unsigned i;
+  memset(buf, 0x11, 40);
+  buf[0] = 0x47;
+  for (i = 0; i < 4; i++)
+    fill_packet(buf + 40 + 188 * i);
+  g_calls = 0;
+  g_stop_after_first = 0;
+
+  ck_assert_int_eq(tspack_feed(&pz, buf, sizeof buf, capture_cb, NULL), 0);
+  ck_assert_int_eq(g_calls, 4);
+  ck_assert_mem_eq(g_last, buf + 40 + 188 * 3, 188);
+}
+END_TEST
+
+START_TEST(tspack_feed_rejects_false_sync_across_chunks) {
+  tspack_t pz = {{0}, 0, 0};
+  unsigned char buf[188 * 4 + 40];
+  unsigned i;
+  size_t off = 0;
+  memset(buf, 0x11, 40);
+  buf[0] = 0x47;
+  for (i = 0; i < 4; i++)
+    fill_packet(buf + 40 + 188 * i);
+  g_calls = 0;
+  g_stop_after_first = 0;
+
+  while (off < sizeof buf) {
+    size_t n = sizeof buf - off < 61 ? sizeof buf - off : 61;
+    ck_assert_int_eq(tspack_feed(&pz, buf + off, n, capture_cb, NULL), 0);
+    off += n;
+  }
+  ck_assert_int_eq(g_calls, 4);
+  ck_assert_mem_eq(g_last, buf + 40 + 188 * 3, 188);
+}
+END_TEST
+
 static Suite *tspack_suite(void) {
   Suite *s = suite_create("tspack");
   TCase *tc = tcase_create("core");
@@ -132,8 +187,11 @@ static Suite *tspack_suite(void) {
   tcase_add_test(tc, tspack_feed_reassembles_split_input);
   tcase_add_test(tc, tspack_feed_resyncs_past_garbage);
   tcase_add_test(tc, tspack_feed_stops_when_callback_returns_nonzero);
+  tcase_add_test(tc, tspack_feed_resyncs_in_short_chunks);
   tcase_add_test(tc, tspack_feed_sync_counts_resync_once);
   tcase_add_test(tc, tspack_feed_sync_clean_stream_has_no_errors);
+  tcase_add_test(tc, tspack_feed_rejects_false_sync);
+  tcase_add_test(tc, tspack_feed_rejects_false_sync_across_chunks);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -138,7 +138,7 @@ static int flush_output(FILE *buf, const char *path) {
 }
 
 int main(int argc, char **argv) {
-  config_t cfg;
+  config_t cfg = {0};
   bcg_doc_t doc;
   FILE *in, *out;
   int rc = 0;

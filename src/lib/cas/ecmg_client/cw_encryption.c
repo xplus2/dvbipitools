@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,15 +28,19 @@ static void cwenc_unload_providers(void) {
 }
 #endif
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+static pthread_once_t cwenc_provider_once = PTHREAD_ONCE_INIT;
+
+static void cwenc_load_providers(void) {
+  cwenc_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
+  cwenc_default_provider = OSSL_PROVIDER_load(NULL, "default");
+  atexit(cwenc_unload_providers);
+}
+#endif
+
 static void cwenc_ensure_legacy_provider(void) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-  static int done = 0;
-  if (!done) {
-    cwenc_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
-    cwenc_default_provider = OSSL_PROVIDER_load(NULL, "default");
-    atexit(cwenc_unload_providers);
-    done = 1;
-  }
+  pthread_once(&cwenc_provider_once, cwenc_load_providers);
 #endif
 }
 

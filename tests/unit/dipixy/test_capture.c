@@ -174,6 +174,12 @@ static void *http_dedup_server_thread(void *arg) {
       return NULL;
     s->accepts++;
     send(fd, resp, sizeof resp - 1, MSG_NOSIGNAL);
+    for (unsigned k = 0; k < 3; k++) {
+      unsigned char pkt[188];
+
+      make_ts_packet(pkt, (unsigned char)k);
+      send(fd, pkt, sizeof pkt, MSG_NOSIGNAL);
+    }
   }
 }
 

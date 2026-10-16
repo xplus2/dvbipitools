@@ -101,16 +101,19 @@ static int codec_is_sync(source_codec_t codec, const unsigned char *p, size_t av
   return aac_latm_is_sync(p, avail);
 }
 
-/* confirms a sync word at buf+frame_len too, since an 11/12-bit sync can appear by chance in compressed audio */
+/* confirms a sync word at buf+frame_len too, since an 11/12-bit sync can appear by chance in compressed audio.
+   ID3 counts too: HLS packed audio, track change tags */
 static int next_sync_ok(source_t *s, size_t frame_len) {
-  return codec_is_sync(s->codec, data(s) + frame_len, s->buf_len - frame_len);
+  const unsigned char *p = data(s) + frame_len;
+  size_t avail = s->buf_len - frame_len;
+  return codec_is_sync(s->codec, p, avail) || id3_is_tag(p, avail);
 }
 
-/* first accepted sync offset in buf[1..buf_len), cheap codec_is_sync() per byte,
-   no repeated probe() calls. buf_len if none: caller drops buffer, waits for more data */
+/* first sync or ID3 offset in buf[1..buf_len), no probe() calls.
+   buf_len if none: caller drops buffer, waits for more data */
 static size_t find_resync_offset(source_t *s) {
   for (size_t i = 1; i < s->buf_len; i++) {
-    if (codec_is_sync(s->codec, data(s) + i, s->buf_len - i)) return i;
+    if (codec_is_sync(s->codec, data(s) + i, s->buf_len - i) || id3_is_tag(data(s) + i, s->buf_len - i)) return i;
   }
   return s->buf_len;
 }
@@ -157,6 +160,7 @@ static void reset_detect(source_t *s) {
 }
 
 static void resync(source_t *s) {
+  s->resyncs++;
   drop_front(s, find_resync_offset(s));
   if (++s->resync_fails >= SRC_REDETECT_FAILS) reset_detect(s);
 }
@@ -258,7 +262,7 @@ static int handle_probe_result(source_t *s, net_err_reason_t *reason_out, int r,
     resync(s);
     return PROBE_STEP_CONTINUE;
   }
-  if (s->buf_len < frame_len + 2) {
+  if (s->buf_len < frame_len + 3) { /* 3: next_sync_ok() sees "ID3" */
     int rf = refill(s, reason_out);
     if (rf <= 0) {
       *ret = rf;
@@ -361,6 +365,12 @@ int source_set_prefill_ms(source_t *s, unsigned ms) {
   return 0;
 }
 
+unsigned long long source_take_resyncs(source_t *s) {
+  unsigned long long n = s->resyncs;
+  s->resyncs = 0;
+  return n;
+}
+
 int source_take_resumed(source_t *s) {
   int r = s->fq_resumed;
   s->fq_resumed = 0;
@@ -430,6 +440,7 @@ void source_close(source_t *s) {
   if (s->id3) id3_free(s->id3);
   if (s->hls) hls_live_free(s->hls);
   if (s->hls_demux) rawaudio_demux_free(s->hls_demux);
+  if (s->hls_remux) esbuild_remux_free(s->hls_remux);
   free(s->hls_remux);
   if (s->http) http_close(s->http);
   free(s);

@@ -12,12 +12,15 @@
 int cidr_parse(const char *s, cidr_t *c) {
   char buf[64];
   char *slash;
-  int prefix;
+  char *end;
+  long prefix;
   bufcpy(buf, sizeof buf, s);
   slash = strchr(buf, '/');
   if (!slash) return -1;
   *slash = '\0';
-  prefix = atoi(slash + 1);
+  if (slash[1] < '0' || slash[1] > '9') return -1;
+  prefix = strtol(slash + 1, &end, 10);
+  if (*end != '\0') return -1;
 
   if (strchr(buf, ':')) {
     if (prefix < 0 || prefix > 128 || inet_pton(AF_INET6, buf, &c->u.v6.addr) != 1) return -1;

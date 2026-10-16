@@ -10,6 +10,7 @@
 typedef struct {
   unsigned char acc[188];
   size_t acclen;
+  int locked; /* sync byte seen 188 B after a packet */
 } tspack_t;
 
 /* feed bytes, packetize to 188 B, resync on 0x47. cb !=0 stops */

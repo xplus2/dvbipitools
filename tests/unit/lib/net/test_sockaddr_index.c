@@ -182,6 +182,48 @@ START_TEST(tiny_capacity_still_works) {
 }
 END_TEST
 
+START_TEST(exceeding_initial_capacity_grows) {
+  sockaddr_index_t *idx = sockaddr_index_new(4);
+
+  ck_assert_ptr_nonnull(idx);
+  for (unsigned i = 0; i < 1000; i++) {
+    struct sockaddr_in a = v4("192.0.2.1", 1000 + i);
+    sockaddr_index_insert(idx, SA(a), sizeof a, i);
+  }
+  for (unsigned i = 0; i < 1000; i++) {
+    struct sockaddr_in a = v4("192.0.2.1", 1000 + i);
+    ck_assert_uint_eq(sockaddr_index_find(idx, SA(a), sizeof a), i);
+  }
+  {
+    struct sockaddr_in a = v4("192.0.2.2", 1);
+    ck_assert_uint_eq(sockaddr_index_find(idx, SA(a), sizeof a), SIZE_MAX);
+  }
+  sockaddr_index_free(idx);
+}
+END_TEST
+
+START_TEST(same_key_churn_keeps_accounting_sane) {
+  sockaddr_index_t *idx = sockaddr_index_new(1);
+  struct sockaddr_in a = v4("192.0.2.7", 77);
+
+  ck_assert_ptr_nonnull(idx);
+  for (unsigned i = 0; i < 1000; i++) {
+    sockaddr_index_insert(idx, SA(a), sizeof a, 0);
+    sockaddr_index_remove(idx, SA(a), sizeof a);
+  }
+  for (unsigned i = 0; i < 50; i++) {
+    struct sockaddr_in b = v4("192.0.2.8", 100 + i);
+    sockaddr_index_insert(idx, SA(b), sizeof b, i);
+  }
+  for (unsigned i = 0; i < 50; i++) {
+    struct sockaddr_in b = v4("192.0.2.8", 100 + i);
+    ck_assert_uint_eq(sockaddr_index_find(idx, SA(b), sizeof b), i);
+  }
+  ck_assert_uint_eq(sockaddr_index_find(idx, SA(a), sizeof a), SIZE_MAX);
+  sockaddr_index_free(idx);
+}
+END_TEST
+
 START_TEST(stripe_is_stable_in_range_and_zero_for_null) {
   struct sockaddr_in a = v4("192.0.2.1", 5000);
   struct sockaddr_in6 b = v6("2001:db8::9", 5000);
@@ -208,6 +250,8 @@ static Suite *sockaddr_index_suite(void) {
   tcase_add_test(tc, fill_to_capacity_then_churn_keeps_every_key);
   tcase_add_test(tc, removal_rebuild_preserves_survivors_and_misses_stay_misses);
   tcase_add_test(tc, tiny_capacity_still_works);
+  tcase_add_test(tc, exceeding_initial_capacity_grows);
+  tcase_add_test(tc, same_key_churn_keeps_accounting_sane);
   tcase_add_test(tc, stripe_is_stable_in_range_and_zero_for_null);
   suite_add_tcase(s, tc);
   return s;

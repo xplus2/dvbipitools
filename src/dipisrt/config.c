@@ -26,6 +26,10 @@ static int apply_insecure(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_bool(&((config_t *)c)->insecure_tls, v, e, n);
 }
 
+static int apply_pace(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_bool(&((config_t *)c)->pace, v, e, n);
+}
+
 static int apply_al_fec(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) {
@@ -131,12 +135,10 @@ static int apply_passphrase(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_pbkeylen(void *c, const char *v, char *e, size_t n) {
-  unsigned u;
-  if (argutil_uint_range(v, 16, 32, &u) || (u != 16 && u != 24 && u != 32)) {
+  if (argutil_srt_pbkeylen(v, &((config_t *)c)->pbkeylen)) {
     snprintf(e, n, "invalid '%s' (16|24|32)", v);
     return -1;
   }
-  ((config_t *)c)->pbkeylen = (int)u;
   return 0;
 }
 
@@ -163,6 +165,7 @@ static const yamlcfg_key_t keys[] = {
     {"out", apply_out, 0, 1},
     {"iface", apply_iface, 0, 0},
     {"insecure", apply_insecure, 0, 0},
+    {"pace", apply_pace, 0, 0},
     {"group-mode", apply_group_mode, 0, 0},
     {"rendezvous", apply_rendezvous, 0, 0},
     {"local", apply_local, 0, 0},
@@ -212,15 +215,21 @@ int srt_cfg_test(const char *path, int strict) {
   warn_if(&y, both && cfg.in.is_srt == cfg.out.is_srt, "HA000247", "exactly one of in/out must be srt://, the other a plain endpoint");
   warn_if(&y, both && srt_ep->n_srt > 1 && cfg.group_mode == SRTGROUP_NONE, "HA000248", "bonding several srt:// peers requires group-mode");
   warn_if(&y, both && srt_ep->n_srt == 1 && cfg.group_mode != SRTGROUP_NONE, "HA000249", "group-mode has no effect with a single srt:// peer");
+  warn_if(&y, cfg.pace && cfg.n_in && (cfg.in.is_srt || (cfg.in.nonsrt.kind != PLAIN_EP_FILE && cfg.in.nonsrt.kind != PLAIN_EP_HTTP)), "HA000721", "pace requires in - , a file path or http(s)://");
   warn_if(&y, both && cfg.rendezvous && srt_ep->listen, "HA000250", "rendezvous is not combinable with srt://@ (listener)");
   warn_if(&y, cfg.rendezvous && cfg.group_mode != SRTGROUP_NONE, "HA000251", "rendezvous is not combinable with group-mode");
   warn_if(&y, cfg.rendezvous && (!cfg.local_host[0] || !cfg.local_port), "HA000252", "rendezvous requires local");
-  warn_if(&y, cfg.passphrase[0] && (strlen(cfg.passphrase) < 10 || strlen(cfg.passphrase) > 79), "HA000253", "passphrase must be 10..79 characters");
+  warn_if(&y, both && config_local_family_mismatch(&cfg), "HA000722", "local and srt:// peer differ in address family");
+  warn_if(&y, !argutil_srt_passphrase_valid(cfg.passphrase), "HA000253", "passphrase must be 10..79 characters");
   warn_if(&y, cfg.pbkeylen && !cfg.passphrase[0], "HA000254", "pbkeylen requires passphrase");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "HA000120", "metrics.sock and metrics.interval require metrics.id");
   warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "HA000161", "metrics.inspect-ts requires metrics.id");
   warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "HA000162", "al-fec requires al-fec-port");
   warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "HA000163", "al-fec-port has no effect without al-fec");
+  warn_if(&y, both && cfg.al_fec_l && !cfg.in.is_srt && cfg.in.nonsrt.kind != PLAIN_EP_RTP, "HA000240", "al-fec has no effect, the non-srt:// side isn't rtp://");
+  warn_if(&y, both && cfg.al_fec_l && cfg.in.is_srt && cfg.out.nonsrt.kind != PLAIN_EP_RTP, "HA000240", "al-fec has no effect, the non-srt:// side isn't rtp://");
+  warn_if(&y, cfg.insecure_tls && cfg.n_in && !(cfg.in.nonsrt.kind == PLAIN_EP_HTTP && cfg.in.nonsrt.http.tls), "HA000148", "insecure needs in https://");
+  warn_if(&y, cfg.send_buffer_mult && both && !config_is_sender(&cfg), "HA100114", "send-buffer-mult needs out srt://");
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);
   return rc;

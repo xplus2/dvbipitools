@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -79,15 +80,16 @@ static frame_status_t frame_timeout(int slot, int authed) {
 
 /* read+decrypt+validate one frame. auth/size/crc failures logged+counted here.
    FRAME_OK: body_out/buflen_out set. FRAME_STOP: read/decrypt failed, no log.
-   FRAME_AUTH_FAIL, FRAME_TIMEOUT: already logged. deadline covers the whole frame */
+   FRAME_AUTH_FAIL, FRAME_TIMEOUT: already logged. deadline covers the whole frame.
+   authed: a frame passed crc already (selects idle vs auth timeout label) */
 static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned char *buf,
-  unsigned char **body_out, size_t *buflen_out, unsigned char conn_ucrc[4], int *have_ucrc, double deadline) {
+  unsigned char **body_out, size_t *buflen_out, unsigned char conn_ucrc[4], int *have_ucrc, int authed, double deadline) {
   unsigned char *body = buf + 4;
   size_t buflen, total;
   int rc;
 
   rc = read_exact(fd, buf, CS378X_MIN_FRAME, &s->stop, deadline);
-  if (rc == -2) return frame_timeout(slot, *have_ucrc);
+  if (rc == -2) return frame_timeout(slot, authed);
   if (rc <= 0) return FRAME_STOP;
 
   if (!*have_ucrc) {
@@ -119,7 +121,7 @@ static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned 
 
   if (total > 32) {
     rc = read_exact(fd, body + 32, total - 32, &s->stop, deadline);
-    if (rc == -2) return frame_timeout(slot, *have_ucrc);
+    if (rc == -2) return frame_timeout(slot, authed);
     if (rc <= 0) return FRAME_STOP;
     if (cs378x_aes128_ecb(s->aes_key, body + 32, total - 32, 0) != 0) return FRAME_STOP;
   }
@@ -143,6 +145,7 @@ static void *worker_main(void *arg) {
   struct timeval tv;
   unsigned char conn_ucrc[4];
   int have_ucrc = 0;
+  int authed = 0;
   int ka = 1;
   double auth_span = (double)s->auth_timeout_ms / 1000.0;
   double idle_span = (double)s->idle_timeout_ms / 1000.0;
@@ -160,7 +163,8 @@ static void *worker_main(void *arg) {
     unsigned char *body;
     size_t buflen;
 
-    if (read_frame(s, fd, slot, buf, &body, &buflen, conn_ucrc, &have_ucrc, deadline) != FRAME_OK) break;
+    if (read_frame(s, fd, slot, buf, &body, &buflen, conn_ucrc, &have_ucrc, authed, deadline) != FRAME_OK) break;
+    authed = 1;
     deadline = mono_seconds() + idle_span;
     switch (body[0]) {
       case CMD_ECM_REQUEST:
@@ -181,8 +185,10 @@ static void *worker_main(void *arg) {
   }
 
   log_line(TOOL_NAME ": connection closed (slot %d)", slot);
+  pthread_mutex_lock(&s->fd_lock);
   atomic_store_explicit(&s->worker_fd[slot], -1, memory_order_release);
   close(fd);
+  pthread_mutex_unlock(&s->fd_lock);
   atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);
   return NULL;
 }
@@ -190,6 +196,7 @@ static void *worker_main(void *arg) {
 int tcp_listen(const char *bind_addr, unsigned port) {
   struct addrinfo hints;
   struct addrinfo *ai;
+  struct addrinfo *cur;
   char portstr[8];
   int fd;
   int on = 1;
@@ -207,21 +214,22 @@ int tcp_listen(const char *bind_addr, unsigned port) {
     log_code("3S000133", TOOL_NAME ": bind address %s: %s", bind_addr, gai_strerror(rc));
     return -1;
   }
-  fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-  if (fd < 0) {
-    log_code("3S500103", TOOL_NAME ": socket: %s", strerror(errno));
-    freeaddrinfo(ai);
-    return -1;
-  }
-  if (ai->ai_family == AF_INET6) setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off);
-  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
-  rc = bind(fd, ai->ai_addr, ai->ai_addrlen);
-  freeaddrinfo(ai);
-  if (rc < 0) {
+  fd = -1;
+  for (cur = ai; cur != NULL; cur = cur->ai_next) {
+    fd = socket(cur->ai_family, cur->ai_socktype | SOCK_CLOEXEC, cur->ai_protocol);
+    if (fd < 0) {
+      log_code("3S500103", TOOL_NAME ": socket: %s", strerror(errno));
+      continue;
+    }
+    if (cur->ai_family == AF_INET6) setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off);
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+    if (bind(fd, cur->ai_addr, cur->ai_addrlen) == 0) break;
     log_code("3S500104", TOOL_NAME ": bind %s port %u: %s", bind_addr, port, strerror(errno));
     close(fd);
-    return -1;
+    fd = -1;
   }
+  freeaddrinfo(ai);
+  if (fd < 0) return -1;
   if (listen(fd, 8) < 0) {
     log_code("3S500105", TOOL_NAME ": listen: %s", strerror(errno));
     close(fd);
@@ -239,6 +247,7 @@ int tcp_listen(const char *bind_addr, unsigned port) {
 void *accept_main(void *arg) {
   cs378x_server_t *s = arg;
   int wfd = signal_wake_fd();
+  int accept_failing = 0;
 
   while (!atomic_load_explicit(&s->stop, memory_order_relaxed) && !signal_stop_requested()) {
     struct pollfd pfds[2];
@@ -260,14 +269,19 @@ void *accept_main(void *arg) {
       npfd = 2;
     }
     pret = poll(pfds, (nfds_t)npfd, npfd == 2 ? -1 : CS378X_POLL_INTERVAL_MS);
+    if (atomic_load_explicit(&s->stop, memory_order_relaxed)) break;
     if (pret <= 0) continue;
     if (!(pfds[0].revents & POLLIN)) continue;
-    fd = accept(s->listen_fd, NULL, NULL);
+    fd = accept4(s->listen_fd, NULL, NULL, SOCK_CLOEXEC);
     if (fd < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) continue;
-      log_code("3E500107", TOOL_NAME ": accept: %s", strerror(errno));
+      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR || errno == ECONNABORTED) continue;
+      if (!accept_failing) log_code("3E500107", TOOL_NAME ": accept: %s", strerror(errno));
+      accept_failing = 1;
+      /* listen fd stays readable: wait out, wake on stop */
+      poll(pfds + 1, wfd >= 0 ? 1 : 0, CS378X_ACCEPT_BACKOFF_MS);
       continue;
     }
+    accept_failing = 0;
 
     slot = -1;
     for (int i = 0; i < CS378X_MAX_CONNS; i++) {
@@ -289,8 +303,9 @@ void *accept_main(void *arg) {
     wa->fd = fd;
     wa->slot = slot;
     atomic_store_explicit(&s->worker_fd[slot], fd, memory_order_release);
-    if (pthread_create(&th, NULL, worker_main, wa) != 0) {
-      log_code("3E500102", TOOL_NAME ": pthread_create: %s", strerror(errno));
+    int rc = pthread_create(&th, NULL, worker_main, wa);
+    if (rc != 0) {
+      log_code("3E500102", TOOL_NAME ": pthread_create: %s", strerror(rc));
       close(fd);
       atomic_store_explicit(&s->worker_fd[slot], -1, memory_order_release);
       atomic_store_explicit(&s->worker_active[slot], 0, memory_order_release);

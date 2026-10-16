@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <arpa/inet.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -102,6 +103,12 @@ void channel_table_free(channel_table_t *t) {
   free(t);
 }
 
+/* entry (chan index + 1) still owns slot: channel in use and carries that slot */
+static int resolve_entry_live(channel_table_t *t, size_t entry, size_t slot) {
+  if (entry == 0) return 0;
+  return atomic_load_explicit(&t->chan[entry - 1].in_use, memory_order_acquire) == 1 && t->chan[entry - 1].resolve_slot == slot;
+}
+
 /* any thread: find-or-claim below resolves concurrent same-key callers to one winner */
 channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size_t addr_len, unsigned port) {
   size_t claimed_h = 0;
@@ -134,13 +141,16 @@ channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size
 
     if (c->psi) psi_free(c->psi);
     if (c->insp) tsinspect_agg_remove(t->agg, c->insp);
-    memset(c, 0, sizeof *c);
+    memset(c, 0, offsetof(channel_t, hned_lock));
+    pthread_mutex_lock(&c->hned_lock); /* stale holders may still be inside, mutex itself survives reclaim */
+    memset(c->hned, 0, sizeof c->hned);
+    memset(c->hned_collisions, 0, sizeof c->hned_collisions);
+    pthread_mutex_unlock(&c->hned_lock);
     c->ring = saved_ring;
     c->ring_size = saved_ring_size;
     c->cache.entries = saved_cache_entries;
     c->cache.cap = saved_cache_cap;
     atomic_store_explicit(&c->generation, saved_generation + 1, memory_order_relaxed);
-    pthread_mutex_init(&c->hned_lock, NULL); /* hned_lock zeroed by memset above, reinit before use */
 
     if (saved_ring) {
       ret_ring_entry_t *ring = (ret_ring_entry_t *)saved_ring;
@@ -156,11 +166,13 @@ channel_t *channel_lookup(channel_table_t *t, int family, const void *addr, size
     memcpy(c->addr, addr, addr_len);
     if (!inet_ntop(family, addr, c->group, sizeof c->group)) c->group[0] = '\0';
     c->port = port;
-    c->resolve_slot = chan_key_hash(family, addr, addr_len, port) % t->max_channels;
-    rb = c->resolve_slot;
-    cur = atomic_load_explicit(&t->resolve_hash[rb], memory_order_relaxed);
-    if (cur == 0 || atomic_load_explicit(&t->chan[cur - 1].in_use, memory_order_relaxed) != 1)
-      atomic_store_explicit(&t->resolve_hash[rb], i + 1, memory_order_release); /* published to resolve-by-port readers */
+    rb = chan_key_hash(family, addr, addr_len, port) % t->max_channels;
+    for (size_t n = 0; n < t->max_channels; n++, rb = (rb + 1) % t->max_channels) {
+      cur = atomic_load_explicit(&t->resolve_hash[rb], memory_order_relaxed);
+      if (!resolve_entry_live(t, cur, rb)) break;
+    }
+    c->resolve_slot = rb;
+    atomic_store_explicit(&t->resolve_hash[rb], i + 1, memory_order_release); /* published to resolve-by-port readers */
     atomic_store_explicit(&c->last_seen, time(NULL), memory_order_relaxed);
     atomic_store_explicit(&c->in_use, 1, memory_order_release);
 
@@ -196,7 +208,7 @@ channel_t *channel_lookup_by_resolve_slot(channel_table_t *t, size_t slot) {
   slot_plus1 = atomic_load_explicit(&t->resolve_hash[slot], memory_order_acquire);
   if (slot_plus1 == 0) return NULL;
   c = &t->chan[slot_plus1 - 1];
-  return atomic_load_explicit(&c->in_use, memory_order_acquire) == 1 ? c : NULL;
+  return resolve_entry_live(t, slot_plus1, slot) ? c : NULL;
 }
 
 static channel_t *ssrc_scan_bucket(channel_table_t *t, size_t base, uint32_t ssrc) {
@@ -220,12 +232,10 @@ channel_t *channel_find_by_ssrc(channel_table_t *t, uint32_t ssrc) {
 
   for (int tries = 0; tries < 8; tries++) {
     unsigned g1 = atomic_load_explicit(&t->ssrc_gen, memory_order_acquire);
-    unsigned g2;
     channel_t *result;
     if (g1 & 1u) continue; /* write in progress, retry */
     result = ssrc_scan_bucket(t, base, ssrc);
-    g2 = atomic_load_explicit(&t->ssrc_gen, memory_order_acquire);
-    if (g1 == g2) return result;
+    if (seqlock_read_ok(&t->ssrc_gen, g1)) return result;
   }
   return NULL; /* repeated race treated as not-found */
 }
@@ -397,6 +407,10 @@ static void reap_slot(channel_table_t *t, size_t i, time_t now, time_t max_age_s
     unsigned g = seqlock_begin_write(&t->ssrc_gen);
     ssrc_hash_remove(t, i, atomic_load_explicit(&c->ssrc, memory_order_relaxed));
     seqlock_commit_write(&t->ssrc_gen, g);
+  }
+  {
+    size_t expect = i + 1;
+    atomic_compare_exchange_strong_explicit(&t->resolve_hash[c->resolve_slot], &expect, 0, memory_order_acq_rel, memory_order_relaxed);
   }
   atomic_store_explicit(&c->in_use, 0, memory_order_release);
 }

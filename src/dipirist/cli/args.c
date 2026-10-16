@@ -13,6 +13,9 @@ static const struct option longopts[] = {
   {"out", required_argument, 0, 'o'},
   {"iface", required_argument, 0, 'I'},
   {"insecure", no_argument, 0, 'k'},
+  {"pace", no_argument, 0, OPT_PACE},
+  {"ttl", required_argument, 0, OPT_TTL},
+  {"dscp", required_argument, 0, OPT_DSCP},
   {"profile", required_argument, 0, OPT_PROFILE},
   {"secret", required_argument, 0, OPT_SECRET},
   {"encryption-type", required_argument, 0, OPT_ENCRYPTION_TYPE},
@@ -42,7 +45,7 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
     if (c == OPT_CONFIGTEST) *configtest = 1;
     if (c == OPT_CONFIG_STRICT) *strict = 1;
     if (c == 'h') {
-      rist_print_help();
+      dipirist_print_help();
       opterr = 1;
       return ARGS_HELP;
     }
@@ -51,8 +54,8 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
   return ARGS_OK;
 }
 
-static args_status_t dispatch(rist_opt_t *p, int c) {
-  static args_status_t (*const groups[])(rist_opt_t *, int) = {rist_opt_general, rist_opt_rist};
+static args_status_t dispatch(dipirist_opt_t *p, int c) {
+  static args_status_t (*const groups[])(dipirist_opt_t *, int) = {dipirist_opt_general, dipirist_opt_rist};
 
   for (size_t i = 0; i < sizeof groups / sizeof groups[0]; i++) {
     args_status_t st = groups[i](p, c);
@@ -65,21 +68,21 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
   int strict = 0;
-  rist_opt_t p = {.cfg = cfg};
+  dipirist_opt_t p = {.cfg = cfg};
   args_status_t pst;
   int c;
 
   pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
   if (pst != ARGS_OK) return pst;
-  if (configtest) return rist_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
-  rist_cfg_defaults(cfg);
-  if (rist_cfg_load(cfg, cfg_path, strict)) return ARGS_ERR;
+  if (configtest) return dipirist_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
+  dipirist_cfg_defaults(cfg);
+  if (dipirist_cfg_load(cfg, cfg_path, strict)) return ARGS_ERR;
   optind = 1;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     args_status_t st;
     if (c == 'c' || c == OPT_CONFIG_STRICT || c == OPT_CONFIGTEST) continue;
     if (c == 'h') {
-      rist_print_help();
+      dipirist_print_help();
       return ARGS_HELP;
     }
     st = dispatch(&p, c);
@@ -89,5 +92,5 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("VS000107", "unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  return rist_cli_check(cfg);
+  return dipirist_cli_check(cfg);
 }

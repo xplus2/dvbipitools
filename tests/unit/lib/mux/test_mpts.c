@@ -202,6 +202,21 @@ START_TEST(mpts_tick_emits_nit_when_network_name_set) {
 }
 END_TEST
 
+START_TEST(mpts_tick_emits_tot_first_then_tdt) {
+  psi_pat_entry_t entries[1] = {{101, 0x1000}};
+  mpts_t *m = mpts_new(1, 1, "", entries, 1, &mock_program_ops);
+
+  g_count = 0;
+  mpts_tick(m, 0.0, capture_cb, NULL);
+  ck_assert_int_eq(count_pid(0x0014), 1);
+  mpts_tick(m, 0.5, capture_cb, NULL);
+  ck_assert_int_eq(count_pid(0x0014), 1);
+  mpts_tick(m, 1.0, capture_cb, NULL);
+  ck_assert_int_eq(count_pid(0x0014), 2);
+  mpts_free(m);
+}
+END_TEST
+
 START_TEST(mpts_tick_skips_sdt_eit_for_inactive_program_but_keeps_pat_entry) {
   psi_pat_entry_t entries[2] = {{101, 0x1000}, {102, 0x1001}};
   mpts_t *m = mpts_new(1, 1, "", entries, 2, &mock_program_ops);
@@ -383,6 +398,7 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, mpts_tick_emits_multi_program_pat);
   tcase_add_test(tc, mpts_tick_omits_nit_when_no_network_name);
   tcase_add_test(tc, mpts_tick_emits_nit_when_network_name_set);
+  tcase_add_test(tc, mpts_tick_emits_tot_first_then_tdt);
   tcase_add_test(tc, mpts_tick_skips_sdt_eit_for_inactive_program_but_keeps_pat_entry);
   tcase_add_test(tc, mpts_tick_shortly_after_sends_nothing_new);
   tcase_add_test(tc, mpts_tick_resends_eit_immediately_on_metadata_change);

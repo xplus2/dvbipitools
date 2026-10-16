@@ -502,7 +502,7 @@ START_TEST(gate_waits_before_the_deadline) {
 }
 END_TEST
 
-START_TEST(gate_fails_past_the_deadline_and_names_the_stragglers) {
+START_TEST(gate_starts_without_stragglers_past_the_deadline) {
   rig_t g;
   cas_t *cas = NULL;
   capture_t cap;
@@ -516,10 +516,23 @@ START_TEST(gate_fails_past_the_deadline_and_names_the_stragglers) {
   capture_begin(&cap);
   rc = check_cas_discovery_gate(&g.cfg, g.progs, 3, g.mpts, mono_seconds() - 1.0, &cas);
   capture_end(&cap, log, sizeof log);
-  ck_assert_int_eq(rc, -1);
-  ck_assert_ptr_null(cas);
+  ck_assert_int_eq(rc, 0);
+  ck_assert_ptr_nonnull(cas);
   ck_assert_ptr_nonnull(strstr(log, "still discovering"));
   ck_assert_ptr_nonnull(strstr(log, "not connected"));
+  cas_stop(cas);
+  rig_free(&g);
+}
+END_TEST
+
+START_TEST(gate_keeps_waiting_past_the_deadline_with_nothing_discovered) {
+  rig_t g;
+  cas_t *cas = NULL;
+
+  rig_init(&g, 2);
+  gate_cfg(&g);
+  ck_assert_int_eq(check_cas_discovery_gate(&g.cfg, g.progs, 2, g.mpts, mono_seconds() - 1.0, &cas), 0);
+  ck_assert_ptr_null(cas);
   rig_free(&g);
 }
 END_TEST
@@ -746,7 +759,8 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, feed_resets_the_program_when_the_source_ends);
   tcase_add_test(tc, gate_starts_cas_once_every_program_is_discovered);
   tcase_add_test(tc, gate_waits_before_the_deadline);
-  tcase_add_test(tc, gate_fails_past_the_deadline_and_names_the_stragglers);
+  tcase_add_test(tc, gate_starts_without_stragglers_past_the_deadline);
+  tcase_add_test(tc, gate_keeps_waiting_past_the_deadline_with_nothing_discovered);
   tcase_add_test(tc, gate_reports_a_cas_that_cannot_start);
   tcase_add_test(tc, cat_passthrough_merges_descriptors_of_programs_that_have_one);
   tcase_add_test(tc, cat_passthrough_skips_when_no_program_carries_emm);

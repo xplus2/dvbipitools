@@ -20,6 +20,9 @@ void fec2022_enc_free(fec2022_enc_t *e);
 
 int fec2022_parse_ld(const char *s, unsigned *l_out, unsigned *d_out);
 
+/* feed releases at most one queued repair, one per D source packets; drain pops next regardless of pacing */
 size_t fec2022_enc_feed(fec2022_enc_t *e, const unsigned char *pkt, size_t len, uint32_t pts_90k, unsigned char *out, size_t cap);
+
+size_t fec2022_enc_drain(fec2022_enc_t *e, unsigned char *out, size_t cap);
 
 #endif

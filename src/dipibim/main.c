@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -8,6 +9,7 @@
 #include "lib/bim/accessunit.h"
 #include "lib/bim/bimreader.h"
 #include "lib/bim/bitwriter.h"
+#include "lib/bim/codec.h"
 #include "lib/bim/strrepo.h"
 #include "lib/helper/fileutil.h"
 #include "lib/sys/ioutil.h"
@@ -16,6 +18,64 @@
 #include "lib/tva/bcg_doc.h"
 #include "lib/tva/tva_xml.h"
 #include "version.h"
+
+static int time_encodable(const char *iso) {
+  bitwriter_t tw;
+  int rc;
+  bitwriter_init(&tw);
+  rc = dvb_datetime_encode(&tw, iso);
+  bitwriter_free(&tw);
+  return rc == 0;
+}
+
+/* drops channels without IPTV ServiceURL */
+static void drop_unaddressable_channels(bcg_doc_t *doc) {
+  int n = 0;
+  for (int i = 0; i < doc->channel_count; i++) {
+    if (doc->channels[i].uri[0]) {
+      if (n != i) doc->channels[n] = doc->channels[i];
+      n++;
+      continue;
+    }
+    log_code("BW400232", "channel %s: no <ServiceURL name=\"IPTV\">, skipping channel and its programmes", doc->channels[i].id);
+  }
+  doc->channel_count = n;
+}
+
+/* drops programmes of unknown channels or with unencodable times */
+static void drop_bad_programmes(bcg_doc_t *doc) {
+  int n = 0;
+  for (int i = 0; i < doc->programme_count; i++) {
+    bcg_programme_t *pr = &doc->programmes[i];
+    if (!bcg_find_channel(doc, pr->channel_id)) {
+      log_code("BW400233", "channel %s: unknown or skipped, skipping programme (start \"%s\")", pr->channel_id, pr->start);
+    } else if (!time_encodable(pr->start) || (pr->stop[0] && !time_encodable(pr->stop))) {
+      log_code("BW400231", "channel %s: skipping programme, bad start/end time (start \"%s\", end \"%s\")", pr->channel_id, pr->start, pr->stop);
+    } else {
+      if (n != i) doc->programmes[n] = *pr;
+      n++;
+      continue;
+    }
+    bcg_programme_free_text(pr);
+  }
+  doc->programme_count = n;
+}
+
+/* best effort, uncached programmes build on demand */
+static void cache_crids(bcg_doc_t *doc) {
+  for (int i = 0; i < doc->programme_count; i++) (void)tva_programme_cache_crid(&doc->programmes[i]);
+}
+
+static int encode_access_unit(accessunit_scratch_t *sc, bcg_doc_t *doc, bitwriter_t *bw, strrepo_writer_t *sw, int *nfuu) {
+  drop_unaddressable_channels(doc);
+  drop_bad_programmes(doc);
+  cache_crids(doc);
+  if (doc->channel_count == 0) {
+    log_code("BE400107", "nothing to encode, no channel with IPTV ServiceURL");
+    return 1;
+  }
+  return accessunit_encode(sc, doc, bw, sw, nfuu);
+}
 
 static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
   bcg_doc_t doc;
@@ -26,13 +86,17 @@ static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
 
   bcg_doc_init(&doc);
   bitwriter_init(&bw);
-  strrepo_writer_init(&sw);
   accessunit_scratch_init(&sc);
-  if (tva_xml_read(in, &doc)) {
-    log_code("BE400101", "cannot parse input XML");
+  if (strrepo_writer_init(&sw)) {
+    log_code("BE500101", "out of memory");
     rc = -1;
-  } else if (accessunit_encode(&sc, &doc, &bw, &sw, &nfuu)) {
-    log_code("BE400102", "BiM encoding failed");
+  } else if (tva_xml_read(in, &doc)) {
+    rc = -1;
+  } else if (doc.channel_count == 0 && doc.programme_count == 0) {
+    log_code("BE400101", "no channels or programmes found in input XML");
+    rc = -1;
+  } else if ((rc = encode_access_unit(&sc, &doc, &bw, &sw, &nfuu))) {
+    if (rc < 0) log_code("BE400102", "BiM encoding failed");
     rc = -1;
   } else {
     size_t bits_len, strs_len;
@@ -43,7 +107,10 @@ static int encode_xml_to_bim(FILE *in, FILE *out, int verbose) {
     lenbuf[1] = (unsigned char)(bits_len >> 16);
     lenbuf[2] = (unsigned char)(bits_len >> 8);
     lenbuf[3] = (unsigned char)bits_len;
-    if (fwrite(lenbuf, 1, 4, out) != 4 || fwrite(bits, 1, bits_len, out) != bits_len || fwrite(strs, 1, strs_len, out) != strs_len) {
+    if (bits_len > UINT32_MAX || strs_len > UINT32_MAX) {
+      log_code("BE400108", "encoded size exceeds 4 GiB format limit: %zu+%zu bytes", bits_len, strs_len);
+      rc = -1;
+    } else if (fwrite(lenbuf, 1, 4, out) != 4 || fwrite(bits, 1, bits_len, out) != bits_len || fwrite(strs, 1, strs_len, out) != strs_len) {
       log_code("BE100103", "write failed");
       rc = -1;
     } else if (verbose) {
@@ -98,6 +165,7 @@ static int decode_bim_to_xml(FILE *in, FILE *out, int verbose) {
     rc = -1;
     goto done;
   }
+  cache_crids(&doc);
   tva_xml_write(out, &doc);
   if (verbose) log_code("BD700102", "%d channels, %d programmes, %d fragments read", doc.channel_count, doc.programme_count, nfuu);
 
@@ -108,9 +176,37 @@ done:
   return rc;
 }
 
+static int copy_to_output(FILE *tmp, const char *path) {
+  char buf[16384];
+  size_t n;
+  FILE *out;
+  int rc = 0;
+
+  if (fflush(tmp) || ferror(tmp) || fseek(tmp, 0, SEEK_SET)) {
+    log_code("BE100102", TOOL_NAME ": error writing %s", path);
+    return 1;
+  }
+  out = fileutil_open_std(path, "w");
+  if (!out) {
+    log_code("BS100104", TOOL_NAME ": cannot open %s", path);
+    return 1;
+  }
+  while ((n = fread(buf, 1, sizeof buf, tmp)) > 0) {
+    if (fwrite(buf, 1, n, out) != n) {
+      rc = 1;
+      break;
+    }
+  }
+  if (ferror(tmp)) rc = 1;
+  if (fflush(out) || ferror(out)) rc = 1;
+  if (out != stdout && fclose(out)) rc = 1;
+  if (rc) log_code("BE100102", TOOL_NAME ": error writing %s", path);
+  return rc;
+}
+
 int main(int argc, char **argv) {
-  config_t cfg;
-  FILE *in, *out;
+  config_t cfg = {0};
+  FILE *in, *tmp;
   int rc;
 
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
@@ -119,19 +215,17 @@ int main(int argc, char **argv) {
     log_code("BS000100", TOOL_NAME ": cannot open %s", cfg.input_path);
     return 1;
   }
-  out = fileutil_open_std(cfg.output_path, "w");
-  if (!out) {
-    log_code("BS100104", TOOL_NAME ": cannot open %s", cfg.output_path);
+  tmp = tmpfile();
+  if (!tmp) {
+    log_code("BS500250", TOOL_NAME ": cannot create temporary file");
     if (in != stdin) fclose(in);
     return 1;
   }
-  if (cfg.format == FMT_XML) rc = encode_xml_to_bim(in, out, cfg.verbose) ? 1 : 0;
-  else rc = decode_bim_to_xml(in, out, cfg.verbose) ? 1 : 0;
+  if (cfg.format == FMT_XML) rc = encode_xml_to_bim(in, tmp, cfg.verbose) ? 1 : 0;
+  else rc = decode_bim_to_xml(in, tmp, cfg.verbose) ? 1 : 0;
 
   if (in != stdin) fclose(in);
-  if (out != stdout && fclose(out) && rc == 0) {
-    log_code("BE100102", TOOL_NAME ": error writing %s", cfg.output_path);
-    rc = 1;
-  }
+  if (rc == 0) rc = copy_to_output(tmp, cfg.output_path);
+  fclose(tmp);
   return rc;
 }

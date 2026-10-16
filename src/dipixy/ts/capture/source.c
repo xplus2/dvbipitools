@@ -26,7 +26,7 @@ static capture_ctx_t *tssrc_ctx_new(char *key, const tssrc_cfg_t *cfg, net_err_r
   atomic_init(&c->ts_push_head, -1);
   c->pump_shard = next_pump_shard();
   c->key = key;
-  c->ts = tssrc_open(cfg, reason);
+  c->ts = tssrc_open_blocking(cfg, 30.0, reason);
   if (!c->ts) {
     free(c->key);
     free(c);

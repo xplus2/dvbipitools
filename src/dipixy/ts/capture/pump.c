@@ -113,20 +113,21 @@ void capture_flush_deferred_quiescent(void) {
 /* stdin/http aren't packet-aligned: reassembles 188B packets across calls */
 static int tssrc_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned char *pkt), void *user) {
   int64_t deadline = monotonic_ms() + CAPTURE_TSSRC_DRAIN_BUDGET_MS;
-  int fd = tssrc_fd(ctx->ts);
   int fec_fd = tssrc_fec_fd(ctx->ts);
   /* caps g_lock hold per tick: continuous source never returns 0 on its own */
   for (;;) {
     unsigned char buf[CAPTURE_RECV_BUF];
     size_t len, off;
     ssize_t n;
+    int fd;
     if (monotonic_ms() >= deadline) return 0;
+    fd = tssrc_timer_driven(ctx->ts) ? -1 : tssrc_fd(ctx->ts);
     if (fd >= 0) {
       /* underlying fd (stdin above all) may be blocking with nothing to read: poll first, never call tssrc_read() blind */
       struct pollfd pfd[2];
       nfds_t nfds = 1;
       pfd[0].fd = fd;
-      pfd[0].events = POLLIN;
+      pfd[0].events = tssrc_poll_events(ctx->ts);
       pfd[0].revents = 0;
       if (fec_fd >= 0) {
         pfd[1].fd = fec_fd;

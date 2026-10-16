@@ -62,7 +62,11 @@ static ssize_t http_read_chunked(struct http *h, void *buf, size_t cap, net_err_
       return -1;
     }
     if (r >= 0) h->chunk_done = 1;
-    if (bufsz > 0 || h->chunk_done) return (ssize_t)bufsz;
+    if (bufsz > 0) return (ssize_t)bufsz;
+    if (h->chunk_done) { /* terminal chunk: EOF now */
+      if (reason_out) *reason_out = NET_ERR_EOF;
+      return -1;
+    }
   }
 }
 

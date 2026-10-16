@@ -12,6 +12,7 @@
 
 #define CS378X_MAX_CONNS 4
 #define CS378X_POLL_INTERVAL_MS 150
+#define CS378X_ACCEPT_BACKOFF_MS 500
 #define CS378X_RECV_TIMEOUT_MS 200
 #define CS378X_SEND_TIMEOUT_MS 3000
 #define CS378X_AUTH_TIMEOUT_MS 10000
@@ -37,10 +38,12 @@ struct cs378x_server {
   int listen_fd;
   atomic_int stop;
   pthread_t accept_thread;
+  int running; /* accept_thread started */
   atomic_int worker_active[CS378X_MAX_CONNS];
   pthread_t worker_thread[CS378X_MAX_CONNS];
   int worker_thread_joinable[CS378X_MAX_CONNS];
   atomic_int worker_fd[CS378X_MAX_CONNS];
+  pthread_mutex_t fd_lock; /* worker close vs stop shutdown */
   worker_arg_t worker_args[CS378X_MAX_CONNS]; /* no per-connection malloc, reuse gated by worker_active[] */
 
   unsigned char aes_key[16]; /* MD5(password) */
@@ -58,6 +61,7 @@ struct cs378x_server {
   atomic_ullong auth_errors_total[CAM_AUTH_REASON_COUNT];
   atomic_ullong ecm_total;
   atomic_ullong ecm_errors_total;
+  atomic_ullong ecm_rejected_total;
   atomic_ullong emm_total;
 };
 

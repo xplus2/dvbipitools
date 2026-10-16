@@ -205,6 +205,10 @@ void remux_release(remux_t *r, double now_s, remux_packet_cb cb, void *ctx, int 
   r->tsm_cur = tsm;
   for (int idx = 0; idx < r->es_count; idx++) {
     const releaseq_t *q = r->hold[idx];
+    if (all && r->scte[idx]) {
+      scte_emit_t e = {r, r->es[idx].out_pid, now_s, cb, ctx};
+      scte35stamp_flush(r->scte[idx], scte_emit, &e);
+    }
     while (q && releaseq_len(q)) {
       int has;
       uint64_t tag;
@@ -249,7 +253,7 @@ int remux_hold_due_ms(const remux_t *r) {
 unsigned long long remux_hold_forced(const remux_t *r) { return r->hold_forced; }
 
 /* continuity_counter gaps, source-side. cc advances on payload packets only (2.4.3.3),
-   same has_payload test as forward_packet() */
+   same has_payload test as forward_packet(). Null pid has undefined cc */
 static void track_continuity(remux_t *r, unsigned pid, const unsigned char pkt188[188], ts_metrics_t *tsm) {
   int has_payload = (pkt188[3] & 0x10) != 0;
   int has_adapt = (pkt188[3] & 0x20) != 0;
@@ -257,8 +261,13 @@ static void track_continuity(remux_t *r, unsigned pid, const unsigned char pkt18
   unsigned char cc = pkt188[3] & 0x0F;
   unsigned char state = r->cc_state[pid];
 
+  if (pid == 0x1FFF) return;
   if (disc_flag && tsm) tsm->ts_discontinuities++;
   if (!has_payload) return;
+  if ((state & 0x10) && !disc_flag && cc == (state & 0x0F) && !(state & 0x20)) {
+    r->cc_state[pid] = (unsigned char)(state | 0x20);
+    return;
+  }
   if ((state & 0x10) && !disc_flag && tsm && cc != (unsigned char)((state + 1) & 0x0F)) {
     tsm->ts_continuity_errors++;
     log_throttled(&r->cc_error_throttle, LOG_THROTTLE_WINDOW_S, "TW700168", "program %u: source continuity error on pid 0x%04x, cc %u after %u", r->src_service_id, pid, cc, state & 0x0F);
@@ -276,13 +285,17 @@ static void track_pcr(remux_t *r, double now_s, const unsigned char pkt188[188],
   r->have_last_pcr = 1;
 }
 
+void remux_tick(remux_t *r, double now_s, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm) {
+  r->tsm_cur = tsm;
+  send_psi_tables(r, now_s, cb, ctx, tsm);
+  if (r->standalone) remux_emit_eit(r, OUT_PID_EIT, &r->cc_eit, 1, cb, ctx);
+}
+
 void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm) {
   unsigned in_pid;
   int idx;
 
-  r->tsm_cur = tsm;
-  send_psi_tables(r, now_s, cb, ctx, tsm);
-  if (r->standalone) remux_emit_eit(r, OUT_PID_EIT, &r->cc_eit, 1, cb, ctx);
+  remux_tick(r, now_s, cb, ctx, tsm);
 
   if (pkt188[0] != 0x47) {
     if (tsm && !tsm->ts_checks_off) tsm->ts_sync_errors++;

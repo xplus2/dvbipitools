@@ -3,17 +3,24 @@
 
 #include "remux.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "lib/demux/fmp4/box.h"
 #include "lib/demux/fmp4/sample.h"
 #include "lib/demux/fmp4/track.h"
+#include "lib/helper/log.h"
 #include "lib/mux/tspacket_write.h"
+#include "pes.h"
 #include "tspacketize.h"
 
 static unsigned char stream_id_for(codec_t c) {
   if (c == CODEC_H264 || c == CODEC_HEVC || c == CODEC_VVC || c == CODEC_AV1 || c == CODEC_LCEVC || c == CODEC_MPEG2V) return 0xE0;
   return 0xC0;
+}
+
+static uint64_t to_90k(uint64_t ticks, unsigned timescale) {
+  return (ticks / timescale) * 90000ULL + (ticks % timescale) * 90000ULL / timescale;
 }
 
 typedef struct {
@@ -60,19 +67,28 @@ int esbuild_remux_add_init(esbuild_remux_t *r, unsigned stream_idx, const unsign
       p = trak.next;
       continue;
     }
-    if (!fmp4_box_find(trak.body, trak.body_len, "tkhd", &tkhd) || tkhd.body_len < 16) { p = trak.next; continue; }
+    if (!fmp4_box_find(trak.body, trak.body_len, "tkhd", &tkhd) || tkhd.body_len < 24) { p = trak.next; continue; }
     if (!fmp4_box_find(trak.body, trak.body_len, "mdia", &mdia)) { p = trak.next; continue; }
-    if (!fmp4_box_find(mdia.body, mdia.body_len, "mdhd", &mdhd) || mdhd.body_len < 16) { p = trak.next; continue; }
+    if (!fmp4_box_find(mdia.body, mdia.body_len, "mdhd", &mdhd) || mdhd.body_len < 24) { p = trak.next; continue; }
     if (!fmp4_box_find(mdia.body, mdia.body_len, "minf", &minf)) { p = trak.next; continue; }
     if (!fmp4_box_find(minf.body, minf.body_len, "stbl", &stbl)) { p = trak.next; continue; }
     if (!fmp4_box_find(stbl.body, stbl.body_len, "stsd", &stsd) || stsd.body_len < 8) { p = trak.next; continue; }
     if (!fmp4_box_read(stsd.body + 8, stsd.body + stsd.body_len, &entry)) { p = trak.next; continue; }
     if (!fmp4_parse_stsd_entry(&entry, &stsd_entry)) { p = trak.next; continue; }
 
-    cand[n].track_id = fmp4_rb_u32(tkhd.body + 12);
+    cand[n].track_id = fmp4_rb_u32(tkhd.body + (tkhd.body[0] == 1 ? 20 : 12));
     cand[n].stream_idx = stream_idx;
-    cand[n].timescale = fmp4_rb_u32(mdhd.body + 12);
-    esbuild_track_init(&cand[n].track, &stsd_entry);
+    cand[n].timescale = fmp4_rb_u32(mdhd.body + (mdhd.body[0] == 1 ? 20 : 12));
+    if (stsd_entry.codec == CODEC_AAC && stsd_entry.cpriv_len < 2) {
+      log_code("LW400239", "fMP4 remux: track %u AAC without AudioSpecificConfig, track skipped", cand[n].track_id);
+      p = trak.next;
+      continue;
+    }
+    if (!esbuild_track_init(&cand[n].track, &stsd_entry)) {
+      log_code("LW400227", "fMP4 remux: track %u parameter sets exceed %d bytes, track skipped", cand[n].track_id, ESBUILD_PS_POOL);
+      p = trak.next;
+      continue;
+    }
     n++;
     p = trak.next;
   }
@@ -94,6 +110,13 @@ int esbuild_remux_add_init(esbuild_remux_t *r, unsigned stream_idx, const unsign
   return 1;
 }
 
+void esbuild_remux_free(esbuild_remux_t *r) {
+  free(r->pesbuf);
+  free(r->esbuf);
+  r->pesbuf = r->esbuf = NULL;
+  r->pes_cap = r->es_cap = 0;
+}
+
 int esbuild_remux_init(esbuild_remux_t *r, const unsigned char *init_data, size_t init_len) {
   memset(r, 0, sizeof *r);
   return esbuild_remux_add_init(r, 0, init_data, init_len);
@@ -105,7 +128,17 @@ static esbuild_remux_track_t *find_track(esbuild_remux_t *r, unsigned stream_idx
   return NULL;
 }
 
-static void emit_pat_pmt(esbuild_remux_t *r, ts_packet_cb cb, void *cb_ctx) {
+static int grow_buf(unsigned char **buf, size_t *cap, size_t need) {
+  unsigned char *p;
+  if (*cap >= need) return 1;
+  p = realloc(*buf, need);
+  if (!p) return 0;
+  *buf = p;
+  *cap = need;
+  return 1;
+}
+
+static unsigned emit_pat_pmt(esbuild_remux_t *r, ts_packet_cb cb, void *cb_ctx) {
   unsigned char sec[188];
   unsigned char ptr = 0x00;
   size_t n;
@@ -118,19 +151,16 @@ static void emit_pat_pmt(esbuild_remux_t *r, ts_packet_cb cb, void *cb_ctx) {
   for (unsigned i = 0; i < r->n_tracks; i++) es_list[i] = r->tracks[i].es;
   n = esbuild_build_pmt(r->pmt_version, 1, es_list, r->n_tracks, sec, sizeof sec);
   if (n) ts_packet_emit(ESBUILD_PMT_PID, &r->pmt_cc, &ptr, sec, n, 0, 0, cb, cb_ctx);
+  return esbuild_pcr_pid(es_list, r->n_tracks);
 }
 
-void esbuild_remux_feed(esbuild_remux_t *r, unsigned stream_idx, const unsigned char *seg_data, size_t seg_len, ts_packet_cb cb, void *cb_ctx) {
-  fmp4_box_t moof;
-  fmp4_box_t mdat;
+/* one moof+mdat. ret: samples dropped */
+static unsigned feed_fragment(esbuild_remux_t *r, unsigned stream_idx, const fmp4_box_t *moof_box, const fmp4_box_t *mdat_box, unsigned pcr_pid, ts_packet_cb cb, void *cb_ctx) {
+  const fmp4_box_t moof = *moof_box;
+  const fmp4_box_t mdat = *mdat_box;
   const unsigned char *p;
   const unsigned char *end;
-
-  if (!r->have_init) return;
-  if (!fmp4_box_find(seg_data, seg_len, "moof", &moof)) return;
-  if (!fmp4_box_find(seg_data, seg_len, "mdat", &mdat)) return;
-
-  emit_pat_pmt(r, cb, cb_ctx);
+  unsigned dropped = 0;
 
   p = moof.body;
   end = moof.body + moof.body_len;
@@ -170,15 +200,48 @@ void esbuild_remux_feed(esbuild_remux_t *r, unsigned stream_idx, const unsigned 
 
     dts = base_dts;
     for (unsigned i = 0; i < n_samples; i++) {
-      size_t eslen = esbuild_convert_sample(&rt->track, &samples[i], r->esbuf, sizeof r->esbuf);
+      size_t bound = esbuild_es_bound(&rt->track, samples[i].size);
+      size_t eslen = 0;
+      if (grow_buf(&r->esbuf, &r->es_cap, bound) && grow_buf(&r->pesbuf, &r->pes_cap, bound + ESBUILD_PES_HDR_MAX)) eslen = esbuild_convert_sample(&rt->track, &samples[i], r->esbuf, r->es_cap);
       if (eslen) {
-        uint64_t dts_90k = dts * 90000ULL / rt->timescale;
-        uint64_t pts_90k = (dts + (uint64_t)(int64_t)samples[i].cts_offset) * 90000ULL / rt->timescale;
-        esbuild_ts_packetize(rt->es.pid, &rt->cc, stream_id_for(rt->track.codec), pts_90k, 1, dts_90k, r->esbuf, eslen, 0, 0, r->pesbuf, sizeof r->pesbuf, cb, cb_ctx);
-      }
+        uint64_t dts_90k = to_90k(dts, rt->timescale);
+        uint64_t pts_90k = to_90k(dts + (uint64_t)(int64_t)samples[i].cts_offset, rt->timescale);
+        if (!esbuild_ts_packetize(rt->es.pid, &rt->cc, stream_id_for(rt->track.codec), pts_90k, 1, dts_90k, r->esbuf, eslen, rt->es.pid == pcr_pid, dts_90k, r->pesbuf, r->pes_cap, cb, cb_ctx)) dropped++;
+      } else dropped++;
       dts += samples[i].duration;
     }
     rt->next_dts = dts;
     p = traf.next;
   }
+  return dropped;
+}
+
+/* chunked CMAF: N moof+mdat pairs */
+void esbuild_remux_feed(esbuild_remux_t *r, unsigned stream_idx, const unsigned char *seg_data, size_t seg_len, ts_packet_cb cb, void *cb_ctx) {
+  const unsigned char *p = seg_data;
+  const unsigned char *end = seg_data + seg_len;
+  fmp4_box_t moof;
+  int have_moof = 0;
+  int psi_sent = 0;
+  unsigned pcr_pid = 0;
+  unsigned dropped = 0;
+
+  if (!r->have_init) return;
+  while ((size_t)(end - p) >= 8) {
+    fmp4_box_t box;
+    if (!fmp4_box_read(p, end, &box)) break;
+    if (!memcmp(box.fourcc, "moof", 4)) {
+      moof = box;
+      have_moof = 1;
+    } else if (!memcmp(box.fourcc, "mdat", 4) && have_moof) {
+      if (!psi_sent) {
+        pcr_pid = emit_pat_pmt(r, cb, cb_ctx);
+        psi_sent = 1;
+      }
+      dropped += feed_fragment(r, stream_idx, &moof, &box, pcr_pid, cb, cb_ctx);
+      have_moof = 0;
+    }
+    p = box.next;
+  }
+  if (dropped) log_code("LW400228", "fMP4 remux: %u sample(s) dropped, conversion failed", dropped);
 }

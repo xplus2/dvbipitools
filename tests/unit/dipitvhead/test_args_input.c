@@ -22,6 +22,7 @@ static const opt_case_t BAD_VALUE[] = {
   {"--sid", "0"},
   {"--rist-encryption-type-in", "64"},
   {"--rist-profile-in", "bogus"},
+  {"--rist-buffer-in", "0"},
   {"--srt-pbkeylen-in", "20"},
   {"--srt-latency-in", "0"},
   {"--jitter-ms", "0"},
@@ -31,6 +32,8 @@ static const opt_case_t OVERSIZED_VALUE[] = {
   {"-s", NULL},
   {"--provider", NULL},
   {"--hbbtv-name", NULL},
+  {"--rist-secret-in", NULL},
+  {"--rist-cname-in", NULL},
   {"--srt-passphrase-in", NULL},
   {"--srt-streamid-in", NULL},
   {"--srt-packetfilter-in", NULL},
@@ -50,6 +53,9 @@ static const opt_case_t BEFORE_INPUT[] = {
   {"--sid", "1"},
   {"--rist-encryption-type-in", "128"},
   {"--rist-profile-in", "main"},
+  {"--rist-secret-in", "0123456789"},
+  {"--rist-cname-in", "name"},
+  {"--rist-buffer-in", "500"},
   {"--srt-passphrase-in", "0123456789"},
   {"--srt-pbkeylen-in", "16"},
   {"--srt-streamid-in", "id"},
@@ -157,6 +163,68 @@ START_TEST(sdt_dash_drops_the_table) {
 }
 END_TEST
 
+START_TEST(al_fec_in_fills_the_current_input) {
+  char *argv[] = {"dipitvhead", "-i", "rtp://@239.1.1.1:5000", "--al-fec-in", "5:10", "--al-fec-port-in", "5002",
+                  "-i", "rtp://@239.1.1.2:5000", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_parse(ARGS_FIXTURE_ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.inputs[0].al_fec_l_in, 5u);
+  ck_assert_uint_eq(cfg.inputs[0].al_fec_d_in, 10u);
+  ck_assert_uint_eq(cfg.inputs[0].al_fec_port_in, 5002u);
+  ck_assert_uint_eq(cfg.inputs[1].al_fec_l_in, 0u);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(al_fec_in_without_port_is_rejected) {
+  char *argv[] = {"dipitvhead", "-i", "rtp://@239.1.1.1:5000", "--al-fec-in", "5:10", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_ne(args_parse(ARGS_FIXTURE_ARGC(argv), argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(al_fec_in_rejects_bad_ratio) {
+  char *argv[] = {"dipitvhead", "-i", "rtp://@239.1.1.1:5000", "--al-fec-in", "41:1", "--al-fec-port-in", "5002", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_ne(args_parse(ARGS_FIXTURE_ARGC(argv), argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(srt_input_accepts_hostname) {
+  char *argv[] = {"dipitvhead", "-i", "srt://@feed.example.net:9000", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_parse(ARGS_FIXTURE_ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.inputs[0].input.kind, SRC_SRT);
+  ck_assert_str_eq(cfg.inputs[0].input.srt_host, "feed.example.net");
+  ck_assert_uint_eq(cfg.inputs[0].input.srt_port, 9000u);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(srt_input_rejects_malformed_hostname) {
+  char *argv[] = {"dipitvhead", "-i", "srt://bad_host!:9000", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_ne(args_parse(ARGS_FIXTURE_ARGC(argv), argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(pmt_pid_below_0x10_is_rejected) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-p", "5", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_ne(args_parse(ARGS_FIXTURE_ARGC(argv), argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(srt_input_options_fill_the_current_input) {
   char *argv[] = {"dipitvhead", "-i", "srt://127.0.0.1:9000",
                   "--srt-passphrase-in", "0123456789",
@@ -183,6 +251,9 @@ START_TEST(rist_input_options_fill_the_current_input) {
   char *argv[] = {"dipitvhead", "-i", "rist://@127.0.0.1:6000",
                   "--rist-profile-in", "main",
                   "--rist-encryption-type-in", "256",
+                  "--rist-secret-in", "s3cret",
+                  "--rist-cname-in", "rx1",
+                  "--rist-buffer-in", "750",
                   "-m", "239.1.2.1:5000", NULL};
   config_t cfg = {0};
   const dipitvhead_input_t *in;
@@ -191,6 +262,9 @@ START_TEST(rist_input_options_fill_the_current_input) {
   in = &cfg.inputs[0];
   ck_assert_int_eq(in->rist_profile_main, 1);
   ck_assert_int_eq(in->rist_key_size_in, 256);
+  ck_assert_str_eq(in->rist_secret_in, "s3cret");
+  ck_assert_str_eq(in->rist_cname_in, "rx1");
+  ck_assert_uint_eq(in->rist_buffer_ms_in, 750u);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -206,6 +280,12 @@ static Suite *args_input_suite(void) {
   tcase_add_test(tc, unknown_option_is_left_to_the_caller);
   tcase_add_test(tc, input_options_fill_the_current_input);
   tcase_add_test(tc, sdt_dash_drops_the_table);
+  tcase_add_test(tc, al_fec_in_fills_the_current_input);
+  tcase_add_test(tc, al_fec_in_without_port_is_rejected);
+  tcase_add_test(tc, al_fec_in_rejects_bad_ratio);
+  tcase_add_test(tc, srt_input_accepts_hostname);
+  tcase_add_test(tc, srt_input_rejects_malformed_hostname);
+  tcase_add_test(tc, pmt_pid_below_0x10_is_rejected);
   tcase_add_test(tc, srt_input_options_fill_the_current_input);
   tcase_add_test(tc, rist_input_options_fill_the_current_input);
   suite_add_tcase(s, tc);

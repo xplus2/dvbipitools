@@ -21,6 +21,7 @@ typedef struct {
   const char *const *responses;
   const size_t *response_lens;
   int n_responses;
+  char (*reqs)[128];
 } scripted_server_t;
 
 static void *serve_scripted(void *arg) {
@@ -38,7 +39,15 @@ static void *serve_scripted(void *arg) {
       got += (size_t)n;
       if (got >= 4 && memcmp(buf + got - 4, "\r\n\r\n", 4) == 0) break;
     }
-    send(cfd, a->responses[i], a->response_lens[i], 0);
+    if (a->reqs) {
+      size_t k = 0;
+      while (k < got && k < sizeof a->reqs[i] - 1 && buf[k] != '\r') {
+        a->reqs[i][k] = buf[k];
+        k++;
+      }
+      a->reqs[i][k] = '\0';
+    }
+    send(cfd, a->responses[i], a->response_lens[i], MSG_NOSIGNAL);
     close(cfd);
   }
   return NULL;
@@ -108,7 +117,7 @@ START_TEST(dash_live_fetches_init_then_sequential_number_segments) {
   size_t init_lens[1];
   const char *seg_responses[2];
   size_t seg_lens[2];
-  scripted_server_t mpd_srv, init_srv, seg_srv;
+  scripted_server_t mpd_srv = {0}, init_srv = {0}, seg_srv = {0};
   http_url_t mpd_url;
   dash_live_t *h;
   unsigned char acc[4096];
@@ -215,7 +224,7 @@ START_TEST(dash_live_init_segment_arrives_via_cb_before_media_segments) {
   size_t init_lens[1];
   const char *seg_responses[1];
   size_t seg_lens[1];
-  scripted_server_t mpd_srv, init_srv, seg_srv;
+  scripted_server_t mpd_srv = {0}, init_srv = {0}, seg_srv = {0};
   http_url_t mpd_url;
   dash_live_t *h;
   cb_log_t log;
@@ -315,6 +324,7 @@ typedef struct {
   const char *resp[RIG_MAX];
   size_t lens[RIG_MAX];
   int n;
+  char reqs[RIG_MAX][128];
   dash_live_t *h;
 } rig_t;
 
@@ -346,6 +356,19 @@ static void rig_add_raw(rig_t *r, const char *text) {
   r->n++;
 }
 
+#define BIG_BODY_LEN (2 * 1024 * 1024 + 4096)
+
+static void rig_add_big(rig_t *r) {
+  static char big[BIG_BODY_LEN + 128];
+  size_t hl = (size_t)snprintf(big, sizeof big, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", BIG_BODY_LEN);
+
+  ck_assert_int_lt(r->n, RIG_MAX);
+  memset(big + hl, 'A', BIG_BODY_LEN);
+  r->resp[r->n] = big;
+  r->lens[r->n] = hl + BIG_BODY_LEN;
+  r->n++;
+}
+
 static void rig_add_mpd_with(rig_t *r, const char *conn, const char *attrs, const char *tmpl) {
   char mpd[1024];
 
@@ -363,6 +386,7 @@ static void rig_open(rig_t *r, unsigned as_index, const dash_insp_t *si) {
   r->srv.responses = r->resp;
   r->srv.response_lens = r->lens;
   r->srv.n_responses = r->n;
+  r->srv.reqs = r->reqs;
   ck_assert_int_eq(pthread_create(&r->th, NULL, serve_scripted, &r->srv), 0);
   snprintf(uri, sizeof uri, "http://127.0.0.1:%u/live.mpd", r->port);
   ck_assert_int_eq(http_url_parse(uri, &url), 0);
@@ -620,6 +644,38 @@ START_TEST(dash_live_fails_on_unparsable_segment_url) {
 }
 END_TEST
 
+START_TEST(dash_live_rejects_oversize_init_segment) {
+  rig_t r;
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  rig_init(&r);
+  rig_add_mpd(&r, "type=\"static\"", TMPL_SLOW);
+  rig_add_big(&r);
+  rig_open(&r, 0, NULL);
+  ck_assert_int_eq(pump_until_error(r.h, 100, &reason), 1);
+  ck_assert_int_eq(reason, NET_ERR_FORMAT);
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(dash_live_skips_oversize_segment) {
+  rig_t r;
+  unsigned char acc[64];
+  size_t len = 0;
+
+  rig_init(&r);
+  rig_add_mpd(&r, "type=\"static\"", TMPL_FAST);
+  rig_add_text(&r, "INITDATA");
+  rig_add_big(&r);
+  rig_add_text(&r, "SEG2");
+  rig_open(&r, 0, NULL);
+  ck_assert_int_eq(drive_until_len(r.h, acc, sizeof acc, &len, 12, 300), 1);
+  ck_assert_uint_eq(len, 12);
+  ck_assert_mem_eq(acc, "INITDATASEG2", 12);
+  rig_close(&r);
+}
+END_TEST
+
 START_TEST(dash_live_reports_init_fetch_error) {
   rig_t r;
   net_err_reason_t reason = NET_ERR_COUNT;
@@ -630,6 +686,81 @@ START_TEST(dash_live_reports_init_fetch_error) {
   rig_open(&r, 0, NULL);
   ck_assert_int_eq(pump_until_error(r.h, 100, &reason), 1);
   ck_assert_int_ne(reason, NET_ERR_COUNT);
+  rig_close(&r);
+}
+END_TEST
+
+static void format_ast(char *out, size_t n, time_t ago_s) {
+  time_t t = time(NULL) - ago_s;
+  struct tm tm;
+  gmtime_r(&t, &tm);
+  strftime(out, n, "%Y-%m-%dT%H:%M:%SZ", &tm);
+}
+
+static void add_dynamic_mpd(rig_t *r, const char *attrs, const char *tmpl_body) {
+  char mpd[1536];
+  snprintf(mpd, sizeof mpd,
+    "<MPD %s>\n<Period id=\"0\">\n<AdaptationSet mimeType=\"video/mp4\">\n<Representation id=\"v\" bandwidth=\"3000000\">\n"
+    "%s\n</Representation>\n</AdaptationSet>\n</Period>\n</MPD>\n", attrs, tmpl_body);
+  rig_add_text(r, mpd);
+}
+
+START_TEST(dash_live_joins_wall_clock_edge) {
+  rig_t r;
+  unsigned char acc[64];
+  size_t len = 0;
+  char attrs[128];
+
+  rig_init(&r);
+  snprintf(attrs, sizeof attrs, "type=\"dynamic\" availabilityStartTime=\"");
+  format_ast(attrs + strlen(attrs), sizeof attrs - strlen(attrs), 101);
+  strcat(attrs, "\"");
+  add_dynamic_mpd(&r, attrs, "<SegmentTemplate initialization=\"init.mp4\" media=\"seg$Number$.m4s\" timescale=\"1000\" duration=\"2000\" startNumber=\"1\"/>");
+  rig_add_text(&r, "INIT");
+  rig_add_text(&r, "SEG");
+  rig_open(&r, 0, NULL);
+  ck_assert_int_eq(drive_until_len(r.h, acc, sizeof acc, &len, 7, 300), 1);
+  ck_assert_str_eq(r.reqs[2], "GET /seg50.m4s HTTP/1.1");
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(dash_live_retries_unavailable_segment) {
+  rig_t r;
+  unsigned char acc[64];
+  size_t len = 0;
+  char attrs[128];
+
+  rig_init(&r);
+  snprintf(attrs, sizeof attrs, "type=\"dynamic\" availabilityStartTime=\"");
+  format_ast(attrs + strlen(attrs), sizeof attrs - strlen(attrs), 101);
+  strcat(attrs, "\"");
+  add_dynamic_mpd(&r, attrs, "<SegmentTemplate initialization=\"init.mp4\" media=\"seg$Number$.m4s\" timescale=\"1000\" duration=\"2000\" startNumber=\"1\"/>");
+  rig_add_text(&r, "INIT");
+  rig_add_raw(&r, "HTTP/1.1 404 Not Found\r\nContent-Length: 4\r\nConnection: close\r\n\r\nGONE");
+  rig_add_text(&r, "SEG");
+  rig_open(&r, 0, NULL);
+  ck_assert_int_eq(drive_until_len(r.h, acc, sizeof acc, &len, 7, 600), 1);
+  ck_assert_mem_eq(acc, "INITSEG", 7);
+  ck_assert_str_eq(r.reqs[2], r.reqs[3]);
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(dash_live_joins_timeline_at_newest_segment) {
+  rig_t r;
+  unsigned char acc[64];
+  size_t len = 0;
+
+  rig_init(&r);
+  add_dynamic_mpd(&r, "type=\"dynamic\"",
+    "<SegmentTemplate initialization=\"init.mp4\" media=\"seg$Time$.m4s\" timescale=\"1000\">"
+    "<SegmentTimeline><S t=\"0\" d=\"2000\" r=\"9\"/></SegmentTimeline></SegmentTemplate>");
+  rig_add_text(&r, "INIT");
+  rig_add_text(&r, "SEG");
+  rig_open(&r, 0, NULL);
+  ck_assert_int_eq(drive_until_len(r.h, acc, sizeof acc, &len, 7, 300), 1);
+  ck_assert_str_eq(r.reqs[2], "GET /seg18000.m4s HTTP/1.1");
   rig_close(&r);
 }
 END_TEST
@@ -653,7 +784,12 @@ static Suite *dash_live_suite(void) {
   tcase_add_test(tc, dash_live_has_buffered_tracks_phase);
   tcase_add_test(tc, dash_live_fails_on_unparsable_init_url);
   tcase_add_test(tc, dash_live_fails_on_unparsable_segment_url);
+  tcase_add_test(tc, dash_live_rejects_oversize_init_segment);
+  tcase_add_test(tc, dash_live_skips_oversize_segment);
   tcase_add_test(tc, dash_live_reports_init_fetch_error);
+  tcase_add_test(tc, dash_live_joins_wall_clock_edge);
+  tcase_add_test(tc, dash_live_retries_unavailable_segment);
+  tcase_add_test(tc, dash_live_joins_timeline_at_newest_segment);
   suite_add_tcase(s, tc);
   return s;
 }

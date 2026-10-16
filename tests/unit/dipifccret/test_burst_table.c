@@ -249,6 +249,40 @@ START_TEST(start_replaces_existing_burst_without_reusing_old_pointer) {
 }
 END_TEST
 
+START_TEST(start_update_resets_nack_state_for_new_burst) {
+  burst_table_t *t = burst_table_new(1);
+  channel_t *c = make_channel_with_rap();
+  burst_t *b1;
+  burst_t *b2;
+  struct sockaddr_in sin;
+  burst_table_nack_result_t result;
+  burst_slot_t *slot;
+  uint8_t msn = 0;
+
+  atomic_store_explicit(&c->nominal_bps, 4000000.0, memory_order_relaxed);
+  b1 = burst_new(c, 1.0, 0, 99);
+  b2 = burst_new(c, 1.0, 0, 99);
+  addr_of(&sin, 6000);
+  ck_assert_int_eq(burst_table_start(t, (const struct sockaddr *)&sin, sizeof sin, 3, b1, &msn), 0);
+  burst_table_note_nack(t, (const struct sockaddr *)&sin, sizeof sin, 4, &result);
+  burst_table_note_nack(t, (const struct sockaddr *)&sin, sizeof sin, 4, &result);
+  ck_assert_int_eq(result.action, BURST_TABLE_NACK_ADAPTED);
+
+  ck_assert_int_eq(burst_table_start(t, (const struct sockaddr *)&sin, sizeof sin, 3, b2, &msn), 1);
+  slot = burst_table_find(t, (const struct sockaddr *)&sin, sizeof sin);
+  ck_assert_ptr_nonnull(slot);
+  ck_assert_uint_eq(slot->nack_count, 0);
+  ck_assert_int_eq(slot->congestion_adapted, 0);
+
+  burst_table_note_nack(t, (const struct sockaddr *)&sin, sizeof sin, 4, &result);
+  burst_table_note_nack(t, (const struct sockaddr *)&sin, sizeof sin, 4, &result);
+  ck_assert_int_eq(result.action, BURST_TABLE_NACK_ADAPTED);
+
+  burst_table_free(t);
+  channel_table_free(g_table);
+}
+END_TEST
+
 START_TEST(note_nack_adapts_then_terminates_under_thresholds) {
   burst_table_t *t = burst_table_new(1);
   channel_t *c = make_channel_with_rap();
@@ -558,6 +592,37 @@ START_TEST(claim_admits_exactly_cap_across_multiple_stripes) {
 }
 END_TEST
 
+START_TEST(acquire_snapshots_current_burst_and_takes_ref) {
+  burst_table_t *t = burst_table_new(4);
+  channel_t *c = make_channel_with_rap();
+  burst_t *b1 = burst_new(c, 1.0, 0, 99);
+  burst_t *b2 = burst_new(c, 1.0, 0, 99);
+  struct sockaddr_in sin;
+  burst_slot_t *slot;
+  burst_snap_t snap;
+  uint8_t msn;
+  size_t idx;
+
+  addr_of(&sin, 6000);
+  slot = burst_table_claim(t, (const struct sockaddr *)&sin, sizeof sin, 3, b1);
+  ck_assert_ptr_nonnull(slot);
+  idx = (size_t)(slot - t->slots);
+
+  ck_assert_int_eq(burst_table_start(t, (const struct sockaddr *)&sin, sizeof sin, 4, b2, &msn), 1);
+  ck_assert_int_eq(burst_table_acquire(t, idx, &snap), 1);
+  ck_assert_ptr_eq(snap.b, b2);
+  ck_assert_int_eq(snap.fd, 4);
+  ck_assert_uint_eq(snap.addrlen, sizeof sin);
+  ck_assert_uint_eq(atomic_load(&b2->refs), 2u);
+  burst_release(snap.b);
+
+  ck_assert_int_eq(burst_table_acquire(t, idx + 1, &snap), 0);
+
+  burst_table_free(t);
+  channel_table_free(g_table);
+}
+END_TEST
+
 static Suite *burst_table_suite(void) {
   Suite *s = suite_create("burst_table");
   TCase *tc = tcase_create("core");
@@ -571,11 +636,13 @@ static Suite *burst_table_suite(void) {
   tcase_add_test(tc, target_bps_is_atomically_readable_and_writable_cross_module);
   tcase_add_test(tc, congestion_adapted_resets_on_claim_and_reclaim);
   tcase_add_test(tc, start_replaces_existing_burst_without_reusing_old_pointer);
+  tcase_add_test(tc, start_update_resets_nack_state_for_new_burst);
   tcase_add_test(tc, note_nack_adapts_then_terminates_under_thresholds);
   tcase_add_test(tc, get_metrics_reports_active_count_and_nack_totals);
   tcase_add_test(tc, burst_table_survives_rams_r_pacer_nack_termination_race);
   tcase_add_test(tc, start_under_concurrent_exhaustion_admits_exactly_cap_sessions);
   tcase_add_test(tc, claim_admits_exactly_cap_across_multiple_stripes);
+  tcase_add_test(tc, acquire_snapshots_current_burst_and_takes_ref);
   tcase_set_timeout(tc, 20);
   suite_add_tcase(s, tc);
   return s;

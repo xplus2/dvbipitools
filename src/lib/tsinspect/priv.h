@@ -116,6 +116,7 @@ struct tsinspect {
   unsigned pcr_pid;
   int pcr_have;
   uint64_t pcr_last;
+  double pcr_seen;
   double pcr_max_cur;
   double pcr_max_prev;
   double pcr_win_start;

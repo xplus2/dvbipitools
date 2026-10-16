@@ -43,6 +43,9 @@ burst_response_t burst_decide(const channel_t *c, const rtcp_rams_r_t *req, unsi
   if (!channel_has_rap(c))
     return BURST_NO_RAP;
 
+  if (atomic_load_explicit(&c->nominal_bps, memory_order_relaxed) <= 0.0)
+    return BURST_NO_VALID_START; /* bitrate not measured yet, burst would be dead */
+
   if (req->has_min_buffer_fill && cache_depth_ms(c) < req->min_buffer_fill_ms)
     return BURST_NO_VALID_START; /* cache depth < requested min */
 
@@ -103,7 +106,9 @@ burst_tick_result_t burst_tick(burst_t *b, unsigned duration_cap_ms, burst_send_
     return BURST_TICK_DONE;
   }
 
-  budget_bytes = atomic_load_explicit(&b->target_bps, memory_order_relaxed) * elapsed_s / 8.0;
+  b->budget_bytes += atomic_load_explicit(&b->target_bps, memory_order_relaxed) * (elapsed_s - b->last_elapsed_s) / 8.0;
+  b->last_elapsed_s = elapsed_s;
+  budget_bytes = b->budget_bytes;
   end = channel_cache_end(b->channel);
   if (end - b->cursor > b->channel->cache.cap) {
     atomic_store_explicit(&b->done, 1, memory_order_release);

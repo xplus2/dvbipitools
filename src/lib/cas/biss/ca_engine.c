@@ -37,7 +37,18 @@ typedef struct {
   unsigned char buf[4096];
   size_t len;
   double last_send;
+  int sent;
 } emm_section_t;
+
+typedef struct {
+  emm_section_t *secs;
+  size_t n_secs;
+  size_t next;
+  unsigned char session_data[BISS_CA_SESSION_DATA_LEN];
+  unsigned version;
+  int active;
+  int in_place; /* secs is the live array, sendable while filling */
+} emm_build_t;
 
 struct biss_ca_engine {
   cas_scramble_engine_t *scr;
@@ -49,7 +60,7 @@ struct biss_ca_engine {
   char receivers_dir[512];
   receiver_set_t receivers;
 
-  unsigned char sw[2][BISS_CA_SW_LEN]; /* indexed by SCRAMBLE_PARITY_EVEN/_ODD */
+  unsigned char sw[2][BISS_CA_SW_LEN]; /* ECM content, indexed by parity. in force: sw_epoch & 1, other: next */
   unsigned long sw_epoch;              /* parity in force = sw_epoch & 1 */
   unsigned long sw_period_ms;
   unsigned long since_sw_change_ms;
@@ -59,8 +70,12 @@ struct biss_ca_engine {
   size_t ecm_cache_len;
   double last_ecm_send;
 
-  unsigned char sk[BISS_CA_SK_LEN];
+  unsigned char sk[BISS_CA_SK_LEN]; /* ECM encrypts under this */
   int sk_parity;
+  unsigned char sk_emm[BISS_CA_SK_LEN]; /* newest key, carried by EMM. differs from sk while pending */
+  int sk_emm_parity;
+  int sk_pending;                       /* sk_emm not yet in force */
+  int live_new;                         /* live sections carry sk_emm */
   unsigned long sk_epoch;
   unsigned long sk_period_ms;
   unsigned long since_sk_change_ms;
@@ -68,7 +83,9 @@ struct biss_ca_engine {
   int emm_dirty;
   emm_section_t *emm_secs;
   size_t n_emm_secs;
+  size_t n_sent; /* live sections sent at least once */
   size_t emm_cursor;
+  emm_build_t bld;
 };
 
 static void set_free(receiver_set_t *s) {
@@ -194,14 +211,14 @@ biss_ca_engine_t *biss_ca_engine_start(const biss_ca_engine_cfg_t *cfg) {
     free(e);
     return NULL;
   }
-  if (cas_scramble_engine_set_cw(e->scr, SCRAMBLE_PARITY_EVEN, e->sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN, NULL, NULL) != 0 ||
-      cas_scramble_engine_set_cw(e->scr, SCRAMBLE_PARITY_ODD, e->sw[SCRAMBLE_PARITY_ODD], BISS_CA_SW_LEN, NULL, NULL) != 0) {
+  if (cas_scramble_engine_set_cw(e->scr, SCRAMBLE_PARITY_EVEN, e->sw[SCRAMBLE_PARITY_EVEN], BISS_CA_SW_LEN, NULL, NULL) != 0) {
     log_code("LS300114", "biss-ca: initial key rejected by the scrambler, not starting");
     cas_scramble_engine_stop(e->scr);
     set_free(&e->receivers);
     free(e);
     return NULL;
   }
+  memcpy(e->sk_emm, e->sk, BISS_CA_SK_LEN);
   e->ecm_dirty = 1;
   e->emm_dirty = 1;
 
@@ -213,6 +230,7 @@ void biss_ca_engine_stop(biss_ca_engine_t *e) {
   if (!e) return;
   cas_scramble_engine_stop(e->scr);
   set_free(&e->receivers);
+  if (e->bld.active && !e->bld.in_place) free(e->bld.secs);
   free(e->emm_secs);
   free(e);
 }
@@ -233,13 +251,32 @@ static void rotate_sw(biss_ca_engine_t *e, scrambler_emit_cb emit, void *ctx) {
     log_code("LE300115", "biss-ca: SW rotation failed (RNG unavailable), keeping current key");
     return;
   }
-  memcpy(e->sw[parity], fresh, BISS_CA_SW_LEN);
+  /* sw[parity] already went out in the ECM during the last period */
+  if (cas_scramble_engine_set_cw(e->scr, parity, e->sw[parity], BISS_CA_SW_LEN, emit, ctx) != 0) {
+    log_code("LE300177", "biss-ca: SW rotation failed (key rejected by the scrambler), keeping current key");
+    return;
+  }
+  /* retired parity: scrambler keeps old key for late flips, fresh one goes live next rotation */
+  memcpy(e->sw[parity ^ 1], fresh, BISS_CA_SW_LEN);
   e->sw_epoch = epoch;
   e->ecm_version = (e->ecm_version + 1) & 0x1F;
   e->ecm_dirty = 1;
-  cas_scramble_engine_set_cw(e->scr, parity, e->sw[parity], BISS_CA_SW_LEN, emit, ctx);
 }
 
+static void emm_build_abort(biss_ca_engine_t *e) {
+  if (!e->bld.active) return;
+  if (e->bld.in_place) {
+    free(e->emm_secs);
+    e->emm_secs = NULL;
+    e->n_emm_secs = 0;
+    e->n_sent = 0;
+  } else {
+    free(e->bld.secs);
+  }
+  memset(&e->bld, 0, sizeof e->bld);
+}
+
+/* ECM keeps old SK until EMM carrying new one went out */
 static void rotate_sk(biss_ca_engine_t *e) {
   unsigned long epoch = e->sk_epoch + 1;
   unsigned char fresh[BISS_CA_SK_LEN];
@@ -248,12 +285,22 @@ static void rotate_sk(biss_ca_engine_t *e) {
     log_code("LE300116", "biss-ca: SK rotation failed (RNG unavailable), keeping current key");
     return;
   }
-  memcpy(e->sk, fresh, BISS_CA_SK_LEN);
-  e->sk_parity = (int)(epoch & 1);
+  memcpy(e->sk_emm, fresh, BISS_CA_SK_LEN);
+  e->sk_emm_parity = (int)(epoch & 1);
   e->sk_epoch = epoch;
   e->emm_version = (e->emm_version + 1) & 0x1F;
+  e->sk_pending = 1;
+  e->live_new = 0;
+  emm_build_abort(e);
   e->emm_dirty = 1;
-  e->ecm_dirty = 1; /* ECM re-encrypts SW under the new SK */
+}
+
+static void activate_sk(biss_ca_engine_t *e) {
+  memcpy(e->sk, e->sk_emm, BISS_CA_SK_LEN);
+  e->sk_parity = e->sk_emm_parity;
+  e->sk_pending = 0;
+  e->ecm_version = (e->ecm_version + 1) & 0x1F;
+  e->ecm_dirty = 1;
 }
 
 void biss_ca_engine_force_sk_rotation(biss_ca_engine_t *e) {
@@ -268,7 +315,7 @@ void biss_ca_engine_scramble_packet(biss_ca_engine_t *e, unsigned out_pid, doubl
     rotate_sw(e, emit, ctx);
     e->since_sw_change_ms = 0;
   }
-  if (e->since_sk_change_ms >= e->sk_period_ms) {
+  if (e->since_sk_change_ms >= e->sk_period_ms && !e->sk_pending) {
     rotate_sk(e);
     e->since_sk_change_ms = 0;
   }
@@ -342,53 +389,68 @@ static void rebuild_ecm(biss_ca_engine_t *e) {
   e->ecm_dirty = 0;
 }
 
-static void rebuild_emm(biss_ca_engine_t *e) {
-  unsigned char session_data[BISS_CA_SESSION_DATA_LEN];
-  biss_ca_emm_entry_t *entries;
+static void emm_build_begin(biss_ca_engine_t *e) {
+  emm_build_t *b = &e->bld;
+  size_t n_secs = e->receivers.n ? (e->receivers.n + BISS_CA_ENGINE_ENTRIES_PER_SECTION - 1) / BISS_CA_ENGINE_ENTRIES_PER_SECTION : 1;
   emm_section_t *secs;
-  size_t n = 0;
-  size_t n_secs;
 
-  if (!biss_ca_build_session_data(e->sk, e->sk_parity, session_data, sizeof session_data)) {
+  if (!biss_ca_build_session_data(e->sk_emm, e->sk_emm_parity, b->session_data, sizeof b->session_data)) {
     log_code("LE300120", "biss-ca: EMM rebuild failed (session_data build)");
     return;
   }
-  entries = malloc((e->receivers.n ? e->receivers.n : 1) * sizeof *entries);
-  if (!entries) return;
-  for (size_t i = 0; i < e->receivers.n; i++) {
-    memcpy(entries[n].entitlement_key_id, e->receivers.v[i].ekid, BISS_CA_EKID_LEN);
-    if (biss_ca_rsa_encrypt(e->receivers.v[i].pub, session_data, sizeof session_data, entries[n].encrypted_session_data) != 0) {
+  secs = calloc(n_secs, sizeof *secs);
+  if (!secs) return;
+  for (size_t i = 0; i < n_secs; i++) secs[i].last_send = -1.0;
+  b->secs = secs;
+  b->n_secs = n_secs;
+  b->next = 0;
+  b->version = e->emm_version;
+  b->active = 1;
+  b->in_place = (e->n_emm_secs == 0);
+  if (b->in_place) {
+    e->emm_secs = secs;
+    e->n_emm_secs = n_secs;
+    e->n_sent = 0;
+    e->emm_cursor = 0;
+    e->live_new = 1;
+  }
+  e->emm_dirty = 0;
+}
+
+/* 1 section per call: bounds RSA work on data path */
+static void emm_build_step(biss_ca_engine_t *e) {
+  emm_build_t *b = &e->bld;
+  biss_ca_emm_entry_t entries[BISS_CA_ENGINE_ENTRIES_PER_SECTION] = {0};
+  emm_section_t *s = &b->secs[b->next];
+  size_t first = b->next * BISS_CA_ENGINE_ENTRIES_PER_SECTION;
+  size_t cnt = e->receivers.n - first < BISS_CA_ENGINE_ENTRIES_PER_SECTION ? e->receivers.n - first : BISS_CA_ENGINE_ENTRIES_PER_SECTION;
+  size_t n = 0;
+
+  for (size_t i = 0; i < cnt; i++) {
+    memcpy(entries[n].entitlement_key_id, e->receivers.v[first + i].ekid, BISS_CA_EKID_LEN);
+    if (biss_ca_rsa_encrypt(e->receivers.v[first + i].pub, b->session_data, sizeof b->session_data, entries[n].encrypted_session_data) != 0) {
       log_code("LW300121", "biss-ca: RSA-OAEP encrypt failed for one receiver, dropping it this round");
       continue;
     }
     n++;
   }
-
-  n_secs = n ? (n + BISS_CA_ENGINE_ENTRIES_PER_SECTION - 1) / BISS_CA_ENGINE_ENTRIES_PER_SECTION : 1;
-  secs = realloc(e->emm_secs, n_secs * sizeof *secs);
-  if (!secs) {
-    free(entries);
+  s->len = biss_ca_build_emm_section(0x81, e->esid, b->version, (unsigned)b->next, (unsigned)(b->n_secs - 1), e->onid, 0x81, entries, n, s->buf, sizeof s->buf);
+  if (!s->len) {
+    log_code("LE300122", "biss-ca: EMM section %zu build overflow (%zu receivers)", b->next, e->receivers.n);
+    emm_build_abort(e);
+    e->emm_dirty = 1;
     return;
   }
-  e->emm_secs = secs;
-  for (size_t i = e->n_emm_secs; i < n_secs; i++) {
-    secs[i].len = 0;
-    secs[i].last_send = -1.0;
+  if (++b->next < b->n_secs) return;
+  if (!b->in_place) {
+    free(e->emm_secs);
+    e->emm_secs = b->secs;
+    e->n_emm_secs = b->n_secs;
+    e->n_sent = 0;
+    e->emm_cursor = 0;
+    e->live_new = 1;
   }
-  for (size_t i = 0; i < n_secs; i++) {
-    size_t first = i * BISS_CA_ENGINE_ENTRIES_PER_SECTION;
-    size_t cnt = n - first < BISS_CA_ENGINE_ENTRIES_PER_SECTION ? n - first : BISS_CA_ENGINE_ENTRIES_PER_SECTION;
-    secs[i].len = biss_ca_build_emm_section(0x81, e->esid, e->emm_version, (unsigned)i, (unsigned)(n_secs - 1), e->onid, 0x81, entries + first, cnt, secs[i].buf, sizeof secs[i].buf);
-    if (!secs[i].len) {
-      log_code("LE300122", "biss-ca: EMM section %zu build overflow (%zu receivers)", i, n);
-      free(entries);
-      return;
-    }
-  }
-  free(entries);
-  e->n_emm_secs = n_secs;
-  e->emm_cursor = 0;
-  e->emm_dirty = 0;
+  memset(b, 0, sizeof *b);
 }
 
 int biss_ca_engine_ecm_due(biss_ca_engine_t *e, double now, unsigned char *out, size_t cap, size_t *out_len) {
@@ -402,7 +464,8 @@ int biss_ca_engine_ecm_due(biss_ca_engine_t *e, double now, unsigned char *out, 
 }
 
 int biss_ca_engine_emm_due(biss_ca_engine_t *e, double now, unsigned char *out, size_t cap, size_t *out_len) {
-  if (e->emm_dirty) rebuild_emm(e);
+  if (e->emm_dirty && !e->bld.active) emm_build_begin(e);
+  if (e->bld.active) emm_build_step(e);
   for (size_t k = 0; k < e->n_emm_secs; k++) {
     size_t i = (e->emm_cursor + k) % e->n_emm_secs;
     emm_section_t *s = &e->emm_secs[i];
@@ -411,7 +474,12 @@ int biss_ca_engine_emm_due(biss_ca_engine_t *e, double now, unsigned char *out, 
     memcpy(out, s->buf, s->len);
     *out_len = s->len;
     s->last_send = now;
+    if (!s->sent) {
+      s->sent = 1;
+      e->n_sent++;
+    }
     e->emm_cursor = (i + 1) % e->n_emm_secs;
+    if (e->sk_pending && e->live_new && e->n_sent == e->n_emm_secs) activate_sk(e);
     return 0;
   }
   return -1;
@@ -432,6 +500,7 @@ int biss_ca_engine_reload_receivers(biss_ca_engine_t *e) {
   for (size_t i = 0; !changed && i < e->receivers.n; i++) changed = !set_has(&fresh, e->receivers.v[i].ekid);
   set_free(&e->receivers);
   e->receivers = fresh;
+  emm_build_abort(e);
   e->emm_dirty = 1;
   return changed;
 }

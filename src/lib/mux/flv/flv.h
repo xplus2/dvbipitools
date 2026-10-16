@@ -26,7 +26,7 @@ typedef struct flv flv_t;
    cb: onMetaData once, seqhdr per track, then per-AU tags. cb_ctx opaque. */
 flv_t *flv_new(const flv_opts_t *opts, unsigned pmt_pid, flv_tag_cb cb, void *cb_ctx, unsigned long long *bytes);
 void flv_feed(flv_t *f, const unsigned char *pkt); /* one 188-byte packet */
-void flv_close(flv_t *f);                          /* EOS: flush pending PES */
+int  flv_close(flv_t *f);                          /* EOS: flush pending PES. 0 ok, -1 error */
 int flv_error(const flv_t *f);
 
 const psi_t *flv_psi(const flv_t *f);

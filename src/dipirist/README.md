@@ -33,6 +33,9 @@ dipirist -i <uri> -o <uri> [options]
 | `-o` | `--out`                 | `<uri>`                     | required                                 |
 | `-I` | `--iface`               | `<iface>`                   | kernel route (non-RIST side only)        |
 | `-k` | `--insecure`            |                             | off (`-i https://` source only)          |
+|      | `--pace`                |                             | off (`-i` file or `-`, PCR/RTP rate)     |
+|      | `--ttl`                 | `<n>`                       | kernel (1; `-o rtp://` `udp://` only)    |
+|      | `--dscp`                | `<v>`                       | kernel (`-o rtp://` `udp://` only)       |
 |      | `--profile`             | `simple\|main`              | `simple`                                 |
 |      | `--secret`              | `<psk>`                     | none (requires `--profile main`)         |
 |      | `--encryption-type`     | `128\|256`                  | library default (needs `--profile main`) |
@@ -62,6 +65,7 @@ Without `-c`, `/etc/dvbipitools/dipirist.yaml` is read if it exists.
 
 Configuration file issues (unknown or duplicate keys, invalid values, conflicting settings, referenced files
 that are not readable) are reported as warnings and the affected entries are skipped or overridden (last one wins).
+Repeated `in`/`out` keys accumulate: `rist://` entries are added as bonded peers, a second plain endpoint is invalid.
 
 With `--config-strict` they are errors instead: all of them are listed and the tool fails early.
 
@@ -78,6 +82,9 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 | `-`                                          | stdin (`-i`) or stdout (`-o`)                   |
 | `<path>`                                     | a file                                          |
 
+An HTTP(S) source that drops, ends or delivers nothing for 30 s is reconnected, retrying every 1 to 10 s.
+Redirects from `https://` to `http://` are refused.
+
 Exactly one of `-i`/`-o` must be a `rist://` URI. Whether that peer listens or calls out is controlled the same way as 
 this toolkit's own `rtp://@`/`udp://@` addresses: add an `@` right after `rist://` to listen, 
 leave it off to call out.
@@ -92,6 +99,8 @@ Recovers at most one lost packet per column. No effect on the RIST side, which a
 
 `--metrics-inspect-ts` covers packet-level and PCR checks only, no PSI/SI checks at any level. 
 `medium` adds PCR jitter, accuracy and frequency offset for UDP and RTP inputs.
+With a `rist://` input there are no receive timestamps, so `medium` adds nothing there.
+`full` currently behaves like `medium`.
 
 ## Running under systemd
 

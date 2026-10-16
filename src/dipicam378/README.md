@@ -13,7 +13,7 @@ dipicam378 -k <keyfile> [options]
 | flag | long form            | argument              | default                             |
 |------|----------------------|-----------------------|-------------------------------------|
 | `-k` | `--key`              | `<path>`              | required                            |
-| `-s` | `--serial`           | `<id>`                | none = no filtering                 |
+| `-s` | `--serial`           | `<id>`                | required                            |
 | `-b` | `--bind`             | `<addr>`              | `127.0.0.1`                         |
 | `-p` | `--port`             | `<n>`                 | `27500`                             |
 | `-a` | `--auth`             | `[user:]<pass>`       | `dipicam378`                        |
@@ -56,8 +56,7 @@ Decryption of EMM-U/EMM-G/ECM all happens locally with this key.
 
 ### Device serial (`-s`)
 
-Optional. Matched against EMM-U addressing. EMM-U for any other device on the
-same carousel is skipped.
+Required and matched against EMM-U addressing. EMM-U for any other device on the same carousel is skipped. 255 B max.
 
 ### Listen address (`-b`)
 

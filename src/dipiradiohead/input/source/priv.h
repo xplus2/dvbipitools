@@ -42,6 +42,7 @@ struct source {
   source_codec_t codec;
   aac_latm_t *latm;
   unsigned resync_fails;   /* consecutive bad frames, codec re-detected at SRC_REDETECT_FAILS */
+  unsigned long long resyncs; /* since last source_take_resyncs() */
   size_t detect_skipped;   /* bytes dropped without a confirmed sync */
   unsigned char buf[SRC_BUF_CAP];
   size_t buf_off; /* consumed prefix, compacted lazily on refill */

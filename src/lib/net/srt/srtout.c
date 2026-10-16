@@ -21,13 +21,17 @@
 #define SRTOUT_CLOSE_DRAIN_MAX_MS 3000 /* cap on drain_before_close's wait */
 #define SRTOUT_CLOSE_MIN_WAIT_MS 1000  /* floor on drain_before_close's wait, see there */
 #define SRTOUT_RECONNECT_BACKOFF_S 0.2 /* min gap between failed (re)connect attempts */
+#define SRTOUT_REVIVE_INTERVAL_S 1.0   /* min gap between bonded member re-add checks */
+#define SRTOUT_CARRY_MAX_S 0.02        /* max hold of a partial chunk before sending it short */
 #define SRTOUT_PLSIZE 1316             /* srt.h's SRT_LIVE_DEF_PLSIZE, but real constant expr for array sizing */
 
 #define SRTOUT_PENDING_FLOOR_CHUNKS 64        /* never below this, regardless of bitrate/RAM: ~84KB */
 #define SRTOUT_SAFETY_MULT_DEFAULT 4          /* --send-buffer-mult unset: latency-window multiples to buffer */
 #define SRTOUT_SAFETY_MULT_MAX 32
 #define SRTOUT_DEFAULT_LATENCY_MS 120         /* SRT_LIVE_DEF_LATENCY, fallback for opts.latency_ms 0 */
-#define SRTOUT_INITIAL_BITRATE_BPS (100000000 / 8) /* generous startup guess, resize_pending_if_needed() settles it */
+#define SRTOUT_INITIAL_BITRATE_BPS (25000000 / 8)  /* startup guess: one DVB mux, until first sample */
+#define SRTOUT_GROW_PCT 25   /* grow only when target exceeds cap by this much */
+#define SRTOUT_SHRINK_PCT 50 /* shrink only when target is below this share of cap */
 #define SRTOUT_RAM_FRACTION_DIVISOR 50         /* ceiling: 1/50 = 2% of MemAvailable */
 #define SRTOUT_RESIZE_INTERVAL_S 1.0
 #define SRTOUT_RAM_CHECK_INTERVAL_S 5.0 /* feeds a soft ceiling only, doesn't need 1Hz freshness */
@@ -38,6 +42,9 @@ struct srtout {
   int eid;                  /* SRT epoll set: watches sock for OUT (writable/connected) | ERR */
   int connected;            /* 1 once sock has reported OUT since its last (re)connect */
   double next_reconnect_at; /* mono_seconds() gate; 0 = try on next service() call */
+  double next_revive_at;    /* mono_seconds() gate for bonded member re-add */
+  srtcommon_resolver_t *revive_res;    /* in-flight member re-add lookups */
+  srtcommon_resolver_t *reconnect_res; /* in-flight reconnect lookups */
   metrics_exporter_t *mx;
   const char *tool_version;
   char peer_label[64];
@@ -49,8 +56,12 @@ struct srtout {
   int pending_cap;
   int pending_head;  /* index of oldest queued chunk */
   int pending_count;
+  uint64_t pending_bytes; /* sum of queued chunk lengths */
   srt_queue_metrics_t queue_metrics;
   void (*note_enqueue)(srtout_t *);
+  unsigned char carry[SRTOUT_PLSIZE]; /* partial chunk held until filled or close */
+  int carry_len;
+  double carry_since; /* mono_seconds() of first carried byte */
   int pending_hwm;
   uint64_t queue_dropped;
   int drop_logged;   /* throttles "queue full" logging to once per overflow streak */
@@ -63,17 +74,55 @@ struct srtout {
   double ram_checked_at;    /* mono_seconds(); 0 = not yet sampled */
 };
 
-/* RCVSYN/SNDSYN off: connect/rendezvous returns immediately, EASYNCSND means in progress */
-static SRTSOCKET open_single(const srtout_cfg_t *cfg) {
-  SRTSOCKET s;
-  struct sockaddr_storage remote;
-  struct sockaddr_storage local;
-  int remote_len;
-  int local_len;
-  int no = 0;
+typedef struct {
+  struct sockaddr_storage ss[SRTCOMMON_MAX_PEERS + 1]; /* peers, then local bind if rendezvous */
+  int len[SRTCOMMON_MAX_PEERS + 1];
+} targets_t;
 
-  if (srtcommon_resolve(cfg->peers[0].host, cfg->peers[0].port, &remote, &remote_len))
-    return SRT_INVALID_SOCK;
+static int target_count(const srtout_cfg_t *cfg) { return cfg->npeers + (cfg->rendezvous ? 1 : 0); }
+
+static void target_peers(const srtout_cfg_t *cfg, srtcommon_peer_t *out) {
+  for (int i = 0; i < cfg->npeers; i++) out[i] = cfg->peers[i];
+  if (cfg->rendezvous) {
+    out[cfg->npeers].host = cfg->local_host;
+    out[cfg->npeers].port = cfg->local_port;
+  }
+}
+
+static int resolve_blocking(const srtout_cfg_t *cfg, targets_t *t) {
+  srtcommon_peer_t pe[SRTCOMMON_MAX_PEERS + 1];
+  int n = target_count(cfg);
+
+  target_peers(cfg, pe);
+  for (int i = 0; i < n; i++)
+    if (srtcommon_resolve(pe[i].host, pe[i].port, &t->ss[i], &t->len[i])) return -1;
+  return 0;
+}
+
+/* 0 ready, 1 pending, -1 failed */
+static int resolve_async(srtout_t *r, targets_t *t) {
+  srtcommon_peer_t pe[SRTCOMMON_MAX_PEERS + 1];
+  int n = target_count(&r->cfg);
+  int rc = 0;
+
+  if (!r->reconnect_res) {
+    target_peers(&r->cfg, pe);
+    r->reconnect_res = srtcommon_resolver_start(pe, n);
+    if (!r->reconnect_res) return -1;
+  }
+  if (!srtcommon_resolver_poll(r->reconnect_res)) return 1;
+  for (int i = 0; i < n && !rc; i++)
+    if (srtcommon_resolver_get(r->reconnect_res, i, &t->ss[i], &t->len[i])) rc = -1;
+  srtcommon_resolver_free(r->reconnect_res);
+  r->reconnect_res = NULL;
+  return rc;
+}
+
+/* RCVSYN/SNDSYN off: connect/rendezvous returns immediately, EASYNCSND means in progress */
+static SRTSOCKET open_single(const srtout_cfg_t *cfg, const targets_t *t) {
+  SRTSOCKET s;
+  const struct sockaddr *remote = (const struct sockaddr *)&t->ss[0];
+  int no = 0;
 
   s = srt_create_socket();
   if (s == SRT_INVALID_SOCK) {
@@ -86,22 +135,13 @@ static SRTSOCKET open_single(const srtout_cfg_t *cfg) {
     return SRT_INVALID_SOCK;
   }
   if (cfg->rendezvous) {
-    if (!cfg->local_host) {
-      log_code("LE000321", "srt: rendezvous requires a local bind address");
-      srt_close(s);
-      return SRT_INVALID_SOCK;
-    }
-    if (srtcommon_resolve(cfg->local_host, cfg->local_port, &local, &local_len)) {
-      srt_close(s);
-      return SRT_INVALID_SOCK;
-    }
-    if (srt_rendezvous(s, (struct sockaddr *)&local, local_len, (struct sockaddr *)&remote, remote_len) != 0 &&
+    if (srt_rendezvous(s, (const struct sockaddr *)&t->ss[1], t->len[1], remote, t->len[0]) != 0 &&
         srt_getlasterror(NULL) != SRT_EASYNCSND) {
       log_code("LE600136", "srt: rendezvous failed: %s", srt_getlasterror_str());
       srt_close(s);
       return SRT_INVALID_SOCK;
     }
-  } else if (srt_connect(s, (struct sockaddr *)&remote, remote_len) != 0 && srt_getlasterror(NULL) != SRT_EASYNCSND) {
+  } else if (srt_connect(s, remote, t->len[0]) != 0 && srt_getlasterror(NULL) != SRT_EASYNCSND) {
     log_code("LE600137", "srt: connect failed: %s", srt_getlasterror_str());
     srt_close(s);
     return SRT_INVALID_SOCK;
@@ -109,7 +149,7 @@ static SRTSOCKET open_single(const srtout_cfg_t *cfg) {
   return s;
 }
 
-static SRTSOCKET open_group(const srtout_cfg_t *cfg) {
+static SRTSOCKET open_group(const srtout_cfg_t *cfg, const targets_t *t) {
   SRTSOCKET g;
   SRT_GROUP_TYPE type = cfg->group_mode == SRTGROUP_BACKUP ? SRT_GTYPE_BACKUP : SRT_GTYPE_BROADCAST;
   SRT_SOCKGROUPCONFIG gc[SRTCOMMON_MAX_PEERS];
@@ -125,10 +165,8 @@ static SRTSOCKET open_group(const srtout_cfg_t *cfg) {
     srt_close(g);
     return SRT_INVALID_SOCK;
   }
-  if (srtcommon_build_group_config(cfg->peers, cfg->npeers, gc)) {
-    srt_close(g);
-    return SRT_INVALID_SOCK;
-  }
+  for (int i = 0; i < cfg->npeers; i++)
+    gc[i] = srt_prepare_endpoint(NULL, (const struct sockaddr *)&t->ss[i], t->len[i]);
   if (srt_connect_group(g, gc, cfg->npeers) == SRT_ERROR && srt_getlasterror(NULL) != SRT_EASYNCSND) {
     log_code("LE600139", "srt: group connect failed: %s", srt_getlasterror_str());
     srt_close(g);
@@ -138,11 +176,22 @@ static SRTSOCKET open_group(const srtout_cfg_t *cfg) {
 }
 
 /* (re)starts a connect attempt: creates socket/group, kicks off non-blocking
-   connect, registers it with r's epoll set. 0 ok, -1 error (nothing changed) */
-static int start_connect(srtout_t *r) {
-  SRTSOCKET s = r->cfg.group_mode == SRTGROUP_NONE ? open_single(&r->cfg) : open_group(&r->cfg);
+   connect, registers it with r's epoll set. blocking: lookups inline (startup only).
+   else lookups run async, 1 = still pending, call again. 0 ok, -1 error (nothing changed) */
+static int start_connect(srtout_t *r, int blocking) {
+  targets_t t;
+  SRTSOCKET s;
   int events = SRT_EPOLL_OUT | SRT_EPOLL_ERR;
+  int rc;
 
+  if (r->cfg.rendezvous && !r->cfg.local_host) {
+    log_code("LE000321", "srt: rendezvous requires a local bind address");
+    return -1;
+  }
+  rc = blocking ? resolve_blocking(&r->cfg, &t) : resolve_async(r, &t);
+  if (rc)
+    return rc;
+  s = r->cfg.group_mode == SRTGROUP_NONE ? open_single(&r->cfg, &t) : open_group(&r->cfg, &t);
   if (s == SRT_INVALID_SOCK)
     return -1;
   if (srt_epoll_add_usock(r->eid, s, &events) != 0) {
@@ -179,6 +228,7 @@ static int enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
   int dropped = 0;
 
   if (r->pending_count == r->pending_cap) {
+    r->pending_bytes -= (uint64_t)r->pending_len[r->pending_head];
     r->pending_head = (r->pending_head + 1) % r->pending_cap;
     r->pending_count--;
     r->queue_dropped++;
@@ -194,6 +244,7 @@ static int enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
   memcpy(pending_slot(r, tail), buf, (size_t)len);
   r->pending_len[tail] = len;
   r->pending_count++;
+  r->pending_bytes += (uint64_t)len;
   r->note_enqueue(r);
   return dropped;
 }
@@ -211,6 +262,7 @@ static void flush_pending(srtout_t *r) {
       teardown_for_reconnect(r, "write failed on queued data");
       return;
     }
+    r->pending_bytes -= (uint64_t)r->pending_len[head];
     r->pending_head = (head + 1) % r->pending_cap;
     r->pending_count--;
   }
@@ -291,9 +343,11 @@ static void resize_pending(srtout_t *r, int new_cap) {
 }
 
 /* re-estimates input bitrate (EMA), retargets pending buffer to
-   safety_mult latency-windows at that rate, bounded by RAM headroom */
+   safety_mult latency-windows at that rate, bounded by RAM headroom.
+   hysteresis: small target drift does not realloc */
 static void resize_pending_if_needed(srtout_t *r) {
   double now = mono_seconds();
+  int target;
 
   if (r->last_check_at > 0 && now - r->last_check_at < SRTOUT_RESIZE_INTERVAL_S)
     return;
@@ -304,7 +358,10 @@ static void resize_pending_if_needed(srtout_t *r) {
   }
   r->bytes_since_check = 0;
   r->last_check_at = now;
-  resize_pending(r, pending_target_chunks(r, now));
+  target = pending_target_chunks(r, now);
+  if (target > r->pending_cap + r->pending_cap * SRTOUT_GROW_PCT / 100 ||
+      target < r->pending_cap * SRTOUT_SHRINK_PCT / 100)
+    resize_pending(r, target);
 }
 
 srtout_t *srtout_open(const srtout_cfg_t *cfg) {
@@ -320,7 +377,7 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
     return NULL;
   }
   if (cfg->group_mode != SRTGROUP_NONE && cfg->rendezvous) {
-    log_code("LW000324", "srt: rendezvous cannot be combined with bonded groups");
+    log_code("LE000324", "srt: rendezvous cannot be combined with bonded groups");
     return NULL;
   }
 
@@ -367,7 +424,7 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
     return NULL;
   }
 
-  if (start_connect(r) != 0) {
+  if (start_connect(r, 1) != 0) {
     free(r->pending);
     free(r->pending_len);
     srt_epoll_release(r->eid);
@@ -379,16 +436,18 @@ srtout_t *srtout_open(const srtout_cfg_t *cfg) {
 }
 
 static uint64_t queue_ms(const srtout_t *r) {
-  uint64_t bytes = 0;
   if (r->bitrate_ema_bps <= 0) return 0;
-  for (int i = 0; i < r->pending_count; i++) bytes += (uint64_t)r->pending_len[(r->pending_head + i) % r->pending_cap];
-  return (uint64_t)((double)bytes * 1000.0 / r->bitrate_ema_bps);
+  return (uint64_t)((double)r->pending_bytes * 1000.0 / r->bitrate_ema_bps);
 }
 
 /* stats push covers whole connection/group, not per bonded member */
 static void push_stats(srtout_t *r) {
   SRT_TRACEBSTATS st;
-  if (!r->mx || r->sock == SRT_INVALID_SOCK || !metrics_exporter_due(r->mx, mono_seconds()) || srt_bstats(r->sock, &st, 0) != 0) return;
+  int have;
+  size_t n = 0;
+  if (!r->mx || !metrics_exporter_due(r->mx, mono_seconds())) return;
+  memset(&st, 0, sizeof st);
+  have = r->sock != SRT_INVALID_SOCK && srt_bstats(r->sock, &st, 0) == 0;
   metrics_entry_t e[] = {
 {METRICS_ID_SRT_SENDER_SENT_TOTAL, r->peer_label, (uint64_t)st.pktSentTotal},
 {METRICS_ID_SRT_SENDER_RETRANSMITTED_TOTAL, r->peer_label, (uint64_t)st.pktRetransTotal},
@@ -404,8 +463,10 @@ static void push_stats(srtout_t *r) {
 {METRICS_ID_SRT_SENDER_QUEUE_MILLISECONDS, r->peer_label, queue_ms(r)},
   };
   metrics_entry_t all[sizeof e / sizeof e[0] + sizeof q / sizeof q[0]];
-  size_t n = sizeof e / sizeof e[0];
-  memcpy(all, e, sizeof e);
+  if (have) {
+    n = sizeof e / sizeof e[0];
+    memcpy(all, e, sizeof e);
+  }
   if (r->queue_metrics != SRT_QUEUE_METRICS_OFF) {
     size_t nq = r->queue_metrics == SRT_QUEUE_METRICS_FULL ? 4 : 2;
     memcpy(all + n, q, nq * sizeof q[0]);
@@ -415,10 +476,32 @@ static void push_stats(srtout_t *r) {
   metrics_push_entries(r->mx, r->tool_version, all, n);
 }
 
+/* libsrt never redials a broken member of a live group */
+static void revive_members(srtout_t *r) {
+  double now = mono_seconds();
+
+  if (r->cfg.group_mode == SRTGROUP_NONE || !r->connected)
+    return;
+  if (!r->revive_res) {
+    if (now < r->next_revive_at) return;
+    r->next_revive_at = now + SRTOUT_REVIVE_INTERVAL_S;
+  }
+  srtcommon_group_revive(r->sock, r->cfg.peers, r->cfg.npeers, &r->revive_res);
+}
+
+static int send_chunk(srtout_t *r, const unsigned char *p, size_t len);
+
+static void flush_carry(srtout_t *r) {
+  if (r->carry_len > 0) send_chunk(r, r->carry, (size_t)r->carry_len);
+  r->carry_len = 0;
+}
+
 static void service_step(srtout_t *r) {
+  if (r->carry_len > 0 && mono_seconds() - r->carry_since >= SRTOUT_CARRY_MAX_S) flush_carry(r);
   resize_pending_if_needed(r);
   if (r->sock == SRT_INVALID_SOCK) {
-    if (mono_seconds() >= r->next_reconnect_at && start_connect(r) != 0) r->next_reconnect_at = mono_seconds() + SRTOUT_RECONNECT_BACKOFF_S;
+    if ((r->reconnect_res || mono_seconds() >= r->next_reconnect_at) && start_connect(r, 0) < 0)
+      r->next_reconnect_at = mono_seconds() + SRTOUT_RECONNECT_BACKOFF_S;
   } else {
     SRT_EPOLL_EVENT ev;
     if (srt_epoll_uwait(r->eid, &ev, 1, 0) > 0 && ev.fd == r->sock) {
@@ -433,6 +516,8 @@ static void service_step(srtout_t *r) {
           teardown_for_reconnect(r, "link failed");
       }
     }
+    if (r->sock != SRT_INVALID_SOCK)
+      revive_members(r);
   }
 }
 
@@ -442,20 +527,43 @@ void srtout_service(srtout_t *r, srtout_status_t *out) {
   out->connected = r->connected;
 }
 
+/* 0 ok, -1 if send failed or a chunk was dropped */
+static int send_chunk(srtout_t *r, const unsigned char *p, size_t len) {
+  int rc = 0;
+
+  if (r->pending_count == 0 && r->connected) {
+    int sent = srt_sendmsg2(r->sock, (const char *)p, (int)len, NULL);
+    if (sent != SRT_ERROR) return 0;
+    if (srt_getlasterror(NULL) != SRT_EASYNCSND) {
+      teardown_for_reconnect(r, "write failed");
+      rc = -1;
+    }
+  }
+  if (enqueue_pending(r, p, (int)len)) rc = -1;
+  return rc;
+}
+
 int srtout_write(srtout_t *r, const unsigned char *buf, size_t n) {
   int rc = 0;
+  size_t off = 0;
+
   r->bytes_since_check += n;
-  for (size_t off = 0; off < n; off += (size_t)SRTOUT_PLSIZE) {
-    size_t chunk = n - off < (size_t)SRTOUT_PLSIZE ? n - off : (size_t)SRTOUT_PLSIZE;
-    if (r->pending_count == 0 && r->connected) {
-      int sent = srt_sendmsg2(r->sock, (const char *)(buf + off), (int)chunk, NULL);
-      if (sent != SRT_ERROR) continue;
-      if (srt_getlasterror(NULL) != SRT_EASYNCSND) {
-        teardown_for_reconnect(r, "write failed");
-        rc = -1;
-      }
-    }
-    if (enqueue_pending(r, buf + off, (int)chunk)) rc = -1;
+  if (r->carry_len > 0) {
+    size_t take = (size_t)(SRTOUT_PLSIZE - r->carry_len);
+    if (take > n) take = n;
+    memcpy(r->carry + r->carry_len, buf, take);
+    r->carry_len += (int)take;
+    off = take;
+    if (r->carry_len < SRTOUT_PLSIZE) return 0;
+    rc = send_chunk(r, r->carry, SRTOUT_PLSIZE);
+    r->carry_len = 0;
+  }
+  for (; n - off >= (size_t)SRTOUT_PLSIZE; off += (size_t)SRTOUT_PLSIZE)
+    if (send_chunk(r, buf + off, SRTOUT_PLSIZE)) rc = -1;
+  if (off < n) {
+    memcpy(r->carry, buf + off, n - off);
+    r->carry_since = mono_seconds();
+    r->carry_len = (int)(n - off);
   }
   return rc;
 }
@@ -509,16 +617,43 @@ void srtout_queue_stats(const srtout_t *r, srtout_queue_stats_t *out) {
   out->ms_known = r->bitrate_ema_bps > 0;
 }
 
-void srtout_close(srtout_t *r) {
+void srtout_link_stats(const srtout_t *r, srtout_link_stats_t *out) {
+  SRT_TRACEBSTATS st;
+
+  memset(out, 0, sizeof *out);
+  if (r->sock == SRT_INVALID_SOCK || srt_bstats(r->sock, &st, 0) != 0) return;
+  out->connected = 1;
+  out->packets = (uint64_t)st.pktSentTotal;
+  out->retransmitted = (uint64_t)st.pktRetransTotal;
+  out->lost = (uint64_t)st.pktSndLossTotal;
+  out->dropped = (uint64_t)st.pktSndDropTotal;
+  out->rtt_ms = st.msRTT;
+  out->mbps = st.mbpsSendRate;
+}
+
+static void close_impl(srtout_t *r, int graceful) {
   if (!r) return;
-  flush_before_close(r);
+  if (graceful) {
+    flush_carry(r);
+    flush_before_close(r);
+  }
   if (r->sock != SRT_INVALID_SOCK) {
-    drain_before_close(r->sock);
+    if (graceful) drain_before_close(r->sock);
     srt_close(r->sock);
   }
   srt_epoll_release(r->eid);
+  srtcommon_resolver_free(r->revive_res);
+  srtcommon_resolver_free(r->reconnect_res);
   srtcommon_cleanup();
   free(r->pending);
   free(r->pending_len);
   free(r);
+}
+
+void srtout_close(srtout_t *r) {
+  close_impl(r, 1);
+}
+
+void srtout_close_now(srtout_t *r) {
+  close_impl(r, 0);
 }

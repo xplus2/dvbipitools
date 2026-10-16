@@ -29,11 +29,16 @@ int tvh_apply_input_hbbtv_app_id(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_hbbtv_name(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_rist_profile(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_rist_encryption_type(void *c, const char *v, char *e, size_t n);
+int tvh_apply_input_rist_secret(void *c, const char *v, char *e, size_t n);
+int tvh_apply_input_rist_cname(void *c, const char *v, char *e, size_t n);
+int tvh_apply_input_rist_buffer(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_passphrase(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_pbkeylen(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_streamid(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_packetfilter(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_srt_latency(void *c, const char *v, char *e, size_t n);
+int tvh_apply_input_al_fec(void *c, const char *v, char *e, size_t n);
+int tvh_apply_input_al_fec_port(void *c, const char *v, char *e, size_t n);
 int tvh_apply_input_jitter_ms(void *c, const char *v, char *e, size_t n);
 
 int tvh_apply_mcast(void *c, const char *v, char *e, size_t n);

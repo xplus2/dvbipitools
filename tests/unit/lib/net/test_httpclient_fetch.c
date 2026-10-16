@@ -204,6 +204,7 @@ START_TEST(http_fetch_sends_etag_and_handles_304) {
 
   pthread_join(th, NULL);
   ck_assert_ptr_nonnull(strstr(capture, "If-None-Match: \"abc123\""));
+  ck_assert_ptr_null(strstr(capture, "Connection:"));
   close(listen_fd);
 }
 END_TEST
@@ -347,6 +348,73 @@ START_TEST(http_fetch_reports_error_on_refused_connection) {
 }
 END_TEST
 
+START_TEST(http_fetch_reports_error_on_truncated_body) {
+  unsigned port;
+  int listen_fd = make_listener(&port);
+  pthread_t th;
+  server_arg_t sarg = {0};
+  const char *resp = "HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\nSHORT";
+  char uri[64];
+  http_url_t url;
+  http_fetch_t *f;
+  unsigned char buf[256];
+  net_err_reason_t reason = NET_ERR_OTHER;
+  http_fetch_state_t st = HTTP_FETCH_PENDING;
+
+  sarg.listen_fd = listen_fd;
+  sarg.response = resp;
+  sarg.response_len = strlen(resp);
+  ck_assert_int_eq(pthread_create(&th, NULL, serve_once, &sarg), 0);
+
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/x", port);
+  ck_assert_int_eq(http_url_parse(uri, &url), 0);
+  f = http_fetch_start(&url, "test-agent", 0, NULL, NULL, buf, sizeof buf, NULL, NULL);
+  ck_assert_ptr_nonnull(f);
+  for (int i = 0; i < 200 && st == HTTP_FETCH_PENDING; i++) {
+    struct pollfd pfd;
+    pfd.fd = http_fetch_poll_fd(f);
+    pfd.events = http_fetch_poll_events(f);
+    pfd.revents = 0;
+    poll(&pfd, 1, 100);
+    st = http_fetch_step(f, &reason);
+  }
+  ck_assert_int_eq(st, HTTP_FETCH_ERROR);
+  ck_assert_int_eq(reason, NET_ERR_READ);
+  http_fetch_free(f);
+  pthread_join(th, NULL);
+  close(listen_fd);
+}
+END_TEST
+
+START_TEST(http_fetch_times_out_on_silent_server) {
+  http_url_t url;
+  http_fetch_t *f;
+  unsigned char buf[16];
+  unsigned port;
+  char uri[64];
+  int listen_fd = make_listener(&port); /* backlog accepts, never answers */
+  net_err_reason_t reason = NET_ERR_OTHER;
+  http_fetch_state_t st = HTTP_FETCH_PENDING;
+
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/x", port);
+  ck_assert_int_eq(http_url_parse(uri, &url), 0);
+  f = http_fetch_start(&url, "test-agent", 0, NULL, NULL, buf, sizeof buf, NULL, NULL);
+  ck_assert_ptr_nonnull(f);
+  for (int i = 0; i < 200 && st == HTTP_FETCH_PENDING; i++) {
+    struct pollfd pfd;
+    pfd.fd = http_fetch_poll_fd(f);
+    pfd.events = http_fetch_poll_events(f);
+    pfd.revents = 0;
+    poll(&pfd, 1, 100);
+    st = http_fetch_step(f, &reason);
+  }
+  ck_assert_int_eq(st, HTTP_FETCH_ERROR);
+  ck_assert_int_eq(reason, NET_ERR_TIMEOUT);
+  http_fetch_free(f);
+  close(listen_fd);
+}
+END_TEST
+
 static Suite *httpclient_fetch_suite(void) {
   Suite *s = suite_create("httpclient_fetch");
   TCase *tc = tcase_create("core");
@@ -357,6 +425,11 @@ static Suite *httpclient_fetch_suite(void) {
   tcase_add_test(tc, http_fetch_reports_error_on_refused_connection);
   tcase_add_test(tc, http_fetch_reuses_connection_across_two_requests);
   tcase_add_test(tc, http_fetch_falls_back_when_reuse_host_mismatches);
+  suite_add_tcase(s, tc);
+  tc = tcase_create("timeouts");
+  tcase_set_timeout(tc, 30);
+  tcase_add_test(tc, http_fetch_times_out_on_silent_server);
+  tcase_add_test(tc, http_fetch_reports_error_on_truncated_body);
   suite_add_tcase(s, tc);
   return s;
 }

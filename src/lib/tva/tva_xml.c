@@ -142,6 +142,23 @@ void tva_build_crid(const char *channel_id, const char *start_iso, char *out, si
   snprintf(out, outcap, "crid://dipixmltv.invalid/%s/%s", enc, ts);
 }
 
+int tva_programme_cache_crid(bcg_programme_t *pr) {
+  char crid[TVA_CRID_BUF];
+  char *dup;
+  tva_build_crid(pr->channel_id, pr->start, crid, sizeof crid);
+  dup = strdup(crid);
+  if (!dup) return -1;
+  free(pr->crid);
+  pr->crid = dup;
+  return 0;
+}
+
+const char *tva_programme_crid(const bcg_programme_t *pr, char *buf, size_t cap) {
+  if (pr->crid) return pr->crid;
+  tva_build_crid(pr->channel_id, pr->start, buf, cap);
+  return buf;
+}
+
 typedef struct {
   const char *id;
   int idx;
@@ -171,10 +188,9 @@ static int channel_index_of(const bcg_doc_t *doc, const chan_idx_t *cidx, const 
 }
 
 static void write_schedule_event(FILE *f, const bcg_programme_t *pr) {
-  char crid[BCG_ID_LEN * 3 + 64];
-  tva_build_crid(pr->channel_id, pr->start, crid, sizeof crid);
+  char buf[TVA_CRID_BUF];
   fputs("<ScheduleEvent><Program crid=\"", f);
-  xml_escape(f, crid);
+  xml_escape(f, tva_programme_crid(pr, buf, sizeof buf));
   fprintf(f, "\"/><PublishedStartTime>%s</PublishedStartTime>", pr->start);
   if (pr->stop[0]) fprintf(f, "<PublishedEndTime>%s</PublishedEndTime>", pr->stop);
   fputs("</ScheduleEvent>\n", f);
@@ -224,11 +240,10 @@ void tva_xml_write(FILE *f, const bcg_doc_t *doc) {
   for (int i = 0; i < doc->programme_count; i++) {
     const bcg_programme_t *pr = &doc->programmes[i];
     int ci = channel_index_of(doc, cidx, pr->channel_id);
-    char crid[BCG_ID_LEN * 3 + 64];
+    char buf[TVA_CRID_BUF];
     if (ci < 0 || !doc->channels[ci].uri[0]) continue;
-    tva_build_crid(pr->channel_id, pr->start, crid, sizeof crid);
     fputs("<ProgramInformation programId=\"", f);
-    xml_escape(f, crid);
+    xml_escape(f, tva_programme_crid(pr, buf, sizeof buf));
     fputs("\"><BasicDescription>", f);
     if (pr->title) {
       fputs("<Title>", f);
@@ -368,14 +383,15 @@ static int program_text_cb(const char *tag, const char *blk_end, void *ctx) {
   progtext_list_t *pl = ctx;
   char crid[BCG_ID_LEN * 3 + 64];
   bcg_progtext_t *pt;
+  xml_span_t genre;
   if (bcg_tag_attr(tag, blk_end, "programId", crid, sizeof crid) == 0) {
     if (progtext_grow(pl) != 0) return -1;
     pt = &pl->items[pl->n++];
     memset(pt, 0, sizeof *pt);
     pt->crid = strdup(crid);
-    if (!pt->crid || bcg_elem_text(tag, blk_end, "Title", &pt->title) || bcg_elem_text(tag, blk_end, "Synopsis", &pt->desc) ||
-        bcg_elem_text(tag, blk_end, "Name", &pt->category))
+    if (!pt->crid || bcg_elem_text(tag, blk_end, "Title", &pt->title) || bcg_elem_text(tag, blk_end, "Synopsis", &pt->desc))
       return -1;
+    if (xml_find_elem(tag, blk_end, "Genre", &genre) == 0 && bcg_elem_text(genre.tag, genre.end, "Name", &pt->category)) return -1;
   }
   return 0;
 }
@@ -385,10 +401,28 @@ static int parse_program_texts(const char *buf, const char *end, progtext_list_t
   return for_each_xml_elem(buf, end, "ProgramInformation", program_text_cb, pl);
 }
 
+typedef struct {
+  bcg_channel_t *c;
+  const char *svc, *svc_end;
+  const char *pos;
+  int inside;
+} service_name_ctx_t;
+
+static int in_genre_cb(const char *tag, const char *blk_end, void *ctx) {
+  service_name_ctx_t *n = ctx;
+  if (n->pos > tag && n->pos < blk_end) n->inside = 1;
+  return 0;
+}
+
 static int service_name_cb(const char *tag, const char *blk_end, void *ctx) {
-  bcg_channel_t *c = ctx;
+  service_name_ctx_t *n = ctx;
+  bcg_channel_t *c = n->c;
   char name[BCG_ID_LEN];
   int cut = 0;
+  n->pos = tag;
+  n->inside = 0;
+  for_each_xml_elem(n->svc, n->svc_end, "ServiceGenre", in_genre_cb, n);
+  if (n->inside) return 0;
   if (xml_span_text_chk(tag, blk_end, name, sizeof name, &cut) == 0) {
     if (cut) log_code("LW400186", "bcg: <Name> text truncated to %zu bytes", strlen(name));
     bcg_channel_add_name(c, name);
@@ -430,12 +464,16 @@ static int service_info_cb(const char *tag, const char *blk_end, void *ctx) {
   bcg_channel_t *c;
   char sid[BCG_ID_LEN];
   service_url_ctx_t uctx = {0};
+  service_name_ctx_t nctx = {0};
   if (bcg_tag_attr(tag, blk_end, "serviceId", sid, sizeof sid) == 0) {
     c = bcg_add_channel(doc);
     if (!c) return -1;
     bufcpy(c->id, sizeof c->id, sid);
     uctx.c = c;
-    for_each_xml_elem(tag, blk_end, "Name", service_name_cb, c);
+    nctx.c = c;
+    nctx.svc = tag;
+    nctx.svc_end = blk_end;
+    for_each_xml_elem(tag, blk_end, "Name", service_name_cb, &nctx);
     for_each_xml_elem(tag, blk_end, "ServiceURL", service_url_cb, &uctx);
   }
   return 0;

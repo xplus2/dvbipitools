@@ -377,7 +377,7 @@ END_TEST
 
 START_TEST(config_item_without_source_is_error) {
   char path[] = "/tmp/dipiradiohead_cfg_XXXXXX";
-  char *argv[] = {"dipiradiohead", "-c", path, NULL};
+  char *argv[] = {"dipiradiohead", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "input:\n  - sid: 3\nmcast: 239.1.1.1:5000\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
@@ -423,7 +423,7 @@ END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipiradiohead_cfg_XXXXXX";
-  char *argv[] = {"dipiradiohead", "-c", path, NULL};
+  char *argv[] = {"dipiradiohead", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "input: http://a\nmcast: 239.1.1.1:5000\nttl: 300\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);

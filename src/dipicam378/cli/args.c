@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/cas/device_state_core.h"
+#include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
 #include "priv.h"
@@ -39,8 +41,8 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
   opterr = 0;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
     if (c == 'c') *cfg_path = optarg;
-    if (c == 1006) *configtest = 1;
-    if (c == 1007) *strict = 1;
+    if (c == OPT_CONFIGTEST) *configtest = 1;
+    if (c == OPT_CONFIG_STRICT) *strict = 1;
     if (c == 'h') {
       cam378_print_help();
       opterr = 1;
@@ -51,7 +53,7 @@ static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *
   return ARGS_OK;
 }
 
-args_status_t args_parse(int argc, char **argv, config_t *cfg) {
+static args_status_t parse_inner(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
   int strict = 0;
@@ -154,6 +156,25 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("3S000128", "missing -k device key");
     return ARGS_ERR;
   }
+  if (!cfg->serial || !*cfg->serial) {
+    argerr("3S000130", "missing -s device serial");
+    return ARGS_ERR;
+  }
+  if (strlen(cfg->serial) >= DEVICE_SERIAL_MAX) {
+    argerr("3S000723", "invalid -s serial: longer than %d bytes", DEVICE_SERIAL_MAX - 1);
+    return ARGS_ERR;
+  }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
   return ARGS_OK;
+}
+
+args_status_t args_parse(int argc, char **argv, config_t *cfg) {
+  args_status_t st;
+  cfg->str_pool = NULL;
+  st = parse_inner(argc, argv, cfg);
+  if (st != ARGS_OK) {
+    yamlcfg_strpool_free(cfg->str_pool);
+    cfg->str_pool = NULL;
+  }
+  return st;
 }

@@ -66,7 +66,7 @@ int src_open(const config_t *cfg, src_t *s) {
       break;
   }
 
-  s->t = tssrc_open(&tc, NULL);
+  s->t = tssrc_open_blocking(&tc, 30.0, NULL);
   if (!s->t) return -1;
   if (s->kind != URI_HTTP && cfg->ret.enabled) {
     ret_client_cfg_t rc;
@@ -125,7 +125,7 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
     ssize_t w = write(fd, p, n);
     if (w < 0) {
       if (errno == EINTR) continue;
-      log_code("CE100139", "w:%s", strerror(errno));
+      log_code("CE100139", "output write failed: %s", strerror(errno));
       return -1;
     }
     p += w;

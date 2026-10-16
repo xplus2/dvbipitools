@@ -6,7 +6,8 @@ BIN=$1
 . "$(dirname "$0")/../common.sh"
 
 run_expect_rc 2 "missing -k" "$BIN"
-run_expect_rc 1 "nonexistent key file" "$BIN" -k "$WORK/does-not-exist.pem"
+run_expect_rc 2 "missing -s" "$BIN" -k "$WORK/does-not-exist.pem"
+run_expect_rc 1 "nonexistent key file" "$BIN" -k "$WORK/does-not-exist.pem" -s e2e-01
 
 echo "OK"
 

@@ -13,7 +13,8 @@ typedef void (*id3_meta_cb)(void *ctx, const char *artist, const char *title);
 id3_t *id3_new(id3_meta_cb cb, void *ctx);
 void id3_free(id3_t *c);
 
-/* caller must only probe at a frame boundary, never mid-frame (avoids false positives on audio bytes) */
+/* caller must only probe at a frame boundary, never mid-frame (avoids false positives on audio bytes).
+   avail >= 10: header checked (version 2..4, syncsafe size) */
 int id3_is_tag(const unsigned char *p, size_t avail);
 
 /* full on-disk tag size (header + body + optional footer). 0 if avail < 10 */

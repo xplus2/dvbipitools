@@ -5,17 +5,17 @@
 #define DIPICAM378_ARGS_H
 
 typedef struct {
-  const char *key_path;  /* -k, RSA private key PEM, required */
-  const char *serial;    /* -s, matched against EMM-U addressing; NULL = no filter */
-  const char *bind;      /* -b, listen address. default: loopback */
-  unsigned port;         /* -p, cs378x TCP listen port */
-  const char *username;  /* -a's "user:" part; matches reader's "user ="; NULL = no check */
-  const char *password;  /* -a's password part; matches reader's "password ="; default "dipicam378" */
-  unsigned caid;         /* --caid, hex; 0 = no filter */
-  int cw_len;            /* --algo cissa|csa2; 16 or 8 */
-  int verbose;           /* -v */
-  int daemonize;         /* -d, --daemonize: fork to background after startup */
-  int color_mode;        /* --color; log_color_t */
+  const char *key_path;        /* -k, RSA private key PEM, required */
+  const char *serial;          /* -s, matched against EMM-U addressing, required */
+  const char *bind;            /* -b, listen address. default: loopback */
+  unsigned port;               /* -p, cs378x TCP listen port */
+  const char *username;        /* -a's "user:" part; matches reader's "user ="; NULL = no check */
+  const char *password;        /* -a's password part; matches reader's "password ="; default "dipicam378" */
+  unsigned caid;               /* --caid, hex; 0 = no filter */
+  int cw_len;                  /* --algo cissa|csa2; 16 or 8 */
+  int verbose;                 /* -v */
+  int daemonize;               /* -d, --daemonize: fork to background after startup */
+  int color_mode;              /* --color; log_color_t */
   const char *metrics_sock;    /* --metrics. NULL = default socket path */
   const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
   unsigned metrics_interval_s; /* --metrics-interval. 0 = default */

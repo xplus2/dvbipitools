@@ -318,6 +318,95 @@ START_TEST(mkv_clusters_are_written_live_and_close_adds_cues_and_duration) {
 }
 END_TEST
 
+#define PREFIX_LEN 100
+
+static unsigned char *mux_with_prefix(char *path, int append, long *fsize) {
+  int fd = mkstemp(path);
+  unsigned long long bytes = 0;
+  mkv_opts_t cfg = base_cfg();
+  mkv_t *m;
+  unsigned char adts[64];
+  unsigned char pes[128];
+  unsigned char pkt[188];
+  unsigned char prefix[PREFIX_LEN];
+  unsigned char *buf;
+  FILE *f;
+
+  ck_assert_int_ge(fd, 0);
+  memset(prefix, 0xAA, sizeof prefix);
+  ck_assert_int_eq(write(fd, prefix, sizeof prefix), (ssize_t)sizeof prefix);
+  if (append) {
+    close(fd);
+    fd = open(path, O_WRONLY | O_APPEND);
+    ck_assert_int_ge(fd, 0);
+  }
+  m = mkv_new(fd, &cfg, 0, &bytes, NULL, 0);
+  ck_assert_ptr_nonnull(m);
+  feed_discovery(m);
+  for (unsigned k = 0; k < 6; k++) {
+    size_t alen = build_adts_frame(adts, 50);
+    size_t plen = build_pes_with_pts(pes, 90000u + k * 180000u, adts, alen);
+    wrap_ts_packet(pkt, 0x0101, 1, pes, plen);
+    mkv_feed(m, pkt);
+  }
+  ck_assert_int_eq(mkv_error(m), 0);
+  mkv_close(m);
+  close(fd);
+
+  f = fopen(path, "rb");
+  ck_assert_ptr_nonnull(f);
+  fseek(f, 0, SEEK_END);
+  *fsize = ftell(f);
+  rewind(f);
+  buf = malloc((size_t)*fsize);
+  ck_assert_ptr_nonnull(buf);
+  ck_assert_uint_eq(fread(buf, 1, (size_t)*fsize, f), (size_t)*fsize);
+  fclose(f);
+  return buf;
+}
+
+START_TEST(mkv_patches_land_correctly_at_nonzero_start_offset) {
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  long fsize;
+  unsigned char *buf = mux_with_prefix(path, 0, &fsize);
+  const unsigned char *d;
+  const unsigned char *seg;
+  uint64_t u = 0;
+  double dur;
+
+  for (int i = 0; i < PREFIX_LEN; i++) ck_assert_uint_eq(buf[i], 0xAA);
+  ck_assert_uint_eq(buf[PREFIX_LEN], 0x1A); /* EBML header intact after prefix */
+  seg = memmem(buf, (size_t)fsize, "\x18\x53\x80\x67", 4);
+  ck_assert_ptr_nonnull(seg);
+  ck_assert_uint_eq(seg[4], 0x01);
+  ck_assert_uint_ne(seg[5], 0xFFu); /* Segment size patched */
+  d = memmem(buf, (size_t)fsize, "\x44\x89\x88", 3);
+  ck_assert_ptr_nonnull(d);
+  for (int i = 0; i < 8; i++) u = (u << 8) | d[3 + i];
+  memcpy(&dur, &u, sizeof dur);
+  ck_assert(dur > 0.0);
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(mkv_append_mode_output_is_not_patched) {
+  char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
+  long fsize;
+  unsigned char *buf = mux_with_prefix(path, 1, &fsize);
+  const unsigned char *seg;
+
+  for (int i = 0; i < PREFIX_LEN; i++) ck_assert_uint_eq(buf[i], 0xAA);
+  ck_assert_uint_eq(buf[PREFIX_LEN], 0x1A);
+  seg = memmem(buf, (size_t)fsize, "\x18\x53\x80\x67", 4);
+  ck_assert_ptr_nonnull(seg);
+  ck_assert_uint_eq(seg[5], 0xFFu); /* unknown size stays */
+  ck_assert_ptr_null(memmem(buf, (size_t)fsize, "\x44\x89\x88", 3));
+  free(buf);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(mkv_no_supported_tracks_writes_nothing_and_no_error) {
   char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";
   int fd = mkstemp(path);
@@ -868,6 +957,8 @@ static Suite *mkv_suite(void) {
   tcase_add_test(tc, mkv_writes_a_valid_container_for_audio_only);
   tcase_add_test(tc, mkv_no_supported_tracks_writes_nothing_and_no_error);
   tcase_add_test(tc, mkv_clusters_are_written_live_and_close_adds_cues_and_duration);
+  tcase_add_test(tc, mkv_patches_land_correctly_at_nonzero_start_offset);
+  tcase_add_test(tc, mkv_append_mode_output_is_not_patched);
   tcase_add_test(tc, mkv_multi_program_labels_tracks_with_program_names);
   tcase_add_test(tc, mkv_single_program_still_omits_track_name);
   tcase_add_test(tc, mkv_pts_wraparound_is_rebased_not_dropped);

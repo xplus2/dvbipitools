@@ -283,6 +283,10 @@ START_TEST(biss1_sw_enables_and_stores_key) {
 END_TEST
 
 static const opt_case_t MUXER_PID_SINGLE[] = {
+  {"--cas-ecm-pid", "0x0001"},
+  {"--cas-ecm-pid", "0x0012"},
+  {"--cas-emm-pid", "0x0001"},
+  {"--cas-emm-pid", "0x0012"},
   {"--cas-ecm-pid", "0x0010"},
   {"--cas-ecm-pid", "0x0011"},
   {"--cas-ecm-pid", "0x0100"},
@@ -294,6 +298,8 @@ static const opt_case_t MUXER_PID_SINGLE[] = {
 };
 
 static const opt_case_t MUXER_PID_MULTI[] = {
+  {"--cas-ecm-pid", "0x0014"},
+  {"--cas-emm-pid", "0x0014"},
   {"--cas-ecm-pid", "0x0100"},
   {"--cas-ecm-pid", "0x0101"},
   {"--cas-ecm-pid", "0x1000"},

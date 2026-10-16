@@ -332,32 +332,9 @@ START_TEST(emm_u_for_another_serial_is_ignored) {
 }
 END_TEST
 
-START_TEST(no_serial_configured_accepts_any_emm_u) {
-  EVP_PKEY *pub;
-  device_state_t *d = make_device_serial(&pub, 8, NULL);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
-  unsigned char cw[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
-  unsigned char buf[1024];
-  unsigned char cw_out[16];
-  size_t n;
-
-  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
-    bk[i] = (unsigned char)i;
-    sk[i] = (unsigned char)(255 - i);
-  }
-
-  n = build_emm_u_for(pub, bk, "whatever-serial", buf, sizeof buf);
-  device_on_emm(d, buf, n);
-
-  n = build_emm_g(bk, sk, 0x0001, buf, sizeof buf);
-  device_on_emm(d, buf, n);
-
-  n = build_ecm(sk, cw, 8, buf, sizeof buf);
-  ck_assert_int_eq(device_resolve_cw(d, buf, n, 0x0001, 0, cw_out), 0);
-  ck_assert_mem_eq(cw_out, cw, 8); /* build_ecm() defaults to SC_SECTION_TID_ECM_EVEN */
-
-  EVP_PKEY_free(pub);
-  device_state_free(d);
+START_TEST(missing_serial_is_rejected) {
+  ck_assert_ptr_null(device_state_new(g_key_path, 8, NULL, 0));
+  ck_assert_ptr_null(device_state_new(g_key_path, 8, "", 0));
 }
 END_TEST
 
@@ -506,7 +483,7 @@ START_TEST(ecm_cb_forwards_to_the_device_and_passes_its_result_through) {
 }
 END_TEST
 
-START_TEST(emm_cb_forwards_sections_to_the_device_ignoring_caid_and_provider) {
+START_TEST(emm_cb_forwards_sections_to_the_device_ignoring_provider) {
   EVP_PKEY *pub;
   device_state_t *d = make_device(&pub, 8);
   unsigned char bk[CRYPTO_KEY_LEN];
@@ -522,6 +499,33 @@ START_TEST(emm_cb_forwards_sections_to_the_device_ignoring_caid_and_provider) {
   cam378_emm_cb(buf, n, 0xABCD, 0x99, d);
   n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf);
   cam378_emm_cb(buf, n, 0, 0, d);
+  ck_assert_uint_eq(device_state_services_active(d), 1u);
+  EVP_PKEY_free(pub);
+  device_state_free(d);
+}
+END_TEST
+
+START_TEST(emm_cb_drops_sections_of_other_caids_when_caid_set) {
+  EVP_PKEY *pub;
+  device_state_t *d = make_device_full(&pub, 8, TEST_SERIAL, 0x1234);
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char buf[1024];
+  size_t n;
+
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++) {
+    bk[i] = (unsigned char)(i + 3);
+    sk[i] = (unsigned char)(90 - i);
+  }
+  n = build_emm_u(pub, bk, buf, sizeof buf);
+  cam378_emm_cb(buf, n, 0x4321, 0, d);
+  n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf);
+  cam378_emm_cb(buf, n, 0x1234, 0, d);
+  ck_assert_uint_eq(device_state_services_active(d), 0u);
+  n = build_emm_u(pub, bk, buf, sizeof buf);
+  cam378_emm_cb(buf, n, 0x1234, 0, d);
+  n = build_emm_g(bk, sk, 0x0064, buf, sizeof buf);
+  cam378_emm_cb(buf, n, 0x1234, 0, d);
   ck_assert_uint_eq(device_state_services_active(d), 1u);
   EVP_PKEY_free(pub);
   device_state_free(d);
@@ -557,9 +561,10 @@ START_TEST(push_metrics_reports_server_and_device_counters_once_per_interval) {
   atomic_store(&srv.auth_errors_total[CAM_AUTH_CHECKSUM], 1ull);
   atomic_store(&srv.ecm_total, 50ull);
   atomic_store(&srv.ecm_errors_total, 4ull);
+  atomic_store(&srv.ecm_rejected_total, 3ull);
   atomic_store(&srv.emm_total, 9ull);
   sink_open(&ms, METRICS_COMPONENT_CAM378, "cam1", 5.0);
-  cam378_push_metrics(&ms.mx, &srv, d, "csa2");
+  cam378_push_metrics(&ms.mx, &srv, d);
   ck_assert_int_eq(sink_read(&ms, &seen), 1);
   ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAM_CONNECTIONS_ACTIVE, &v), 1);
   ck_assert_uint_eq(v, 2u);
@@ -567,16 +572,18 @@ START_TEST(push_metrics_reports_server_and_device_counters_once_per_interval) {
   ck_assert_uint_eq(v, 7u);
   ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAM_SERVICES_ACTIVE, &v), 1);
   ck_assert_uint_eq(v, 1u);
-  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAS_ECM_TOTAL, &v), 1);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAM_ECM_TOTAL, &v), 1);
   ck_assert_uint_eq(v, 50u);
-  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAS_ECM_ERRORS_TOTAL, &v), 1);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAM_ECM_ERRORS_TOTAL, &v), 1);
   ck_assert_uint_eq(v, 4u);
-  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAS_EMM_TOTAL, &v), 1);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAM_ECM_REJECTED_TOTAL, &v), 1);
+  ck_assert_uint_eq(v, 3u);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_CAM_EMM_TOTAL, &v), 1);
   ck_assert_uint_eq(v, 9u);
   for (unsigned i = 0; i < seen.n; i++)
     if (seen.id[i] == METRICS_ID_CAM_AUTH_ERRORS_TOTAL) auth_entries++;
   ck_assert_uint_eq(auth_entries, 2u);
-  cam378_push_metrics(&ms.mx, &srv, d, "csa2");
+  cam378_push_metrics(&ms.mx, &srv, d);
   ck_assert_int_eq(sink_read(&ms, &seen), 0);
   sink_close(&ms);
   EVP_PKEY_free(pub);
@@ -594,13 +601,14 @@ static Suite *device_suite(void) {
   tcase_add_test(tc, resolve_cw_fails_before_any_emm_g);
   tcase_add_test(tc, emm_g_ignored_before_emm_u_sets_bk);
   tcase_add_test(tc, emm_u_for_another_serial_is_ignored);
-  tcase_add_test(tc, no_serial_configured_accepts_any_emm_u);
+  tcase_add_test(tc, missing_serial_is_rejected);
   tcase_add_test(tc, resolve_cw_rejects_wrong_caid);
   tcase_add_test(tc, resolve_cw_accepts_matching_caid);
   tcase_add_test(tc, services_active_counts_services_with_a_session_key);
   tcase_add_test(tc, resolve_cw_no_sk_yet_stays_transient_even_with_caid_configured);
   tcase_add_test(tc, ecm_cb_forwards_to_the_device_and_passes_its_result_through);
-  tcase_add_test(tc, emm_cb_forwards_sections_to_the_device_ignoring_caid_and_provider);
+  tcase_add_test(tc, emm_cb_forwards_sections_to_the_device_ignoring_provider);
+  tcase_add_test(tc, emm_cb_drops_sections_of_other_caids_when_caid_set);
   tcase_add_test(tc, push_metrics_reports_server_and_device_counters_once_per_interval);
   suite_add_tcase(s, tc);
   return s;

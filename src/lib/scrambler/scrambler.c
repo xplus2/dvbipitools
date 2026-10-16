@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/helper/log.h"
 #include "cissa.h"
 #include "csa2.h"
 
@@ -32,6 +33,7 @@ struct scrambler {
   csa2_batch_entry_t *batch_entries; /* allocated queue_cap, replaces a VLA in scrambler_queue_flush */
   unsigned queue_batch_size; /* csa2_batch_size() result, 0 means no batching backend */
   unsigned queue_cap;        /* allocated s->queue length */
+  unsigned long long dropped_total; /* packets dropped on failed batch */
   unsigned queue_len;
   unsigned queue_scrambled_count;
   int queue_parity;
@@ -110,10 +112,13 @@ int scrambler_set_key(scrambler_t *s, int parity, const unsigned char *cw, size_
 }
 
 /* TS header adaptation_field_control (byte 3 bits 4-5): 01 payload only,
-   10 AF only (no payload), 11 AF+payload. AF, if present, is 1 length byte plus that many bytes. */
+   10 AF only (no payload), 11 AF+payload, 00 reserved. AF, if present, is 1 length byte plus that many bytes.
+   returns 188 when no payload. */
 static size_t ts_payload_offset(const unsigned char *pkt) {
   unsigned afc = (pkt[3] >> 4) & 0x3;
-  if (afc == 2 || afc == 3)
+  if (afc == 0 || afc == 2)
+    return 188;
+  if (afc == 3)
     return 4 + 1 + pkt[4];
   return 4;
 }
@@ -193,6 +198,7 @@ int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]) {
 static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *ctx) {
   if (s->queue_len == 0)
     return;
+  int failed = 0;
   if (s->queue_scrambled_count > 0) {
     csa2_batch_entry_t *entries = s->batch_entries;
     unsigned ei = 0;
@@ -204,12 +210,18 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
       }
     }
     if (s->queue_mode == SCRAMBLER_QUEUE_MODE_ENCRYPT)
-      csa2_encrypt_batch(s->csa2_key[s->queue_parity], entries, s->queue_scrambled_count);
+      failed = csa2_encrypt_batch(s->csa2_key[s->queue_parity], entries, s->queue_scrambled_count) != 0;
     else
-      csa2_decrypt_batch(s->csa2_key[s->queue_parity], entries, s->queue_scrambled_count);
+      failed = csa2_decrypt_batch(s->csa2_key[s->queue_parity], entries, s->queue_scrambled_count) != 0;
   }
-  for (unsigned i = 0; i < s->queue_len; i++)
+  for (unsigned i = 0; i < s->queue_len; i++) {
+    if (failed && s->queue[i].needs_crypto) {
+      if (s->dropped_total++ == 0)
+        log_code("LE500246", "scrambler: batch %scrypt failed, dropping affected packets", s->queue_mode == SCRAMBLER_QUEUE_MODE_ENCRYPT ? "en" : "de");
+      continue; /* control bits already flipped, payload not transformed: never emit */
+    }
     emit(ctx, s->queue[i].pkt);
+  }
   s->queue_len = 0;
   s->queue_scrambled_count = 0;
   s->queue_parity = -1;

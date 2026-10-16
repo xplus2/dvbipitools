@@ -82,8 +82,8 @@ args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
         return ARGS_ERR;
       break;
     case OPT_RIST_BUFFER:
-      if (argutil_uint_range(optarg, 1, UINT_MAX, &cfg->rist_buffer_ms)) {
-        argerr("TS000511", "invalid --rist-buffer: %s (ms)", optarg);
+      if (argutil_uint_range(optarg, 1, 60000, &cfg->rist_buffer_ms)) {
+        argerr("TS000511", "invalid --rist-buffer: %s (1..60000 ms)", optarg);
         return ARGS_ERR;
       }
       break;

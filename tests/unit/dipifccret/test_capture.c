@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <check.h>
+#include <errno.h>
 #include <netinet/in.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -12,6 +13,7 @@
 #include <net/if_arp.h>
 #include <signal.h>
 #include <sys/ioctl.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -232,6 +234,78 @@ START_TEST(capture_ipv4_udp_length_below_header_rejected) {
 }
 END_TEST
 
+START_TEST(capture_rtp_padding_excluded_from_payload) {
+  unsigned char pkt[512];
+  cidr_t ranges[2];
+  record_t rec;
+  size_t len;
+
+  make_ranges(ranges);
+  memset(&rec, 0, sizeof rec);
+  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0, 1);
+  pkt[14 + 28] |= 0x20; /* P bit */
+  memset(pkt + len, 0, 3);
+  pkt[len + 3] = 4; /* pad count includes itself */
+  len += 4;
+  pkt[14 + 24] = 0;
+  pkt[14 + 25] = 8 + 200 + 4; /* UDP length */
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+
+  ck_assert_int_eq(rec.called, 1);
+  ck_assert_uint_eq(rec.payload_len, 188);
+}
+END_TEST
+
+START_TEST(capture_ipv4_fragments_rejected) {
+  unsigned char pkt[512];
+  cidr_t ranges[2];
+  record_t rec;
+  size_t len;
+
+  make_ranges(ranges);
+  memset(&rec, 0, sizeof rec);
+  len = build_ipv4_frame(pkt, 0, "239.1.2.5", 5000, 0, 1);
+  pkt[14 + 7] = 0x10; /* non-first fragment */
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+  ck_assert_int_eq(rec.called, 0);
+
+  pkt[14 + 6] = 0x20; /* first fragment, MF */
+  pkt[14 + 7] = 0;
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+  ck_assert_int_eq(rec.called, 0);
+
+  pkt[14 + 6] = 0x40; /* DF only */
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+  ck_assert_int_eq(rec.called, 1);
+}
+END_TEST
+
+START_TEST(capture_ipv6_fragments_rejected) {
+  unsigned char pkt[512];
+  cidr_t ranges[2];
+  record_t rec;
+  size_t len;
+
+  make_ranges(ranges);
+  memset(&rec, 0, sizeof rec);
+  len = build_ipv6_frame(pkt, 0, "ff3e::5", 6000, 0, 1, 1);
+  pkt[14 + 40 + 0] = 17;
+  pkt[14 + 6] = 44; /* fragment header in place of hop-by-hop */
+  pkt[14 + 40 + 2] = 0x00;
+  pkt[14 + 40 + 3] = 0x08; /* offset 1 */
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+  ck_assert_int_eq(rec.called, 0);
+
+  pkt[14 + 40 + 3] = 0x01; /* MF */
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+  ck_assert_int_eq(rec.called, 0);
+
+  pkt[14 + 40 + 3] = 0x00; /* atomic fragment */
+  capture_handle_frame(pkt, len, ranges, 2, record_cb, &rec);
+  ck_assert_int_eq(rec.called, 1);
+}
+END_TEST
+
 START_TEST(capture_ipv4_vlan_tagged_accepted) {
   unsigned char pkt[512];
   cidr_t ranges[2];
@@ -432,6 +506,45 @@ START_TEST(ring_drain_delivers_in_range_frames_and_returns_the_block) {
   ck_assert_uint_eq(seen.ports[0], 5001u);
   ck_assert_uint_eq(seen.ports[1], 5003u);
   ck_assert_uint_eq(ring_block(ring, 0)->hdr.bh1.block_status, (unsigned)TP_STATUS_KERNEL);
+  capture_close(cap);
+}
+END_TEST
+
+START_TEST(ring_drain_skips_outgoing_frames) {
+  unsigned char ring[RING_BLOCK_SIZE];
+  const char *ips[2] = {"239.1.2.5", "239.1.2.6"};
+  unsigned ports[2] = {8001, 8002};
+  cidr_t ranges[2];
+  ring_seen_t seen = {{0}, 0};
+  struct tpacket_block_desc *bd = ring_block(ring, 0);
+  unsigned char *at;
+  capture_t *cap;
+
+  make_ranges(ranges);
+  memset(ring, 0, sizeof ring);
+  bd->hdr.bh1.offset_to_first_pkt = TPACKET_ALIGN(sizeof(struct tpacket_block_desc));
+  bd->hdr.bh1.num_pkts = 2;
+  at = ring + bd->hdr.bh1.offset_to_first_pkt;
+  for (unsigned i = 0; i < 2; i++) {
+    struct tpacket3_hdr *ppd = (struct tpacket3_hdr *)at;
+    struct sockaddr_ll *sll = (struct sockaddr_ll *)(at + TPACKET_ALIGN(sizeof(struct tpacket3_hdr)));
+    unsigned char frame[512];
+    size_t len = build_ipv4_frame(frame, 0, ips[i], ports[i], 0, 1);
+
+    sll->sll_pkttype = i == 0 ? PACKET_OUTGOING : PACKET_MULTICAST;
+    ppd->tp_mac = (unsigned short)(TPACKET_ALIGN(sizeof(struct tpacket3_hdr)) + TPACKET_ALIGN(sizeof *sll));
+    ppd->tp_snaplen = (unsigned)len;
+    ppd->tp_len = (unsigned)len;
+    ppd->tp_next_offset = (unsigned)TPACKET_ALIGN(ppd->tp_mac + len);
+    memcpy(at + ppd->tp_mac, frame, len);
+    at += ppd->tp_next_offset;
+  }
+  bd->hdr.bh1.block_status = TP_STATUS_USER;
+  cap = capture_from_ring(ring, RING_BLOCK_SIZE, 1, ranges, 2);
+  ck_assert_ptr_nonnull(cap);
+  capture_drain_ring(cap, ring_cb, &seen);
+  ck_assert_int_eq(seen.n, 1);
+  ck_assert_uint_eq(seen.ports[0], 8002u);
   capture_close(cap);
 }
 END_TEST
@@ -812,6 +925,81 @@ START_TEST(capture_run_returns_once_stop_is_requested) {
 }
 END_TEST
 
+START_TEST(capture_run_reports_poll_failure) {
+  unsigned char ring[RING_BLOCK_SIZE];
+  struct rlimit old, rl;
+  capture_t *cap = capture_from_ring(ring, RING_BLOCK_SIZE, 1, NULL, 0);
+
+  ck_assert_ptr_nonnull(cap);
+  ck_assert_int_eq(getrlimit(RLIMIT_NOFILE, &old), 0);
+  rl = old;
+  rl.rlim_cur = 0;
+  ck_assert_int_eq(setrlimit(RLIMIT_NOFILE, &rl), 0); /* poll(): EINVAL when nfds > limit */
+  ck_assert_int_eq(capture_run(cap, NULL, NULL), -1);
+  ck_assert_int_eq(setrlimit(RLIMIT_NOFILE, &old), 0); /* LSan needs /proc at exit */
+  capture_close(cap);
+}
+END_TEST
+
+START_TEST(capture_run_fails_on_socket_error) {
+  unsigned char ring[RING_BLOCK_SIZE];
+  struct sockaddr_in sa;
+  socklen_t sl = sizeof sa;
+  capture_t *cap = capture_from_ring(ring, RING_BLOCK_SIZE, 1, NULL, 0);
+  int s;
+
+  ck_assert_ptr_nonnull(cap);
+  s = socket(AF_INET, SOCK_DGRAM, 0);
+  ck_assert_int_ge(s, 0);
+  memset(&sa, 0, sizeof sa);
+  sa.sin_family = AF_INET;
+  sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ck_assert_int_eq(bind(s, (struct sockaddr *)&sa, sizeof sa), 0);
+  ck_assert_int_eq(getsockname(s, (struct sockaddr *)&sa, &sl), 0);
+  close(s);
+  s = socket(AF_INET, SOCK_DGRAM, 0);
+  ck_assert_int_eq(connect(s, (struct sockaddr *)&sa, sizeof sa), 0);
+  ck_assert_int_eq(send(s, "x", 1, 0), 1);
+  usleep(50000); /* let ICMP unreachable land */
+  capture_set_fd(cap, s);
+  ck_assert_int_eq(capture_run(cap, NULL, NULL), -1);
+  ck_assert_int_eq(errno, ECONNREFUSED);
+  capture_close(cap);
+}
+END_TEST
+
+START_TEST(capture_run_fails_on_hangup) {
+  unsigned char ring[RING_BLOCK_SIZE];
+  int p[2];
+  capture_t *cap = capture_from_ring(ring, RING_BLOCK_SIZE, 1, NULL, 0);
+
+  ck_assert_ptr_nonnull(cap);
+  ck_assert_int_eq(pipe(p), 0);
+  close(p[1]);
+  capture_set_fd(cap, p[0]);
+  ck_assert_int_eq(capture_run(cap, NULL, NULL), -1);
+  ck_assert_int_ne(errno, 0);
+  capture_close(cap);
+}
+END_TEST
+
+START_TEST(capture_run_fails_on_invalid_fd) {
+  unsigned char ring[RING_BLOCK_SIZE];
+  int p[2];
+  capture_t *cap = capture_from_ring(ring, RING_BLOCK_SIZE, 1, NULL, 0);
+
+  ck_assert_ptr_nonnull(cap);
+  ck_assert_int_eq(pipe(p), 0);
+  close(p[1]);
+  close(p[0]);
+  capture_set_fd(cap, p[0]);
+  ck_assert_int_eq(capture_run(cap, NULL, NULL), -1);
+  ck_assert_int_eq(errno, EBADF);
+  capture_set_fd(cap, -1);
+  capture_close(cap);
+}
+END_TEST
+
 static Suite *capture_suite(void) {
   Suite *s = suite_create("capture");
   TCase *tc = tcase_create("core");
@@ -820,6 +1008,9 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, capture_ipv6_payload_len_excludes_ethernet_padding);
   tcase_add_test(tc, capture_ipv4_udp_length_below_header_rejected);
   tcase_add_test(tc, capture_ipv4_vlan_tagged_accepted);
+  tcase_add_test(tc, capture_rtp_padding_excluded_from_payload);
+  tcase_add_test(tc, capture_ipv4_fragments_rejected);
+  tcase_add_test(tc, capture_ipv6_fragments_rejected);
   tcase_add_test(tc, capture_ipv6_hopbyhop_accepted);
   tcase_add_test(tc, capture_ipv4_dscp_extracted);
   tcase_add_test(tc, capture_ipv4_dscp_masks_ecn_bits);
@@ -830,6 +1021,7 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, bpf_accepts_in_range_v4_v6_rejects_others);
   tcase_add_test(tc, bpf_instruction_count_stays_within_kernel_limit);
   tcase_add_test(tc, ring_drain_delivers_in_range_frames_and_returns_the_block);
+  tcase_add_test(tc, ring_drain_skips_outgoing_frames);
   tcase_add_test(tc, ring_drain_follows_the_blocks_round_robin_and_stops_at_a_kernel_block);
   tcase_add_test(tc, ring_drain_with_an_empty_released_block_just_returns_it);
   tcase_add_test(tc, ring_capture_without_ranges_is_constructible);
@@ -841,6 +1033,10 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, capture_open_reports_why_an_interface_cannot_be_used);
   tcase_add_test(tc, capture_open_on_an_ethernet_interface_succeeds_or_explains);
   tcase_add_test(tc, capture_run_returns_once_stop_is_requested);
+  tcase_add_test(tc, capture_run_reports_poll_failure);
+  tcase_add_test(tc, capture_run_fails_on_socket_error);
+  tcase_add_test(tc, capture_run_fails_on_hangup);
+  tcase_add_test(tc, capture_run_fails_on_invalid_fd);
   suite_add_tcase(s, tc);
   return s;
 }

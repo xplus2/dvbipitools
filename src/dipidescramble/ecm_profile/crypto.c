@@ -118,7 +118,8 @@ int ecm_profile_decrypt_cw(const ecm_profile_t *p, int cw_len, const unsigned ch
   size_t assoc_len = 0;
   size_t off;
   int rc;
-  if (ecm_profile_layout(p, cw_len, &lay) != 0 || lay.wire_len != wire_len || lay.plaintext_len > sizeof plaintext)
+  if (ecm_profile_layout(p, cw_len, &lay) != 0 || lay.wire_len != wire_len || lay.plaintext_len > sizeof plaintext ||
+      lay.ciphertext_len > sizeof plaintext)
     return -1;
   if (locate_wire_components(p, &lay, wire, wire_len, &iv_ptr, &ct_ptr, &gcm_tag_ptr, &itag_ptr) != 0)
     return -1;

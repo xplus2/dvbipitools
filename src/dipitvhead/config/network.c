@@ -78,7 +78,7 @@ int tvh_apply_cname(void *c, const char *v, char *e, size_t n) {
 }
 
 int tvh_apply_buffer(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_uint(&((config_t *)c)->rist_buffer_ms, v, 1, UINT_MAX, e, n);
+  return yamlcfg_set_uint(&((config_t *)c)->rist_buffer_ms, v, 1, 60000, e, n);
 }
 
 int tvh_apply_srt_group_mode(void *c, const char *v, char *e, size_t n) {

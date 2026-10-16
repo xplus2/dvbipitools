@@ -8,12 +8,12 @@
 
 void cam378_print_help(void) {
   printf(
-    "usage: %s -k <keyfile> [options]\n\n"
+    "usage: %s -k <keyfile> -s <serial> [options]\n\n"
     "cs378x (camd35/TCP) key server: holds a device's RSA private key, answers\n"
     "oscam's ECM/EMM with a control word - a software smartcard, nothing more.\n\n"
     "options:\n"
     "  -k, --key <path>           RSA private key, PEM (required)\n"
-    "  -s, --serial <id>          device's serial, matched against EMM-U\n"
+    "  -s, --serial <id>          device's serial, matched against EMM-U (required)\n"
     "  -b, --bind <addr>          listen address, (default: %s)\n"
     "  -p, --port <n>             cs378x TCP listen port (default: %u)\n"
     "  -a, --auth [user:]<pass>   password must match the reader's \"password =\"\n"

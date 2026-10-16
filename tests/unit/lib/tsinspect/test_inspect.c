@@ -376,6 +376,69 @@ START_TEST(pmt_late_repetition_counted) {
 }
 END_TEST
 
+START_TEST(pmt_repetition_ignores_other_programs_once_locked) {
+  tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  psi_t *psi = psi_new();
+  unsigned char sec[128];
+  unsigned char pkt[188];
+  size_t len = build_pat(sec, 0, 1, 0x100);
+
+  sec[len - 4] = 0;
+  sec[len - 3] = 2;
+  sec[len - 2] = 0xE2;
+  sec[len - 1] = 0x00;
+  len = seal(sec, len - 7 + 4);
+  tsinspect_bind_psi(t, psi);
+  tsinspect_tick(t, 1.0);
+  section_pkt(pkt, 0, sec, len);
+  feed_psi(t, psi, pkt);
+  len = build_pmt(sec, 0, 1, 0x101, 0x101);
+  for (int i = 0; i < 10; i++) {
+    section_pkt(pkt, 0x100, sec, len);
+    feed_psi(t, psi, pkt);
+    tsinspect_tick(t, 1.2 + i * 0.2);
+  }
+  ck_assert_uint_eq(tsinspect_counters(t)->pmt_errors, 0u);
+  psi_free(psi);
+  tsinspect_free(t);
+}
+END_TEST
+
+START_TEST(pcr_pid_change_resets_pcr_state) {
+  tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
+  psi_t *psi = psi_new();
+  unsigned char sec[128];
+  unsigned char pkt[188];
+  size_t len;
+
+  tsinspect_bind_psi(t, psi);
+  tsinspect_tick(t, 1.0);
+  len = build_pat(sec, 0, 1, 0x100);
+  section_pkt(pkt, 0, sec, len);
+  feed_psi(t, psi, pkt);
+  len = build_pmt(sec, 0, 1, 0x101, 0x101);
+  section_pkt(pkt, 0x100, sec, len);
+  feed_psi(t, psi, pkt);
+  tsinspect_tick(t, 1.1);
+  for (unsigned i = 0; i < 3; i++) {
+    pcr_pkt(pkt, 0x101, i, 27000000ULL + i * 1080000ULL, 0);
+    tsinspect_packet(t, pkt);
+  }
+  len = build_pmt(sec, 1, 1, 0x102, 0x101);
+  section_pkt(pkt, 0x100, sec, len);
+  feed_psi(t, psi, pkt);
+  tsinspect_tick(t, 1.2);
+  for (unsigned i = 0; i < 3; i++) {
+    pcr_pkt(pkt, 0x102, i, 5000000000ULL + i * 1080000ULL, 0);
+    tsinspect_packet(t, pkt);
+  }
+  ck_assert_uint_eq(tsinspect_counters(t)->pcr_discontinuity_errors, 0u);
+  ck_assert_uint_eq(tsinspect_counters(t)->pcr_repetition_errors, 0u);
+  psi_free(psi);
+  tsinspect_free(t);
+}
+END_TEST
+
 START_TEST(referenced_pid_missing_after_five_windows) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   psi_t *psi = psi_new();
@@ -429,19 +492,23 @@ START_TEST(pcr_repetition_and_discontinuity_checks) {
 
   pcr_pkt(pkt, 0x101, 0, 27000000ULL, 0);
   tsinspect_packet(t, pkt);
-  pcr_pkt(pkt, 0x101, 1, 27000000ULL + 1350000ULL, 0);
+  pcr_pkt(pkt, 0x101, 1, 27000000ULL + 1080000ULL, 0);
   tsinspect_packet(t, pkt);
   ck_assert_uint_eq(c->pcr_repetition_errors, 0u);
   ck_assert_uint_eq(c->pcr_discontinuity_errors, 0u);
-  pcr_pkt(pkt, 0x101, 2, 27000000ULL + 1350000ULL + 5400000ULL, 0);
+  pcr_pkt(pkt, 0x101, 2, 27000000ULL + 1080000ULL + 1350000ULL, 0);
   tsinspect_packet(t, pkt);
   ck_assert_uint_eq(c->pcr_repetition_errors, 1u);
+  ck_assert_uint_eq(c->pcr_discontinuity_errors, 0u);
+  pcr_pkt(pkt, 0x101, 3, 27000000ULL + 1080000ULL + 1350000ULL + 5400000ULL, 0);
+  tsinspect_packet(t, pkt);
+  ck_assert_uint_eq(c->pcr_repetition_errors, 2u);
   ck_assert_uint_eq(c->pcr_discontinuity_errors, 1u);
-  pcr_pkt(pkt, 0x101, 3, 1000, 0);
+  pcr_pkt(pkt, 0x101, 4, 1000, 0);
   tsinspect_packet(t, pkt);
   ck_assert_uint_eq(c->pcr_discontinuity_errors, 2u);
-  ck_assert_uint_eq(c->pcr_repetition_errors, 1u);
-  pcr_pkt(pkt, 0x101, 4, 90000000ULL, 1);
+  ck_assert_uint_eq(c->pcr_repetition_errors, 2u);
+  pcr_pkt(pkt, 0x101, 5, 90000000ULL, 1);
   tsinspect_packet(t, pkt);
   ck_assert_uint_eq(c->pcr_discontinuity_errors, 2u);
   ck_assert(tsinspect_pcr_max_interval(t) >= 0.19);
@@ -628,6 +695,10 @@ START_TEST(tdt_missing_and_wrong_table_id) {
   section_pkt(pkt, 0x14, sec, len);
   tsinspect_packet(t, pkt);
   ck_assert_uint_eq(tsinspect_counters(t)->tdt_errors, 2u);
+  len = build_si(sec, 0x72, 0, 0, 0);
+  section_pkt(pkt, 0x14, sec, len);
+  tsinspect_packet(t, pkt);
+  ck_assert_uint_eq(tsinspect_counters(t)->tdt_errors, 2u);
   tsinspect_free(t);
 }
 END_TEST
@@ -642,6 +713,10 @@ START_TEST(rst_wrong_table_id_counted) {
   tsinspect_packet(t, pkt);
   ck_assert_uint_eq(tsinspect_counters(t)->rst_errors, 0u);
   len = build_si(sec, 0x42, 0, 0, 0);
+  section_pkt(pkt, 0x13, sec, len);
+  tsinspect_packet(t, pkt);
+  ck_assert_uint_eq(tsinspect_counters(t)->rst_errors, 1u);
+  len = build_si(sec, 0x72, 0, 0, 0);
   section_pkt(pkt, 0x13, sec, len);
   tsinspect_packet(t, pkt);
   ck_assert_uint_eq(tsinspect_counters(t)->rst_errors, 1u);
@@ -1008,7 +1083,7 @@ START_TEST(pcr_jitter_from_arrival_timestamps) {
   }
   ck_assert_uint_ge(jitter, 2900u);
   ck_assert_uint_le(jitter, 3100u);
-  ck_assert_uint_eq(tsinspect_counters(t)->pcr_accuracy_errors, 1u);
+  ck_assert_uint_eq(tsinspect_counters(t)->pcr_accuracy_errors, 0u);
   psi_free(psi);
   tsinspect_free(t);
 }
@@ -1026,7 +1101,7 @@ START_TEST(relay_detects_pcr_without_psi_and_skips_si) {
   pcr_pkt(buf, 0x101, 0, 27000000ULL, 0);
   section_pkt(buf + 188, 0x13, sec, len);
   tsinspect_grid(t, buf, 188 * 2);
-  tsinspect_set_rx_ns(t, 1000000000ULL + 40000000ULL + 3000000ULL);
+  tsinspect_set_rx_ns(t, 1000000000ULL + 40000000ULL + 8000000ULL);
   pcr_pkt(buf, 0x101, 0, 27000000ULL + 1080000ULL, 0);
   tsinspect_grid(t, buf, 188);
   pcr_pkt(buf, 0x101, 0, 27000000ULL + 1080000ULL + 5400000ULL, 0);
@@ -1824,6 +1899,8 @@ static Suite *inspect_suite(void) {
   tcase_add_test(tc, pat_missing_counts_once_until_it_arrives);
   tcase_add_test(tc, pat_crc_error_and_version_changes_counted);
   tcase_add_test(tc, pmt_late_repetition_counted);
+  tcase_add_test(tc, pmt_repetition_ignores_other_programs_once_locked);
+  tcase_add_test(tc, pcr_pid_change_resets_pcr_state);
   tcase_add_test(tc, referenced_pid_missing_after_five_windows);
   tcase_add_test(tc, pcr_repetition_and_discontinuity_checks);
   tcase_add_test(tc, cat_missing_with_scrambled_packets);

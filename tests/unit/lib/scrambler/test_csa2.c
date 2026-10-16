@@ -230,13 +230,13 @@ START_TEST(csa2_batch_matches_single_packet_api_mixed_lengths) {
     }
     for (i = 0; i < n; i++)
       csa2_encrypt_block(k, single[i], lens[i]);
-    csa2_encrypt_batch(k, entries, n);
+    ck_assert_int_eq(csa2_encrypt_batch(k, entries, n), 0);
     for (i = 0; i < n; i++)
       ck_assert_mem_eq(single[i], batch_bufs[i], lens[i]);
 
     for (i = 0; i < n; i++)
       csa2_decrypt_block(k, single[i], lens[i]);
-    csa2_decrypt_batch(k, entries, n);
+    ck_assert_int_eq(csa2_decrypt_batch(k, entries, n), 0);
     for (i = 0; i < n; i++)
       ck_assert_mem_eq(single[i], batch_bufs[i], lens[i]);
   }
@@ -533,6 +533,29 @@ START_TEST(csa2_af_only_packet_is_never_scrambled_and_is_cleared_on_decrypt) {
 }
 END_TEST
 
+START_TEST(csa2_afc_reserved_and_af_only_have_no_payload_regardless_of_af_len) {
+  unsigned char pkt[188];
+  unsigned char orig[188];
+  scrambler_t *s = keyed_csa2();
+
+  for (unsigned afc = 0; afc <= 2; afc += 2) {
+    make_pkt(pkt, 0, afc, 10);
+    memcpy(orig, pkt, 188);
+    ck_assert_int_eq(scrambler_encrypt_packet(s, pkt, SCRAMBLE_PARITY_EVEN), 0);
+    ck_assert_mem_eq(pkt, orig, 188);
+    ck_assert_int_eq(scrambler_encrypt_packet_queued(s, pkt, SCRAMBLE_PARITY_EVEN, capture_emit, NULL), 0);
+    ck_assert_mem_eq(pkt, orig, 188);
+
+    make_pkt(pkt, 2, afc, 10);
+    memcpy(orig, pkt, 188);
+    ck_assert_int_eq(scrambler_decrypt_packet(s, pkt), 0);
+    ck_assert_uint_eq((pkt[3] >> 6) & 3u, 0u);
+    ck_assert_mem_eq(pkt + 4, orig + 4, 184);
+  }
+  scrambler_free(s);
+}
+END_TEST
+
 START_TEST(csa2_decrypt_rejects_reserved_control_and_null_scrambler) {
   unsigned char pkt[188];
   scrambler_t *s = keyed_csa2();
@@ -622,6 +645,7 @@ static Suite *csa2_suite(void) {
   tcase_add_test(tc, scrambler_encrypt_queued_survives_flush_at_queue_capacity);
   tcase_add_test(tc, scrambler_passthrough_queued_preserves_order);
   tcase_add_test(tc, csa2_af_only_packet_is_never_scrambled_and_is_cleared_on_decrypt);
+  tcase_add_test(tc, csa2_afc_reserved_and_af_only_have_no_payload_regardless_of_af_len);
   tcase_add_test(tc, csa2_decrypt_rejects_reserved_control_and_null_scrambler);
   tcase_add_test(tc, csa2_queued_af_only_packets_keep_their_position_in_the_batch);
   tcase_add_test(tc, csa2_queued_decrypt_af_only_with_scrambling_bits_and_unscrambled_packets);

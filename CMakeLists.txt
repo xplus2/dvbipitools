@@ -82,6 +82,19 @@ if (DVBIPITOOLS_RIST)
         pkg_check_modules(RIST IMPORTED_TARGET librist)
         if (RIST_FOUND)
             set(DVBIPITOOLS_HAVE_RIST TRUE)
+            include(CheckCSourceCompiles)
+            set(CMAKE_REQUIRED_INCLUDES ${RIST_INCLUDE_DIRS})
+            check_c_source_compiles("
+#include <librist/librist.h>
+int main(void) {
+    struct rist_stats_receiver_flow f;
+    return (int) f.avg_buffer_time;
+}
+" DVBIPITOOLS_RIST_HAVE_AVG_BUFFER_TIME)
+            unset(CMAKE_REQUIRED_INCLUDES)
+            if (DVBIPITOOLS_RIST_HAVE_AVG_BUFFER_TIME)
+                set_property(TARGET PkgConfig::RIST APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS DVBIPITOOLS_RIST_HAVE_AVG_BUFFER_TIME)
+            endif ()
             set(DVBIPITOOLS_RIST_IPV6_WARN FALSE)
             if (RIST_VERSION AND RIST_VERSION VERSION_LESS_EQUAL "0.2.20")
                 set(DVBIPITOOLS_RIST_IPV6_WARN TRUE)

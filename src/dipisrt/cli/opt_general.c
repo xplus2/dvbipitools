@@ -47,6 +47,9 @@ args_status_t srt_opt_general(srt_opt_t *p, int c) {
     case 'k':
       cfg->insecure_tls = 1;
       break;
+    case OPT_PACE:
+      cfg->pace = 1;
+      break;
     case OPT_COLOR: {
       log_color_t v;
       if (log_color_from_string(optarg, &v)) {

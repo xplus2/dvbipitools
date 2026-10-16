@@ -519,7 +519,7 @@ END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipirec_cfg_XXXXXX";
-  char *argv[] = {"dipirec", "-c", path, NULL};
+  char *argv[] = {"dipirec", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "in: udp://@239.1.1.1:5000\nout: a.ts\nttl: 300\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);

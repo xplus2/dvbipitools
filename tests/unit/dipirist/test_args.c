@@ -191,7 +191,7 @@ START_TEST(secret_with_profile_main_is_accepted) {
 END_TEST
 
 START_TEST(encryption_type_with_profile_main_is_accepted) {
-  char *argv[] = {"dipirist", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--profile", "main", "--encryption-type", "256", NULL};
+  char *argv[] = {"dipirist", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--profile", "main", "--secret", "s3cret", "--encryption-type", "256", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.key_size, 256);
@@ -210,7 +210,7 @@ END_TEST
 START_TEST(encryption_type_invalid_is_rejected) {
   static char bad[][4] = {"0", "192", "abc", ""};
   for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
-    char *argv[] = {"dipirist", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--profile", "main", "--encryption-type", bad[i], NULL};
+    char *argv[] = {"dipirist", "-i", "rtp://@239.1.1.1:5000", "-o", "rist://1.2.3.4:6000", "--profile", "main", "--secret", "s3cret", "--encryption-type", bad[i], NULL};
     config_t cfg = {0};
     ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
     yamlcfg_strpool_free(cfg.str_pool);
@@ -279,7 +279,7 @@ START_TEST(config_file_provides_encryption_type) {
   char path[] = "/tmp/dipirist_cfg_XXXXXX";
   char *argv[] = {"dipirist", "-c", path, NULL};
   config_t cfg = {0};
-  write_cfg(path, "in: rtp://@239.1.1.1:5000\nout: rist://1.2.3.4:6000\nprofile: main\nencryption-type: 128\n");
+  write_cfg(path, "in: rtp://@239.1.1.1:5000\nout: rist://1.2.3.4:6000\nprofile: main\nsecret: s3cret\nencryption-type: 128\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   unlink(path);
   ck_assert_int_eq(cfg.key_size, 128);
@@ -327,7 +327,7 @@ END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipirist_cfg_XXXXXX";
-  char *argv[] = {"dipirist", "-c", path, NULL};
+  char *argv[] = {"dipirist", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "in: rtp://@239.1.1.1:5000\nout: rist://1.2.3.4:6000\nbuffer: 0\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
@@ -350,7 +350,7 @@ START_TEST(configtest_reports_by_exit_status) {
 END_TEST
 START_TEST(config_scalar_key_rejects_list) {
   char path[] = "/tmp/dipirist_cfg_XXXXXX";
-  char *argv[] = {"dipirist", "-c", path, NULL};
+  char *argv[] = {"dipirist", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "in: rtp://@239.1.1.1:5000\nout: rist://1.2.3.4:6000\nbuffer: [1, 2]\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
@@ -426,8 +426,8 @@ static const option_case_t option_cases[] = {
   OPT(profile, CFG_INT, RIST_PROF_MAIN, NULL, SEND_BASE, "--profile", "main"),
   OPT(profile, CFG_INT, RIST_PROF_SIMPLE, NULL, SEND_BASE, "--profile", "simple"),
   OPT(secret, CFG_CHARARR, 0, "s3cret", SEND_BASE, "--profile", "main", "--secret", "s3cret"),
-  OPT(key_size, CFG_INT, 256, NULL, SEND_BASE, "--profile", "main", "--encryption-type", "256"),
-  OPT(key_size, CFG_INT, 128, NULL, SEND_BASE, "--profile", "main", "--encryption-type", "128"),
+  OPT(key_size, CFG_INT, 256, NULL, SEND_BASE, "--profile", "main", "--secret", "s3cret", "--encryption-type", "256"),
+  OPT(key_size, CFG_INT, 128, NULL, SEND_BASE, "--profile", "main", "--secret", "s3cret", "--encryption-type", "128"),
   OPT(cname, CFG_CHARARR, 0, "cam1", SEND_BASE, "--cname", "cam1"),
   OPT(buffer_ms, CFG_UINT, 750, NULL, SEND_BASE, "--buffer", "750"),
   OPT(buffer_ms, CFG_UINT, 60000, NULL, SEND_BASE, "--buffer", "60000"),
@@ -436,6 +436,10 @@ static const option_case_t option_cases[] = {
   OPT(al_fec_port, CFG_UINT, 6004, NULL, SEND_BASE, "--al-fec", "10:5", "--al-fec-port", "6004"),
   OPT(iface, CFG_STRPTR, 0, "eth7", SEND_BASE, "-I", "eth7"),
   OPT(insecure_tls, CFG_INT, 1, NULL, "-i", "https://example.org/live.ts", "-o", "rist://1.2.3.4:6000", "-k"),
+  OPT(pace, CFG_INT, 1, NULL, "-i", "/tmp/in.ts", "-o", "rist://1.2.3.4:6000", "--pace"),
+  OPT(out_ttl, CFG_INT, 16, NULL, RECV_BASE, "--ttl", "16"),
+  OPT(out_tos, CFG_INT, 0x22 << 2, NULL, RECV_BASE, "--dscp", "video-high"),
+  OPT(out_tos, CFG_INT, 10 << 2, NULL, RECV_BASE, "--dscp", "10"),
   OPT(color_mode, CFG_INT, LOG_COLOR_NEVER, NULL, SEND_BASE, "--color", "never"),
   OPT(metrics_sock, CFG_STRPTR, 0, "/tmp/m.sock", SEND_BASE, "--metrics", "/tmp/m.sock", "--metrics-id", "r1"),
   OPT(metrics_id, CFG_STRPTR, 0, "r1", SEND_BASE, "--metrics-id", "r1"),
@@ -480,6 +484,9 @@ static const message_case_t message_cases[] = {
   MSG(ARGS_ERR, "invalid --buffer: 60001 (1..60000 ms)", SEND_BASE, "--buffer", "60001"),
   MSG(ARGS_ERR, "invalid --al-fec: 41:1", SEND_BASE, "--al-fec", "41:1"),
   MSG(ARGS_ERR, "invalid --al-fec-port: 0", SEND_BASE, "--al-fec-port", "0"),
+  MSG(ARGS_ERR, "invalid --ttl: 256 (0..255)", RECV_BASE, "--ttl", "256"),
+  MSG(ARGS_ERR, "invalid --dscp: loud", RECV_BASE, "--dscp", "loud"),
+  MSG(ARGS_OK, "--ttl/--dscp need -o rtp:// or udp:// target", SEND_BASE, "--ttl", "4"),
   MSG(ARGS_ERR, "invalid --color: rainbow", SEND_BASE, "--color", "rainbow"),
   MSG(ARGS_ERR, "invalid --metrics-interval: 0", SEND_BASE, "--metrics-id", "m", "--metrics-interval", "0"),
   MSG(ARGS_ERR, "invalid --metrics-inspect-ts: loud", SEND_BASE, "--metrics-id", "m", "--metrics-inspect-ts", "loud"),
@@ -494,6 +501,8 @@ static const message_case_t message_cases[] = {
   MSG(ARGS_ERR, "exactly one of -i/-o must be rist://", "-i", "udp://@239.1.2.3:5000", "-o", "out.ts"),
   MSG(ARGS_ERR, "--secret requires --profile main", SEND_BASE, "--secret", "s3cret"),
   MSG(ARGS_ERR, "--encryption-type requires --profile main", SEND_BASE, "--encryption-type", "128"),
+  MSG(ARGS_ERR, "--encryption-type requires --secret", SEND_BASE, "--profile", "main", "--encryption-type", "128"),
+  MSG(ARGS_ERR, "--insecure needs -i https://", SEND_BASE, "-k"),
   MSG(ARGS_ERR, "--metrics/--metrics-interval require --metrics-id", SEND_BASE, "--metrics", "/tmp/m.sock"),
   MSG(ARGS_ERR, "--metrics-inspect-ts requires --metrics-id", SEND_BASE, "--metrics-inspect-ts", "basic"),
   MSG(ARGS_ERR, "--al-fec requires --al-fec-port", SEND_BASE, "--al-fec", "10:5"),
@@ -501,7 +510,7 @@ static const message_case_t message_cases[] = {
   MSG(ARGS_ERR, "", SEND_BASE, "--no-such-option"),
   MSG(ARGS_OK, "--al-fec-port has no effect without --al-fec", SEND_BASE, "--al-fec-port", "6004"),
   MSG(ARGS_OK, "--al-fec has no effect, non-rist:// side isn't rtp://", SEND_BASE, "--al-fec", "10:5", "--al-fec-port", "6004"),
-  MSG(ARGS_OK, "--insecure needs -i https://", SEND_BASE, "-k"),
+  MSG(ARGS_OK, "--pace requires -i - or a file path", SEND_BASE, "--pace"),
 };
 
 START_TEST(argument_messages_and_status) {
@@ -555,7 +564,7 @@ START_TEST(single_endpoint_parsing) {
   const endpoint_case_t *c = &endpoint_cases[_i];
   config_t cfg = {0};
 
-  ck_assert_int_eq(rist_cfg_add_endpoint(&cfg, c->is_out, c->uri), c->ret);
+  ck_assert_int_eq(dipirist_cfg_add_endpoint(&cfg, c->is_out, c->uri), c->ret);
   ck_assert_int_eq(c->is_out ? cfg.n_out : cfg.n_in, c->ret ? 0 : 1);
 }
 END_TEST
@@ -566,21 +575,21 @@ START_TEST(endpoint_limits_and_mixing) {
 
   for (int i = 0; i < DIPIRIST_MAX_PEERS; i++) {
     snprintf(uri, sizeof uri, "rist://1.2.3.%d:6000", i + 1);
-    ck_assert_int_eq(rist_cfg_add_endpoint(&cfg, 1, uri), 0);
+    ck_assert_int_eq(dipirist_cfg_add_endpoint(&cfg, 1, uri), 0);
   }
-  ck_assert_int_eq(rist_cfg_add_endpoint(&cfg, 1, "rist://1.2.3.99:6000"), -1);
+  ck_assert_int_eq(dipirist_cfg_add_endpoint(&cfg, 1, "rist://1.2.3.99:6000"), -1);
   ck_assert_int_eq(cfg.out.n_rist, DIPIRIST_MAX_PEERS);
   memset(&cfg, 0, sizeof cfg);
-  ck_assert_int_eq(rist_cfg_add_endpoint(&cfg, 1, "rist://1.2.3.4:6000"), 0);
-  ck_assert_int_eq(rist_cfg_add_endpoint(&cfg, 1, "udp://239.1.2.3:5000"), -1);
+  ck_assert_int_eq(dipirist_cfg_add_endpoint(&cfg, 1, "rist://1.2.3.4:6000"), 0);
+  ck_assert_int_eq(dipirist_cfg_add_endpoint(&cfg, 1, "udp://239.1.2.3:5000"), -1);
   memset(&cfg, 0, sizeof cfg);
-  ck_assert_int_eq(rist_cfg_add_endpoint(&cfg, 1, "udp://239.1.2.3:5000"), 0);
-  ck_assert_int_eq(rist_cfg_add_endpoint(&cfg, 1, "udp://239.1.2.4:5000"), -1);
+  ck_assert_int_eq(dipirist_cfg_add_endpoint(&cfg, 1, "udp://239.1.2.3:5000"), 0);
+  ck_assert_int_eq(dipirist_cfg_add_endpoint(&cfg, 1, "udp://239.1.2.4:5000"), -1);
   memset(&cfg, 0, sizeof cfg);
   memset(uri, 'a', sizeof uri - 1);
   memcpy(uri, "rist://1.2.3.4:", 15);
   uri[sizeof uri - 1] = '\0';
-  ck_assert_int_eq(rist_cfg_add_endpoint(&cfg, 1, uri), -1);
+  ck_assert_int_eq(dipirist_cfg_add_endpoint(&cfg, 1, uri), -1);
 }
 END_TEST
 
@@ -608,7 +617,7 @@ START_TEST(endpoint_describe_formats) {
   char buf[256];
   const endpoint_t *e = c->is_out ? &cfg.out : &cfg.in;
 
-  for (int i = 0; i < c->n; i++) ck_assert_int_eq(rist_cfg_add_endpoint(&cfg, c->is_out, c->uris[i]), 0);
+  for (int i = 0; i < c->n; i++) ck_assert_int_eq(dipirist_cfg_add_endpoint(&cfg, c->is_out, c->uris[i]), 0);
   endpoint_describe(e, buf, sizeof buf);
   ck_assert_str_eq(buf, c->want);
 }

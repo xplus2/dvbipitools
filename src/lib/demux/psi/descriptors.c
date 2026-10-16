@@ -286,7 +286,7 @@ void link_lcevc(psi_es_t *es, int count) {
     if (1 + cnt > ll) continue;
     for (unsigned t = 0; t < cnt && ve->lcevc_pid_count < PSI_LCEVC_MAX_LINKS; t++) {
       unsigned tag = link[1 + t];
-      for (int x = 0; x < count; x++) {
+      for (int x = 0; x < count && ve->lcevc_pid_count < PSI_LCEVC_MAX_LINKS; x++) {
         psi_es_t *ee = &es[x];
         size_t vl;
         const unsigned char *own;

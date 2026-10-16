@@ -6,6 +6,7 @@
 
 #include "lib/cas/cas_args.h"
 #include "lib/helper/log.h"
+#include "lib/scrambler/cissa.h"
 
 #include "priv.h"
 #include "../mux/pmtbuild.h"
@@ -80,15 +81,22 @@ int tvh_cfg_check(const config_t *cfg, int partial, tvh_report_fn rep, void *ud)
     if (in->srt_pbkeylen_in && !inlen) FATAL("TS000340", "--srt-pbkeylen-in requires --srt-passphrase-in");
     if (in->input.kind != SRC_SRT && (inlen || in->srt_pbkeylen_in || in->srt_streamid_in[0] || in->srt_packetfilter_in[0] || in->srt_latency_in_ms))
       NOTE("TA000595", "--srt-*-in has no effect, that -i isn't srt://");
-    if (in->rist_key_size_in && in->input.kind != SRC_RIST) NOTE("TA000596", "--rist-encryption-type-in has no effect, that -i isn't rist://");
+    if ((in->rist_key_size_in || in->rist_secret_in[0] || in->rist_cname_in[0] || in->rist_buffer_ms_in) && in->input.kind != SRC_RIST)
+      NOTE("TA000596", "--rist-*-in has no effect, that -i isn't rist://");
     if (in->rist_key_size_in && in->input.kind == SRC_RIST && !in->rist_profile_main) FATAL("TS000542", "--rist-encryption-type-in requires --rist-profile-in main");
+    if (in->rist_secret_in[0] && in->input.kind == SRC_RIST && !in->rist_profile_main) FATAL("TS000725", "--rist-secret-in requires --rist-profile-in main");
     if (in->jitter_ms && in->input.kind != SRC_RTP && in->input.kind != SRC_UDP && in->input.kind != SRC_RIST && in->input.kind != SRC_SRT)
       NOTE("TA000597", "--jitter-ms has no effect, that -i isn't rtp/udp/rist/srt");
+    if (in->al_fec_l_in && !in->al_fec_port_in) FATAL("TS000729", "--al-fec-in requires --al-fec-port-in");
+    if (!in->al_fec_l_in && in->al_fec_port_in) NOTE("TA000731", "--al-fec-port-in has no effect without --al-fec-in");
+    if (in->al_fec_l_in && in->input.kind != SRC_RTP) NOTE("TA000730", "--al-fec-in has no effect, that -i isn't rtp://");
     if (in->hbbtv_url && (!in->hbbtv_org_id || !in->hbbtv_app_id)) FATAL("TS000598", "--hbbtv requires --hbbtv-org-id and --hbbtv-app-id");
     if ((in->hbbtv_org_id || in->hbbtv_app_id || in->hbbtv_name[0]) && !in->hbbtv_url) FATAL("TS000599", "--hbbtv-org-id/--hbbtv-app-id/--hbbtv-name need --hbbtv");
   }
   if (cfg->any_cas_flag && cfg->cas_algo == CAS_ALGO_NONE && !cfg->biss2_enabled && !cfg->biss1_enabled && !cfg->biss2_ca_enabled)
     FATAL("TS000600", "--cas-* options require --cas-algo (or --cas-pids alone under --biss2-sw/--biss1-sw/--biss2-ca-receivers)");
+  if ((cfg->cas_algo == CAS_ALGO_CISSA || cfg->biss2_enabled || cfg->biss2_ca_enabled) && !cissa_available())
+    FATAL("TS000726", "CISSA/BISS-2 needs a build with OpenSSL");
   if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
     cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms}) != 0)
     fatal++;

@@ -46,10 +46,12 @@ void flv_send_tag(flv_t *f, flv_tag_type_t type, uint32_t ts, const unsigned cha
 /* only known facts: duration=0, videocodecid=0 iff no video track */
 void flv_emit_metadata(flv_t *f) {
   ebuf_t b;
+  int vcid = !f->have_v || f->vtrk.es.codec == CODEC_H264;
+  int acid = f->have_a && (f->atrk.es.codec == CODEC_AAC || f->atrk.es.codec == CODEC_AAC_LATM);
 
   memset(&b, 0, sizeof b);
   amf_string(&b, "onMetaData");
-  amf_ecma_array_start(&b, f->have_v ? (f->have_a ? 3u : 2u) : (f->have_a ? 2u : 1u));
+  amf_ecma_array_start(&b, 1u + (unsigned)vcid + (unsigned)acid);
   amf_object_key(&b, "duration");
   amf_number(&b, 0.0);
   if (!f->have_v) {
@@ -59,7 +61,7 @@ void flv_emit_metadata(flv_t *f) {
     amf_object_key(&b, "videocodecid");
     amf_number(&b, FLV_CODECID_AVC);
   }
-  if (f->have_a && (f->atrk.es.codec == CODEC_AAC || f->atrk.es.codec == CODEC_AAC_LATM)) {
+  if (acid) {
     amf_object_key(&b, "audiocodecid");
     amf_number(&b, FLV_SOUNDFMT_AAC);
   }
@@ -143,8 +145,10 @@ void flv_emit_audio(flv_t *f, flv_track_t *t, const unsigned char *d, size_t n) 
   unsigned char hdr[5];
   size_t hn = 0;
   int64_t rel = t->ts_ms - f->t0;
-  uint32_t ts = rel > 0 ? (uint32_t)rel : 0;
+  uint32_t ts;
 
+  if (rel < 0) return; /* before first video DTS */
+  ts = (uint32_t)rel;
   if (!t->seqhdr_sent) audio_seqhdr(f, t);
   if (t->es.codec == CODEC_AAC || t->es.codec == CODEC_AAC_LATM) {
     hdr[hn++] = (unsigned char)((FLV_SOUNDFMT_AAC << 4) | 0x0F);

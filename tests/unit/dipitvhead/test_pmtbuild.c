@@ -557,6 +557,43 @@ START_TEST(pmtbuild_pmt_keeps_ca_passthrough_out_of_the_es_loop_and_in_program_i
 }
 END_TEST
 
+START_TEST(pmtbuild_pmt_writes_ac3_eac3_as_dvb_private_with_descriptor) {
+  psi_es_t es[3];
+  out_es_t out_es[4];
+  out_program_pids_t pids;
+  unsigned char sec[256];
+  unsigned pcr_pid;
+  int n, dropped, trunc;
+  size_t slen;
+
+  out_program_pids(0, &pids);
+  memset(es, 0, sizeof es);
+  es[0].pid = 0x0101;
+  es[0].cls = PID_VIDEO;
+  es[0].codec = CODEC_H264;
+  es[1].pid = 0x0102;
+  es[1].cls = PID_AUDIO;
+  es[1].codec = CODEC_AC3; /* ATSC source: no descriptor */
+  es[2].pid = 0x0103;
+  es[2].cls = PID_AUDIO;
+  es[2].codec = CODEC_EAC3;
+  es[2].desc[0] = 0x7A; /* DVB source: already has it */
+  es[2].desc[1] = 1;
+  es[2].desc[2] = 0x40;
+  es[2].desc_len = 3;
+
+  n = pmtbuild_map_es(es, 3, 0, 0x0101, pids.video_pid, pids.es_pid_base, out_es, 4, &pcr_pid, &dropped);
+  ck_assert_int_eq(n, 3);
+  ck_assert_uint_eq(out_es[1].stream_type, 0x06u);
+  ck_assert_uint_eq(out_es[2].stream_type, 0x06u);
+  slen = pmtbuild_pmt(0, 1, pcr_pid, NULL, 0, out_es, n, NULL, 0, sec, sizeof sec, &trunc);
+  ck_assert_uint_gt(slen, 0);
+  ck_assert_int_eq(trunc, 0);
+  ck_assert_ptr_nonnull(memmem(sec, slen, "\x06\xE1\x01\xF0\x03\x6A\x01\x00", 8));
+  ck_assert_ptr_nonnull(memmem(sec, slen, "\x06\xE1\x02\xF0\x03\x7A\x01\x40", 8));
+}
+END_TEST
+
 static Suite *pmtbuild_suite(void) {
   Suite *s = suite_create("pmtbuild");
   TCase *tc = tcase_create("core");
@@ -574,6 +611,7 @@ static Suite *pmtbuild_suite(void) {
   tcase_add_test(tc, pmtbuild_pmt_round_trips_av1_registration_descriptor);
   tcase_add_loop_test(tc, pmtbuild_add_ca_passthrough_assigns_pids_and_honours_the_cap, 0, (int)(sizeof ca_pass_cases / sizeof ca_pass_cases[0]));
   tcase_add_test(tc, pmtbuild_pmt_keeps_ca_passthrough_out_of_the_es_loop_and_in_program_info);
+  tcase_add_test(tc, pmtbuild_pmt_writes_ac3_eac3_as_dvb_private_with_descriptor);
   suite_add_tcase(s, tc);
   return s;
 }

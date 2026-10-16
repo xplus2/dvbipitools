@@ -8,6 +8,9 @@
 
 #define RETRYSET_MAX_SLOTS 32
 
+/* max seconds a slot may stay CONNECTING before dropped + rescheduled */
+#define RETRYSET_OPEN_TIMEOUT_S 30
+
 /* retry_deadline sentinel: never retry this slot (single-input, no -e given) */
 #define RETRYSET_NEVER ((time_t)-1)
 
@@ -46,7 +49,7 @@ short retryset_poll_events(const retryset_t *rs, unsigned idx);
 /* 1 if slot idx is down and will not be retried (RETRYSET_NEVER policy) */
 int retryset_given_up(const retryset_t *rs, unsigned idx);
 
-/* soonest retry deadline across down slots, RETRYSET_NEVER if none due */
+/* soonest retry or open-timeout deadline across down/connecting slots, RETRYSET_NEVER if none */
 time_t retryset_next_deadline(const retryset_t *rs);
 
 /* steps open if connecting, starts one if down and due. call after poll() or on a tick */
@@ -54,5 +57,8 @@ void retryset_service(retryset_t *rs, unsigned idx, time_t now);
 
 /* call on a hard read error for a connected slot: closes result, reschedules retry */
 void retryset_mark_down(retryset_t *rs, unsigned idx, time_t now);
+
+/* like mark_down, but reconnect due at once, regardless of retry policy */
+void retryset_reconnect_now(retryset_t *rs, unsigned idx, time_t now);
 
 #endif

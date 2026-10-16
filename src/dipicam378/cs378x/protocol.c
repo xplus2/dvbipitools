@@ -132,12 +132,13 @@ void handle_ecm(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], un
     send_ecm_response(s, fd, conn_ucrc, body, cw);
     return;
   }
-  atomic_fetch_add_explicit(&s->ecm_errors_total, 1, memory_order_relaxed);
   if (rc == -2) {
+    atomic_fetch_add_explicit(&s->ecm_rejected_total, 1, memory_order_relaxed);
     log_code("3W000131", TOOL_NAME ": caid %04X not supported, sending CMD08 for srvid=%04X", caid, srvid);
     send_cmd08(s, fd, conn_ucrc, body);
     return;
   }
+  atomic_fetch_add_explicit(&s->ecm_errors_total, 1, memory_order_relaxed);
   if (s->verbose)
     log_code("3D700103", TOOL_NAME ": no CW available yet, dropping request");
 }

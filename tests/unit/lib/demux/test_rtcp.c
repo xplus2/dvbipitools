@@ -460,6 +460,55 @@ START_TEST(nack_without_fci_entries_gives_no_callback) {
 }
 END_TEST
 
+START_TEST(nack_padding_is_not_parsed_as_fci) {
+  unsigned char body[8 + 4 + 8] = {0};
+  unsigned char pkt[4 + sizeof body];
+  size_t n;
+
+  wr16(body + 8, 0x1234);
+  body[sizeof body - 1] = 8;
+  n = build_hdr_pkt(pkt, 1, 205, body, sizeof body);
+  pkt[0] |= 0x20;
+
+  reset_counters();
+  rtcp_parse(pkt, n, &(rtcp_cbs_t){.nack_cb = nack_cb});
+  ck_assert_int_eq(g_nack_calls, 1);
+  ck_assert_uint_eq(g_nack.entry_count, 1u);
+  ck_assert_uint_eq(g_nack.entry[0].pid, 0x1234u);
+}
+END_TEST
+
+START_TEST(nack_padding_only_gives_no_callback) {
+  unsigned char body[8 + 8] = {0};
+  unsigned char pkt[4 + sizeof body];
+  size_t n;
+
+  body[sizeof body - 1] = 8;
+  n = build_hdr_pkt(pkt, 1, 205, body, sizeof body);
+  pkt[0] |= 0x20;
+
+  reset_counters();
+  rtcp_parse(pkt, n, &(rtcp_cbs_t){.nack_cb = nack_cb});
+  ck_assert_int_eq(g_nack_calls, 0);
+}
+END_TEST
+
+START_TEST(nack_bad_padding_count_drops_packet) {
+  unsigned char body[8 + 4] = {0};
+  unsigned char pkt[4 + sizeof body];
+  size_t n;
+
+  wr16(body + 8, 0x1234);
+  body[sizeof body - 1] = 0xFF;
+  n = build_hdr_pkt(pkt, 1, 205, body, sizeof body);
+  pkt[0] |= 0x20;
+
+  reset_counters();
+  rtcp_parse(pkt, n, &(rtcp_cbs_t){.nack_cb = nack_cb});
+  ck_assert_int_eq(g_nack_calls, 0);
+}
+END_TEST
+
 START_TEST(nack_without_callback_does_not_crash) {
   unsigned char body[12] = {0};
   unsigned char pkt[20];
@@ -758,6 +807,9 @@ static Suite *rtcp_suite(void) {
   tcase_add_test(tc, nack_fci_exactly_at_cap_is_not_truncated);
   tcase_add_test(tc, nack_fci_over_cap_sets_truncated);
   tcase_add_test(tc, nack_without_fci_entries_gives_no_callback);
+  tcase_add_test(tc, nack_padding_is_not_parsed_as_fci);
+  tcase_add_test(tc, nack_padding_only_gives_no_callback);
+  tcase_add_test(tc, nack_bad_padding_count_drops_packet);
   tcase_add_test(tc, nack_without_callback_does_not_crash);
   tcase_add_test(tc, rams_i_all_tlvs_are_parsed);
   tcase_add_test(tc, rams_i_unknown_and_short_and_overrun_tlvs_are_tolerated);

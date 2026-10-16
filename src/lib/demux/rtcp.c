@@ -42,7 +42,7 @@ static void parse_nack(const unsigned char *p, size_t len, rtcp_nack_cb cb, void
   nack.truncated = 0;
 
   fci_off = 12;
-  fci_len = len - fci_off; /* may include RFC 3550 padding, worst case one bogus trailing entry */
+  fci_len = len - fci_off;
   for (i = 0; i + 4 <= fci_len && nack.entry_count < RTCP_NACK_MAX_ENTRIES; i += 4) {
     nack.entry[nack.entry_count].pid = be16_get(p + fci_off + i);
     nack.entry[nack.entry_count].blp = be16_get(p + fci_off + i + 2);
@@ -305,11 +305,20 @@ void rtcp_parse(const unsigned char *p, size_t len, const rtcp_cbs_t *cbs) {
     unsigned pt = p[off + 1];
     unsigned fmt = p[off] & 0x1F; /* FMT (RTPFB/PSFB), RC (SR/RR) or SC (SDES), same bit field */
     size_t pkt_len = ((size_t)be16_get(p + off + 2) + 1) * 4; /* RFC 3550 6.4.1 */
+    size_t body_len = pkt_len;
 
     if (version != 2 || off + pkt_len > len) break; /* stop before misparsing rest */
+    if (p[off] & 0x20) { /* P bit: last octet counts padding incl. itself */
+      size_t pad = p[off + pkt_len - 1];
+      if (pad == 0 || pad > pkt_len - 4) {
+        off += pkt_len; /* bad padding, drop packet */
+        continue;
+      }
+      body_len = pkt_len - pad;
+    }
     switch (pt) {
-      case RTCP_PT_RTPFB: parse_rtpfb(p + off, pkt_len, fmt, cbs); break;
-      case RTCP_PT_SDES:  parse_sdes(p + off, pkt_len, fmt, cbs->sdes_cb, cbs->user); break;
+      case RTCP_PT_RTPFB: parse_rtpfb(p + off, body_len, fmt, cbs); break;
+      case RTCP_PT_SDES:  parse_sdes(p + off, body_len, fmt, cbs->sdes_cb, cbs->user); break;
       default: break; /* other types (SR/RR/BYE/PSFB): valid, skipped */
     }
 

@@ -46,6 +46,27 @@ static void sync_input_bytes(mpts_tick_t *tk, const source_t *src, unsigned i) {
   }
 }
 
+/* stream_type 0: empty PMT until first frame sets codec. NULL on OOM */
+static tspacketizer_t *program_new(const config_t *cfg, const inputset_t *is, cas_t *cas, unsigned i, unsigned stream_type, unsigned aac_profile_level) {
+  tspacketizer_cfg_t tc;
+  tspacketizer_t *t;
+  memset(&tc, 0, sizeof tc);
+  tc.tsid = cfg->tsid;
+  tc.onid = cfg->onid;
+  tc.sid = inputset_sid(is, i);
+  tc.stream_type = stream_type;
+  tc.aac_profile_level = aac_profile_level;
+  tc.network_name = "";
+  tc.service_name = inputset_service_name(is, i);
+  tc.provider_name = inputset_provider_name(is, i);
+  tc.pmt_pid = inputset_pmt_pid(is, i);
+  tc.audio_pid = inputset_audio_pid(is, i);
+  tc.standalone = 0;
+  t = tspacketizer_new(&tc);
+  if (t && cas) tspacketizer_set_cas(t, cas);
+  return t;
+}
+
 /* processes one input slot for this tick: reads up to RADIOHEAD_MAX_FRAMES_PER_TICK frames,
    feeds packetizer, updates metrics. -1: fatal (tspacketizer_new() OOM), caller must abort */
 int process_input_slot(mpts_tick_t *tk, unsigned i) {
@@ -76,7 +97,7 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
     if (r == 0) break;
     if (r < 0) {
       input_metrics_note_read(tk->metrics_on ? &tk->input_stats[i] : NULL, -1, reason);
-      if (tk->metrics_on && reason == NET_ERR_FORMAT) tk->rm->framing_errors_total++;
+      if (tk->metrics_on) tk->rm->framing_errors_total += source_take_resyncs(src) + (reason == NET_ERR_FORMAT);
       if (tk->metrics_on) tk->input_stats[i].up = 0;
       sync_input_bytes(tk, src, i);
       inputset_mark_down(tk->is, i, tk->now_t);
@@ -90,27 +111,16 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
       tk->rm->frames_total[f.codec]++;
     }
     if (!tk->tsps[i]) {
-      tspacketizer_cfg_t tc;
-      memset(&tc, 0, sizeof tc);
-      tc.tsid = tk->cfg->tsid;
-      tc.onid = tk->cfg->onid;
-      tc.sid = inputset_sid(tk->is, i);
-      tc.stream_type = f.stream_type;
-      tc.aac_profile_level = f.aac_profile_level;
-      tc.network_name = "";
-      tc.service_name = inputset_service_name(tk->is, i);
-      tc.provider_name = inputset_provider_name(tk->is, i);
-      tc.pmt_pid = inputset_pmt_pid(tk->is, i);
-      tc.audio_pid = inputset_audio_pid(tk->is, i);
-      tc.standalone = 0;
-      tk->tsps[i] = tspacketizer_new(&tc);
+      tk->tsps[i] = program_new(tk->cfg, tk->is, tk->cas, i, f.stream_type, f.aac_profile_level);
       if (!tk->tsps[i]) return -1;
-      if (tk->cas) tspacketizer_set_cas(tk->tsps[i], tk->cas);
       log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): codec detected: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", i, inputset_service_name(tk->is, i), source_codec_name(f.codec), f.sample_rate);
-    } else if (tspacketizer_set_codec(tk->tsps[i], f.stream_type, f.aac_profile_level)) {
-      log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): codec changed: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", i, inputset_service_name(tk->is, i), source_codec_name(f.codec), f.sample_rate);
+    } else {
+      int had_codec = tspacketizer_has_codec(tk->tsps[i]);
+      if (tspacketizer_set_codec(tk->tsps[i], f.stream_type, f.aac_profile_level))
+        log_line_ansi("input \e[1;30m%u\e[0m (\e[1;30m%s\e[0m): codec %s: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", i, inputset_service_name(tk->is, i), had_codec ? "changed" : "detected", source_codec_name(f.codec), f.sample_rate);
     }
     mpts_set_program(tk->mpts, i, tk->tsps[i]);
+    pace_reanchor(&tk->pace_deadline[i], tk->now, tk->tsps[i]);
 
     if (tk->metas[i].dirty) {
       int accepted = tspacketizer_set_metadata(tk->tsps[i], tk->metas[i].artist, tk->metas[i].title);
@@ -123,6 +133,7 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
     tspacketizer_feed(tk->tsps[i], pts, (uint32_t)((uint64_t)f.samples * 90000ULL / f.sample_rate), tk->now, f.data, f.len, tk->out->insp ? &packet_cb_inspect : &packet_cb, tk->out);
   }
   sync_input_bytes(tk, src, i);
+  if (tk->metrics_on) tk->rm->framing_errors_total += source_take_resyncs(src);
   return 0;
 }
 
@@ -204,6 +215,13 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     }
     radiohead_mpts_set_cas(mpts, cas);
   }
+  for (unsigned i = 0; i < n; i++) {
+    tsps[i] = program_new(cfg, is, cas, i, 0, 0);
+    if (!tsps[i]) {
+      rc = 1;
+      goto done;
+    }
+  }
 
   start = mono_seconds();
   unsigned rr_start = 0;
@@ -219,7 +237,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     unsigned active;
     deadline = inputset_next_deadline(is);
     if (deadline != INPUTSET_NEVER) {
-      long remain_s = (long)(deadline - time(NULL));
+      long remain_s = (long)(deadline - (time_t)mono_seconds());
       int remain_ms = remain_s <= 0 ? 0 : (int)(remain_s * 1000);
       if (remain_ms < timeout_ms) timeout_ms = remain_ms;
     }
@@ -231,7 +249,10 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
         int wait_ms = pcr_due <= now_pre ? 0 : 1 + (int)((pcr_due - now_pre) * 1000.0);
         if (wait_ms < timeout_ms) timeout_ms = wait_ms;
       }
-      if (fd < 0) continue;
+      if (fd < 0) {
+        if (inputset_source(is, i) && timeout_ms > RADIOHEAD_IDLE_WAIT_MS) timeout_ms = RADIOHEAD_IDLE_WAIT_MS;
+        continue;
+      }
       /* sock readable, skip&sleep. avoid poll() spin. */
       if (inputset_source(is, i) && pace_deadline[i] > now_pre + RADIOHEAD_PACE_TOLERANCE_S) {
         /* ceil, not trunc */
@@ -250,7 +271,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     if (signal_stop_requested()) break;
     radiohead_srt_service(&out);
     now = mono_seconds();
-    now_t = time(NULL);
+    now_t = (time_t)now;
     for (unsigned i = 0; i < n; i++) inputset_service(is, i, now_t);
 
     tk.is = is;
@@ -284,11 +305,11 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     if (n) rr_start = (rr_start + 1) % n;
     {
       double now_pcr = mono_seconds();
-      size_t pcr_sent = 0;
+      for (unsigned i = 0; i < n; i++) tspacketizer_pcr_flush(tsps[i], now_pcr, out.insp ? &packet_cb_inspect : &packet_cb, &out);
+      /* PAT lists all programs: idle ones keep PMT */
       for (unsigned i = 0; i < n; i++) {
-        if (tsps[i]) pcr_sent += tspacketizer_pcr_flush(tsps[i], now_pcr, out.insp ? &packet_cb_inspect : &packet_cb, &out);
+        if (!was_connected[i] || now > pace_deadline[i] + RADIOHEAD_PACE_TOLERANCE_S) tspacketizer_idle(tsps[i], now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
       }
-      if (pcr_sent) flush_batch(&out);
     }
 
     if (out.insp) tsinspect_tick(out.insp, now);
@@ -318,6 +339,7 @@ int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
     for (unsigned i = 0; i < n; i++) {
       if (was_connected[i]) active++;
     }
+    flush_batch(&out); /* each pass: PCR must not wait for full datagram */
     emit_metrics(mx, now, &out, n, active, input_stats, n, &rm, cas);
   }
 

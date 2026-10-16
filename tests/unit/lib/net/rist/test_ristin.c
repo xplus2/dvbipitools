@@ -91,7 +91,7 @@ START_TEST(receiver_stats_cb_pushes_flow_counters) {
   memset(&r, 0, sizeof r);
   r.mx = &s.mx;
   r.tool_version = "test";
-  ck_assert_int_eq(receiver_stats_cb(&r, st), 0);
+  ck_assert_int_eq(ristin_stats_cb(&r, st), 0);
   ck_assert_int_eq(sink_read(&s, &seen), 1);
   ck_assert_int_eq(seen_has(&seen, METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL, &v), 1);
   ck_assert_uint_eq(v, 1000u);
@@ -117,7 +117,7 @@ START_TEST(receiver_stats_cb_ignores_other_stats_types) {
   memset(&r, 0, sizeof r);
   r.mx = &s.mx;
   r.tool_version = "test";
-  ck_assert_int_eq(receiver_stats_cb(&r, st), 0);
+  ck_assert_int_eq(ristin_stats_cb(&r, st), 0);
   ck_assert_int_eq(sink_read(&s, &seen), 0);
   sink_close(&s);
 }

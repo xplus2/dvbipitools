@@ -8,13 +8,14 @@
 #include <sys/types.h>
 
 #include "lib/net/netconnect.h"
+#include "lib/net/ts/source.h"
 
 #include "../cli/args.h"
 
 typedef struct tvsrc tvsrc_t;
 
-/* opens per input->input (rtp/udp multicast, http(s), or stdin); cfg->insecure_tls applies to
-   all inputs. NULL on failure. reason_out: nullable, set only on NULL return */
+/* opens per input->input (rtp/udp multicast, http(s) TS/HLS/DASH, or stdin). HTTP open bounded: 30s.
+   cfg->insecure_tls applies to all inputs. NULL on failure. reason_out: nullable, set only on NULL return */
 tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_err_reason_t *reason_out);
 
 /* TS bytes, RTP unwrapped if present. >0 len, 0 transient (retry), -1 hard error/EOF.
@@ -27,6 +28,11 @@ int tvsrc_wait(const tvsrc_t *s, int timeout_ms);
 
 /* underlying fd, for caller's own poll(); valid for life of s */
 int tvsrc_fd(const tvsrc_t *s);
+short tvsrc_poll_events(const tvsrc_t *s);
+
+/* 1: fd poll alone never wakes for this src (HLS/DASH timers). read every tick, poll at most TVSRC_TIMER_WAIT_MS */
+int tvsrc_timer_driven(const tvsrc_t *s);
+#define TVSRC_TIMER_WAIT_MS TSSRC_TIMER_WAIT_MS
 int tvsrc_enable_rx_timestamps(tvsrc_t *s);
 uint64_t tvsrc_last_rx_ns(const tvsrc_t *s);
 int64_t tvsrc_buffer_ms(const tvsrc_t *s);

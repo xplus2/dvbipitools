@@ -43,6 +43,7 @@ typedef struct {
   int daemonize; /* -d, --daemonize: fork to background after startup */
   int color_mode;
   int insecure_tls; /* -k, --insecure, -i https:// source only */
+  int pace;         /* --pace: file/stdin/http source released at PCR/RTP rate */
   const char *metrics_sock;    /* --metrics. NULL = default socket path */
   const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
   unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
@@ -56,6 +57,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg);
 
 /* 1 if -o is srt:// (this process sends into SRT), 0 if -i is (receives from SRT) */
 int config_is_sender(const config_t *cfg);
+
+/* 1 if --local is set and any srt:// peer has another address family */
+int config_local_family_mismatch(const config_t *cfg);
 
 int srt_cfg_add_endpoint(config_t *cfg, int is_out, const char *uri);
 

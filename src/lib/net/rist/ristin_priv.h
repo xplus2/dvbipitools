@@ -24,6 +24,6 @@ struct ristin {
 };
 
 /* librist stats callback, owns stats */
-int receiver_stats_cb(void *arg, const struct rist_stats *stats);
+int ristin_stats_cb(void *arg, const struct rist_stats *stats);
 
 #endif

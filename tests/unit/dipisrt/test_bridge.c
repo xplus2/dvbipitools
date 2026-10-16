@@ -175,41 +175,75 @@ START_TEST(srtout_queue_stats_count_chunks_watermark_and_drops) {
 }
 END_TEST
 
-START_TEST(dedup_is_duplicate_false_on_empty_history) {
+START_TEST(dedup_replay_no_match_on_empty_history) {
   dedup_entry_t hist[6] = {{0, 0}};
-  ck_assert_int_eq(dedup_is_duplicate(hist, 6, 0x12345678u, 100), 0);
+  dedup_replay_t r;
+  dedup_replay_begin(&r, 6);
+  ck_assert_int_eq(dedup_replay_match(&r, hist, 6, 0, 0x12345678u, 100), 0);
 }
 END_TEST
 
-START_TEST(dedup_record_then_is_duplicate_matches_same_hash_and_len) {
-  dedup_entry_t hist[6] = {{0, 0}};
-  int next = 0;
-  dedup_record(hist, 6, &next, 0xAABBCCDDu, 188);
-  ck_assert_int_eq(next, 1);
-  ck_assert_int_eq(dedup_is_duplicate(hist, 6, 0xAABBCCDDu, 188), 1);
-}
-END_TEST
-
-START_TEST(dedup_is_duplicate_requires_len_match_too) {
-  dedup_entry_t hist[6] = {{0, 0}};
-  int next = 0;
-  dedup_record(hist, 6, &next, 0xAABBCCDDu, 188);
-  ck_assert_int_eq(dedup_is_duplicate(hist, 6, 0xAABBCCDDu, 189), 0);
-}
-END_TEST
-
-START_TEST(dedup_record_wraps_ring_and_overwrites_oldest) {
+START_TEST(dedup_record_advances_and_wraps_ring) {
   dedup_entry_t hist[3] = {{0, 0}};
+  int next = 0;
+  dedup_record(hist, 3, &next, 1, 10);
+  ck_assert_int_eq(next, 1);
+  dedup_record(hist, 3, &next, 2, 10);
+  dedup_record(hist, 3, &next, 3, 10);
+  ck_assert_int_eq(next, 0);
+  dedup_record(hist, 3, &next, 4, 10);
+  ck_assert_int_eq(next, 1);
+  ck_assert_uint_eq(hist[0].hash, 4u);
+}
+END_TEST
+
+START_TEST(dedup_replay_skips_ordered_replay_then_passes_new) {
+  dedup_entry_t hist[3] = {{0, 0}};
+  dedup_replay_t r;
   int next = 0;
   dedup_record(hist, 3, &next, 1, 10);
   dedup_record(hist, 3, &next, 2, 10);
   dedup_record(hist, 3, &next, 3, 10);
-  ck_assert_int_eq(next, 0);
-  ck_assert_int_eq(dedup_is_duplicate(hist, 3, 1, 10), 1);
-  dedup_record(hist, 3, &next, 4, 10);
-  ck_assert_int_eq(next, 1);
-  ck_assert_int_eq(dedup_is_duplicate(hist, 3, 1, 10), 0);
-  ck_assert_int_eq(dedup_is_duplicate(hist, 3, 4, 10), 1);
+  dedup_replay_begin(&r, 3);
+  ck_assert_int_eq(dedup_replay_match(&r, hist, 3, next, 1, 10), 1);
+  ck_assert_int_eq(dedup_replay_match(&r, hist, 3, next, 2, 10), 1);
+  ck_assert_int_eq(dedup_replay_match(&r, hist, 3, next, 3, 10), 1);
+  ck_assert_uint_eq(r.cand, 0u);
+}
+END_TEST
+
+START_TEST(dedup_replay_passes_out_of_order_chunk) {
+  dedup_entry_t hist[3] = {{0, 0}};
+  dedup_replay_t r;
+  int next = 0;
+  dedup_record(hist, 3, &next, 1, 10);
+  dedup_record(hist, 3, &next, 2, 10);
+  dedup_record(hist, 3, &next, 3, 10);
+  dedup_replay_begin(&r, 3);
+  ck_assert_int_eq(dedup_replay_match(&r, hist, 3, next, 2, 10), 1);
+  ck_assert_int_eq(dedup_replay_match(&r, hist, 3, next, 1, 10), 0);
+  ck_assert_uint_eq(r.cand, 0u);
+}
+END_TEST
+
+START_TEST(dedup_replay_requires_len_match_too) {
+  dedup_entry_t hist[6] = {{0, 0}};
+  dedup_replay_t r;
+  int next = 0;
+  dedup_record(hist, 6, &next, 0xAABBCCDDu, 188);
+  dedup_replay_begin(&r, 6);
+  ck_assert_int_eq(dedup_replay_match(&r, hist, 6, next, 0xAABBCCDDu, 189), 0);
+}
+END_TEST
+
+START_TEST(dedup_replay_identical_chunks_do_not_swallow_stream) {
+  dedup_entry_t hist[6] = {{0, 0}};
+  dedup_replay_t r;
+  int next = 0;
+  for (int i = 0; i < 6; i++) dedup_record(hist, 6, &next, 0xC0FFEEu, 188);
+  dedup_replay_begin(&r, 6);
+  ck_assert_int_eq(dedup_replay_match(&r, hist, 6, next, 0xC0FFEEu, 188), 1);
+  ck_assert_uint_eq(r.cand, 0u);
 }
 END_TEST
 
@@ -410,6 +444,7 @@ START_TEST(sender_recovers_lost_packet_from_repair_without_further_source) {
     bridge_rtp_ts(pkt[i], (uint16_t)(0x3000 + i), (unsigned char)i);
     rlen = fec2022_enc_feed(enc, pkt[i], RTP_LEN, 1000 + i, repair, sizeof repair);
   }
+  rlen = fec2022_enc_drain(enc, repair, sizeof repair);
   ck_assert_uint_gt(rlen, 0u);
   for (unsigned i = 0; i < PKTS - 1; i++)
     ck_assert_int_eq((int)sendto(src_sock, pkt[i], RTP_LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), RTP_LEN);
@@ -459,10 +494,12 @@ static Suite *bridge_suite(void) {
   tcase_add_test(tc, srtout_queue_watermark_stays_zero_below_level_two);
   tcase_add_loop_test(tc, bridge_run_fails_cleanly_when_setup_cannot_complete, 0, (int)(sizeof srt_bridge_fail_cases / sizeof srt_bridge_fail_cases[0]));
   tcase_add_test(tc, sender_recovers_lost_packet_from_repair_without_further_source);
-  tcase_add_test(tc, dedup_is_duplicate_false_on_empty_history);
-  tcase_add_test(tc, dedup_record_then_is_duplicate_matches_same_hash_and_len);
-  tcase_add_test(tc, dedup_is_duplicate_requires_len_match_too);
-  tcase_add_test(tc, dedup_record_wraps_ring_and_overwrites_oldest);
+  tcase_add_test(tc, dedup_replay_no_match_on_empty_history);
+  tcase_add_test(tc, dedup_record_advances_and_wraps_ring);
+  tcase_add_test(tc, dedup_replay_skips_ordered_replay_then_passes_new);
+  tcase_add_test(tc, dedup_replay_passes_out_of_order_chunk);
+  tcase_add_test(tc, dedup_replay_requires_len_match_too);
+  tcase_add_test(tc, dedup_replay_identical_chunks_do_not_swallow_stream);
   suite_add_tcase(s, tc);
   return s;
 }

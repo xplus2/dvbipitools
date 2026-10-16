@@ -9,6 +9,7 @@
 
 #include "../../dash/mpd.h"
 #include "../../sys/ioutil.h"
+#include "../../sys/signal.h"
 #include "../../hls/playlist.h"
 
 #include "source_priv.h"
@@ -66,8 +67,9 @@ static int dash_find_adaptation_set(const dash_period_t *p, const char *mime_pre
 }
 
 static int build_dash_result(tssrc_open_t *o, const dash_mpd_t *mpd, const http_url_t *mpd_url, net_err_reason_t *reason_out) {
-  int video_idx = dash_find_adaptation_set(&mpd->periods[0], "video/");
-  int audio_idx = dash_find_adaptation_set(&mpd->periods[0], "audio/");
+  const dash_period_t *period = &mpd->periods[dash_mpd_live_period(mpd)];
+  int video_idx = dash_find_adaptation_set(period, "video/");
+  int audio_idx = dash_find_adaptation_set(period, "audio/");
   tssrc_t *r;
 
   if (video_idx < 0 && audio_idx < 0) {
@@ -175,7 +177,8 @@ static http_open_step_t step_sniff_classify(tssrc_open_t *o, net_err_reason_t *r
     o->h = NULL;
     return HOPEN_STEP_ERROR;
   }
-  if (rc == 1 && o->buf_len < TSSRC_HTTP_SNIFF_CAP) return HOPEN_STEP_CONTINUE;
+  if (rc == 1 && o->buf_len < TSSRC_HTTP_SNIFF_CAP && tssrc_http_classify(o->buf, o->buf_len) != HTTP_CONTENT_TS)
+    return HOPEN_STEP_CONTINUE;
   o->content = tssrc_http_classify(o->buf, o->buf_len);
   if (o->content == HTTP_CONTENT_UNKNOWN) {
     http_close(o->h);
@@ -220,10 +223,13 @@ static http_open_step_t step_sniff_manifest(tssrc_open_t *o, net_err_reason_t *r
   o->buf[term] = '\0';
 
   if (o->content == HTTP_CONTENT_DASH) {
-    dash_mpd_t mpd;
-    int ok = dash_mpd_parse((char *)o->buf, &base, &mpd) && mpd.n_periods > 0;
-    if (!ok && reason_out) *reason_out = NET_ERR_FORMAT;
-    if (ok) ok = build_dash_result(o, &mpd, &base, reason_out);
+    dash_mpd_t *mpd = malloc(sizeof *mpd);
+    int ok = mpd != NULL;
+    if (!ok && reason_out) *reason_out = NET_ERR_OTHER;
+    if (ok) ok = dash_mpd_parse((char *)o->buf, &base, mpd) && mpd->n_periods > 0;
+    if (mpd && !ok && reason_out) *reason_out = NET_ERR_FORMAT;
+    if (ok) ok = build_dash_result(o, mpd, &base, reason_out);
+    free(mpd);
     http_close(o->h);
     o->h = NULL;
     if (!ok) {
@@ -417,4 +423,33 @@ void tssrc_open_async_free(tssrc_open_t *o) {
   if (o->hf) http_fetch_free(o->hf);
   if (o->result) tssrc_close(o->result);
   free(o);
+}
+
+tssrc_t *tssrc_open_blocking(const tssrc_cfg_t *cfg, double timeout_s, net_err_reason_t *reason_out) {
+  net_err_reason_t reason = NET_ERR_OTHER;
+  tssrc_open_t *o = tssrc_open_async_start(cfg, &reason);
+  double deadline = mono_seconds() + timeout_s;
+
+  if (!o) {
+    if (reason_out) *reason_out = reason;
+    return NULL;
+  }
+  while (!signal_stop_requested()) {
+    tssrc_open_state_t st = tssrc_open_async_step(o, &reason);
+    struct pollfd pfd;
+
+    if (st == TSSRC_OPEN_DONE) return tssrc_open_async_take(o);
+    if (st == TSSRC_OPEN_ERROR) break;
+    if (mono_seconds() >= deadline) {
+      reason = NET_ERR_TIMEOUT;
+      break;
+    }
+    pfd.fd = tssrc_open_async_poll_fd(o);
+    pfd.events = tssrc_open_async_poll_events(o);
+    pfd.revents = 0;
+    poll(&pfd, 1, 100);
+  }
+  tssrc_open_async_free(o);
+  if (reason_out) *reason_out = reason;
+  return NULL;
 }

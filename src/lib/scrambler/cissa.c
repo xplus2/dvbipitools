@@ -21,6 +21,8 @@ struct cissa_key {
   unsigned char cw[CISSA_CW_LEN];
 };
 
+int cissa_available(void) { return 1; }
+
 cissa_key_t *cissa_key_new(const unsigned char cw[CISSA_CW_LEN]) {
   cissa_key_t *k = calloc(1, sizeof *k);
   if (!k)

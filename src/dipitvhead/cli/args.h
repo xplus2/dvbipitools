@@ -32,8 +32,8 @@ typedef struct {
   /* SRC_RIST, stored raw for librist's own parser */
   char rist_uri[256];
   /* SRC_SRT */
-  int srt_family; /* AF_INET or AF_INET6, display only */
-  char srt_host[64];
+  int srt_family; /* AF_INET, AF_INET6 or AF_UNSPEC (hostname), display only */
+  char srt_host[256];
   unsigned srt_port;
   int srt_listen; /* 1 = @, bind/listen/accept. 0 = call out (connect) */
 } source_t;
@@ -76,12 +76,18 @@ typedef struct {
   char hbbtv_name[64];     /* --hbbtv-name right after this -i; empty = "HbbTV" */
   int rist_profile_main;  /* --rist-profile-in right after this -i; SRC_RIST only */
   int rist_key_size_in;   /* --rist-encryption-type-in right after this -i; SRC_RIST + main only, 0 = default */
+  char rist_secret_in[128]; /* --rist-secret-in right after this -i; SRC_RIST + main only, "" = none */
+  char rist_cname_in[128];  /* --rist-cname-in right after this -i; SRC_RIST only, "" = library default */
+  unsigned rist_buffer_ms_in; /* --rist-buffer-in right after this -i; SRC_RIST only, 0 = library default */
   char srt_passphrase_in[128];   /* --srt-passphrase-in right after this -i; SRC_SRT only, "" = no encryption */
   int srt_pbkeylen_in;           /* --srt-pbkeylen-in right after this -i; requires --srt-passphrase-in */
   char srt_streamid_in[128];     /* --srt-streamid-in right after this -i; SRC_SRT only, "" = none */
   char srt_packetfilter_in[256]; /* --srt-packetfilter-in right after this -i; SRC_SRT only, "" = none */
   unsigned srt_latency_in_ms;    /* --srt-latency-in right after this -i; SRC_SRT only, 0 = library default */
   unsigned jitter_ms;            /* --jitter-ms right after this -i; rtp/udp/rist/srt only, 0 = off */
+  unsigned al_fec_l_in;          /* --al-fec-in right after this -i; SRC_RTP only, 0 = off */
+  unsigned al_fec_d_in;
+  unsigned al_fec_port_in;       /* --al-fec-port-in right after this -i */
 } dipitvhead_input_t;
 
 typedef struct {
@@ -150,8 +156,8 @@ typedef struct {
   unsigned rist_buffer_ms; /* --rist-buffer; n_rist>0 only, 0 = library default */
   /* -R srt://, repeatable, bonded onto one group when >1 (--srt-group-mode).
      one scheme at a time: rist:// and srt:// peers can't mix in one -R set */
-  int srt_family[ARGS_MAX_SRT_PEERS]; /* AF_INET or AF_INET6, display only */
-  char srt_host[ARGS_MAX_SRT_PEERS][64];
+  int srt_family[ARGS_MAX_SRT_PEERS]; /* AF_INET, AF_INET6 or AF_UNSPEC (hostname), display only */
+  char srt_host[ARGS_MAX_SRT_PEERS][256];
   unsigned srt_port[ARGS_MAX_SRT_PEERS];
   unsigned n_srt;
   srt_bond_mode_t srt_group_mode; /* --srt-group-mode; n_srt>1 only, required then */

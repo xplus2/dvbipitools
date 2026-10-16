@@ -157,6 +157,22 @@ START_TEST(tva_build_crid_offset_crosses_day) {
 }
 END_TEST
 
+START_TEST(tva_programme_crid_cached_and_fallback) {
+  bcg_programme_t pr;
+  char buf[TVA_CRID_BUF];
+  memset(&pr, 0, sizeof pr);
+  strcpy(pr.channel_id, "ch");
+  strcpy(pr.start, "2026-01-01T00:30:00Z");
+  ck_assert_ptr_eq(tva_programme_crid(&pr, buf, sizeof buf), buf);
+  ck_assert_str_eq(buf, "crid://dipixmltv.invalid/ch/20260101003000");
+  ck_assert_int_eq(tva_programme_cache_crid(&pr), 0);
+  ck_assert_ptr_eq(tva_programme_crid(&pr, buf, sizeof buf), pr.crid);
+  ck_assert_str_eq(pr.crid, "crid://dipixmltv.invalid/ch/20260101003000");
+  bcg_programme_free_text(&pr);
+  ck_assert_ptr_eq(pr.crid, NULL);
+}
+END_TEST
+
 typedef struct {
   const char *channel;
   const char *title;
@@ -530,6 +546,42 @@ START_TEST(tva_xml_write_emits_mapped_genre_href) {
 }
 END_TEST
 
+START_TEST(tva_xml_read_takes_names_from_the_right_elements) {
+  const char xml[] =
+    "<TVAMain><ProgramDescription><ProgramInformationTable>"
+    "<ProgramInformation programId=\"a\"><BasicDescription><Title>A</Title>"
+    "<ParentalGuidance><ParentalRating href=\"x\"><Name>FSK 12</Name></ParentalRating></ParentalGuidance>"
+    "<Genre href=\"urn:g\"/></BasicDescription></ProgramInformation>"
+    "<ProgramInformation programId=\"b\"><BasicDescription><Title>B</Title>"
+    "<ParentalGuidance><ParentalRating href=\"x\"><Name>FSK 12</Name></ParentalRating></ParentalGuidance>"
+    "<Genre href=\"urn:g\"><Name>Drama</Name></Genre></BasicDescription></ProgramInformation>"
+    "</ProgramInformationTable><ProgramLocationTable><Schedule serviceIDRef=\"c\">"
+    "<ScheduleEvent><Program crid=\"a\"/><PublishedStartTime>2024-03-15T12:00:00Z</PublishedStartTime></ScheduleEvent>"
+    "<ScheduleEvent><Program crid=\"b\"/><PublishedStartTime>2024-03-15T13:00:00Z</PublishedStartTime></ScheduleEvent>"
+    "</Schedule></ProgramLocationTable><ServiceInformationTable>"
+    "<ServiceInformation serviceId=\"c\"><ServiceGenre href=\"g1\"><Name>Genre1</Name></ServiceGenre>"
+    "<Name>Chan</Name><ServiceGenre href=\"g2\"><Name>Genre2</Name></ServiceGenre>"
+    "<ServiceURL name=\"IPTV\">rtp://239.1.1.1:5000</ServiceURL></ServiceInformation>"
+    "</ServiceInformationTable></ProgramDescription></TVAMain>\n";
+  bcg_doc_t doc;
+  FILE *f = tmpfile();
+
+  ck_assert_ptr_nonnull(f);
+  fputs(xml, f);
+  rewind(f);
+  bcg_doc_init(&doc);
+  ck_assert_int_eq(tva_xml_read(f, &doc), 0);
+  fclose(f);
+  ck_assert_int_eq(doc.channel_count, 1);
+  ck_assert_int_eq(doc.channels[0].name_count, 1);
+  ck_assert_str_eq(doc.channels[0].names[0], "Chan");
+  ck_assert_int_eq(doc.programme_count, 2);
+  ck_assert_ptr_null(doc.programmes[0].category);
+  ck_assert_str_eq(doc.programmes[1].category, "Drama");
+  bcg_doc_free(&doc);
+}
+END_TEST
+
 static Suite *tva_xml_suite(void) {
   Suite *s = suite_create("tva_xml");
   TCase *tc = tcase_create("core");
@@ -539,6 +591,7 @@ static Suite *tva_xml_suite(void) {
   tcase_add_test(tc, tva_build_crid_percent_encodes_and_compacts_time);
   tcase_add_test(tc, tva_build_crid_dst_overlap_distinct);
   tcase_add_test(tc, tva_build_crid_offset_crosses_day);
+  tcase_add_test(tc, tva_programme_crid_cached_and_fallback);
   tcase_add_test(tc, tva_xml_write_groups_programmes_for_unsorted_channels);
   tcase_add_test(tc, tva_xml_write_omits_absent_optional_fields);
   tcase_add_test(tc, tva_xml_write_handles_empty_documents_and_channels_without_programmes);
@@ -551,6 +604,7 @@ static Suite *tva_xml_suite(void) {
   tcase_add_test(tc, tva_xml_read_end_time_wins_and_bad_duration_leaves_stop_empty);
   tcase_add_test(tc, tva_genre_href_maps_known_and_falls_back);
   tcase_add_test(tc, tva_xml_write_emits_mapped_genre_href);
+  tcase_add_test(tc, tva_xml_read_takes_names_from_the_right_elements);
   suite_add_tcase(s, tc);
   return s;
 }

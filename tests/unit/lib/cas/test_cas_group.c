@@ -4,6 +4,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "lib/cas/cas_group.h"
 
@@ -194,6 +195,28 @@ START_TEST(no_vendor_group_builds_only_the_scrambling_descriptor) {
 }
 END_TEST
 
+START_TEST(clock_detect_timeout_is_per_config) {
+  cas_group_cfg_t cfg = valid_cfg();
+  cas_group_t *quick;
+  cas_group_t *dflt;
+  struct timespec nap = {0, 50000000L};
+
+  cfg.clock_detect_timeout_s = 0.02;
+  quick = cas_group_start(&cfg, 0x100);
+  cfg.clock_detect_timeout_s = 0.0;
+  dflt = cas_group_start(&cfg, 0x100);
+  ck_assert_ptr_nonnull(quick);
+  ck_assert_ptr_nonnull(dflt);
+  nanosleep(&nap, NULL);
+  cas_group_tick_alive(quick);
+  cas_group_tick_alive(dflt);
+  ck_assert_int_eq(cas_group_failed(quick), 1);
+  ck_assert_int_eq(cas_group_failed(dflt), 0);
+  cas_group_stop(quick);
+  cas_group_stop(dflt);
+}
+END_TEST
+
 static Suite *cas_group_suite(void) {
   Suite *s = suite_create("cas_group");
   TCase *tc = tcase_create("core");
@@ -212,6 +235,7 @@ static Suite *cas_group_suite(void) {
   tcase_add_test(tc, start_accepts_boundary_configuration);
   tcase_add_test(tc, descriptor_builders_reject_every_short_buffer);
   tcase_add_test(tc, no_vendor_group_builds_only_the_scrambling_descriptor);
+  tcase_add_test(tc, clock_detect_timeout_is_per_config);
   suite_add_tcase(s, tc);
   return s;
 }

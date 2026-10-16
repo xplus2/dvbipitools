@@ -32,7 +32,7 @@ typedef struct {
   uint64_t pcr_repetition_errors;    /* TR 101 290 2.3a */
   uint64_t pcr_discontinuity_errors; /* TR 101 290 2.3b */
   uint64_t pts_errors;               /* TR 101 290 2.5 */
-  uint64_t pcr_accuracy_errors;      /* TR 101 290 2.4 */
+  uint64_t pcr_accuracy_errors;      /* arrival jitter over 5 ms, TR 101 290 2.4 analog */
   uint64_t pcr_freq_offset_errors;
   uint64_t eit_errors;               /* TR 101 290 3.6 */
   uint64_t eit_other_errors;         /* TR 101 290 3.6b */

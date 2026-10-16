@@ -15,6 +15,7 @@
 #define ID3_HDR 10
 #define PES_STREAM_ID_AUDIO 0xC0
 #define PES_BUF_CAP 8400
+#define PCR_INTERVAL_90K 4500ULL
 
 static const unsigned adts_rates[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350};
 
@@ -86,7 +87,13 @@ static void adts_to_ts(hls_ts_passthrough_t *p, const unsigned char *d, size_t l
       continue;
     }
     if (off + flen > len) break;
-    esbuild_ts_packetize(ESBUILD_FIRST_ES_PID, &p->es_cc, PES_STREAM_ID_AUDIO, (p->base_pts + p->frames * ADTS_SAMPLES_PER_FRAME * 90000ULL / adts_rates[sri]) & 0x1FFFFFFFFULL, 0, 0, f, flen, 0, 0, pesbuf, sizeof pesbuf, cb, ctx);
+    uint64_t pts = (p->base_pts + p->frames * ADTS_SAMPLES_PER_FRAME * 90000ULL / adts_rates[sri]) & 0x1FFFFFFFFULL;
+    int pcr = !p->have_pcr || ((pts - p->last_pcr_pts) & 0x1FFFFFFFFULL) >= PCR_INTERVAL_90K;
+    if (pcr) {
+      p->last_pcr_pts = pts;
+      p->have_pcr = 1;
+    }
+    esbuild_ts_packetize(ESBUILD_FIRST_ES_PID, &p->es_cc, PES_STREAM_ID_AUDIO, pts, 0, 0, f, flen, pcr, pts, pesbuf, sizeof pesbuf, cb, ctx);
     p->frames++;
     emitted++;
     off += flen;

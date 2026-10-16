@@ -123,7 +123,7 @@ static size_t psi_put_sdt_entry(unsigned char *out, size_t n, size_t cap, const 
   if (n + size > cap) return 0;
   psi_put16(out + n, e->service_id);
   n += 2;
-  out[n++] = 0xFD; /* reserved(6)=111111, EIT_schedule=0, EIT_present_following=1 */
+  out[n++] = e->no_eit_pf ? 0xFC : 0xFD; /* reserved(6)=111111, EIT_schedule=0, EIT_present_following */
   f16_pos = n;
   n += 2;
   out[n++] = 0x48; /* service_descriptor */
@@ -156,7 +156,7 @@ static size_t psi_put_sdt_header(unsigned char *out, unsigned version, unsigned 
 }
 
 size_t psi_build_sdt(unsigned version, unsigned tsid, unsigned onid, unsigned service_id, unsigned service_type, const char *provider, const char *service, unsigned char *out, size_t cap) {
-  psi_sdt_entry_t e = {service_id, service_type, provider, service, 0};
+  psi_sdt_entry_t e = {service_id, service_type, provider, service, 0, 0};
   size_t n;
 
   if (cap < 24) return 0;
@@ -280,4 +280,32 @@ void psi_ver_track_stamp(psi_ver_track_t *t, unsigned char *sec, size_t n) {
   t->primed = 1;
   sec[5] = (unsigned char)((sec[5] & 0xC1) | (t->ver << 1));
   be32_put(sec + n - 4, crc32_mpeg(sec, n - 4));
+}
+
+static void put_utc(unsigned char *p, time_t utc) {
+  time_t days = utc / 86400;
+  unsigned sod = (unsigned)(utc % 86400);
+  unsigned mjd = (unsigned)days + 40587;
+  unsigned hh = sod / 3600, mm = sod % 3600 / 60, ss = sod % 60;
+  psi_put16(p, mjd);
+  p[2] = (unsigned char)(((hh / 10) << 4) | (hh % 10));
+  p[3] = (unsigned char)(((mm / 10) << 4) | (mm % 10));
+  p[4] = (unsigned char)(((ss / 10) << 4) | (ss % 10));
+}
+
+size_t psi_build_tdt(time_t utc, unsigned char *out, size_t cap) {
+  if (cap < 8 || utc < 0) return 0;
+  out[0] = 0x70;
+  out[1] = 0x70;
+  out[2] = 0x05;
+  put_utc(out + 3, utc);
+  return 8;
+}
+
+size_t psi_build_tot(time_t utc, unsigned char *out, size_t cap) {
+  if (cap < 14 || utc < 0) return 0;
+  out[0] = 0x73;
+  put_utc(out + 3, utc);
+  psi_put16(out + 8, 0xF000); /* no descriptors */
+  return psi_finish_section(out, 10, cap, 0x70); /* short section, syntax indicator 0 */
 }

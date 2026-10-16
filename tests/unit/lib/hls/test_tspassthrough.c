@@ -201,6 +201,8 @@ static size_t id3_with_ts(unsigned char *t, uint64_t ts) {
   return total;
 }
 
+static uint64_t pcr_base(const unsigned char *b) { return ((uint64_t)b[0] << 25) | ((uint64_t)b[1] << 17) | ((uint64_t)b[2] << 9) | ((uint64_t)b[3] << 1) | (b[4] >> 7); }
+
 static uint64_t pes_pts(const unsigned char *pkt) {
   unsigned off = 4 + ((pkt[3] & 0x20) ? 1u + pkt[4] : 0);
   const unsigned char *p = pkt + off + 9;
@@ -261,6 +263,10 @@ START_TEST(hls_ts_passthrough_converts_packed_aac) {
   ck_assert_uint_eq(((acc[1] & 0x1F) << 8) | acc[2], 0x0000);
   ck_assert_uint_eq(((acc[189] & 0x1F) << 8) | acc[190], 0x0100);
   for (int i = 2; i < 5; i++) ck_assert_uint_eq(((acc[i * 188 + 1] & 0x1F) << 8) | acc[i * 188 + 2], 0x0101);
+  ck_assert_int_ne(acc[2 * 188 + 3] & 0x20, 0);
+  ck_assert_int_ne(acc[2 * 188 + 5] & 0x10, 0);
+  ck_assert_uint_eq(pcr_base(acc + 2 * 188 + 6), 900000 - 63000);
+  for (int i = 3; i < 5; i++) ck_assert_int_eq(acc[i * 188 + 5] & 0x10, 0);
   ck_assert_uint_eq(pes_pts(acc + 2 * 188), 900000);
   ck_assert_uint_eq(pes_pts(acc + 3 * 188), 900000 + 1920);
   ck_assert_uint_eq(pes_pts(acc + 4 * 188), 900000 + 2 * 1920);

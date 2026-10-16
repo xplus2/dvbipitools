@@ -10,6 +10,7 @@
 
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/log.h"
+#include "lib/scrambler/cissa.h"
 
 #include "dipitvhead/cli/args.h"
 #include "dipitvhead/config.h"
@@ -180,10 +181,22 @@ START_TEST(global_flags_are_not_per_input) {
 }
 END_TEST
 
+/* CISSA/BISS-2 need OpenSSL: stub builds must reject at parse */
+#define PARSE_OK_OR_NO_OPENSSL(rc_expr)           \
+  do {                                            \
+    int rc_ = (rc_expr);                          \
+    if (!cissa_available()) {                     \
+      ck_assert_int_ne(rc_, ARGS_OK);             \
+      yamlcfg_strpool_free(cfg.str_pool);         \
+      return;                                     \
+    }                                             \
+    ck_assert_int_eq(rc_, ARGS_OK);               \
+  } while (0)
+
 START_TEST(biss2_ca_receivers_enables_and_sets_dir) {
   char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000", "--biss2-ca-receivers", "/etc/biss-ca/receivers", NULL};
   config_t cfg = {0};
-  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  PARSE_OK_OR_NO_OPENSSL(args_parse(ARGC(argv), argv, &cfg));
   ck_assert_int_eq(cfg.biss2_ca_enabled, 1);
   ck_assert_str_eq(cfg.biss2_ca_receivers_dir, "/etc/biss-ca/receivers");
   ck_assert_int_eq(cfg.biss2_ca_session_id_given, 0);
@@ -194,7 +207,7 @@ END_TEST
 START_TEST(biss2_ca_session_id_parses_hex_and_dec) {
   char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000", "--biss2-ca-receivers", "/etc/biss-ca/receivers", "--biss2-ca-session-id", "0x1234", NULL};
   config_t cfg = {0};
-  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  PARSE_OK_OR_NO_OPENSSL(args_parse(ARGC(argv), argv, &cfg));
   ck_assert_int_eq(cfg.biss2_ca_session_id_given, 1);
   ck_assert_uint_eq(cfg.biss2_ca_session_id, 0x1234u);
   yamlcfg_strpool_free(cfg.str_pool);
@@ -237,7 +250,7 @@ END_TEST
 START_TEST(biss2_ca_receivers_defaults_cas_pids_to_video_audio) {
   char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-m", "239.1.2.1:5000", "--biss2-ca-receivers", "/etc/biss-ca/receivers", NULL};
   config_t cfg = {0};
-  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  PARSE_OK_OR_NO_OPENSSL(args_parse(ARGC(argv), argv, &cfg));
   ck_assert_int_eq(cfg.cas_pids_video, 1);
   ck_assert_int_eq(cfg.cas_pids_audio, 1);
   yamlcfg_strpool_free(cfg.str_pool);
@@ -330,6 +343,24 @@ START_TEST(rist_encryption_type_in_without_profile_in_main_is_rejected) {
   char *argv[] = {"dipitvhead", "-i", "rist://@127.0.0.1:6000", "--rist-encryption-type-in", "128", "-m", "239.1.2.1:5000", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(rist_secret_in_without_profile_in_main_is_rejected) {
+  char *argv[] = {"dipitvhead", "-i", "rist://@127.0.0.1:6000", "--rist-secret-in", "s3cret", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(rist_secret_in_with_profile_in_main_is_accepted) {
+  char *argv[] = {"dipitvhead", "-i", "udp://@239.1.1.1:5000", "-i", "rist://@127.0.0.1:6000", "--rist-profile-in", "main", "--rist-secret-in", "s3cret", "-m", "239.1.2.1:5000", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_str_eq(cfg.inputs[0].rist_secret_in, "");
+  ck_assert_str_eq(cfg.inputs[1].rist_secret_in, "s3cret");
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -1020,7 +1051,8 @@ static const setter_case_t setter_cases[] = {
     BAD("al-fec port zero", tvh_apply_al_fec_port, SCOPE_NONE, "0", "invalid '0' (need 1..65535)"),
     BAD("al-fec port too large", tvh_apply_al_fec_port, SCOPE_NONE, "65536", "invalid '65536' (need 1..65535)"),
     OKU("al-fec port", tvh_apply_al_fec_port, SCOPE_NONE, "4000", CFG_OFF(al_fec_port), 4000),
-    BAD("rist buffer zero", tvh_apply_buffer, SCOPE_NONE, "0", "invalid '0' (need 1..4294967295)"),
+    BAD("rist buffer zero", tvh_apply_buffer, SCOPE_NONE, "0", "invalid '0' (need 1..60000)"),
+    BAD("rist buffer too large", tvh_apply_buffer, SCOPE_NONE, "60001", "invalid '60001' (need 1..60000)"),
     OKU("rist buffer", tvh_apply_buffer, SCOPE_NONE, "500", CFG_OFF(rist_buffer_ms), 500),
     BAD("rist profile unknown", tvh_apply_profile, SCOPE_NONE, "x", "invalid 'x' (simple|main)"),
     BAD("rist encryption type unsupported", tvh_apply_encryption_type, SCOPE_NONE, "192", "invalid '192' (128|256)"),
@@ -1056,6 +1088,7 @@ static const setter_case_t setter_cases[] = {
     OKU("input rist profile main", tvh_apply_input_rist_profile, SCOPE_INPUT, "main", IN_OFF(rist_profile_main), 1),
     BAD("input rist encryption type unsupported", tvh_apply_input_rist_encryption_type, SCOPE_INPUT, "512", "invalid '512' (128|256)"),
     OKU("input rist encryption type 256", tvh_apply_input_rist_encryption_type, SCOPE_INPUT, "256", IN_OFF(rist_key_size_in), 256),
+    OKU("input rist buffer", tvh_apply_input_rist_buffer, SCOPE_INPUT, "500", IN_OFF(rist_buffer_ms_in), 500),
     BAD("input srt pbkeylen below range", tvh_apply_input_srt_pbkeylen, SCOPE_INPUT, "15", "invalid '15' (16|24|32)"),
     BAD("input srt pbkeylen between sizes", tvh_apply_input_srt_pbkeylen, SCOPE_INPUT, "20", "invalid '20' (16|24|32)"),
     BAD("input srt pbkeylen above range", tvh_apply_input_srt_pbkeylen, SCOPE_INPUT, "33", "invalid '33' (16|24|32)"),
@@ -1187,6 +1220,8 @@ static const buffer_case_t buffer_cases[] = {
     {"srt packetfilter", tvh_apply_srt_packetfilter, SCOPE_NONE, MEMBER_SIZE(config_t, srt_packetfilter)},
     {"input sdt text", tvh_apply_input_sdt, SCOPE_INPUT, MEMBER_SIZE(dipitvhead_input_t, sdt_text)},
     {"input provider", tvh_apply_input_provider, SCOPE_INPUT, MEMBER_SIZE(dipitvhead_input_t, provider_text)},
+    {"input rist secret", tvh_apply_input_rist_secret, SCOPE_INPUT, MEMBER_SIZE(dipitvhead_input_t, rist_secret_in)},
+    {"input rist cname", tvh_apply_input_rist_cname, SCOPE_INPUT, MEMBER_SIZE(dipitvhead_input_t, rist_cname_in)},
     {"input srt passphrase", tvh_apply_input_srt_passphrase, SCOPE_INPUT, MEMBER_SIZE(dipitvhead_input_t, srt_passphrase_in)},
     {"input srt streamid", tvh_apply_input_srt_streamid, SCOPE_INPUT, MEMBER_SIZE(dipitvhead_input_t, srt_streamid_in)},
     {"input srt packetfilter", tvh_apply_input_srt_packetfilter, SCOPE_INPUT, MEMBER_SIZE(dipitvhead_input_t, srt_packetfilter_in)},
@@ -1288,7 +1323,7 @@ static const cfgtest_case_t cfgtest_cases[] = {
     {"unknown key is a warning", "input: udp://@239.1.1.1:5000\nmcast: 239.1.3.1:5000\nbogus: 1\n", 0, -1},
     {"missing input and output is a warning", "ttl: 4\n", 0, -1},
     {"conflicting options are a warning", "input: udp://@239.1.1.1:5000\nmcast: 239.1.3.1:5000\nal-fec: 5:5\n", 0, -1},
-    {"invalid value is a warning too", "input: udp://@239.1.1.1:5000\nmcast: 239.1.3.1:5000\nttl: 300\n", 0, -1},
+    {"invalid value is an error", "input: udp://@239.1.1.1:5000\nmcast: 239.1.3.1:5000\nttl: 300\n", -1, -1},
 };
 
 START_TEST(configtest_separates_warnings_from_errors) {
@@ -1348,6 +1383,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, rist_encryption_type_in_pairs_with_preceding_input);
   tcase_add_test(tc, rist_encryption_type_in_without_profile_in_main_is_rejected);
   tcase_add_test(tc, rist_encryption_type_in_before_any_input_is_rejected);
+  tcase_add_test(tc, rist_secret_in_without_profile_in_main_is_rejected);
+  tcase_add_test(tc, rist_secret_in_with_profile_in_main_is_accepted);
   tcase_add_test(tc, rist_encryption_type_in_on_non_rist_input_is_harmless);
   tcase_add_test(tc, rist_options_without_any_rist_peer_are_rejected_by_profile_check_only);
   tcase_add_test(tc, rist_input_with_at_is_accepted);

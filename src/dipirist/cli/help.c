@@ -6,7 +6,7 @@
 #include "priv.h"
 #include "../version.h"
 
-void rist_print_help(void) {
+void dipirist_print_help(void) {
   printf(
   "usage: %s -i <uri> -o <uri> [options]\n\n"
   "bridge a DVB-IPI stream between plain RTP/UDP/file and a RIST link (VSF TR-06),\n"
@@ -17,7 +17,7 @@ void rist_print_help(void) {
   "  rist://@<host>:<port>[?params] RIST peer, listens; -i only\n"
   "                                 repeat -i/-o to bond several links\n"
   "                                 e.g. ?buffer=1000&secret=... - see --buffer/\n"
-  "                                 --secret below for the equivalent flags)\n"
+  "                                 --secret below for the equivalent flags\n"
   "  rtp://@<group>:<port>          RTP wrapped SPTS multicast (@ optional)\n"
   "  udp://@<group>:<port>          raw SPTS multicast (@ optional)\n"
   "  http://<host>:<port>/<path>    HTTP TS stream, -i only\n"
@@ -30,6 +30,10 @@ void rist_print_help(void) {
   "  -o, --out <uri>                output (see above), repeatable if rist://\n"
   "  -I, --iface <iface>            interface for the non-RIST side's multicast join/send\n"
   "  -k, --insecure                 skip TLS verification, -i https:// only\n"
+  "      --ttl <n>                  multicast TTL for -o rtp://udp:// (default: kernel, 1)\n"
+  "      --dscp <v>                 DSCP for -o rtp://udp://: video-high|video-low|voice|\n"
+  "                                 signalling|best-effort|0..63 (default: kernel)\n"
+  "      --pace                     release -i file/stdin at PCR/RTP rate, not disk speed\n"
   "      --profile <name>           simple|main (default simple); main adds encryption\n"
   "      --secret <psk>             pre-shared key; requires --profile main\n"
   "      --encryption-type <bits>   AES key size, 128|256 requires --profile main\n"
@@ -42,7 +46,7 @@ void rist_print_help(void) {
   "      --metrics-id <name>        stable instance id; metrics disabled unless set\n"
   "      --metrics-interval <s>     snapshot interval in seconds (default: 5)\n"
   "      --metrics-inspect-ts <lvl> TS health metrics: off|basic|medium|full (default: off)\n"
-  "  -v, --verbose                  periodic bridge stats on stderr\n"
+  "  -v, --verbose                  raise librist log level to DEBUG\n"
   "  -d, --daemonize                fork to background after startup\n"
   "  -c, --config <path>            YAML config file (default: %s, if present)\n"
   "      --config-strict            fail on config file issues instead of warnings\n"

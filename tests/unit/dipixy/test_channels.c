@@ -45,6 +45,13 @@ static void *playlist_http_server_thread(void *arg) {
       return NULL;
     s->accepts++;
     send(fd, resp, sizeof resp - 1, MSG_NOSIGNAL);
+    for (unsigned k = 0; k < 3; k++) {
+      unsigned char pkt[188];
+
+      memset(pkt, 0xAB, sizeof pkt);
+      pkt[0] = 0x47;
+      send(fd, pkt, sizeof pkt, MSG_NOSIGNAL);
+    }
   }
 }
 

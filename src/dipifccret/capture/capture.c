@@ -47,6 +47,7 @@ capture_t *capture_open(const char *iface, const char *const *ranges, size_t ran
   struct ifreq ifr;
   int ifindex;
   int ver;
+  int ign;
   struct tpacket_req3 req;
   struct sockaddr_ll sll;
   struct packet_mreq mreq;
@@ -117,6 +118,12 @@ capture_t *capture_open(const char *iface, const char *const *ranges, size_t ran
   ver = TPACKET_V3;
   if (setsockopt(cap->fd, SOL_PACKET, PACKET_VERSION, &ver, sizeof ver) < 0) {
     snprintf(errbuf, errbuf_len, "PACKET_VERSION: %s", strerror(errno));
+    goto fail;
+  }
+
+  ign = 1;
+  if (setsockopt(cap->fd, SOL_PACKET, PACKET_IGNORE_OUTGOING, &ign, sizeof ign) < 0 && errno != ENOPROTOOPT) {
+    snprintf(errbuf, errbuf_len, "PACKET_IGNORE_OUTGOING: %s", strerror(errno));
     goto fail;
   }
 
@@ -201,6 +208,10 @@ capture_t *capture_from_ring(unsigned char *ring, size_t block_size, size_t bloc
   return cap;
 }
 
+void capture_set_fd(capture_t *cap, int fd) {
+  cap->fd = fd;
+}
+
 void capture_close(capture_t *cap) {
   if (!cap) return;
   if (cap->ring && !cap->ring_borrowed) munmap(cap->ring, cap->ring_size);
@@ -240,24 +251,36 @@ int capture_drop_privileges(const char *user) {
   return 0;
 }
 
+/* own transmissions loop back on ETH_P_ALL. sll between header and mac */
+static int ring_frame_outgoing(const struct tpacket3_hdr *ppd) {
+  size_t sll_off = TPACKET_ALIGN(sizeof(struct tpacket3_hdr));
+  const struct sockaddr_ll *sll;
+
+  if (ppd->tp_mac < sll_off + sizeof *sll)
+    return 0;
+  sll = (const struct sockaddr_ll *)((const unsigned char *)ppd + sll_off);
+  return sll->sll_pkttype == PACKET_OUTGOING;
+}
+
 void capture_drain_ring(capture_t *cap, capture_frame_cb cb, void *user) {
   for (;;) {
     struct tpacket_block_desc *bd = (struct tpacket_block_desc *)(cap->ring + cap->block_idx * cap->block_size);
     struct tpacket3_hdr *ppd;
 
-    if (!(bd->hdr.bh1.block_status & TP_STATUS_USER)) break;
+    if (!(__atomic_load_n(&bd->hdr.bh1.block_status, __ATOMIC_ACQUIRE) & TP_STATUS_USER)) break;
     ppd = (struct tpacket3_hdr *)((unsigned char *)bd + bd->hdr.bh1.offset_to_first_pkt);
     for (unsigned i = 0; i < bd->hdr.bh1.num_pkts; i++) {
       const unsigned char *pkt = (const unsigned char *)ppd + ppd->tp_mac;
-      capture_handle_frame(pkt, ppd->tp_snaplen, cap->parsed_ranges, cap->range_count, cb, user);
+      if (!ring_frame_outgoing(ppd))
+        capture_handle_frame(pkt, ppd->tp_snaplen, cap->parsed_ranges, cap->range_count, cb, user);
       ppd = (struct tpacket3_hdr *)((unsigned char *)ppd + ppd->tp_next_offset);
     }
-    bd->hdr.bh1.block_status = TP_STATUS_KERNEL;
+    __atomic_store_n(&bd->hdr.bh1.block_status, TP_STATUS_KERNEL, __ATOMIC_RELEASE);
     cap->block_idx = (cap->block_idx + 1) % cap->block_nr;
   }
 }
 
-void capture_run(capture_t *cap, capture_frame_cb cb, void *user) {
+int capture_run(capture_t *cap, capture_frame_cb cb, void *user) {
   struct pollfd pfd;
   pfd.fd = cap->fd;
   pfd.events = POLLIN;
@@ -265,9 +288,18 @@ void capture_run(capture_t *cap, capture_frame_cb cb, void *user) {
     int n = poll(&pfd, 1, CAPTURE_POLL_TIMEOUT_MS);
     if (n < 0) {
       if (errno == EINTR) continue;
-      break;
+      return -1;
     }
     if (n == 0) continue;
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+      /* iface down etc: POLLERR is sticky, retrying would spin */
+      int soerr = 0;
+      socklen_t sl = sizeof soerr;
+      if (pfd.revents & POLLNVAL || getsockopt(cap->fd, SOL_SOCKET, SO_ERROR, &soerr, &sl) < 0 || soerr == 0) soerr = (pfd.revents & POLLNVAL) ? EBADF : ENETDOWN;
+      errno = soerr;
+      return -1;
+    }
     capture_drain_ring(cap, cb, user);
   }
+  return 0;
 }

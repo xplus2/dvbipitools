@@ -40,7 +40,7 @@ static int so_start_fetch(source_open_t *o, net_err_reason_t *reason_out) {
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
-  o->ha = http_async_start(&u, TOOL_NAME "/" TOOL_VERSION, o->insecure, NULL, reason_out);
+  o->ha = http_async_start(&u, TOOL_NAME "/" TOOL_VERSION, o->insecure, "Icy-MetaData: 1", reason_out); /* icy_feed() strips blocks */
   if (!o->ha) return -1;
   o->phase = SO_FETCHING;
   return 0;

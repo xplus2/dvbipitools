@@ -16,6 +16,7 @@ typedef struct {
   unsigned port;
   const char *iface; /* NULL = kernel default route */
   int ttl;            /* 0 = kernel default */
+  int tos;            /* full tos byte, 0 = kernel default */
   unsigned al_fec_l;
   unsigned al_fec_d;
   unsigned al_fec_port;

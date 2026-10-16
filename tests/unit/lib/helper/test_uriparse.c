@@ -219,6 +219,25 @@ START_TEST(pct_encode_seg_truncates_on_triplet_boundary) {
 }
 END_TEST
 
+static const struct {
+  const char *in;
+  const char *out;
+} redact_cases[] = {
+    {"rtp://user:pw@host:1234/p", "rtp://host:1234/p"},
+    {"rtp://user:p@ss@host:1234/p", "rtp://host:1234/p"},
+    {"rtp://host/p@th?x=1#f", "rtp://host/p@th"},
+    {"rtp://@host", "rtp://@host"},
+    {"host:1234", "host:1234"},
+};
+
+START_TEST(redact_drops_userinfo_up_to_last_at) {
+  char *r = uriparse_redact_dup(redact_cases[_i].in);
+  ck_assert_ptr_nonnull(r);
+  ck_assert_str_eq(r, redact_cases[_i].out);
+  free(r);
+}
+END_TEST
+
 static Suite *uriparse_suite(void) {
   Suite *s = suite_create("uriparse");
   TCase *tc = tcase_create("core");
@@ -231,6 +250,7 @@ static Suite *uriparse_suite(void) {
   tcase_add_loop_test(tc, rtmp_or_file_classifies_and_bounds_targets, 0, (int)(sizeof target_cases / sizeof target_cases[0]));
   tcase_add_test(tc, pct_encode_seg_encodes_reserved_and_high_bytes);
   tcase_add_test(tc, pct_encode_seg_truncates_on_triplet_boundary);
+  tcase_add_loop_test(tc, redact_drops_userinfo_up_to_last_at, 0, (int)(sizeof redact_cases / sizeof redact_cases[0]));
   suite_add_tcase(s, tc);
   return s;
 }

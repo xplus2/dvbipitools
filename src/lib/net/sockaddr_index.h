@@ -11,7 +11,7 @@
    no payload: caller keeps own slot array. O(1) avg lookup vs linear scan. not thread-safe, caller serializes. */
 typedef struct sockaddr_index sockaddr_index_t;
 
-/* cap: max live keys, same as caller's slot pool. table sized for <75% load */
+/* cap: initial live key estimate, table sized for <50% load. grows when exceeded */
 sockaddr_index_t *sockaddr_index_new(size_t cap);
 void sockaddr_index_free(sockaddr_index_t *idx);
 

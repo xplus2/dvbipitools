@@ -41,31 +41,37 @@ void tvhead_mpts_set_cas(mpts_t *mpts, cas_t *cas) {
   mpts_set_cas(mpts, cas, &mpts_cas_ops, vendors, n);
 }
 
+/* Past deadline: start with discovered inputs, lates attach in discover_input(). None yet: keep waiting. */
 int check_cas_discovery_gate(const config_t *cfg, mpts_program_t *progs, unsigned n, mpts_t *mpts,
                              double cas_gate_deadline, cas_t **cas_out) {
   unsigned ready_count = 0;
+  int expired = mono_seconds() >= cas_gate_deadline;
   for (unsigned i = 0; i < n; i++) {
     if (progs[i].rx) ready_count++;
   }
-  if (ready_count == n) {
+  if (ready_count == n || (expired && ready_count > 0)) {
     const out_es_t *es_lists[ARGS_MAX_INPUTS] = {0};
     int es_counts[ARGS_MAX_INPUTS] = {0};
     cas_t *cas;
-    for (unsigned i = 0; i < n; i++) es_lists[i] = remux_es(progs[i].rx, &es_counts[i]);
+    if (ready_count < n) {
+      log_code("TW000612", "cas: --cas-pids video/audio/lcevc: not every -i discovered within %.0fs, starting without:", CAS_KEYWORD_DISCOVERY_TIMEOUT_S);
+      for (unsigned i = 0; i < n; i++) {
+        if (!progs[i].rx) log_code_ansi("TW000613", "  input \e[1;30m%u\e[0m: %s", i, progs[i].psi ? "still discovering" : "not connected");
+      }
+    }
+    for (unsigned i = 0; i < n; i++) {
+      if (progs[i].rx) es_lists[i] = remux_es(progs[i].rx, &es_counts[i]);
+    }
     cas = cas_start_multi(cfg, es_lists, es_counts, n);
     if (!cas) {
       log_code("TS300163", "cas: failed to start");
       return -1;
     }
     tvhead_mpts_set_cas(mpts, cas);
-    for (unsigned i = 0; i < n; i++) remux_set_cas(progs[i].rx, cas);
-    *cas_out = cas;
-  } else if (mono_seconds() >= cas_gate_deadline) {
-    log_code("TE000612", "cas: --cas-pids video/audio/lcevc need every -i discovered within %.0fs:", CAS_KEYWORD_DISCOVERY_TIMEOUT_S);
     for (unsigned i = 0; i < n; i++) {
-      if (!progs[i].rx) log_code_ansi("TE000613", "  input \e[1;30m%u\e[0m: %s", i, progs[i].psi ? "still discovering" : "not connected");
+      if (progs[i].rx) remux_set_cas(progs[i].rx, cas);
     }
-    return -1;
+    *cas_out = cas;
   }
   return 0;
 }

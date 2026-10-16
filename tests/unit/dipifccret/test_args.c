@@ -145,6 +145,25 @@ START_TEST(burst_multiplier_is_overridable) {
 }
 END_TEST
 
+START_TEST(burst_multiplier_rejects_nonfinite_and_huge) {
+  const char *bad[] = {"nan", "inf", "-inf", "1e300", "1000001"};
+  for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+    char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "-X", (char *)bad[i], NULL};
+    config_t cfg = {0};
+    ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+    yamlcfg_strpool_free(cfg.str_pool);
+  }
+}
+END_TEST
+
+START_TEST(burst_multiplier_accepts_upper_bound) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "-X", "1e6", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(cpu_affinity_defaults_off) {
   char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", NULL};
   config_t cfg = {0};
@@ -400,6 +419,41 @@ START_TEST(fcc_resolve_base_port_rejects_out_of_range) {
 }
 END_TEST
 
+START_TEST(fcc_resolve_range_past_65535_rejected) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:65535", "-I", "eth0", "--fcc-resolve-by-port", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(fcc_resolve_range_explicit_base_past_65535_rejected) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0",
+                  "--fcc-resolve-by-port", "--fcc-resolve-base-port", "65500", "-M", "100", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(fcc_resolve_range_ending_at_65535_accepted) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0",
+                  "--fcc-resolve-by-port", "--fcc-resolve-base-port", "65436", "-M", "100", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(fcc_resolve_range_containing_listen_port_rejected) {
+  char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6050", "-I", "eth0",
+                  "--fcc-resolve-by-port", "--fcc-resolve-base-port", "6000", "-M", "100", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(congestion_nack_threshold_defaults_to_five) {
   char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", NULL};
   config_t cfg = {0};
@@ -454,6 +508,30 @@ START_TEST(fcc_client_range_rejects_malformed_cidr) {
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(fcc_range_rejects_bad_prefix_text) {
+  const char *bad[] = {"10.0.0.0/", "10.0.0.0/x", "10.0.0.0/8x", "10.0.0.0/ 8", "ff3e::/", "10.0.0.0/33", "10.0.0.0/-1"};
+  for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
+    char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0",
+                    "--fcc-range", (char *)bad[i], NULL};
+    config_t cfg = {0};
+    ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+    yamlcfg_strpool_free(cfg.str_pool);
+  }
+}
+END_TEST
+
+START_TEST(fcc_client_range_rejects_bad_prefix_text) {
+  const char *bad[] = {"10.0.0.0/", "10.0.0.0/x", "10.0.0.0/8x", "10.0.0.0/ 8", "ff3e::/", "10.0.0.0/33", "10.0.0.0/-1"};
+  for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
+    char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0",
+                    "--fcc-client-range", (char *)bad[i], NULL};
+    config_t cfg = {0};
+    ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
+    yamlcfg_strpool_free(cfg.str_pool);
+  }
 }
 END_TEST
 
@@ -662,6 +740,8 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, buffer_zero_is_rejected);
   tcase_add_test(tc, burst_multiplier_must_exceed_one);
   tcase_add_test(tc, burst_multiplier_is_overridable);
+  tcase_add_test(tc, burst_multiplier_rejects_nonfinite_and_huge);
+  tcase_add_test(tc, burst_multiplier_accepts_upper_bound);
   tcase_add_test(tc, workers_is_overridable);
   tcase_add_test(tc, cpu_affinity_defaults_off);
   tcase_add_test(tc, cpu_affinity_accepts_auto_and_list);
@@ -688,12 +768,18 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, fcc_resolve_by_port_defaults_off);
   tcase_add_test(tc, fcc_resolve_by_port_and_base_port_are_settable);
   tcase_add_test(tc, fcc_resolve_base_port_rejects_out_of_range);
+  tcase_add_test(tc, fcc_resolve_range_past_65535_rejected);
+  tcase_add_test(tc, fcc_resolve_range_explicit_base_past_65535_rejected);
+  tcase_add_test(tc, fcc_resolve_range_ending_at_65535_accepted);
+  tcase_add_test(tc, fcc_resolve_range_containing_listen_port_rejected);
   tcase_add_test(tc, congestion_nack_threshold_defaults_to_five);
   tcase_add_test(tc, congestion_nack_threshold_zero_disables);
   tcase_add_test(tc, fcc_range_accepts_cidr_list);
   tcase_add_test(tc, fcc_range_rejects_malformed_cidr);
   tcase_add_test(tc, fcc_client_range_accepts_cidr_list);
   tcase_add_test(tc, fcc_client_range_rejects_malformed_cidr);
+  tcase_add_test(tc, fcc_range_rejects_bad_prefix_text);
+  tcase_add_test(tc, fcc_client_range_rejects_bad_prefix_text);
   tcase_add_test(tc, abuse_limit_options_have_defaults_and_can_be_set);
   tcase_add_test(tc, abuse_limit_options_reject_out_of_range);
   tcase_add_test(tc, help_returns_help_status);

@@ -92,6 +92,12 @@ START_TEST(id3_is_tag_and_tag_size) {
   ck_assert_int_eq(id3_is_tag(hdr, sizeof hdr), 1);
   ck_assert_uint_eq(id3_tag_size(hdr, sizeof hdr), 20u); /* 10 header + syncsafe body 10 */
   ck_assert_int_eq(id3_is_tag((const unsigned char *)"XYZ", 3), 0);
+  ck_assert_int_eq(id3_is_tag((const unsigned char *)"ID3", 3), 1);
+  hdr[3] = 7;
+  ck_assert_int_eq(id3_is_tag(hdr, sizeof hdr), 0);
+  hdr[3] = 4;
+  hdr[8] = 0x80;
+  ck_assert_int_eq(id3_is_tag(hdr, sizeof hdr), 0);
 }
 END_TEST
 

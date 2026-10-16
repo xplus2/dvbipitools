@@ -140,6 +140,7 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
       psi_set_label(r->watch, label);
       r->watch_pmt_pid = psi_pmt_pid(psi);
       psi_select_pmt_pid(r->watch, r->watch_pmt_pid);
+      psi_select_program(r->watch, r->src_service_id);
     }
   } else {
     r->src_pmt_len = 0;
@@ -149,6 +150,8 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
   r->last_nit = -1.0;
   r->last_ait = -1.0;
   r->last_cat = -1.0;
+  r->last_tdt = -1.0;
+  r->last_tot = -1.0;
   return r;
 }
 
@@ -161,6 +164,7 @@ void remux_free(remux_t *r) {
     free(r->scte[i]);
   }
   psi_free(r->watch);
+  psi_free(r->watch_prev);
   free(r);
 }
 
@@ -309,6 +313,8 @@ static void remap_es(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
   r->last_es_idx = 0;
   r->pcr_pid_in = psi_pcr_pid(r->watch);
   if (r->hold_clock) pick_hold_ref(r);
+  psi_free(r->watch_prev);
+  r->watch_prev = NULL;
 }
 
 static int follow_pmt_pid(remux_t *r) {
@@ -327,11 +333,13 @@ static int follow_pmt_pid(remux_t *r) {
     log_line("program %u: PMT pid 0x%x -> 0x%x", r->src_service_id, r->watch_pmt_pid, pid);
     snprintf(label, sizeof label, "program %u watch", r->src_service_id);
     psi_set_label(w, label);
-    psi_free(r->watch);
+    if (r->watch_prev) psi_free(r->watch);
+    else r->watch_prev = r->watch;
     r->watch = w;
     r->watch_pmt_pid = pid;
     r->watch_parsed = 0;
     psi_select_pmt_pid(w, r->watch_pmt_pid);
+    psi_select_program(w, r->src_service_id);
     return 1;
   }
   return 0;
@@ -346,7 +354,8 @@ void watch_source_pmt(remux_t *r, double now, const unsigned char *pkt188, remux
   if (psi_pmt_parsed(r->watch) == r->watch_parsed) return;
   r->watch_parsed = psi_pmt_parsed(r->watch);
   sec = psi_pmt_section(r->watch, &len);
-  if (!sec || len > sizeof r->src_pmt || (len == r->src_pmt_len && !memcmp(sec, r->src_pmt, len))) return;
+  if (!sec || len > sizeof r->src_pmt) return;
+  if (!r->watch_prev && len == r->src_pmt_len && !memcmp(sec, r->src_pmt, len)) return;
   memcpy(r->src_pmt, sec, len);
   r->src_pmt_len = len;
   remap_es(r, now, cb, ctx, tsm);
@@ -405,5 +414,6 @@ int remux_get_sdt_info(const remux_t *r, psi_sdt_entry_t *out) {
   out->service_type = r->service_type;
   out->provider = r->provider_name;
   out->service_name = r->service_name;
+  out->no_eit_pf = r->input.strip_eit ? 1u : 0u;
   return 0;
 }

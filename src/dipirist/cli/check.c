@@ -7,7 +7,7 @@
 
 #include "priv.h"
 
-args_status_t rist_cli_check(config_t *cfg) {
+args_status_t dipirist_cli_check(config_t *cfg) {
   plain_endpoint_t *ne;
 
   if (!cfg->n_in) {
@@ -30,6 +30,10 @@ args_status_t rist_cli_check(config_t *cfg) {
     argerr("VS000144", "--encryption-type requires --profile main");
     return ARGS_ERR;
   }
+  if (cfg->key_size && !cfg->secret[0]) {
+    argerr("VS000719", "--encryption-type requires --secret");
+    return ARGS_ERR;
+  }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
   if (argutil_metrics_inspect_ts_validate(TOOL_NAME, cfg->metrics_id, cfg->metrics_inspect_ts)) return ARGS_ERR;
   if (cfg->al_fec_l && !cfg->al_fec_port) {
@@ -43,7 +47,13 @@ args_status_t rist_cli_check(config_t *cfg) {
   ne->al_fec_l = cfg->al_fec_l;
   ne->al_fec_d = cfg->al_fec_d;
   ne->al_fec_port = cfg->al_fec_port;
-  if (cfg->insecure_tls && !(cfg->in.nonrist.kind == PLAIN_EP_HTTP && cfg->in.nonrist.http.tls))
-    log_code("VS000148", TOOL_NAME ": --insecure needs -i https://");
+  if (cfg->insecure_tls && !(cfg->in.nonrist.kind == PLAIN_EP_HTTP && cfg->in.nonrist.http.tls)) {
+    argerr("VS000148", "--insecure needs -i https://");
+    return ARGS_ERR;
+  }
+  if ((cfg->out_ttl || cfg->out_tos) && (cfg->out.is_rist || cfg->out.nonrist.kind == PLAIN_EP_FILE))
+    log_code("VA000535", TOOL_NAME ": --ttl/--dscp need -o rtp:// or udp:// target");
+  if (cfg->pace && (cfg->in.is_rist || cfg->in.nonrist.kind != PLAIN_EP_FILE))
+    log_code("VA000566", TOOL_NAME ": --pace requires -i - or a file path");
   return ARGS_OK;
 }

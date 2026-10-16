@@ -3,10 +3,12 @@
 
 
 #include <getopt.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/mux/fec2022.h"
 #include "lib/net/jitbuf.h"
 
 #include "priv.h"
@@ -98,6 +100,23 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
         return ARGS_ERR;
       }
       break;
+    case OPT_RIST_SECRET_IN:
+      REQUIRE_INPUT("--rist-secret-in");
+      if (argutil_bufcpy_opt(TOOL_NAME, in->rist_secret_in, sizeof in->rist_secret_in, optarg, "--rist-secret-in"))
+        return ARGS_ERR;
+      break;
+    case OPT_RIST_CNAME_IN:
+      REQUIRE_INPUT("--rist-cname-in");
+      if (argutil_bufcpy_opt(TOOL_NAME, in->rist_cname_in, sizeof in->rist_cname_in, optarg, "--rist-cname-in"))
+        return ARGS_ERR;
+      break;
+    case OPT_RIST_BUFFER_IN:
+      REQUIRE_INPUT("--rist-buffer-in");
+      if (argutil_uint_range(optarg, 1, 60000, &in->rist_buffer_ms_in)) {
+        argerr("TS000724", "invalid --rist-buffer-in: %s (1..60000 ms)", optarg);
+        return ARGS_ERR;
+      }
+      break;
     case OPT_RIST_PROFILE_IN: {
       static const enum_map_t map[] = {{"simple", 0}, {"main", 1}};
       int v;
@@ -135,6 +154,20 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
       REQUIRE_INPUT("--srt-latency-in");
       if (argutil_uint_range(optarg, 1, 60000, &in->srt_latency_in_ms)) {
         argerr("TS000360", "invalid --srt-latency-in: %s (1..60000 ms)", optarg);
+        return ARGS_ERR;
+      }
+      break;
+    case OPT_AL_FEC_IN:
+      REQUIRE_INPUT("--al-fec-in");
+      if (fec2022_parse_ld(optarg, &in->al_fec_l_in, &in->al_fec_d_in)) {
+        argerr("TS000727", "invalid --al-fec-in: %s (want L:D, L*D<=400, L<=40)", optarg);
+        return ARGS_ERR;
+      }
+      break;
+    case OPT_AL_FEC_PORT_IN:
+      REQUIRE_INPUT("--al-fec-port-in");
+      if (argutil_port_parse(optarg, &in->al_fec_port_in)) {
+        argerr("TS000728", "invalid --al-fec-port-in: %s", optarg);
         return ARGS_ERR;
       }
       break;

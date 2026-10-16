@@ -13,6 +13,7 @@
 #include "../log_capture.h"
 #include "../metrics_sink.h"
 #include "dipirist/bridge.h"
+#include "lib/sys/signal.h"
 #include "dipirist/version.h"
 
 START_TEST(profile_of_maps_simple) {
@@ -286,7 +287,7 @@ START_TEST(receiver_stats_cb_pushes_flow_counters_once_per_interval) {
   st->stats.receiver_flow.recovered = 5;
   st->stats.receiver_flow.lost = 2;
   st->stats.receiver_flow.rtt = 33;
-#ifdef DIPIRIST_HAVE_AVG_BUFFER_TIME
+#ifdef DVBIPITOOLS_RIST_HAVE_AVG_BUFFER_TIME
   st->stats.receiver_flow.avg_buffer_time = 150;
 #endif
   again->stats.receiver_flow.received = 2000;
@@ -304,7 +305,7 @@ START_TEST(receiver_stats_cb_pushes_flow_counters_once_per_interval) {
   ck_assert_uint_eq(v, 2u);
   ck_assert_int_eq(seen_has(&seen, METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS, &v), 1);
   ck_assert_uint_eq(v, 33u);
-#ifdef DIPIRIST_HAVE_AVG_BUFFER_TIME
+#ifdef DVBIPITOOLS_RIST_HAVE_AVG_BUFFER_TIME
   ck_assert_int_eq(seen_has(&seen, METRICS_ID_RIST_RECEIVER_BUFFER_MILLISECONDS, &v), 1);
   ck_assert_uint_eq(v, 150u);
 #endif
@@ -321,6 +322,36 @@ START_TEST(receiver_stats_cb_ignores_other_stats_types) {
 
   sink_open(&ms, METRICS_COMPONENT_RIST, "rist1", 5.0);
   ck_assert_int_eq(bridge_receiver_stats_cb(&ms.mx, st), 0);
+  ck_assert_int_eq(sink_read(&ms, &seen), 0);
+  sink_close(&ms);
+}
+END_TEST
+
+START_TEST(receiver_idle_push_sends_commons_without_flow) {
+  sink_t ms;
+  seen_t seen;
+  uint64_t v = 0;
+
+  sink_open(&ms, METRICS_COMPONENT_RIST, "rist1", 5.0);
+  bridge_receiver_idle_push(&ms.mx, 100.0);
+  ck_assert_int_eq(sink_read(&ms, &seen), 1);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_HEADEND_INFO, &v), 1);
+  ck_assert_int_eq(seen_has(&seen, METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL, &v), 0);
+  sink_close(&ms);
+}
+END_TEST
+
+START_TEST(receiver_idle_push_yields_while_flow_stats_fresh) {
+  sink_t ms;
+  seen_t seen;
+  struct rist_stats *st = new_stats(RIST_STATS_RECEIVER_FLOW);
+
+  sink_open(&ms, METRICS_COMPONENT_RIST, "rist1", 5.0);
+  ck_assert_int_eq(bridge_receiver_stats_cb(&ms.mx, st), 0);
+  ck_assert_int_eq(sink_read(&ms, &seen), 1);
+  bridge_receiver_idle_push(&ms.mx, mono_seconds() + 10.0);
+  ck_assert_int_eq(sink_read(&ms, &seen), 1);
+  bridge_receiver_idle_push(&ms.mx, mono_seconds() + 1.0);
   ck_assert_int_eq(sink_read(&ms, &seen), 0);
   sink_close(&ms);
 }
@@ -343,6 +374,8 @@ static Suite *bridge_suite(void) {
   tcase_add_test(tc, tssink_cfg_udp_kind);
   tcase_add_test(tc, receiver_stats_cb_pushes_flow_counters_once_per_interval);
   tcase_add_test(tc, receiver_stats_cb_ignores_other_stats_types);
+  tcase_add_test(tc, receiver_idle_push_sends_commons_without_flow);
+  tcase_add_test(tc, receiver_idle_push_yields_while_flow_stats_fresh);
   tcase_add_loop_test(tc, bridge_run_fails_cleanly_when_setup_cannot_complete, 0, (int)(sizeof bridge_fail_cases / sizeof bridge_fail_cases[0]));
   suite_add_tcase(s, tc);
   return s;

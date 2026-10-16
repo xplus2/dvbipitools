@@ -15,7 +15,7 @@
 
 #include "priv.h"
 
-args_status_t rist_opt_rist(rist_opt_t *p, int c) {
+args_status_t dipirist_opt_rist(dipirist_opt_t *p, int c) {
   config_t *cfg = p->cfg;
 
   switch (c) {

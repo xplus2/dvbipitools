@@ -42,10 +42,6 @@ typedef struct {
   int depth;
 } walk_t;
 
-static int soft(const yamlcfg_t *y) {
-  return y->check || y->strict;
-}
-
 static void code_for(const yamlcfg_t *y, const char *code, char *out, size_t n) {
   snprintf(out, n, "%s", code);
   out[1] = y->strict ? 'S' : 'A';
@@ -82,6 +78,16 @@ static void warn_at(yamlcfg_t *y, int line, const char *code, const char *fmt, .
   y->warnings++;
 }
 
+static void error_at(yamlcfg_t *y, int line, const char *code, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
+
+static void error_at(yamlcfg_t *y, int line, const char *code, const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vreport(y, "error: ", line, code, fmt, ap);
+  va_end(ap);
+  y->errors++;
+}
+
 void yamlcfg_warn(yamlcfg_t *y, const char *code, const char *fmt, ...) {
   char cb[16];
   va_list ap;
@@ -93,12 +99,14 @@ void yamlcfg_warn(yamlcfg_t *y, const char *code, const char *fmt, ...) {
 }
 
 int yamlcfg_report(const yamlcfg_t *y) {
-  const char *noun = y->strict ? "error" : "warning";
+  int as_error = y->strict || y->errors;
+  unsigned n = y->errors + (y->strict ? y->warnings : y->errors ? 0 : y->warnings);
+  const char *noun = as_error ? "error" : "warning";
   char cb[16];
-  code_for(y, "LA700001", cb, sizeof cb);
-  if (y->warnings) argutil_err(y->tool, cb, "%s: %u %s%s", y->path, y->warnings, noun, y->warnings == 1 ? "" : "s");
-  else             argutil_err(y->tool, NULL, "%s: ok", y->path);
-  return y->strict && y->warnings ? -1 : 0;
+  snprintf(cb, sizeof cb, "%s", as_error ? "LS700001" : "LA700001");
+  if (n) argutil_err(y->tool, cb, "%s: %u %s%s", y->path, n, noun, n == 1 ? "" : "s");
+  else   argutil_err(y->tool, NULL, "%s: ok", y->path);
+  return as_error && n ? -1 : 0;
 }
 
 int yamlcfg_parse_bool(const char *val, int *out) {
@@ -144,18 +152,16 @@ static int apply_value(walk_t *w, const char *val, int line, int in_seq, unsigne
     return 0;
   }
   if (in_seq && !w->keys[i].list) {
-    if (!soft(y)) return fail(y, line, "LS000295", "%s: not a list", w->path);
-    warn_at(y, line, "LA000295", "%s: not a list", w->path);
+    warn_at(y, line, "LA000295", "key '%s' is not a list", w->path);
     return 0;
   }
-  if (w->seen[i] && item == 0) warn_at(y, line, "LA000296", "duplicate key '%s', last one wins", w->path);
+  if (w->seen[i] && item == 0 && !w->keys[i].list) warn_at(y, line, "LA000296", "duplicate key '%s', last one wins", w->path);
   w->seen[i] = 1;
   if (w->keys[i].apply(w->cfg, val, err, sizeof err)) {
-    if (!soft(y)) return fail(y, line, "LS000297", "%s: %s", w->path, err[0] ? err : "invalid value");
-    warn_at(y, line, "LA000298", "%s: %s", w->path, err[0] ? err : "invalid value");
+    error_at(y, line, "LS000298", "invalid value for '%s': %s", w->path, err[0] ? err : "rejected");
     return 0;
   }
-  if (soft(y) && w->keys[i].must_exist && access(val, R_OK)) warn_at(y, line, "LA000299", "%s: %s: %s", w->path, val, strerror(errno));
+  if ((y->check || y->strict) && w->keys[i].must_exist && access(val, R_OK)) warn_at(y, line, "LA000299", "key '%s': cannot read file '%s': %s", w->path, val, strerror(errno));
   return 0;
 }
 
@@ -169,8 +175,7 @@ static int list_kind(const walk_t *w) {
 static int item_event(walk_t *w, int begin, int line) {
   char err[192] = "";
   if (!w->item_fn || !w->item_fn(w->cfg, w->path, begin, err, sizeof err)) return 0;
-  if (!soft(w->y)) return fail(w->y, line, "LS000300", "%s: %s", w->path, err[0] ? err : "invalid item");
-  warn_at(w->y, line, "LA000301", "%s: %s", w->path, err[0] ? err : "invalid item");
+  error_at(w->y, line, "LS000301", "invalid list item in '%s': %s", w->path, err[0] ? err : "rejected");
   return 0;
 }
 
@@ -269,7 +274,6 @@ static int on_scalar(walk_t *w, const yaml_event_t *e, int line) {
     top->opts = 0;
     top->want_key = 1;
     if (scalar_is_null(e)) return 0;
-    if (!soft(w->y)) return fail(w->y, line, "LS400135", "%s: options must be a mapping", w->path);
     warn_at(w->y, line, "LS400135", "%s: options must be a mapping", w->path);
     return 0;
   }
@@ -281,9 +285,9 @@ static int on_scalar(walk_t *w, const yaml_event_t *e, int line) {
 
 static int parse_fail(const yamlcfg_t *y, const yaml_parser_t *p) {
   int line = (int)p->problem_mark.line + 1;
-  const char *problem = p->problem ? p->problem : "parse error";
-  if (p->context) return fail(y, line, "LS400138", "%s (%s)", problem, p->context);
-  return fail(y, line, "LS400139", "%s", problem);
+  const char *problem = p->problem ? p->problem : "unknown problem";
+  if (p->context) return fail(y, line, "LS400138", "yaml syntax error: %s (%s)", problem, p->context);
+  return fail(y, line, "LS400139", "yaml syntax error: %s", problem);
 }
 
 static int walk(walk_t *w, yaml_parser_t *p) {
@@ -351,7 +355,7 @@ int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int mode, const char *pat
   f = fopen(use, "r");
   if (!f) {
     if (!path && !y->check && errno == ENOENT) return YAMLCFG_ABSENT;
-    return fail(y, 0, "LS000302", "%s", strerror(errno));
+    return fail(y, 0, "LS000302", "cannot open config: %s", strerror(errno));
   }
   if (fstat(fileno(f), &sb) || !S_ISREG(sb.st_mode)) {
     fclose(f);
@@ -381,7 +385,7 @@ int yamlcfg_load_items(yamlcfg_t *y, const char *tool, int mode, const char *pat
   yaml_parser_delete(&p);
   fclose(f);
   if (rc) return YAMLCFG_ERROR;
-  if (y->strict && !y->check && y->warnings) {
+  if (!y->check && (y->errors || (y->strict && y->warnings))) {
     yamlcfg_report(y);
     return YAMLCFG_ERROR;
   }

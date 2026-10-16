@@ -94,6 +94,19 @@ START_TEST(http_get_rejects_a_malformed_response) {
 }
 END_TEST
 
+START_TEST(http_get_rejects_a_signed_content_length) {
+  static const char *const cl[] = {"-1", "+4", "-0"};
+  for (size_t i = 0; i < sizeof cl / sizeof cl[0]; i++) {
+    unsigned port;
+    char resp[96];
+    net_err_reason_t reason = NET_ERR_COUNT;
+    snprintf(resp, sizeof resp, "HTTP/1.1 200 OK\r\nContent-Length: %s\r\nConnection: close\r\n\r\nBODY", cl[i]);
+    ck_assert_ptr_null(get_response_any(resp, &port, &reason));
+    ck_assert_int_eq(reason, NET_ERR_FORMAT);
+  }
+}
+END_TEST
+
 START_TEST(http_get_accepts_a_shoutcast_v1_status_line) {
   unsigned port;
   http_t *h = get_response("ICY 200 OK\r\nicy-name: Test\r\nConnection: close\r\n\r\n", &port);
@@ -213,6 +226,7 @@ static Suite *httpclient_headers_suite(void) {
   Suite *s = suite_create("httpclient_headers");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, http_get_rejects_a_malformed_response);
+  tcase_add_test(tc, http_get_rejects_a_signed_content_length);
   tcase_add_test(tc, http_get_accepts_a_shoutcast_v1_status_line);
   tcase_add_test(tc, http_get_reports_a_connection_closed_before_the_headers);
   tcase_add_test(tc, http_get_keeps_only_the_headers_that_fit);

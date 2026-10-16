@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -133,6 +134,8 @@ static void write_head(mkv_t *m) {
   struct tm tm;
   ebuf_t tag;
   ebuf_t tgt;
+  off_t cur;
+  int flags;
 
   gmtime_r(&now, &tm);
   strftime(date, sizeof date, "%Y-%m-%d %H:%M:%S", &tm);
@@ -149,7 +152,10 @@ static void write_head(mkv_t *m) {
   wfd(m, b.p, b.len);
   ebuf_free(&b);
 
-  m->seekable = lseek(m->fd, 0, SEEK_CUR) >= 0;
+  cur = lseek(m->fd, 0, SEEK_CUR);
+  flags = fcntl(m->fd, F_GETFL);
+  m->seekable = cur >= 0 && flags >= 0 && !(flags & O_APPEND); /* pwrite appends under O_APPEND */
+  m->fd_base = m->seekable ? (uint64_t)cur - *m->bytes : 0;
   m->seg_size_pos = *m->bytes + 4;
   wfd(m, seg, sizeof seg);
   m->seg_data = *m->bytes;
@@ -233,7 +239,7 @@ static void write_head(mkv_t *m) {
 }
 
 static void patch(mkv_t *m, const void *p, size_t n, uint64_t pos) {
-  if (!m->err && pwrite(m->fd, p, n, (off_t)pos) != (ssize_t)n) {
+  if (!m->err && pwrite(m->fd, p, n, (off_t)(m->fd_base + pos)) != (ssize_t)n) {
     log_code("LE100124", "mkv patch: %s", strerror(errno));
     m->err = 1;
   }

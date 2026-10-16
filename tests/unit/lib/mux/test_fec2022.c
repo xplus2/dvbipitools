@@ -20,6 +20,12 @@ static size_t drain_all(fec2022_dec_t *dc, unsigned char *out, size_t cap) {
   return off;
 }
 
+static void drain_repairs(fec2022_enc_t *e, fec2022_dec_t *dc) {
+  unsigned char rep[FEC2022_MAX_REPAIR];
+  size_t n;
+  while ((n = fec2022_enc_drain(e, rep, sizeof rep)) > 0) fec2022_dec_repair(dc, rep, n);
+}
+
 static void build_source(unsigned char *out, uint16_t seq, uint32_t ts, unsigned char fill) {
   out[0] = 0x80;
   out[1] = 33;
@@ -43,11 +49,34 @@ START_TEST(fec2022_enc_new_rejects_bad_params) {
   ck_assert_ptr_null(fec2022_enc_new(4, 0, 96));
   ck_assert_ptr_null(fec2022_enc_new(FEC2022_MAX_L + 1, 1, 96));
   ck_assert_ptr_null(fec2022_enc_new(40, 11, 96));
+  ck_assert_ptr_null(fec2022_enc_new(4, 1073741824u, 96));
+  ck_assert_ptr_null(fec2022_enc_new(2, 2147483648u, 96));
   dc = fec2022_dec_new(FEC2022_MAX_L, 1);
   ck_assert_ptr_nonnull(dc);
   fec2022_dec_free(dc);
   ck_assert_ptr_null(fec2022_dec_new(0, 3));
   ck_assert_ptr_null(fec2022_dec_new(40, 11));
+  ck_assert_ptr_null(fec2022_dec_new(4, 1073741824u));
+  ck_assert_ptr_null(fec2022_dec_new(2, 2147483648u));
+}
+END_TEST
+
+START_TEST(fec2022_enc_spreads_repairs) {
+  fec2022_enc_t *e = fec2022_enc_new(L, D, 96);
+  unsigned char src[200];
+  unsigned char rep[FEC2022_MAX_REPAIR];
+  unsigned last = 0;
+  unsigned got = 0;
+
+  ck_assert_ptr_nonnull(e);
+  for (unsigned i = 0; i < 3 * N; i++) {
+    build_source(src, (uint16_t)i, 1000 + i, (unsigned char)i);
+    if (fec2022_enc_feed(e, src, 200, 5000 + i, rep, sizeof rep) == 0) continue;
+    if (got++) ck_assert_uint_eq(i - last, D);
+    last = i;
+  }
+  ck_assert_uint_ge(got, 2 * L);
+  fec2022_enc_free(e);
 }
 END_TEST
 
@@ -61,6 +90,9 @@ START_TEST(fec2022_parse_ld_accepts_and_rejects) {
   ck_assert_int_eq(fec2022_parse_ld("40:10", &l, &d), 0);
   ck_assert_int_eq(fec2022_parse_ld("41:1", &l, &d), -1);
   ck_assert_int_eq(fec2022_parse_ld("40:11", &l, &d), -1);
+  ck_assert_int_eq(fec2022_parse_ld("4:1073741824", &l, &d), -1);
+  ck_assert_int_eq(fec2022_parse_ld("2:2147483648", &l, &d), -1);
+  ck_assert_int_eq(fec2022_parse_ld("4:18446744073709551615", &l, &d), -1);
   ck_assert_int_eq(fec2022_parse_ld("0:5", &l, &d), -1);
   ck_assert_int_eq(fec2022_parse_ld("5:0", &l, &d), -1);
   ck_assert_int_eq(fec2022_parse_ld("5", &l, &d), -1);
@@ -129,6 +161,7 @@ START_TEST(fec2022_recovers_single_loss_per_column) {
     if (repair_len[i] > 0)
       fec2022_dec_repair(dc, repair[i], repair_len[i]);
   }
+  drain_repairs(e, dc);
   off = drain_all(dc, out, sizeof out);
 
   ck_assert_uint_eq(off, (size_t)N * 200);
@@ -450,6 +483,7 @@ START_TEST(fec2022_dec_recovers_packets_with_csrc) {
     if (i != dropped) fec2022_dec_source(dc, src[i], 208);
     if (repair_len[i]) fec2022_dec_repair(dc, repair[i], repair_len[i]);
   }
+  drain_repairs(e, dc);
   got = drain_all(dc, out, sizeof out);
   ck_assert_uint_eq(got, (size_t)N * 208);
   ck_assert_mem_eq(out + (size_t)dropped * 208, src[dropped], 208);
@@ -486,6 +520,7 @@ static Suite *fec2022_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, fec2022_enc_new_rejects_bad_params);
   tcase_add_test(tc, fec2022_parse_ld_accepts_and_rejects);
+  tcase_add_test(tc, fec2022_enc_spreads_repairs);
   tcase_add_test(tc, fec2022_round_trip_no_loss);
   tcase_add_test(tc, fec2022_recovers_single_loss_per_column);
   tcase_add_test(tc, fec2022_drops_double_loss_in_one_column);

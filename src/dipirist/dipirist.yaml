@@ -8,6 +8,12 @@
 #iface: <iface>
 # -k|--insecure off
 insecure: off
+# --pace off
+#pace: off
+# --ttl [not set]
+#ttl: <n>
+# --dscp [not set] # video-high|video-low|voice|signalling|best-effort|0..63
+#dscp: <v>
 # --profile simple # simple|main
 profile: simple
 # --secret [not set]

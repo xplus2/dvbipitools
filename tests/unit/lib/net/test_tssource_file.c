@@ -186,6 +186,65 @@ START_TEST(tssrc_file_reads_are_packet_aligned) {
 }
 END_TEST
 
+START_TEST(tssrc_file_resyncs_on_mid_packet_start) {
+  unsigned char content[37 + 20 * 188];
+  unsigned char readback[20 * 188];
+  char *path;
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+
+  memset(content, 0x55, 37);
+  for (unsigned i = 0; i < 20; i++)
+    fill_ts_packet(content + 37 + i * 188, (unsigned char)i);
+
+  path = write_temp(content, sizeof content);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_FILE;
+  cfg.file_path = path;
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+
+  ck_assert_int_eq(read_all(s, readback, sizeof readback), (ssize_t)sizeof readback);
+  ck_assert_int_eq(memcmp(content + 37, readback, sizeof readback), 0);
+
+  tssrc_close(s);
+  unlink(path);
+  free(path);
+}
+END_TEST
+
+START_TEST(tssrc_file_resyncs_after_mid_stream_loss) {
+  unsigned char content[20 * 188 + 50];
+  unsigned char expect[20 * 188 - 188];
+  unsigned char readback[sizeof expect];
+  char *path;
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+
+  for (unsigned i = 0; i < 10; i++)
+    fill_ts_packet(content + i * 188, (unsigned char)i);
+  memset(content + 10 * 188, 0x55, 50);
+  for (unsigned i = 10; i < 20; i++)
+    fill_ts_packet(content + 50 + i * 188, (unsigned char)i);
+  memcpy(expect, content, 10 * 188);
+  memcpy(expect + 10 * 188, content + 50 + 10 * 188, 9 * 188);
+
+  path = write_temp(content, 50 + 20 * 188 - 188);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_FILE;
+  cfg.file_path = path;
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+
+  ck_assert_int_eq(read_all(s, readback, sizeof readback), (ssize_t)sizeof readback);
+  ck_assert_int_eq(memcmp(expect, readback, sizeof expect), 0);
+
+  tssrc_close(s);
+  unlink(path);
+  free(path);
+}
+END_TEST
+
 static Suite *tssource_file_suite(void) {
   Suite *s = suite_create("tssource_file");
   TCase *tc = tcase_create("core");
@@ -193,6 +252,8 @@ static Suite *tssource_file_suite(void) {
   tcase_add_test(tc, tssrc_file_rtp_framed_deframes);
   tcase_add_test(tc, tssrc_rewind_restarts_raw_file_from_zero);
   tcase_add_test(tc, tssrc_file_reads_are_packet_aligned);
+  tcase_add_test(tc, tssrc_file_resyncs_on_mid_packet_start);
+  tcase_add_test(tc, tssrc_file_resyncs_after_mid_stream_loss);
   suite_add_tcase(s, tc);
   return s;
 }

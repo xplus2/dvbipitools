@@ -48,7 +48,8 @@ void srtcommon_cleanup(void) {
 }
 
 void srtcommon_open_logging(int verbose) {
-  srt_setloglevel(verbose ? LOG_DEBUG : LOG_WARNING);
+  srt_setloglevel(verbose ? LOG_NOTICE : LOG_WARNING);
+  srt_setlogflags(SRT_LOGF_DISABLE_TIME | SRT_LOGF_DISABLE_THREADNAME | SRT_LOGF_DISABLE_SEVERITY | SRT_LOGF_DISABLE_EOL);
   srt_setloghandler(NULL, srt_log_cb);
 }
 
@@ -152,25 +153,28 @@ static void *resolve_thread(void *arg) {
   return NULL;
 }
 
-int srtcommon_resolve_stoppable(const char *host, unsigned port, struct sockaddr_storage *ss, int *len, unsigned timeout_ms, int (*stop)(void *), void *arg) {
+/* NULL: failed. *sync_ok set: only thread creation failed, caller may resolve inline */
+static resolve_job_t *resolve_job_start(const char *host, unsigned port, int *sync_ok) {
   resolve_job_t *j;
   pthread_condattr_t ca;
   pthread_attr_t ta;
   pthread_t th;
-  struct timespec t0;
-  int rc = -1;
   int started;
 
-  if (strlen(host) >= sizeof j->host) return srtcommon_resolve(host, port, ss, len);
+  *sync_ok = 0;
+  if (strlen(host) >= sizeof j->host) {
+    *sync_ok = 1;
+    return NULL;
+  }
   if (atomic_fetch_add_explicit(&g_resolve_inflight, 1, memory_order_relaxed) >= RESOLVE_INFLIGHT_MAX) {
     atomic_fetch_sub_explicit(&g_resolve_inflight, 1, memory_order_relaxed);
     log_code("LE600135", "srt: address resolve failed for %s:%u: too many lookups in flight", host, port);
-    return -1;
+    return NULL;
   }
   j = calloc(1, sizeof *j);
   if (!j) {
     atomic_fetch_sub_explicit(&g_resolve_inflight, 1, memory_order_relaxed);
-    return -1;
+    return NULL;
   }
   pthread_mutex_init(&j->mu, NULL);
   pthread_condattr_init(&ca);
@@ -188,8 +192,20 @@ int srtcommon_resolve_stoppable(const char *host, unsigned port, struct sockaddr
     atomic_fetch_sub_explicit(&g_resolve_inflight, 1, memory_order_relaxed);
     resolve_job_unref(j);
     resolve_job_unref(j);
-    return srtcommon_resolve(host, port, ss, len);
+    *sync_ok = 1;
+    return NULL;
   }
+  return j;
+}
+
+int srtcommon_resolve_stoppable(const char *host, unsigned port, struct sockaddr_storage *ss, int *len, unsigned timeout_ms, int (*stop)(void *), void *arg) {
+  resolve_job_t *j;
+  struct timespec t0;
+  int sync_ok;
+  int rc = -1;
+
+  j = resolve_job_start(host, port, &sync_ok);
+  if (!j) return sync_ok ? srtcommon_resolve(host, port, ss, len) : -1;
 
   clock_gettime(CLOCK_MONOTONIC, &t0);
   pthread_mutex_lock(&j->mu);
@@ -220,6 +236,72 @@ int srtcommon_resolve_stoppable(const char *host, unsigned port, struct sockaddr
   return rc;
 }
 
+struct srtcommon_resolver {
+  int n;
+  int pending;
+  resolve_job_t *job[SRTCOMMON_MAX_PEERS + 1];
+  int failed[SRTCOMMON_MAX_PEERS + 1];
+  struct sockaddr_storage ss[SRTCOMMON_MAX_PEERS + 1];
+  int len[SRTCOMMON_MAX_PEERS + 1];
+};
+
+srtcommon_resolver_t *srtcommon_resolver_start(const srtcommon_peer_t *peers, int n) {
+  srtcommon_resolver_t *r;
+  int sync_ok;
+
+  if (n <= 0 || n > SRTCOMMON_MAX_PEERS + 1) return NULL;
+  r = calloc(1, sizeof *r);
+  if (!r) return NULL;
+  r->n = n;
+  for (int i = 0; i < n; i++) {
+    r->job[i] = resolve_job_start(peers[i].host, peers[i].port, &sync_ok);
+    if (r->job[i]) {
+      r->pending++;
+      continue;
+    }
+    /* inline fallback blocks, but only on thread/oversize-name failure */
+    if (!sync_ok || srtcommon_resolve(peers[i].host, peers[i].port, &r->ss[i], &r->len[i])) r->failed[i] = 1;
+  }
+  return r;
+}
+
+int srtcommon_resolver_poll(srtcommon_resolver_t *r) {
+  for (int i = 0; i < r->n; i++) {
+    resolve_job_t *j = r->job[i];
+    if (!j) continue;
+    pthread_mutex_lock(&j->mu);
+    if (!j->done) {
+      pthread_mutex_unlock(&j->mu);
+      continue;
+    }
+    if (j->rc == 0) {
+      r->ss[i] = j->ss;
+      r->len[i] = j->len;
+    } else {
+      r->failed[i] = 1;
+    }
+    pthread_mutex_unlock(&j->mu);
+    resolve_job_unref(j);
+    r->job[i] = NULL;
+    r->pending--;
+  }
+  return r->pending == 0;
+}
+
+int srtcommon_resolver_get(const srtcommon_resolver_t *r, int i, struct sockaddr_storage *ss, int *len) {
+  if (r->failed[i] || r->job[i]) return -1;
+  *ss = r->ss[i];
+  *len = r->len[i];
+  return 0;
+}
+
+void srtcommon_resolver_free(srtcommon_resolver_t *r) {
+  if (!r) return;
+  for (int i = 0; i < r->n; i++)
+    if (r->job[i]) resolve_job_unref(r->job[i]);
+  free(r);
+}
+
 int srtcommon_build_group_config(const srtcommon_peer_t *peers, int npeers, SRT_SOCKGROUPCONFIG *gc_out) {
   for (int i = 0; i < npeers; i++) {
     struct sockaddr_storage remote;
@@ -228,6 +310,114 @@ int srtcommon_build_group_config(const srtcommon_peer_t *peers, int npeers, SRT_
     if (srtcommon_resolve(peers[i].host, peers[i].port, &remote, &remote_len))
       return -1;
     gc_out[i] = srt_prepare_endpoint(NULL, (struct sockaddr *)&remote, remote_len);
+  }
+  return 0;
+}
+
+static int addr_equal(const struct sockaddr_storage *a, const struct sockaddr_storage *b) {
+  if (a->ss_family != b->ss_family)
+    return 0;
+  if (a->ss_family == AF_INET) {
+    const struct sockaddr_in *x = (const struct sockaddr_in *)a;
+    const struct sockaddr_in *y = (const struct sockaddr_in *)b;
+    return x->sin_port == y->sin_port && x->sin_addr.s_addr == y->sin_addr.s_addr;
+  }
+  if (a->ss_family == AF_INET6) {
+    const struct sockaddr_in6 *x = (const struct sockaddr_in6 *)a;
+    const struct sockaddr_in6 *y = (const struct sockaddr_in6 *)b;
+    return x->sin6_port == y->sin6_port && memcmp(&x->sin6_addr, &y->sin6_addr, sizeof x->sin6_addr) == 0;
+  }
+  return 0;
+}
+
+static int member_live(const SRT_SOCKGROUPDATA *m) {
+  if (m->memberstate == SRT_GST_BROKEN)
+    return 0;
+  return m->sockstate != SRTS_BROKEN && m->sockstate != SRTS_CLOSING && m->sockstate != SRTS_CLOSED && m->sockstate != SRTS_NONEXIST;
+}
+
+int srtcommon_group_missing(const struct sockaddr_storage *addrs, int npeers, const SRT_SOCKGROUPDATA *data, size_t ndata, int *missing) {
+  int n = 0;
+
+  for (int i = 0; i < npeers; i++) {
+    int found = 0;
+
+    missing[i] = 0;
+    if (addrs[i].ss_family == 0)
+      continue;
+    for (size_t j = 0; j < ndata && !found; j++)
+      found = member_live(&data[j]) && addr_equal(&addrs[i], &data[j].peeraddr);
+    if (!found) {
+      missing[i] = 1;
+      n++;
+    }
+  }
+  return n;
+}
+
+static int group_live(SRTSOCKET g, SRT_SOCKGROUPDATA *data, size_t *ndata) {
+  int live = 0;
+
+  if (srt_group_data(g, data, ndata) != 0)
+    return -1;
+  for (size_t j = 0; j < *ndata; j++)
+    live += member_live(&data[j]);
+  return live;
+}
+
+int srtcommon_group_revive(SRTSOCKET g, const srtcommon_peer_t *peers, int npeers, srtcommon_resolver_t **res) {
+  SRT_SOCKGROUPDATA data[SRTCOMMON_MAX_PEERS * 2];
+  SRT_SOCKGROUPCONFIG gc[SRTCOMMON_MAX_PEERS];
+  struct sockaddr_storage addrs[SRTCOMMON_MAX_PEERS];
+  int missing[SRTCOMMON_MAX_PEERS];
+  size_t ndata = sizeof data / sizeof data[0];
+  int ng = 0;
+  int old_rcv = 1;
+  int old_snd = 1;
+  int len = sizeof old_rcv;
+  int no = 0;
+  int live;
+  int rc;
+
+  if (!*res) {
+    live = group_live(g, data, &ndata);
+    if (live < 0 || live >= npeers)
+      return 0;
+    *res = srtcommon_resolver_start(peers, npeers);
+    if (!*res)
+      return 0;
+  }
+  if (!srtcommon_resolver_poll(*res))
+    return 0;
+  memset(addrs, 0, sizeof addrs);
+  for (int i = 0; i < npeers; i++) {
+    int alen;
+    if (srtcommon_resolver_get(*res, i, &addrs[i], &alen))
+      addrs[i].ss_family = 0;
+  }
+  srtcommon_resolver_free(*res);
+  *res = NULL;
+  ndata = sizeof data / sizeof data[0];
+  if (group_live(g, data, &ndata) < 0)
+    return 0;
+  if (srtcommon_group_missing(addrs, npeers, data, ndata, missing) == 0)
+    return 0;
+  for (int i = 0; i < npeers; i++) {
+    if (missing[i])
+      gc[ng++] = srt_prepare_endpoint(NULL, (struct sockaddr *)&addrs[i], (int)sizeof addrs[i]);
+  }
+  /* group may be in sync mode: connect must not stall the data path */
+  srt_getsockopt(g, 0, SRTO_RCVSYN, &old_rcv, &len);
+  len = sizeof old_snd;
+  srt_getsockopt(g, 0, SRTO_SNDSYN, &old_snd, &len);
+  srt_setsockopt(g, 0, SRTO_RCVSYN, &no, sizeof no);
+  srt_setsockopt(g, 0, SRTO_SNDSYN, &no, sizeof no);
+  rc = srt_connect_group(g, gc, ng);
+  srt_setsockopt(g, 0, SRTO_RCVSYN, &old_rcv, sizeof old_rcv);
+  srt_setsockopt(g, 0, SRTO_SNDSYN, &old_snd, sizeof old_snd);
+  if (rc == SRT_ERROR && srt_getlasterror(NULL) != SRT_EASYNCSND) {
+    log_code("LW600165", "srt: group member re-add failed: %s", srt_getlasterror_str());
+    return -1;
   }
   return 0;
 }

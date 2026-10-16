@@ -35,6 +35,9 @@ int netaddr_fill(int family, const char *addr, unsigned port, struct sockaddr_st
 /* IP_TOS (v4) or IPV6_TCLASS (v6) on fd */
 int net_set_dscp(int fd, int family, int tos);
 
+/* sendto with per-packet IP_TOS/IPV6_TCLASS cmsg, no socket state touched. like sendto() */
+ssize_t net_sendto_tos(int fd, const void *buf, size_t len, const struct sockaddr *to, socklen_t tolen, int tos);
+
 /* ETSI TS 102 034 Table 29, tos byte = dscp << 2 */
 #define NET_DSCP_VOICE_BEARER (0x30 << 2)
 #define NET_DSCP_VIDEO_HIGH   (0x22 << 2)
@@ -45,26 +48,31 @@ int net_set_dscp(int fd, int family, int tos);
 /* name or raw 0..63 dscp; *tos_out = full tos byte */
 int net_dscp_parse(const char *s, int *tos_out);
 
-/* holds the resolved addrinfo list + position for netconnect_tcp_start/finish's
+/* holds the resolved address list + position for netconnect_tcp_start/finish's
    fallback to the next address when one fails */
 typedef struct netconnect_pending netconnect_pending_t;
 
 /* async pair: for callers running their own poll() loop over many connections at once (netconnect_tcp's own wait_connect() would serialize them).
-   resolves host, starts connect() on first usable address, fd stays O_NONBLOCK. does not wait.
-   *pending_out receives remaining-address state on success, pass it to netconnect_tcp_finish().
-   -1 on immediate failure (*pending_out untouched), else poll fd for POLLOUT, then call netconnect_tcp_finish().
+   IP: starts connect() on first usable address, fd stays O_NONBLOCK.
+   hostnames: lookup runs in forked child, fd = result pipe (not a socket yet). neither waits.
+   *pending_out receives state on success, pass it to netconnect_tcp_finish().
+   -1 on immediate failure (*pending_out untouched), else poll fd for netconnect_tcp_events(*pending_out), then call netconnect_tcp_finish().
    reason_out: nullable, set only on -1 */
 int netconnect_tcp_start(const char *host, unsigned port, netconnect_pending_t **pending_out, net_err_reason_t *reason_out);
 
-/* call once *fd is POLLOUT-ready. 1: connected, *pending freed and set NULL, *fd unchanged.
-   0: this address failed, old *fd closed internally, next candidate from the same resolved
-   list opened and connecting, *fd updated to it - poll *fd for POLLOUT and call again.
-   -1: every address failed (not logged, caller's job), *pending freed and set NULL, *fd
-   closed and set to -1, errno set. reason_out: nullable, set only on -1 */
+/* poll events to wait for on the fd of a pending connect: POLLIN while resolving, POLLOUT while connecting.
+   recheck after every netconnect_tcp_finish() returning 0 */
+short netconnect_tcp_events(const netconnect_pending_t *pending);
+
+/* call once fd is ready for netconnect_tcp_events(). 1: connected, *pending freed and set NULL, *fd unchanged.
+   0: not done, either lookup finished and first candidate opened, or this address failed, old *fd closed internally,
+   next candidate opened. *fd updated, check netconnect_tcp_events() and call again.
+   -1: lookup or every address failed, *pending freed and set NULL, *fd closed and set to -1, errno set.
+   lookup failure (reason NET_ERR_DNS) is logged here, connect failure is not (caller's job). reason_out: nullable, set only on -1 */
 int netconnect_tcp_finish(netconnect_pending_t **pending, int *fd, net_err_reason_t *reason_out);
 
 /* give up on a pending connect before netconnect_tcp_finish() reaches a terminal result
-   (1 or -1). frees the remaining-address state; does not touch fd, caller closes that itself. */
+   (1 or -1). free state, stop lookup child; does not touch fd, caller closes that itself. */
 void netconnect_tcp_abort(netconnect_pending_t *pending);
 
 #endif

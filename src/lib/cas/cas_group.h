@@ -12,7 +12,7 @@
 #define CAS_GROUP_MAX_VENDORS 8
 #define CAS_CORE_MAX_PIDS 32 /* matches dipitvhead's OUT_MAX_ES: cannot be exceeded by remux */
 
-/* fails cas_group_failed() after this many seconds with no cas_group_clock_tick() call at all */
+/* default: cas_group_failed() after this many s without cas_group_clock_tick() */
 #define CAS_CORE_CLOCK_DETECT_TIMEOUT_S 8.0
 
 typedef struct {
@@ -57,6 +57,7 @@ typedef struct {
   unsigned pids[CAS_CORE_MAX_PIDS];
   size_t pid_count;
   int fallback_clear; /* total outage (or a required vendor down): clear instead of frozen */
+  double clock_detect_timeout_s; /* 0 = CAS_CORE_CLOCK_DETECT_TIMEOUT_S */
   cas_group_vendor_cfg_t vendors[CAS_GROUP_MAX_VENDORS];
   size_t vendor_count;
 } cas_group_cfg_t;

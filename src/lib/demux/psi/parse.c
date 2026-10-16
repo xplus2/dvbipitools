@@ -127,6 +127,7 @@ void parse_pat(psi_t *c) {
       continue;
     }
     if (c->preferred_pmt_pid && pid != c->preferred_pmt_pid) continue;
+    if (c->preferred_program && prog != c->preferred_program) continue;
     if (!find_cand(c, prog, pid)) add_pmt_candidate(c, prog, pid);
   }
   if (moved_pid && !still_listed) follow_pmt_move(c, moved_pid);
@@ -178,6 +179,7 @@ int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n) {
     log_throttled(&c->pmt_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400146", "%s: PMT section dropped: %s (pid 0x%04x, program %u, table_id 0x%02x, len %zu)", psi_tag(c), fault, cand->pmt_pid, cand->program_number, b[0], n);
     return 0;
   }
+  if (!(b[5] & 1) || b[6] != 0) return 0;
   prog = ((unsigned)b[3] << 8) | b[4];
   if (prog != cand->program_number) return 0;
   if (!c->pmt_locked || cand == &c->pmt_cand[c->pmt_lock_idx]) {
@@ -285,6 +287,7 @@ void parse_sdt(psi_t *c) {
     log_throttled(&c->sdt_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400148", "%s: SDT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
+  if (!(b[5] & 1)) return;
   obs_version(c, PSI_OBS_SDT, b, NULL);
   c->onid = ((unsigned)b[8] << 8) | b[9];
   end = n - 4;
@@ -322,6 +325,7 @@ void parse_nit(psi_t *c) {
     log_throttled(&c->nit_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400149", "%s: NIT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
+  if (!(b[5] & 1)) return;
   obs_version(c, PSI_OBS_NIT, b, NULL);
   ndl = tspack_length12(b + 8);
   if (10 + ndl > n) {
@@ -345,6 +349,7 @@ void parse_cat(psi_t *c) {
     log_throttled(&c->cat_drop_throttle, LOG_THROTTLE_WINDOW_S, "LW400151", "%s: CAT section dropped: %s (table_id 0x%02x, len %zu)", psi_tag(c), fault, b[0], n);
     return;
   }
+  if (!(b[5] & 1)) return;
   obs_version(c, PSI_OBS_CAT, b, NULL);
   c->emm_pid = 0;
   c->ca_system_id = 0;
@@ -354,4 +359,5 @@ void parse_cat(psi_t *c) {
     c->emm_pid = (((unsigned)ca[2] & 0x1F) << 8) | ca[3];
   }
   c->have_cat = 1;
+  rebuild_class_table(c);
 }

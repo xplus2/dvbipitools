@@ -47,7 +47,7 @@ START_TEST(bcg_find_channel_by_id) {
 }
 END_TEST
 
-START_TEST(bcg_channel_add_name_caps_at_max_and_drops_silently) {
+START_TEST(bcg_channel_add_name_caps_at_max_and_reports_drop) {
   bcg_doc_t d;
   bcg_channel_t *c;
   bcg_doc_init(&d);
@@ -56,7 +56,7 @@ START_TEST(bcg_channel_add_name_caps_at_max_and_drops_silently) {
   for (int i = 0; i < BCG_MAX_NAMES + 3; i++) {
     char name[16];
     snprintf(name, sizeof name, "name%d", i);
-    bcg_channel_add_name(c, name);
+    ck_assert_int_eq(bcg_channel_add_name(c, name), i < BCG_MAX_NAMES ? 0 : -1);
   }
   ck_assert_int_eq(c->name_count, BCG_MAX_NAMES);
   ck_assert_str_eq(c->names[0], "name0");
@@ -117,7 +117,7 @@ static Suite *bcg_doc_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, bcg_add_channel_grows_past_initial_capacity);
   tcase_add_test(tc, bcg_find_channel_by_id);
-  tcase_add_test(tc, bcg_channel_add_name_caps_at_max_and_drops_silently);
+  tcase_add_test(tc, bcg_channel_add_name_caps_at_max_and_reports_drop);
   tcase_add_test(tc, bcg_add_programme_zeroes_new_entries);
   tcase_add_test(tc, bcg_set_text_copies_replaces_and_maps_empty_to_null);
   tcase_add_test(tc, bcg_programme_copy_is_deep);

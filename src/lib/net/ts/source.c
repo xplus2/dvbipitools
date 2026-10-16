@@ -114,10 +114,12 @@ static tssrc_t *tssrc_open_base(const tssrc_cfg_t *cfg, net_err_reason_t *reason
 
 int tssrc_enable_rx_timestamps(tssrc_t *s) {
   if ((s->kind != TSSRC_UDP && s->kind != TSSRC_RTP) || !s->m) return -1;
+  s->rx_stamp = 1;
   return mcast_enable_rx_timestamps(s->m);
 }
 
 uint64_t tssrc_last_rx_ns(const tssrc_t *s) {
+  if (s->fec_dec) return s->fec_rx_ns;
   return s->m ? mcast_last_rx_ns(s->m) : 0;
 }
 
@@ -133,10 +135,22 @@ static ssize_t stream_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_r
   }
 }
 
-/* byte-stream kinds: whole 188 multiples only, remainder waits for next read. partial at EOF dropped */
+/* leading bytes to skip so buf starts on a 0x47 pair 188 apart, or have if none */
+static size_t stream_find_sync(const unsigned char *buf, size_t have) {
+  size_t i;
+
+  for (i = 0; i + 188 < have; i++)
+    if (buf[i] == 0x47 && buf[i + 188] == 0x47) return i;
+  return have;
+}
+
+/* byte-stream kinds: whole 188 multiples only, remainder waits for next read. partial at EOF dropped.
+ * junk skipped until 0x47 confirmed one packet later, at start and after sync loss */
 static ssize_t stream_read_aligned(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
   size_t have;
-  size_t out;
+  size_t pos = 0;
+  size_t skip;
+  size_t keep;
   ssize_t n;
 
   if (cap < 2 * 188) return stream_read(s, buf, cap, reason_out);
@@ -144,10 +158,47 @@ static ssize_t stream_read_aligned(tssrc_t *s, unsigned char *buf, size_t cap, n
   n = stream_read(s, buf + s->align_len, cap - s->align_len, reason_out);
   if (n < 0) return n;
   have = s->align_len + (size_t)n;
-  out = have - have % 188;
-  s->align_len = have - out;
-  memcpy(s->align_tail, buf + out, s->align_len);
-  return (ssize_t)out;
+  while (pos + 188 <= have) {
+    if (s->synced && buf[pos] == 0x47) {
+      pos += 188;
+      continue;
+    }
+    skip = stream_find_sync(buf + pos, have - pos);
+    if (skip == have - pos) {
+      keep = skip > 188 ? 188 : skip;
+      memcpy(s->align_tail, buf + have - keep, keep);
+      s->align_len = keep;
+      s->synced = 0;
+      return (ssize_t)pos;
+    }
+    memmove(buf + pos, buf + pos + skip, have - pos - skip);
+    have -= skip;
+    s->synced = 1;
+  }
+  s->align_len = have - pos;
+  memcpy(s->align_tail, buf + pos, s->align_len);
+  return (ssize_t)pos;
+}
+
+static void fec_rx_put(tssrc_t *s, const unsigned char *pkt, size_t n) {
+  uint16_t seq;
+
+  if (n < 12) return;
+  seq = (uint16_t)((pkt[2] << 8) | pkt[3]);
+  s->fec_rx[seq % TSSRC_FEC_RX_N].seq = seq;
+  s->fec_rx[seq % TSSRC_FEC_RX_N].ns = mcast_last_rx_ns(s->m);
+}
+
+/* arrival time of released packet. 0 if recovered, never received */
+static void fec_rx_take(tssrc_t *s, const unsigned char *pkt, size_t n) {
+  uint16_t seq;
+
+  s->fec_rx_ns = 0;
+  if (n < 12) return;
+  seq = (uint16_t)((pkt[2] << 8) | pkt[3]);
+  if (s->fec_rx[seq % TSSRC_FEC_RX_N].seq != seq) return;
+  s->fec_rx_ns = s->fec_rx[seq % TSSRC_FEC_RX_N].ns;
+  s->fec_rx[seq % TSSRC_FEC_RX_N].ns = 0;
 }
 
 /* all ready packets, RTP stripped, as far as cap allows */
@@ -160,11 +211,13 @@ static size_t tssrc_fec_drain(tssrc_t *s, unsigned char *buf, size_t cap) {
     size_t n;
     if (len - 12 > cap - out && out > 0) break;
     fec2022_dec_drain(s->fec_dec, pkt, sizeof pkt);
+    if (s->rx_stamp) fec_rx_take(s, pkt, len);
     n = (size_t)tssrc_rtp_strip(pkt, len);
     if (n > cap - out) n = (cap - out) - (cap - out) % 188;
     memcpy(buf + out, pkt, n);
     out += n;
     if (!n && cap - out < 188) break;
+    if (s->rx_stamp) break;
   }
   return out;
 }
@@ -180,7 +233,10 @@ static ssize_t tssrc_read_src(tssrc_t *s, unsigned char *buf, size_t cap, net_er
         if (n > 0) return n;
         n = mcast_recv(s->m, buf, cap, reason_out);
         if (n < 0) return n;
-        if (n > 0) fec2022_dec_source(s->fec_dec, buf, (size_t)n);
+        if (n > 0) {
+          if (s->rx_stamp) fec_rx_put(s, buf, (size_t)n);
+          fec2022_dec_source(s->fec_dec, buf, (size_t)n);
+        }
         tssrc_fec_poll(s);
         return (ssize_t)tssrc_fec_drain(s, buf, cap);
       }
@@ -267,6 +323,7 @@ int tssrc_rewind(tssrc_t *s) {
       s->raw_len = 0;
       s->rtp_pos = 0;
       s->align_len = 0;
+      s->synced = 0;
       return 1;
     }
   }
@@ -281,6 +338,11 @@ int tssrc_rewind(tssrc_t *s) {
 }
 
 mcast_t *tssrc_mcast(const tssrc_t *s) { return s->m; }
+
+int tssrc_set_nonblock(tssrc_t *s) {
+  if ((s->kind != TSSRC_UDP && s->kind != TSSRC_RTP) || !s->m) return 0;
+  return mcast_set_nonblock(s->m) == 0;
+}
 
 int tssrc_fec_fd(const tssrc_t *s) {
   return s->fec_dec ? mcast_fd(s->fec_m) : -1;
@@ -297,6 +359,15 @@ void tssrc_fec_poll(tssrc_t *s) {
 }
 
 int tssrc_fd(const tssrc_t *s) { return s->jb ? s->epfd : tssrc_src_fd(s); }
+
+short tssrc_poll_events(const tssrc_t *s) {
+  if (!s->jb && s->kind == TSSRC_HTTP) return tssrc_http_poll_events(s);
+  return POLLIN;
+}
+
+int tssrc_timer_driven(const tssrc_t *s) {
+  return !s->jb && s->kind == TSSRC_HTTP && tssrc_http_timer_driven(s);
+}
 
 int tssrc_wait(const tssrc_t *s, int timeout_ms) {
   struct pollfd pfd[2];

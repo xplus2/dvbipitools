@@ -54,6 +54,12 @@ Skip TLS verification. Only meaningful with an
 .B \-i https://
 source.
 .TP
+.B \-\-pace
+Release a file, stdin or http(s)
+.B \-i
+source at its PCR rate (RTP timestamps if RTP-framed).
+Needed for files.
+.TP
 .B \-\-group\-mode \fImode\fR
 .B broadcast
 or
@@ -189,8 +195,10 @@ multicast.
 .B dipisrt \-i rtp://@239.1.1.1:5000 \-o srt://1.2.3.4:9000 \-o srt://5.6.7.8:9000 \-\-group\-mode broadcast
 Bonded sender: the same stream carried over two independent SRT links.
 .TP
-.B dipisrt \-i rtp://@239.1.1.1:5000 \-o srt://1.2.3.4:9000 \-\-passphrase correcthorsebatterystaple
-Sender with encryption.
+.B dipisrt \-i rtp://@239.1.1.1:5000 \-o srt://1.2.3.4:9000
+Sender with encryption, with
+.B passphrase
+set in the configuration file.
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipisrt.yaml

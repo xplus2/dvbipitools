@@ -5,6 +5,8 @@
 
 #include "cissa.h"
 
+int cissa_available(void) { return 0; }
+
 /* built without OpenSSL: CISSA scrambling always fails to even acquire a key */
 cissa_key_t *cissa_key_new(const unsigned char cw[CISSA_CW_LEN]) {
   (void)cw;

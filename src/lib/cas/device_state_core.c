@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "lib/helper/log.h"
+#include "lib/helper/secure_zero.h"
 #include "device_state_core.h"
 
 int device_core_init(device_core_t *core, const char *key_path, const char *serial, size_t max_services) {
@@ -23,6 +24,8 @@ int device_core_init(device_core_t *core, const char *key_path, const char *seri
 void device_core_release(device_core_t *core) {
   pthread_mutex_destroy(&core->lock);
   EVP_PKEY_free(core->ek);
+  secure_zero(core->bk, sizeof core->bk);
+  secure_zero(core->services, sizeof core->services);
 }
 
 void *device_core_alloc(size_t state_size, const char *key_path, const char *serial, size_t max_services) {
@@ -83,9 +86,11 @@ static int handle_emm_u(device_core_t *core, const unsigned char *p, size_t len,
     memcpy(core->bk, bk, sizeof core->bk);
     core->have_bk = 1;
     device_core_unlock(core);
+    secure_zero(bk, sizeof bk);
     log_line("%sEMM-U decrypted, BK updated", log_prefix);
     return 1;
   }
+  secure_zero(bk, sizeof bk);
   log_code("LE300129", "%sEMM-U decrypt failed", log_prefix);
   return 0;
 }
@@ -104,25 +109,30 @@ static int handle_emm_g(device_core_t *core, const unsigned char *p, size_t len,
     device_core_unlock(core);
     return 0;
   }
-  sk = device_core_service_slot_locked(core, service_id, 1);
-  if (!sk) {
-    device_core_unlock(core);
-    log_code("LW500122", "%sservice key cache full (%zu services), dropping EMM-G for service %04X", log_prefix, core->max_services, service_id);
-    return 0;
-  }
   memcpy(bk, core->bk, sizeof bk);
   device_core_unlock(core);
 
-  if (device_emm_g_decrypt(bk, p + 4, sk_buf) == 0) {
-    device_core_lock(core);
-    memcpy(sk->sk, sk_buf, sizeof sk->sk);
-    sk->have = 1;
-    device_core_unlock(core);
-    log_line("%sEMM-G decrypted, SK updated for service %04X", log_prefix, service_id);
-    return 1;
+  if (device_emm_g_decrypt(bk, p + 4, sk_buf) != 0) {
+    secure_zero(bk, sizeof bk);
+    log_code("LE300130", "%sEMM-G decrypt failed for service %04X", log_prefix, service_id);
+    return 0;
   }
-  log_code("LE300130", "%sEMM-G decrypt failed for service %04X", log_prefix, service_id);
-  return 0;
+  device_core_lock(core);
+  sk = device_core_service_slot_locked(core, service_id, 1);
+  if (!sk) {
+    device_core_unlock(core);
+    secure_zero(bk, sizeof bk);
+    secure_zero(sk_buf, sizeof sk_buf);
+    log_code("LW500122", "%sservice key cache full (%zu services), dropping EMM-G for service %04X", log_prefix, core->max_services, service_id);
+    return 0;
+  }
+  memcpy(sk->sk, sk_buf, sizeof sk->sk);
+  sk->have = 1;
+  device_core_unlock(core);
+  secure_zero(bk, sizeof bk);
+  secure_zero(sk_buf, sizeof sk_buf);
+  log_line("%sEMM-G decrypted, SK updated for service %04X", log_prefix, service_id);
+  return 1;
 }
 
 /* EMM-G payload fixed size (2+2+60=64), EMM-U's RSA ciphertext larger */

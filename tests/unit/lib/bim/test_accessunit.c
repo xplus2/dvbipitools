@@ -164,6 +164,79 @@ START_TEST(accessunit_decode_refs_follows_string_buffer_offsets) {
 }
 END_TEST
 
+START_TEST(accessunit_decode_refs_accepts_reordered_fuus) {
+  bcg_doc_t *doc = build_doc();
+  bcg_doc_t doc2;
+  bitwriter_t bw;
+  bitreader_t br;
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  accessunit_scratch_t sc;
+  accessunit_ref_t refs[8];
+  accessunit_ref_t nrefs[8];
+  unsigned char *rev;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  size_t bwlen;
+  size_t swlen;
+  size_t pos;
+  int nfuu;
+  int nfuu2;
+
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  accessunit_scratch_init(&sc);
+  ck_assert_int_eq(accessunit_encode(&sc, doc, &bw, &sw, &nfuu), 0);
+  ck_assert_int_eq(nfuu, 4);
+  memcpy(refs, sc.refs, sizeof(accessunit_ref_t) * (size_t)nfuu);
+  bwdata = bitwriter_data(&bw, &bwlen);
+  swdata = strrepo_writer_data(&sw, &swlen);
+
+  /* fuu blocks in reverse container order */
+  rev = malloc(bwlen);
+  ck_assert_ptr_nonnull(rev);
+  memcpy(rev, bwdata, refs[0].au_off);
+  pos = refs[0].au_off;
+  for (int i = nfuu - 1; i >= 0; i--) {
+    size_t end = (i + 1 < nfuu) ? refs[i + 1].au_off : bwlen;
+    size_t len = end - refs[i].au_off;
+    memcpy(rev + pos, bwdata + refs[i].au_off, len);
+    nrefs[nfuu - 1 - i].au_off = (uint32_t)pos;
+    nrefs[nfuu - 1 - i].str_off = refs[i].str_off;
+    pos += len;
+  }
+  ck_assert_uint_eq(pos, bwlen);
+
+  bitreader_init(&br, rev, bwlen);
+  ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
+  bcg_doc_init(&doc2);
+  ck_assert_int_eq(accessunit_decode_refs(&sc, &br, &sr, nrefs, nfuu, &doc2, &nfuu2), 0);
+  ck_assert_int_eq(nfuu2, 4);
+  ck_assert_str_eq(doc2.channels[0].id, "channel1");
+  ck_assert_str_eq(doc2.programmes[0].title, "News");
+  ck_assert_str_eq(doc2.programmes[1].title, "Weather");
+
+  bitreader_init(&br, rev, bwlen);
+  strrepo_reader_init(&sr, swdata, swlen);
+  bcg_doc_free(&doc2);
+  bcg_doc_init(&doc2);
+  ck_assert_int_eq(accessunit_decode_refs(&sc, &br, &sr, NULL, 0, &doc2, &nfuu2), -1);
+
+  bitreader_init(&br, rev, bwlen);
+  strrepo_reader_init(&sr, swdata, swlen);
+  bcg_doc_free(&doc2);
+  bcg_doc_init(&doc2);
+  ck_assert_int_eq(accessunit_decode_refs(&sc, &br, &sr, nrefs, 1, &doc2, &nfuu2), -1);
+
+  accessunit_scratch_free(&sc);
+  free(rev);
+  bcg_doc_free(doc);
+  bcg_doc_free(&doc2);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
 START_TEST(accessunit_encode_range_limits_output_to_given_channels) {
   bcg_doc_t *doc = build_doc();
   bitwriter_t bw;
@@ -173,6 +246,7 @@ START_TEST(accessunit_encode_range_limits_output_to_given_channels) {
   int part = 0;
   int none = 0;
   int nprog = -1;
+  accessunit_index_t ix;
 
   accessunit_scratch_init(&sc);
   bitwriter_init(&bw);
@@ -181,15 +255,17 @@ START_TEST(accessunit_encode_range_limits_output_to_given_channels) {
   bitwriter_reset(&bw);
   strrepo_writer_free(&sw);
   strrepo_writer_init(&sw);
-  ck_assert_int_eq(accessunit_encode_range(&sc, doc, 0, 1, &bw, &sw, &part, &nprog), 0);
+  ck_assert_int_eq(accessunit_index_build(&ix, doc), 0);
+  ck_assert_int_eq(accessunit_encode_range(&sc, doc, &ix, 0, 1, &bw, &sw, &part, &nprog), 0);
   ck_assert_int_eq(part, all);
   ck_assert_int_ge(nprog, 0);
   bitwriter_reset(&bw);
   strrepo_writer_free(&sw);
   strrepo_writer_init(&sw);
-  ck_assert_int_eq(accessunit_encode_range(&sc, doc, 1, 1, &bw, &sw, &none, NULL), 0);
+  ck_assert_int_eq(accessunit_encode_range(&sc, doc, &ix, 1, 1, &bw, &sw, &none, NULL), 0);
   ck_assert_int_eq(none, 0);
 
+  accessunit_index_free(&ix);
   accessunit_scratch_free(&sc);
   bcg_doc_free(doc);
   bitwriter_free(&bw);
@@ -436,6 +512,7 @@ static Suite *accessunit_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, accessunit_encode_decode_round_trips_full_doc);
   tcase_add_test(tc, accessunit_decode_refs_follows_string_buffer_offsets);
+  tcase_add_test(tc, accessunit_decode_refs_accepts_reordered_fuus);
   tcase_add_test(tc, accessunit_encode_range_limits_output_to_given_channels);
   tcase_add_test(tc, accessunit_encode_empty_doc_has_zero_fuus);
   tcase_add_test(tc, accessunit_decode_rejects_fuu_count_above_int_max);

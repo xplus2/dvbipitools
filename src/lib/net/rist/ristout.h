@@ -33,6 +33,9 @@ ristout_t *ristout_open(const ristout_cfg_t *cfg);
 /* chunks internally at librist's safe payload size. 0 ok, -1 error */
 int ristout_write(ristout_t *r, const unsigned char *buf, size_t n);
 
+/* push snapshot w/o peer counters when no peer stats arrived lately. call once per caller loop iteration */
+void ristout_idle_push(ristout_t *r, double now_mono);
+
 void ristout_close(ristout_t *r);
 
 #endif

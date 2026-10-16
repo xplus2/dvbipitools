@@ -597,14 +597,14 @@ START_TEST(repeated_rotations_keep_ecm_consistent_and_bump_version) {
   ck_assert_ptr_nonnull(e);
   read_state(e, 0.5, &prev);
   for (int i = 0; i < 40; i++) {
-    int odd_rotated = (i + 1) & 1;
+    int odd_in_force = (i + 1) & 1; /* in-force key was already in the previous ECM, retired slot gets the fresh one */
     int sk_rotated = ((i + 1) % 6) == 0;
 
     biss_ca_engine_clock_tick(e, 1000);
     scramble_one(e, 1.0 + i);
     read_state(e, 1.0 + i, &cur);
 
-    ck_assert_uint_eq(cur.ecm_version, (prev.ecm_version + 1) & 0x1F);
+    ck_assert_uint_eq(cur.ecm_version, (prev.ecm_version + (sk_rotated ? 2 : 1)) & 0x1F); /* SK switch bumps ECM too */
     if (sk_rotated) {
       ck_assert_mem_ne(cur.sk, prev.sk, BISS_CA_SK_LEN);
       ck_assert_int_ne(cur.parity, prev.parity);
@@ -612,15 +612,101 @@ START_TEST(repeated_rotations_keep_ecm_consistent_and_bump_version) {
       ck_assert_mem_eq(cur.sk, prev.sk, BISS_CA_SK_LEN);
       ck_assert_int_eq(cur.parity, prev.parity);
     }
-    if (odd_rotated) {
-      ck_assert_mem_eq(cur.sw_even, prev.sw_even, BISS_CA_SW_LEN);
-      ck_assert_mem_ne(cur.sw_odd, prev.sw_odd, BISS_CA_SW_LEN);
-    } else {
+    if (odd_in_force) {
       ck_assert_mem_ne(cur.sw_even, prev.sw_even, BISS_CA_SW_LEN);
       ck_assert_mem_eq(cur.sw_odd, prev.sw_odd, BISS_CA_SW_LEN);
+    } else {
+      ck_assert_mem_eq(cur.sw_even, prev.sw_even, BISS_CA_SW_LEN);
+      ck_assert_mem_ne(cur.sw_odd, prev.sw_odd, BISS_CA_SW_LEN);
     }
     prev = cur;
   }
+  biss_ca_engine_stop(e);
+}
+END_TEST
+
+START_TEST(ecm_keeps_old_sk_until_new_emm_went_out) {
+  const unsigned pids[] = {0x0100};
+  biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
+  biss_ca_engine_t *e = biss_ca_engine_start(&cfg);
+  engine_state_t before;
+  engine_state_t after;
+  unsigned char ecm_a[4096];
+  unsigned char ecm_b[4096];
+  unsigned char sec[4096];
+  size_t len_a = 0;
+  size_t len_b = 0;
+  size_t len = 0;
+  biss_ca_ecm_parsed_t ecm;
+
+  ck_assert_ptr_nonnull(e);
+  read_state(e, 1.0, &before);
+  biss_ca_engine_force_sk_rotation(e);
+  scramble_one(e, 2.0);
+
+  ck_assert_int_eq(biss_ca_engine_ecm_due(e, 3.0, ecm_a, sizeof ecm_a, &len_a), 0);
+  ck_assert_int_eq(biss_ca_parse_ecm_section(ecm_a, len_a, &ecm), 0);
+  ck_assert_int_eq(ecm.session_key_parity, before.parity);
+  ck_assert_int_eq(biss_ca_aes_cbc_decrypt(before.sk, ecm.iv, ecm.esw_even, sec), 0);
+  ck_assert_mem_eq(sec, before.sw_even, BISS_CA_SW_LEN);
+
+  /* further SW rotation meanwhile still uses the old SK */
+  biss_ca_engine_clock_tick(e, 1000);
+  scramble_one(e, 4.0);
+  ck_assert_int_eq(biss_ca_engine_ecm_due(e, 5.0, ecm_b, sizeof ecm_b, &len_b), 0);
+  ck_assert_int_eq(biss_ca_parse_ecm_section(ecm_b, len_b, &ecm), 0);
+  ck_assert_int_eq(ecm.session_key_parity, before.parity);
+
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 6.0, sec, sizeof sec, &len), 0);
+  read_state(e, 7.0, &after);
+  ck_assert_int_ne(before.parity, after.parity);
+  ck_assert_mem_ne(before.sk, after.sk, BISS_CA_SK_LEN);
+  biss_ca_engine_stop(e);
+}
+END_TEST
+
+START_TEST(ecm_switches_only_after_all_emm_sections_sent) {
+  const unsigned pids[] = {0x0100};
+  biss_ca_engine_cfg_t cfg = base_cfg(pids, 1);
+  biss_ca_engine_t *e;
+  biss_ca_ecm_parsed_t ecm;
+  unsigned char sec[4096];
+  size_t len = 0;
+  char sub[512];
+  int parity;
+
+  make_subdir("rot", sub, sizeof sub);
+  fill_from_pool(sub);
+  cfg.receivers_dir = sub;
+  e = biss_ca_engine_start(&cfg);
+  ck_assert_ptr_nonnull(e);
+  ck_assert_int_eq(biss_ca_engine_ecm_due(e, 0.0, sec, sizeof sec, &len), 0);
+  ck_assert_int_eq(biss_ca_parse_ecm_section(sec, len, &ecm), 0);
+  parity = ecm.session_key_parity;
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 0.0, sec, sizeof sec, &len), 0);
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 0.0, sec, sizeof sec, &len), 0);
+
+  biss_ca_engine_force_sk_rotation(e);
+  scramble_one(e, 1.0);
+
+  ck_assert_int_eq(biss_ca_engine_ecm_due(e, 1.0, sec, sizeof sec, &len), 0);
+  ck_assert_int_eq(biss_ca_parse_ecm_section(sec, len, &ecm), 0);
+  ck_assert_int_eq(ecm.session_key_parity, parity);
+
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 1.0, sec, sizeof sec, &len), 0);
+  ck_assert_int_eq(biss_ca_engine_ecm_due(e, 2.0, sec, sizeof sec, &len), 0);
+  ck_assert_int_eq(biss_ca_parse_ecm_section(sec, len, &ecm), 0);
+  ck_assert_int_eq(ecm.session_key_parity, parity);
+
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 1.0, sec, sizeof sec, &len), 0);
+  ck_assert_int_eq(biss_ca_engine_ecm_due(e, 2.5, sec, sizeof sec, &len), 0);
+  ck_assert_int_eq(biss_ca_parse_ecm_section(sec, len, &ecm), 0);
+  ck_assert_int_eq(ecm.session_key_parity, parity);
+
+  ck_assert_int_eq(biss_ca_engine_emm_due(e, 1.0, sec, sizeof sec, &len), 0);
+  ck_assert_int_eq(biss_ca_engine_ecm_due(e, 3.0, sec, sizeof sec, &len), 0);
+  ck_assert_int_eq(biss_ca_parse_ecm_section(sec, len, &ecm), 0);
+  ck_assert_int_ne(ecm.session_key_parity, parity);
   biss_ca_engine_stop(e);
 }
 END_TEST
@@ -649,6 +735,8 @@ static Suite *biss_ca_engine_suite(void) {
   tcase_add_test(tc, ecm_and_emm_decrypt_consistently);
   tcase_add_test(tc, sk_rotation_changes_sk_and_keeps_session_words);
   tcase_add_test(tc, repeated_rotations_keep_ecm_consistent_and_bump_version);
+  tcase_add_test(tc, ecm_keeps_old_sk_until_new_emm_went_out);
+  tcase_add_test(tc, ecm_switches_only_after_all_emm_sections_sent);
   suite_add_tcase(s, tc);
   return s;
 }

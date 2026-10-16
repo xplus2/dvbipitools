@@ -20,34 +20,35 @@ dipisrt -i <uri> -o <uri> [options]
 
 ## Options
 
-| flag | long form               | argument                    | default                                |
-|------|-------------------------|-----------------------------|----------------------------------------|
-| `-i` | `--in`                  | `<uri>`                     | required                               |
-| `-o` | `--out`                 | `<uri>`                     | required                               |
-| `-I` | `--iface`               | `<iface>`                   | kernel route (non-SRT side only)       |
-| `-k` | `--insecure`            |                             | off (`-i https://` source only)        |
-|      | `--group-mode`          | `broadcast\|backup`         | none (required when bonding)           |
-|      | `--rendezvous`          |                             | off (needs `--local`)                  |
-|      | `--local`               | `<host:port>`               | none (required with `--rendezvous`)    |
-|      | `--passphrase`          | `<pw>`                      | none (10..79 chars)                    |
-|      | `--pbkeylen`            | `16\|24\|32`                | `16` (only with `--passphrase`)        |
-|      | `--streamid`            | `<id>`                      | none                                   |
-|      | `--packetfilter`        | `<cfg>`                     | none, e.g. `fec,cols:10,rows:5`        |
-|      | `--latency`             | `<ms>`                      | library default                        |
-|      | `--send-buffer-mult`    | `<n>` (1..32)               | `4` (sender side only)                 |
-|      | `--al-fec`              | `<L>:<D>`                   | off (Annex E Layer 1 FEC, rtp:// only) |
-|      | `--al-fec-port`         | `<port>`                    | required with `--al-fec`               |
-|      | `--color`               | `auto\|always\|never`       | `auto`                                 |
-|      | `--metrics`             | `<path>`                    | `/run/dvbipitools/metrics.sock`        |
-|      | `--metrics-id`          | `<name>`                    | none (metrics disabled unless set)     |
-|      | `--metrics-interval`    | `<s>`                       | `5`                                    |
-|      | `--metrics-inspect-ts`  | `off\|basic\|medium\|full`  | `off`                                  |
-| `-v` | `--verbose`             |                             | off                                    |
-| `-d` | `--daemonize`           |                             | off (foreground)                       |
-| `-c` | `--config`              | `<path>`                    | `/etc/dvbipitools/dipisrt.yaml`        |
-|      | `--config-strict`       |                             | config file issues are errors          |
-|      | `--configtest`          |                             | check the config file, then exit       |
-| `-h` | `--help`                |                             |                                        |
+| flag | long form               | argument                    | default                                       |
+|------|-------------------------|-----------------------------|-----------------------------------------------|
+| `-i` | `--in`                  | `<uri>`                     | required                                      |
+| `-o` | `--out`                 | `<uri>`                     | required                                      |
+| `-I` | `--iface`               | `<iface>`                   | kernel route (non-SRT side only)              |
+| `-k` | `--insecure`            |                             | off (`-i https://` source only)               |
+|      | `--pace`                |                             | off (`-i` file, `-` or http(s), PCR/RTP rate) |
+|      | `--group-mode`          | `broadcast\|backup`         | none (required when bonding)                  |
+|      | `--rendezvous`          |                             | off (needs `--local`)                         |
+|      | `--local`               | `<host:port>`               | none (required with `--rendezvous`)           |
+|      | `--passphrase`          | `<pw>`                      | none (10..79 chars, prefer config file)       |
+|      | `--pbkeylen`            | `16\|24\|32`                | `16` (only with `--passphrase`)               |
+|      | `--streamid`            | `<id>`                      | none                                          |
+|      | `--packetfilter`        | `<cfg>`                     | none, e.g. `fec,cols:10,rows:5`               |
+|      | `--latency`             | `<ms>`                      | library default                               |
+|      | `--send-buffer-mult`    | `<n>` (1..32)               | `4` (sender side only)                        |
+|      | `--al-fec`              | `<L>:<D>`                   | off (Annex E Layer 1 FEC, rtp:// only)        |
+|      | `--al-fec-port`         | `<port>`                    | required with `--al-fec`                      |
+|      | `--color`               | `auto\|always\|never`       | `auto`                                        |
+|      | `--metrics`             | `<path>`                    | `/run/dvbipitools/metrics.sock`               |
+|      | `--metrics-id`          | `<name>`                    | none (metrics disabled unless set)            |
+|      | `--metrics-interval`    | `<s>`                       | `5`                                           |
+|      | `--metrics-inspect-ts`  | `off\|basic\|medium\|full`  | `off`                                         |
+| `-v` | `--verbose`             |                             | off                                           |
+| `-d` | `--daemonize`           |                             | off (foreground)                              |
+| `-c` | `--config`              | `<path>`                    | `/etc/dvbipitools/dipisrt.yaml`               |
+|      | `--config-strict`       |                             | config file issues are errors                 |
+|      | `--configtest`          |                             | check the config file, then exit              |
+| `-h` | `--help`                |                             |                                               |
 
 ## Configuration file
 
@@ -105,8 +106,8 @@ dipisrt -i srt://@0.0.0.0:9000 -o rtp://@239.1.1.1:5000
 # bonded sender: two SRT links carrying the same stream
 dipisrt -i rtp://@239.1.1.1:5000 -o srt://1.2.3.4:9000 -o srt://5.6.7.8:9000 --group-mode broadcast
 
-# encrypted
-dipisrt -i rtp://@239.1.1.1:5000 -o srt://1.2.3.4:9000 --passphrase correcthorsebatterystaple
+# encrypted, passphrase from config file (passphrase: <pw>)
+dipisrt -i rtp://@239.1.1.1:5000 -o srt://1.2.3.4:9000
 ```
 
 ## Notes

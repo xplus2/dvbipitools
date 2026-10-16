@@ -23,10 +23,15 @@ int poll_fd_for_input(const retryset_t *rs, unsigned i, short *events_out) {
     const tvsrc_t *src = retryset_result(rs, i);
     if (src) {
       fd = tvsrc_fd(src);
-      *events_out = POLLIN;
+      *events_out = tvsrc_poll_events(src);
     }
   }
   return fd;
+}
+
+int input_timer_driven(const retryset_t *rs, unsigned i) {
+  const tvsrc_t *src = retryset_result(rs, i);
+  return src && tvsrc_timer_driven(src);
 }
 
 uint32_t input_poll_ready_mask(const unsigned *pfd_slot, const struct pollfd *pfds, nfds_t npfd) {
@@ -99,10 +104,7 @@ void discover_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
   tk->progs[i].rx = remux_new(tk->cfg, &tk->cfg->inputs[i], tk->progs[i].psi, &pids, 0);
   if (!tk->progs[i].rx) {
     log_code_ansi("TE500196", "input \e[1;30m%u\e[0m: \e[0;31mremux setup failed\e[0m", i);
-    psi_free(tk->progs[i].psi);
-    tk->progs[i].psi = NULL;
-    retryset_mark_down(tk->rs, i, tk->now_t);
-    if (tk->metrics_on) tk->input_stats[i].up = 0;
+    discover_fail(tk, i);
     return;
   }
   /* cas already running (non-keyword mode, or reconnect): attach too, else this program's packets never scramble */
@@ -163,7 +165,7 @@ int feed_input(mpts_tick_t *tk, unsigned i, tvsrc_t *src) {
     remux_release(tk->progs[i].rx, tk->now, packet_cb, tk->out, 1, tk->tsm);
     out_pcr_pid_set(tk->out, i, 0);
     program_reset(&tk->progs[i]);
-    retryset_mark_down(tk->rs, i, tk->now_t);
+    retryset_reconnect_now(tk->rs, i, tk->now_t);
     if (tk->metrics_on) tk->input_stats[i].up = 0;
     return 0;
   }

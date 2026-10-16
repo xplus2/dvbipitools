@@ -8,10 +8,13 @@
 
 typedef struct device_state device_state_t;
 
-/* cw_len: 8 (CSA2) or 16 (CISSA). serial: NULL/"" = no EMM-U filtering.
+/* cw_len: 8 (CSA2) or 16 (CISSA). serial: required, EMM-U for other serials skipped.
    caid: 0 = no filtering (resolve_cw never returns -2) else ret CAID only. NULL on err */
 device_state_t *device_state_new(const char *key_path, int cw_len, const char *serial, unsigned caid);
 void device_state_free(device_state_t *d);
+
+/* 1 if caid passes configured filter (always 1 when unset) */
+int device_caid_matches(const device_state_t *d, unsigned caid);
 
 /* one EMM section, as captured. EMM-U updates BK, EMM-G updates SK cache for its dvb_service_id */
 void device_on_emm(device_state_t *d, const unsigned char *emm, size_t emm_len);

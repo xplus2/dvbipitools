@@ -33,6 +33,7 @@ static channel_t *make_channel_with_rap(size_t cache_cap, int n_extra_entries) {
   memset(pkt, 0xAB, sizeof pkt);
   pkt[0] = 0x47;
   atomic_store_explicit(&c->cache.have_rap, 1, memory_order_relaxed);
+  atomic_store_explicit(&c->nominal_bps, 1000000.0, memory_order_relaxed);
   channel_store(g_table, c, 0x1234, 1, 0, 0, pkt, sizeof pkt); /* entry 0: becomes "RAP" once have_rap seen */
   for (i = 0; i < n_extra_entries; i++)
     channel_store(g_table, c, 0x1234, (uint16_t)(2 + i), 0, 0, pkt, sizeof pkt);
@@ -49,6 +50,7 @@ static channel_t *make_channel_with_rap_dscp(unsigned char dscp) {
   memset(pkt, 0xAB, sizeof pkt);
   pkt[0] = 0x47;
   atomic_store_explicit(&c->cache.have_rap, 1, memory_order_relaxed);
+  atomic_store_explicit(&c->nominal_bps, 1000000.0, memory_order_relaxed);
   channel_store(g_table, c, 0x1234, 1, 0, dscp, pkt, sizeof pkt);
   return c;
 }
@@ -158,6 +160,16 @@ START_TEST(burst_decide_accepts_when_cache_meets_requested_min) {
 }
 END_TEST
 
+START_TEST(burst_decide_rejects_unknown_nominal_bitrate) {
+  channel_t *c = make_channel_with_rap(8, 0);
+  rtcp_rams_r_t req;
+  atomic_store_explicit(&c->nominal_bps, 0.0, memory_order_relaxed); /* RAP cached before first bitrate window */
+  memset(&req, 0, sizeof req);
+  ck_assert_int_eq(burst_decide(c, &req, 0), BURST_NO_VALID_START);
+  channel_table_free(g_table);
+}
+END_TEST
+
 START_TEST(burst_decide_rejects_insufficient_client_bitrate) {
   channel_t *c = make_channel_with_rap(8, 0);
   rtcp_rams_r_t req;
@@ -224,6 +236,33 @@ START_TEST(burst_new_caps_target_to_client_max) {
 
   burst_free(uncapped);
   burst_free(capped);
+  channel_table_free(g_table);
+}
+END_TEST
+
+START_TEST(burst_tick_keeps_sending_after_target_halved) {
+  channel_t *c = make_channel_with_rap(128, 99);
+  burst_t *b;
+  struct timespec ts = {0, 200000000};
+  int first_sent;
+
+  atomic_store_explicit(&c->nominal_bps, 80000.0, memory_order_relaxed);
+  b = burst_new(c, 1.0, 0, 99);
+
+  nanosleep(&ts, NULL);
+  g_send_calls = 0;
+  burst_tick(b, 60000, capture_send, NULL);
+  first_sent = g_send_calls;
+  ck_assert_int_gt(first_sent, 0);
+
+  atomic_store_explicit(&b->target_bps, 40000.0, memory_order_relaxed); /* NACK halving */
+  ts.tv_nsec = 100000000;
+  nanosleep(&ts, NULL);
+  g_send_calls = 0;
+  burst_tick(b, 60000, capture_send, NULL);
+  ck_assert_int_gt(g_send_calls, 0); /* cut not retroactive, no stall */
+
+  burst_free(b);
   channel_table_free(g_table);
 }
 END_TEST
@@ -480,11 +519,13 @@ static Suite *burst_suite(void) {
   tcase_add_test(tc, burst_decide_rejects_zero_max_buffer_fill);
   tcase_add_test(tc, burst_decide_rejects_cache_shallower_than_requested_min);
   tcase_add_test(tc, burst_decide_accepts_when_cache_meets_requested_min);
+  tcase_add_test(tc, burst_decide_rejects_unknown_nominal_bitrate);
   tcase_add_test(tc, burst_decide_rejects_insufficient_client_bitrate);
   tcase_add_test(tc, burst_decide_accepts_valid_request);
   tcase_add_test(tc, burst_new_caps_target_to_client_max);
   tcase_add_test(tc, burst_tick_delivers_cached_packets_and_completes);
   tcase_add_test(tc, burst_tick_survives_new_rap_arriving_mid_burst);
+  tcase_add_test(tc, burst_tick_keeps_sending_after_target_halved);
   tcase_add_test(tc, burst_tick_stops_when_writer_laps_cursor);
   tcase_add_test(tc, burst_tick_stops_at_duration_cap);
   tcase_add_test(tc, burst_tick_detects_slot_reuse);

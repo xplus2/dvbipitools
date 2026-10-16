@@ -17,6 +17,8 @@ typedef struct {
   unsigned char es_cc;
   uint64_t base_pts;
   uint64_t frames; /* ADTS frames since base_pts */
+  uint64_t last_pcr_pts;
+  int have_pcr;
 } hls_ts_passthrough_t;
 
 void hls_ts_passthrough_feed(void *ctx, hls_live_t *h, const unsigned char *data, size_t len);

@@ -162,6 +162,21 @@ START_TEST(bitwriter_vluimsbf4_encodes_uint64_max_without_overflow) {
 }
 END_TEST
 
+START_TEST(bitwriter_put_failure_leaves_state_untouched) {
+  bitwriter_t bw;
+  bitwriter_init(&bw);
+  ck_assert_int_eq(bitwriter_put(&bw, 0x5, 3), 0);
+  bw.len = SIZE_MAX; /* growth impossible */
+  bw.cap = SIZE_MAX;
+  ck_assert_int_eq(bitwriter_put(&bw, 0xFFFF, 16), -1);
+  ck_assert_uint_eq(bw.len, SIZE_MAX);
+  ck_assert_int_eq(bw.cur_bits, 3);
+  ck_assert_uint_eq(bw.cur, 0xA0u);
+  bw.len = 0;
+  bw.cap = 0;
+}
+END_TEST
+
 static Suite *bitwriter_suite(void) {
   Suite *s = suite_create("bitwriter");
   TCase *tc = tcase_create("core");
@@ -173,6 +188,7 @@ static Suite *bitwriter_suite(void) {
   tcase_add_test(tc, bitwriter_vluimsbf8_matches_known_encoding);
   tcase_add_test(tc, bitwriter_vluimsbf4_round_trips_across_group_boundaries);
   tcase_add_test(tc, bitwriter_vluimsbf4_encodes_uint64_max_without_overflow);
+  tcase_add_test(tc, bitwriter_put_failure_leaves_state_untouched);
   suite_add_tcase(s, tc);
   return s;
 }

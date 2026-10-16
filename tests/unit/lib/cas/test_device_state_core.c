@@ -269,6 +269,34 @@ START_TEST(emm_g_beyond_service_limit_is_dropped) {
 }
 END_TEST
 
+START_TEST(forged_emm_g_does_not_consume_cache_slots) {
+  device_core_t core;
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char emm[256];
+  size_t n;
+
+  key_begin();
+  fill(bk, 5);
+  fill(sk, 50);
+  ck_assert_int_eq(device_core_init(&core, g_key_path, NULL, 2), 0);
+  n = build_emm_u(emm, "S", bk, g_pkey, 0);
+  ck_assert_int_eq(device_core_on_emm(&core, emm, n, ""), 1);
+  for (unsigned id = 100; id < 110; id++) {
+    n = build_emm_g(emm, id, bk, sk, 1);
+    ck_assert_int_eq(device_core_on_emm(&core, emm, n, ""), 0);
+  }
+  ck_assert_uint_eq(core.service_count, 0u);
+  n = build_emm_g(emm, 1, bk, sk, 0);
+  ck_assert_int_eq(device_core_on_emm(&core, emm, n, ""), 1);
+  n = build_emm_g(emm, 2, bk, sk, 0);
+  ck_assert_int_eq(device_core_on_emm(&core, emm, n, ""), 1);
+  ck_assert_uint_eq(core.service_count, 2u);
+  device_core_release(&core);
+  key_end();
+}
+END_TEST
+
 START_TEST(copy_service_key_sole_fallback_only_when_allowed) {
   device_core_t core;
   unsigned char bk[CRYPTO_KEY_LEN];
@@ -317,6 +345,7 @@ static Suite *device_state_core_suite(void) {
   tcase_add_test(tc, emm_u_without_serial_filter_accepts_any_address);
   tcase_add_test(tc, emm_g_decrypt_failure_leaves_service_without_key);
   tcase_add_test(tc, emm_g_beyond_service_limit_is_dropped);
+  tcase_add_test(tc, forged_emm_g_does_not_consume_cache_slots);
   tcase_add_test(tc, copy_service_key_sole_fallback_only_when_allowed);
   tcase_add_test(tc, alloc_and_free_state_round_trip);
   suite_add_tcase(s, tc);

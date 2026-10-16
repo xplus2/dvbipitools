@@ -427,6 +427,7 @@ START_TEST(tssrc_fec_poll_feeds_repair_and_recovers_lost_packet) {
     build_rtp_ts(pkt[i], (uint16_t)(0x2000 + i), (unsigned char)i);
     rlen = fec2022_enc_feed(enc, pkt[i], SRC_LEN, 1000 + i, repair, sizeof repair);
   }
+  rlen = fec2022_enc_drain(enc, repair, sizeof repair);
   ck_assert_uint_gt(rlen, 0u);
   for (unsigned i = 0; i < SRC_PKTS - 1; i++)
     ck_assert_int_eq((int)sendto(src_sock, pkt[i], SRC_LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), SRC_LEN);
@@ -463,11 +464,67 @@ START_TEST(tssrc_fec_poll_feeds_repair_and_recovers_lost_packet) {
     ck_assert_uint_eq(got, 3u * 188);
     for (unsigned i = 1; i <= 3; i++) {
       ck_assert_uint_eq(all[(i - 1) * 188], 0x47);
-      ck_assert_uint_eq(all[(i - 1) * 188 + 1], i);
+      ck_assert_uint_eq(all[(i - 1) * 188 + 1], i + 2); /* 0..2 went out before repair */
     }
   }
 
   fec2022_enc_free(enc);
+  close(src_sock);
+  close(fec_sock);
+  tssrc_close(s);
+}
+END_TEST
+
+START_TEST(tssrc_fec_rx_ns_follows_released_packet) {
+  enum { PKTS = 8, LEN = 12 + 188 };
+  tssrc_cfg_t cfg;
+  tssrc_t *s;
+  struct sockaddr_in src_dst;
+  struct sockaddr_in fec_dst;
+  char group[32];
+  unsigned port = free_udp_port();
+  unsigned fec_port = free_udp_port();
+  int src_sock;
+  int fec_sock;
+  unsigned char pkt[LEN];
+  unsigned char buf[2048];
+  uint64_t ns[PKTS];
+  unsigned nread = 0;
+
+  ck_assert_uint_ne(port, fec_port);
+  unique_group(group, sizeof group);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.kind = TSSRC_RTP;
+  cfg.family = AF_INET;
+  cfg.group = group;
+  cfg.port = port;
+  cfg.al_fec_l = 2;
+  cfg.al_fec_d = 2;
+  cfg.al_fec_port = fec_port;
+  s = tssrc_open(&cfg, NULL);
+  ck_assert_ptr_nonnull(s);
+  ck_assert_int_eq(tssrc_enable_rx_timestamps(s), 0);
+  src_sock = open_sender(group, port, &src_dst);
+  fec_sock = open_sender(group, fec_port, &fec_dst);
+
+  for (unsigned i = 0; i < PKTS; i++) {
+    build_rtp_ts(pkt, (uint16_t)(0x3000 + i), (unsigned char)i);
+    ck_assert_int_eq((int)sendto(src_sock, pkt, LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), LEN);
+    usleep(20000);
+  }
+  for (unsigned tries = 0; tries < 40 && nread < PKTS; tries++) {
+    ssize_t n;
+
+    tssrc_wait(s, 50);
+    n = tssrc_read(s, buf, sizeof buf, NULL);
+    if (n <= 0) continue;
+    ck_assert_int_eq((int)n, 188);
+    ns[nread++] = tssrc_last_rx_ns(s);
+  }
+  ck_assert_uint_ge(nread, 2u);
+  for (unsigned i = 1; i < nread; i++)
+    ck_assert_uint_ge(ns[i] - ns[i - 1], 15000000u);
+
   close(src_sock);
   close(fec_sock);
   tssrc_close(s);
@@ -513,6 +570,7 @@ START_TEST(tssrc_read_consumes_repair_without_explicit_fec_poll) {
     build_rtp_ts(pkt[i], (uint16_t)(0x2000 + i), (unsigned char)i);
     rlen = fec2022_enc_feed(enc, pkt[i], SRC_LEN, 1000 + i, repair, sizeof repair);
   }
+  rlen = fec2022_enc_drain(enc, repair, sizeof repair);
   ck_assert_uint_gt(rlen, 0u);
   for (unsigned i = 0; i < SRC_PKTS - 1; i++)
     ck_assert_int_eq((int)sendto(src_sock, pkt[i], SRC_LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), SRC_LEN);
@@ -548,7 +606,7 @@ START_TEST(tssrc_read_consumes_repair_without_explicit_fec_poll) {
     ck_assert_uint_eq(got, 3u * 188);
     for (unsigned i = 1; i <= 3; i++) {
       ck_assert_uint_eq(all[(i - 1) * 188], 0x47);
-      ck_assert_uint_eq(all[(i - 1) * 188 + 1], i);
+      ck_assert_uint_eq(all[(i - 1) * 188 + 1], i + 2); /* 0..2 went out before repair */
     }
   }
 
@@ -686,6 +744,7 @@ static Suite *tssource_async_suite(void) {
   tcase_add_test(tc, tssrc_open_async_reports_error_on_refused_connection);
   tcase_add_test(tc, tssrc_mcast_returns_the_joined_socket_for_udp_only);
   tcase_add_test(tc, tssrc_fec_poll_feeds_repair_and_recovers_lost_packet);
+  tcase_add_test(tc, tssrc_fec_rx_ns_follows_released_packet);
   tcase_add_test(tc, tssrc_read_consumes_repair_without_explicit_fec_poll);
   tcase_add_test(tc, tssrc_read_with_fec_returns_zero_when_idle);
   tcase_add_test(tc, tssrc_buffer_ms_is_minus_one_without_jitter_buffer);

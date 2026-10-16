@@ -5,9 +5,11 @@
 #include <stdatomic.h>
 #include <time.h>
 
+#include "lib/helper/log.h"
 #include "lib/mux/rtcp_build.h"
 #include "lib/sys/signal.h"
 
+#include "../version.h"
 #include "run.h"
 
 static void ntp_now(uint32_t *sec, uint32_t *frac) {
@@ -62,7 +64,8 @@ void *rsi_pacer_main(void *arg) {
   time_t collision_max_age = (time_t)pc->interval_s * 3; /* report collision ~3 cycles after last seen */
   int wfd = signal_wake_fd();
 
-  cpuaff_pin(pc->cpuaff, pc->cpu_idx, "rsi pacer");
+  if (cpuaff_pin(pc->cpuaff, pc->cpu_idx, "rsi pacer") < 0)
+    log_code("FW500245", TOOL_NAME ": rsi pacer: cpu pin failed, running unpinned");
   if (!chunks_per_cycle) chunks_per_cycle = 1;
   while (!signal_stop_requested()) {
     size_t cap;

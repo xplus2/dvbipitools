@@ -63,6 +63,7 @@ struct remux {
 
   psi_versions_t *pv;
   psi_t *watch;                 /* owned, tracks source PMT after discovery. NULL: no live tracking */
+  psi_t *watch_prev;            /* owned, pre-move watch: es[].src may still point into it until next remap */
   unsigned watch_pmt_pid;
   unsigned long watch_parsed;
   unsigned char src_pmt[1024];  /* source of PMT es[] */
@@ -88,6 +89,7 @@ struct remux {
   unsigned char cc_ait;
   unsigned char cc_cat;
   unsigned char cc_eit;
+  unsigned char cc_tdt;
   unsigned char cc_ecm[ARGS_MAX_CAS_VENDORS];
   unsigned char cc_emm[ARGS_MAX_CAS_VENDORS];
   cc_offsets_t *ccm;
@@ -98,9 +100,11 @@ struct remux {
   double last_nit;
   double last_ait;
   double last_cat;
+  double last_tdt;
+  double last_tot;
 
   /* per-pid TS-integrity, source-side: resets on reconnect, unlike caller-owned cumulative ts_metrics_t */
-  unsigned char cc_state[8192]; /* bit 0x10=seen, low nibble=last continuity_counter */
+  unsigned char cc_state[8192]; /* 0x10=seen, 0x20=dup used, low nibble=last cc */
   unsigned pcr_pid_in;          /* source's PCR pid at discovery, 0=none */
   int have_last_pcr;
   uint64_t last_pcr27;

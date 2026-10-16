@@ -90,6 +90,7 @@ struct mkv {
   int cl_cue; /* open cluster starts on a video keyframe */
   int cut_num; /* video track number, 0 = cut on any keyframe */
   int seekable;
+  uint64_t fd_base; /* file offset of byte count 0 */
   uint64_t seg_size_pos;
   uint64_t seg_data;
   uint64_t pos_info;

@@ -63,8 +63,8 @@ START_TEST(csa2_batch_reports_no_capacity_and_leaves_data_untouched) {
   memset(buf, 0x5A, sizeof buf);
   memcpy(ref, buf, sizeof ref);
   ck_assert_uint_eq(csa2_batch_size(), 0);
-  csa2_encrypt_batch(NULL, &e, 1);
-  csa2_decrypt_batch(NULL, &e, 1);
+  ck_assert_int_eq(csa2_encrypt_batch(NULL, &e, 1), -1);
+  ck_assert_int_eq(csa2_decrypt_batch(NULL, &e, 1), -1);
   ck_assert_mem_eq(buf, ref, sizeof buf);
 }
 END_TEST

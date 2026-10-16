@@ -21,7 +21,7 @@ typedef struct {
 /* "http://host[:port]/path" or "https://...". 0 ok, -1 bad uri */
 int http_url_parse(const char *uri, http_url_t *u);
 
-/* GET, sends Icy-MetaData: 1, follows up to 5 redirects. insecure skips TLS verification.
+/* GET, follows up to 5 redirects. insecure skips TLS verification.
    extra_header: one raw "Name: value" line added to the request, no trailing CRLF. NULL for none.
    NULL on failure. reason_out: nullable, set only on NULL return */
 http_t *http_get(const http_url_t *url, const char *user_agent, int insecure, const char *extra_header, net_err_reason_t *reason_out);
@@ -56,8 +56,9 @@ typedef struct http_async http_async_t;
 
 typedef enum { HTTP_ASYNC_PENDING, HTTP_ASYNC_DONE, HTTP_ASYNC_ERROR } http_async_state_t;
 
-/* async http_get(): never blocks, caller polls. same semantics (redirects, Icy-MetaData: 1).
-   caller decides how long to poll before http_async_free() abandons it. no internal timeout.
+/* async http_get(): never blocks, caller polls. same semantics (redirects).
+   stages (connect, TLS, send, headers) time out after 10s each, checked in http_async_step():
+   step at least that often, poll() alone never wakes for hung peer.
    NULL on immediate setup failure (bad uri, resolve failure - logged).
    reason_out: nullable, set only on NULL return */
 http_async_t *http_async_start(const http_url_t *url, const char *user_agent, int insecure, const char *extra_header, net_err_reason_t *reason_out);

@@ -106,7 +106,9 @@ char *uriparse_redact_dup(const char *uri) {
   if (!auth) return out;
   auth += 3;
   end = auth + strcspn(auth, "/?#");
-  at = memchr(auth, '@', (size_t)(end - auth));
+  at = NULL;
+  for (const char *p = auth; p < end; p++)
+    if (*p == '@') at = p; /* last: raw '@' in password */
   if (at && at > auth) {
     n = strlen(at + 1) + 1;
     memmove(auth, at + 1, n);

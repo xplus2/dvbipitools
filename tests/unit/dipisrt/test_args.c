@@ -368,7 +368,7 @@ END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipisrt_cfg_XXXXXX";
-  char *argv[] = {"dipisrt", "-c", path, NULL};
+  char *argv[] = {"dipisrt", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "in: srt://@0.0.0.0:9000\nout: rtp://@239.1.1.1:5000\npbkeylen: 20\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
@@ -472,6 +472,7 @@ static const option_case_t option_cases[] = {
   OPT(al_fec_port, CFG_UINT, 6004, NULL, SEND_BASE, "--al-fec", "10:5", "--al-fec-port", "6004"),
   OPT(iface, CFG_STRPTR, 0, "eth7", SEND_BASE, "-I", "eth7"),
   OPT(insecure_tls, CFG_INT, 1, NULL, "-i", "https://example.org/live.ts", "-o", "srt://1.2.3.4:9000", "-k"),
+  OPT(pace, CFG_INT, 1, NULL, "-i", "/tmp/in.ts", "-o", "srt://1.2.3.4:9000", "--pace"),
   OPT(color_mode, CFG_INT, LOG_COLOR_NEVER, NULL, SEND_BASE, "--color", "never"),
   OPT(metrics_sock, CFG_STRPTR, 0, "/tmp/m.sock", SEND_BASE, "--metrics", "/tmp/m.sock", "--metrics-id", "s1"),
   OPT(metrics_id, CFG_STRPTR, 0, "s1", SEND_BASE, "--metrics-id", "s1"),
@@ -534,6 +535,7 @@ static const message_case_t message_cases[] = {
   MSG(ARGS_ERR, "exactly one of -i/-o must be srt://", "-i", "udp://@239.1.2.3:5000", "-o", "out.ts"),
   MSG(ARGS_ERR, "--rendezvous is not combinable with srt://@ (listener)", RECV_BASE, "--rendezvous", "--local", "0.0.0.0:9100"),
   MSG(ARGS_ERR, "--rendezvous requires --local <host:port>", SEND_BASE, "--rendezvous"),
+  MSG(ARGS_ERR, "--local and srt:// peer differ in address family", SEND_BASE, "--local", "[::1]:9100"),
   MSG(ARGS_ERR, "--passphrase must be 10..79 characters", SEND_BASE, "--passphrase", "short"),
   MSG(ARGS_ERR, "--pbkeylen requires --passphrase", SEND_BASE, "--pbkeylen", "16"),
   MSG(ARGS_ERR, "--metrics/--metrics-interval require --metrics-id", SEND_BASE, "--metrics", "/tmp/m.sock"),
@@ -544,6 +546,7 @@ static const message_case_t message_cases[] = {
   MSG(ARGS_OK, "--al-fec-port has no effect without --al-fec", SEND_BASE, "--al-fec-port", "6004"),
   MSG(ARGS_OK, "--al-fec has no effect, the non-srt:// side isn't rtp://", SEND_BASE, "--al-fec", "10:5", "--al-fec-port", "6004"),
   MSG(ARGS_OK, "--insecure needs -i https://", SEND_BASE, "-k"),
+  MSG(ARGS_OK, "--pace requires -i - , a file path or http(s)://", SEND_BASE, "--pace"),
   MSG(ARGS_OK, "--send-buffer-mult needs -o srt://", RECV_BASE, "--send-buffer-mult", "4"),
 #ifndef DIPISRT_HAVE_BONDING
   MSG(ARGS_ERR, "--group-mode needs a libsrt built with bonding support", SEND_BASE, "--group-mode", "backup"),

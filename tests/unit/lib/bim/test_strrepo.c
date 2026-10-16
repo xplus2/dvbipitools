@@ -34,7 +34,7 @@ START_TEST(strrepo_round_trips_multiple_strings_in_order) {
 }
 END_TEST
 
-START_TEST(strrepo_reader_truncates_into_small_buffer) {
+START_TEST(strrepo_reader_rejects_string_too_long_for_buffer) {
   strrepo_writer_t sw;
   strrepo_reader_t sr;
   const unsigned char *data;
@@ -42,25 +42,31 @@ START_TEST(strrepo_reader_truncates_into_small_buffer) {
   char out[4];
   strrepo_writer_init(&sw);
   strrepo_writer_put(&sw, "abcdefgh");
+  strrepo_writer_put(&sw, "abc");
   data = strrepo_writer_data(&sw, &len);
   strrepo_reader_init(&sr, data, len);
 
-  ck_assert_int_eq(strrepo_reader_next(&sr, out, sizeof out), 0);
-  ck_assert_str_eq(out, "abc"); /* 3 chars + NUL fits a 4-byte buffer */
+  ck_assert_int_eq(strrepo_reader_next(&sr, out, sizeof out), -1);
 
   strrepo_writer_free(&sw);
 }
 END_TEST
 
-START_TEST(strrepo_reader_truncation_skips_rest_of_string) {
+START_TEST(strrepo_reader_accepts_exact_fit_with_nul) {
+  strrepo_writer_t sw;
   strrepo_reader_t sr;
-  static const unsigned char buf[] = {0x01, 'a', 'b', 'c', 'd', 'e', '\0', 'z', '\0'};
-  char out[3];
-  ck_assert_int_eq(strrepo_reader_init(&sr, buf, sizeof buf), 0);
+  const unsigned char *data;
+  size_t len;
+  char out[4];
+  strrepo_writer_init(&sw);
+  strrepo_writer_put(&sw, "abc");
+  data = strrepo_writer_data(&sw, &len);
+  strrepo_reader_init(&sr, data, len);
+
   ck_assert_int_eq(strrepo_reader_next(&sr, out, sizeof out), 0);
-  ck_assert_str_eq(out, "ab");
-  ck_assert_int_eq(strrepo_reader_next(&sr, out, sizeof out), 0);
-  ck_assert_str_eq(out, "z");
+  ck_assert_str_eq(out, "abc");
+
+  strrepo_writer_free(&sw);
 }
 END_TEST
 
@@ -114,15 +120,23 @@ START_TEST(strrepo_reader_init_rejects_bad_encoding_and_empty) {
 }
 END_TEST
 
+START_TEST(strrepo_put_fails_on_writer_without_encoding_byte) {
+  strrepo_writer_t sw = {NULL, 0, 0}; /* state after failed init */
+  ck_assert_int_eq(strrepo_writer_put(&sw, "x"), -1);
+  ck_assert_uint_eq(sw.len, 0u);
+}
+END_TEST
+
 static Suite *strrepo_suite(void) {
   Suite *s = suite_create("strrepo");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, strrepo_round_trips_multiple_strings_in_order);
-  tcase_add_test(tc, strrepo_reader_truncates_into_small_buffer);
-  tcase_add_test(tc, strrepo_reader_truncation_skips_rest_of_string);
+  tcase_add_test(tc, strrepo_reader_rejects_string_too_long_for_buffer);
+  tcase_add_test(tc, strrepo_reader_accepts_exact_fit_with_nul);
   tcase_add_test(tc, strrepo_reader_next_dup_returns_full_string);
   tcase_add_test(tc, strrepo_reader_init_rejects_bad_encoding_and_empty);
   tcase_add_test(tc, strrepo_reader_seek_repositions_and_rejects_bad_offsets);
+  tcase_add_test(tc, strrepo_put_fails_on_writer_without_encoding_byte);
   suite_add_tcase(s, tc);
   return s;
 }

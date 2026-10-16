@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "lib/demux/psi/section_asm.h"
+#include "lib/cas/device_state_core.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/sys/signal.h"
@@ -17,7 +18,7 @@
 #define IPICLIENT_TOKEN_MAX 256
 #define IPICLIENT_ETAG_MAX 128
 #define IPICLIENT_TOKEN_HEADER_MAX 64
-#define IPICLIENT_BODY_MAX (33 * PSI_SECTION_ASM_BUF_LEN) /* one EMM-U + up to 32 EMM-G, matches emmcache.c's cap */
+#define IPICLIENT_BODY_MAX ((DEVICE_MAX_SERVICES_CEILING + 1) * (PSI_SECTION_ASM_BUF_LEN + 3)) /* one EMM-U + EMM-G per service, 3 byte record hdr */
 #define IPICLIENT_POLL_TIMEOUT_S 20.0
 
 struct ipiclient {
@@ -39,7 +40,9 @@ static int split_userinfo(const char *uri, char *token_out, size_t token_out_sz,
 
   if (!scheme_end) return -1;
   scheme_len = (size_t)(scheme_end - uri) + 3;
-  at = strchr(scheme_end + 3, '@');
+  at = NULL;
+  for (const char *p = scheme_end + 3; *p && !strchr("/?#", *p); p++)
+    if (*p == '@') at = p; /* authority only, last: raw '@' in token */
   if (!at) {
     if (bufcpy(uri_out, uri_out_sz, uri) >= uri_out_sz) return -1;
     token_out[0] = '\0';

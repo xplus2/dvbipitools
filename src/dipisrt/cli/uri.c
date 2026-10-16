@@ -57,6 +57,15 @@ int config_is_sender(const config_t *cfg) {
   return cfg->out.is_srt;
 }
 
+int config_local_family_mismatch(const config_t *cfg) {
+  const endpoint_t *e = cfg->in.is_srt ? &cfg->in : &cfg->out;
+  int local_family = strchr(cfg->local_host, ':') ? AF_INET6 : AF_INET;
+  if (!cfg->local_host[0]) return 0;
+  for (int i = 0; i < e->n_srt; i++)
+    if (e->family[i] != local_family) return 1;
+  return 0;
+}
+
 void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
   if (e->is_srt) {
     char first[96];

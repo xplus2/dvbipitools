@@ -7,7 +7,7 @@ BIN=$1
 
 require_itest_helper
 
-# jitter-src: 1 s burst, then real time, one 2 s stall. longest audio gap in first 8 s (EOF flush excluded). PSI keeps flowing during the stall, and idle flushes send partial datagrams, so only full datagrams carrying audio pid 0x0101 count
+# jitter-src: 1 s burst, then real time, one 2 s stall. longest audio gap in first 8 s (EOF flush excluded). PSI and PCR-only packets keep flowing during the stall: only datagrams with audio pid 0x0101 payload count
 FPB=$(free_port_block 7)
 GROUP=$(unique_mcast 61)
 

@@ -3,9 +3,9 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 
+#include "lib/config/yamlcfg.h"
 #include "lib/sys/antidebug.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
@@ -14,16 +14,15 @@
 #include "lib/sys/signal.h"
 
 #include "cli/args.h"
+#include "config.h"
 #include "cs378x/cs378x.h"
 #include "device.h"
 #include "hooks.h"
 #include "version.h"
 
-#define CAM378_METRICS_POLL_MS 200
-
 /* banner prints before parsing: --color read early */
 int main(int argc, char **argv) {
-  config_t cfg;
+  config_t cfg = {0};
   device_state_t *dev;
   cs378x_cfg_t srv_cfg;
   cs378x_server_t *srv;
@@ -31,10 +30,10 @@ int main(int argc, char **argv) {
 
   antidebug_install();
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
-  if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
   dev = device_state_new(cfg.key_path, cfg.cw_len, cfg.serial, cfg.caid);
   if (!dev) {
     log_code("3S300105", "%s: cannot load RSA private key from -k %s", TOOL_NAME, cfg.key_path);
+    yamlcfg_strpool_free(cfg.str_pool);
     return 1;
   }
 
@@ -44,11 +43,25 @@ int main(int argc, char **argv) {
   srv_cfg.username = cfg.username;
   srv_cfg.password = cfg.password;
   srv_cfg.verbose = cfg.verbose;
-  signals_install();
-  srv = cs378x_server_start(&srv_cfg, cam378_ecm_cb, cam378_emm_cb, dev);
+  srv = cs378x_server_bind(&srv_cfg, cam378_ecm_cb, cam378_emm_cb, dev);
+  cam378_cfg_wipe_auth();
   if (!srv) {
     log_code("3S500108", "%s: failed to start cs378x listener on %s port %u", TOOL_NAME, cfg.bind, cfg.port);
     device_state_free(dev);
+    yamlcfg_strpool_free(cfg.str_pool);
+    return 1;
+  }
+  if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) {
+    cs378x_server_stop(srv);
+    device_state_free(dev);
+    yamlcfg_strpool_free(cfg.str_pool);
+    return 1;
+  }
+  signals_install();
+  if (cs378x_server_run(srv) != 0) {
+    cs378x_server_stop(srv);
+    device_state_free(dev);
+    yamlcfg_strpool_free(cfg.str_pool);
     return 1;
   }
   log_line(TOOL_NAME ": listening on %s port %u", cfg.bind, cfg.port);
@@ -57,15 +70,14 @@ int main(int argc, char **argv) {
   if (!metrics_exporter_enabled(&mx)) {
     while (!signal_stop_requested()) sleep_interruptible(3600.0);
   } else {
-    const char *algo_name = cfg.cw_len == 8 ? "csa2" : "cissa";
-    struct timespec tick = {0, CAM378_METRICS_POLL_MS * 1000000L};
     while (!signal_stop_requested()) {
-      cam378_push_metrics(&mx, srv, dev, algo_name);
-      nanosleep(&tick, NULL);
+      cam378_push_metrics(&mx, srv, dev);
+      sleep_interruptible(mx.last_send_mono + mx.interval_s - mono_seconds());
     }
   }
   metrics_exporter_close(&mx);
   cs378x_server_stop(srv);
   device_state_free(dev);
+  yamlcfg_strpool_free(cfg.str_pool);
   return 0;
 }

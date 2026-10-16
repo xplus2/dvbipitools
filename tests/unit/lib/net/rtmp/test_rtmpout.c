@@ -94,6 +94,24 @@ static size_t build_result_create_stream(unsigned char *out, double stream_id) {
   return n;
 }
 
+static size_t build_publish_start(unsigned char *out) {
+  ebuf_t b;
+  size_t n;
+  memset(&b, 0, sizeof b);
+  amf_string(&b, "onStatus");
+  amf_number(&b, 0);
+  amf_null(&b);
+  amf_object_start(&b);
+  amf_object_key(&b, "level");
+  amf_string(&b, "status");
+  amf_object_key(&b, "code");
+  amf_string(&b, "NetStream.Publish.Start");
+  amf_object_end(&b);
+  n = build_chunk(out, 3, RTMP_TYPE_INVOKE, 0, b.p, b.len);
+  ebuf_free(&b);
+  return n;
+}
+
 typedef struct {
   int listen_fd;
   unsigned char captured[4096];
@@ -120,6 +138,8 @@ static int accept_until_ready(int listen_fd) {
 
   recv_until_quiet(cfd); /* releaseStream + FCPublish + createStream */
   n = build_result_create_stream(msg, 9.0);
+  send(cfd, msg, n, 0);
+  n = build_publish_start(msg); /* publish itself stays unread, callers capture it */
   send(cfd, msg, n, 0);
   return cfd;
 }
@@ -264,6 +284,39 @@ START_TEST(rtmpout_delivers_keyframe_end_to_end) {
   pthread_join(th, NULL);
   close(listen_fd);
   ck_assert_ptr_nonnull(memmem(srv.captured, srv.captured_len, "KEY", 3));
+
+  rtmpout_close(o);
+}
+END_TEST
+
+START_TEST(rtmpout_service_connects_without_writes) {
+  unsigned port;
+  int listen_fd = make_listener(&port, 0);
+  pthread_t th;
+  fake_server_t srv;
+  char url[64];
+  rtmpout_cfg_t cfg;
+  rtmpout_t *o;
+
+  memset(&srv, 0, sizeof srv);
+  srv.listen_fd = listen_fd;
+  ck_assert_int_eq(pthread_create(&th, NULL, fake_server_thread, &srv), 0);
+
+  snprintf(url, sizeof url, "rtmp://127.0.0.1:%u/live/key123", port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = url;
+  o = rtmpout_open(&cfg);
+  ck_assert_ptr_nonnull(o);
+
+  for (int i = 0; i < 400; i++) {
+    struct timespec ts = {0, 5000000L};
+    rtmpout_service(o);
+    nanosleep(&ts, NULL);
+  }
+
+  pthread_join(th, NULL);
+  close(listen_fd);
+  ck_assert_ptr_nonnull(memmem(srv.captured, srv.captured_len, "live", 4));
 
   rtmpout_close(o);
 }
@@ -518,6 +571,44 @@ START_TEST(rtmpout_partial_write_keeps_remainder_queued) {
 }
 END_TEST
 
+START_TEST(rtmpout_close_flushes_queued_tail) {
+  unsigned port;
+  int listen_fd = make_listener(&port, 16384);
+  pthread_t th;
+  stall_server_t srv;
+  char url[64];
+  rtmpout_cfg_t cfg;
+  rtmpout_t *o;
+  unsigned char keyframe[8] = {0x17, 0x01, 0x00, 0x00, 0x00, 'K', 'E', 'Y'};
+  size_t big_len = 3u << 20;
+  unsigned char *big = calloc(1, big_len);
+
+  ck_assert_ptr_nonnull(big);
+  big[0] = 0x17;
+  big[1] = 0x01;
+  memcpy(big + big_len - 3, "END", 3);
+  memset(&srv, 0, sizeof srv);
+  srv.listen_fd = listen_fd;
+  ck_assert_int_eq(pthread_create(&th, NULL, stall_server_thread, &srv), 0);
+
+  snprintf(url, sizeof url, "rtmp://127.0.0.1:%u/live/key123", port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = url;
+  o = rtmpout_open(&cfg);
+  ck_assert_ptr_nonnull(o);
+  ck_assert_int_eq(drive_until_sent(o, FLV_TAG_VIDEO, keyframe, sizeof keyframe, 400), 1);
+  ck_assert_int_eq(rtmpout_write(o, FLV_TAG_VIDEO, 40, big, big_len, NULL, 0), 0);
+  ck_assert_int_eq(atomic_load(&srv.found_end), 0);
+
+  atomic_store(&srv.drain, 1);
+  rtmpout_close(o);
+  pthread_join(th, NULL);
+  close(listen_fd);
+  ck_assert_int_eq(atomic_load(&srv.found_end), 1);
+  free(big);
+}
+END_TEST
+
 START_TEST(rtmpout_url_forms_are_parsed) {
   static const char *const good[] = {
     "rtmp://host/app",
@@ -641,6 +732,7 @@ static Suite *rtmpout_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, rtmpout_open_rejects_malformed_urls);
   tcase_add_test(tc, rtmpout_delivers_keyframe_end_to_end);
+  tcase_add_test(tc, rtmpout_service_connects_without_writes);
   tcase_add_test(tc, rtmpout_resolves_hostname_in_background);
   tcase_add_test(tc, rtmpout_close_while_resolving_is_clean);
   tcase_add_test(tc, rtmpout_holds_back_interframe_until_keyframe);
@@ -648,6 +740,7 @@ static Suite *rtmpout_suite(void) {
   tcase_add_test(tc, rtmpout_sends_adobe_authmod_for_userinfo_uri);
   tcase_add_test(tc, rtmpout_queue_overflow_drops_the_connection);
   tcase_add_test(tc, rtmpout_partial_write_keeps_remainder_queued);
+  tcase_add_test(tc, rtmpout_close_flushes_queued_tail);
   tcase_add_test(tc, rtmpout_url_forms_are_parsed);
   tcase_add_test(tc, rtmpout_oversized_and_bad_url_parts_are_rejected);
   tcase_add_loop_test(tc, rtmpout_unreachable_peers_stay_non_fatal, 0, 2);

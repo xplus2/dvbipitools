@@ -45,6 +45,7 @@ tssink_t *tssink_open(const tssink_cfg_t *cfg) {
     case TSSINK_RTP:
       s->mc = mcast_open_send(cfg->family, cfg->group, cfg->port, cfg->iface, cfg->ttl);
       if (!s->mc) goto fail;
+      if (cfg->tos) mcast_set_tos(s->mc, cfg->tos);
       if (cfg->kind == TSSINK_RTP) {
         s->rtph = rtpheader_new();
         if (!s->rtph) goto fail;
@@ -52,6 +53,7 @@ tssink_t *tssink_open(const tssink_cfg_t *cfg) {
           s->fec_mc = mcast_open_send(cfg->family, cfg->group, cfg->al_fec_port, cfg->iface, cfg->ttl);
           s->fec_enc = s->fec_mc ? fec2022_enc_new(cfg->al_fec_l, cfg->al_fec_d, AL_FEC_PT) : NULL;
           if (!s->fec_mc || !s->fec_enc) goto fail;
+          if (cfg->tos) mcast_set_tos(s->fec_mc, cfg->tos);
         }
       }
       break;
@@ -81,7 +83,7 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
     ssize_t w = write(fd, p, n);
     if (w < 0) {
       if (errno == EINTR) continue;
-      log_code("LE100132", "w:%s", strerror(errno));
+      log_code("LE100132", "output write failed: %s", strerror(errno));
       return -1;
     }
     p += w;
@@ -187,6 +189,12 @@ int tssink_write(tssink_t *s, const unsigned char *buf, size_t n) {
 void tssink_close(tssink_t *s) {
   if (!s) return;
   tssink_flush(s);
+  if (s->fec_enc && s->fec_mc) {
+    unsigned char repair[FEC2022_MAX_REPAIR];
+    size_t rlen;
+
+    while ((rlen = fec2022_enc_drain(s->fec_enc, repair, sizeof repair)) > 0) mcast_send(s->fec_mc, repair, rlen);
+  }
   if (s->rtph) rtpheader_free(s->rtph);
   if (s->fec_enc) fec2022_enc_free(s->fec_enc);
   if (s->fec_mc) mcast_close(s->fec_mc);

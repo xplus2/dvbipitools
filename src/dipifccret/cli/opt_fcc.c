@@ -103,8 +103,8 @@ args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {
     case 'X': {
       char *end;
       double v = strtod(optarg, &end);
-      if (*end != '\0' || v <= 1.0) {
-        argerr("FS000443", "invalid -X burst-multiplier: %s (must be > 1.0)", optarg);
+      if (*end != '\0' || !(v > 1.0 && v <= 1e6)) {
+        argerr("FS000443", "invalid -X burst-multiplier: %s (1.0 < x <= 1e6)", optarg);
         return ARGS_ERR;
       }
       cfg->burst_multiplier = v;

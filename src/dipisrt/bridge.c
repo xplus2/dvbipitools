@@ -2,17 +2,18 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <errno.h>
-#include <poll.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #include "lib/demux/crc32.h"
+#include "lib/demux/psi/psi.h"
+#include "lib/demux/tspack.h"
 #include "lib/helper/log.h"
 #include "lib/net/send_result.h"
 #include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtout.h"
+#include "lib/net/ts/pace.h"
 #include "lib/net/ts/sink.h"
 #include "lib/net/ts/source.h"
 #include "lib/tsinspect/inspect.h"
@@ -23,8 +24,28 @@
 #include "version.h"
 
 #define DIPISRT_SENDER_POLL_MS 200
-#define DIPISRT_SENDER_FEC_READS_MAX 64
-#define DIPISRT_SENDER_DRAIN_MS_DEFAULT 1000 /* srt's own default latency buffer */
+#define DIPISRT_SENDER_READS_MAX 64
+#define DIPISRT_PACED_READ_CAP (7 * 188) /* bounds sleep per chunk */
+#define DIPISRT_STATS_INTERVAL_S 5.0
+#define DIPISRT_OPEN_TIMEOUT_S 30.0
+
+
+typedef struct {
+  psi_t *psi;
+  pace_ctrl_t *pace;
+} pace_ctx_t;
+
+static int pace_pkt_cb(void *v, const unsigned char *pkt) {
+  pace_ctx_t *c = v;
+  pace_feed_pcr_pkt(c->pace, pkt, psi_pcr_pid(c->psi));
+  psi_feed(c->psi, pkt);
+  return 0;
+}
+
+static int insp_pkt_cb(void *v, const unsigned char *pkt) {
+  tsinspect_packet(v, pkt);
+  return 0;
+}
 
 static void fill_common_opts(const config_t *cfg, srtcommon_opts_t *o) {
   o->passphrase = cfg->passphrase[0] ? cfg->passphrase : NULL;
@@ -41,15 +62,18 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   srtout_t *srt;
   tsinspect_t *insp;
   tsinspect_set_t set = {&insp, 1, NULL, 0};
-  struct pollfd pfd[2];
-  nfds_t nfds = 1;
   int fec_fd;
+  int drain;
   unsigned char buf[65536];
   int rc = 0;
   int was_connected = 0;
+  pace_ctx_t pc = {NULL, NULL};
+  tspack_t pz = {{0}, 0, 0};
+  size_t read_cap = sizeof buf;
+  double last_stat = mono_seconds();
 
   plain_endpoint_to_tssrc_cfg(&cfg->in.nonsrt, cfg->iface, TOOL_NAME "/" TOOL_VERSION, cfg->insecure_tls, &tc);
-  src = tssrc_open(&tc, NULL);
+  src = tssrc_open_blocking(&tc, DIPISRT_OPEN_TIMEOUT_S, NULL);
   if (!src) return 1;
 
   memset(&rcfg, 0, sizeof rcfg);
@@ -67,7 +91,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   rcfg.mx = mx;
   rcfg.tool_version = TOOL_VERSION;
   rcfg.safety_mult = cfg->send_buffer_mult;
-  rcfg.queue_metrics = cfg->metrics_inspect_ts == METRICS_INSPECT_TS_OFF ? 0 : cfg->metrics_inspect_ts == METRICS_INSPECT_TS_BASIC ? 1 : 2;
+  rcfg.queue_metrics = metrics_queue_level(cfg->metrics_inspect_ts);
 
   srt = srtout_open(&rcfg);
   if (!srt) {
@@ -75,18 +99,26 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     return 1;
   }
 
+  if (cfg->pace) {
+    pc.pace = pace_new();
+    pc.psi = psi_new();
+    if (!pc.pace || !pc.psi) {
+      log_code("HS500101", "out of memory");
+      psi_free(pc.psi);
+      pace_free(pc.pace);
+      srtout_close(srt);
+      tssrc_close(src);
+      return 1;
+    }
+    read_cap = DIPISRT_PACED_READ_CAP;
+  }
+
   insp = tsinspect_new_relay(cfg->metrics_inspect_ts);
   if (insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
   if (tsinspect_wants_rx_ns(insp)) tssrc_enable_rx_timestamps(src);
 
-  pfd[0].fd = tssrc_fd(src);
-  pfd[0].events = POLLIN;
   fec_fd = tssrc_fec_fd(src);
-  if (fec_fd >= 0) {
-    pfd[1].fd = fec_fd;
-    pfd[1].events = POLLIN;
-    nfds = 2;
-  }
+  drain = fec_fd >= 0 || tssrc_set_nonblock(src);
 
   while (!signal_stop_requested()) {
     srtout_status_t st;
@@ -95,6 +127,15 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     ssize_t n;
 
     srtout_service(srt, &st);
+    if (cfg->verbose && mono_seconds() - last_stat >= DIPISRT_STATS_INTERVAL_S) {
+      srtout_link_stats_t ls;
+      srtout_link_stats(srt, &ls);
+      last_stat = mono_seconds();
+      if (ls.connected)
+        log_line("srt out: %.2f Mbit/s, %llu pkts, %llu retrans, %llu lost, %llu dropped, rtt %.1f ms", ls.mbps,
+                 (unsigned long long)ls.packets, (unsigned long long)ls.retransmitted, (unsigned long long)ls.lost,
+                 (unsigned long long)ls.dropped, ls.rtt_ms);
+    }
     if (insp) tsinspect_tick(insp, mono_seconds());
     if (st.connected != was_connected) {
       if (st.connected) log_line("srt output: connected");
@@ -102,53 +143,68 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
       was_connected = st.connected;
     }
 
-    pfd[0].revents = 0;
-    pfd[1].revents = 0;
-    pr = poll(pfd, nfds, DIPISRT_SENDER_POLL_MS);
+    pr = tssrc_wait(src, DIPISRT_SENDER_POLL_MS);
     if (pr < 0) {
-      if (errno == EINTR) continue;
       log_code("HE500115", "srt output: poll failed: %s", strerror(errno));
       rc = 1;
       break;
     }
     if (pr == 0) continue;
-    if (nfds == 2 && pfd[1].revents) tssrc_fec_poll(src);
+    if (fec_fd >= 0) tssrc_fec_poll(src);
 
-    for (unsigned reads = 0; reads < DIPISRT_SENDER_FEC_READS_MAX; reads++) {
-      n = tssrc_read(src, buf, sizeof buf, &reason);
+    for (unsigned reads = 0; reads < DIPISRT_SENDER_READS_MAX; reads++) {
+      n = tssrc_read(src, buf, read_cap, &reason);
       if (n <= 0) break;
+      if (pc.pace) {
+        if (tssrc_is_rtp_framed(src)) pace_feed_rtp_ts(pc.pace, tssrc_last_rtp_ts(src));
+        else tspack_feed(&pz, buf, (size_t)n, pace_pkt_cb, &pc);
+      }
       if (insp) {
         tsinspect_set_rx_ns(insp, tssrc_last_rx_ns(src));
         tsinspect_grid(insp, buf, (size_t)n);
       }
       srtout_write(srt, buf, (size_t)n);
-      if (fec_fd < 0) break;
+      if (!drain) break;
     }
     if (n < 0) {
-      rc = 1;
+      rc = reason == NET_ERR_EOF ? 0 : 1;
       break;
     }
   }
-  if (rc) {
-    /* eof/err, not live stop: drain srt retransmits before teardown */
-    unsigned drain_ms = cfg->latency_ms ? cfg->latency_ms : DIPISRT_SENDER_DRAIN_MS_DEFAULT;
-    struct timespec ts = {(time_t)(drain_ms / 1000), (long)(drain_ms % 1000) * 1000000L};
-    nanosleep(&ts, NULL);
-  }
   if (insp) metrics_exporter_set_extra(mx, NULL, NULL);
   tsinspect_free(insp);
-  srtout_close(srt);
+  if (signal_stop_requested()) srtout_close_now(srt);
+  else srtout_close(srt);
   tssrc_close(src);
+  psi_free(pc.psi);
+  pace_free(pc.pace);
   return rc;
 }
 
 #define RECV_DEDUP_HISTORY 6 /* reconnect can redeliver several already-written chunks */
 
-int dedup_is_duplicate(const dedup_entry_t *hist, int hist_n, uint32_t hash, int len) {
-  for (int hi = 0; hi < hist_n; hi++) {
-    if (hist[hi].len == len && hist[hi].hash == hash) return 1;
+void dedup_replay_begin(dedup_replay_t *r, int hist_n) {
+  r->cand = hist_n >= 32 ? 0xFFFFFFFFu : (1u << hist_n) - 1;
+  r->pos = 0;
+}
+
+int dedup_replay_match(dedup_replay_t *r, const dedup_entry_t *hist, int hist_n, int next, uint32_t hash, int len) {
+  uint32_t keep = 0;
+  int done = 0;
+  for (int s = 0; s < hist_n; s++) {
+    const dedup_entry_t *e;
+    if (!(r->cand & (1u << s)) || s + r->pos >= hist_n) continue;
+    e = &hist[(next + s + r->pos) % hist_n];
+    if (e->len == len && e->len > 0 && e->hash == hash) keep |= 1u << s;
   }
-  return 0;
+  r->cand = keep;
+  if (!keep) return 0;
+  r->pos++;
+  for (int s = 0; s < hist_n; s++) {
+    if ((keep & (1u << s)) && s + r->pos >= hist_n) done = 1;
+  }
+  if (done) r->cand = 0;
+  return 1;
 }
 
 void dedup_record(dedup_entry_t *hist, int hist_n, int *next, uint32_t hash, int len) {
@@ -168,13 +224,17 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   unsigned char buf[65536];
   dedup_entry_t dedup_hist[RECV_DEDUP_HISTORY] = {{0, 0}};
   int dedup_hist_next = 0;
-  int dedup_active = 0; /* set on reconnect, cleared at first non-duplicate chunk */
+  tspack_t pz_in = {{0}, 0, 0};
+  tspack_t pz_out = {{0}, 0, 0};
+  dedup_replay_t dedup_replay = {0, 0}; /* armed on reconnect, cand 0 when idle */
   int net_had_error = 0;
   unsigned long long net_errors = 0;
   int net_retry;
   int rc = 0;
+  double last_stat = mono_seconds();
 
   plain_endpoint_to_tssink_cfg(&cfg->out.nonsrt, cfg->iface, &tk);
+  tk.pack = 1;
   net_retry = tk.kind == TSSINK_UDP || tk.kind == TSSINK_RTP;
   sink = tssink_open(&tk);
   if (!sink) {
@@ -189,6 +249,7 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   rcfg.npeers = cfg->in.n_srt;
   rcfg.group_mode = cfg->group_mode;
   rcfg.listen = cfg->in.listen;
+  rcfg.retry_open = 1;
   rcfg.rendezvous = cfg->rendezvous;
   rcfg.local_host = cfg->local_host[0] ? cfg->local_host : NULL;
   rcfg.local_port = cfg->local_port;
@@ -210,6 +271,14 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   while (!signal_stop_requested()) {
     int reconnected = 0;
     int n = srtin_read(srt, buf, sizeof buf, &reconnected);
+    if (cfg->verbose && mono_seconds() - last_stat >= DIPISRT_STATS_INTERVAL_S) {
+      srtin_stats_t ls;
+      srtin_stats(srt, &ls);
+      last_stat = mono_seconds();
+      if (ls.connected)
+        log_line("srt in: %.2f Mbit/s, %llu pkts, %llu lost, %llu dropped, rtt %.1f ms", ls.mbps,
+                 (unsigned long long)ls.packets, (unsigned long long)ls.lost, (unsigned long long)ls.dropped, ls.rtt_ms);
+    }
     uint32_t h;
     int wr;
     if (insp_in) {
@@ -222,21 +291,22 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
       rc = 1;
       break;
     }
-    if (reconnected) dedup_active = 1;
-    if (n == 0) continue;
-    if (insp_in) tsinspect_grid(insp_in, buf, (size_t)n);
-    h = crc32_mpeg(buf, (size_t)n);
-    if (dedup_active) {
-      if (dedup_is_duplicate(dedup_hist, RECV_DEDUP_HISTORY, h, n)) continue;
-      dedup_active = 0;
+    if (reconnected) dedup_replay_begin(&dedup_replay, RECV_DEDUP_HISTORY);
+    if (n == 0) {
+      tssink_flush(sink);
+      continue;
     }
+    if (insp_in) tspack_feed_sync(&pz_in, buf, (size_t)n, insp_pkt_cb, insp_in, tsinspect_sync(insp_in));
+    h = crc32_mpeg(buf, (size_t)n);
+    if (dedup_replay.cand && dedup_replay_match(&dedup_replay, dedup_hist, RECV_DEDUP_HISTORY, dedup_hist_next, h, n))
+      continue;
     wr = tssink_write(sink, buf, (size_t)n);
     if (wr < 0 && !net_retry) {
       rc = 1;
       break;
     }
     note_send_result(wr >= 0, &net_had_error, &net_errors, "net");
-    if (wr >= 0 && insp_out) tsinspect_grid(insp_out, buf, (size_t)n);
+    if (wr >= 0 && insp_out) tspack_feed_sync(&pz_out, buf, (size_t)n, insp_pkt_cb, insp_out, tsinspect_sync(insp_out));
     dedup_record(dedup_hist, RECV_DEDUP_HISTORY, &dedup_hist_next, h, n);
   }
 

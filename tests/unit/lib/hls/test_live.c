@@ -41,7 +41,7 @@ static void *serve_scripted(void *arg) {
       got += (size_t)n;
       if (got >= 4 && memcmp(buf + got - 4, "\r\n\r\n", 4) == 0) break;
     }
-    send(cfd, a->responses[i], a->response_lens[i], 0);
+    send(cfd, a->responses[i], a->response_lens[i], MSG_NOSIGNAL);
     close(cfd);
   }
   return NULL;
@@ -505,7 +505,7 @@ START_TEST(hls_aes128cbc_rejects_bad_length) {
 }
 END_TEST
 
-#define RIG_MAX 6
+#define RIG_MAX 16
 #define PL_HEAD "#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:%u\n%s"
 #define PL_SEG "#EXTINF:1.0,\ns.ts\n"
 #define KEY_TAG "#EXT-X-KEY:METHOD=AES-128,URI=\"k.bin\"\n"
@@ -565,6 +565,19 @@ static void rig_add_raw(rig_t *r, const char *text) {
   ck_assert_int_lt(r->n, RIG_MAX);
   r->resp[r->n] = text;
   r->lens[r->n] = strlen(text);
+  r->n++;
+}
+
+#define BIG_BODY_LEN (9 * 1024 * 1024)
+
+static void rig_add_big(rig_t *r) {
+  static char big[BIG_BODY_LEN + 128];
+  size_t hl = (size_t)snprintf(big, sizeof big, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", BIG_BODY_LEN);
+
+  ck_assert_int_lt(r->n, RIG_MAX);
+  memset(big + hl, 'A', BIG_BODY_LEN);
+  r->resp[r->n] = big;
+  r->lens[r->n] = hl + BIG_BODY_LEN;
   r->n++;
 }
 
@@ -657,6 +670,9 @@ START_TEST(hls_live_segment_kind_classifies) {
   static const unsigned char ftyp[] = {0, 0, 0, 0x18, 'f', 't', 'y', 'p'};
   static const unsigned char styp[] = {0, 0, 0, 0x18, 's', 't', 'y', 'p'};
   static const unsigned char moof[] = {0, 0, 0, 0x18, 'm', 'o', 'o', 'f'};
+  static const unsigned char emsg[] = {0, 0, 0, 0x30, 'e', 'm', 's', 'g'};
+  static const unsigned char prft[] = {0, 0, 0, 0x20, 'p', 'r', 'f', 't'};
+  static const unsigned char sidx[] = {0, 0, 0, 0x2C, 's', 'i', 'd', 'x'};
   static const unsigned char ff_bad[] = {0xFF, 0x00};
   static const unsigned char b_bad[] = {0x0B, 0x00};
   static const unsigned char one_byte[] = {0x0B};
@@ -674,6 +690,9 @@ START_TEST(hls_live_segment_kind_classifies) {
     {ftyp, sizeof ftyp, HLS_SEG_FMP4},
     {styp, sizeof styp, HLS_SEG_FMP4},
     {moof, sizeof moof, HLS_SEG_FMP4},
+    {emsg, sizeof emsg, HLS_SEG_FMP4},
+    {prft, sizeof prft, HLS_SEG_FMP4},
+    {sidx, sizeof sidx, HLS_SEG_FMP4},
     {unsynced, sizeof unsynced, HLS_SEG_TS},
     {ff_bad, sizeof ff_bad, HLS_SEG_UNKNOWN},
     {b_bad, sizeof b_bad, HLS_SEG_UNKNOWN},
@@ -833,6 +852,40 @@ START_TEST(hls_live_skips_segment_that_fails_decrypt) {
 }
 END_TEST
 
+START_TEST(hls_live_skips_oversize_segment) {
+  rig_t r;
+  unsigned char acc[64];
+  size_t len = 0;
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  rig_init(&r);
+  rig_add_playlist(&r, 7, PL_SEG);
+  rig_add_big(&r);
+  rig_open(&r, NULL);
+  ck_assert_int_eq(pump_collect(r.h, acc, sizeof acc, &len, 1, 25), 0);
+  ck_assert_uint_eq(len, 0);
+  ck_assert_int_eq(reason, NET_ERR_COUNT);
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(hls_live_rejects_oversize_init_segment) {
+  rig_t r;
+  init_rec_t rec = {0, 1, 0, {0}};
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  rig_init(&r);
+  rig_add_playlist(&r, 3, "#EXT-X-MAP:URI=\"init.mp4\"\n" PL_SEG);
+  rig_add_big(&r);
+  rig_open(&r, NULL);
+  hls_live_set_init_cb(r.h, init_rec_cb, &rec);
+  ck_assert_int_eq(pump_until_error(r.h, 100, &reason), 1);
+  ck_assert_int_eq(reason, NET_ERR_FORMAT);
+  ck_assert_int_eq(rec.calls, 0);
+  rig_close(&r);
+}
+END_TEST
+
 static void run_init_case(int cb_result, const char *init_body, size_t init_len, int expect_error) {
   rig_t r;
   init_rec_t rec = {0, cb_result, 0, {0}};
@@ -900,15 +953,48 @@ START_TEST(hls_live_fails_on_unparsable_init_url) {
 }
 END_TEST
 
-START_TEST(hls_live_reports_segment_fetch_error) {
+START_TEST(hls_live_skips_failed_segment) {
+  rig_t r;
+  unsigned char acc[2048];
+  size_t len = 0;
+
+  rig_init(&r);
+  rig_add_playlist(&r, 3, PL_SEG PL_SEG);
+  rig_add_raw(&r, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+  rig_add_segment(&r, "GOODSEG");
+  rig_open(&r, NULL);
+  ck_assert_int_eq(drive_until_contains(r.h, acc, sizeof acc, &len, "GOODSEG", 200), 1);
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(hls_live_retries_on_fresh_conn_when_kept_alive_conn_is_dead) {
+  rig_t r;
+  unsigned char acc[2048];
+  size_t len = 0;
+  char pl[768];
+
+  snprintf(pl, sizeof pl, PL_HEAD, 3u, PL_SEG);
+  rig_init(&r);
+  rig_add_keepalive_text(&r, pl);
+  rig_add_segment(&r, "FRESHSEG");
+  rig_open(&r, NULL);
+  ck_assert_int_eq(drive_until_contains(r.h, acc, sizeof acc, &len, "FRESHSEG", 200), 1);
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(hls_live_reports_repeated_segment_fetch_errors) {
   rig_t r;
   net_err_reason_t reason = NET_ERR_COUNT;
 
   rig_init(&r);
-  rig_add_playlist(&r, 3, PL_SEG);
-  rig_add_raw(&r, "");
+  for (unsigned round = 0; round < 4; round++) {
+    rig_add_playlist(&r, 3 * (round + 1), PL_SEG PL_SEG PL_SEG);
+    for (int i = 0; i < (round < 3 ? 3 : 1); i++) rig_add_raw(&r, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+  }
   rig_open(&r, NULL);
-  ck_assert_int_eq(pump_until_error(r.h, 100, &reason), 1);
+  ck_assert_int_eq(pump_until_error(r.h, 400, &reason), 1);
   ck_assert_int_ne(reason, NET_ERR_COUNT);
   rig_close(&r);
 }
@@ -951,13 +1037,17 @@ static Suite *hls_live_suite(void) {
   tcase_add_test(tc, hls_live_decrypts_with_sequence_iv);
   tcase_add_test(tc, hls_live_rejects_key_of_wrong_length);
   tcase_add_test(tc, hls_live_skips_segment_that_fails_decrypt);
+  tcase_add_test(tc, hls_live_skips_oversize_segment);
+  tcase_add_test(tc, hls_live_rejects_oversize_init_segment);
   tcase_add_test(tc, hls_live_fetches_init_segment_before_media);
   tcase_add_test(tc, hls_live_rejects_init_segment_when_callback_fails);
   tcase_add_test(tc, hls_live_rejects_empty_init_segment);
   tcase_add_test(tc, hls_live_fails_on_unparsable_segment_url);
   tcase_add_test(tc, hls_live_fails_on_unparsable_key_url);
   tcase_add_test(tc, hls_live_fails_on_unparsable_init_url);
-  tcase_add_test(tc, hls_live_reports_segment_fetch_error);
+  tcase_add_test(tc, hls_live_skips_failed_segment);
+  tcase_add_test(tc, hls_live_retries_on_fresh_conn_when_kept_alive_conn_is_dead);
+  tcase_add_test(tc, hls_live_reports_repeated_segment_fetch_errors);
   tcase_add_test(tc, hls_live_repolls_with_etag_after_empty_playlist);
   suite_add_tcase(s, tc);
   return s;

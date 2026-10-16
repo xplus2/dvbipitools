@@ -35,8 +35,8 @@ size_t u64_to_dec(char *dst, uint64_t val);
    new arr on success, NULL on OOM (arr, *cap unchanged) */
 void *array_grow(void *arr, int *cap, int need, size_t elemsz);
 
-/* doubles *cap (elem_size units, initial_elems if 0) until >= need_elems, realloc *buf.
-   0 ok, -1 OOM (*buf, *cap unchanged) */
+/* doubles *cap (elem_size units, initial_elems if 0, 1 if both 0) until >= need_elems, realloc *buf.
+   0 ok, -1 OOM or size overflow (*buf, *cap unchanged) */
 int growbuf_reserve(void **buf, size_t *cap, size_t elem_size, size_t need_elems, size_t initial_elems);
 
 /* EINTR/EAGAIN-retrying pipe write, 100ms poll between EAGAIN spins.
@@ -66,7 +66,7 @@ typedef struct {
   iso8601_offset_kind_t offset_kind;
 } iso8601_t;
 
-/* "YYYY-MM-DDTHH:MM:SS[.f+][Z|+HH:MM|-HH:MM]", fraction dropped. 0 ok, -1 malformed */
+/* "YYYY-MM-DDTHH:MM:SS[.f+][Z|+HH:MM|-HH:MM]", fraction dropped, trailing junk rejected. No offset gives ISO8601_OFF_NONE, caller picks zone. 0 ok, -1 malformed or field out of range (no leap second) */
 int iso8601_split(const char *in, iso8601_t *out);
 
 /* EN 300 468 annex C, proleptic Gregorian calendar date to modified Julian Day */

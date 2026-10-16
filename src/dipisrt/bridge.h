@@ -22,7 +22,15 @@ typedef struct {
   int len;
 } dedup_entry_t;
 
-int dedup_is_duplicate(const dedup_entry_t *hist, int hist_n, uint32_t hash, int len);
+/* cand: bit per history start offset (oldest first) still consistent with replay */
+typedef struct {
+  uint32_t cand;
+  int pos;
+} dedup_replay_t;
+
+void dedup_replay_begin(dedup_replay_t *r, int hist_n);
+/* 1: chunk is replay of history, skip. 0: new data, replay over */
+int dedup_replay_match(dedup_replay_t *r, const dedup_entry_t *hist, int hist_n, int next, uint32_t hash, int len);
 void dedup_record(dedup_entry_t *hist, int hist_n, int *next, uint32_t hash, int len);
 
 #endif

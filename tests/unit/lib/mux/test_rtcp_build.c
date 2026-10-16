@@ -394,8 +394,9 @@ START_TEST(rtcp_build_rsi_srbt_dns_and_collision_reject_limits) {
   memset(ssrcs, 0, sizeof ssrcs);
   ck_assert_uint_eq(rtcp_build_rsi_srbt_dns(name, 250, 1, buf, sizeof buf), 4u + 252u);
   ck_assert_uint_eq(rtcp_build_rsi_srbt_dns(name, 251, 1, buf, sizeof buf), 0u);
-  ck_assert_uint_eq(rtcp_build_rsi_srbt_collision(ssrcs, 255, buf, sizeof buf), 4u + 255u * 4u);
-  ck_assert_uint_eq(rtcp_build_rsi_srbt_collision(ssrcs, 256, buf, sizeof buf), 0u);
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_collision(ssrcs, 254, buf, sizeof buf), 4u + 254u * 4u);
+  ck_assert_uint_eq(buf[1], 255u); /* length byte must not wrap */
+  ck_assert_uint_eq(rtcp_build_rsi_srbt_collision(ssrcs, 255, buf, sizeof buf), 0u);
 }
 END_TEST
 
@@ -412,8 +413,7 @@ static Suite *rtcp_build_suite(void) {
   tcase_add_test(tc, rtcp_build_rsi_srbt_bandwidth_layout);
   tcase_add_test(tc, rtcp_build_rsi_srbt_bandwidth_rejects_out_of_range);
   tcase_add_test(tc, rtcp_build_rsi_srbt_collision_layout);
-  tcase_add_test(tc, rtcp_build_rsi_srbt_collision_rejects_zero_count);
-  tcase_add_test(tc, rtcp_build_rams_i_header_with_no_tlvs);
+  tcase_add_test(tc, rtcp_build_rsi_srbt_collision_rejects_zero_count);  tcase_add_test(tc, rtcp_build_rams_i_header_with_no_tlvs);
   tcase_add_test(tc, rtcp_build_rams_i_appends_requested_tlvs);
   tcase_add_test(tc, rtcp_build_rams_r_round_trips_through_rtcp_parse);
   tcase_add_test(tc, rtcp_build_rams_r_rejects_small_cap);

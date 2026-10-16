@@ -31,7 +31,8 @@ typedef enum {
   PID_AIT,
   PID_ECM,
   PID_DATA,
-  PID_LCEVC
+  PID_LCEVC,
+  PID_EMM
 } pid_class_t;
 
 typedef enum {
@@ -134,6 +135,9 @@ void psi_feed(psi_t *c, const unsigned char *pkt); /* one 188-byte packet */
 
 /* call b4 PMT locks in: forces PMT PID */
 void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid);
+
+/* call b4 PMT locks in: only this program_number is a candidate. for programs sharing a PMT pid */
+void psi_select_program(psi_t *c, unsigned program_number);
 
 /* call before feeding: each candidate's PMT resolves independently, no
    single-first lock. SDT-actual names captured per program too, combinable

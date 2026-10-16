@@ -275,6 +275,24 @@ START_TEST(save_fails_cleanly_for_unwritable_paths) {
 }
 END_TEST
 
+START_TEST(save_leaves_no_temp_file) {
+  fx_t fx;
+  unsigned char emm[EMM_BUF];
+  char tmp[sizeof(((fx_t *)0)->path) + 8];
+  size_t n;
+
+  fx_open(&fx, 0, 0);
+  n = build_emm_u(fx.key, fx.bk, emm, sizeof emm);
+  emmcache_feed(fx.cache, fx.dev, emm, n);
+  snprintf(tmp, sizeof tmp, "%s.tmp", fx.path);
+  ck_assert_int_eq(emmcache_save(fx.cache, fx.path), 0);
+  ck_assert_int_ne(access(tmp, F_OK), 0);
+  ck_assert_int_eq(emmcache_save(fx.cache, "/tmp"), -1);
+  ck_assert_int_ne(access("/tmp.tmp", F_OK), 0);
+  fx_close(&fx);
+}
+END_TEST
+
 static Suite *emmcache_suite(void) {
   Suite *s = suite_create("emmcache");
   TCase *tc = tcase_create("core");
@@ -290,6 +308,7 @@ static Suite *emmcache_suite(void) {
   tcase_add_test(tc, truncated_cache_file_replays_only_the_complete_sections);
   tcase_add_test(tc, file_over_one_mebibyte_is_refused_and_absent_or_garbage_files_are_harmless);
   tcase_add_test(tc, save_fails_cleanly_for_unwritable_paths);
+  tcase_add_test(tc, save_leaves_no_temp_file);
   suite_add_tcase(s, tc);
   return s;
 }

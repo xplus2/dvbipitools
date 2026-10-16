@@ -28,13 +28,18 @@ typedef struct {
   unsigned char pmt_cc;
   unsigned pmt_version;
   int have_init;
-  unsigned char pesbuf[65536];
-  unsigned char esbuf[65536];
+  unsigned char *pesbuf;
+  size_t pes_cap;
+  unsigned char *esbuf;
+  size_t es_cap;
 } esbuild_remux_t;
 
 int esbuild_remux_init(esbuild_remux_t *r, const unsigned char *init_data, size_t init_len);
 
 int esbuild_remux_add_init(esbuild_remux_t *r, unsigned stream_idx, const unsigned char *init_data, size_t init_len);
+
+/* releases buffers grown by feed. init must run again before reuse */
+void esbuild_remux_free(esbuild_remux_t *r);
 
 void esbuild_remux_feed(esbuild_remux_t *r, unsigned stream_idx, const unsigned char *seg_data, size_t seg_len, ts_packet_cb cb, void *cb_ctx);
 

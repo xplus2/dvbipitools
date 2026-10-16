@@ -39,9 +39,9 @@ struct ecmg_client {
   atomic_uint ecm_cp_valid; /* 1 once an ECM arrived on this connection */
   atomic_uint ecm_cp; /* CP_number of latest ECM */
   atomic_int last_parity; /* latest publish's parity, direct snapshot, reconnect-safe */
-
+  atomic_int hold_prev_ecm; /* cw_per_msg == 1: new ECM lacks current CW, serve previous until ecm_valid_from */
+  atomic_ulong ecm_valid_from; /* packet_counter at which latest ECM's CP starts */
   atomic_uint ecm_rep_period_ms;
-
   atomic_ulong cryptoperiod_transitions_total;
   atomic_ulong ecm_total;
   atomic_ulong ecm_errors_total;

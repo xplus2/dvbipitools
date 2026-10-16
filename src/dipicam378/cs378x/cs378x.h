@@ -32,6 +32,7 @@ typedef struct {
   unsigned long long auth_errors_total[CAM_AUTH_REASON_COUNT];
   unsigned long long ecm_total;
   unsigned long long ecm_errors_total;
+  unsigned long long ecm_rejected_total;
   unsigned long long emm_total;
 } cs378x_metrics_t;
 
@@ -44,6 +45,10 @@ typedef int (*cs378x_ecm_cb)(const unsigned char *ecm, size_t ecm_len, unsigned 
 /* one incoming EMM, no reply ever sent */
 typedef void (*cs378x_emm_cb)(const unsigned char *emm, size_t emm_len, unsigned caid, unsigned provid, void *user);
 
+/* bind: validate cfg, listen. no threads, safe before daemon(). run: start accept thread. 0 ok */
+cs378x_server_t *cs378x_server_bind(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_cb, cs378x_emm_cb emm_cb, void *user);
+int cs378x_server_run(cs378x_server_t *s);
+/* bind + run */
 cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_cb, cs378x_emm_cb emm_cb, void *user);
 void cs378x_server_stop(cs378x_server_t *s);
 

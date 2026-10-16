@@ -146,10 +146,17 @@ static void on_status(struct rtmp *r, const unsigned char *p, const unsigned cha
   char level[16];
   char code[96];
   p = amf_skip_value(p, end); /* command object, Null */
-  if (!p || amf_object_find_string(p, end, "level", level, sizeof level) != 1 || strcmp(level, "error") != 0) return;
+  if (!p || amf_object_find_string(p, end, "level", level, sizeof level) != 1) return;
   if (amf_object_find_string(p, end, "code", code, sizeof code) != 1) bufcpy(code, sizeof code, "onStatus error");
-  r->state = RTMP_ST_FAILED;
-  if (r->error_cb) r->error_cb(r->cb_ctx, code);
+  if (strcmp(level, "error") == 0) {
+    r->state = RTMP_ST_FAILED;
+    if (r->error_cb) r->error_cb(r->cb_ctx, code);
+    return;
+  }
+  if (r->state == RTMP_ST_WAIT_PUBLISH && strcmp(code, "NetStream.Publish.Start") == 0) {
+    r->state = RTMP_ST_READY;
+    if (r->ready_cb) r->ready_cb(r->cb_ctx);
+  }
 }
 
 void rtmp_command_on_invoke(struct rtmp *r, const unsigned char *payload, size_t len) {
@@ -175,11 +182,13 @@ void rtmp_command_on_invoke(struct rtmp *r, const unsigned char *payload, size_t
       char challenge[128];
       char challenge2[24];
       char response[32];
+      char user_enc[3 * sizeof r->user];
       opaque[0] = challenge[0] = '\0';
       if (amf_object_find_string(info, end, "description", desc, sizeof desc) == 1 && desc_kv(desc, "salt=", salt, sizeof salt) &&
           (desc_kv(desc, "opaque=", opaque, sizeof opaque) || desc_kv(desc, "challenge=", challenge, sizeof challenge)) &&
           rtmp_auth_adobe_response(r->user, r->password, salt, opaque[0] ? opaque : NULL, challenge[0] ? challenge : NULL, challenge2, sizeof challenge2, response, sizeof response) == 0) {
-        snprintf(r->auth_query, sizeof r->auth_query, "?authmod=adobe&user=%s&challenge=%s&response=%s%s%s", r->user, challenge2, response, opaque[0] ? "&opaque=" : "", opaque);
+        pct_encode_seg(r->user, user_enc, sizeof user_enc);
+        snprintf(r->auth_query, sizeof r->auth_query, "?authmod=adobe&user=%s&challenge=%s&response=%s%s%s", user_enc, challenge2, response, opaque[0] ? "&opaque=" : "", opaque);
         r->auth_retry = 1;
         r->state = RTMP_ST_FAILED;
         if (r->error_cb) r->error_cb(r->cb_ctx, "auth challenge");
@@ -210,9 +219,8 @@ void rtmp_command_on_invoke(struct rtmp *r, const unsigned char *payload, size_t
       return;
     }
     r->stream_id = (uint32_t)stream_id;
-    r->state = RTMP_ST_READY;
+    r->state = RTMP_ST_WAIT_PUBLISH;
     send_set_chunk_size(r, RTMP_OUT_CHUNK_SIZE);
     rtmp_command_publish(r);
-    if (r->ready_cb) r->ready_cb(r->cb_ctx);
   }
 }

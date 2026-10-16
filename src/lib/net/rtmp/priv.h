@@ -70,6 +70,7 @@ typedef enum {
   RTMP_ST_WAIT_S2,
   RTMP_ST_WAIT_CONNECT_RESULT,
   RTMP_ST_WAIT_CREATE_STREAM_RESULT,
+  RTMP_ST_WAIT_PUBLISH,
   RTMP_ST_READY,
   RTMP_ST_FAILED
 } rtmp_client_state_t;
@@ -85,7 +86,7 @@ struct rtmp {
   char stream_name[256];
   char user[128];
   char password[128];
-  char auth_query[400]; /* appended to connect app once auth needed */
+  char auth_query[768]; /* appended to connect app once auth needed */
   int auth_tried;       /* connect carried credentials, no more retries */
   int auth_retry;       /* auth_query holds response for a fresh connection */
 

@@ -24,6 +24,9 @@ int ecmg_client_get_ecm(ecmg_client_t *c, unsigned char *out, size_t cap, size_t
     return -1;
   slot = ecmg_client_target_parity(c);
   pthread_mutex_lock(&c->ecm_lock);
+  if (atomic_load_explicit(&c->hold_prev_ecm, memory_order_acquire) && atomic_load_explicit(&c->connected, memory_order_relaxed) &&
+      atomic_load_explicit(c->packet_counter, memory_order_relaxed) < atomic_load_explicit(&c->ecm_valid_from, memory_order_acquire) && c->ecm_slot_len[slot ^ 1] > 0)
+    slot ^= 1;
   have = c->ecm_slot_len[slot] > 0;
   if (have) {
     if (cap < c->ecm_slot_len[slot]) {

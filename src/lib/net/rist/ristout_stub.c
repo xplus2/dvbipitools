@@ -20,3 +20,8 @@ int ristout_write(ristout_t *r, const unsigned char *buf, size_t n) {
 }
 
 void ristout_close(ristout_t *r) { (void)r; }
+
+void ristout_idle_push(ristout_t *r, double now_mono) {
+  (void)r;
+  (void)now_mono;
+}

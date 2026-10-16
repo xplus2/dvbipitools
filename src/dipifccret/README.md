@@ -52,7 +52,7 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 | flag | long form                 | argument | default       | description                                      |
 |------|---------------------------|----------|---------------|--------------------------------------------------|
 |      | --no-ret                  |          |               | disable RET                                      |
-| -B   | --buffer                  | <ms>     | 2000          | per-channel retransmission buffer size           |
+| -B   | --buffer                  | <ms>     | 2000          | per-channel ret buffer (max 65536)               |
 | -F   | --ff-port                 | <port>   | original port | multicast RET session port                       |
 |      | --no-mc-ret               |          |               | disable multicast RET session                    |
 |      | --max-ret-clients         | <n>      | 16384         | pre-allocated unicast RTX client slots, F.3.2.1  |
@@ -138,6 +138,20 @@ without it.
 by the client's optional Max Receive Bitrate TLV if that's lower. This is a fixed multiplier, not
 an adaptive/congestion-aware ramp.
 
+## Memory sizing
+All channel memory is allocated at startup for `-M` channels (default 300), so virtual size is fixed up front.
+Entries are about 1.5 KB each.
+
+* FCC cache: sized for a 20 Mbps stream (about 1900 packets/s) over `-G` (default 8000 ms), so about 15k entries
+  per channel. At 300 channels that is about 6.8 GB.
+* RET ring: `-B` slots per channel, default 2000, so about 0.9 GB at 300 channels.
+
+The default configuration will not start on 32-bit. Lower `-M`, `-G` or `-B`, or disable one side with `--no-fcc` or `--no-ret`.
+
+`-B` counts packets, not time: one slot per ms assumes about 1000 packets/s. A 20 Mbps stream is about 1900 packets/s, so
+the default holds about 1 s, not 2 s. Scale `-B` to the stream rate. The ring is indexed by the 16-bit RTP sequence
+number, so values above 65536 are capped to 65536.
+
 ## Concurrency
 
 One capture thread feeds the channel/ring/cache state (lock-free, single-writer).
@@ -149,7 +163,7 @@ hitting one channel's ring from many directions simultaneously.
 
 A separate pacing thread (FCC only) ticks every active burst session on a fixed interval. The
 burst-session table is guarded by a plain mutex rather than a lock-free design - claim/terminate/reap
-are far less frequent than the per-tick send path, which never touches that lock.
+are far less frequent than the per-tick send path, which only takes the lock briefly per active burst to snapshot it.
 
 ### CPU/core affinity
 `--cpu-affinity` (default `off`) pins the burst pacing thread and the RSI announcement thread, in that order, so the
@@ -162,7 +176,7 @@ The `-w` socket workers are never pinned (and usually I/O bound).
 
 Capture needs `CAP_NET_RAW`. Either grant it directly (`setcap cap_net_raw+ep` on the binary, or
 systemd `AmbientCapabilities=CAP_NET_RAW`) and run as an unprivileged user, or start as root and
-use `-u` to drop to an unprivileged user right after the capture handle opens.
+use `-u` to drop to an unprivileged user once the capture handle and listen sockets (so `-l` ports below 1024 work) are open.
 
 
 ## Stopping
@@ -186,7 +200,7 @@ Since dipifccret only needs `CAP_NET_RAW`, not root, a unit granting just that c
 # edge box on a SPAN port mirroring the access switch, RET and FCC both on
 dipifccret -g 239.0.0.0/8 -l 10.0.0.1:6000 -I eth0
 
-# fixed worker count, privilege drop after opening the capture handle
+# fixed worker count, privilege drop after opening capture and listen sockets
 dipifccret -g 239.0.0.0/8,224.1.2.0/24 -l 10.0.0.1:6000 -I eth0 -w 4 -u dipifccret
 
 # RET only, no FCC

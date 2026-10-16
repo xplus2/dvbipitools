@@ -24,6 +24,9 @@
 #define OPT_CONFIG_STRICT 1011
 #define OPT_CONFIGTEST 1010
 #define OPT_ENCRYPTION_TYPE 1013
+#define OPT_PACE 1014
+#define OPT_TTL 1015
+#define OPT_DSCP 1016
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
@@ -33,14 +36,14 @@ typedef struct {
   config_t *cfg;
   int cli_in;
   int cli_out;
-} rist_opt_t;
+} dipirist_opt_t;
 
 /* ARGS_OK: handled. OPT_UNHANDLED: not this group */
-args_status_t rist_opt_general(rist_opt_t *p, int c);
-args_status_t rist_opt_rist(rist_opt_t *p, int c);
+args_status_t dipirist_opt_general(dipirist_opt_t *p, int c);
+args_status_t dipirist_opt_rist(dipirist_opt_t *p, int c);
 
-void rist_print_help(void);
-args_status_t rist_cli_check(config_t *cfg);
-int rist_parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *count);
+void dipirist_print_help(void);
+args_status_t dipirist_cli_check(config_t *cfg);
+int dipirist_parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *count);
 
 #endif

@@ -142,13 +142,11 @@ static size_t find_valid(const burst_table_t *t, burst_stripe_t *st, const struc
 }
 
 /* caller holds st->lock. pops st's own free list for addr/fd/b, indexes it.
-   NULL if free list empty: reject, don't scan other stripes.
-   gen-bracketed: pacer may read lock-free up to in_use flip below */
+   NULL if free list empty: reject, don't scan other stripes */
 static burst_slot_t *claim_locked(burst_table_t *t, burst_stripe_t *st, const struct sockaddr *addr, socklen_t addrlen, int fd, burst_t *b) {
   size_t idx;
   burst_slot_t *s;
   uint64_t words[BURST_ADDR_WORDS];
-  unsigned g;
   size_t want;
   size_t cur;
 
@@ -162,7 +160,6 @@ static burst_slot_t *claim_locked(burst_table_t *t, burst_stripe_t *st, const st
   while (want > cur && !atomic_compare_exchange_weak_explicit(&t->high_water_mark, &cur, want, memory_order_relaxed, memory_order_relaxed))
     ; /* concurrent claim in another stripe raced ahead: retry with its value */
 
-  g = seqlock_begin_write(&s->gen);
   memset(words, 0, sizeof words);
   memcpy(words, addr, addrlen);
   for (size_t w = 0; w < BURST_ADDR_WORDS; w++)
@@ -174,7 +171,6 @@ static burst_slot_t *claim_locked(burst_table_t *t, burst_stripe_t *st, const st
   s->nack_count = 0;
   s->congestion_adapted = 0;
   atomic_store_explicit(&s->in_use, 1, memory_order_relaxed);
-  seqlock_commit_write(&s->gen, g);
 
   sockaddr_index_remove(st->index, addr, addrlen); /* drop stale entry before insert */
   sockaddr_index_insert(st->index, addr, addrlen, idx);
@@ -211,12 +207,12 @@ int burst_table_start(burst_table_t *t, const struct sockaddr *addr, socklen_t a
   i = find_valid(t, st, addr, addrlen);
   if (i != SIZE_MAX) {
     burst_slot_t *s = &t->slots[i];
-    unsigned g = seqlock_begin_write(&s->gen);
     old = atomic_load_explicit(&s->b, memory_order_relaxed);
     atomic_store_explicit(&s->fd, fd, memory_order_relaxed);
     atomic_store_explicit(&s->b, b, memory_order_relaxed);
     *msn_out = ++s->msn;
-    seqlock_commit_write(&s->gen, g);
+    s->nack_count = 0;
+    s->congestion_adapted = 0;
     updated = 1;
   } else {
     const burst_slot_t *s = claim_locked(t, st, addr, addrlen, fd, b);
@@ -256,6 +252,7 @@ int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen
   slot = &t->slots[idx];
   b = atomic_load_explicit(&slot->b, memory_order_relaxed);
 
+  out->media_ssrc = atomic_load_explicit(&b->channel->ssrc, memory_order_relaxed);
   slot->nack_count++;
   atomic_fetch_add_explicit(&t->nacks_total, 1, memory_order_relaxed);
   if (threshold == 0) {
@@ -290,6 +287,27 @@ int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen
   return idx != SIZE_MAX;
 }
 
+int burst_table_acquire(burst_table_t *t, size_t idx, burst_snap_t *out) {
+  burst_stripe_t *st;
+  burst_slot_t *slot;
+  int live;
+
+  if (idx >= t->cap) return 0;
+  st = stripe_of_idx(t, idx);
+  slot = &t->slots[idx];
+  pthread_mutex_lock(&st->lock);
+  live = atomic_load_explicit(&slot->in_use, memory_order_relaxed);
+  if (live) {
+    out->b = atomic_load_explicit(&slot->b, memory_order_relaxed);
+    out->fd = atomic_load_explicit(&slot->fd, memory_order_relaxed);
+    out->addrlen = atomic_load_explicit(&slot->addrlen, memory_order_relaxed);
+    slot_read_addr(slot, &out->addr);
+    burst_acquire(out->b); /* slot ref keeps it alive while locked */
+  }
+  pthread_mutex_unlock(&st->lock);
+  return live;
+}
+
 int burst_table_release(burst_table_t *t, size_t idx, const burst_t *expect_b, int should_clear, int *did_clear) {
   burst_stripe_t *st = stripe_of_idx(t, idx);
   burst_slot_t *slot = &t->slots[idx];
@@ -302,11 +320,9 @@ int burst_table_release(burst_table_t *t, size_t idx, const burst_t *expect_b, i
     if (should_clear) {
       struct sockaddr_storage sa;
       socklen_t sl = atomic_load_explicit(&slot->addrlen, memory_order_relaxed);
-      unsigned g = seqlock_begin_write(&slot->gen);
 
       atomic_store_explicit(&slot->b, NULL, memory_order_relaxed);
       atomic_store_explicit(&slot->in_use, 0, memory_order_relaxed);
-      seqlock_commit_write(&slot->gen, g);
 
       slot_read_addr(slot, &sa);
       sockaddr_index_remove(st->index, (const struct sockaddr *)&sa, sl);

@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <string.h>
+#include <time.h>
 
 #include "lib/demux/crc32.h"
 #include "lib/helper/beutil.h"
@@ -14,6 +15,8 @@
 #define INTERVAL_SDT_S 2.0
 #define INTERVAL_NIT_S 10.0
 #define INTERVAL_AIT_S 0.5
+#define INTERVAL_TDT_S 1.0
+#define INTERVAL_TOT_S 10.0
 
 const char *psi_table_name(psi_table_t table) {
   static const char *const names[PSI_TABLE_COUNT] = {"PAT", "PMT", "CAT", "SDT", "NIT"};
@@ -113,10 +116,15 @@ void send_psi_tables(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
   }
   if (r->standalone) {
     if (r->send_sdt && due(now, &r->last_sdt, INTERVAL_SDT_S)) {
-      n = psi_build_sdt(0, r->cfg->tsid, r->cfg->onid, r->input.sid, r->service_type, r->provider_name, r->service_name, sec, sizeof sec);
+      psi_sdt_entry_t e = {r->input.sid, r->service_type, r->provider_name, r->service_name, 0, r->input.strip_eit ? 1u : 0u};
+      n = psi_build_sdt_multi(0, r->cfg->tsid, r->cfg->onid, &e, 1, sec, sizeof sec);
       psi_note(tsm, PSI_TABLE_SDT, n);
       stamp_version(r->pv, PSI_TABLE_SDT, sec, n);
       if (n) ts_packet_emit(OUT_PID_SDT, &r->cc_sdt, &ptr0, sec, n, 0, 0, cb, ctx);
+    }
+    if (due(now, &r->last_tdt, INTERVAL_TDT_S)) {
+      n = due(now, &r->last_tot, INTERVAL_TOT_S) ? psi_build_tot(time(NULL), sec, sizeof sec) : psi_build_tdt(time(NULL), sec, sizeof sec);
+      if (n) ts_packet_emit(OUT_PID_TDT, &r->cc_tdt, &ptr0, sec, n, 0, 0, cb, ctx);
     }
     if (r->send_nit && due(now, &r->last_nit, INTERVAL_NIT_S)) {
       n = psi_build_nit(0, r->cfg->onid, r->cfg->tsid, r->network_name, sec, sizeof sec);

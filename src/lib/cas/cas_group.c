@@ -49,6 +49,7 @@ struct cas_group {
   unsigned flush_pid;
   cas_scramble_engine_t *engine;
 
+  double clock_wait_s;
   double clock_wait_deadline;
   int have_clock;
   int fatal;
@@ -216,7 +217,8 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
     g->vendors[i].required = cfg->vendors[i].required;
     g->vendors[i].last_ecm_send = -1.0;
   }
-  g->clock_wait_deadline = mono() + CAS_CORE_CLOCK_DETECT_TIMEOUT_S;
+  g->clock_wait_s = cfg->clock_detect_timeout_s > 0.0 ? cfg->clock_detect_timeout_s : CAS_CORE_CLOCK_DETECT_TIMEOUT_S;
+  g->clock_wait_deadline = mono() + g->clock_wait_s;
   lm = cfg->cp_duration_ms / 4;
   if (lm > 2000) lm = 2000;
   if (lm < 100) lm = 100;
@@ -241,7 +243,7 @@ int cas_group_failed(cas_group_t *g) { return g->fatal; }
 void cas_group_tick_alive(cas_group_t *g) {
   if (!g->have_clock && !g->fatal && mono() >= g->clock_wait_deadline) {
     g->fatal = 1;
-    log_code("LE700112", "cas_group: no clock activity observed within %.0fs, giving up", CAS_CORE_CLOCK_DETECT_TIMEOUT_S);
+    log_code("LE700112", "cas_group: no clock activity observed within %.0fs, giving up", g->clock_wait_s);
   }
 }
 

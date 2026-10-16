@@ -1,23 +1,24 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include "lib/helper/log.h"
+#include "lib/helper/secure_zero.h"
 #include "../version.h"
 #include "priv.h"
 
-cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_cb, cs378x_emm_cb emm_cb, void *user) {
+cs378x_server_t *cs378x_server_bind(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_cb, cs378x_emm_cb emm_cb, void *user) {
   cs378x_server_t *s;
 
   s = calloc(1, sizeof *s);
   if (!s) return NULL;
   for (int i = 0; i < CS378X_MAX_CONNS; i++) atomic_init(&s->worker_fd[i], -1);
   if (cs378x_md5((const unsigned char *)cfg->password, strlen(cfg->password), s->aes_key) != 0) {
+    secure_zero(s->aes_key, sizeof s->aes_key);
     free(s);
     return NULL;
   }
@@ -25,6 +26,7 @@ cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_
     unsigned char md5tmp[16];
     uint32_t crc;
     if (cs378x_md5((const unsigned char *)cfg->username, strlen(cfg->username), md5tmp) != 0) {
+      secure_zero(s->aes_key, sizeof s->aes_key);
       free(s);
       return NULL;
     }
@@ -43,13 +45,30 @@ cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_
   s->user = user;
   s->listen_fd = tcp_listen(cfg->bind ? cfg->bind : CS378X_DEFAULT_BIND, cfg->port);
   if (s->listen_fd < 0) {
+    secure_zero(s->aes_key, sizeof s->aes_key);
     free(s);
     return NULL;
   }
-  if (pthread_create(&s->accept_thread, NULL, accept_main, s) != 0) {
-    log_code("3S500102", TOOL_NAME ": pthread_create: %s", strerror(errno));
-    close(s->listen_fd);
-    free(s);
+  pthread_mutex_init(&s->fd_lock, NULL);
+  return s;
+}
+
+int cs378x_server_run(cs378x_server_t *s) {
+  if (!s || s->running) return -1;
+  int rc = pthread_create(&s->accept_thread, NULL, accept_main, s);
+  if (rc != 0) {
+    log_code("3S500102", TOOL_NAME ": pthread_create: %s", strerror(rc));
+    return -1;
+  }
+  s->running = 1;
+  return 0;
+}
+
+cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_cb, cs378x_emm_cb emm_cb, void *user) {
+  cs378x_server_t *s = cs378x_server_bind(cfg, ecm_cb, emm_cb, user);
+
+  if (s && cs378x_server_run(s) != 0) {
+    cs378x_server_stop(s);
     return NULL;
   }
   return s;
@@ -58,17 +77,24 @@ cs378x_server_t *cs378x_server_start(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_
 void cs378x_server_stop(cs378x_server_t *s) {
   if (!s) return;
   atomic_store_explicit(&s->stop, 1, memory_order_relaxed);
-  pthread_join(s->accept_thread, NULL);
+  if (s->running) {
+    shutdown(s->listen_fd, SHUT_RDWR);
+    pthread_join(s->accept_thread, NULL);
+  }
   close(s->listen_fd);
   for (int i = 0; i < CS378X_MAX_CONNS; i++) {
+    pthread_mutex_lock(&s->fd_lock);
     int fd = atomic_load_explicit(&s->worker_fd[i], memory_order_acquire);
     if (fd >= 0) shutdown(fd, SHUT_RDWR);
+    pthread_mutex_unlock(&s->fd_lock);
   }
   for (int i = 0; i < CS378X_MAX_CONNS; i++)
     if (s->worker_thread_joinable[i]) {
       pthread_join(s->worker_thread[i], NULL);
       s->worker_thread_joinable[i] = 0;
     }
+  pthread_mutex_destroy(&s->fd_lock);
+  secure_zero(s->aes_key, sizeof s->aes_key);
   free(s);
 }
 
@@ -89,5 +115,6 @@ void cs378x_server_get_metrics(const cs378x_server_t *s, cs378x_metrics_t *out) 
   for (int i = 0; i < CAM_AUTH_REASON_COUNT; i++) out->auth_errors_total[i] = atomic_load_explicit(&s->auth_errors_total[i], memory_order_relaxed);
   out->ecm_total = atomic_load_explicit(&s->ecm_total, memory_order_relaxed);
   out->ecm_errors_total = atomic_load_explicit(&s->ecm_errors_total, memory_order_relaxed);
+  out->ecm_rejected_total = atomic_load_explicit(&s->ecm_rejected_total, memory_order_relaxed);
   out->emm_total = atomic_load_explicit(&s->emm_total, memory_order_relaxed);
 }

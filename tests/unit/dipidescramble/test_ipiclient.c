@@ -139,6 +139,114 @@ START_TEST(ipiclient_poll_completes_for_not_modified) {
 }
 END_TEST
 
+START_TEST(ipiclient_poll_not_truncated_at_max_services) {
+  unsigned port = 0;
+  int listen_fd = make_listener(&port);
+  pthread_t th;
+  server_arg_t sarg;
+  unsigned char emm[1024];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char junk[4096];
+  unsigned char ecm[64];
+  unsigned char cw[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+  unsigned char cw_out[16];
+  size_t cap = 300 * 4099;
+  unsigned char *body = malloc(cap);
+  char *resp = malloc(cap + 256);
+  size_t blen = 0;
+  size_t n;
+  int rl;
+  char uri[64];
+  ipiclient_t *c;
+  ipiclient_poll_t *p;
+  EVP_PKEY *key = make_rsa_key();
+  device_state_t *d = make_device_for_key(key, TEST_SERIAL, 256);
+  emmcache_t *cache = emmcache_new(256);
+
+  ck_assert_ptr_nonnull(body);
+  ck_assert_ptr_nonnull(resp);
+  memset(bk, 0x11, sizeof bk);
+  memset(sk, 0x22, sizeof sk);
+  memset(junk, 0xA5, sizeof junk);
+  n = build_emm_u(key, bk, emm, sizeof emm);
+  blen += put_unit(body, emm, n);
+  for (int i = 0; i < 200; i++) blen += put_unit(body + blen, junk, sizeof junk);
+  n = build_emm_g(bk, sk, 0x0064, emm, sizeof emm);
+  blen += put_unit(body + blen, emm, n);
+
+  rl = snprintf(resp, 256, "HTTP/1.1 200 OK\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n", blen);
+  memcpy(resp + rl, body, blen);
+  sarg.listen_fd = listen_fd;
+  sarg.response = resp;
+  sarg.response_len = (size_t)rl + blen;
+  ck_assert_int_eq(pthread_create(&th, NULL, serve_once, &sarg), 0);
+
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/emm", port);
+  c = ipiclient_new(uri, 0, NULL);
+  ck_assert_ptr_nonnull(c);
+  p = ipiclient_poll_start(c);
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(drive(p, 500), IPICLIENT_POLL_DONE);
+  ck_assert_int_eq(ipiclient_poll_take(p, cache, d), 1);
+
+  n = build_ecm(sk, cw, 8, ecm, sizeof ecm);
+  ck_assert_int_eq(device_resolve_cw(d, ecm, n, 0x0064, 8, TEST_ECM_PID, cw_out), 0);
+  ck_assert_mem_eq(cw_out, cw, 8);
+
+  pthread_join(th, NULL);
+  close(listen_fd);
+  ipiclient_free(c);
+  emmcache_free(cache);
+  device_state_free(d);
+  EVP_PKEY_free(key);
+  free(body);
+  free(resp);
+}
+END_TEST
+
+static void expect_error_for_status(const char *resp) {
+  unsigned port = 0;
+  int listen_fd = make_listener(&port);
+  pthread_t th;
+  server_arg_t sarg;
+  char uri[64];
+  ipiclient_t *c;
+  ipiclient_poll_t *p;
+
+  sarg.listen_fd = listen_fd;
+  sarg.response = resp;
+  sarg.response_len = strlen(resp);
+  ck_assert_int_eq(pthread_create(&th, NULL, serve_once, &sarg), 0);
+
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/emm", port);
+  c = ipiclient_new(uri, 0, NULL);
+  ck_assert_ptr_nonnull(c);
+  p = ipiclient_poll_start(c);
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(drive(p, 200), IPICLIENT_POLL_ERROR);
+  ipiclient_poll_free(p);
+
+  pthread_join(th, NULL);
+  close(listen_fd);
+  ipiclient_free(c);
+}
+
+START_TEST(ipiclient_poll_reports_error_on_http_401) {
+  expect_error_for_status("HTTP/1.1 401 Unauthorized\r\nETag: \"x\"\r\nContent-Length: 4\r\nConnection: close\r\n\r\nnope");
+}
+END_TEST
+
+START_TEST(ipiclient_poll_reports_error_on_http_404) {
+  expect_error_for_status("HTTP/1.1 404 Not Found\r\nContent-Length: 4\r\nConnection: close\r\n\r\nnope");
+}
+END_TEST
+
+START_TEST(ipiclient_poll_reports_error_on_http_500) {
+  expect_error_for_status("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 4\r\nConnection: close\r\n\r\nnope");
+}
+END_TEST
+
 START_TEST(ipiclient_poll_reports_error_on_refused_connection) {
   ipiclient_t *c = ipiclient_new("http://127.0.0.1:1/nothing", 0, NULL);
   ipiclient_poll_t *p;
@@ -157,6 +265,10 @@ static Suite *ipiclient_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, ipiclient_poll_completes_for_body_and_feeds_units);
   tcase_add_test(tc, ipiclient_poll_completes_for_not_modified);
+  tcase_add_test(tc, ipiclient_poll_not_truncated_at_max_services);
+  tcase_add_test(tc, ipiclient_poll_reports_error_on_http_401);
+  tcase_add_test(tc, ipiclient_poll_reports_error_on_http_404);
+  tcase_add_test(tc, ipiclient_poll_reports_error_on_http_500);
   tcase_add_test(tc, ipiclient_poll_reports_error_on_refused_connection);
   suite_add_tcase(s, tc);
   return s;

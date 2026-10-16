@@ -45,10 +45,14 @@ static cas_pid_state_t *find_pid_state(cas_scramble_engine_t *e, unsigned pid) {
   return NULL;
 }
 
+/* AF with PCR flag. MPTS has no single clock pid, any PCR pkg ends batch */
+static int carries_pcr(const unsigned char pkt188[188]) { return (pkt188[3] & 0x20) && pkt188[4] >= 7 && (pkt188[5] & 0x10); }
+
+static int flush_due(const cas_scramble_engine_t *e, unsigned out_pid, const unsigned char pkt188[188]) { return out_pid == e->flush_pid || carries_pcr(pkt188); }
+
 static void queue_clear(cas_scramble_engine_t *e, unsigned out_pid, const unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx) {
   scrambler_passthrough_queued(e->scr, pkt188, emit, ctx);
-  if (out_pid == e->flush_pid)
-    scrambler_flush(e->scr, emit, ctx);
+  if (flush_due(e, out_pid, pkt188)) scrambler_flush(e->scr, emit, ctx);
 }
 
 cas_scramble_engine_t *cas_scramble_engine_start(scramble_algo_t algo, const unsigned *pids, size_t pid_count, unsigned flush_pid) {
@@ -115,7 +119,7 @@ void cas_scramble_engine_scramble_packet(cas_scramble_engine_t *e, unsigned out_
   }
   e->scrambled_packets_total++;
   scrambler_encrypt_packet_queued(e->scr, pkt188, ps->current_parity, emit, ctx);
-  if (out_pid == e->flush_pid) scrambler_flush(e->scr, emit, ctx); /* never let batching delay the caller's clock pid */
+  if (flush_due(e, out_pid, pkt188)) scrambler_flush(e->scr, emit, ctx); /* batching never delays PCR */
 }
 
 void cas_scramble_engine_flush(cas_scramble_engine_t *e, scrambler_emit_cb emit, void *ctx) {

@@ -40,6 +40,8 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + --cas-emmg-port becomes --cas-emmg-listen and allows a bind address
     + added --hbbtv-name
     + handle empty PMT properly
+    + --rist-secret-in, --rist-buffer-in, --rist-cname-in
+    + --al-fec-in, --al-fec-port-in
   * dipiradiohead
     + PMT lost CA descriptors with 5+ CAS vendors
     + shoutcast v1 support
@@ -65,9 +67,16 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + rtp:// and udp:// output: TS-aligned, 7x188 datagrams on -f raw/ts
   * dipicam378
     + sane connection limit
-    * new -b|--bind address, defaults to loopback
+    + new -b|--bind address, defaults to loopback
+    + -s is required now
   * dipirist
     + free config on error
+    + -p paced file/stdin reading
+    + --ttl and --dscp on multicast output
+  * dipisrt
+    + fixed receiver stop after sender disconnect
+    + --pace paced file/stdin/http reading
+    + lost bonding recovery
   * dipixy
     + UAF on snap/segmenter retire under OOM
     + qsbr: pad per-worker epochs to cache lines
@@ -89,8 +98,6 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
   * dipimetrics
     + better concurrency handling (>8 conns)
     + stricter OpenMetrics 1.0.0 response
-  * dipisrt
-    + fixed receiver stop after sender disconnect
  -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.5.0-1) unstable; urgency=low

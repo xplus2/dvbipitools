@@ -72,6 +72,7 @@ int tvhead_output_open(const config_t *cfg, out_ctx_t *o) {
       if (!o->rtph) return -1;
       if (cfg->al_fec_l) {
         o->fec_mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->al_fec_port, cfg->iface_out, (int)cfg->ttl);
+        if (o->fec_mc) mcast_set_tos(o->fec_mc, cfg->dscp);
         o->fec_enc = o->fec_mc ? fec2022_enc_new(cfg->al_fec_l, cfg->al_fec_d, 96) : NULL;
         if (!o->fec_mc || !o->fec_enc) return -1;
       }
@@ -118,7 +119,7 @@ void flush_batch(out_ctx_t *o) {
   bitrate_pace(o->pacer);
   if (o->mc) {
     if (o->rtp) {
-      uint32_t ts90k = (uint32_t)(mono_seconds() * 90000.0);
+      uint32_t ts90k = (uint32_t)((uint64_t)(mono_seconds() * 90000.0) & 0xFFFFFFFFu);
       rtpheader_build(o->rtph, ts90k, o->batch, 12);
       note_send_result(mcast_send(o->mc, o->batch, 12 + n) >= 0, &o->mc_had_error, &o->errors, "mcast");
       if (o->fec_enc) {
@@ -424,6 +425,7 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
       }
       if (cas && signal_reload_requested()) cas_reload_receivers(cas);
     }
+    remux_tick(rx, now, packet_cb, out, tsm);
     /* every tick, not just at data inputs: keep CBR stuffing paced off the clock  */
     stuff_n = bitrate_stuff_due(out->pacer, (unsigned)out->batch_count);
     for (int k = 0; k < stuff_n; k++) send_null_packet(out);

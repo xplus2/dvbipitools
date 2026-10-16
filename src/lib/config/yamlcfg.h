@@ -29,6 +29,7 @@ typedef struct {
   int check;
   int strict;
   unsigned warnings;
+  unsigned errors;
   char path[4096];
 } yamlcfg_t;
 

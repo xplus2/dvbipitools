@@ -49,6 +49,28 @@ Skip TLS verification. Only meaningful with an
 .B \-i https://
 source.
 .TP
+.B \-\-pace
+Release a file or stdin
+.B \-i
+source at its PCR rate (RTP timestamps if RTP-framed).
+Needed for files.
+.TP
+.BR \-\-ttl " " \fIn\fR
+Multicast TTL / hop limit, 0..255, for an
+.B \-o rtp://
+or
+.B udp://
+target. Default: kernel (1).
+.TP
+.BR \-\-dscp " " \fIv\fR
+DSCP marking for an
+.B \-o rtp://
+or
+.B udp://
+target:
+.BR video-high ", " video-low ", " voice ", " signalling ", " best-effort ,
+or a raw DSCP value 0..63. Default: kernel.
+.TP
 .B \-\-profile \fIname\fR
 RIST profile,
 .B simple
@@ -121,6 +143,12 @@ Requires
 Packet-level and PCR checks only, no PSI/SI checks at any level.
 .B medium
 adds PCR jitter, accuracy and frequency offset for UDP and RTP inputs.
+With a
+.B rist://
+input there are no receive timestamps, so it adds nothing.
+.B full
+currently behaves like
+.BR medium .
 .TP
 .BR \-v ", " \-\-verbose
 Raise librist's own log verbosity to DEBUG. Default is WARN and above

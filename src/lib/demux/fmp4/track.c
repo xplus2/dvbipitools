@@ -7,7 +7,9 @@
 
 static codec_t codec_for_fourcc(const char *fourcc, int *is_video) {
   static const struct { const char fourcc[5]; codec_t codec; int is_video; } map[] = {
-{"avc1", CODEC_H264, 1}, {"hvc1", CODEC_HEVC, 1}, {"vvc1", CODEC_VVC, 1}, {"av01", CODEC_AV1, 1}, {"lvc1", CODEC_LCEVC, 1},
+{"avc1", CODEC_H264, 1}, {"avc3", CODEC_H264, 1}, {"dva1", CODEC_H264, 1}, {"dvav", CODEC_H264, 1},
+{"hvc1", CODEC_HEVC, 1}, {"hev1", CODEC_HEVC, 1}, {"dvh1", CODEC_HEVC, 1}, {"dvhe", CODEC_HEVC, 1},
+{"vvc1", CODEC_VVC, 1}, {"vvi1", CODEC_VVC, 1}, {"av01", CODEC_AV1, 1}, {"lvc1", CODEC_LCEVC, 1},
 {"ac-3", CODEC_AC3, 0}, {"ec-3", CODEC_EAC3, 0}, {"Opus", CODEC_OPUS, 0}, {"dtsc", CODEC_DTS, 0}, {"dtse", CODEC_DTS_HD, 0},
 {"dtsl", CODEC_DTS_HD_MA, 0},
 {"dtsh", CODEC_DTS_HD_MA, 0}, /* has_core=1 for both DTS_HD and DTS_HD_MA, fourcc alone can't tell them apart */
@@ -23,6 +25,10 @@ static codec_t codec_for_fourcc(const char *fourcc, int *is_video) {
   return CODEC_NONE;
 }
 
+static void set_nal_len_size(fmp4_stsd_entry_t *out, unsigned size) {
+  if (size == 1 || size == 2 || size == 4) out->nal_len_size = size;
+}
+
 static void add_ps(fmp4_nal_t *arr, unsigned *n, const unsigned char *data, size_t len) {
   if (*n >= FMP4_PS_MAX) return;
   arr[*n].data = data;
@@ -35,6 +41,7 @@ void fmp4_parse_avcc(const unsigned char *p, const unsigned char *end, fmp4_stsd
   unsigned n_pps;
   unsigned i;
   if (end - p < 6) return;
+  set_nal_len_size(out, (p[4] & 3u) + 1);
   p += 5; /* configurationVersion, profile, compat, level, lengthSizeMinusOne-byte */
   n_sps = *p++ & 0x1F;
   for (i = 0; i < n_sps && end - p >= 2; i++) {
@@ -58,6 +65,7 @@ void fmp4_parse_avcc(const unsigned char *p, const unsigned char *end, fmp4_stsd
 void fmp4_parse_hvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   unsigned num_arrays;
   if (end - p < 23) return;
+  set_nal_len_size(out, (p[21] & 3u) + 1);
   p += 22; /* configurationVersion(1)+ptl(12)+min_spatial_seg(2)+parallelism(1)+chroma(1)+
               bitDepthLuma(1)+bitDepthChroma(1)+avgFrameRate(2)+lengthSize/etc(1) */
   num_arrays = *p++;
@@ -128,7 +136,7 @@ void fmp4_parse_esds(const unsigned char *p, const unsigned char *end, fmp4_stsd
     fmp4_parse_esds_desc(&q, es_end, &dtag, &dbody, &dsize);
     if (!dtag) break;
     if (dtag != 0x04 || dsize < 1) continue;
-    if (dbody[0] == 0x6B) out->codec = CODEC_MP2A;
+    if (dbody[0] == 0x6B || dbody[0] == 0x69) out->codec = CODEC_MP2A; /* MPEG-1 / MPEG-2 LSF audio */
     dc_end = dbody + dsize;
     r = dbody + 13; /* oti(1)+streamType/upStream/reserved(1)+bufferSizeDB(3)+maxBitrate(4)+avgBitrate(4) */
     while (r < dc_end) {
@@ -187,7 +195,8 @@ void fmp4_parse_vvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd
   unsigned num_arrays;
   if (end - p < 2) return;
   num_arrays = p[1];
-  p += 2; /* byte0: ptl_present_flag+reserved. byte1: numOfArrays */
+  set_nal_len_size(out, (unsigned)(p[0] >> 6) + 1);
+  p += 2; /* byte0: lengthSizeMinusOne + ptl_present_flag + reserved. byte1: numOfArrays */
   for (unsigned a = 0; a < num_arrays && end - p >= 5; a++) {
     unsigned nal_type = p[0] & 0x1F;
     unsigned num_nalus;

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "../demux/crc32.h"
 #include "../helper/beutil.h"
@@ -15,6 +16,8 @@
 #define MPTS_INTERVAL_SDT 2.0
 #define MPTS_INTERVAL_NIT 10.0
 #define MPTS_INTERVAL_EIT 1.0
+#define MPTS_INTERVAL_TDT 1.0
+#define MPTS_INTERVAL_TOT 10.0
 
 struct mpts {
   unsigned tsid;
@@ -31,6 +34,7 @@ struct mpts {
   unsigned char cc_nit;
   unsigned char cc_sdt;
   unsigned char cc_eit;
+  unsigned char cc_tdt;
   unsigned char cc_ecm[MPTS_MAX_CAS_VENDORS];
   unsigned char cc_emm[MPTS_MAX_CAS_VENDORS];
   unsigned ver_pat;
@@ -43,6 +47,8 @@ struct mpts {
   double last_cat;
   double last_nit;
   double last_sdt;
+  double last_tdt;
+  double last_tot;
 
   void *cas_ctx;
   const mpts_cas_ops_t *cas_ops;
@@ -80,6 +86,8 @@ mpts_t *mpts_new(unsigned tsid, unsigned onid, const char *network_name, const p
   m->last_cat = -1.0;
   m->last_nit = -1.0;
   m->last_sdt = -1.0;
+  m->last_tdt = -1.0;
+  m->last_tot = -1.0;
   return m;
 }
 
@@ -124,6 +132,10 @@ size_t mpts_tick(mpts_t *m, double now_s, ts_packet_cb cb, void *ctx) {
     if (n) count += ts_packet_emit(0x0010, &m->cc_nit, &ptr0, sec, n, 0, 0, cb, ctx);
   }
 
+  if (due_s(now_s, &m->last_tdt, MPTS_INTERVAL_TDT)) {
+    n = due_s(now_s, &m->last_tot, MPTS_INTERVAL_TOT) ? psi_build_tot(time(NULL), sec, sizeof sec) : psi_build_tdt(time(NULL), sec, sizeof sec);
+    if (n) count += ts_packet_emit(0x0014, &m->cc_tdt, &ptr0, sec, n, 0, 0, cb, ctx);
+  }
   if (due_s(now_s, &m->last_sdt, MPTS_INTERVAL_SDT)) {
     unsigned n_sdt = 0;
     for (unsigned i = 0; i < m->n_programs; i++) {

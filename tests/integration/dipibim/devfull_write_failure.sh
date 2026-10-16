@@ -29,6 +29,10 @@ run_expect_rc 0 "decode big" "$BIN" -f bim -i "$WORK/big.bim" -o "$WORK/big.out.
 [ "$(wc -c < "$WORK/big.out.xml")" -gt 16384 ] || fail "decoded document too small to exercise stdio buffering"
 run_expect_rc 1 "decode to full device" "$BIN" -f bim -i "$WORK/big.bim" -o /dev/full 2> "$WORK/dec.err"
 assert_contains "$WORK/dec.err" "error writing /dev/full" "decode write failure message"
+run_expect_rc 1 "encode to stdout on full device" sh -c '"$0" -f xml -i "$1" -o - > /dev/full 2> "$2"' "$BIN" "$WORK/big.xml" "$WORK/enc-stdout.err"
+assert_contains "$WORK/enc-stdout.err" "error writing" "encode stdout write failure message"
+run_expect_rc 1 "decode to stdout on full device" sh -c '"$0" -f bim -i "$1" -o - > /dev/full 2> "$2"' "$BIN" "$WORK/big.bim" "$WORK/dec-stdout.err"
+assert_contains "$WORK/dec-stdout.err" "error writing" "decode stdout write failure message"
 echo "OK"
 
 #EOF

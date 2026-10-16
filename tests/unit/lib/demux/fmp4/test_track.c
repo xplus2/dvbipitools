@@ -75,6 +75,7 @@ START_TEST(fmp4_parse_stsd_entry_h264_avcc_extracts_sps_pps) {
   ck_assert_uint_eq(out.sps[0].len, sizeof sps);
   ck_assert_int_eq(memcmp(out.sps[0].data, sps, sizeof sps), 0);
   ck_assert_uint_eq(out.n_pps, 1u);
+  ck_assert_uint_eq(out.nal_len_size, 4u);
   ck_assert_uint_eq(out.pps[0].len, sizeof pps);
   ck_assert_int_eq(memcmp(out.pps[0].data, pps, sizeof pps), 0);
 }
@@ -136,7 +137,36 @@ START_TEST(fmp4_parse_stsd_entry_hevc_hvcc_extracts_vps_sps_pps) {
   ck_assert_uint_eq(out.n_sps, 1u);
   ck_assert_int_eq(memcmp(out.sps[0].data, sps, sizeof sps), 0);
   ck_assert_uint_eq(out.n_pps, 1u);
+  ck_assert_uint_eq(out.nal_len_size, 4u);
   ck_assert_int_eq(memcmp(out.pps[0].data, pps, sizeof pps), 0);
+}
+END_TEST
+
+START_TEST(fmp4_parse_stsd_entry_inband_and_dv_fourccs_map_to_video_codecs) {
+  static const struct { const char *fourcc; codec_t codec; } cases[] = {
+    {"avc3", CODEC_H264}, {"dva1", CODEC_H264}, {"dvav", CODEC_H264},
+    {"hev1", CODEC_HEVC}, {"dvh1", CODEC_HEVC}, {"dvhe", CODEC_HEVC},
+    {"vvi1", CODEC_VVC},
+  };
+  trak_meta_t t;
+  unsigned char buf[512];
+  fmp4_box_t entry;
+  fmp4_stsd_entry_t out;
+
+  memset(&t, 0, sizeof t);
+  t.track_id = 1;
+  t.cls = PID_VIDEO;
+  t.codec = CODEC_H264;
+  t.width = 1280;
+  t.height = 720;
+  build_and_find_entry(&t, buf, sizeof buf, &entry);
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+    memcpy(entry.fourcc, cases[i].fourcc, 4);
+    ck_assert_int_eq(fmp4_parse_stsd_entry(&entry, &out), 1);
+    ck_assert_int_eq(out.codec, cases[i].codec);
+    ck_assert_uint_eq(out.width, 1280u);
+    ck_assert_uint_eq(out.height, 720u);
+  }
 }
 END_TEST
 
@@ -186,6 +216,7 @@ START_TEST(fmp4_parse_stsd_entry_vvc_vvcc_extracts_vps_sps_pps) {
   ck_assert_uint_eq(out.n_sps, 1u);
   ck_assert_int_eq(memcmp(out.sps[0].data, sps, sizeof sps), 0);
   ck_assert_uint_eq(out.n_pps, 1u);
+  ck_assert_uint_eq(out.nal_len_size, 4u);
   ck_assert_int_eq(memcmp(out.pps[0].data, pps, sizeof pps), 0);
 }
 END_TEST
@@ -368,6 +399,7 @@ END_TEST
 
 START_TEST(fmp4_parse_stsd_entry_mp2a_disambiguated_via_esds_oti) {
   trak_meta_t t;
+  int patched = 0;
   unsigned char buf[256];
   fmp4_box_t entry;
   fmp4_stsd_entry_t out;
@@ -383,6 +415,39 @@ START_TEST(fmp4_parse_stsd_entry_mp2a_disambiguated_via_esds_oti) {
   ck_assert_str_eq(entry.fourcc, "mp4a");
   ck_assert_int_eq(fmp4_parse_stsd_entry(&entry, &out), 1);
   ck_assert_int_eq(out.codec, CODEC_MP2A);
+
+  for (size_t i = 0; i + 16 < sizeof buf; i++) {
+    if (memcmp(buf + i, "esds", 4)) continue;
+    ck_assert_int_eq(buf[i + 4 + 11], 0x6B);
+    buf[i + 4 + 11] = 0x69; /* MPEG-2 LSF audio */
+    patched = 1;
+    break;
+  }
+  ck_assert_int_eq(patched, 1);
+  ck_assert_int_eq(fmp4_parse_stsd_entry(&entry, &out), 1);
+  ck_assert_int_eq(out.codec, CODEC_MP2A);
+}
+END_TEST
+
+START_TEST(fmp4_parse_config_nal_length_size_codes) {
+  unsigned char avcc[6] = {1, 0, 0, 0, 0, 0};
+  unsigned char hvcc[23] = {1};
+  unsigned char vvcc[2] = {0, 0};
+  fmp4_stsd_entry_t out;
+  static const unsigned want[4] = {1, 2, 0, 4};
+
+  avcc[4] = (unsigned char)(0xFC | _i);
+  hvcc[21] = (unsigned char)(0xFC | _i);
+  vvcc[0] = (unsigned char)((_i << 6) | 0x3E);
+  memset(&out, 0, sizeof out);
+  fmp4_parse_avcc(avcc, avcc + sizeof avcc, &out);
+  ck_assert_uint_eq(out.nal_len_size, want[_i]);
+  memset(&out, 0, sizeof out);
+  fmp4_parse_hvcc(hvcc, hvcc + sizeof hvcc, &out);
+  ck_assert_uint_eq(out.nal_len_size, want[_i]);
+  memset(&out, 0, sizeof out);
+  fmp4_parse_vvcc(vvcc, vvcc + sizeof vvcc, &out);
+  ck_assert_uint_eq(out.nal_len_size, want[_i]);
 }
 END_TEST
 
@@ -640,8 +705,10 @@ END_TEST
 static Suite *fmp4_track_suite(void) {
   Suite *s = suite_create("fmp4_track");
   TCase *tc = tcase_create("core");
+  tcase_add_loop_test(tc, fmp4_parse_config_nal_length_size_codes, 0, 4);
   tcase_add_test(tc, fmp4_parse_stsd_entry_h264_avcc_extracts_sps_pps);
   tcase_add_test(tc, fmp4_parse_stsd_entry_hevc_hvcc_extracts_vps_sps_pps);
+  tcase_add_test(tc, fmp4_parse_stsd_entry_inband_and_dv_fourccs_map_to_video_codecs);
   tcase_add_test(tc, fmp4_parse_stsd_entry_vvc_vvcc_extracts_vps_sps_pps);
   tcase_add_test(tc, fmp4_parse_stsd_entry_ac3_extracts_dac3_fields);
   tcase_add_test(tc, fmp4_parse_stsd_entry_eac3_extracts_dec3_fields);

@@ -247,17 +247,24 @@ START_TEST(tspacketizer_idle_emits_psi_on_wall_clock) {
 }
 END_TEST
 
-START_TEST(tspacketizer_idle_is_a_noop_when_not_standalone) {
+START_TEST(tspacketizer_idle_emits_only_pmt_when_not_standalone) {
   tspacketizer_cfg_t cfg;
   tspacketizer_t *t;
   memset(&cfg, 0, sizeof cfg);
   cfg.network_name = "";
   cfg.service_name = "Test Service";
+  cfg.pmt_pid = 0x1000;
   t = tspacketizer_new(&cfg);
 
+  ck_assert_int_eq(tspacketizer_has_codec(t), 0);
   g_count = 0;
-  ck_assert_uint_eq(tspacketizer_idle(t, 1.0, capture_cb, NULL), 0u);
-  ck_assert_int_eq(g_count, 0);
+  ck_assert_uint_eq(tspacketizer_idle(t, 1.0, capture_cb, NULL), 1u);
+  ck_assert_int_eq(g_count, 1);
+  ck_assert_uint_eq(g_pids[0], 0x1000u);
+  ck_assert_uint_eq(tspacketizer_idle(t, 1.05, capture_cb, NULL), 0u);
+  ck_assert_uint_eq(tspacketizer_idle(t, 1.1, capture_cb, NULL), 1u);
+  tspacketizer_set_codec(t, 0x0F, 0);
+  ck_assert_int_eq(tspacketizer_has_codec(t), 1);
 
   tspacketizer_free(t);
 }
@@ -386,6 +393,9 @@ struct cas {
   unsigned scramble_calls;
   unsigned scramble_pid;
   double scramble_now;
+  int hold; /* hold until cas_flush(): CSA batching */
+  unsigned char held[4][188];
+  int n_held;
 };
 
 static const unsigned char fake_ca_desc[6] = {0x09, 0x04, 0x4A, 0x75, 0xE0, 0x20};
@@ -437,7 +447,16 @@ void cas_scramble_packet(cas_t *c, unsigned out_pid, double now, unsigned char p
   c->scramble_calls++;
   c->scramble_pid = out_pid;
   c->scramble_now = now;
+  if (c->hold && c->n_held < 4) {
+    memcpy(c->held[c->n_held++], pkt188, 188);
+    return;
+  }
   emit(ctx, pkt188);
+}
+
+void cas_flush(cas_t *c, scrambler_emit_cb emit, void *ctx) {
+  for (int i = 0; i < c->n_held; i++) emit(ctx, c->held[i]);
+  c->n_held = 0;
 }
 
 static void init_fake_cas(cas_t *c) {
@@ -565,6 +584,27 @@ START_TEST(tspacketizer_cas_non_standalone_scrambles_but_sends_no_cat_ecm_or_emm
 }
 END_TEST
 
+START_TEST(tspacketizer_cas_batched_audio_goes_out_before_pcr_only_packets) {
+  cas_t c;
+  tspacketizer_t *t;
+  const unsigned char *first;
+
+  init_fake_cas(&c);
+  c.hold = 1;
+  t = new_cas_packetizer(&c, 0);
+
+  g_npkts = 0;
+  tspacketizer_feed(t, 0, 5760, 0.0, g_frame, sizeof g_frame, store_cb, NULL);
+  ck_assert_int_eq(count_pid(0x0101), 0);
+  ck_assert_uint_eq((unsigned)tspacketizer_pcr_flush(t, 0.032, store_cb, NULL), 1u);
+  ck_assert_int_eq(count_pid(0x0101), 2);
+  first = nth_pid(0x0101, 0);
+  ck_assert_uint_eq(first[3] & 0x10, 0x10u);
+  ck_assert_uint_eq(nth_pid(0x0101, 1)[3] & 0x30, 0x20u);
+  tspacketizer_free(t);
+}
+END_TEST
+
 START_TEST(tspacketizer_sdt_info_flags_free_ca_mode_only_with_cas) {
   cas_t c;
   tspacketizer_t *t;
@@ -666,7 +706,7 @@ static Suite *tspacketizer_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, tspacketizer_first_feed_emits_all_tables_and_audio);
   tcase_add_test(tc, tspacketizer_idle_emits_psi_on_wall_clock);
-  tcase_add_test(tc, tspacketizer_idle_is_a_noop_when_not_standalone);
+  tcase_add_test(tc, tspacketizer_idle_emits_only_pmt_when_not_standalone);
   tcase_add_test(tc, tspacketizer_set_codec_reports_change_and_enables_pmt);
   tcase_add_test(tc, tspacketizer_omits_nit_when_no_network_name);
   tcase_add_test(tc, tspacketizer_pcr_leads_pts_and_long_frames_get_pcr_only_packets);
@@ -684,6 +724,7 @@ static Suite *tspacketizer_suite(void) {
   tcase_add_test(tc, tspacketizer_cas_repeats_cat_and_pmt_on_their_interval_only);
   tcase_add_test(tc, tspacketizer_cas_non_standalone_scrambles_but_sends_no_cat_ecm_or_emm);
   tcase_add_test(tc, tspacketizer_sdt_info_flags_free_ca_mode_only_with_cas);
+  tcase_add_test(tc, tspacketizer_cas_batched_audio_goes_out_before_pcr_only_packets);
   suite_add_tcase(s, tc);
   return s;
 }

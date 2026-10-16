@@ -35,7 +35,11 @@ char *playlist_next_line(char **cursor) {
 int playlist_resolve_relative(const http_url_t *base, const char *ref, char *out, size_t n) {
   char path[sizeof base->path];
   int len;
+  const char *lb;
+  const char *rb;
   if (!base) return 0;
+  lb = strchr(base->host, ':') ? "[" : "";
+  rb = strchr(base->host, ':') ? "]" : "";
   if (ref[0] == '/') {
     if (bufcpy(path, sizeof path, ref) >= sizeof path) return 0;
   } else {
@@ -47,8 +51,8 @@ int playlist_resolve_relative(const http_url_t *base, const char *ref, char *out
     if (strlen(path) + strlen(ref) >= sizeof path) return 0;
     strcat(path, ref);
   }
-  if (base->port == (unsigned)(base->tls ? 443 : 80)) len = snprintf(out, n, "%s://%s%s", base->tls ? "https" : "http", base->host, path);
-  else len = snprintf(out, n, "%s://%s:%u%s", base->tls ? "https" : "http", base->host, base->port, path);
+  if (base->port == (unsigned)(base->tls ? 443 : 80)) len = snprintf(out, n, "%s://%s%s%s%s", base->tls ? "https" : "http", lb, base->host, rb, path);
+  else len = snprintf(out, n, "%s://%s%s%s:%u%s", base->tls ? "https" : "http", lb, base->host, rb, base->port, path);
 
   return len > 0 && (size_t)len < n;
 }

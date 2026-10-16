@@ -18,7 +18,7 @@ void tls_log_ssl_error(const char *what) {
   char buf[256];
   if (e) {
     ERR_error_string_n(e, buf, sizeof buf);
-    log_code("LE700133", "%s: %s", what, buf);
+    log_code("LE700133", "%s failed: %s", what, buf);
   } else {
     log_code("LE300136", "%s: unknown TLS error", what);
   }
@@ -35,6 +35,9 @@ static SSL_CTX *build_client_ctx(int insecure) {
     SSL_CTX_free(ctx);
     return NULL;
   }
+#ifdef SSL_OP_IGNORE_UNEXPECTED_EOF
+  SSL_CTX_set_options(ctx, SSL_OP_IGNORE_UNEXPECTED_EOF); /* OpenSSL 3: close w/o close_notify is EOF. length checks stay with callers */
+#endif
   if (insecure) {
     SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
   } else {
@@ -158,9 +161,12 @@ ssize_t tls_read(tls_t *t, void *buf, size_t cap) {
       return 0;
     default: break;
   }
-  if (err != SSL_ERROR_ZERO_RETURN) tls_log_ssl_error("SSL_read");
+  if (err == SSL_ERROR_ZERO_RETURN) t->eof = 1;
+  else tls_log_ssl_error("SSL_read");
   return -1;
 }
+
+int tls_eof(const tls_t *t) { return t->eof; }
 
 int tls_pending(const tls_t *t) { return SSL_pending(t->ssl); }
 

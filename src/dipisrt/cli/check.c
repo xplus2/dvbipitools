@@ -46,7 +46,11 @@ args_status_t srt_cli_check(config_t *cfg) {
       return ARGS_ERR;
     }
   }
-  if (cfg->passphrase[0] && (strlen(cfg->passphrase) < 10 || strlen(cfg->passphrase) > 79)) {
+  if (config_local_family_mismatch(cfg)) {
+    argerr("HS000722", "--local and srt:// peer differ in address family");
+    return ARGS_ERR;
+  }
+  if (!argutil_srt_passphrase_valid(cfg->passphrase)) {
     argerr("HS000238", "--passphrase must be 10..79 characters");
     return ARGS_ERR;
   }
@@ -66,7 +70,9 @@ args_status_t srt_cli_check(config_t *cfg) {
   ne->al_fec_l = cfg->al_fec_l;
   ne->al_fec_d = cfg->al_fec_d;
   ne->al_fec_port = cfg->al_fec_port;
-  if (cfg->insecure_tls && !(cfg->in.nonsrt.kind == PLAIN_EP_HTTP && cfg->in.nonsrt.http.tls)) log_code("HS000148", TOOL_NAME ": --insecure needs -i https://");
-  if (cfg->send_buffer_mult && !config_is_sender(cfg)) log_code("HS100114", TOOL_NAME ": --send-buffer-mult needs -o srt://");
+  if (cfg->insecure_tls && !(cfg->in.nonsrt.kind == PLAIN_EP_HTTP && cfg->in.nonsrt.http.tls)) log_code("HA000148", TOOL_NAME ": --insecure needs -i https://");
+  if (cfg->pace && (cfg->in.is_srt || (cfg->in.nonsrt.kind != PLAIN_EP_FILE && cfg->in.nonsrt.kind != PLAIN_EP_HTTP)))
+    log_code("HA000721", TOOL_NAME ": --pace requires -i - , a file path or http(s)://");
+  if (cfg->send_buffer_mult && !config_is_sender(cfg)) log_code("HA100114", TOOL_NAME ": --send-buffer-mult needs -o srt://");
   return ARGS_OK;
 }

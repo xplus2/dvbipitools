@@ -61,6 +61,10 @@ double tspacketizer_pcr_next_due(const tspacketizer_t *t);
 /* sets/changes codec after creation. PMT version bumps on change from a set codec. 1 if changed */
 int tspacketizer_set_codec(tspacketizer_t *t, unsigned stream_type, unsigned aac_profile_level);
 
+/* 1: stream_type set */
+int tspacketizer_has_codec(const tspacketizer_t *t);
+
+/* PSI on wall clock while no frames. non-standalone: PMT only */
 size_t tspacketizer_idle(tspacketizer_t *t, double now, ts_packet_cb cb, void *ctx);
 
 /* non-standalone only: fills *out with this program's current SDT service info, for a mux to

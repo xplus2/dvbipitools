@@ -138,8 +138,10 @@ void tspacketizer_mark_discontinuity(tspacketizer_t *t) {
   t->pcr_n = 0;
 }
 
+/* CSA batch may hold payload of this pid: flush first */
 static size_t pcr_drain(tspacketizer_t *t, int all, double now, ts_packet_cb cb, void *ctx) {
   size_t count = 0;
+  if (t->cas && t->pcr_n && (all || t->pcr_due[t->pcr_head] <= now)) cas_flush(t->cas, cb, ctx);
   while (t->pcr_n && (all || t->pcr_due[t->pcr_head] <= now)) {
     ts_packet_emit_pcr_only(t->audio_pid, &t->cc_audio, t->pcr_q[t->pcr_head], cb, ctx);
     t->pcr_head++;
@@ -285,6 +287,8 @@ size_t tspacketizer_feed(tspacketizer_t *t, uint64_t pts_90k, uint32_t dur_90k, 
   return count;
 }
 
+int tspacketizer_has_codec(const tspacketizer_t *t) { return t->cfg.stream_type != 0; }
+
 int tspacketizer_set_codec(tspacketizer_t *t, unsigned stream_type, unsigned aac_profile_level) {
   if (t->cfg.stream_type == stream_type && t->cfg.aac_profile_level == aac_profile_level) return 0;
   if (t->cfg.stream_type || t->pmt_empty_sent) t->ver_pmt = (t->ver_pmt + 1) & 0x1F;
@@ -299,12 +303,12 @@ size_t tspacketizer_idle(tspacketizer_t *t, double now, ts_packet_cb cb, void *c
   size_t n;
   size_t count = 0;
 
-  if (!t->cfg.standalone) return 0;
-  if (due_s(now, &t->idle_last_pat, IDLE_INTERVAL_PAT_CAT_S)) {
+  if (t->cfg.standalone && due_s(now, &t->idle_last_pat, IDLE_INTERVAL_PAT_CAT_S)) {
     n = psi_build_pat(t->cfg.tsid, t->ver_pat, t->cfg.sid, t->pmt_pid, sec, sizeof sec);
     if (n) count += ts_packet_emit(PID_PAT, &t->cc_pat, &ptr0, sec, n, 0, 0, cb, ctx);
   }
   if (due_s(now, &t->idle_last_pmt, IDLE_INTERVAL_PAT_CAT_S)) count += emit_pmt(t, sec, sizeof sec, &ptr0, cb, ctx);
+  if (!t->cfg.standalone) return count;
   if (t->cas && due_s(now, &t->idle_last_cat, IDLE_INTERVAL_PAT_CAT_S)) {
     n = cas_build_cat(t->cas, sec, sizeof sec);
     if (n) count += ts_packet_emit(PID_CAT, &t->cc_cat, &ptr0, sec, n, 0, 0, cb, ctx);

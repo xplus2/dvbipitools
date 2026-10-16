@@ -200,18 +200,18 @@ static int wait_readable(int fd, double timeout_s) {
   return poll(&p, 1, ms);
 }
 
+/* datagram with audio pid payload: PSI-only + PCR-only (afc 10) ones skipped */
 static void stamp_audio_dgram(const unsigned char *d, size_t n, double *stamps, size_t *cnt) {
-  if (n != (size_t)TS_PER_DGRAM * TS_PKT || *cnt >= MAX_STAMPS) return;
+  if (n % TS_PKT || *cnt >= MAX_STAMPS) return;
   for (size_t i = 0; i < n; i += TS_PKT) {
-    if (((((unsigned)d[i + 1] & 0x1Fu) << 8) | d[i + 2]) == 0x0101u) {
+    if (((((unsigned)d[i + 1] & 0x1Fu) << 8) | d[i + 2]) == 0x0101u && (d[i + 3] & 0x10)) {
       stamps[(*cnt)++] = now_s();
       return;
     }
   }
 }
 
-/* paced mp3 over http with a 1 s burst and one 2 s stall. measures the longest
-   gap between full audio datagrams on mc output within 8 s */
+/* paced mp3 over http with a 1 s burst and one 2 s stall. measures longest gap between audio dgs on mc output within 8 s */
 static int cmd_jitter_src(int argc, char **argv) {
   enum { NFRAMES = 330, STALL_AT = 130, FRAME_LEN = 417 };
   const double dt = 1152.0 / 44100.0;

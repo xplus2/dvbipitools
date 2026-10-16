@@ -188,6 +188,17 @@ START_TEST(ecm_decrypt_recovers_cissa_cw) {
 }
 END_TEST
 
+START_TEST(ecm_decrypt_rejects_bad_cw_len) {
+  unsigned char sk[CRYPTO_KEY_LEN] = {0};
+  unsigned char enc[CRYPTO_CW_ENC_LEN] = {0};
+  unsigned char cw[CRYPTO_CW_ENC_LEN + 1];
+
+  ck_assert_int_eq(device_ecm_decrypt(sk, enc, 0, cw), -1);
+  ck_assert_int_eq(device_ecm_decrypt(sk, enc, -1, cw), -1);
+  ck_assert_int_eq(device_ecm_decrypt(sk, enc, CRYPTO_CW_ENC_LEN + 1, cw), -1);
+}
+END_TEST
+
 START_TEST(device_key_load_rejects_unparsable_pem) {
   EVP_PKEY *out = NULL;
   char path[] = "/tmp/dipidescramble_test_badkey_XXXXXX";
@@ -238,6 +249,7 @@ static Suite *crypto_suite(void) {
   tcase_add_test(tc, emm_g_decrypt_rejects_bad_tag);
   tcase_add_test(tc, ecm_decrypt_recovers_csa2_cw);
   tcase_add_test(tc, ecm_decrypt_recovers_cissa_cw);
+  tcase_add_test(tc, ecm_decrypt_rejects_bad_cw_len);
   suite_add_tcase(s, tc);
   return s;
 }

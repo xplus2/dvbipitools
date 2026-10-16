@@ -83,6 +83,7 @@ int radiohead_output_open(const config_t *cfg, out_ctx_t *o) {
         o->fec_mc = mcast_open_send(cfg->family, cfg->mcast_group, cfg->al_fec_port, cfg->iface, (int)cfg->ttl);
         o->fec_enc = o->fec_mc ? fec2022_enc_new(cfg->al_fec_l, cfg->al_fec_d, 96) : NULL;
         if (!o->fec_mc || !o->fec_enc) return -1;
+        mcast_set_tos(o->fec_mc, cfg->dscp);
       }
     }
   }
@@ -202,7 +203,7 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
     if (r == 0) break;
     if (r < 0) {
       input_metrics_note_read(tk->metrics_on ? tk->im : NULL, -1, reason);
-      if (tk->metrics_on && reason == NET_ERR_FORMAT) tk->rm->framing_errors_total++;
+      if (tk->metrics_on) tk->rm->framing_errors_total += source_take_resyncs(src) + (reason == NET_ERR_FORMAT);
       return -1;
     }
     frames_this_visit++;
@@ -212,6 +213,7 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
       tk->rm->frames_total[f.codec]++;
     }
     if (!*tk->tsp && single_tsp_new(tk->cfg, tk->cas, tk->tsp)) return -2;
+    pace_reanchor(tk->pace_deadline, now, *tk->tsp);
     if (tspacketizer_set_codec(*tk->tsp, f.stream_type, f.aac_profile_level))
       log_line_ansi("codec detected: \e[1;30m%s\e[0m, \e[1;30m%u\e[0m Hz", source_codec_name(f.codec), f.sample_rate);
     if (tk->meta->dirty) {
@@ -243,6 +245,7 @@ int process_single_frame(single_tick_t *tk, source_t *src) {
       }
     }
   }
+  if (tk->metrics_on) tk->rm->framing_errors_total += source_take_resyncs(src);
   if (frames_this_visit) emit_metrics(tk->mx, now, tk->out, 1, 1, tk->im, 1, tk->rm, tk->cas);
   return 0;
 }
@@ -260,10 +263,11 @@ static void single_wait(const inputset_t *is, double pace_deadline, double pcr_d
     if (wait_ms < timeout_ms) timeout_ms = wait_ms;
   }
   if (deadline != INPUTSET_NEVER) {
-    long remain_s = (long)(deadline - time(NULL));
+    long remain_s = (long)(deadline - (time_t)mono_seconds());
     int remain_ms = remain_s <= 0 ? 0 : (int)(remain_s * 1000);
     if (remain_ms < timeout_ms) timeout_ms = remain_ms;
   }
+  if (fd < 0 && inputset_source(is, 0) && timeout_ms > RADIOHEAD_IDLE_WAIT_MS) timeout_ms = RADIOHEAD_IDLE_WAIT_MS;
   if (fd >= 0) {
     if (inputset_source(is, 0) && pace_deadline > now_pre + RADIOHEAD_PACE_TOLERANCE_S) {
       /* ceil, not trunc */
@@ -355,12 +359,13 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     double now;
     double now_pcr;
     time_t now_t;
+    int idle;
 
     single_wait(is, pace_deadline, tspacketizer_pcr_next_due(tsp));
     if (signal_stop_requested()) break;
     radiohead_srt_service(&out);
     now = mono_seconds();
-    now_t = time(NULL);
+    now_t = (time_t)now;
     out.cur_pts = (uint64_t)(now * 90000.0);
     inputset_service(is, 0, now_t);
     if (out.insp) tsinspect_tick(out.insp, now);
@@ -398,12 +403,11 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
     }
     now_pcr = mono_seconds();
     out.cur_pts = (uint64_t)(now_pcr * 90000.0);
-    if (tspacketizer_pcr_flush(tsp, now_pcr, out.insp ? &packet_cb_inspect : &packet_cb, &out)) flush_batch(&out);
-    if (!src || now > pace_deadline + RADIOHEAD_PACE_TOLERANCE_S) {
-      tspacketizer_idle(tsp, now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
-      flush_batch(&out);
-      emit_metrics(mx, now, &out, 1, src ? 1 : 0, &im, 1, &rm, cas);
-    }
+    idle = !src || now > pace_deadline + RADIOHEAD_PACE_TOLERANCE_S;
+    tspacketizer_pcr_flush(tsp, now_pcr, out.insp ? &packet_cb_inspect : &packet_cb, &out);
+    if (idle) tspacketizer_idle(tsp, now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
+    flush_batch(&out); /* each pass: PCR must not wait for full datagram */
+    if (idle) emit_metrics(mx, now, &out, 1, src ? 1 : 0, &im, 1, &rm, cas);
   }
 
 done:

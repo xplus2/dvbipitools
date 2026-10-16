@@ -38,7 +38,7 @@ unsigned cas_pcr_pid(cas_t *c);
    1) cas_pcr_tick() - no-op unless out_pid == cas_pcr_pid(c)
    2) cas_scramble_packet() - no-op unless out_pid in --cas-pids. emits exactly once,
       immediate or batched (CSA2 SIMD backend, same-parity fill) - see
-      scrambler_encrypt_packet_queued. always immediate on cas_pcr_pid(c): batching
+      scrambler_encrypt_packet_queued. always immediate on cas_pcr_pid(c) and any PCR packet: batching
       never delays PCR. */
 void cas_pcr_tick(cas_t *c, unsigned out_pid, const unsigned char pkt188[188]);
 void cas_scramble_packet(cas_t *c, unsigned out_pid, double now, unsigned char pkt188[188], scrambler_emit_cb emit, void *ctx);

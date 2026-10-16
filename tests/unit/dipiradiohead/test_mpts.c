@@ -267,6 +267,63 @@ START_TEST(codec_change_on_an_existing_program_updates_the_packetizer) {
 }
 END_TEST
 
+START_TEST(precreated_program_gets_its_codec_from_the_first_frame) {
+  static unsigned char body[MP3_FRAMES * MP3_FRAME_LEN];
+  rig_t *r = calloc(1, sizeof *r);
+  tspacketizer_cfg_t tc;
+  tspacketizer_t *pre;
+
+  if (!r) abort();
+  fixture_mp3_frames(body, MP3_FRAMES);
+  rig_init(r, NULL, body, sizeof body);
+  memset(&tc, 0, sizeof tc);
+  tc.sid = 7;
+  tc.network_name = "";
+  tc.service_name = "Svc";
+  pre = tspacketizer_new(&tc);
+  ck_assert_ptr_nonnull(pre);
+  r->tsps[0] = pre;
+  rig_connect(r);
+  r->tk.ready_mask = 1;
+  for (int i = 0; i < 50 && !tspacketizer_has_codec(pre); i++) {
+    wait_readable(r);
+    ck_assert_int_eq(process_input_slot(&r->tk, 0), 0);
+  }
+  ck_assert_ptr_eq(r->tsps[0], pre);
+  ck_assert_int_eq(tspacketizer_has_codec(pre), 1);
+  ck_assert_uint_gt(r->out.packets, 0u);
+  rig_free(r);
+  free(r);
+}
+END_TEST
+
+START_TEST(stalled_slot_reanchors_instead_of_bursting_the_backlog) {
+  static unsigned char body[MP3_FRAMES * MP3_FRAME_LEN];
+  rig_t *r = calloc(1, sizeof *r);
+  unsigned long long frames;
+
+  if (!r) abort();
+  fixture_mp3_frames(body, MP3_FRAMES);
+  rig_init(r, NULL, body, sizeof body);
+  rig_connect(r);
+  r->tk.ready_mask = 0;
+  ck_assert_int_eq(process_input_slot(&r->tk, 0), 0);
+  frames = r->rm.frames_total[SRC_MPEG_AUDIO];
+  r->pace_deadline[0] = NOW - 5.0;
+  r->tk.ready_mask = 1;
+  for (int i = 0; i < 50 && r->rm.frames_total[SRC_MPEG_AUDIO] == frames; i++) {
+    wait_readable(r);
+    ck_assert_int_eq(process_input_slot(&r->tk, 0), 0);
+  }
+  frames = r->rm.frames_total[SRC_MPEG_AUDIO] - frames;
+  ck_assert_uint_ge(frames, 1u);
+  ck_assert_uint_le(frames, 13u);
+  ck_assert_double_eq_tol(r->pace_deadline[0], NOW + (double)(frames * 1152u) / 44100.0, 1e-6);
+  rig_free(r);
+  free(r);
+}
+END_TEST
+
 START_TEST(pacing_deadline_ahead_of_the_clock_defers_all_frames) {
   static unsigned char body[MP3_FRAMES * MP3_FRAME_LEN];
   rig_t *r = calloc(1, sizeof *r);
@@ -377,6 +434,8 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, first_sight_of_a_connected_source_resets_the_slot_clock);
   tcase_add_test(tc, ready_slot_creates_the_program_and_feeds_paced_frames);
   tcase_add_test(tc, codec_change_on_an_existing_program_updates_the_packetizer);
+  tcase_add_test(tc, precreated_program_gets_its_codec_from_the_first_frame);
+  tcase_add_test(tc, stalled_slot_reanchors_instead_of_bursting_the_backlog);
   tcase_add_test(tc, pacing_deadline_ahead_of_the_clock_defers_all_frames);
   tcase_add_test(tc, framing_failure_marks_the_input_down_and_counts_the_error);
   tcase_add_loop_test(tc, run_mpts_sets_up_and_tears_down_for_each_configuration, 0, (int)(sizeof run_cases / sizeof run_cases[0]));

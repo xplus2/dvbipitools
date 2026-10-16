@@ -7,7 +7,7 @@
 
 #include "pace.h"
 
-#define RESYNC_THRESHOLD_S 2.0 /* real discontinuity, not scheduler jitter */
+#define RESYNC_THRESHOLD_S 2.0 /* discontinuity, not scheduler jitter */
 
 struct pace_ctrl {
   int have_baseline;

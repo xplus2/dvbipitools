@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "lib/cas/device_state_core.h"
 #include "lib/demux/psi/section_asm.h"
@@ -149,11 +150,19 @@ int emmcache_load(emmcache_t *c, device_state_t *d, const char *path) {
 
 int emmcache_save(const emmcache_t *c, const char *path) {
   FILE *f;
+  char *tmp;
+  size_t tmp_len = strlen(path) + 5;
   int rc = 0;
 
-  f = fopen(path, "wb");
+  tmp = malloc(tmp_len);
+  if (!tmp)
+    return -1;
+  snprintf(tmp, tmp_len, "%s.tmp", path);
+
+  f = fopen(tmp, "wb");
   if (!f) {
     log_code("DW100133", TOOL_NAME ": cannot write emm cache %s: %s", path, strerror(errno));
+    free(tmp);
     return -1;
   }
   if (c->have_emm_u && fwrite(c->emm_u.raw, 1, c->emm_u.len, f) != c->emm_u.len) {
@@ -166,10 +175,21 @@ int emmcache_save(const emmcache_t *c, const char *path) {
       rc = -1;
     }
   }
-  if (fclose(f)) {
+  if (rc == 0 && (fflush(f) != 0 || fsync(fileno(f)) != 0)) {
     log_code("DE100135", TOOL_NAME ": error writing emm cache %s: %s", path, strerror(errno));
     rc = -1;
   }
+  if (fclose(f) && rc == 0) {
+    log_code("DE100135", TOOL_NAME ": error writing emm cache %s: %s", path, strerror(errno));
+    rc = -1;
+  }
+  if (rc == 0 && rename(tmp, path) != 0) {
+    log_code("DE100149", TOOL_NAME ": cannot replace emm cache %s: %s", path, strerror(errno));
+    rc = -1;
+  }
+  if (rc != 0)
+    unlink(tmp);
+  free(tmp);
   return rc;
 }
 

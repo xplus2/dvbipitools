@@ -104,6 +104,9 @@ unsigned long long remux_hold_forced(const remux_t *r);
    also drives PMT/AIT (standalone: +PAT/CAT/SDT/NIT) resend. tsm: accumulates call's TS-integrity counters (nullable) */
 void remux_feed(remux_t *r, double now_s, const unsigned char *pkt188, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm);
 
+/* PSI (and standalone EIT) resend without input packet. call each loop pass: output keeps its tables through source stalls */
+void remux_tick(remux_t *r, double now_s, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm);
+
 /* non-standalone only. 0: filled *out. nonzero: nothing to send */
 int remux_get_sdt_info(const remux_t *r, psi_sdt_entry_t *out);
 

@@ -267,6 +267,14 @@ else
 HAVE_RIST := $(HAVE_LIBRIST)
 endif
 
+RIST_AVGBUF_TEST_SRC := '\#include <librist/librist.h>\nint main(void){struct rist_stats_receiver_flow f;return (int)f.avg_buffer_time;}\n'
+RIST_CFLAGS := $(shell pkg-config --cflags librist)
+ifeq ($(HAVE_RIST),yes)
+ifeq ($(shell printf $(RIST_AVGBUF_TEST_SRC) | $(CC) -xc - $(RIST_CFLAGS) -o /dev/null >/dev/null 2>&1 && echo yes),yes)
+RIST_CFLAGS += -DDVBIPITOOLS_RIST_HAVE_AVG_BUFFER_TIME
+endif
+endif
+
 HAVE_LIBSRT := $(shell pkg-config --exists srt && echo yes)
 
 ifeq ($(SRT),no)
@@ -320,7 +328,7 @@ ifeq ($(HAVE_RIST),yes)
 dipirec_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c \
 src/lib/helper/pipereader.c \
 src/lib/net/rist/ristpeer.c
-dipirec_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+dipirec_EXTRA_CFLAGS += $(RIST_CFLAGS)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipirec_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
@@ -471,7 +479,7 @@ dipirec_SRCS := \
 	$(dipirec_AUTH_SRC) \
 	src/lib/mux/pmt_filter.c \
 	src/dipirec/filter/ts.c \
-	src/dipirec/filter/pace.c
+	src/lib/net/ts/pace.c
 
 ifeq ($(HAVE_OPENSSL),yes)
 dipiradiohead_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
@@ -529,7 +537,7 @@ dipiradiohead_EXTRA_LDFLAGS += -pthread
 ifeq ($(HAVE_RIST),yes)
 dipiradiohead_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristlog.c \
 src/lib/net/rist/ristpeer.c
-dipiradiohead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+dipiradiohead_EXTRA_CFLAGS += $(RIST_CFLAGS)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
@@ -716,7 +724,7 @@ ifeq ($(HAVE_RIST),yes)
 dipitvhead_RIST_SRC := src/lib/net/rist/ristout.c src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c \
 src/lib/helper/pipereader.c \
 src/lib/net/rist/ristpeer.c
-dipitvhead_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+dipitvhead_EXTRA_CFLAGS += $(RIST_CFLAGS)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
@@ -1003,7 +1011,7 @@ ifeq ($(HAVE_RIST),yes)
 dipidescramble_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c \
 src/lib/helper/pipereader.c \
 src/lib/net/rist/ristpeer.c
-dipidescramble_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+dipidescramble_EXTRA_CFLAGS += $(RIST_CFLAGS)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
@@ -1167,17 +1175,11 @@ endif
 
 ifeq ($(HAVE_RIST),yes)
 TOOLS += dipirist
-dipirist_EXTRA_CFLAGS := $(shell pkg-config --cflags librist)
+dipirist_EXTRA_CFLAGS := $(RIST_CFLAGS)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipirist_EXTRA_LDFLAGS := $(shell pkg-config --static --libs librist) -latomic
 else
 dipirist_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
-endif
-
-DIPIRIST_AVGBUF_TEST_SRC := '\#include <librist/librist.h>\nint main(void){struct rist_stats_receiver_flow f;return (int)f.avg_buffer_time;}\n'
-HAVE_AVG_BUFFER_TIME := $(shell printf $(DIPIRIST_AVGBUF_TEST_SRC) | $(CC) -xc - $(dipirist_EXTRA_CFLAGS) -o /dev/null >/dev/null 2>&1 && echo yes)
-ifeq ($(HAVE_AVG_BUFFER_TIME),yes)
-dipirist_EXTRA_CFLAGS += -DDIPIRIST_HAVE_AVG_BUFFER_TIME
 endif
 
 DIPIRIST_LIBRIST_VERSION := $(shell pkg-config --modversion librist)
@@ -1251,6 +1253,7 @@ dipirist_SRCS := \
 	src/lib/net/ts/source.c \
 	src/lib/net/ts/deframe.c \
 	src/lib/net/ts/jitter.c \
+	src/lib/net/ts/pace.c \
 	src/lib/net/ts/http.c \
 	src/lib/net/ts/open_async.c \
 	src/lib/net/jitbuf.c \
@@ -1329,9 +1332,8 @@ endif
 
 ifeq ($(HAVE_RIST),yes)
 dipisrt_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c \
-src/lib/helper/pipereader.c \
 src/lib/net/rist/ristpeer.c
-dipisrt_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+dipisrt_EXTRA_CFLAGS += $(RIST_CFLAGS)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipisrt_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
@@ -1381,6 +1383,7 @@ dipisrt_SRCS := \
 	src/lib/net/ts/source.c \
 	src/lib/net/ts/deframe.c \
 	src/lib/net/ts/jitter.c \
+	src/lib/net/ts/pace.c \
 	src/lib/net/ts/http.c \
 	src/lib/net/ts/open_async.c \
 	src/lib/net/jitbuf.c \
@@ -1402,7 +1405,6 @@ dipisrt_SRCS := \
 	src/lib/helper/xml_util.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/crc32.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/net/ts/sink.c \
 	src/lib/mux/fec2022.c \
@@ -1458,7 +1460,7 @@ ifeq ($(HAVE_RIST),yes)
 dipixy_RIST_SRC := src/lib/net/rist/ristin.c src/lib/net/rist/ristlog.c \
 src/lib/helper/pipereader.c \
 src/lib/net/rist/ristpeer.c
-dipixy_EXTRA_CFLAGS += $(shell pkg-config --cflags librist)
+dipixy_EXTRA_CFLAGS += $(RIST_CFLAGS)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs librist) -latomic
 else
@@ -1875,7 +1877,8 @@ UNIT_TESTS += lib_cas_biss_ca
 lib_cas_biss_ca_BIN := tests/unit/lib/cas/test_biss_ca
 lib_cas_biss_ca_SRCS := \
 	tests/unit/lib/cas/test_biss_ca.c \
-	src/lib/cas/biss/ca.c
+	src/lib/cas/biss/ca.c \
+	src/lib/helper/secure_zero.c
 lib_cas_biss_ca_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_cas_biss_ca_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -2269,6 +2272,17 @@ lib_scrambler_csa2_SRCS := \
 	src/lib/scrambler/cissa_stub.c \
 	src/lib/helper/log.c
 lib_scrambler_csa2_EXTRA_LDFLAGS := -ldvbcsa -ldl
+
+UNIT_TESTS += lib_cas_scramble_engine
+lib_cas_scramble_engine_BIN := tests/unit/lib/cas/test_cas_scramble_engine
+lib_cas_scramble_engine_SRCS := \
+	tests/unit/lib/cas/test_cas_scramble_engine.c \
+	src/lib/cas/cas_scramble_engine.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/csa2.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/helper/log.c
+lib_cas_scramble_engine_EXTRA_LDFLAGS := -ldvbcsa -ldl
 else
 $(warning tests: libdvbcsa not found, skipping lib_scrambler_csa2 unit test)
 endif
@@ -2285,6 +2299,7 @@ dipicam378_args_SRCS := \
 	src/lib/vendor/libyaml/parser.c \
 	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
@@ -2301,6 +2316,7 @@ dipicam378_config_SRCS := \
 	src/lib/vendor/libyaml/parser.c \
 	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
@@ -2348,6 +2364,7 @@ dipicam378_cs378x_SRCS := \
 	src/dipicam378/cs378x/protocol.c \
 	src/dipicam378/cs378x/worker.c \
 	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/sys/signal.c
 dipicam378_cs378x_EXTRA_CFLAGS := -pthread $(shell pkg-config --cflags openssl)
 dipicam378_cs378x_EXTRA_LDFLAGS := -pthread $(shell pkg-config --libs openssl)
@@ -2435,6 +2452,7 @@ dipidescramble_biss_ca_state_SRCS := \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/mux/psi_build.c \
 	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c \
 	src/lib/demux/crc32.c
 dipidescramble_biss_ca_state_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_biss_ca_state_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2509,7 +2527,7 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/net/rtmp/auth.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa.c \
-	src/lib/scrambler/csa2_stub.c \
+	src/lib/scrambler/csa2.c \
 	src/lib/cas/biss/biss.c \
 	src/lib/cas/biss/hex.c \
 	src/lib/cas/biss/ca.c \
@@ -2523,7 +2541,7 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c
 dipidescramble_pipeline_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
-dipidescramble_pipeline_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
+dipidescramble_pipeline_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl) -ldl
 
 UNIT_TESTS += dipidescramble_ipiclient
 dipidescramble_ipiclient_BIN := tests/unit/dipidescramble/test_ipiclient
@@ -2745,7 +2763,9 @@ dipirist_args_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/net/httpclient/url.c \
+	src/lib/net/netconnect.c \
 	src/lib/net/plain_endpoint.c \
+	src/lib/sys/signal.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
@@ -2770,17 +2790,16 @@ dipirist_config_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/net/httpclient/url.c \
+	src/lib/net/netconnect.c \
 	src/lib/net/plain_endpoint.c \
+	src/lib/sys/signal.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
 ifeq ($(HAVE_RIST),yes)
 UNIT_TESTS += dipirist_bridge
 dipirist_bridge_BIN := tests/unit/dipirist/test_bridge
-dipirist_bridge_EXTRA_CFLAGS := $(shell pkg-config --cflags librist)
-ifeq ($(HAVE_AVG_BUFFER_TIME),yes)
-dipirist_bridge_EXTRA_CFLAGS += -DDIPIRIST_HAVE_AVG_BUFFER_TIME
-endif
+dipirist_bridge_EXTRA_CFLAGS := $(RIST_CFLAGS)
 dipirist_bridge_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
 dipirist_bridge_SRCS := \
 	tests/unit/dipirist/test_bridge.c \
@@ -2821,6 +2840,7 @@ dipirist_bridge_SRCS := \
 	src/lib/net/ts/source.c \
 	src/lib/net/ts/deframe.c \
 	src/lib/net/ts/jitter.c \
+	src/lib/net/ts/pace.c \
 	src/lib/net/ts/http.c \
 	src/lib/net/ts/open_async.c \
 	src/lib/net/jitbuf.c \
@@ -2866,7 +2886,7 @@ dipirist_bridge_SRCS := \
 
 UNIT_TESTS += lib_net_rist_ristlog
 lib_net_rist_ristlog_BIN := tests/unit/lib/net/rist/test_ristlog
-lib_net_rist_ristlog_EXTRA_CFLAGS := $(shell pkg-config --cflags librist)
+lib_net_rist_ristlog_EXTRA_CFLAGS := $(RIST_CFLAGS)
 lib_net_rist_ristlog_EXTRA_LDFLAGS := $(shell pkg-config --libs librist)
 lib_net_rist_ristlog_SRCS := \
 	tests/unit/lib/net/rist/test_ristlog.c \
@@ -2877,13 +2897,13 @@ RIST_SEND_HELPER_BIN := tests/unit/lib/net/rist/rist_send_helper
 RIST_SEND_HELPER_SRCS := tests/unit/lib/net/rist/rist_send_helper.c
 RIST_SEND_HELPER_OBJS := $(RIST_SEND_HELPER_SRCS:.c=.o)
 ALL_OBJS += $(RIST_SEND_HELPER_OBJS)
-$(RIST_SEND_HELPER_OBJS): CFLAGS += $(shell pkg-config --cflags librist)
+$(RIST_SEND_HELPER_OBJS): CFLAGS += $(RIST_CFLAGS)
 $(RIST_SEND_HELPER_BIN): $(RIST_SEND_HELPER_OBJS)
 	$(CC) $^ $(LDFLAGS) $(shell pkg-config --libs librist) -o $@
 
 UNIT_TESTS += lib_net_rist_ristin
 lib_net_rist_ristin_BIN := tests/unit/lib/net/rist/test_ristin
-lib_net_rist_ristin_EXTRA_CFLAGS := $(shell pkg-config --cflags librist) -DRIST_SEND_HELPER_PATH='"$(abspath $(RIST_SEND_HELPER_BIN))"'
+lib_net_rist_ristin_EXTRA_CFLAGS := $(RIST_CFLAGS) -DRIST_SEND_HELPER_PATH='"$(abspath $(RIST_SEND_HELPER_BIN))"'
 ifeq ($(TSAN),yes)
 lib_net_rist_ristin_EXTRA_CFLAGS += -DDVBIPITOOLS_TSAN_BUILD
 endif
@@ -2899,6 +2919,7 @@ lib_net_rist_ristin_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c
 tests/unit/lib/net/rist/test_ristin: | $(RIST_SEND_HELPER_BIN)
@@ -2997,6 +3018,7 @@ dipisrt_bridge_SRCS := \
 	src/lib/net/ts/source.c \
 	src/lib/net/ts/deframe.c \
 	src/lib/net/ts/jitter.c \
+	src/lib/net/ts/pace.c \
 	src/lib/net/ts/http.c \
 	src/lib/net/ts/open_async.c \
 	src/lib/net/jitbuf.c \
@@ -3747,6 +3769,7 @@ lib_mux_esbuild_pmtbuild_SRCS := \
 lib_mux_esbuild_remux_BIN := tests/unit/lib/mux/esbuild/test_remux
 lib_mux_esbuild_remux_SRCS := \
 	tests/unit/lib/mux/esbuild/test_remux.c \
+	src/lib/helper/log.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/mux/esbuild/esbuild.c \
 	src/lib/mux/esbuild/pes.c \
@@ -4613,6 +4636,7 @@ lib_dash_mpd_SRCS := \
 	tests/unit/lib/dash/test_mpd.c \
 	src/lib/dash/mpd.c \
 	src/lib/hls/m3u_lines.c \
+	src/lib/net/httpclient/url.c \
 	src/lib/helper/log.c \
 	src/lib/helper/xml_util.c \
 	src/lib/sys/ioutil.c
@@ -6151,7 +6175,7 @@ dipirec_ts_filter_SRCS := \
 dipirec_pace_BIN := tests/unit/dipirec/test_pace
 dipirec_pace_SRCS := \
 	tests/unit/dipirec/test_pace.c \
-	src/dipirec/filter/pace.c \
+	src/lib/net/ts/pace.c \
 	src/lib/sys/signal.c
 
 dipirec_record_BIN := tests/unit/dipirec/test_record
@@ -6285,7 +6309,7 @@ dipirec_record_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/pmt_filter.c \
 	src/dipirec/filter/ts.c \
-	src/dipirec/filter/pace.c
+	src/lib/net/ts/pace.c
 
 ifeq ($(HAVE_RIST),yes)
 ifeq ($(HAVE_SRT),yes)
@@ -6426,7 +6450,7 @@ dipirec_record_net_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/pmt_filter.c \
 	src/dipirec/filter/ts.c \
-	src/dipirec/filter/pace.c
+	src/lib/net/ts/pace.c
 dipirec_record_net_EXTRA_CFLAGS := $(shell pkg-config --cflags librist srt)
 ifeq ($(TSAN),yes)
 dipirec_record_net_EXTRA_CFLAGS += -DDVBIPITOOLS_TSAN_BUILD

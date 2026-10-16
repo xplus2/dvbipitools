@@ -48,6 +48,7 @@ void rebuild_class_table(psi_t *c) {
   } else if (c->have_pat) {
     c->class_by_pid[c->pmt_pid] = PID_PMT;
   }
+  if (c->have_cat && c->emm_pid) c->class_by_pid[c->emm_pid] = PID_EMM;
   if (c->have_pat && c->nit_pid)
     c->class_by_pid[c->nit_pid] = PID_NIT;
   c->class_by_pid[0x0000] = PID_PAT;
@@ -123,6 +124,7 @@ double psi_obs_oldest_other(const psi_obs_t *o, psi_obs_id_t id) {
 
 double psi_pmt_oldest_seen(const psi_t *c) {
   double oldest = 0.0;
+  if (c->pmt_locked && !c->multi_mode) return c->pmt_cand[c->pmt_lock_idx].obs_last;
   for (int k = 0; k < c->pmt_cand_count; k++) {
     if (c->pmt_cand[k].obs_last == 0.0) return 0.0;
     if (oldest == 0.0 || c->pmt_cand[k].obs_last < oldest) oldest = c->pmt_cand[k].obs_last;
@@ -246,6 +248,8 @@ int psi_wants_pid(const psi_t *c, unsigned pid) {
 
 void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid) { c->preferred_pmt_pid = pmt_pid; }
 
+void psi_select_program(psi_t *c, unsigned program_number) { c->preferred_program = program_number; }
+
 void psi_enable_multi_program(psi_t *c) { c->multi_mode = 1; }
 
 const psi_multi_program_t *psi_multi_programs(const psi_t *c, int *count) {
@@ -330,6 +334,7 @@ const char *pid_class_name(pid_class_t k) {
     case PID_ECM:       return "ECM";
     case PID_DATA:      return "data";
     case PID_LCEVC:     return "LCEVC";
+    case PID_EMM:       return "EMM";
     case PID_UNKNOWN:   return "unknown";
   }
   return "unknown";

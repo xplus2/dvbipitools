@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "../../sys/ioutil.h"
+#include "../../sys/signal.h"
 #include "../../helper/log.h"
 #include "../netconnect.h"
 #include "priv.h"
@@ -22,6 +23,18 @@ static ssize_t raw_send_nb(struct http *h, const char *buf, size_t n) {
     return -1;
   }
   return w;
+}
+
+static void async_arm(http_async_t *a) { a->deadline = mono_seconds() + HTTP_ASYNC_STAGE_TIMEOUT_S; }
+
+static const char *async_phase_name(http_async_phase_t p) {
+  switch (p) {
+    case HA_CONNECTING:      return "connect";
+    case HA_TLS_HANDSHAKE:   return "TLS handshake";
+    case HA_SENDING:         return "request send";
+    case HA_READING_HEADERS: return "response headers";
+  }
+  return "?";
 }
 
 static int async_build_request(http_async_t *a) {
@@ -40,8 +53,9 @@ static int async_start_connect(http_async_t *a, net_err_reason_t *reason_out) {
   a->h->fd = fd;
   a->h->url = a->url;
   a->phase = HA_CONNECTING;
-  a->want_events = POLLOUT;
+  a->want_events = netconnect_tcp_events(a->connect_pending);
   a->hdr_got = 0;
+  async_arm(a);
   return 0;
 }
 
@@ -91,6 +105,7 @@ http_async_t *http_async_start_reuse(http_t *h, const http_url_t *url, const cha
   }
   a->phase = HA_SENDING;
   a->want_events = POLLOUT;
+  async_arm(a);
   return a;
 }
 
@@ -116,6 +131,7 @@ static http_async_state_t async_after_headers(http_async_t *a, net_err_reason_t 
       if (reason_out) *reason_out = NET_ERR_FORMAT;
       return HTTP_ASYNC_ERROR;
     }
+    if (check_redirect_scheme(&h->url, &next, reason_out) != 0) return HTTP_ASYNC_ERROR;
     if (h->tls) {
       tls_close(h->tls);
       h->tls = NULL;
@@ -129,7 +145,7 @@ static http_async_state_t async_after_headers(http_async_t *a, net_err_reason_t 
   }
   if (h->status == 304) return HTTP_ASYNC_DONE; /* not-modified: caller checks http_status(), empty body */
   if (h->status < 200 || h->status >= 300) {
-    log_code("LE600125", "http %d fetching %s%s", h->status, h->url.host, h->url.path);
+    log_code("LE600125", "http %d fetching %s%.*s", h->status, h->url.host, (int)strcspn(h->url.path, "?"), h->url.path);
     if (reason_out) *reason_out = NET_ERR_HTTP;
     return HTTP_ASYNC_ERROR;
   }
@@ -145,6 +161,7 @@ static int start_tls(http_async_t *a, struct http *h, net_err_reason_t *reason_o
   }
   a->phase = HA_TLS_HANDSHAKE;
   a->want_events = POLLOUT; /* SSL_connect()'s first move is normally outbound */
+  async_arm(a);
   return 0;
 }
 
@@ -193,12 +210,22 @@ static int read_response_headers(struct http *h, http_async_t *a, net_err_reason
 http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out) {
   struct http *h = a->h;
 
+  if (mono_seconds() > a->deadline) {
+    log_code("LE600166", "http: %s %s:%u timed out after %ds", async_phase_name(a->phase), h->url.host, h->url.port, HTTP_ASYNC_STAGE_TIMEOUT_S);
+    if (reason_out) *reason_out = NET_ERR_TIMEOUT;
+    return HTTP_ASYNC_ERROR;
+  }
   switch (a->phase) {
     case HA_CONNECTING: {
-      int cr = netconnect_tcp_finish(&a->connect_pending, &h->fd, reason_out);
-      if (cr == 0) return HTTP_ASYNC_PENDING; /* this address failed, next candidate connecting on h->fd */
+      net_err_reason_t why = NET_ERR_OTHER;
+      int cr = netconnect_tcp_finish(&a->connect_pending, &h->fd, &why);
+      if (cr == 0) {
+        a->want_events = netconnect_tcp_events(a->connect_pending); /* lookup done or next candidate connecting on h->fd */
+        return HTTP_ASYNC_PENDING;
+      }
       if (cr < 0) {
-        log_code("LE600128", "connect %s:%u: %s", h->url.host, h->url.port, strerror(errno));
+        if (why != NET_ERR_DNS) log_code("LE600128", "connect %s:%u: %s", h->url.host, h->url.port, strerror(errno));
+        if (reason_out) *reason_out = why;
         return HTTP_ASYNC_ERROR;
       }
       if (h->url.tls) {
@@ -211,6 +238,7 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
       }
       a->phase = HA_SENDING;
       a->want_events = POLLOUT;
+      async_arm(a);
       return HTTP_ASYNC_PENDING;
     }
 
@@ -236,6 +264,7 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
       }
       a->phase = HA_SENDING;
       a->want_events = POLLOUT;
+      async_arm(a);
       return HTTP_ASYNC_PENDING;
     }
 
@@ -245,6 +274,7 @@ http_async_state_t http_async_step(http_async_t *a, net_err_reason_t *reason_out
       if (r == 0) return HTTP_ASYNC_PENDING;
       a->phase = HA_READING_HEADERS;
       a->want_events = POLLIN;
+      async_arm(a);
       return HTTP_ASYNC_PENDING;
     }
 

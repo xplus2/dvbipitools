@@ -175,6 +175,19 @@ right before this: de-jitter buffer of 1..2000 ms for rtp://, udp://,
 rist:// and srt:// inputs. RTP input is reordered by sequence number and
 released after the delay. Other input is delayed in arrival order. Default: off.
 .TP
+.BR \-\-al\-fec\-in " " \fIL\fR:\fID\fR
+For the
+.B \-i
+right before this: recover lost packets of an rtp:// input with SMPTE 2022-1 (Annex E Layer 1) FEC.
+Needs
+.BR \-\-al\-fec\-port\-in .
+.TP
+.BR \-\-al\-fec\-port\-in " " \fIport\fR
+For the
+.B \-i
+right before this: UDP port of the repair stream, same group as the media. Requires
+.BR \-\-al\-fec\-in .
+.TP
 .B \-\-strip\-eit
 For the
 .B \-i

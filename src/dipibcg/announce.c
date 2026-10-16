@@ -284,7 +284,7 @@ static size_t vlu8_len(size_t n) {
   return len;
 }
 
-static int plan_groups(accessunit_scratch_t *sc, const bcg_doc_t *doc, int **bounds, int *ngroups) {
+static int plan_groups(accessunit_scratch_t *sc, const bcg_doc_t *doc, const accessunit_index_t *ix, int **bounds, int *ngroups) {
   int n = doc->channel_count;
   int *b = malloc(sizeof *b * ((size_t)n + 2));
   size_t grp_au_body = 0;
@@ -299,7 +299,7 @@ static int plan_groups(accessunit_scratch_t *sc, const bcg_doc_t *doc, int **bou
   if (!b) return -1;
   b[0] = 0;
   bitwriter_init(&bw);
-  strrepo_writer_init(&sw);
+  if (strrepo_writer_init(&sw)) goto done;
   for (int c = 0; c < n; c++) {
     size_t au_len;
     size_t str_len;
@@ -308,8 +308,8 @@ static int plan_groups(accessunit_scratch_t *sc, const bcg_doc_t *doc, int **bou
     int nf = 0;
     bitwriter_reset(&bw);
     strrepo_writer_free(&sw);
-    strrepo_writer_init(&sw);
-    if (accessunit_encode_range(sc, doc, c, c + 1, &bw, &sw, &nf, NULL)) goto done;
+    if (strrepo_writer_init(&sw)) goto done;
+    if (accessunit_encode_range(sc, doc, ix, c, c + 1, &bw, &sw, &nf, NULL)) goto done;
     bitwriter_data(&bw, &au_len);
     strrepo_writer_data(&sw, &str_len);
     au_body = au_len - vlu8_len((size_t)nf);
@@ -459,13 +459,13 @@ static int cycle_build(bcg_announce_ctx_t *ctx) {
   int *bounds = NULL;
   int ngroups = 0;
   int ok = 1;
+  int rc = -1;
+  accessunit_index_t ix;
 
   ctx_drop_cache(ctx);
   if (window_view(&ctx->doc, ctx->sel, ctx->nsel, &ctx->win)) return -1;
-  if (plan_groups(&ctx->sc, &ctx->win, &bounds, &ngroups) || (ngroups > ctx->vers_n && grow_versions(ctx, ngroups)) || grow_segs(ctx, ngroups)) {
-    free(bounds);
-    return -1;
-  }
+  if (accessunit_index_build(&ix, &ctx->win)) return -1;
+  if (plan_groups(&ctx->sc, &ctx->win, &ix, &bounds, &ngroups) || (ngroups > ctx->vers_n && grow_versions(ctx, ngroups)) || grow_segs(ctx, ngroups)) goto done;
   ctx->nfuu_total = 0;
   ctx->nchan_prog = 0;
   for (int g = 0; g < ngroups; g++) {
@@ -473,29 +473,36 @@ static int cycle_build(bcg_announce_ctx_t *ctx) {
     strrepo_writer_t sw;
     int nfuu = 0;
     int ncp = 0;
-    int rc;
+    int sr;
     bitwriter_init(&bw);
-    strrepo_writer_init(&sw);
-    if (accessunit_encode_range(&ctx->sc, &ctx->win, bounds[g], bounds[g + 1], &bw, &sw, &nfuu, &ncp)) {
-      rc = SEG_NO_DOC;
+    if (strrepo_writer_init(&sw)) {
+      bitwriter_free(&bw);
+      ctx_drop_cache(ctx);
+      goto done;
+    }
+    if (accessunit_encode_range(&ctx->sc, &ctx->win, &ix, bounds[g], bounds[g + 1], &bw, &sw, &nfuu, &ncp)) {
+      sr = SEG_NO_DOC;
     } else {
       ctx->nfuu_total += nfuu;
       ctx->nchan_prog += ncp;
-      rc = build_segment(&bw, &sw, ctx->sc.refs, nfuu, &ctx->vers[g], ctx->cfg->compress, &ctx->seg[g]);
+      sr = build_segment(&bw, &sw, ctx->sc.refs, nfuu, &ctx->vers[g], ctx->cfg->compress, &ctx->seg[g]);
     }
     bitwriter_free(&bw);
     strrepo_writer_free(&sw);
-    if (rc == SEG_NO_DOC) {
-      free(bounds);
+    if (sr == SEG_NO_DOC) {
       ctx_drop_cache(ctx);
-      return -1;
+      goto done;
     }
-    if (rc != SEG_OK) ok = 0;
+    if (sr != SEG_OK) ok = 0;
   }
-  free(bounds);
   ctx->cache_valid = ok;
   ctx->ngroups = ngroups;
-  return 0;
+  rc = 0;
+
+done:
+  free(bounds);
+  accessunit_index_free(&ix);
+  return rc;
 }
 
 static int bcg_announce_cycle(void *ctx_, mcast_t *m, unsigned cycle) {

@@ -10,8 +10,10 @@
 #define CC_SEEN 0x10
 #define CC_DUP 0x20
 #define PCR_MODULUS (((uint64_t)1 << 33) * 300ULL)
-#define PCR_MAX_TICKS 2700000ULL
-#define PCR_ACCURACY_US 0.5
+#define PCR_REP_MAX_TICKS 1080000ULL
+#define PCR_RELEARN_S 1.0
+#define PCR_DISC_MAX_TICKS 2700000ULL
+#define PCR_ACCURACY_US 5000.0
 #define DRIFT_WINDOW_NS 30000000000ULL
 #define DRIFT_FO_PPB 30000.0
 #define TS33_MASK ((1ULL << 33) - 1)
@@ -96,15 +98,14 @@ static void check_pcr(tsinspect_t *t, const unsigned char *pkt, int disc) {
       }
       t->pcr_span_ticks = ticks;
       t->pcr_span_pkts = t->counters.packets - t->pcr_pkt_last;
-      if (ticks > PCR_MAX_TICKS) {
-        t->counters.pcr_repetition_errors++;
-        t->counters.pcr_discontinuity_errors++;
-      }
+      if (ticks > PCR_REP_MAX_TICKS) t->counters.pcr_repetition_errors++;
+      if (ticks > PCR_DISC_MAX_TICKS) t->counters.pcr_discontinuity_errors++;
       if (interval > t->pcr_max_cur) t->pcr_max_cur = interval;
     }
   }
   if (!t->pcr_have || disc) drift_reset(t);
   t->pcr_last = pcr;
+  t->pcr_seen = t->now;
   t->pcr_pkt_last = t->counters.packets;
   if (t->rx_ns) t->pcr_rx_last = t->rx_ns;
   t->pcr_have = 1;
@@ -173,13 +174,13 @@ static void si_section(tsinspect_t *t, unsigned pid, const unsigned char *b, siz
       }
       break;
     case PID_EIT + 1:
-      if (tid != 0x71) t->counters.rst_errors++;
+      if (tid != 0x71 && tid != 0x72) t->counters.rst_errors++;
       break;
     default:
       if (tid == 0x70 || tid == 0x73) {
         t->tdt_last = t->now;
         if (tid == 0x73 && t->x->obs.crc_bat && n >= 12 && crc32_mpeg(b, n) != 0) t->counters.si_crc_errors++;
-      } else {
+      } else if (tid != 0x72) {
         t->counters.tdt_errors++;
       }
       break;
@@ -247,7 +248,11 @@ static inline void packet_body(tsinspect_t *t, const unsigned char *pkt, int ful
   if (afc) check_cc(t, pid, afc, cc, disc);
   t->cc[pid] |= CC_WIN;
   if (full && t->psi && t->x && t->x->obs.t[PSI_OBS_PMT].last_seen != 0.0 && psi_classify(t->psi, pid) == PID_UNKNOWN) c->unreferenced_packets++;
-  if (t->relay && t->pcr_pid == PID_NONE && afc >= 2 && pkt[4] >= 7 && (pkt[5] & 0x10)) t->pcr_pid = pid;
+  if (t->relay && pid != t->pcr_pid && afc >= 2 && pkt[4] >= 7 && (pkt[5] & 0x10) && (t->pcr_pid == PID_NONE || t->now - t->pcr_seen > PCR_RELEARN_S)) {
+    t->pcr_pid = pid;
+    t->pcr_have = 0;
+    t->pcr_rx_last = 0;
+  }
   if (pid == t->pcr_pid && afc >= 2) check_pcr(t, pkt, disc);
   if (!t->x) return;
   if (pid - PID_EIT <= 2 && (afc & 1)) si_packet(t, pid, pkt, afc);

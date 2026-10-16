@@ -7,6 +7,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* PES header with PTS and DTS */
+#define ESBUILD_PES_HDR_MAX 19
+
 size_t esbuild_pes_build(unsigned char stream_id, uint64_t pts_90k, int has_dts, uint64_t dts_90k, const unsigned char *es, size_t es_len, unsigned char *out, size_t cap);
 
 #endif

@@ -433,11 +433,11 @@ START_TEST(client_rate_caps_repairs_per_source_ip) {
   ret_ctx_t *r = ret_ctx_new(t, 99, 32, send_mc, send_unicast, NULL);
 
   (void)c;
-  ck_assert_int_eq(ret_ctx_set_limits(r, 2, 0), 0); /* depth 6: FF + 5 repairs */
+  ck_assert_int_eq(ret_ctx_set_limits(r, 2, 0), 0); /* depth 6: 6 repairs */
   reset_capture();
   nack_ten_seqs(r, "192.0.2.1", 7000);
-  ck_assert_int_eq(g_uni_calls, 5);
-  ck_assert_int_eq(g_mc_calls, 1 + 5);
+  ck_assert_int_eq(g_uni_calls, 6);
+  ck_assert_int_eq(g_mc_calls, 1 + 6);
 
   /* same IP, other port: same bucket, nothing left */
   reset_capture();
@@ -448,7 +448,7 @@ START_TEST(client_rate_caps_repairs_per_source_ip) {
   /* other IP: own bucket */
   reset_capture();
   nack_ten_seqs(r, "192.0.2.2", 7000);
-  ck_assert_int_eq(g_uni_calls, 5);
+  ck_assert_int_eq(g_uni_calls, 6);
   ret_ctx_free(r);
   channel_table_free(t);
 }

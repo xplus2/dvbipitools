@@ -13,9 +13,9 @@ typedef struct biss_ca_state biss_ca_state_t;
 biss_ca_state_t *biss_ca_state_new(const char *const *paths, size_t n_paths);
 void biss_ca_state_free(biss_ca_state_t *s);
 
-/* entitlement_session_id is learned from first EMM/ECM section seen.
+/* entitlement_session_id adopted only from EMM. change drops cached SKs.
    decode 1 program at a time, CA_descriptor-resolved ECM/EMM pids already pin down which session.
-   1: matched entitlement_key_id, SK cache updated. 0: parse fail/esid mismatch/not ours/unchanged */
+   1: matched entitlement_key_id, SK cache updated. 0: parse fail/not ours/unchanged */
 int biss_ca_state_on_emm(biss_ca_state_t *s, const unsigned char *emm, size_t emm_len);
 
 /* 0 ok, sw_even_out/sw_odd_out filled. -1: parse fail/esid mismatch/SK for that parity not cached yet */

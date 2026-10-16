@@ -40,11 +40,19 @@ typedef struct {
   int got_init;
 } tssrc_media_ctx_t;
 
+#define TSSRC_FEC_RX_N 2048
+
 struct tssrc {
   tssrc_kind_t kind;
   mcast_t *m;
   mcast_t *fec_m;
   fec2022_dec_t *fec_dec;
+  int rx_stamp;           /* rx timestamps wanted: FEC drain one packet per read */
+  uint64_t fec_rx_ns;     /* rx time of last drained packet, 0 = recovered */
+  struct {
+    uint16_t seq;
+    uint64_t ns;
+  } fec_rx[TSSRC_FEC_RX_N]; /* source arrival by RTP seq */
   http_t *h;
   ristin_t *rist;
   srtsrc_t *srt;
@@ -59,6 +67,7 @@ struct tssrc {
   /* TSSRC_STDIN/TSSRC_FILE/TSSRC_HTTP: partial packet carried to next read */
   unsigned char align_tail[188];
   size_t align_len;
+  int synced;
   /* de-jitter. epfd = src fd + tfd, returned by tssrc_fd() */
   jitbuf_t *jb;
   int epfd;
@@ -101,8 +110,10 @@ void tssrc_jitter_free(tssrc_t *s);
 http_content_kind_t tssrc_http_classify(const unsigned char *b, size_t n);
 ssize_t tssrc_http_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason_out);
 int tssrc_http_fd(const tssrc_t *s);
+short tssrc_http_poll_events(const tssrc_t *s);
+int tssrc_http_timer_driven(const tssrc_t *s);
 int tssrc_http_wait(const tssrc_t *s, int timeout_ms);
-void tssrc_http_free_media(const tssrc_t *s);
+void tssrc_http_free_media(tssrc_t *s);
 void tssrc_hls_fmp4_segment_feed(void *ctx, hls_live_t *h, const unsigned char *data, size_t len);
 void tssrc_dash_fmp4_segment_feed(void *ctx, dash_live_t *h, const unsigned char *data, size_t len);
 

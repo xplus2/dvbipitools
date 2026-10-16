@@ -126,7 +126,7 @@ static void drain_uds_snapshots(int uds_fd, store_t *store, double now, int verb
 }
 
 int main(int argc, char **argv) {
-  config_t cfg;
+  config_t cfg = {0};
   int uds_fd, http_fd;
   http_server_t *hs;
   tls_server_ctx_t *tls_ctx = NULL;

@@ -299,6 +299,57 @@ START_TEST(read_error_plays_out_queued_frames_first) {
 }
 END_TEST
 
+START_TEST(resync_after_codec_lock_is_counted_once) {
+  static unsigned char body[512];
+  static const unsigned char junk[5] = {0};
+  rig_t *r = calloc(1, sizeof *r);
+  source_frame_t f;
+  size_t n = 0;
+
+  if (!r) abort();
+  n += put_adts(body + n, 0x11);
+  n += put_adts(body + n, 0x22);
+  memcpy(body + n, junk, sizeof junk);
+  n += sizeof junk;
+  n += put_adts(body + n, 0x33);
+  n += put_adts(body + n, 0x44);
+  rig_open(r, body, n);
+  ck_assert_int_eq(next_frame(r, &f, NULL), 1);
+  ck_assert_uint_eq(f.data[ADTS_HEADER_LEN], 0x11u);
+  ck_assert_uint_eq(source_take_resyncs(r->src), 0u);
+  ck_assert_int_eq(next_frame(r, &f, NULL), 1);
+  ck_assert_uint_eq(f.data[ADTS_HEADER_LEN], 0x33u);
+  ck_assert_uint_ge(source_take_resyncs(r->src), 1u);
+  ck_assert_uint_eq(source_take_resyncs(r->src), 0u);
+  rig_close(r);
+  free(r);
+}
+END_TEST
+
+START_TEST(id3_tag_between_frames_keeps_the_frame_before_it) {
+  static unsigned char body[1024];
+  static const unsigned char tag[20] = {'I', 'D', '3', 4, 0, 0, 0, 0, 0, 10};
+  rig_t *r = calloc(1, sizeof *r);
+  source_frame_t f;
+  size_t n = 0;
+
+  if (!r) abort();
+  n += put_adts(body + n, 0x11);
+  n += put_adts(body + n, 0x22);
+  memcpy(body + n, tag, sizeof tag);
+  n += sizeof tag;
+  n += put_adts(body + n, 0x33);
+  n += put_adts(body + n, 0x44);
+  rig_open(r, body, n);
+  for (unsigned char m = 0x11; m <= 0x33; m += 0x11) {
+    ck_assert_int_eq(next_frame(r, &f, NULL), 1);
+    ck_assert_uint_eq(f.data[ADTS_HEADER_LEN], m);
+  }
+  rig_close(r);
+  free(r);
+}
+END_TEST
+
 static Suite *frame_suite(void) {
   Suite *s = suite_create("frame");
   TCase *tc = tcase_create("core");
@@ -310,6 +361,8 @@ static Suite *frame_suite(void) {
   tcase_add_test(tc, stray_sync_bytes_do_not_lock_the_wrong_codec);
   tcase_add_test(tc, codec_is_redetected_after_repeated_bad_frames);
   tcase_add_test(tc, read_error_plays_out_queued_frames_first);
+  tcase_add_test(tc, id3_tag_between_frames_keeps_the_frame_before_it);
+  tcase_add_test(tc, resync_after_codec_lock_is_counted_once);
   suite_add_tcase(s, tc);
   return s;
 }

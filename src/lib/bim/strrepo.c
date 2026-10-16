@@ -21,11 +21,13 @@ static int grow(strrepo_writer_t *sw, size_t more) {
   return 0;
 }
 
-void strrepo_writer_init(strrepo_writer_t *sw) {
+int strrepo_writer_init(strrepo_writer_t *sw) {
   sw->buf = NULL;
   sw->cap = 0;
   sw->len = 0;
-  if (!grow(sw, 1)) sw->buf[sw->len++] = STRREPO_ENCODING_UTF8;
+  if (grow(sw, 1)) return -1;
+  sw->buf[sw->len++] = STRREPO_ENCODING_UTF8;
+  return 0;
 }
 
 void strrepo_writer_free(strrepo_writer_t *sw) {
@@ -37,6 +39,7 @@ void strrepo_writer_free(strrepo_writer_t *sw) {
 
 int strrepo_writer_put(strrepo_writer_t *sw, const char *s) {
   size_t n = strlen(s);
+  if (sw->len == 0) return -1; /* init failed */
   if (grow(sw, n + 1)) return -1;
   memcpy(sw->buf + sw->len, s, n);
   sw->len += n;
@@ -65,13 +68,12 @@ int strrepo_reader_seek(strrepo_reader_t *sr, size_t off) {
 }
 
 int strrepo_reader_next(strrepo_reader_t *sr, char *out, size_t outcap) {
-  size_t start = sr->pos, i, oi = 0;
+  size_t start = sr->pos, i;
   if (start >= sr->len) return -1;
   for (i = start; i < sr->len && sr->buf[i] != '\0'; i++);
-  if (i >= sr->len) return -1;
-  for (i = start; i < sr->len && sr->buf[i] != '\0' && oi + 1 < outcap; i++) out[oi++] = (char)sr->buf[i];
-  out[oi] = '\0';
-  while (i < sr->len && sr->buf[i] != '\0') i++;
+  if (i >= sr->len || i - start >= outcap) return -1;
+  memcpy(out, sr->buf + start, i - start);
+  out[i - start] = '\0';
   sr->pos = i + 1;
   return 0;
 }

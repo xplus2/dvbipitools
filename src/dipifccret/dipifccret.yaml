@@ -17,7 +17,7 @@
 # -u|--user [not set]
 #user: <user>
 
-# -B|--buffer 2000 # ms
+# -B|--buffer 2000
 buffer: 2000
 # -F|--ff-port 0 # 0 = original channel's port
 #ff-port: 0

@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,27 +29,45 @@ void bitwriter_reset(bitwriter_t *bw) {
   bw->cur_bits = 0;
 }
 
-static int push_byte(bitwriter_t *bw, unsigned char b) {
-  if (bw->len >= bw->cap) {
+static int reserve(bitwriter_t *bw, size_t more) {
+  if (more > SIZE_MAX - bw->len)
+    return -1;
+  if (bw->len + more > bw->cap) {
     size_t newcap = bw->cap ? bw->cap * 2 : 64;
-    unsigned char *np = realloc(bw->buf, newcap);
+    unsigned char *np;
+    while (newcap < bw->len + more)
+      newcap *= 2;
+    np = realloc(bw->buf, newcap);
     if (!np)
       return -1;
     bw->buf = np;
     bw->cap = newcap;
   }
+  return 0;
+}
+
+static int push_byte(bitwriter_t *bw, unsigned char b) {
+  if (reserve(bw, 1))
+    return -1;
   bw->buf[bw->len++] = b;
   return 0;
 }
 
 int bitwriter_put(bitwriter_t *bw, uint64_t value, int nbits) {
-  for (int i = nbits - 1; i >= 0; i--) {
-    unsigned bit = (unsigned)((value >> i) & 1);
-    bw->cur |= bit << (7 - bw->cur_bits);
-    bw->cur_bits++;
+  if (nbits <= 0)
+    return 0;
+  /* reserve first: failure leaves state untouched */
+  if (reserve(bw, ((size_t)bw->cur_bits + (size_t)nbits) / 8))
+    return -1;
+  while (nbits > 0) {
+    int space = 8 - bw->cur_bits;
+    int take = nbits < space ? nbits : space;
+    unsigned chunk = (unsigned)(value >> (nbits - take)) & ((1u << take) - 1);
+    bw->cur |= chunk << (space - take);
+    bw->cur_bits += take;
+    nbits -= take;
     if (bw->cur_bits == 8) {
-      if (push_byte(bw, (unsigned char)bw->cur))
-        return -1;
+      bw->buf[bw->len++] = (unsigned char)bw->cur;
       bw->cur = 0;
       bw->cur_bits = 0;
     }
@@ -57,16 +76,8 @@ int bitwriter_put(bitwriter_t *bw, uint64_t value, int nbits) {
 }
 
 static int push_bytes(bitwriter_t *bw, const unsigned char *data, size_t len) {
-  if (bw->len + len > bw->cap) {
-    size_t newcap = bw->cap ? bw->cap * 2 : 64;
-    while (newcap < bw->len + len)
-      newcap *= 2;
-    unsigned char *np = realloc(bw->buf, newcap);
-    if (!np)
-      return -1;
-    bw->buf = np;
-    bw->cap = newcap;
-  }
+  if (reserve(bw, len))
+    return -1;
   memcpy(bw->buf + bw->len, data, len);
   bw->len += len;
   return 0;

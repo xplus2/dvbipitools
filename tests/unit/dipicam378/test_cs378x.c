@@ -503,7 +503,8 @@ START_TEST(unsupported_caid_gets_the_stop_asking_answer) {
   ck_assert_int_eq(body[0], 8);
   ck_assert_int_eq(body[1], 2);
   cs378x_server_get_metrics(srv, &m);
-  ck_assert_uint_eq(m.ecm_errors_total, 1u);
+  ck_assert_uint_eq(m.ecm_errors_total, 0u);
+  ck_assert_uint_eq(m.ecm_rejected_total, 1u);
   close(fd);
   cs378x_server_stop(srv);
 }
@@ -514,6 +515,7 @@ START_TEST(transient_ecm_failure_gets_no_answer_but_keeps_the_connection) {
   unsigned port;
   cs378x_server_t *srv;
   unsigned char body[32];
+  cs378x_metrics_t m;
   int fd;
 
   atomic_store(&st.ecm_result, -1);
@@ -524,6 +526,9 @@ START_TEST(transient_ecm_failure_gets_no_answer_but_keeps_the_connection) {
   send_simple(fd, UCRC, 55, (const unsigned char *)"\0", 1);
   ck_assert_int_eq(read_reply(fd, body, sizeof body, 1500), 0);
   ck_assert_int_eq(body[0], 55);
+  cs378x_server_get_metrics(srv, &m);
+  ck_assert_uint_eq(m.ecm_errors_total, 1u);
+  ck_assert_uint_eq(m.ecm_rejected_total, 0u);
   close(fd);
   cs378x_server_stop(srv);
 }

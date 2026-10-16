@@ -55,6 +55,7 @@ typedef struct {
   rtx_reply_t rtx[MAX_REPLIES];
   int n_rtx;
   uint16_t rams_i_response[MAX_REPLIES];
+  uint32_t rams_i_media_ssrc[MAX_REPLIES];
   int n_rams_i;
   int has_first_seq;
   uint16_t first_seq;
@@ -92,7 +93,6 @@ static void e2e_open(e2e_t *fx, int with_ret, int with_bursts) {
   fx->d.rtx_pt = RTX_PT;
   fx->d.burst_multiplier = 1.5;
   fx->d.duration_cap_ms = 2000;
-  fx->rsc.last_dscp = -1;
   if (with_ret) {
     fx->ret = ret_ctx_new(fx->ch, RTX_PT, 8, mc_noop, ret_send_unicast_impl, &fx->rsc);
     ck_assert_ptr_nonnull(fx->ret);
@@ -255,8 +255,10 @@ static void send_to_server(e2e_t *fx, const unsigned char *pkt, size_t len) {
 static void rams_i_collect(const rtcp_rams_i_t *info, void *user) {
   replies_t *r = user;
 
-  if (r->n_rams_i < MAX_REPLIES)
+  if (r->n_rams_i < MAX_REPLIES) {
     r->rams_i_response[r->n_rams_i] = info->response;
+    r->rams_i_media_ssrc[r->n_rams_i] = info->media_ssrc;
+  }
   r->n_rams_i++;
   if (info->has_first_packet_seqnum) {
     r->has_first_seq = 1;
@@ -417,6 +419,7 @@ START_TEST(rams_r_accepts_and_the_pacer_bursts_the_cache_from_the_rap) {
 
   ck_assert_int_eq(done, 1);
   ck_assert_uint_eq(r.rams_i_response[1], (unsigned)BURST_DONE);
+  ck_assert_uint_eq(r.rams_i_media_ssrc[1], MEDIA_SSRC);
   ck_assert_int_eq(r.n_rtx, LAST_SEQ - RAP_SEQ + 1);
   for (int i = 0; i < r.n_rtx; i++)
     expect_original(&r.rtx[i], (uint16_t)(RAP_SEQ + i));

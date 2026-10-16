@@ -50,7 +50,7 @@ static void inspect_rx_ns(const src_t *s, tsinspect_t *insp) {
 int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const rtmp_fanout_t *rf,
             metrics_exporter_t *mx, unsigned long long *bytes, double start, pace_ctrl_t *pace, const rec_insp_t *ri) {
   unsigned char buf[65536];
-  tspack_t pz = {{0}, 0};
+  tspack_t pz = {{0}, 0, 0};
   raw_ctx_t ctx;
   double last_stat = 0;
   int rc = 0;
@@ -64,6 +64,7 @@ int run_raw(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, const
     net_err_reason_t reason;
     int pr;
     sinks_service_srt(sinks, n_sinks);
+    rtmp_fanout_service(rf);
     if (ctx.insp) tsinspect_tick(ctx.insp, mono_seconds());
     pr = src_wait_readable(s, 100);
     if (pr < 0) {
@@ -185,7 +186,7 @@ static int stream_cb_inspect(void *v, const unsigned char *pkt) { return stream_
 int run_stream(src_t *s, const config_t *cfg, out_sink_t *sinks, int n_sinks, int mkv_fd, rtmp_fanout_t *rf, metrics_exporter_t *mx, unsigned long long *bytes,
                double start, int video_ok, unsigned pmt_pid, const unsigned *all_pids, int n_all_pids, pace_ctrl_t *pace, const rec_insp_t *ri) {
   unsigned char buf[65536];
-  tspack_t pz = {{0}, 0};
+  tspack_t pz = {{0}, 0, 0};
   stream_ctx_t ctx;
   double last_stat = 0;
   int is_container = mkv_fd >= 0;

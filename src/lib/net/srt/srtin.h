@@ -6,6 +6,7 @@
 
 #include <stdatomic.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "lib/metrics/export.h"
 
@@ -21,7 +22,8 @@ typedef struct {
   unsigned local_port;          /* 0 = ephemeral; rendezvous wants a fixed port */
   srtcommon_opts_t opts;
   unsigned connect_timeout_ms;  /* caller connect only. 0 = 3000 */
-  int verbose;                  /* gates libsrt's own NOTICE/DEBUG logging */
+  int retry_open;               /* caller: failed first connect retried until stop, like later redials */
+  int verbose;                  /* gates libsrt's own NOTICE logging */
   metrics_exporter_t *mx;       /* NULL = no stats push */
   const char *tool_version;     /* required if mx set */
   const atomic_int *stop;
@@ -30,13 +32,26 @@ typedef struct {
 typedef struct srtin srtin_t;
 
 /* blocks until connected/accepted or a fatal setup error. NULL on failure.
+   retry_open: caller connect failures are not fatal, NULL only on stop.
    cfg and what it points to must outlive srtin_t. built without libsrt: always fails, logs why */
 srtin_t *srtin_open(const srtin_cfg_t *cfg);
 
 /* blocks up to a short internal timeout. n>0: data. 0: nothing this call (timeout,
    transient async-recv, or a lost link is being re-established, see reconnected_out).
-   lost link: listener re-accepts, caller re-dials. -1: fatal read error on a group without listeners */
+   lost link: listener re-accepts, caller re-dials. never -1 */
 int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out);
+
+typedef struct {
+  int connected;
+  uint64_t packets;
+  uint64_t lost;
+  uint64_t dropped;
+  double rtt_ms;
+  double mbps;
+} srtin_stats_t;
+
+/* totals over connection/group. connected 0: rest zero */
+void srtin_stats(const srtin_t *r, srtin_stats_t *out);
 
 void srtin_close(srtin_t *r);
 

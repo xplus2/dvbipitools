@@ -47,6 +47,8 @@ void bcg_programme_free_text(bcg_programme_t *pr) {
   free(pr->title);
   free(pr->desc);
   free(pr->category);
+  free(pr->crid);
+  pr->crid = NULL;
   pr->title = NULL;
   pr->desc = NULL;
   pr->category = NULL;
@@ -57,6 +59,7 @@ int bcg_programme_copy(bcg_programme_t *dst, const bcg_programme_t *src) {
   dst->title = NULL;
   dst->desc = NULL;
   dst->category = NULL;
+  dst->crid = NULL;
   if (bcg_set_text(&dst->title, src->title) || bcg_set_text(&dst->desc, src->desc) || bcg_set_text(&dst->category, src->category)) {
     bcg_programme_free_text(dst);
     return -1;
@@ -95,11 +98,12 @@ const bcg_channel_t *bcg_find_channel(const bcg_doc_t *d, const char *id) {
   return NULL;
 }
 
-void bcg_channel_add_name(bcg_channel_t *c, const char *name) {
+int bcg_channel_add_name(bcg_channel_t *c, const char *name) {
   if (c->name_count >= BCG_MAX_NAMES) {
     log_code("LW400182", "bcg: channel %s has more than %d names, dropping \"%s\"", c->id, BCG_MAX_NAMES, name);
-    return;
+    return -1;
   }
   bufcpy(c->names[c->name_count], sizeof c->names[0], name);
   c->name_count++;
+  return 0;
 }

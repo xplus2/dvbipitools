@@ -69,13 +69,15 @@ static int hls_init_feed(void *ctx, const hls_live_t *h, const unsigned char *da
   if (!s->hls_remux) {
     s->hls_remux = malloc(sizeof *s->hls_remux);
     if (!s->hls_remux) return 0;
-  }
+  } else esbuild_remux_free(s->hls_remux);
   return esbuild_remux_init(s->hls_remux, data, len);
 }
 
 static void hls_segment_feed(void *ctx, hls_live_t *h, const unsigned char *data, size_t len) {
   source_t *s = ctx;
-  switch (hls_live_segment_kind(data, len)) {
+  hls_segment_kind_t kind = hls_live_segment_kind(data, len);
+  if (kind == HLS_SEG_UNKNOWN && hls_live_uses_fmp4(h)) kind = HLS_SEG_FMP4; /* EXT-X-MAP: fMP4 whatever box leads */
+  switch (kind) {
     case HLS_SEG_TS:
       s->hls_tspack.acclen = 0;
       tspack_feed(&s->hls_tspack, data, len, hls_on_ts_packet, s);

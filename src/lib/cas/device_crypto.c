@@ -44,6 +44,7 @@ int device_emm_u_decrypt(EVP_PKEY *ek, const unsigned char *ct, size_t ct_len, u
   memcpy(bk_out, buf, CRYPTO_KEY_LEN);
   ret = 0;
 done:
+  secure_zero(buf, sizeof buf);
   EVP_PKEY_CTX_free(ctx);
   return ret;
 }
@@ -84,6 +85,9 @@ int device_ecm_decrypt(const unsigned char sk[CRYPTO_KEY_LEN], const unsigned ch
   EVP_CIPHER_CTX *ctx;
   unsigned char block[CRYPTO_CW_ENC_LEN];
   int len = 0, ret = -1;
+
+  if (cw_len < 1 || cw_len > CRYPTO_CW_ENC_LEN)
+    return -1;
 
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx)

@@ -44,6 +44,9 @@ mcast_t *mcast_open_send(int family, const char *group, unsigned port, const cha
 ssize_t mcast_send(mcast_t *m, const void *buf, size_t len);
 ssize_t mcast_sendv(mcast_t *m, const void *hdr, size_t hdr_len, const void *payload, size_t payload_len);
 
+/* mcast_send with per-packet tos byte (thread-safe on a shared socket). >=0 sent, -1 error */
+ssize_t mcast_send_tos(mcast_t *m, const void *buf, size_t len, int tos);
+
 /* IP_TOS (v4) / IPV6_TCLASS (v6) on send-side socket, e.g. per-packet DSCP marking; 0 on success */
 int mcast_set_tos(mcast_t *m, int tos);
 

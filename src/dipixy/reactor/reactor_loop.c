@@ -186,7 +186,8 @@ void *worker_thread(void *arg) {
   if (cfg) {
     char what[32];
     snprintf(what, sizeof what, "reactor worker %d", tid);
-    cpuaff_pin(&cfg->cpu_affinity, (unsigned)tid, what);
+    if (cpuaff_pin(&cfg->cpu_affinity, (unsigned)tid, what) < 0)
+      log_code("YW500245", TOOL_NAME ": %s: cpu pin failed, running unpinned", what);
   }
   epfd = epoll_create1(EPOLL_CLOEXEC);
   if (epfd < 0) {

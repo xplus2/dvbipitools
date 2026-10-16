@@ -20,7 +20,7 @@ void fccret_print_help(void) {
   "  -R, --rtx-pt <n>                 RTP payload type for retransmitted/burst packets (default: 99)\n"
   "  -w, --workers <n>                -l socket worker threads (default: 0 = online CPU cores)\n"
   "      --cpu-affinity <spec>        pin pacer threads to CPUs: off|auto|2-4,6,8 (default: off)\n"
-  "  -u, --user <user>                drop privileges to this user after opening the capture handle\n"
+  "  -u, --user <user>                drop privileges to this user after opening sockets\n"
   "  -v, --verbose                    periodic stats on stderr\n"
   "      --color <when>               auto|always|never (default auto)\n"
   "      --metrics <path>             socket for metrics (default: /run/dvbipitools/metrics.sock)\n"

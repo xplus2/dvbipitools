@@ -30,7 +30,12 @@ id3_t *id3_new(id3_meta_cb cb, void *ctx) {
 
 void id3_free(id3_t *c) { free(c); }
 
-int id3_is_tag(const unsigned char *p, size_t avail) { return avail >= 3 && memcmp(p, "ID3", 3) == 0; }
+/* <10 B: provisional, caller waits for header */
+int id3_is_tag(const unsigned char *p, size_t avail) {
+  if (avail < 3 || memcmp(p, "ID3", 3) != 0) return 0;
+  if (avail < 10) return 1;
+  return p[3] >= 2 && p[3] <= 4 && p[4] != 0xFF && !((p[6] | p[7] | p[8] | p[9]) & 0x80);
+}
 
 static unsigned syncsafe32(const unsigned char *b) {
   return ((unsigned)(b[0] & 0x7F) << 21) | ((unsigned)(b[1] & 0x7F) << 14) | ((unsigned)(b[2] & 0x7F) << 7) | (unsigned)(b[3] & 0x7F);

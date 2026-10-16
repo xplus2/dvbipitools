@@ -1,6 +1,6 @@
 # -k|--key [not set]
 #key: <path>
-# -s|--serial [not set]
+# -s|--serial required
 #serial: <id>
 # -b|--bind 127.0.0.1
 bind: 127.0.0.1

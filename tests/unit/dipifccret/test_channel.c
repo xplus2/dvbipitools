@@ -219,6 +219,41 @@ START_TEST(channel_lookup_by_resolve_slot_returns_null_for_unclaimed_slot) {
 }
 END_TEST
 
+START_TEST(channel_resolve_slots_are_unique_when_table_is_full) {
+  enum { N = 64 };
+  channel_table_t *t = channel_table_new(N, 0, 0);
+  int seen[N] = {0};
+  for (int i = 0; i < N; i++) {
+    char ip[32];
+    channel_t *c;
+    snprintf(ip, sizeof ip, "239.2.%d.%d", i / 200, i % 200 + 1);
+    c = lookup_ip(t, ip, 5000);
+    ck_assert_ptr_nonnull(c);
+    ck_assert_uint_lt(c->resolve_slot, (size_t)N);
+    ck_assert_int_eq(seen[c->resolve_slot], 0);
+    seen[c->resolve_slot] = 1;
+    ck_assert_ptr_eq(channel_lookup_by_resolve_slot(t, c->resolve_slot), c);
+  }
+  channel_table_free(t);
+}
+END_TEST
+
+START_TEST(channel_lookup_by_resolve_slot_ignores_reused_index_with_other_slot) {
+  channel_table_t *t = channel_table_new(8, 0, 0);
+  channel_t *a = lookup_ip(t, "239.1.1.1", 5000);
+  size_t old_slot = a->resolve_slot;
+  size_t idx = (size_t)(a - &t->chan[0]);
+
+  atomic_store_explicit(&a->last_seen, time(NULL) - 100, memory_order_relaxed);
+  channel_table_reap(t, 10);
+  atomic_store_explicit(&t->resolve_hash[old_slot], idx + 1, memory_order_relaxed); /* stale entry */
+  a = lookup_ip(t, "239.1.1.1", 5000);
+  a->resolve_slot = (old_slot + 1) % 8; /* index reused under another slot */
+  ck_assert_ptr_null(channel_lookup_by_resolve_slot(t, old_slot));
+  channel_table_free(t);
+}
+END_TEST
+
 /* same key always hashes to same slot: predictable without dipifccret's discovery order */
 START_TEST(channel_lookup_by_resolve_slot_survives_reap_and_rediscovery) {
   channel_table_t *t = channel_table_new(4, 0, 0);
@@ -1023,6 +1058,8 @@ static Suite *channel_suite(void) {
   tcase_add_test(tc, channel_lookup_by_resolve_slot_rejects_out_of_range);
   tcase_add_test(tc, channel_lookup_by_resolve_slot_returns_null_for_unclaimed_slot);
   tcase_add_test(tc, channel_lookup_by_resolve_slot_survives_reap_and_rediscovery);
+  tcase_add_test(tc, channel_resolve_slots_are_unique_when_table_is_full);
+  tcase_add_test(tc, channel_lookup_by_resolve_slot_ignores_reused_index_with_other_slot);
   tcase_add_test(tc, channel_fcc_cache_tracks_rap_and_entries);
   tcase_add_test(tc, channel_has_rap_stays_zero_when_fcc_disabled);
   tcase_add_test(tc, channel_table_reap_frees_stale_channels);

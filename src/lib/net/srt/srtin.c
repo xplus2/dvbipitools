@@ -20,15 +20,19 @@
 #define SRT_RCVTIMEO_MS 200
 #define SRT_CONNECT_SLICE_MS 100
 #define SRT_CONNECT_TIMEOUT_DEFAULT_MS 3000
+#define SRT_REVIVE_INTERVAL_S 1.0 /* min gap between bonded member re-add checks */
 
 struct srtin {
   SRTSOCKET sock;
   SRTSOCKET listeners[SRTCOMMON_MAX_PEERS]; /* kept alive alongside sock, see open_single_listener() */
   int n_listeners;
+  atomic_int *busy; /* listener side: 1 while sock live. read by libsrt thread, heap: outlives r use */
   srtgroup_mode_t group_mode;
   srtin_cfg_t cfg; /* caller reconnect re-dials from it */
   metrics_exporter_t *mx;
   const char *tool_version;
+  double next_revive_at; /* mono_seconds() gate for bonded caller member re-add */
+  srtcommon_resolver_t *revive_res; /* in-flight member re-add lookups */
 };
 
 static int stop_wanted(const srtin_cfg_t *cfg) {
@@ -39,8 +43,9 @@ static unsigned connect_total_ms(const srtin_cfg_t *cfg) {
   return cfg->connect_timeout_ms ? cfg->connect_timeout_ms : SRT_CONNECT_TIMEOUT_DEFAULT_MS;
 }
 
-/* non-blocking connect, polled in slices. 0 connected, -1 fail/stopped */
-static int connect_interruptible(const srtin_cfg_t *cfg, SRTSOCKET s, const struct sockaddr *remote, int remote_len) {
+/* non-blocking connect (rendezvous if local set), polled in slices. 0 connected, -1 fail/stopped */
+static int connect_interruptible(const srtin_cfg_t *cfg, SRTSOCKET s, const struct sockaddr *local, int local_len,
+                                 const struct sockaddr *remote, int remote_len) {
   unsigned total = connect_total_ms(cfg);
   int sync = 0;
   int tmo = (int)total;
@@ -63,8 +68,9 @@ static int connect_interruptible(const srtin_cfg_t *cfg, SRTSOCKET s, const stru
     goto out;
   }
   clock_gettime(CLOCK_MONOTONIC, &t0);
-  if (srt_connect(s, remote, remote_len) == SRT_ERROR) {
-    log_code("LE600137", "srt: connect failed: %s", srt_getlasterror_str());
+  if ((local ? srt_rendezvous(s, local, local_len, remote, remote_len) : srt_connect(s, remote, remote_len)) == SRT_ERROR &&
+      srt_getlasterror(NULL) != SRT_EASYNCSND) {
+    log_code(local ? "LE600136" : "LE600137", "srt: %s failed: %s", local ? "rendezvous" : "connect", srt_getlasterror_str());
     goto out;
   }
   while (!stop_wanted(cfg)) {
@@ -85,7 +91,8 @@ static int connect_interruptible(const srtin_cfg_t *cfg, SRTSOCKET s, const stru
       goto out;
     }
     if (st != SRTS_CONNECTING) {
-      log_code("LE600137", "srt: connect failed: %s", srt_getlasterror_str());
+      int rej = srt_getrejectreason(s);
+      log_code("LE600137", "srt: connect failed: %s", rej == SRT_REJ_UNKNOWN ? srt_getlasterror_str() : srt_rejectreason_str(rej));
       goto out;
     }
     if ((now.tv_sec - t0.tv_sec) * 1000L + (now.tv_nsec - t0.tv_nsec) / 1000000L >= (long)total) {
@@ -100,17 +107,23 @@ out:
   return rc;
 }
 
+static void idle_wait(void);
+
 static int stop_cb(void *arg) { return stop_wanted(arg); }
 
-static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
+/* transient (nullable): set when failure is peer-side and worth retrying */
+static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg, int *transient) {
   SRTSOCKET s;
   struct sockaddr_storage remote;
   struct sockaddr_storage local;
   int remote_len;
   int local_len;
 
-  if (srtcommon_resolve_stoppable(cfg->peers[0].host, cfg->peers[0].port, &remote, &remote_len, connect_total_ms(cfg), stop_cb, (void *)cfg))
+  if (transient) *transient = 0;
+  if (srtcommon_resolve_stoppable(cfg->peers[0].host, cfg->peers[0].port, &remote, &remote_len, connect_total_ms(cfg), stop_cb, (void *)cfg)) {
+    if (transient) *transient = 1;
     return SRT_INVALID_SOCK;
+  }
 
   s = srt_create_socket();
   if (s == SRT_INVALID_SOCK) {
@@ -132,20 +145,34 @@ static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg) {
       srt_close(s);
       return SRT_INVALID_SOCK;
     }
-    if (srt_rendezvous(s, (struct sockaddr *)&local, local_len, (struct sockaddr *)&remote, remote_len) != 0) {
-      log_code("LE600136", "srt: rendezvous failed: %s", srt_getlasterror_str());
+    if (connect_interruptible(cfg, s, (struct sockaddr *)&local, local_len, (struct sockaddr *)&remote, remote_len) != 0) {
       srt_close(s);
+      if (transient) *transient = 1;
       return SRT_INVALID_SOCK;
     }
-  } else if (connect_interruptible(cfg, s, (struct sockaddr *)&remote, remote_len) != 0) {
+  } else if (connect_interruptible(cfg, s, NULL, 0, (struct sockaddr *)&remote, remote_len) != 0) {
     srt_close(s);
+    if (transient) *transient = 1;
     return SRT_INVALID_SOCK;
   }
   return s;
 }
 
-/* bounded wait. 1: accepted into *out. 0: timeout. -1: error */
-static int accept_poll(SRTSOCKET lsn, SRTSOCKET *out) {
+/* single listener queues extra callers: they would handshake and send into nothing, a stale one
+   could be accepted after reconnect. reject while a connection is live */
+static int reject_while_busy(void *opaq, SRTSOCKET ns, int hsversion, const struct sockaddr *peeraddr, const char *streamid) {
+  atomic_int *busy = opaq;
+
+  (void)hsversion;
+  (void)peeraddr;
+  (void)streamid;
+  if (!atomic_load(busy)) return 0;
+  srt_setrejectreason(ns, SRT_REJ_RESOURCE);
+  return -1;
+}
+
+/* bounded wait. 1: accepted into *out, busy set. 0: timeout. -1: error */
+static int accept_poll(SRTSOCKET lsn, SRTSOCKET *out, atomic_int *busy) {
   int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
   int eid = srt_epoll_create();
   SRTSOCKET ready[1];
@@ -173,17 +200,19 @@ static int accept_poll(SRTSOCKET lsn, SRTSOCKET *out) {
     if (*out == SRT_INVALID_SOCK) {
       log_code("LE600138", "srt: accept failed: %s", srt_getlasterror_str());
       rc = -1;
+    } else if (busy) {
+      atomic_store(busy, 1);
     }
   }
   srt_epoll_release(eid);
   return rc;
 }
 
-static SRTSOCKET accept_single(const srtin_cfg_t *cfg, SRTSOCKET lsn) {
+static SRTSOCKET accept_single(const srtin_cfg_t *cfg, SRTSOCKET lsn, atomic_int *busy) {
   SRTSOCKET s = SRT_INVALID_SOCK;
 
   while (!stop_wanted(cfg)) {
-    if (accept_poll(lsn, &s) != 0)
+    if (accept_poll(lsn, &s, busy) != 0)
       break;
   }
   return s;
@@ -191,7 +220,7 @@ static SRTSOCKET accept_single(const srtin_cfg_t *cfg, SRTSOCKET lsn) {
 
 /* accepted socket shares listener's UDP multiplexer. early close: kills connection too.
    keep listener open until final teardown. lsn_out: carries it out */
-static SRTSOCKET open_single_listener(const srtin_cfg_t *cfg, SRTSOCKET *lsn_out) {
+static SRTSOCKET open_single_listener(const srtin_cfg_t *cfg, SRTSOCKET *lsn_out, atomic_int *busy) {
   SRTSOCKET lsn;
   SRTSOCKET s = SRT_INVALID_SOCK;
   struct sockaddr_storage local;
@@ -209,12 +238,17 @@ static SRTSOCKET open_single_listener(const srtin_cfg_t *cfg, SRTSOCKET *lsn_out
     srt_close(lsn);
     return SRT_INVALID_SOCK;
   }
+  if (srt_listen_callback(lsn, reject_while_busy, busy) != 0) {
+    log_code("LE500243", "srt: listen callback failed: %s", srt_getlasterror_str());
+    srt_close(lsn);
+    return SRT_INVALID_SOCK;
+  }
   if (srt_bind(lsn, (struct sockaddr *)&local, local_len) != 0 || srt_listen(lsn, 1) != 0) {
     log_code("LE500163", "srt: bind/listen failed: %s", srt_getlasterror_str());
     srt_close(lsn);
     return SRT_INVALID_SOCK;
   }
-  s = accept_single(cfg, lsn);
+  s = accept_single(cfg, lsn, busy);
   if (s == SRT_INVALID_SOCK)
     srt_close(lsn); /* no connection ever came in: nothing depends on this multiplexer */
   else
@@ -222,11 +256,12 @@ static SRTSOCKET open_single_listener(const srtin_cfg_t *cfg, SRTSOCKET *lsn_out
   return s;
 }
 
-static SRTSOCKET open_group_caller(const srtin_cfg_t *cfg) {
+static SRTSOCKET open_group_caller(const srtin_cfg_t *cfg, int *transient) {
   SRTSOCKET g;
   SRT_GROUP_TYPE type = cfg->group_mode == SRTGROUP_BACKUP ? SRT_GTYPE_BACKUP : SRT_GTYPE_BROADCAST;
   SRT_SOCKGROUPCONFIG gc[SRTCOMMON_MAX_PEERS];
 
+  if (transient) *transient = 0;
   g = srt_create_group(type);
   if (g == SRT_INVALID_SOCK) {
     log_code("LE500164", "srt: group create failed: %s", srt_getlasterror_str());
@@ -243,6 +278,7 @@ static SRTSOCKET open_group_caller(const srtin_cfg_t *cfg) {
   if (srt_connect_group(g, gc, cfg->npeers) == SRT_ERROR) {
     log_code("LE600139", "srt: group connect failed: %s", srt_getlasterror_str());
     srt_close(g);
+    if (transient) *transient = 1;
     return SRT_INVALID_SOCK;
   }
   return g;
@@ -305,20 +341,21 @@ fail:
 
 /* listeners_out/n_listeners_out: sockets outliving this call, see open_single_listener().
    caller flavors: empty, nothing to keep alive */
-static SRTSOCKET open_srt_input(const srtin_cfg_t *cfg, SRTSOCKET *listeners_out, int *n_listeners_out) {
+static SRTSOCKET open_srt_input(const srtin_cfg_t *cfg, SRTSOCKET *listeners_out, int *n_listeners_out, atomic_int *busy, int *transient) {
   *n_listeners_out = 0;
+  *transient = 0;
   if (cfg->group_mode != SRTGROUP_NONE)
-    return cfg->listen ? open_group_listener(cfg, listeners_out, n_listeners_out) : open_group_caller(cfg);
+    return cfg->listen ? open_group_listener(cfg, listeners_out, n_listeners_out) : open_group_caller(cfg, transient);
   if (cfg->listen) {
     SRTSOCKET lsn;
-    SRTSOCKET s = open_single_listener(cfg, &lsn);
+    SRTSOCKET s = open_single_listener(cfg, &lsn, busy);
     if (lsn != SRT_INVALID_SOCK) {
       listeners_out[0] = lsn;
       *n_listeners_out = 1;
     }
     return s;
   }
-  return open_single_caller(cfg);
+  return open_single_caller(cfg, transient);
 }
 
 srtin_t *srtin_open(const srtin_cfg_t *cfg) {
@@ -326,6 +363,7 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
   SRTSOCKET s;
   SRTSOCKET listeners[SRTCOMMON_MAX_PEERS];
   int n_listeners;
+  atomic_int *busy;
 
   if (cfg->npeers <= 0 || cfg->npeers > SRTCOMMON_MAX_PEERS) {
     log_code("LE000322", "srt: invalid peer count %d", cfg->npeers);
@@ -342,8 +380,20 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
   }
   srtcommon_open_logging(cfg->verbose);
 
-  s = open_srt_input(cfg, listeners, &n_listeners);
+  busy = calloc(1, sizeof *busy);
+  if (!busy) {
+    srtcommon_cleanup();
+    return NULL;
+  }
+
+  for (;;) {
+    int transient;
+    s = open_srt_input(cfg, listeners, &n_listeners, busy, &transient);
+    if (s != SRT_INVALID_SOCK || !cfg->retry_open || !transient || stop_wanted(cfg)) break;
+    idle_wait();
+  }
   if (s == SRT_INVALID_SOCK) {
+    free(busy);
     srtcommon_cleanup();
     return NULL;
   }
@@ -353,10 +403,12 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
     srt_close(s);
     for (int i = 0; i < n_listeners; i++)
       srt_close(listeners[i]);
+    free(busy);
     srtcommon_cleanup();
     return NULL;
   }
   r->sock = s;
+  r->busy = busy;
   r->n_listeners = n_listeners;
   memcpy(r->listeners, listeners, (size_t)n_listeners * sizeof listeners[0]);
   r->group_mode = cfg->group_mode;
@@ -366,10 +418,17 @@ srtin_t *srtin_open(const srtin_cfg_t *cfg) {
   return r;
 }
 
+/* no stats without live socket: header and extras still go out */
 static void push_stats(srtin_t *r) {
   SRT_TRACEBSTATS st;
+  int have;
 
-  if (!r->mx || !metrics_exporter_due(r->mx, mono_seconds()) || srt_bstats(r->sock, &st, 0) != 0) return;
+  if (!r->mx || !metrics_exporter_due(r->mx, mono_seconds())) return;
+  have = r->sock != SRT_INVALID_SOCK && srt_bstats(r->sock, &st, 0) == 0;
+  if (!have) {
+    metrics_push_entries(r->mx, r->tool_version, NULL, 0);
+    return;
+  }
   metrics_entry_t e[] = {
   {METRICS_ID_SRT_RECEIVER_RECEIVED_TOTAL, NULL, (uint64_t)st.pktRecvTotal},
   {METRICS_ID_SRT_RECEIVER_LOST_TOTAL, NULL, (uint64_t)st.pktRcvLossTotal},
@@ -382,7 +441,6 @@ static void push_stats(srtin_t *r) {
 
 static void idle_wait(void) {
   int wfd = signal_wake_fd();
-
   if (wfd >= 0) {
     struct pollfd pfd = {wfd, POLLIN, 0};
     poll(&pfd, 1, SRT_RCVTIMEO_MS);
@@ -393,22 +451,27 @@ static void idle_wait(void) {
 
 /* 1: r->sock live again */
 static int reconnect_once(srtin_t *r) {
-  if (r->group_mode != SRTGROUP_NONE) {
+  if (r->group_mode != SRTGROUP_NONE && r->n_listeners > 0) {
     r->sock = srt_accept_bond(r->listeners, r->n_listeners, SRT_RCVTIMEO_MS);
     if (r->sock != SRT_INVALID_SOCK) return 1;
     if (srt_getlasterror(NULL) != SRT_ETIMEOUT) log_code("LW600141", "srt: reconnect attempt failed: %s", srt_getlasterror_str());
     return 0;
   }
-  if (r->n_listeners > 0) {
-    if (accept_poll(r->listeners[0], &r->sock) < 0) idle_wait();
+  if (r->group_mode != SRTGROUP_NONE) {
+    r->sock = open_group_caller(&r->cfg, NULL);
+    if (r->sock == SRT_INVALID_SOCK) idle_wait();
     return r->sock != SRT_INVALID_SOCK;
   }
-  r->sock = open_single_caller(&r->cfg);
+  if (r->n_listeners > 0) {
+    if (accept_poll(r->listeners[0], &r->sock, r->busy) < 0) idle_wait();
+    return r->sock != SRT_INVALID_SOCK;
+  }
+  r->sock = open_single_caller(&r->cfg, NULL);
   if (r->sock == SRT_INVALID_SOCK) idle_wait();
   return r->sock != SRT_INVALID_SOCK;
 }
 
-int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out) {
+static int read_once(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out) {
   int n;
 
   *reconnected_out = 0;
@@ -421,6 +484,15 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
     return 0;
   }
 
+  if (r->group_mode != SRTGROUP_NONE && r->n_listeners == 0) {
+    /* libsrt never re-dials a broken member of a live group */
+    double now = mono_seconds();
+    if (r->revive_res || now >= r->next_revive_at) {
+      if (!r->revive_res) r->next_revive_at = now + SRT_REVIVE_INTERVAL_S;
+      srtcommon_group_revive(r->sock, r->cfg.peers, r->cfg.npeers, &r->revive_res);
+    }
+  }
+
   n = srt_recvmsg2(r->sock, (char *)buf, (int)cap, NULL);
   if (n == SRT_ERROR) {
     int err = srt_getlasterror(NULL);
@@ -430,32 +502,47 @@ int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out)
       idle_wait();
       return 0;
     }
-    if (r->group_mode != SRTGROUP_NONE && r->n_listeners > 0) {
+    if (r->group_mode != SRTGROUP_NONE) {
       /* group error: state could be corrupted, reconnect regardless of cause.
          next call retries, one attempt each, see above */
       log_code("LW600142", "srt: read failed on group (%s), reconnecting", srt_getlasterror_str());
-      srt_close(r->sock);
-      r->sock = SRT_INVALID_SOCK;
-      return 0;
-    }
-    if (r->group_mode == SRTGROUP_NONE) {
+    } else {
       /* peer gone: listener goes back to accept, caller re-dials */
       log_code("LW600143", "srt: link lost (%s), reconnecting", srt_getlasterror_str());
-      srt_close(r->sock);
-      r->sock = SRT_INVALID_SOCK;
-      return 0;
     }
-    log_code("LE600144", "srt: read failed: %s", srt_getlasterror_str());
-    return -1;
+    srt_close(r->sock);
+    r->sock = SRT_INVALID_SOCK;
+    atomic_store(r->busy, 0);
+    return 0;
   }
-  if (n > 0) push_stats(r);
   return n;
+}
+
+int srtin_read(srtin_t *r, unsigned char *buf, size_t cap, int *reconnected_out) {
+  int n = read_once(r, buf, cap, reconnected_out);
+  push_stats(r);
+  return n;
+}
+
+void srtin_stats(const srtin_t *r, srtin_stats_t *out) {
+  SRT_TRACEBSTATS st;
+
+  memset(out, 0, sizeof *out);
+  if (r->sock == SRT_INVALID_SOCK || srt_bstats(r->sock, &st, 0) != 0) return;
+  out->connected = 1;
+  out->packets = (uint64_t)st.pktRecvTotal;
+  out->lost = (uint64_t)st.pktRcvLossTotal;
+  out->dropped = (uint64_t)st.pktRcvDropTotal;
+  out->rtt_ms = st.msRTT;
+  out->mbps = st.mbpsRecvRate;
 }
 
 void srtin_close(srtin_t *r) {
   if (!r) return;
   if (r->sock != SRT_INVALID_SOCK) srt_close(r->sock);
   for (int i = 0; i < r->n_listeners; i++) srt_close(r->listeners[i]);
+  srtcommon_resolver_free(r->revive_res);
   srtcommon_cleanup();
+  free(r->busy);
   free(r);
 }

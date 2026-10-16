@@ -67,9 +67,14 @@ typedef struct {
   int cw_len;
   int have_cw[2]; /* indexed by SCRAMBLE_PARITY_EVEN/_ODD */
   unsigned char last_cw[2][16];
+  unsigned char last_ecm[2][PSI_SECTION_ASM_BUF_LEN]; /* raw section behind last_cw, repeat skips key derivation */
+  size_t last_ecm_len[2]; /* 0 = none cached */
+  unsigned last_ecm_srvid[2];
+  int cas_probe_valid;
+  uint64_t cas_probe_key; /* detect_cas_scheme() inputs at last miss */
   /* set by emit_downstream(). a void scrambler_emit_cb can't return an error code. this is how a failed mkv_feed/write reaches pkt_cb's int return */
   int emit_failed;
-  int fatal; /* CAS/BISS scheme could not be resolved (missing key material, unsupported mode) */
+  int fatal; /* unrecoverable: CAS/BISS unresolved, input poll/read error */
   int emmcache_dirty;
   double emmcache_last_save;
 } loop_ctx_t;
@@ -81,7 +86,7 @@ typedef struct {
 int pkt_cb(void *v, const unsigned char *pkt);
 int pkt_cb_inspect(void *v, const unsigned char *pkt);
 
-/* drains any packets scrambler_set_key() queued for last crypto-period's batch */
+/* drains queued scrambler batch and raw-fd output batch. shutdown and idle input */
 void pipeline_flush(loop_ctx_t *lc);
 
 /* flv_tag_cb, fans out to lc->rtmp[0..n_rtmp), registered on lc->flv by main() */
@@ -92,6 +97,12 @@ void descramble_rtmp_note_result(int ok, int *had_error, int idx);
 /* advances every -o srt:// target's connect state, flushes queued data.
    call every main-loop iteration, even when input is quiet. */
 void srt_service_all(loop_ctx_t *lc);
+
+/* same for -o rtmp(s):// targets */
+void rtmp_service_all(loop_ctx_t *lc);
+
+/* key material changed: cached ECM sections no longer imply their CW */
+void pipeline_ecm_cache_invalidate(loop_ctx_t *lc);
 
 void pipeline_service_unicast_emm(loop_ctx_t *lc);
 

@@ -42,6 +42,22 @@ START_TEST(esbuild_build_pmt_uses_video_pid_as_pcr) {
 }
 END_TEST
 
+START_TEST(esbuild_build_pmt_writes_ac3_eac3_as_dvb_private_with_descriptor) {
+  codec_t codecs[2] = {CODEC_AC3, CODEC_EAC3};
+  esbuild_es_t es[2];
+  unsigned char out[188];
+  size_t n;
+
+  esbuild_assign_pids(codecs, 2, es);
+  n = esbuild_build_pmt(0, 1, es, 2, out, sizeof out);
+  ck_assert_uint_gt(n, 0u);
+  ck_assert_uint_eq(out[12], 0x06);
+  ck_assert_mem_eq(out + 15, "\xF0\x03\x6A\x01\x00", 5);
+  ck_assert_uint_eq(out[20], 0x06);
+  ck_assert_mem_eq(out + 23, "\xF0\x03\x7A\x01\x00", 5);
+}
+END_TEST
+
 START_TEST(esbuild_build_pmt_first_es_stream_type_and_pid) {
   codec_t codecs[1] = {CODEC_H264};
   esbuild_es_t es[1];
@@ -138,6 +154,7 @@ static Suite *esbuild_pmtbuild_suite(void) {
   tcase_add_test(tc, esbuild_build_pat_points_at_pmt_pid);
   tcase_add_test(tc, esbuild_build_pmt_uses_video_pid_as_pcr);
   tcase_add_test(tc, esbuild_build_pmt_first_es_stream_type_and_pid);
+  tcase_add_test(tc, esbuild_build_pmt_writes_ac3_eac3_as_dvb_private_with_descriptor);
   tcase_add_test(tc, esbuild_build_pmt_emits_registration_descriptor_for_opus);
   tcase_add_test(tc, esbuild_build_pmt_emits_dvb_ext_descriptor_for_ac4);
   tcase_add_loop_test(tc, esbuild_build_pmt_emits_dts_hd_extension_descriptor, 0, (int)(sizeof dts_hd_cases / sizeof dts_hd_cases[0]));

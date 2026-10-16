@@ -21,6 +21,9 @@ typedef struct {
    ESBUILD_FIRST_ES_PID, in codecs[] order. n capped at ESBUILD_MAX_ES. returns count assigned */
 unsigned esbuild_assign_pids(const codec_t *codecs, unsigned n, esbuild_es_t *out);
 
+/* PCR_PID: first video ES, else first entry. n_es > 0 */
+unsigned esbuild_pcr_pid(const esbuild_es_t *es, unsigned n_es);
+
 size_t esbuild_build_pat(unsigned tsid, unsigned version, unsigned program_number, unsigned char *out, size_t cap);
 
 size_t esbuild_build_pmt(unsigned version, unsigned program_number, const esbuild_es_t *es, unsigned n_es, unsigned char *out, size_t cap);

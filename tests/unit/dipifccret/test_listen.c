@@ -277,7 +277,7 @@ START_TEST(listen_pool_start_fails_cleanly_when_epoll_cannot_be_created) {
   int n = lowest_free_fd();
   listen_pool_t *p;
 
-  limit_fds_to(n, 1);
+  limit_fds_to(n, 2);
   p = listen_pool_start(AF_INET, "127.0.0.1", TEST_PORT + 5, 2, NULL, NULL);
   ck_assert_ptr_null(p);
   limit_fds_to(n, 64);
@@ -289,7 +289,7 @@ START_TEST(listen_pool_start_unwinds_already_started_workers_on_late_failure) {
   int n = lowest_free_fd();
   listen_pool_t *p;
 
-  limit_fds_to(n, 2);
+  limit_fds_to(n, 3);
   p = listen_pool_start(AF_INET, "127.0.0.1", TEST_PORT + 6, 3, NULL, NULL);
   ck_assert_ptr_null(p);
   limit_fds_to(n, 64);

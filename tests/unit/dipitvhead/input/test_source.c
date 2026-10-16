@@ -83,6 +83,7 @@ START_TEST(udp_kind_opens_a_real_socket_and_reads_datagrams) {
   s = tvsrc_open(&cfg, &in, &reason);
   ck_assert_ptr_nonnull(s);
   ck_assert_int_ge(tvsrc_fd(s), 0);
+  ck_assert_int_eq(tvsrc_timer_driven(s), 0);
 
   memset(pkt, 0xFF, sizeof pkt);
   pkt[0] = 0x47;
@@ -107,6 +108,8 @@ START_TEST(stdin_kind_maps_to_the_stdin_fd) {
   s = tvsrc_open(&cfg, &in, &reason);
   ck_assert_ptr_nonnull(s);
   ck_assert_int_eq(tvsrc_fd(s), STDIN_FILENO);
+  ck_assert_int_eq(tvsrc_timer_driven(s), 0);
+  ck_assert_int_eq(tvsrc_poll_events(s), POLLIN);
 
   tvsrc_close(s);
 }
@@ -350,6 +353,58 @@ START_TEST(async_http_open_rejects_unrecognized_content) {
 }
 END_TEST
 
+START_TEST(sync_http_open_classifies_content_like_async) {
+  static const char response[] = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 11\r\n\r\nhello world";
+  config_t cfg;
+  dipitvhead_input_t in;
+  http_server_t srv;
+  tvsrc_t *s;
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  http_server_start(&srv, response, sizeof response - 1);
+  memset(&cfg, 0, sizeof cfg);
+  fill_http_input(&in, srv.port);
+  s = tvsrc_open(&cfg, &in, &reason);
+  ck_assert_ptr_null(s);
+  ck_assert_int_eq(reason, NET_ERR_FORMAT);
+  http_server_stop(&srv);
+}
+END_TEST
+
+START_TEST(sync_http_open_delivers_a_transport_stream_body) {
+  static char response[2048];
+  config_t cfg;
+  dipitvhead_input_t in;
+  http_server_t srv;
+  tvsrc_t *s;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  unsigned char rbuf[4096];
+  size_t header_len;
+  size_t body_len = 188 * 8;
+  size_t got = 0;
+
+  header_len = (size_t)snprintf(response, sizeof response, "HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nConnection: close\r\nContent-Length: %zu\r\n\r\n", body_len);
+  for (size_t i = 0; i < body_len; i++) response[header_len + i] = (i % 188 == 0) ? 0x47 : (char)(i * 3);
+  http_server_start(&srv, response, header_len + body_len);
+
+  memset(&cfg, 0, sizeof cfg);
+  fill_http_input(&in, srv.port);
+  s = tvsrc_open(&cfg, &in, &reason);
+  ck_assert_ptr_nonnull(s);
+  for (int i = 0; i < 100 && got < body_len; i++) {
+    ssize_t n = tvsrc_read(s, rbuf + got, sizeof rbuf - got, &reason);
+
+    ck_assert_int_ge((int)n, 0);
+    got += (size_t)n;
+    if (n == 0) wait_ms(10);
+  }
+  ck_assert_uint_eq(got, body_len);
+  ck_assert_int_eq(rbuf[0], 0x47);
+  tvsrc_close(s);
+  http_server_stop(&srv);
+}
+END_TEST
+
 START_TEST(async_http_open_stays_pending_against_a_silent_server_and_frees_cleanly) {
   config_t cfg;
   dipitvhead_input_t in;
@@ -387,6 +442,8 @@ static Suite *source_suite(void) {
   tcase_add_test(tc, async_http_open_delivers_a_transport_stream_body);
   tcase_add_test(tc, async_http_open_rejects_unrecognized_content);
   tcase_add_test(tc, async_http_open_stays_pending_against_a_silent_server_and_frees_cleanly);
+  tcase_add_test(tc, sync_http_open_classifies_content_like_async);
+  tcase_add_test(tc, sync_http_open_delivers_a_transport_stream_body);
   tcase_add_test(tc, async_free_accepts_null);
   suite_add_tcase(s, tc);
   return s;

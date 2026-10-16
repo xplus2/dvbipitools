@@ -246,6 +246,33 @@ START_TEST(pts_disc_peek_does_not_modify_state) {
 }
 END_TEST
 
+START_TEST(pes_drops_oversized_pes_until_next_start) {
+  pes_t *p = pes_new(capture_cb, NULL);
+  unsigned char payload[184], pkt[188];
+  size_t i;
+
+  ck_assert_int_eq(pes_track(p, 0x101), 0);
+  g_calls = 0;
+  build_pes_start_payload(payload, 0xE0, 900000u, 0x00);
+  wrap_ts_raw(pkt, 0x101, 1, payload);
+  pes_feed(p, pkt);
+  memset(payload, 0xAA, sizeof payload);
+  wrap_ts_raw(pkt, 0x101, 0, payload);
+  for (i = 0; i < (20u << 20) / 184; i++)
+    pes_feed(p, pkt);
+  pes_flush(p);
+  ck_assert_int_eq(g_calls, 0);
+
+  build_pes_start_payload(payload, 0xE0, 990000u, 0x00);
+  wrap_ts_raw(pkt, 0x101, 1, payload);
+  pes_feed(p, pkt);
+  pes_flush(p);
+  ck_assert_int_eq(g_calls, 1);
+  ck_assert_uint_eq((unsigned)g_pts, 990000u);
+  pes_free(p);
+}
+END_TEST
+
 static Suite *pes_suite(void) {
   Suite *s = suite_create("pes");
   TCase *tc = tcase_create("core");
@@ -254,6 +281,7 @@ static Suite *pes_suite(void) {
   tcase_add_test(tc, pes_has_no_dts_when_pts_only);
   tcase_add_test(tc, pes_ignores_untracked_pid);
   tcase_add_test(tc, pes_ignores_start_without_valid_startcode);
+  tcase_add_test(tc, pes_drops_oversized_pes_until_next_start);
   tcase_add_test(tc, pts_disc_small_steps_keep_shift);
   tcase_add_test(tc, pts_disc_forward_jump_rebases_to_expected);
   tcase_add_test(tc, pts_disc_backward_jump_rebases_to_expected);

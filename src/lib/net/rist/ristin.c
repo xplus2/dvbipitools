@@ -13,44 +13,36 @@
 #include "lib/sys/signal.h"
 #include "ristin.h"
 #include "ristin_priv.h"
-#include "ristlog.h"
 #include "ristpeer.h"
 
-#define RISTIN_READ_TIMEOUT_MS 200
-#define RIST_STATS_INTERVAL_MS 1000 /* metrics_exporter_due() gates actual push cadence */
-
-int receiver_stats_cb(void *arg, const struct rist_stats *stats) {
+int ristin_stats_cb(void *arg, const struct rist_stats *stats) {
   ristin_t *r = arg;
-  const struct rist_stats_receiver_flow *f = &stats->stats.receiver_flow;
-  if (stats->stats_type != RIST_STATS_RECEIVER_FLOW) {
-    rist_stats_free(stats);
-    return 0;
-  }
-  metrics_entry_t e[] = {
-  {METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL, NULL, f->received},
-  {METRICS_ID_RIST_RECEIVER_MISSING_TOTAL, NULL, f->missing},
-  {METRICS_ID_RIST_RECEIVER_RECOVERED_TOTAL, NULL, f->recovered},
-  {METRICS_ID_RIST_RECEIVER_LOST_TOTAL, NULL, f->lost},
-  {METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS, NULL, f->rtt},
-  };
-  rist_push_stats_if_due(r->mx, r->tool_version, e, sizeof e / sizeof e[0], stats);
+  metrics_entry_t e[RIST_RECEIVER_FLOW_ENTRIES];
+  size_t n = ristpeer_receiver_flow_entries(stats, e);
+
+  if (n) ristpeer_push_stats_if_due(r->mx, r->tool_version, e, n, stats);
+  else rist_stats_free(stats);
   return 0;
 }
 
 static struct rist_ctx *ctx_start(ristin_t *r) {
-  struct rist_ctx *ctx;
-  enum rist_profile profile = r->simple ? RIST_PROFILE_SIMPLE : RIST_PROFILE_MAIN;
+  const char *uris[1] = {r->peer_uri};
+  rist_recv_cfg_t rc;
 
-  if (rist_receiver_create(&ctx, profile, ristlog_get(r->verbose)) != 0) {
-    log_code("LE500113", "rist: receiver create failed");
-    return NULL;
+  memset(&rc, 0, sizeof rc);
+  rc.uris = uris;
+  rc.n = 1;
+  rc.simple = r->simple;
+  rc.secret = r->secret;
+  rc.key_size = r->key_size;
+  rc.cname = r->cname;
+  rc.buffer_ms = r->buffer_ms;
+  rc.verbose = r->verbose;
+  if (r->mx) {
+    rc.stats_cb = ristin_stats_cb;
+    rc.stats_arg = r;
   }
-  if (rist_add_peer(ctx, r->peer_uri, r->secret, r->key_size, r->cname, r->buffer_ms, 0, r->simple) || rist_start(ctx) != 0) {
-    rist_destroy(ctx);
-    return NULL;
-  }
-  if (r->mx) rist_stats_callback_set(ctx, RIST_STATS_INTERVAL_MS, receiver_stats_cb, r);
-  return ctx;
+  return rist_receiver_open(&rc);
 }
 
 /* stale flow lingers to session timeout, restart collides */
@@ -60,31 +52,32 @@ static int ctx_restart(ristin_t *r) {
   rist_destroy(r->ctx);
   r->ctx = NULL;
   ctx = ctx_start(r);
-  if (!ctx) return -1;
+  if (!ctx) {
+    log_code("LE500242", "rist: receiver restart failed");
+    return -1;
+  }
   r->ctx = ctx;
   return 0;
 }
 
 static void *reader_main(void *arg) {
   ristin_t *r = arg;
-  unsigned idle_ms = 0;
-  unsigned reset_ms = 2 * r->buffer_ms + RISTIN_READ_TIMEOUT_MS;
-  int got = 0;
+  ristpeer_flow_watch_t watch;
+
+  ristpeer_flow_watch_init(&watch, r->buffer_ms);
 
   while (!atomic_load_explicit(&r->io.stop, memory_order_relaxed) && !signal_stop_requested()) {
     struct rist_data_block *db = NULL;
-    int ret = rist_receiver_data_read2(r->ctx, &db, RISTIN_READ_TIMEOUT_MS);
+    int ret = rist_receiver_data_read2(r->ctx, &db, RIST_READ_TIMEOUT_MS);
     if (ret < 0) break;
     if (ret == 0 || !db) {
-      idle_ms += RISTIN_READ_TIMEOUT_MS;
-      if (got && r->buffer_ms && idle_ms >= reset_ms) {
-        if (ctx_restart(r) != 0) break;
-        got = 0;
-      }
+      if (ristpeer_flow_watch_idle(&watch) && ctx_restart(r) != 0) break;
       continue;
     }
-    idle_ms = 0;
-    got = 1;
+    if (!ristpeer_flow_watch_data(&watch, db->flow_id)) {
+      rist_receiver_data_block_free2(&db);
+      continue;
+    }
     if (pipe_write_all(r->io.pfd[1], db->payload, db->payload_len, &r->io.stop) < 0) {
       rist_receiver_data_block_free2(&db);
       break;

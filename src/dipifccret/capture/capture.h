@@ -43,13 +43,16 @@ void capture_close(capture_t *cap);
 
 capture_t *capture_from_ring(unsigned char *ring, size_t block_size, size_t block_nr, const cidr_t *ranges, size_t range_count);
 
+/* replaces the socket fd, closed by capture_close; exposed for testing */
+void capture_set_fd(capture_t *cap, int fd);
+
 void capture_drain_ring(capture_t *cap, capture_frame_cb cb, void *user);
 
 /* setuid/setgid after capture_open; 0 on success */
 int capture_drop_privileges(const char *user);
 
-/* blocks until signal_stop_requested(), feeds captured RTP to cb */
-void capture_run(capture_t *cap, capture_frame_cb cb, void *user);
+/* blocks until signal_stop_requested(), feeds captured RTP to cb. 0 on stop, -1 with errno set on poll error or socket error (e.g. ENETDOWN) */
+int capture_run(capture_t *cap, capture_frame_cb cb, void *user);
 
 /* parses one captured Ethernet frame (single VLAN tag unwrapped if present), invokes cb if in-range RTP; ranges must already be parsed (see cidr_parse); exposed for testing */
 void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ranges, size_t range_count, capture_frame_cb cb, void *user);

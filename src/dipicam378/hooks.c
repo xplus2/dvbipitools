@@ -6,7 +6,7 @@
 #include "hooks.h"
 #include "version.h"
 
-void cam378_push_metrics(metrics_exporter_t *mx, const cs378x_server_t *srv, device_state_t *dev, const char *algo_name) {
+void cam378_push_metrics(metrics_exporter_t *mx, const cs378x_server_t *srv, device_state_t *dev) {
   cs378x_metrics_t m;
   metrics_writer_t w;
 
@@ -20,9 +20,10 @@ void cam378_push_metrics(metrics_exporter_t *mx, const cs378x_server_t *srv, dev
       metrics_writer_put(&w, METRICS_ID_CAM_AUTH_ERRORS_TOTAL, cs378x_auth_reason_name((cam_auth_reason_t)i), m.auth_errors_total[i]);
   }
   metrics_writer_put(&w, METRICS_ID_CAM_SERVICES_ACTIVE, NULL, device_state_services_active(dev));
-  metrics_writer_put(&w, METRICS_ID_CAS_ECM_TOTAL, algo_name, m.ecm_total);
-  metrics_writer_put(&w, METRICS_ID_CAS_ECM_ERRORS_TOTAL, algo_name, m.ecm_errors_total);
-  metrics_writer_put(&w, METRICS_ID_CAS_EMM_TOTAL, algo_name, m.emm_total);
+  metrics_writer_put(&w, METRICS_ID_CAM_ECM_TOTAL, NULL, m.ecm_total);
+  metrics_writer_put(&w, METRICS_ID_CAM_ECM_ERRORS_TOTAL, NULL, m.ecm_errors_total);
+  metrics_writer_put(&w, METRICS_ID_CAM_ECM_REJECTED_TOTAL, NULL, m.ecm_rejected_total);
+  metrics_writer_put(&w, METRICS_ID_CAM_EMM_TOTAL, NULL, m.emm_total);
   metrics_exporter_send(mx, &w);
 }
 
@@ -32,7 +33,8 @@ int cam378_ecm_cb(const unsigned char *ecm, size_t ecm_len, unsigned srvid, unsi
 }
 
 void cam378_emm_cb(const unsigned char *emm, size_t emm_len, unsigned caid, unsigned provid, void *user) {
-  (void)caid;
+  device_state_t *d = (device_state_t *)user;
   (void)provid;
-  device_on_emm((device_state_t *)user, emm, emm_len);
+  if (!device_caid_matches(d, caid)) return;
+  device_on_emm(d, emm, emm_len);
 }

@@ -32,7 +32,7 @@ size_t rtcp_build_rsi_srbt_dns(const char *name, size_t name_len, uint16_t port,
 size_t rtcp_build_rsi_srbt_bandwidth(double kbps, unsigned char *out, size_t cap);
 
 /* F.5.3 Figure F.9, SRBT 8: list of HNED SSRCs currently believed to collide. 0 if count is
-   0/too large (>255 sub-report-length bytes) or cap too small. */
+   0/too large (>254, length byte is count+1 words) or cap too small. */
 size_t rtcp_build_rsi_srbt_collision(const uint32_t *ssrcs, size_t count, unsigned char *out, size_t cap);
 
 /* RAMS-I optional TLVs (Annex I.2.7.3 types 31-35), server->client only, never parsed by us */

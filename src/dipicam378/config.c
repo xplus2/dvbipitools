@@ -5,8 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/cas/device_state_core.h"
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
+#include "lib/helper/secure_zero.h"
 #include "lib/sys/ioutil.h"
 #include "config.h"
 #include "version.h"
@@ -14,6 +16,10 @@
 #define AUTH_BUF 256
 
 static char auth_buf[AUTH_BUF];
+
+void cam378_cfg_wipe_auth(void) {
+  secure_zero(auth_buf, sizeof auth_buf);
+}
 
 void cam378_cfg_defaults(config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
@@ -126,7 +132,7 @@ static const yamlcfg_key_t keys[] = {
     {"algo", apply_algo, 0, 0},
     {"verbose", apply_verbose, 0, 0},
     {"color", apply_color, 0, 0},
-    {"metrics", apply_metrics_sock, 0, 0},
+    {"metrics.sock", apply_metrics_sock, 0, 0},
     {"metrics.id", apply_metrics_id, 0, 0},
     {"metrics.interval", apply_metrics_interval, 0, 0},
     {"daemonize", apply_daemonize, 0, 0},
@@ -153,7 +159,9 @@ int cam378_cfg_test(const char *path, int strict) {
     return -1;
   }
   warn_if(&y, !cfg.key_path, "3A000129", "key not set (required unless given on the command line)");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "3A000130", "metrics and metrics-interval require metrics-id");
+  warn_if(&y, !cfg.serial, "3A000137", "serial not set (required unless given on the command line)");
+  if (cfg.serial && strlen(cfg.serial) >= DEVICE_SERIAL_MAX) yamlcfg_warn(&y, "3A000723", "invalid serial: longer than %d bytes", DEVICE_SERIAL_MAX - 1);
+  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "3A000120", "metrics.sock and metrics.interval require metrics.id");
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);
   return rc;

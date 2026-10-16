@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "lib/config/yamlcfg.h"
+#include "lib/mux/fec2022.h"
 #include "lib/net/jitbuf.h"
 #include "../config.h"
 #include "priv.h"
@@ -99,6 +100,21 @@ int tvh_apply_input_rist_encryption_type(void *c, const char *v, char *e, size_t
   return in ? tvh_set_key_size(&in->rist_key_size_in, v, e, n) : -1;
 }
 
+int tvh_apply_input_rist_secret(void *c, const char *v, char *e, size_t n) {
+  dipitvhead_input_t *in = tvh_cur_input(c, e, n);
+  return in ? tvh_set_buf(in->rist_secret_in, sizeof in->rist_secret_in, v, e, n) : -1;
+}
+
+int tvh_apply_input_rist_cname(void *c, const char *v, char *e, size_t n) {
+  dipitvhead_input_t *in = tvh_cur_input(c, e, n);
+  return in ? tvh_set_buf(in->rist_cname_in, sizeof in->rist_cname_in, v, e, n) : -1;
+}
+
+int tvh_apply_input_rist_buffer(void *c, const char *v, char *e, size_t n) {
+  dipitvhead_input_t *in = tvh_cur_input(c, e, n);
+  return in ? yamlcfg_set_uint(&in->rist_buffer_ms_in, v, 1, 60000, e, n) : -1;
+}
+
 int tvh_apply_input_srt_passphrase(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
   return in ? tvh_set_buf(in->srt_passphrase_in, sizeof in->srt_passphrase_in, v, e, n) : -1;
@@ -117,6 +133,21 @@ int tvh_apply_input_srt_streamid(void *c, const char *v, char *e, size_t n) {
 int tvh_apply_input_srt_packetfilter(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
   return in ? tvh_set_buf(in->srt_packetfilter_in, sizeof in->srt_packetfilter_in, v, e, n) : -1;
+}
+
+int tvh_apply_input_al_fec(void *c, const char *v, char *e, size_t n) {
+  dipitvhead_input_t *in = tvh_cur_input(c, e, n);
+  if (!in) return -1;
+  if (fec2022_parse_ld(v, &in->al_fec_l_in, &in->al_fec_d_in)) {
+    snprintf(e, n, "invalid '%s' (want L:D, L*D<=400, L<=40)", v);
+    return -1;
+  }
+  return 0;
+}
+
+int tvh_apply_input_al_fec_port(void *c, const char *v, char *e, size_t n) {
+  dipitvhead_input_t *in = tvh_cur_input(c, e, n);
+  return in ? yamlcfg_set_uint(&in->al_fec_port_in, v, 1, 65535, e, n) : -1;
 }
 
 int tvh_apply_input_jitter_ms(void *c, const char *v, char *e, size_t n) {

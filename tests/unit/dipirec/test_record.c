@@ -23,7 +23,7 @@
 #include "lib/sys/signal.h"
 #include "../log_capture.h"
 #include "dipirec/config.h"
-#include "dipirec/filter/pace.h"
+#include "lib/net/ts/pace.h"
 #include "lib/demux/crc32.h"
 #include "lib/demux/psi/psi.h"
 #include "lib/mux/psi_build.h"
@@ -559,7 +559,7 @@ START_TEST(sink_write_to_full_device_fails) {
   rc = sink_write(&o, data, sizeof data);
   log_capture_end(msg, sizeof msg);
   ck_assert_int_eq(rc, -1);
-  ck_assert_ptr_nonnull(strstr(msg, "w:"));
+  ck_assert_ptr_nonnull(strstr(msg, "output write failed"));
   sink_close(&o);
 }
 END_TEST
@@ -1453,7 +1453,7 @@ static void fill_mpts_aac_file(const char *path) {
   static const unsigned pmts[] = {MPTS_PMT_A, MPTS_PMT_B};
   static const unsigned audio[] = {MPTS_AUDIO_A, MPTS_AUDIO_B};
   static const psi_pat_entry_t pat[2] = {{1, MPTS_PMT_A}, {2, MPTS_PMT_B}};
-  static const psi_sdt_entry_t sdt[2] = {{1, 0x02, "prov", "svc one", 0}, {2, 0x02, "prov", "svc two", 0}};
+  static const psi_sdt_entry_t sdt[2] = {{1, 0x02, "prov", "svc one", 0, 0}, {2, 0x02, "prov", "svc two", 0, 0}};
   unsigned char sec[256];
   unsigned char adts[AAC_FRAME_LEN];
   unsigned char pes[256];

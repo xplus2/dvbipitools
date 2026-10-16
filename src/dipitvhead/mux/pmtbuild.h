@@ -12,6 +12,7 @@
 #define OUT_PID_CAT 0x0001
 #define OUT_PID_NIT 0x0010
 #define OUT_PID_SDT 0x0011
+#define OUT_PID_TDT 0x0014
 #define OUT_PID_EIT 0x0012                  /* fixed DVB-SI pid (ETSI EN 300 468) */
 #define OUT_PID_PMT_BASE 0x1000             /* + prog_idx, ffmpeg pmt_start_pid default */
 #define OUT_PROGRAM_BLOCK_BASE 0x0100

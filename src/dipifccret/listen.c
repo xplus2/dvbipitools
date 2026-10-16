@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 #include <unistd.h>
 
 #include "lib/helper/log.h"
@@ -33,6 +34,7 @@ struct listen_pool {
   worker_t *workers;
   unsigned count;
   atomic_int stop;
+  int stopfd;
 };
 
 /* drains pending datagrams on fd via recv_cb, stops at EAGAIN/EWOULDBLOCK or a real error.
@@ -49,7 +51,7 @@ static void drain_socket(int fd, unsigned char *buf, size_t buflen, const char *
         return;
       if (errno == EINTR)
         continue;
-      log_code("FS500175", TOOL_NAME ": %s: %s", log_tag, strerror(errno));
+      log_code("FS500175", TOOL_NAME ": %s failed: %s", log_tag, strerror(errno));
       return;
     }
     if (recv_cb)
@@ -75,6 +77,32 @@ static void *worker_main(void *arg) {
     }
   }
   return NULL;
+}
+
+static int stop_event_new(void) {
+  int fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+  if (fd < 0) log_code("FS500175", TOOL_NAME ": %s failed: %s", "eventfd", strerror(errno));
+  return fd;
+}
+
+/* level-triggered: stays readable, wakes every epoll watching it */
+static void stop_event_fire(atomic_int *stop, int fd) {
+  uint64_t one = 1;
+  ssize_t r;
+  atomic_store_explicit(stop, 1, memory_order_relaxed);
+  r = write(fd, &one, sizeof one);
+  (void)r;
+}
+
+static int stop_event_watch(int epfd, int stopfd, uint64_t tag) {
+  struct epoll_event ev;
+  ev.events = EPOLLIN;
+  ev.data.u64 = tag;
+  if (epoll_ctl(epfd, EPOLL_CTL_ADD, stopfd, &ev) < 0) {
+    log_code("FS500178", TOOL_NAME ": epoll_ctl: %s", strerror(errno));
+    return -1;
+  }
+  return 0;
 }
 
 static int bind_dgram(int fd, int family, const char *addr, unsigned port) {
@@ -127,6 +155,12 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
     return NULL;
   }
   atomic_init(&p->stop, 0);
+  p->stopfd = stop_event_new();
+  if (p->stopfd < 0) {
+    free(p->workers);
+    free(p);
+    return NULL;
+  }
 
   for (unsigned i = 0; i < workers; i++) {
     struct epoll_event ev;
@@ -145,6 +179,11 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
     ev.data.fd = fd;
     if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) < 0) {
       log_code("FS500178", TOOL_NAME ": epoll_ctl: %s", strerror(errno));
+      close(epfd);
+      close(fd);
+      goto fail;
+    }
+    if (stop_event_watch(epfd, p->stopfd, (uint64_t)p->stopfd) < 0) {
       close(epfd);
       close(fd);
       goto fail;
@@ -176,13 +215,14 @@ listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, un
   return p;
 
 fail:
-  atomic_store_explicit(&p->stop, 1, memory_order_relaxed);
+  stop_event_fire(&p->stop, p->stopfd);
   for (unsigned i = 0; i < p->count; i++)
     pthread_join(p->workers[i].thread, NULL);
   for (unsigned i = 0; i < p->count; i++) {
     close(p->workers[i].epfd);
     close(p->workers[i].fd);
   }
+  close(p->stopfd);
   free(p->workers);
   free(p);
   return NULL;
@@ -191,12 +231,14 @@ fail:
 void listen_pool_stop(listen_pool_t *p) {
   if (!p)
     return;
+  stop_event_fire(&p->stop, p->stopfd);
   for (unsigned i = 0; i < p->count; i++)
     pthread_join(p->workers[i].thread, NULL);
   for (unsigned i = 0; i < p->count; i++) {
     close(p->workers[i].epfd);
     close(p->workers[i].fd);
   }
+  close(p->stopfd);
   free(p->workers);
   free(p);
 }
@@ -209,6 +251,8 @@ struct listen_multi {
   listen_multi_cb cb;
   void *user;
   int has_wake;
+  atomic_int stop;
+  int stopfd;
 };
 
 #define LISTEN_MULTI_WAKE_SLOT ((uint64_t)-1)
@@ -229,7 +273,7 @@ static void *multi_worker_main(void *arg) {
   unsigned char buf[2048];
   struct epoll_event events[32];
 
-  while (!signal_stop_requested()) {
+  while (!signal_stop_requested() && !atomic_load_explicit(&p->stop, memory_order_relaxed)) {
     int n = epoll_wait(p->epfd, events, 32, p->has_wake ? -1 : 100);
     for (int e = 0; e < n; e++) {
       size_t slot;
@@ -263,10 +307,25 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
   p->count = count;
   p->cb = cb;
   p->user = user;
+  atomic_init(&p->stop, 0);
 
+  p->stopfd = stop_event_new();
+  if (p->stopfd < 0) {
+    free(p->fds);
+    free(p);
+    return NULL;
+  }
   p->epfd = epoll_create1(0);
   if (p->epfd < 0) {
     log_code("FS500177", TOOL_NAME ": epoll_create1: %s", strerror(errno));
+    close(p->stopfd);
+    free(p->fds);
+    free(p);
+    return NULL;
+  }
+  if (stop_event_watch(p->epfd, p->stopfd, LISTEN_MULTI_WAKE_SLOT) < 0) {
+    close(p->epfd);
+    close(p->stopfd);
     free(p->fds);
     free(p);
     return NULL;
@@ -307,6 +366,7 @@ listen_multi_t *listen_multi_start(int family, const char *addr, unsigned base_p
 fail:
   for (size_t i = 0; i < opened; i++) close(p->fds[i]);
   close(p->epfd);
+  close(p->stopfd);
   free(p->fds);
   free(p);
   return NULL;
@@ -314,9 +374,11 @@ fail:
 
 void listen_multi_stop(listen_multi_t *p) {
   if (!p) return;
+  stop_event_fire(&p->stop, p->stopfd);
   pthread_join(p->thread, NULL);
   for (size_t i = 0; i < p->count; i++) close(p->fds[i]);
   close(p->epfd);
+  close(p->stopfd);
   free(p->fds);
   free(p);
 }

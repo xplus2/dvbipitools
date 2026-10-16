@@ -308,6 +308,49 @@ START_TEST(fragment_service_information_without_triplet_stays_zero) {
 }
 END_TEST
 
+START_TEST(fragment_service_information_foreign_tail_keeps_string_alignment) {
+  bcg_channel_t c;
+  bcg_channel_t out;
+  bitwriter_t bw;
+  bitreader_t br;
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  unsigned char buf[256];
+  char next[16];
+  size_t bwlen;
+  size_t swlen;
+  size_t own;
+
+  memset(&c, 0, sizeof c);
+  bufcpy(c.id, sizeof c.id, "channel1");
+  bufcpy(c.uri, sizeof c.uri, "rtp://239.1.1.1:5000");
+  bcg_channel_add_name(&c, "One");
+
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(fragment_encode_service_information(&c, &bw, &sw), 0);
+  bwdata = bitwriter_data(&bw, &bwlen);
+  swdata = strrepo_writer_data(&sw, &swlen);
+
+  own = swlen - 3; /* drop empty triplet and "0" */
+  ck_assert_uint_lt(own + 12, sizeof buf);
+  memcpy(buf, swdata, own);
+  memcpy(buf + own, "Alpha\0Beta\0", 11);
+
+  bitreader_init(&br, bwdata, bwlen);
+  strrepo_reader_init(&sr, buf, own + 11);
+  ck_assert_int_eq(fragment_decode_service_information(&br, &sr, &out), 0);
+  ck_assert_uint_eq(sr.pos, own);
+  ck_assert_int_eq(strrepo_reader_next(&sr, next, sizeof next), 0);
+  ck_assert_str_eq(next, "Alpha");
+
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
 START_TEST(fragment_payload_decodes_published_time_optimized_locator_and_duration) {
   bitwriter_t bw;
   bitreader_t br;
@@ -350,14 +393,18 @@ START_TEST(fragment_payload_decodes_published_time_optimized_locator_and_duratio
   bitwriter_put(&bw, 0, 1); /* path */
   bitwriter_put(&bw, 0, 1); /* InstanceMetadataId */
   bitwriter_put(&bw, 1, 1); /* InstanceDescription */
-  bitwriter_put(&bw, 1, 1); /* Title */
+  bitwriter_put_vluimsbf4(&bw, 1); /* Title */
   bitwriter_put(&bw, 0, 2); /* Title type, xml:lang */
-  bitwriter_put(&bw, 0, 1); /* Synopsis */
+  bitwriter_put_vluimsbf4(&bw, 0); /* Synopsis */
   bitwriter_put_vluimsbf4(&bw, 0); /* Genre */
   bitwriter_put(&bw, 0, 1); /* PurchaseList */
+  bitwriter_put_vluimsbf4(&bw, 0); /* CaptionLanguage */
+  bitwriter_put_vluimsbf4(&bw, 0); /* SignLanguage */
+  bitwriter_put_vluimsbf4(&bw, 0); /* ParentalGuidance */
   bitwriter_put(&bw, 0, 1); /* AVAttributes */
   bitwriter_put_vluimsbf4(&bw, 0); /* MemberOf */
-  bitwriter_put(&bw, 0, 1); /* PurchaseList */
+  bitwriter_put_vluimsbf4(&bw, 0); /* OtherIdentifier */
+  bitwriter_put_vluimsbf4(&bw, 0); /* RelatedMaterial */
   bitwriter_put(&bw, 1, 1); /* PublishedStartTime */
   bitwriter_put(&bw, 1, 2);
   bitwriter_put(&bw, 0, 1); /* date reused */
@@ -408,6 +455,137 @@ START_TEST(fragment_payload_decode_rejects_type_casting_and_length_modes) {
 }
 END_TEST
 
+START_TEST(fragment_payload_decode_rejects_repeated_zero_bit_elements) {
+  static const bim_type_t empty = {NULL, 0, BIM_CONTENT_NONE, BIM_UNSUPPORTED, NULL};
+  static const bim_part_t kid[] = {{BIM_PART_ELEM, "E", &empty, 0, BIM_UNBOUNDED, NULL, 0}};
+  static const bim_part_t top = {BIM_PART_SEQ, NULL, NULL, 1, 1, kid, 1};
+  static const bim_type_t root_type = {NULL, 0, BIM_CONTENT_SEQ, BIM_UNSUPPORTED, &top};
+  const unsigned long counts[] = {2, 99999, 1000000000UL};
+  bitwriter_t bw;
+  bitreader_t br;
+  strrepo_reader_t sr;
+  const unsigned char repo[] = {0x01, 's', 0};
+  bim_node_t *root = NULL;
+  const unsigned char *b;
+  size_t blen;
+  for (int i = 0; i < 3; i++) {
+    bitwriter_init(&bw);
+    bitwriter_put(&bw, 0x0F, 8);
+    ck_assert_int_eq(bitwriter_put_vluimsbf4(&bw, counts[i]), 0);
+    b = bitwriter_data(&bw, &blen);
+    bitreader_init(&br, b, blen);
+    strrepo_reader_init(&sr, repo, sizeof repo);
+    ck_assert_int_eq(bim_decode_payload(&root_type, "R", &br, &sr, &root), -1);
+    bitwriter_free(&bw);
+  }
+  bitwriter_init(&bw);
+  bitwriter_put(&bw, 0x0F, 8);
+  ck_assert_int_eq(bitwriter_put_vluimsbf4(&bw, 1), 0);
+  b = bitwriter_data(&bw, &blen);
+  bitreader_init(&br, b, blen);
+  strrepo_reader_init(&sr, repo, sizeof repo);
+  ck_assert_int_eq(bim_decode_payload(&root_type, "R", &br, &sr, &root), 0);
+  ck_assert_int_eq(root->nkids, 1);
+  bim_node_free(root);
+  bitwriter_free(&bw);
+}
+END_TEST
+
+START_TEST(codec_payload_round_trips_choice_and_repeated_sequence) {
+  static const bim_type_t str = {NULL, 0, BIM_CONTENT_SIMPLE, BIM_STRING, NULL};
+  static const bim_part_t alts[] = {{BIM_PART_ELEM, "A", &str, 1, 1, NULL, 0}, {BIM_PART_ELEM, "B", &str, 1, 1, NULL, 0}};
+  static const bim_part_t pair[] = {{BIM_PART_ELEM, "C", &str, 1, 1, NULL, 0}, {BIM_PART_ELEM, "D", &str, 1, 1, NULL, 0}};
+  static const bim_part_t kids[] = {{BIM_PART_CHOICE, NULL, NULL, 1, 1, alts, 2}, {BIM_PART_SEQ, NULL, NULL, 0, BIM_UNBOUNDED, pair, 2}};
+  static const bim_part_t top = {BIM_PART_SEQ, NULL, NULL, 1, 1, kids, 2};
+  static const bim_type_t root_type = {NULL, 0, BIM_CONTENT_SEQ, BIM_UNSUPPORTED, &top};
+  static const char *const names[] = {"B", "C", "D", "C", "D"};
+  bim_node_t *root = bim_node_new("R"), *got = NULL;
+  bitwriter_t bw;
+  bitreader_t br;
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  const unsigned char *bwdata, *swdata;
+  size_t bwlen, swlen;
+  ck_assert_ptr_nonnull(root);
+  for (int i = 0; i < 5; i++) ck_assert_ptr_nonnull(bim_node_add_new(root, names[i], "v"));
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(bim_encode_payload(&root_type, root, &bw, &sw), 0);
+  bwdata = bitwriter_data(&bw, &bwlen);
+  swdata = strrepo_writer_data(&sw, &swlen);
+  bitreader_init(&br, bwdata, bwlen);
+  ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
+  ck_assert_int_eq(bim_decode_payload(&root_type, "R", &br, &sr, &got), 0);
+  ck_assert_int_eq(got->nkids, 5);
+  for (int i = 0; i < 5; i++) ck_assert_str_eq(got->kids[i]->name, names[i]);
+  bim_node_free(got);
+  bim_node_free(root);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
+START_TEST(codec_payload_encode_rejects_missing_required_choice) {
+  static const bim_type_t str = {NULL, 0, BIM_CONTENT_SIMPLE, BIM_STRING, NULL};
+  static const bim_part_t alts[] = {{BIM_PART_ELEM, "A", &str, 1, 1, NULL, 0}, {BIM_PART_ELEM, "B", &str, 1, 1, NULL, 0}};
+  static const bim_part_t kids[] = {{BIM_PART_CHOICE, NULL, NULL, 1, 1, alts, 2}};
+  static const bim_part_t top = {BIM_PART_SEQ, NULL, NULL, 1, 1, kids, 1};
+  static const bim_type_t root_type = {NULL, 0, BIM_CONTENT_SEQ, BIM_UNSUPPORTED, &top};
+  bim_node_t *root = bim_node_new("R");
+  bitwriter_t bw;
+  strrepo_writer_t sw;
+  ck_assert_ptr_nonnull(root);
+  ck_assert_ptr_nonnull(bim_node_add_new(root, "X", "v"));
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(bim_encode_payload(&root_type, root, &bw, &sw), -1);
+  bim_node_free(root);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
+START_TEST(fragment_title_type_and_short_title_attrs_round_trip) {
+  bim_node_t *root = bim_node_new("ProgramInformation"), *bd, *t, *st, *got = NULL;
+  const bim_node_t *gbd;
+  bitwriter_t bw;
+  bitreader_t br;
+  strrepo_writer_t sw;
+  strrepo_reader_t sr;
+  const unsigned char *bwdata, *swdata;
+  size_t bwlen, swlen;
+  ck_assert_ptr_nonnull(root);
+  ck_assert_int_eq(bim_node_set_attr(root, "programId", "crid://x/1"), 0);
+  bd = bim_node_add_new(root, "BasicDescription", NULL);
+  t = bim_node_add_new(bd, "Title", "Main");
+  ck_assert_int_eq(bim_node_set_attr(t, "type", "secondary"), 0);
+  st = bim_node_add_new(bd, "ShortTitle", "Sh");
+  ck_assert_int_eq(bim_node_set_attr(st, "length", "2"), 0);
+  ck_assert_int_eq(bim_node_set_attr(st, "type", "main"), 0);
+  ck_assert_int_eq(bim_node_set_attr(st, "xml:lang", "en"), 0);
+  bitwriter_init(&bw);
+  strrepo_writer_init(&sw);
+  ck_assert_int_eq(bim_encode_payload(tva_type_program_information, root, &bw, &sw), 0);
+  bwdata = bitwriter_data(&bw, &bwlen);
+  swdata = strrepo_writer_data(&sw, &swlen);
+  bitreader_init(&br, bwdata, bwlen);
+  ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
+  ck_assert_int_eq(bim_decode_payload(tva_type_program_information, "ProgramInformation", &br, &sr, &got), 0);
+  gbd = bim_node_child(got, "BasicDescription");
+  ck_assert_ptr_nonnull(gbd);
+  ck_assert_str_eq(bim_node_attr(bim_node_child(gbd, "Title"), "type"), "secondary");
+  st = (bim_node_t *)bim_node_child(gbd, "ShortTitle");
+  ck_assert_str_eq(st->text, "Sh");
+  ck_assert_str_eq(bim_node_attr(st, "length"), "2");
+  ck_assert_str_eq(bim_node_attr(st, "type"), "main");
+  ck_assert_str_eq(bim_node_attr(st, "xml:lang"), "en");
+  bim_node_free(got);
+  bim_node_free(root);
+  bitwriter_free(&bw);
+  strrepo_writer_free(&sw);
+}
+END_TEST
+
 static Suite *fragment_suite(void) {
   Suite *s = suite_create("fragment");
   TCase *tc = tcase_create("core");
@@ -418,9 +596,14 @@ static Suite *fragment_suite(void) {
   tcase_add_test(tc, fragment_service_information_round_trips);
   tcase_add_test(tc, fragment_service_information_without_triplet_stays_zero);
   tcase_add_test(tc, fragment_service_information_without_names_round_trips);
+  tcase_add_test(tc, fragment_service_information_foreign_tail_keeps_string_alignment);
   tcase_add_test(tc, fragment_schedule_wire_layout_follows_ts102323_annex_b);
   tcase_add_test(tc, fragment_payload_decodes_published_time_optimized_locator_and_duration);
   tcase_add_test(tc, fragment_payload_decode_rejects_type_casting_and_length_modes);
+  tcase_add_test(tc, fragment_payload_decode_rejects_repeated_zero_bit_elements);
+  tcase_add_test(tc, codec_payload_round_trips_choice_and_repeated_sequence);
+  tcase_add_test(tc, codec_payload_encode_rejects_missing_required_choice);
+  tcase_add_test(tc, fragment_title_type_and_short_title_attrs_round_trip);
   suite_add_tcase(s, tc);
   return s;
 }

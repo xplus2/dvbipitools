@@ -430,6 +430,7 @@ dvbipitools_add_unit_test(lib_mux_esbuild_pmtbuild
 
 dvbipitools_add_unit_test(lib_mux_esbuild_remux
     unit/lib/mux/esbuild/test_remux.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/esbuild.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pes.c
@@ -1022,7 +1023,8 @@ if (OpenSSL_FOUND)
 
     dvbipitools_add_unit_test(lib_cas_biss_ca
         unit/lib/cas/test_biss_ca.c
-        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
     target_link_libraries(test_lib_cas_biss_ca PRIVATE OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(lib_cas_device_state_core
@@ -1117,6 +1119,16 @@ if (DVBCSA_INCLUDE_DIR AND DVBCSA_LIBRARY)
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
     target_include_directories(test_lib_scrambler_csa2 PRIVATE ${DVBCSA_INCLUDE_DIR})
     target_link_libraries(test_lib_scrambler_csa2 PRIVATE ${DVBCSA_LIBRARY} ${CMAKE_DL_LIBS})
+
+    dvbipitools_add_unit_test(lib_cas_scramble_engine
+        unit/lib/cas/test_cas_scramble_engine.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_scramble_engine.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+    target_include_directories(test_lib_cas_scramble_engine PRIVATE ${DVBCSA_INCLUDE_DIR})
+    target_link_libraries(test_lib_cas_scramble_engine PRIVATE ${DVBCSA_LIBRARY} ${CMAKE_DL_LIBS})
 else ()
     message(WARNING "tests: libdvbcsa not found, skipping lib_scrambler_csa2 unit test")
 endif ()
@@ -1132,6 +1144,7 @@ dvbipitools_add_unit_test(dipicam378_args
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
     ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -1146,6 +1159,7 @@ dvbipitools_add_unit_test(dipicam378_config
     ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
     ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -1185,6 +1199,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/protocol.c
         ${CMAKE_SOURCE_DIR}/src/dipicam378/cs378x/worker.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
         ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
     target_link_libraries(test_dipicam378_cs378x PRIVATE OpenSSL::Crypto Threads::Threads)
 
@@ -1257,6 +1272,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
     target_link_libraries(test_dipidescramble_biss_ca_state PRIVATE OpenSSL::Crypto)
 
@@ -1328,7 +1344,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/scrambler.c
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
-        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
+        ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c
@@ -1341,7 +1357,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
         ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c)
-    target_link_libraries(test_dipidescramble_pipeline PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(test_dipidescramble_pipeline PRIVATE OpenSSL::SSL OpenSSL::Crypto ${CMAKE_DL_LIBS})
 
     dvbipitools_add_unit_test(dipidescramble_ipiclient
         unit/dipidescramble/test_ipiclient.c
@@ -2163,6 +2179,7 @@ dvbipitools_add_unit_test(lib_dash_mpd
     unit/lib/dash/test_mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
     ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
@@ -3332,7 +3349,7 @@ dvbipitools_add_unit_test(dipirec_ts_filter
 
 dvbipitools_add_unit_test(dipirec_pace
     unit/dipirec/test_pace.c
-    ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/ts/pace.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
 
 dvbipitools_add_unit_test(dipirec_record
@@ -3479,7 +3496,7 @@ dvbipitools_add_unit_test(dipirec_record
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
     ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
-    ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/net/ts/pace.c)
 
 if (TARGET dipirist AND TARGET dipisrt)
     dvbipitools_add_unit_test(dipirec_record_net
@@ -3631,7 +3648,7 @@ if (TARGET dipirist AND TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
         ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
         ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
-        ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/net/ts/pace.c)
     target_link_libraries(test_dipirec_record_net PRIVATE PkgConfig::RIST PkgConfig::SRT)
     if (DVBIPITOOLS_TSAN)
         target_compile_definitions(test_dipirec_record_net PRIVATE DVBIPITOOLS_TSAN_BUILD)
@@ -4286,7 +4303,9 @@ dvbipitools_add_unit_test(dipirist_args
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -4309,7 +4328,9 @@ dvbipitools_add_unit_test(dipirist_config
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
+    ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/plain_endpoint.c
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -4353,6 +4374,7 @@ if (TARGET dipirist)
         ${CMAKE_SOURCE_DIR}/src/lib/net/ts/source.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/ts/deframe.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/ts/jitter.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/ts/pace.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/ts/http.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/ts/open_async.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/jitbuf.c
@@ -4410,9 +4432,6 @@ if (TARGET dipirist)
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c)
     target_link_libraries(test_dipirist_bridge PRIVATE PkgConfig::RIST)
-    if (DIPIRIST_HAVE_AVG_BUFFER_TIME)
-        target_compile_definitions(test_dipirist_bridge PRIVATE DIPIRIST_HAVE_AVG_BUFFER_TIME)
-    endif ()
 else ()
     message(WARNING "tests: dipirist not built (librist missing), skipping its bridge unit test")
 endif ()
@@ -4439,7 +4458,8 @@ if (DVBIPITOOLS_HAVE_RIST)
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
         ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
-        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c)
     target_link_libraries(test_lib_net_rist_ristin PRIVATE PkgConfig::RIST)
     add_dependencies(test_lib_net_rist_ristin rist_send_helper)
     target_compile_definitions(test_lib_net_rist_ristin PRIVATE
@@ -4539,6 +4559,7 @@ if (TARGET dipisrt)
         ${CMAKE_SOURCE_DIR}/src/lib/net/ts/source.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/ts/deframe.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/ts/jitter.c
+        ${CMAKE_SOURCE_DIR}/src/lib/net/ts/pace.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/ts/http.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/ts/open_async.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/jitbuf.c

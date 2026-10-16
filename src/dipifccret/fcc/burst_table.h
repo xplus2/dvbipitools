@@ -10,18 +10,16 @@
 #include <sys/socket.h>
 
 #include "lib/net/sockaddr_index.h"
-#include "lib/helper/seqlock.h"
 
 #include "burst.h"
 
 #define BURST_ADDR_WORDS (sizeof(struct sockaddr_storage) / sizeof(uint64_t))
 #define BURST_TABLE_STRIPE_COUNT_MAX 8 /* client addr hashes to one, own lock each */
 
-/* claim/find/note_nack/terminate/release: stripe lock (picked by client addr). pacer
-   (main.c): lock-free scan via gen seqlock below.
-   msn/nack_count/congestion_adapted: stripe-lock only, never read by pacer, stay plain. */
+/* claim/find/note_nack/terminate/acquire/release: stripe lock (picked by client addr).
+   pacer scan peeks in_use lock-free, takes burst ref under lock via burst_table_acquire.
+   msn/nack_count/congestion_adapted: stripe-lock only, stay plain. */
 typedef struct {
-  _Atomic unsigned gen;
   _Atomic int in_use;
   _Atomic uint64_t addr_words[BURST_ADDR_WORDS];
   _Atomic socklen_t addrlen;
@@ -43,7 +41,7 @@ typedef struct {
 } burst_stripe_t;
 
 typedef struct {
-  burst_slot_t *slots; /* flat, cap entries: main.c's pacer scans this directly */
+  burst_slot_t *slots; /* flat, cap entries: pacer peeks in_use per slot */
   size_t cap;
   burst_stripe_t stripes[BURST_TABLE_STRIPE_COUNT_MAX];
   size_t stripe_count;
@@ -72,6 +70,7 @@ typedef struct {
   burst_table_nack_action_t action;
   uint8_t msn;
   double new_bps;
+  uint32_t media_ssrc; /* burst channel ssrc, valid when found */
 } burst_table_nack_result_t;
 
 burst_table_t *burst_table_new(size_t cap);
@@ -93,8 +92,19 @@ int burst_table_note_nack(burst_table_t *t, const struct sockaddr *addr, socklen
 /* terminates matching session if found. 1 found, 0 not. has_stop_seq/stop_seqnum: see burst_terminate() */
 int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen_t addrlen, int has_stop_seq, uint32_t stop_seqnum);
 
+typedef struct {
+  int fd;
+  struct sockaddr_storage addr;
+  socklen_t addrlen;
+  burst_t *b;
+} burst_snap_t;
+
+/* snapshot of slot idx taken under stripe lock, b ref acquired: caller burst_release()s it.
+   0 if slot no longer in use, out untouched */
+int burst_table_acquire(burst_table_t *t, size_t idx, burst_snap_t *out);
+
 /* owns_slot: idx still in_use and holds expect_b.
-   should_clear: also seqlock-clears slot, returns it to its stripe's free list.
+   should_clear: also clears slot, returns it to its stripe's free list.
    *did_clear: whether that clear ran. */
 int burst_table_release(burst_table_t *t, size_t idx, const burst_t *expect_b, int should_clear, int *did_clear);
 

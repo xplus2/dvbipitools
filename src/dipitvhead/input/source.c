@@ -9,6 +9,8 @@
 #include "../version.h"
 #include "source.h"
 
+#define TVSRC_OPEN_TIMEOUT_S 30.0
+
 struct tvsrc {
   tssrc_t *t;
 };
@@ -39,6 +41,9 @@ static void fill_cfg(tssrc_cfg_t *tc_out, const config_t *cfg, const dipitvhead_
   tc_out->rist_uri = input->input.rist_uri;
   tc_out->rist_profile_main = input->rist_profile_main;
   tc_out->rist_key_size = input->rist_key_size_in;
+  tc_out->rist_secret = input->rist_secret_in;
+  tc_out->rist_cname = input->rist_cname_in;
+  tc_out->rist_buffer_ms = input->rist_buffer_ms_in;
   tc_out->srt_host = input->input.srt_host;
   tc_out->srt_port = input->input.srt_port;
   tc_out->srt_listen = input->input.srt_listen;
@@ -48,6 +53,9 @@ static void fill_cfg(tssrc_cfg_t *tc_out, const config_t *cfg, const dipitvhead_
   tc_out->srt_packetfilter = input->srt_packetfilter_in;
   tc_out->srt_latency_ms = input->srt_latency_in_ms;
   tc_out->jitter_ms = input->jitter_ms;
+  tc_out->al_fec_l = input->al_fec_l_in;
+  tc_out->al_fec_d = input->al_fec_d_in;
+  tc_out->al_fec_port = input->al_fec_port_in;
   tc_out->srt_verbose = cfg->verbose;
 }
 
@@ -57,7 +65,7 @@ tvsrc_t *tvsrc_open(const config_t *cfg, const dipitvhead_input_t *input, net_er
   if (!s) return NULL;
   fill_cfg(&tc, cfg, input);
 
-  s->t = tssrc_open(&tc, reason_out);
+  s->t = tssrc_open_blocking(&tc, TVSRC_OPEN_TIMEOUT_S, reason_out);
   if (!s->t) {
     free(s);
     return NULL;
@@ -70,6 +78,10 @@ ssize_t tvsrc_read(tvsrc_t *s, unsigned char *buf, size_t cap, net_err_reason_t 
 int tvsrc_wait(const tvsrc_t *s, int timeout_ms) { return tssrc_wait(s->t, timeout_ms); }
 
 int tvsrc_fd(const tvsrc_t *s) { return tssrc_fd(s->t); }
+
+short tvsrc_poll_events(const tvsrc_t *s) { return tssrc_poll_events(s->t); }
+
+int tvsrc_timer_driven(const tvsrc_t *s) { return tssrc_timer_driven(s->t); }
 
 int tvsrc_enable_rx_timestamps(tvsrc_t *s) { return tssrc_enable_rx_timestamps(s->t); }
 

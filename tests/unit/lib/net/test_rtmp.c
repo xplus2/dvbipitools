@@ -122,6 +122,30 @@ static size_t build_error_needauth(unsigned char *out, double transaction) {
   return n;
 }
 
+static size_t build_status(unsigned char *out, const char *level, const char *code) {
+  ebuf_t b;
+  size_t n;
+  memset(&b, 0, sizeof b);
+  amf_string(&b, "onStatus");
+  amf_number(&b, 0);
+  amf_null(&b);
+  amf_object_start(&b);
+  amf_object_key(&b, "level");
+  amf_string(&b, level);
+  amf_object_key(&b, "code");
+  amf_string(&b, code);
+  amf_object_end(&b);
+  n = build_chunk(out, 3, RTMP_TYPE_INVOKE, 0, b.p, b.len);
+  ebuf_free(&b);
+  return n;
+}
+
+static void feed_publish_start(rtmp_t *r) {
+  unsigned char msg[256];
+  size_t n = build_status(msg, "status", "NetStream.Publish.Start");
+  ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+}
+
 static rtmp_t *make_client(capture_t *cap) {
   rtmp_cfg_t cfg;
   memset(cap, 0, sizeof *cap);
@@ -193,9 +217,12 @@ START_TEST(rtmp_full_publish_sequence_reaches_ready) {
   cap.len = 0;
   n = build_result_create_stream(msg, 5.0);
   ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
-  ck_assert_int_eq(cap.ready, 1);
+  ck_assert_int_eq(cap.ready, 0);
   ck_assert_ptr_nonnull(memmem(cap.buf, cap.len, "publish", 7));
   ck_assert_ptr_nonnull(memmem(cap.buf, cap.len, "key123", 6));
+
+  feed_publish_start(r);
+  ck_assert_int_eq(cap.ready, 1);
 
   rtmp_free(r);
 }
@@ -228,6 +255,7 @@ START_TEST(rtmp_send_after_ready_uses_created_stream_id) {
   rtmp_feed(r, msg, n);
   n = build_result_create_stream(msg, 7.0);
   rtmp_feed(r, msg, n);
+  feed_publish_start(r);
   ck_assert_int_eq(cap.ready, 1);
 
   cap.len = 0;
@@ -280,7 +308,58 @@ START_TEST(rtmp_error_reply_to_release_and_fcpublish_is_ignored) {
   ck_assert_str_eq(cap.error, "");
   n = build_result_create_stream(msg, 5.0);
   ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+  feed_publish_start(r);
   ck_assert_int_eq(cap.ready, 1);
+
+  rtmp_free(r);
+}
+END_TEST
+
+START_TEST(rtmp_media_is_refused_until_publish_start) {
+  capture_t cap;
+  rtmp_t *r = make_client(&cap);
+  unsigned char msg[256];
+  unsigned char video[3] = {0x17, 0x00, 0x01};
+  size_t n;
+
+  ck_assert_ptr_nonnull(r);
+  run_handshake(r, &cap);
+  n = build_result_connect(msg);
+  rtmp_feed(r, msg, n);
+  n = build_result_create_stream(msg, 7.0);
+  rtmp_feed(r, msg, n);
+  ck_assert_int_eq(rtmp_send_video(r, 0, video, sizeof video, NULL, 0), -1);
+
+  n = build_status(msg, "status", "NetStream.Unpublish.Success");
+  ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+  ck_assert_int_eq(cap.ready, 0);
+  ck_assert_int_eq(rtmp_send_video(r, 0, video, sizeof video, NULL, 0), -1);
+
+  feed_publish_start(r);
+  ck_assert_int_eq(cap.ready, 1);
+  ck_assert_int_eq(rtmp_send_video(r, 0, video, sizeof video, NULL, 0), 0);
+
+  rtmp_free(r);
+}
+END_TEST
+
+START_TEST(rtmp_publish_rejection_fires_error_cb) {
+  capture_t cap;
+  rtmp_t *r = make_client(&cap);
+  unsigned char msg[256];
+  size_t n;
+
+  ck_assert_ptr_nonnull(r);
+  run_handshake(r, &cap);
+  n = build_result_connect(msg);
+  rtmp_feed(r, msg, n);
+  n = build_result_create_stream(msg, 7.0);
+  rtmp_feed(r, msg, n);
+
+  n = build_status(msg, "error", "NetStream.Publish.BadName");
+  ck_assert_int_eq(rtmp_feed(r, msg, n), 0);
+  ck_assert_str_eq(cap.error, "NetStream.Publish.BadName");
+  ck_assert_int_eq(cap.ready, 0);
 
   rtmp_free(r);
 }
@@ -311,6 +390,18 @@ START_TEST(rtmp_connect_includes_authmod_when_user_set) {
   ck_assert_ptr_nonnull(r);
   run_handshake(r, &cap); /* asserts "connect"/"live" already present on wire */
   ck_assert_ptr_nonnull(memmem(cap.buf, cap.len, "authmod=adobe&user=bob", 23));
+
+  rtmp_free(r);
+}
+END_TEST
+
+START_TEST(rtmp_auth_user_is_percent_encoded) {
+  capture_t cap;
+  rtmp_t *r = make_client_with_auth(&cap, "a&b=c d", "pw");
+
+  ck_assert_ptr_nonnull(r);
+  run_handshake(r, &cap);
+  ck_assert_ptr_nonnull(memmem(cap.buf, cap.len, "authmod=adobe&user=a%26b%3Dc%20d", 32));
 
   rtmp_free(r);
 }
@@ -740,6 +831,7 @@ START_TEST(create_stream_result_requires_usable_stream_id) {
   plen = build_chunk(msg, RTMP_CID_INVOKE, RTMP_TYPE_INVOKE, 0, b.p, b.len);
   feed_ok(r, msg, plen);
   ebuf_free(&b);
+  if (c->ready) feed_publish_start(r);
 
   ck_assert_msg(cap.ready == c->ready, "%s: ready %d", c->name, cap.ready);
   if (c->ready) ck_assert_msg(r->stream_id == (uint32_t)c->id, "%s: stream id %u", c->name, r->stream_id);
@@ -799,6 +891,9 @@ static Suite *rtmp_suite(void) {
   tcase_add_test(tc, rtmp_error_reply_fires_error_cb);
   tcase_add_test(tc, rtmp_error_reply_to_release_and_fcpublish_is_ignored);
   tcase_add_test(tc, rtmp_error_reply_to_create_stream_fires_error_cb);
+  tcase_add_test(tc, rtmp_media_is_refused_until_publish_start);
+  tcase_add_test(tc, rtmp_publish_rejection_fires_error_cb);
+  tcase_add_test(tc, rtmp_auth_user_is_percent_encoded);
   tcase_add_test(tc, rtmp_connect_includes_authmod_when_user_set);
   tcase_add_test(tc, rtmp_needauth_error_without_crypto_fails_gracefully);
   tcase_add_loop_test(tc, handshake_c1_layout_and_determinism, 0, (int)(sizeof c1_timestamps / sizeof c1_timestamps[0]));

@@ -90,6 +90,21 @@ START_TEST(wake_fd_is_negative_before_signals_install) {
 }
 END_TEST
 
+START_TEST(second_install_keeps_wake_fd) {
+  signals_install();
+  int first = signal_wake_fd();
+  ck_assert_int_ge(first, 0);
+  signals_install();
+  ck_assert_int_eq(signal_wake_fd(), first);
+  signals_install_oneshot();
+  ck_assert_int_eq(signal_wake_fd(), first);
+
+  struct pollfd pfd = {first, POLLIN, 0};
+  raise(SIGTERM);
+  ck_assert_int_eq(poll(&pfd, 1, 0), 1);
+}
+END_TEST
+
 static Suite *signal_suite(void) {
   Suite *s = suite_create("lib_helper_signal");
   TCase *tc = tcase_create("core");
@@ -99,6 +114,7 @@ static Suite *signal_suite(void) {
   tcase_add_test(tc, sleep_interruptible_returns_after_duration_without_stop);
   tcase_add_test(tc, sleep_interruptible_wakes_promptly_on_stop);
   tcase_add_test(tc, sleep_interruptible_on_another_thread_wakes_on_stop_from_this_one);
+  tcase_add_test(tc, second_install_keeps_wake_fd);
   suite_add_tcase(s, tc);
   return s;
 }

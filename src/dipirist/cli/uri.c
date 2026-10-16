@@ -10,12 +10,19 @@
 #include "lib/helper/describe.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
+#include "lib/helper/uriparse.h"
 #include "lib/net/plain_endpoint.h"
 
 #include "priv.h"
 
+void dipirist_uri_redact(const char *uri, char *buf, size_t n) {
+  char *safe = uriparse_redact_dup(uri);
+  bufcpy(buf, n, safe ? safe : "?");
+  free(safe);
+}
+
 /* *count tracks with this flag: 0 = decides is_rist, further rist:// bond onto same endpoint, others (mixed, or a repeated non-RIST endpoint) rejected */
-int rist_parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *count) {
+int dipirist_parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *count) {
   int is_rist_uri = strncmp(uri, "rist://", 7) == 0;
   if (*count == 0) {
     e->is_rist = is_rist_uri;
@@ -28,8 +35,11 @@ int rist_parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *co
     int has_at = uri[7] == '@'; /* librist: '@' right after rist:// binds/listens, else it calls out */
 
 #ifdef DIPIRIST_LIBRIST_IPV6_WARN
-    if (uri[7 + has_at] == '[')
-      log_code("VA700106", "warning: this librist build (<=0.2.20) has known IPv6 handling bugs, %s may crash it", uri);
+    if (uri[7 + has_at] == '[') {
+      char safe[sizeof e->rist_uri[0]];
+      dipirist_uri_redact(uri, safe, sizeof safe);
+      log_code("VA700106", "warning: this librist build (<=0.2.20) has known IPv6 handling bugs, %s may crash it", safe);
+    }
 #endif
     if (e->n_rist >= DIPIRIST_MAX_PEERS) return -1;
     if (strlen(uri) >= sizeof e->rist_uri[0]) return -1;
@@ -43,8 +53,8 @@ int rist_parse_endpoint_uri(const char *uri, endpoint_t *e, int is_sink, int *co
   return 0;
 }
 
-int rist_cfg_add_endpoint(config_t *cfg, int is_out, const char *uri) {
-  return is_out ? rist_parse_endpoint_uri(uri, &cfg->out, 1, &cfg->n_out) : rist_parse_endpoint_uri(uri, &cfg->in, 0, &cfg->n_in);
+int dipirist_cfg_add_endpoint(config_t *cfg, int is_out, const char *uri) {
+  return is_out ? dipirist_parse_endpoint_uri(uri, &cfg->out, 1, &cfg->n_out) : dipirist_parse_endpoint_uri(uri, &cfg->in, 0, &cfg->n_in);
 }
 
 int config_is_sender(const config_t *cfg) {
@@ -53,12 +63,14 @@ int config_is_sender(const config_t *cfg) {
 
 void endpoint_describe(const endpoint_t *e, char *buf, size_t n) {
   if (e->is_rist) {
+    char safe[sizeof e->rist_uri[0]];
+    dipirist_uri_redact(e->rist_uri[0], safe, sizeof safe);
     if (e->n_rist == 1) {
-      bufcpy(buf, n, e->rist_uri[0]);
+      bufcpy(buf, n, safe);
     } else {
       sbuf_t b;
       sbuf_init(&b, buf, n);
-      sbuf_add(&b, e->rist_uri[0]);
+      sbuf_add(&b, safe);
       sbuf_add(&b, " +");
       sbuf_add_uint(&b, (unsigned)(e->n_rist - 1));
       sbuf_add(&b, " more");

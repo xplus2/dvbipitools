@@ -68,6 +68,12 @@ START_TEST(aac_adts_probe_rejects_too_short_frame_length) {
   aac_adts_info_t info;
   build_header(p, 4, 3, 0); /* frame_length must be >= 7 (header size) */
   ck_assert_int_eq(aac_adts_probe(p, sizeof p, &info), -1);
+  build_header(p, 4, 8, 0);
+  p[1] = 0xF0; /* CRC present: 9 B header */
+  ck_assert_int_eq(aac_adts_probe(p, sizeof p, &info), -1);
+  build_header(p, 4, 9, 0);
+  p[1] = 0xF0;
+  ck_assert_int_eq(aac_adts_probe(p, sizeof p, &info), 1);
 }
 END_TEST
 

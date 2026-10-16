@@ -63,11 +63,11 @@ int tvh_org_id_parse(const char *s, unsigned *out) {
   return argutil_uint_range(s, 1, 0xFFFFFFFFUL, out);
 }
 
-/* decimal or 0x-hex, PMT pid range: 0x0010..0x1FFE (0 = auto, handled by caller) */
+/* decimal or 0x, pid range 0x0010...0x1FFE */
 int tvh_cfg_pid(const char *s, unsigned *out) {
   char *end;
   unsigned long v = strtoul(s, &end, 0);
-  if (*end != '\0' || v > 0x1FFE) return -1;
+  if (*end != '\0' || v < 0x10 || v > 0x1FFE) return -1;
   *out = (unsigned)v;
   return 0;
 }

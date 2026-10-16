@@ -92,7 +92,27 @@ int tssrc_http_fd(const tssrc_t *s) {
   return -1;
 }
 
-#define HTTP_IDLE_WAIT_MS 20
+short tssrc_http_poll_events(const tssrc_t *s) {
+  switch (s->http_sub) {
+  case HTTP_SUB_TS:
+    return POLLIN;
+  case HTTP_SUB_HLS:
+    for (unsigned i = 0; i < s->n_media; i++)
+      if (hls_live_poll_fd(s->hls[i]) >= 0) return hls_live_poll_events(s->hls[i]);
+    return POLLIN;
+  case HTTP_SUB_DASH:
+    for (unsigned i = 0; i < s->n_media; i++)
+      if (dash_live_poll_fd(s->dash[i]) >= 0) return dash_live_poll_events(s->dash[i]);
+    return POLLIN;
+  }
+  return POLLIN;
+}
+
+int tssrc_http_timer_driven(const tssrc_t *s) {
+  if (s->http_sub == HTTP_SUB_TS || s->n_media == 0) return 0;
+  return 1; /* fetch stalls surface only when stepped */
+}
+
 
 int tssrc_http_wait(const tssrc_t *s, int timeout_ms) {
   struct pollfd pfd[sizeof s->hls / sizeof s->hls[0]];
@@ -131,16 +151,17 @@ int tssrc_http_wait(const tssrc_t *s, int timeout_ms) {
     break;
   }
   /* idle media wake on timers, not fds */
-  if (idle && timeout_ms > HTTP_IDLE_WAIT_MS) timeout_ms = HTTP_IDLE_WAIT_MS;
+  if (idle && timeout_ms > TSSRC_TIMER_WAIT_MS) timeout_ms = TSSRC_TIMER_WAIT_MS;
   for (nfds_t i = 0; i < n; i++) pfd[i].revents = 0;
   pr = poll(pfd, n, timeout_ms);
   if (pr < 0) return errno == EINTR ? 0 : -1;
   return pr > 0;
 }
 
-void tssrc_http_free_media(const tssrc_t *s) {
+void tssrc_http_free_media(tssrc_t *s) {
   for (unsigned i = 0; i < s->n_media; i++) {
     if (s->hls[i]) hls_live_free(s->hls[i]);
     if (s->dash[i]) dash_live_free(s->dash[i]);
   }
+  esbuild_remux_free(&s->remux);
 }

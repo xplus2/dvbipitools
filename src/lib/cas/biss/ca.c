@@ -13,6 +13,8 @@
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
 
+#include "lib/helper/secure_zero.h"
+
 #include "ca.h"
 #include "evp_block.h"
 
@@ -177,6 +179,7 @@ int biss_ca_rsa_decrypt(const biss_ca_key_t *priv, const unsigned char in[BISS_C
   *out_len = outlen;
   rc = 0;
 out:
+  secure_zero(scratch, sizeof scratch);
   EVP_PKEY_CTX_free(ctx);
   return rc;
 }

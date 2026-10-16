@@ -90,9 +90,20 @@ mcast_t *tssrc_mcast(const tssrc_t *s);
 /* underlying fd, for caller's own poll(). valid for life of s. */
 int tssrc_fd(const tssrc_t *s);
 
+/* events to poll tssrc_fd() for. POLLIN except HLS/DASH mid-connect */
+short tssrc_poll_events(const tssrc_t *s);
+
+/* 1: tssrc_fd() alone cannot wake caller (HLS/DASH idle on timers, or several media). caller must call
+   tssrc_read() every tick + cap its poll to TSSRC_TIMER_WAIT_MS. tssrc_read() returns 0 when nothing due */
+int tssrc_timer_driven(const tssrc_t *s);
+#define TSSRC_TIMER_WAIT_MS 20
+
 /* blocks up to timeout_ms. 1: tssrc_read() likely has data. 0: timeout/EINTR. -1: poll error.
    unlike poll(tssrc_fd()): HLS/DASH covers every media, connect (POLLOUT), buffered data, timer-driven idle */
 int tssrc_wait(const tssrc_t *s, int timeout_ms);
+
+/* TSSRC_UDP/TSSRC_RTP: socket non-blocking, tssrc_read() returns 0 when empty so callers may drain. 1 on success, else 0 */
+int tssrc_set_nonblock(tssrc_t *s);
 
 int tssrc_fec_fd(const tssrc_t *s);
 void tssrc_fec_poll(tssrc_t *s);
@@ -130,5 +141,9 @@ tssrc_t *tssrc_open_async_take(tssrc_open_t *o);
 
 /* frees handle + owned state. safe at any state incl. PENDING */
 void tssrc_open_async_free(tssrc_open_t *o);
+
+/* blocking open that classifies HTTP content (HLS/DASH/TS). timeout_s bounds HTTP only.
+   NULL on failure, timeout (NET_ERR_TIMEOUT) or stop request. reason_out: nullable */
+tssrc_t *tssrc_open_blocking(const tssrc_cfg_t *cfg, double timeout_s, net_err_reason_t *reason_out);
 
 #endif

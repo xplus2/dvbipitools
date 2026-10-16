@@ -132,7 +132,15 @@ int growbuf_reserve(void **buf, size_t *cap, size_t elem_size, size_t need_elems
   void *np;
   if (*cap >= need_elems) return 0;
   ncap = *cap ? *cap : initial_elems;
-  while (ncap < need_elems) ncap *= 2;
+  if (!ncap) ncap = 1;
+  while (ncap < need_elems) {
+    if (ncap > SIZE_MAX / 2) {
+      ncap = need_elems;
+      break;
+    }
+    ncap *= 2;
+  }
+  if (elem_size && ncap > SIZE_MAX / elem_size) return -1;
   np = realloc(*buf, ncap * elem_size);
   if (!np) return -1;
   *buf = np;
@@ -190,6 +198,12 @@ size_t csv_split(char *line, char **fields, size_t max_fields) {
   return nf;
 }
 
+static int days_in_month(int y, int mo) {
+  static const unsigned char dim[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (mo == 2 && (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0))) return 29;
+  return dim[mo - 1];
+}
+
 int iso8601_split(const char *in, iso8601_t *out) {
   size_t l = strlen(in);
   const char *tail;
@@ -203,6 +217,8 @@ int iso8601_split(const char *in, iso8601_t *out) {
   out->h = (in[11] - '0') * 10 + (in[12] - '0');
   out->mi = (in[14] - '0') * 10 + (in[15] - '0');
   out->s = (in[17] - '0') * 10 + (in[18] - '0');
+  if (out->mo < 1 || out->mo > 12 || out->d < 1 || out->d > days_in_month(out->y, out->mo)) return -1;
+  if (out->h > 23 || out->mi > 59 || out->s > 59) return -1;
   out->off_min = 0;
   tail = in + 19;
   if (*tail == '.') {
@@ -211,7 +227,7 @@ int iso8601_split(const char *in, iso8601_t *out) {
     if (fe == tail + 1) return -1;
     tail = fe;
   }
-  if (*tail == 'Z') {
+  if (tail[0] == 'Z' && tail[1] == '\0') {
     out->offset_kind = ISO8601_OFF_Z;
     return 0;
   }
@@ -219,9 +235,10 @@ int iso8601_split(const char *in, iso8601_t *out) {
     out->offset_kind = ISO8601_OFF_NONE;
     return 0;
   }
-  if ((*tail == '+' || *tail == '-') && strlen(tail) >= 6 && tail[3] == ':' && all_digits(tail + 1, 2) && all_digits(tail + 4, 2)) {
+  if ((*tail == '+' || *tail == '-') && strlen(tail) == 6 && tail[3] == ':' && all_digits(tail + 1, 2) && all_digits(tail + 4, 2)) {
     int oh = (tail[1] - '0') * 10 + (tail[2] - '0');
     int om = (tail[4] - '0') * 10 + (tail[5] - '0');
+    if (oh > 23 || om > 59) return -1;
     out->off_min = (oh * 60 + om) * (tail[0] == '-' ? -1 : 1);
     out->offset_kind = ISO8601_OFF_NUMERIC;
     return 0;

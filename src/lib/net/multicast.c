@@ -348,6 +348,26 @@ ssize_t mcast_send(mcast_t *m, const void *buf, size_t len) {
   return n;
 }
 
+ssize_t mcast_send_tos(mcast_t *m, const void *buf, size_t len, int tos) {
+  const struct sockaddr *sa;
+  socklen_t salen;
+  ssize_t n;
+
+  if (m->family == AF_INET) {
+    sa = (const struct sockaddr *)&m->dest.v4;
+    salen = sizeof m->dest.v4;
+  } else {
+    sa = (const struct sockaddr *)&m->dest.v6;
+    salen = sizeof m->dest.v6;
+  }
+  n = net_sendto_tos(m->fd, buf, len, sa, salen, tos);
+  if (n < 0) {
+    log_throttled(&m->send_fail_throttle, LOG_THROTTLE_WINDOW_S, "LE100128", "sendmsg: %s", strerror(errno));
+    return -1;
+  }
+  return n;
+}
+
 ssize_t mcast_sendv(mcast_t *m, const void *hdr, size_t hdr_len, const void *payload, size_t payload_len) {
   const struct sockaddr *sa;
   socklen_t salen;

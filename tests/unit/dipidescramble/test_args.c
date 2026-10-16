@@ -302,7 +302,7 @@ END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipidescramble_cfg_XXXXXX";
-  char *argv[] = {"dipidescramble", "-c", path, NULL};
+  char *argv[] = {"dipidescramble", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "input: udp://@239.1.1.1:5000\noutput: a.ts\nmax-services: 300\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);

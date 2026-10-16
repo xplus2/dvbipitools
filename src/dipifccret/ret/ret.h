@@ -14,7 +14,7 @@
 
 #include "../channel/channel.h"
 
-/* sends one built packet on c's MC RET session (F.6.2.2); caller owns socket, sets IP_TOS to dscp */
+/* sends one built packet on c's MC RET session (F.6.2.2); caller owns socket, marks dscp per packet */
 typedef void (*ret_send_fn)(const channel_t *c, const unsigned char *pkt, size_t len, int dscp, void *user);
 
 /* sends one built packet back to requester via fd (F.3.1/Figure F.2 mandatory unicast reply) */

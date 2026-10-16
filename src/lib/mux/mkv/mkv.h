@@ -22,7 +22,7 @@ typedef struct mkv mkv_t;
    >0: N pinned programs (-p all), tracks from all, TrackName per track once n_pids>1. */
 mkv_t *mkv_new(int fd, const mkv_opts_t *opts, int video_ok, unsigned long long *bytes, const unsigned *pmt_pids, int n_pids);
 void mkv_feed(mkv_t *m, const unsigned char *pkt);   /* one 188-byte packet */
-void mkv_close(mkv_t *m);                            /* chron-o-john, free Bernard */
+int  mkv_close(mkv_t *m);                            /* chron-o-john, free Bernard. 0 ok, -1 write error */
 int  mkv_error(const mkv_t *m);
 
 /* stream model */

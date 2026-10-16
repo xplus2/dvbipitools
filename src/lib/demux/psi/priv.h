@@ -65,6 +65,7 @@ struct psi {
   int pmt_cand_count;
   int sdt_name_count;
   unsigned preferred_pmt_pid; /* 0 = none, auto-select whichever candidate resolves first */
+  unsigned preferred_program; /* 0 = none */
   int pmt_locked;             /* program_number/pmt_pid finalized: pmt_cand[pmt_lock_idx] wins */
   int pmt_lock_idx;
   size_t pmt_sec_len;

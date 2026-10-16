@@ -1,6 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -167,6 +169,7 @@ int dvb_datetime_encode(bitwriter_t *bw, const char *iso8601) {
   uint64_t ms;
 
   if (iso8601_split(iso8601, &f)) return -1;
+  /* no offset: UTC (off_min 0) */
   mjd_local = date_to_mjd(f.y, f.mo, f.d);
   total_minutes = mjd_local * 1440L + f.h * 60L + f.mi - f.off_min;
   mjd_utc = floor_div(total_minutes, 1440L);
@@ -270,10 +273,9 @@ void bim_node_free(bim_node_t *n) {
   free(n);
 }
 
-int bim_node_set_attr(bim_node_t *n, const char *name, const char *value) {
-  char *v = strdup(value);
+/* Takes ownership of v, also on failure */
+static int node_put_attr(bim_node_t *n, const char *name, char *v) {
   void *np;
-  if (!v) return -1;
   for (int i = 0; i < n->nattrs; i++) {
     if (strcmp(n->attrs[i].name, name)) continue;
     free(n->attrs[i].value);
@@ -290,6 +292,12 @@ int bim_node_set_attr(bim_node_t *n, const char *name, const char *value) {
   n->attrs[n->nattrs].value = v;
   n->nattrs++;
   return 0;
+}
+
+int bim_node_set_attr(bim_node_t *n, const char *name, const char *value) {
+  char *v = strdup(value);
+  if (!v) return -1;
+  return node_put_attr(n, name, v);
 }
 
 const char *bim_node_attr(const bim_node_t *n, const char *name) {
@@ -343,15 +351,45 @@ static int enum_bits(int n) {
 
 static int put_bit(bitwriter_t *bw, int v) { return bitwriter_put(bw, v ? 1 : 0, 1); }
 
+static const char *skip_ws(const char *s) {
+  while (isspace((unsigned char)*s)) s++;
+  return s;
+}
+
+static int parse_uvlu8(const char *v, uint64_t *out) {
+  char *end;
+  unsigned long long n;
+  v = skip_ws(v);
+  if (*v < '0' || *v > '9') return -1;
+  errno = 0;
+  n = strtoull(v, &end, 10);
+  if (errno || *skip_ws(end)) return -1;
+  *out = n;
+  return 0;
+}
+
+static int parse_boolean(const char *v, int *out) {
+  size_t n;
+  v = skip_ws(v);
+  n = strlen(v);
+  while (n && isspace((unsigned char)v[n - 1])) n--;
+  if ((n == 4 && !strncmp(v, "true", 4)) || (n == 1 && *v == '1')) *out = 1;
+  else if ((n == 5 && !strncmp(v, "false", 5)) || (n == 1 && *v == '0')) *out = 0;
+  else return -1;
+  return 0;
+}
+
 static int encode_value(const bim_attr_t *a, bim_codec_t codec, const char *v, bitwriter_t *bw, strrepo_writer_t *sw) {
+  uint64_t u;
+  int b;
   switch (codec) {
     case BIM_STRING: return dvb_string_encode(sw, v);
     case BIM_LOCATOR: return dvb_locator_encode(bw, sw, v);
     case BIM_DATETIME: return dvb_datetime_encode(bw, v);
     case BIM_DURATION: return put_bit(bw, 0) || dvb_string_encode(sw, v);
     case BIM_TERMREF: return dvb_controlledterm_encode(bw, sw, v);
-    case BIM_BOOLEAN: return put_bit(bw, !strcmp(v, "true") || !strcmp(v, "1"));
-    case BIM_UVLU8: return bitwriter_put_vluimsbf8(bw, strtoull(v, NULL, 10));
+    case BIM_BOOLEAN: return parse_boolean(v, &b) ? -1 : put_bit(bw, b);
+    case BIM_UVLU8: return parse_uvlu8(v, &u) ? -1 : bitwriter_put_vluimsbf8(bw, u);
     case BIM_ENUM:
       for (int i = 0; a && i < a->nenums; i++)
         if (!strcmp(a->enums[i], v)) return bitwriter_put(bw, (uint64_t)i, enum_bits(a->nenums));
@@ -362,37 +400,72 @@ static int encode_value(const bim_attr_t *a, bim_codec_t codec, const char *v, b
 
 static int encode_body(const bim_type_t *t, const bim_node_t *node, bitwriter_t *bw, strrepo_writer_t *sw);
 
-static int part_names_match(const bim_part_t *p, const char *name) {
-  if (p->kind == BIM_PART_ELEM) return !strcmp(p->name, name);
-  for (int i = 0; i < p->nkids; i++)
-    if (part_names_match(&p->kids[i], name)) return 1;
-  return 0;
-}
-
 static int encode_occurrences(const bim_part_t *p, int count, bitwriter_t *bw) {
   if ((unsigned)count < p->min || (p->max != BIM_UNBOUNDED && (unsigned)count > p->max)) return -1;
   if (p->max == 1) return p->min == 0 ? put_bit(bw, count) : 0;
   return bitwriter_put_vluimsbf4(bw, (uint64_t)count);
 }
 
-static int encode_part(const bim_part_t *p, const bim_node_t *node, int *ci, bitwriter_t *bw, strrepo_writer_t *sw) {
-  int count = 0;
+typedef struct {
+  bitwriter_t *bw;
+  strrepo_writer_t *sw;
+  int dry; /* match only, no output */
+} enc_t;
+
+static int walk_part(enc_t *e, const bim_part_t *p, const bim_node_t *node, int *ci);
+
+static int walk_one(enc_t *e, const bim_part_t *p, const bim_node_t *node, int *ci) {
   if (p->kind == BIM_PART_ELEM) {
-    while (*ci + count < node->nkids && !strcmp(node->kids[*ci + count]->name, p->name)) count++;
-    if (count && !p->type) return -1;
-    if (encode_occurrences(p, count, bw)) return -1;
-    for (int i = 0; i < count; i++)
-      if (encode_body(p->type, node->kids[*ci + i], bw, sw)) return -1;
-    *ci += count;
+    if (!p->type || *ci >= node->nkids || strcmp(node->kids[*ci]->name, p->name)) return -1;
+    if (!e->dry && encode_body(p->type, node->kids[*ci], e->bw, e->sw)) return -1;
+    (*ci)++;
     return 0;
   }
-  if (p->kind == BIM_PART_SEQ && p->min == 1 && p->max == 1) {
+  if (p->kind == BIM_PART_SEQ) {
     for (int i = 0; i < p->nkids; i++)
-      if (encode_part(&p->kids[i], node, ci, bw, sw)) return -1;
+      if (walk_part(e, &p->kids[i], node, ci)) return -1;
     return 0;
   }
-  if (*ci < node->nkids && part_names_match(p, node->kids[*ci]->name)) return -1;
-  return encode_occurrences(p, 0, bw);
+  if (p->kind == BIM_PART_CHOICE) {
+    enc_t dry = {NULL, NULL, 1};
+    int pick = -1, empty = -1;
+    for (int i = 0; i < p->nkids && pick < 0; i++) {
+      int c = *ci;
+      if (walk_one(&dry, &p->kids[i], node, &c)) continue;
+      if (c > *ci) pick = i;
+      else if (empty < 0) empty = i;
+    }
+    if (pick < 0) pick = empty;
+    if (pick < 0) return -1;
+    if (!e->dry && bitwriter_put(e->bw, (uint64_t)pick, enum_bits(p->nkids))) return -1;
+    return walk_one(e, &p->kids[pick], node, ci);
+  }
+  return -1;
+}
+
+static size_t out_mark(const enc_t *e) { return e->bw->len * 8 + (size_t)e->bw->cur_bits + e->sw->len; }
+
+static int walk_part(enc_t *e, const bim_part_t *p, const bim_node_t *node, int *ci) {
+  enc_t dry = {NULL, NULL, 1};
+  int cur = *ci, count = 0;
+  while (p->max == BIM_UNBOUNDED || (unsigned)count < p->max) {
+    int c = cur;
+    if (walk_one(&dry, p, node, &c)) break;
+    if (c == cur) {
+      if ((unsigned)count < p->min) count = (int)p->min; /* empty occurrences */
+      break;
+    }
+    cur = c;
+    count++;
+  }
+  if ((unsigned)count < p->min) return -1;
+  if (!e->dry && encode_occurrences(p, count, e->bw)) return -1;
+  for (int i = 0; i < count; i++) {
+    size_t mark = e->dry ? 0 : out_mark(e);
+    if (walk_one(e, p, node, ci)) return -1;
+    if (!e->dry && count > 1 && mark == out_mark(e)) return -1; /* decoder rejects */
+  }
+  return 0;
 }
 
 static int encode_body(const bim_type_t *t, const bim_node_t *node, bitwriter_t *bw, strrepo_writer_t *sw) {
@@ -409,7 +482,8 @@ static int encode_body(const bim_type_t *t, const bim_node_t *node, bitwriter_t 
   }
   if (t->content == BIM_CONTENT_SIMPLE) return encode_value(NULL, t->codec, node->text ? node->text : "", bw, sw);
   if (t->content == BIM_CONTENT_SEQ) {
-    if (encode_part(t->top, node, &ci, bw, sw)) return -1;
+    enc_t e = {bw, sw, 0};
+    if (walk_part(&e, t->top, node, &ci)) return -1;
     return ci == node->nkids ? 0 : -1;
   }
   return 0;
@@ -506,13 +580,11 @@ static int decode_part(dec_t *d, const bim_part_t *p, bim_node_t *node) {
     if (bitreader_get_vluimsbf4(d->br, &count) || count < p->min || (p->max != BIM_UNBOUNDED && count > p->max)) return -1;
   }
   for (uint64_t i = 0; i < count; i++) {
-    if (p->kind == BIM_PART_ELEM) {
-      if (decode_one(d, p, node)) return -1;
-    } else if (p->kind == BIM_PART_SEQ || p->kind == BIM_PART_CHOICE) {
-      if (decode_one(d, p, node)) return -1;
-    } else {
-      return -1;
-    }
+    size_t bits = bitreader_bits_left(d->br);
+    size_t spos = d->sr->pos;
+    if (p->kind != BIM_PART_ELEM && p->kind != BIM_PART_SEQ && p->kind != BIM_PART_CHOICE) return -1;
+    if (decode_one(d, p, node)) return -1;
+    if (count > 1 && bits == bitreader_bits_left(d->br) && spos == d->sr->pos) return -1;
   }
   return 0;
 }
@@ -525,11 +597,7 @@ static int decode_body(dec_t *d, const bim_type_t *t, bim_node_t *node) {
     if (!a->required && bitreader_get(d->br, 1, &present)) return -1;
     if (!present) continue;
     if (decode_value(d, a, a->codec, &v)) return -1;
-    if (bim_node_set_attr(node, a->name, v)) {
-      free(v);
-      return -1;
-    }
-    free(v);
+    if (node_put_attr(node, a->name, v)) return -1;
   }
   if (t->content == BIM_CONTENT_SIMPLE) {
     char *v = NULL;

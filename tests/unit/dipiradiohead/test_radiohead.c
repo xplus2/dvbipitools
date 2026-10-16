@@ -483,8 +483,19 @@ START_TEST(output_open_builds_the_configured_senders_and_close_releases_them) {
   }
   cfg.n_rist = c->n_rist;
   cfg.n_srt = c->n_srt;
+  cfg.dscp = 46;
 
   rc = radiohead_output_open(&cfg, &o);
+  if (o.fec_mc) {
+    int tos_media = 0;
+    int tos_fec = 0;
+    socklen_t sl = sizeof tos_media;
+    ck_assert_int_eq(getsockopt(mcast_fd(o.mc), IPPROTO_IP, IP_TOS, &tos_media, &sl), 0);
+    sl = sizeof tos_fec;
+    ck_assert_int_eq(getsockopt(mcast_fd(o.fec_mc), IPPROTO_IP, IP_TOS, &tos_fec, &sl), 0);
+    ck_assert_int_ne(tos_media, 0);
+    ck_assert_int_eq(tos_fec, tos_media);
+  }
   ck_assert_msg(rc == c->want_rc, "%s: rc %d", c->name, rc);
   ck_assert_msg((o.mc != NULL) == (c->mcast != 0), "%s: mc %p", c->name, (void *)o.mc);
   ck_assert_msg((o.rtph != NULL) == (c->mcast && c->rtp), "%s: rtph %p", c->name, (void *)o.rtph);

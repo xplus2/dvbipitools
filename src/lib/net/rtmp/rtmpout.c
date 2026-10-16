@@ -1,11 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <errno.h>
 #include <poll.h>
-#include <pthread.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,23 +19,14 @@
 
 #define RTMPOUT_RETRY_S 3
 #define RTMPOUT_SETUP_TIMEOUT_S 10
+#define RTMPOUT_CLOSE_FLUSH_MS 1000
 #define RTMPOUT_READBUF 4096
 #define RTMPOUT_SEQHDR_MAX 2048
 #define RTMPOUT_OUTQ_INIT 65536
 #define RTMPOUT_OUTQ_HWM (1u << 20)
 #define RTMPOUT_OUTQ_MAX (8u << 20)
 
-typedef enum { RTMPOUT_DOWN, RTMPOUT_RESOLVING, RTMPOUT_TCP_CONNECTING, RTMPOUT_TLS_HANDSHAKING, RTMPOUT_PROTOCOL } rtmpout_phase_t;
-
-enum { RESOLVE_RUNNING, RESOLVE_DONE, RESOLVE_ABANDONED };
-
-typedef struct {
-  atomic_int state;
-  char host[256];
-  unsigned port;
-  int fd;
-  netconnect_pending_t *pending;
-} resolve_job_t;
+typedef enum { RTMPOUT_DOWN, RTMPOUT_TCP_CONNECTING, RTMPOUT_TLS_HANDSHAKING, RTMPOUT_PROTOCOL } rtmpout_phase_t;
 
 struct rtmpout {
   char host[256];
@@ -48,14 +36,13 @@ struct rtmpout {
   char tcurl[512];
   char user[128];
   char pass[128];
-  char auth_query[400]; /* carried across reconnect after needauth */
+  char auth_query[768]; /* carried across reconnect after needauth */
   int use_tls;
   int insecure;
 
   rtmpout_phase_t phase;
   int fd;
   netconnect_pending_t *connect_pending;
-  resolve_job_t *job;
   double deadline; /* 0: none */
   tls_t *tls;
   rtmp_t *rtmp;
@@ -76,28 +63,6 @@ struct rtmpout {
   size_t outq_off;
   size_t outq_len;
 };
-
-static void job_release(resolve_job_t *j) {
-  if (j->fd >= 0) close(j->fd);
-  netconnect_tcp_abort(j->pending);
-  free(j);
-}
-
-static void *resolve_thread(void *arg) {
-  resolve_job_t *j = arg;
-  net_err_reason_t reason;
-  j->fd = netconnect_tcp_start(j->host, j->port, &j->pending, &reason);
-  if (RESOLVE_ABANDONED == atomic_exchange(&j->state, RESOLVE_DONE))
-    job_release(j);
-  return NULL;
-}
-
-static void job_abandon(rtmpout_t *o) {
-  if (!o->job) return;
-  if (RESOLVE_DONE == atomic_exchange(&o->job->state, RESOLVE_ABANDONED))
-    job_release(o->job);
-  o->job = NULL;
-}
 
 static void close_link(rtmpout_t *o) {
   if (o->tls) {
@@ -199,7 +164,6 @@ static void teardown(rtmpout_t *o) {
     rtmp_free(o->rtmp);
     o->rtmp = NULL;
   }
-  job_abandon(o);
   if (o->connect_pending) {
     netconnect_tcp_abort(o->connect_pending);
     o->connect_pending = NULL;
@@ -222,40 +186,12 @@ static void enter_phase(rtmpout_t *o, rtmpout_phase_t phase, double now) {
   o->deadline = now + RTMPOUT_SETUP_TIMEOUT_S;
 }
 
-static int host_is_numeric(const char *host) {
-  unsigned char a[sizeof(struct in6_addr)];
-  return 1 == inet_pton(AF_INET, host, a) || 1 == inet_pton(AF_INET6, host, a);
-}
-
 static void try_connect(rtmpout_t *o, double now) {
-  pthread_attr_t attr;
-  pthread_t th;
-  resolve_job_t *j;
   net_err_reason_t reason;
-  int rc;
 
   o->next_retry = now + RTMPOUT_RETRY_S;
-  if (host_is_numeric(o->host)) { /* no lookup, connect starts without blocking */
-    o->fd = netconnect_tcp_start(o->host, o->port, &o->connect_pending, &reason);
-    if (o->fd >= 0) enter_phase(o, RTMPOUT_TCP_CONNECTING, now);
-    return;
-  }
-  j = calloc(1, sizeof *j);
-  if (!j) return;
-  atomic_init(&j->state, RESOLVE_RUNNING);
-  j->fd = -1;
-  j->port = o->port;
-  bufcpy(j->host, sizeof j->host, o->host);
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-  rc = pthread_create(&th, &attr, resolve_thread, j);
-  pthread_attr_destroy(&attr);
-  if (rc) {
-    free(j);
-    return;
-  }
-  o->job = j;
-  o->phase = RTMPOUT_RESOLVING;
+  o->fd = netconnect_tcp_start(o->host, o->port, &o->connect_pending, &reason);
+  if (o->fd >= 0) enter_phase(o, RTMPOUT_TCP_CONNECTING, now);
 }
 
 static void start_rtmp(rtmpout_t *o) {
@@ -336,28 +272,11 @@ static void service(rtmpout_t *o) {
       if (now >= o->next_retry) try_connect(o, now);
       return;
 
-    case RTMPOUT_RESOLVING: {
-      resolve_job_t *j = o->job;
-      if (RESOLVE_DONE != atomic_load(&j->state))
-        return;
-      o->fd = j->fd;
-      o->connect_pending = j->pending;
-      free(j);
-      o->job = NULL;
-      if (o->fd < 0) {
-        o->phase = RTMPOUT_DOWN;
-        o->next_retry = now + RTMPOUT_RETRY_S;
-        return;
-      }
-      enter_phase(o, RTMPOUT_TCP_CONNECTING, now);
-      return;
-    }
-
     case RTMPOUT_TCP_CONNECTING: {
       net_err_reason_t reason;
       int cr;
       pfd.fd = o->fd;
-      pfd.events = POLLOUT;
+      pfd.events = netconnect_tcp_events(o->connect_pending);
       if (poll(&pfd, 1, 0) <= 0)
         return;
       cr = netconnect_tcp_finish(&o->connect_pending, &o->fd, &reason);
@@ -407,6 +326,10 @@ static void service(rtmpout_t *o) {
         teardown(o);
       return;
   }
+}
+
+void rtmpout_service(rtmpout_t *o) {
+  service(o);
 }
 
 static int is_video_key(const unsigned char *hdr, size_t hn) {
@@ -580,12 +503,31 @@ rtmpout_t *rtmpout_open(const rtmpout_cfg_t *cfg) {
   return o;
 }
 
+/* best effort, bounded wait for queued tail */
+static void close_flush(rtmpout_t *o) {
+  int64_t end = now_ms() + RTMPOUT_CLOSE_FLUSH_MS;
+  if (!o->ready || o->fd < 0)
+    return;
+  outq_flush(o);
+  while (!o->failed && outq_pending(o)) {
+    struct pollfd pfd;
+    int64_t left = end - now_ms();
+    if (left <= 0)
+      break;
+    pfd.fd = o->fd;
+    pfd.events = POLLOUT;
+    if (poll(&pfd, 1, (int)left) < 0 && EINTR != errno)
+      break;
+    outq_flush(o);
+  }
+}
+
 void rtmpout_close(rtmpout_t *o) {
   if (!o)
     return;
+  close_flush(o);
   if (o->rtmp)
     rtmp_free(o->rtmp);
-  job_abandon(o);
   if (o->connect_pending)
     netconnect_tcp_abort(o->connect_pending);
   close_link(o);

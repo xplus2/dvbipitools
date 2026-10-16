@@ -267,7 +267,7 @@ START_TEST(configtest_ok_returns_exit_status) {
   char path[] = "/tmp/dipimetrics_cfg_XXXXXX";
   char *argv[] = {"dipimetrics", "--configtest", "-c", path, NULL};
   config_t cfg;
-  write_cfg(path, "bogus: 1\nexpiry: 0\ntls:\n  cert: /nonexistent/c.pem\n");
+  write_cfg(path, "bogus: 1\ntls:\n  cert: /nonexistent/c.pem\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
   unlink(path);
 }

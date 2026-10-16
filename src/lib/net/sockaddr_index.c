@@ -99,19 +99,20 @@ void sockaddr_index_free(sockaddr_index_t *idx) {
   free(idx);
 }
 
-/* drops tombstones, reinserts live entries into zeroed table same size.
-   keys live in entries, no caller data needed */
-static void rebuild(sockaddr_index_t *idx) {
+/* drops tombstones, reinserts live entries into zeroed table of new_size (power of two).
+   keys live in entries, no caller data needed. 0 ok, -1 OOM with old table kept */
+static int rebuild(sockaddr_index_t *idx, size_t new_size) {
   sockaddr_index_entry_t *old = idx->entries;
   size_t old_size = idx->size;
   size_t live = 0;
 
-  idx->entries = calloc(idx->size, sizeof *idx->entries);
+  idx->entries = calloc(new_size, sizeof *idx->entries);
   if (!idx->entries) {
-    /* OOM mid-rebuild: keep old table, oversized but correct */
     idx->entries = old;
-    return;
+    return -1;
   }
+  idx->size = new_size;
+  idx->mask = new_size - 1;
   for (size_t i = 0; i < old_size; i++) {
     sockaddr_key_t k;
     size_t h;
@@ -128,6 +129,7 @@ static void rebuild(sockaddr_index_t *idx) {
   free(old);
   idx->used = live;
   idx->tombstones = 0;
+  return 0;
 }
 
 size_t sockaddr_index_find(const sockaddr_index_t *idx, const struct sockaddr *addr, socklen_t addrlen) {
@@ -150,17 +152,20 @@ void sockaddr_index_insert(sockaddr_index_t *idx, const struct sockaddr *addr, s
   size_t h;
 
   canon_key(addr, addrlen, &k);
+  if ((idx->used + idx->tombstones + 1) * 4 > idx->size * 3) {
+    size_t new_size = (idx->used + 1) * 2 > idx->size ? idx->size * 2 : idx->size;
+    if (rebuild(idx, new_size) != 0 && idx->used + idx->tombstones + 1 >= idx->size) return; /* OOM, no room: entry dropped */
+  }
   h = key_hash(&k) & idx->mask;
   while (idx->entries[h].state == SOCKADDR_INDEX_OCCUPIED) h = (h + 1) & idx->mask;
   if (idx->entries[h].state == SOCKADDR_INDEX_TOMBSTONE) idx->tombstones--;
-  else idx->used++;
+  idx->used++;
   idx->entries[h].state = SOCKADDR_INDEX_OCCUPIED;
   idx->entries[h].family = k.family;
   memcpy(idx->entries[h].bytes, k.bytes, k.byteslen);
   idx->entries[h].byteslen = k.byteslen;
   idx->entries[h].port = k.port;
   idx->entries[h].slot = slot_idx;
-  if (idx->used + idx->tombstones > (idx->size / 4) * 3) rebuild(idx);
 }
 
 size_t sockaddr_stripe_of(const struct sockaddr *addr, socklen_t addrlen, size_t stripe_count) {
@@ -183,7 +188,7 @@ void sockaddr_index_remove(sockaddr_index_t *idx, const struct sockaddr *addr, s
     if (e->state == SOCKADDR_INDEX_OCCUPIED && entry_key_eq(e, &k)) {
       e->state = SOCKADDR_INDEX_TOMBSTONE;
       idx->used--;
-      if (++idx->tombstones > idx->size / 4) rebuild(idx);
+      if (++idx->tombstones > idx->size / 4) rebuild(idx, idx->size);
       return;
     }
     h = (h + 1) & idx->mask;

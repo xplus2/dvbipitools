@@ -32,8 +32,7 @@ size=$(wc -c < "$WORK/good.bim")
 run_expect_rc 1 "empty bim" "$BIN" -f bim -i "$WORK/empty.bim" -o "$WORK/empty.xml"
 
 : > "$WORK/empty.xml"
-run_expect_rc 0 "empty xml" "$BIN" -f xml -i "$WORK/empty.xml" -o "$WORK/empty.out.bim"
-run_expect_rc 0 "empty xml round trip" "$BIN" -f bim -i "$WORK/empty.out.bim" -o "$WORK/empty.back.xml"
+run_expect_rc 1 "empty xml" "$BIN" -f xml -i "$WORK/empty.xml" -o "$WORK/empty.out.bim"
 
 cut=1
 while [ "$cut" -lt "$size" ]; do

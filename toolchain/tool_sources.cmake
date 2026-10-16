@@ -811,7 +811,7 @@ function(dipirec_resolve_sources)
             ${RTMP_AUTH_SRC}
             ${CMAKE_SOURCE_DIR}/src/lib/mux/pmt_filter.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/filter/ts.c
-            ${CMAKE_SOURCE_DIR}/src/dipirec/filter/pace.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/ts/pace.c
             ${SRT_SRC})
     set(DIPIREC_SRCS ${DIPIREC_SRCS} PARENT_SCOPE)
     set(DIPIREC_HAVE_TLS ${DIPIREC_HAVE_TLS} PARENT_SCOPE)
@@ -897,6 +897,7 @@ function(dipirist_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/source.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/deframe.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/jitter.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/ts/pace.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/http.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/open_async.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/jitbuf.c
@@ -944,18 +945,6 @@ function(dipirist_resolve_sources)
     set(DIPIRIST_HAVE_TLS ${DIPIRIST_HAVE_TLS} PARENT_SCOPE)
     set(DIPIRIST_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
     set(DIPIRIST_LIBRIST_IPV6_WARN ${DVBIPITOOLS_RIST_IPV6_WARN} PARENT_SCOPE)
-
-    include(CheckCSourceCompiles)
-    set(CMAKE_REQUIRED_INCLUDES ${RIST_INCLUDE_DIRS})
-    check_c_source_compiles("
-#include <librist/librist.h>
-int main(void) {
-    struct rist_stats_receiver_flow f;
-    return (int) f.avg_buffer_time;
-}
-" DIPIRIST_HAVE_AVG_BUFFER_TIME)
-    unset(CMAKE_REQUIRED_INCLUDES)
-    set(DIPIRIST_HAVE_AVG_BUFFER_TIME ${DIPIRIST_HAVE_AVG_BUFFER_TIME} PARENT_SCOPE)
 endfunction()
 
 function(dipisrt_resolve_sources)
@@ -990,7 +979,6 @@ function(dipisrt_resolve_sources)
 
     if (DVBIPITOOLS_HAVE_RIST)
         set(RIST_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristin.c
-        ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristpeer.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/rist/ristlog.c)
     else ()
@@ -1038,6 +1026,7 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/source.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/deframe.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/jitter.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/ts/pace.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/http.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/open_async.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/jitbuf.c
@@ -1060,7 +1049,6 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-            ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/sink.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c

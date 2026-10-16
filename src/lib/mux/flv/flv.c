@@ -43,10 +43,12 @@ const psi_t *flv_psi(const flv_t *f) { return f->psi; }
 
 int flv_error(const flv_t *f) { return f->err; }
 
-void flv_close(flv_t *f) {
-  if (!f) return;
+int flv_close(flv_t *f) {
+  int rc;
+  if (!f) return 0;
   f->flushing = 1;
   if (f->pes) pes_flush(f->pes);
+  rc = f->err ? -1 : 0;
   free(f->vtrk.rem);
   free(f->vtrk.vbuf);
   free(f->vtrk.lcevc_rb);
@@ -57,4 +59,5 @@ void flv_close(flv_t *f) {
   pes_free(f->pes);
   psi_free(f->psi);
   free(f);
+  return rc;
 }

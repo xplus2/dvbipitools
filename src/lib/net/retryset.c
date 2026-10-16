@@ -22,6 +22,7 @@ typedef struct {
   void *opening; /* during RETRYSET_CONNECTING */
   void *result;  /* during RETRYSET_CONNECTED */
   time_t retry_deadline; /* meaningful during RETRYSET_DOWN */
+  time_t open_deadline;  /* meaningful during RETRYSET_CONNECTING */
 } retryset_slot_t;
 
 struct retryset {
@@ -99,8 +100,12 @@ time_t retryset_next_deadline(const retryset_t *rs) {
   time_t best = RETRYSET_NEVER;
   for (unsigned i = 0; i < rs->count; i++) {
     const retryset_slot_t *sl = &rs->slots[i];
-    if (sl->state != RETRYSET_DOWN || sl->retry_deadline == RETRYSET_NEVER) continue;
-    if (best == RETRYSET_NEVER || sl->retry_deadline < best) best = sl->retry_deadline;
+    time_t due;
+    if (sl->state == RETRYSET_CONNECTING) due = sl->open_deadline;
+    else if (sl->state == RETRYSET_DOWN) due = sl->retry_deadline;
+    else continue;
+    if (due == RETRYSET_NEVER) continue;
+    if (best == RETRYSET_NEVER || due < best) best = due;
   }
   return best;
 }
@@ -119,6 +124,16 @@ static void log_slot(unsigned idx, const char *label, const char *code, const ch
   else log_code_ansi(code, "input \e[1;30m%u\e[0m: \e[1;33m%s\e[0m", idx, msg);
 }
 
+static void slot_open_failed(retryset_t *rs, unsigned idx, time_t now) {
+  retryset_slot_t *sl = &rs->slots[idx];
+  sl->state = RETRYSET_DOWN;
+  sl->retry_deadline = next_retry_deadline(rs, now);
+  if (sl->retry_deadline != RETRYSET_NEVER)
+    log_slot(idx, sl->label, "LW600132", "connect failed, retrying in %lds", rs->retry_interval_s);
+  else
+    log_slot(idx, sl->label, "LW600133", "connect failed, not retrying");
+}
+
 void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
   retryset_slot_t *sl = &rs->slots[idx];
   switch (sl->state) {
@@ -126,6 +141,10 @@ void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
       retryset_open_state_t st = rs->ops->open_step(sl->opening);
       switch (st) {
         case RETRYSET_OPEN_PENDING:
+          if (now < sl->open_deadline) return;
+          rs->ops->open_free(sl->opening);
+          sl->opening = NULL;
+          slot_open_failed(rs, idx, now);
           return;
         case RETRYSET_OPEN_DONE:
           sl->result = rs->ops->open_take(sl->opening);
@@ -135,24 +154,14 @@ void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
             log_slot(idx, sl->label, NULL, "connected");
             return;
           }
-          sl->state = RETRYSET_DOWN;
-          sl->retry_deadline = next_retry_deadline(rs, now);
-          if (sl->retry_deadline != RETRYSET_NEVER)
-            log_slot(idx, sl->label, "LW600132", "connect failed, retrying in %lds", rs->retry_interval_s);
-          else
-            log_slot(idx, sl->label, "LW600133", "connect failed, not retrying");
+          slot_open_failed(rs, idx, now);
           return;
         case RETRYSET_OPEN_ERROR:
           break;
       }
       rs->ops->open_free(sl->opening);
       sl->opening = NULL;
-      sl->state = RETRYSET_DOWN;
-      sl->retry_deadline = next_retry_deadline(rs, now);
-      if (sl->retry_deadline != RETRYSET_NEVER)
-        log_slot(idx, sl->label, "LW600132", "connect failed, retrying in %lds", rs->retry_interval_s);
-      else
-        log_slot(idx, sl->label, "LW600133", "connect failed, not retrying");
+      slot_open_failed(rs, idx, now);
       return;
     }
     case RETRYSET_CONNECTED:
@@ -168,6 +177,7 @@ void retryset_service(retryset_t *rs, unsigned idx, time_t now) {
     return;
   }
   sl->state = RETRYSET_CONNECTING;
+  sl->open_deadline = now + RETRYSET_OPEN_TIMEOUT_S;
 }
 
 void retryset_mark_down(retryset_t *rs, unsigned idx, time_t now) {
@@ -182,4 +192,14 @@ void retryset_mark_down(retryset_t *rs, unsigned idx, time_t now) {
     log_slot(idx, sl->label, "LW000315", "read error, retrying in %lds", rs->retry_interval_s);
   else
     log_slot(idx, sl->label, "LW000316", "read error, not retrying");
+}
+
+void retryset_reconnect_now(retryset_t *rs, unsigned idx, time_t now) {
+  retryset_slot_t *sl = &rs->slots[idx];
+
+  if (sl->state != RETRYSET_CONNECTED) return;
+  rs->ops->result_close(sl->result);
+  sl->result = NULL;
+  sl->state = RETRYSET_DOWN;
+  sl->retry_deadline = now;
 }

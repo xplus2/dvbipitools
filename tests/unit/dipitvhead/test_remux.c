@@ -176,6 +176,7 @@ START_TEST(remux_forwards_mapped_es_and_sends_pat_pmt_on_first_feed) {
 
   ck_assert(saw_pid(0x0000));  /* PAT */
   ck_assert(saw_pid(0x1000));  /* our PMT pid */
+  ck_assert(saw_pid(0x0014));  /* TOT on first feed */
   ck_assert(saw_pid(0x0100));  /* video remapped to pids.video_pid */
   ck_assert_uint_eq(tsm.psi_sections_total[PSI_TABLE_PAT], 1u);
   ck_assert_uint_eq(tsm.psi_sections_total[PSI_TABLE_PMT], 1u);
@@ -473,6 +474,49 @@ START_TEST(remux_feed_detects_continuity_gap_and_signaled_discontinuity) {
   remux_feed(r, 0.0, pkt, capture_cb, NULL, &tsm);
   ck_assert_uint_eq(tsm.ts_continuity_errors, 1u); /* unchanged */
   ck_assert_uint_eq(tsm.ts_discontinuities, 1u);
+
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+START_TEST(remux_feed_continuity_allows_one_duplicate_and_ignores_null_pid) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  unsigned char pkt[188];
+  ts_metrics_t tsm;
+
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  memset(&tsm, 0, sizeof tsm);
+
+  memset(pkt, 0xFF, sizeof pkt);
+  pkt[0] = 0x47;
+  pkt[1] = 0x01;
+  pkt[2] = 0x01;
+
+  pkt[3] = 0x10;
+  remux_feed(r, 0.0, pkt, capture_cb, NULL, &tsm);
+  pkt[3] = 0x11;
+  remux_feed(r, 0.0, pkt, capture_cb, NULL, &tsm);
+  remux_feed(r, 0.0, pkt, capture_cb, NULL, &tsm); /* legal duplicate */
+  ck_assert_uint_eq(tsm.ts_continuity_errors, 0u);
+  remux_feed(r, 0.0, pkt, capture_cb, NULL, &tsm); /* second repeat */
+  ck_assert_uint_eq(tsm.ts_continuity_errors, 1u);
+
+  pkt[1] = 0x1F;
+  pkt[2] = 0xFF;
+  pkt[3] = 0x10;
+  remux_feed(r, 0.0, pkt, capture_cb, NULL, &tsm);
+  pkt[3] = 0x15;
+  remux_feed(r, 0.0, pkt, capture_cb, NULL, &tsm);
+  ck_assert_uint_eq(tsm.ts_continuity_errors, 1u);
 
   remux_free(r);
   psi_free(psi);
@@ -1740,6 +1784,47 @@ START_TEST(remux_follows_a_source_pmt_pid_move) {
 }
 END_TEST
 
+START_TEST(remux_keeps_es_sources_valid_across_repeated_pmt_pid_moves) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  psi_versions_t pv;
+  unsigned char pkt[188];
+  unsigned char section[64];
+  size_t slen;
+  int count;
+  double now = 0.0;
+  const unsigned moves[] = {0x0200, 0x0300};
+
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  memset(&pv, 0, sizeof pv);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  remux_set_psi_versions(r, &pv);
+
+  for (size_t m = 0; m < sizeof moves / sizeof moves[0]; m++) {
+    slen = psi_build_pat(0x1234, 0, 101, moves[m], section, sizeof section);
+    wrap_ts_packet(pkt, 0x0000, section, slen);
+    remux_feed(r, now += 0.1, pkt, version_cb, NULL, NULL);
+    remux_feed(r, now += 0.1, pkt, version_cb, NULL, NULL);
+    src_pmt_packet(pkt, 1, 0x0101, 3);
+    pkt[1] = (unsigned char)((pkt[1] & 0xE0) | (moves[m] >> 8));
+    pkt[2] = (unsigned char)moves[m];
+    remux_feed(r, now += 0.1, pkt, version_cb, NULL, NULL);
+    remux_feed(r, now += 0.1, pkt, version_cb, NULL, NULL);
+  }
+  for (int i = 0; i < 40; i++) remux_feed(r, now += 0.1, pkt, version_cb, NULL, NULL);
+  (void)remux_es(r, &count);
+  ck_assert_int_eq(count, 3);
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
 START_TEST(remux_pmt_change_releases_hold_queue_at_the_normal_pace) {
   psi_t *psi;
   unsigned char pkt[188];
@@ -2016,6 +2101,7 @@ START_TEST(remux_non_standalone_only_sends_pmt_and_ait_directly) {
   ck_assert(!saw_pid(0x0000)); /* PAT: mpts_t's job, not sent directly */
   ck_assert(!saw_pid(0x0011)); /* SDT: pulled via remux_get_sdt_info(), not sent directly */
   ck_assert(!saw_pid(0x0010)); /* NIT: mpts_t's job, not sent directly */
+  ck_assert(!saw_pid(0x0014)); /* TDT/TOT: mpts_t's job */
   ck_assert(saw_pid(pids.pmt_pid));    /* PMT: still this program's own job */
   ck_assert(saw_pid(pids.ait_pid));    /* AIT: still this program's own job */
 
@@ -2844,6 +2930,7 @@ static Suite *remux_suite(void) {
   tcase_add_test(tc, remux_cc_offsets_continue_counter_across_reconnect_without_flag);
   tcase_add_test(tc, remux_feed_counts_ts_packets_and_sync_errors);
   tcase_add_test(tc, remux_feed_detects_continuity_gap_and_signaled_discontinuity);
+  tcase_add_test(tc, remux_feed_continuity_allows_one_duplicate_and_ignores_null_pid);
   tcase_add_test(tc, remux_feed_detects_pcr_discontinuity_on_source_pcr_pid);
   tcase_add_test(tc, remux_forwards_a_pcr_only_pid_in_preserve_and_rebase);
   tcase_add_test(tc, remux_rebase_shifts_pcr_and_timestamps_by_one_offset_after_a_source_jump);
@@ -2879,6 +2966,7 @@ static Suite *remux_suite(void) {
   tcase_add_test(tc, remux_psi_versions_start_at_zero_and_bump_only_on_content_change);
   tcase_add_test(tc, remux_psi_versions_survive_a_reconnect);
   tcase_add_test(tc, remux_follows_a_source_pmt_pid_move);
+  tcase_add_test(tc, remux_keeps_es_sources_valid_across_repeated_pmt_pid_moves);
   tcase_add_test(tc, remux_pmt_change_releases_hold_queue_at_the_normal_pace);
   tcase_add_test(tc, remux_psi_versions_wrap_at_32);
   tcase_add_test(tc, remux_follows_a_track_added_to_the_source_pmt);

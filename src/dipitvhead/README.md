@@ -33,6 +33,8 @@ across every input.
 |      | `--provider`                 | `<text>`                       | passthrough                          | per-input |
 | `-I` | `--iface`                    | `<iface>`                      | kernel route (incoming)              | per-input |
 |      | `--jitter-ms`                | `<ms>`                         | off (rtp/udp/rist/srt, 1..2000)      | per-input |
+|      | `--al-fec-in`                | `<L>:<D>`                      | off (Annex E L1 FEC, `-i rtp://`)    | per-input |
+|      | `--al-fec-port-in`           | `<port>`                       | required with `--al-fec-in`          | per-input |
 |      | `--strip-eit`                |                                | off (source EIT passed through)      | per-input |
 |      | `--strip`                    | `<list>` / `none`              | `none` (no strip)                    | per-input |
 |      | `--hbbtv`                    | `<url>`                        | none (no AIT sent)                   | per-input |
@@ -121,6 +123,9 @@ BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each o
 |------|-----------------------------|--------------------|-------------------------------------------------------------------|-----------|
 |      | `--rist-profile-in`         | `simple\|main`     | `simple` (`-i rist://` only)                                      | per-input |
 |      | `--rist-encryption-type-in` | `128\|256`         | library default (`-i` only, `--rist-profile-in main`)             | per-input |
+|      | `--rist-secret-in`          | `<psk>`            | none (`-i rist://` only, `--rist-profile-in main`)                | per-input |
+|      | `--rist-cname-in`           | `<name>`           | library default (`-i rist://` only)                               | per-input |
+|      | `--rist-buffer-in`          | `<ms>`             | library default (`-i rist://` only)                               | per-input |
 | `-R` | `--remote`                  | `rist://host:port` | none, repeatable (bonded, one at a time)                          |           |
 |      | `--rist-profile`            | `simple\|main`     | `simple` (`-R rist://` peers only)                                |           |
 |      | `--rist-secret`             | `<psk>`            | none (`-R rist://` peers only)                                    |           |
@@ -131,8 +136,8 @@ BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each o
 `rist://@host:port[?query]` is also accepted, requires librist.
 `@` is required, since an input peer always listens.
 If you need bonded RIST input for a single program, run `dipirist` in front of this tool as a bridge instead.
-Encrypted input needs `--rist-profile-in main` (paired with the `-i` it follows) and a `?secret=` query parameter
-(`--rist-encryption-type-in` sets the AES key size, 128 or 256) on the URI.
+Encrypted input needs `--rist-profile-in main` and `--rist-secret-in` (both paired with the `-i` they follow).
+`--rist-encryption-type-in` sets the AES key size, 128 or 256.
 
 > librist uses one context per process. This means that only _one_ input _or_ output can use RIST.
 > You can _not_ define multiple RIST inputs - and if you use one, no RIST output.
@@ -372,6 +377,13 @@ on the same multicast group at `--al-fec-port`.
 A receiver needs the same `<L>:<D>` and the repair port to recover from loss. 
 Single-parity-stream FEC recovers at most one lost packet per column.
 Requires RTP output.
+
+### Annex E Layer 1 FEC input (`--al-fec-in`)
+
+Recovers lost packets of an `-i rtp://` input from a parallel SMPTE 2022-1 repair stream. 
+The repair stream is read from the same multicast group (and source) at `--al-fec-port-in`. 
+`<L>:<D>` must match the sender (columns * rows <= 400, columns <= 40). 
+Recovered packets are released through `--jitter-ms` if set. 
 
 ### HbbTV signalling (`--hbbtv`)
 

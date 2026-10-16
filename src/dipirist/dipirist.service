@@ -2,7 +2,6 @@
 Description=dipirist
 After=network-online.target dipimetrics.service
 Wants=network-online.target dipimetrics.service
-PartOf=dipimetrics.service
 StartLimitIntervalSec=60
 StartLimitBurst=10
 

@@ -26,7 +26,7 @@ int aac_adts_probe(const unsigned char *p, size_t avail, aac_adts_info_t *info) 
     return -1;
 
   frame_length = ((unsigned)(p[3] & 0x03) << 11) | ((unsigned)p[4] << 3) | ((unsigned)(p[5] >> 5) & 0x07);
-  if (frame_length < 7)
+  if (frame_length < ((p[1] & 0x01) ? 7u : 9u)) /* protection_absent 0: +2 B CRC */
     return -1;
 
   info->sample_rate = rates[sr_idx];

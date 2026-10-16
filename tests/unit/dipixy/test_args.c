@@ -1399,7 +1399,7 @@ END_TEST
 
 START_TEST(config_input_item_without_source_is_error) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
-  char *argv[] = {"dipixy", "-c", path, NULL};
+  char *argv[] = {"dipixy", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "input:\n  - name: Radio\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
@@ -1446,7 +1446,7 @@ END_TEST
 
 START_TEST(config_invalid_value_is_error) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
-  char *argv[] = {"dipixy", "-c", path, NULL};
+  char *argv[] = {"dipixy", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "max-clients: 0\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
@@ -1486,7 +1486,7 @@ END_TEST
 
 START_TEST(config_h3_retry_invalid_is_error) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
-  char *argv[] = {"dipixy", "-c", path, NULL};
+  char *argv[] = {"dipixy", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "h3:\n  retry: maybe\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
@@ -1512,7 +1512,7 @@ END_TEST
 
 START_TEST(config_h3_max_streams_out_of_range_is_error) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
-  char *argv[] = {"dipixy", "-c", path, NULL};
+  char *argv[] = {"dipixy", "--config-strict", "-c", path, NULL};
   config_t cfg = {0};
   write_cfg(path, "h3:\n  max-streams: 3\n");
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);

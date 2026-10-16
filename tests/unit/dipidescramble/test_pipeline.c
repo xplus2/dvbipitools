@@ -476,6 +476,40 @@ START_TEST(classic_cas_resolves_and_updates_cw_for_both_parities_once_each) {
 }
 END_TEST
 
+START_TEST(classic_cas_does_not_cache_cw_when_scrambler_rejects_key) {
+  cls_t c;
+  unsigned char emm[1024];
+  unsigned char ecm[64];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char cw[16];
+  size_t n;
+
+  cls_open(&c);
+  fill_bytes(bk, sizeof bk, 1);
+  fill_bytes(sk, sizeof sk, 100);
+  fill_bytes(cw, sizeof cw, 0x10);
+  ck_assert_int_eq(prime_cas(&c.lc, CAS_ID, MODE_CISSA), 0);
+  n = build_emm_u(c.key, bk, emm, sizeof emm);
+  feed_section(&c.lc, EMM_PID, emm, n);
+  n = build_emm_g(bk, sk, 0x0064, emm, sizeof emm);
+  feed_section(&c.lc, EMM_PID, emm, n);
+  n = build_ecm(sk, cw, 16, ecm, sizeof ecm);
+
+  c.lc.cw_len = 8;
+  feed_section(&c.lc, ECM_PID, ecm, n);
+  ck_assert_int_eq(c.lc.have_cw[0], 0);
+  ck_assert_uint_eq(c.lc.cryptoperiod_transitions_total, 0u);
+  ck_assert_uint_eq(c.lc.ecm_errors_total, 1u);
+
+  c.lc.cw_len = 16;
+  feed_section(&c.lc, ECM_PID, ecm, n);
+  ck_assert_int_eq(c.lc.have_cw[0], 1);
+  ck_assert_uint_eq(c.lc.cryptoperiod_transitions_total, 1u);
+  cls_close(&c);
+}
+END_TEST
+
 START_TEST(classic_cas_counts_ecm_errors_and_ignores_unrelated_table_ids) {
   cls_t c;
   unsigned char bad[64];
@@ -919,6 +953,29 @@ START_TEST(output_flush_failure_sets_emit_failed_and_stops_the_batch) {
 }
 END_TEST
 
+START_TEST(final_flush_failure_sets_emit_failed) {
+  cls_t c;
+  unsigned char pkt[188];
+
+  cls_open(&c);
+  close(c.outfd);
+  c.outfd = open("/dev/full", O_WRONLY);
+  if (c.outfd < 0) {
+    c.outfd = open("/dev/null", O_WRONLY);
+    cls_close(&c);
+    return;
+  }
+  c.lc.outfd[0] = c.outfd;
+  make_ts(pkt, 0x1FFF, 0);
+  ck_assert_int_eq(pkt_cb(&c.lc, pkt), 0);
+  ck_assert_int_eq(c.lc.emit_failed, 0);
+  pipeline_flush(&c.lc);
+  ck_assert_int_eq(c.lc.emit_failed, 1);
+  ck_assert_uint_eq(c.lc.output_errors_total, 1u);
+  cls_close(&c);
+}
+END_TEST
+
 START_TEST(rtmp_write_results_are_edge_logged) {
   int had_error = 0;
   char log[LOG_CAPTURE_BUF];
@@ -1046,6 +1103,7 @@ static Suite *pipeline_suite(void) {
   tcase_add_test(tc, biss1e_ecm_on_null_dev_does_not_crash);
   tcase_add_test(tc, biss1e_emm_on_null_dev_does_not_crash);
   tcase_add_test(tc, classic_cas_resolves_and_updates_cw_for_both_parities_once_each);
+  tcase_add_test(tc, classic_cas_does_not_cache_cw_when_scrambler_rejects_key);
   tcase_add_test(tc, classic_cas_counts_ecm_errors_and_ignores_unrelated_table_ids);
   tcase_add_test(tc, classic_cas_descrambles_packets_with_the_resolved_control_words);
   tcase_add_test(tc, scrambled_packets_before_any_control_word_are_forwarded_and_counted_unexpected);
@@ -1066,6 +1124,7 @@ static Suite *pipeline_suite(void) {
   tcase_add_test(tc, unicast_emm_fetch_error_clears_the_pending_poll);
   tcase_add_test(tc, unicast_emm_fetch_without_a_response_stays_pending);
   tcase_add_test(tc, output_flush_failure_sets_emit_failed_and_stops_the_batch);
+  tcase_add_test(tc, final_flush_failure_sets_emit_failed);
   tcase_add_test(tc, rtmp_write_results_are_edge_logged);
   tcase_add_test(tc, inspect_callbacks_feed_the_input_and_output_inspectors);
   tcase_add_test(tc, push_metrics_reports_counters_without_a_cas_mode);

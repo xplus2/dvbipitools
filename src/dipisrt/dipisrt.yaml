@@ -8,13 +8,15 @@
 #iface: <iface>
 # -k|--insecure off
 insecure: off
+# --pace off
+#pace: off
 # --group-mode [not set] # broadcast|backup
 #group-mode: broadcast
 # --rendezvous off
 rendezvous: off
 # --local [not set]
 #local: <host>:<port>
-# --passphrase [not set]
+# --passphrase [not set] # prefer this over the command line (visible in /proc)
 #passphrase: <pw>
 # --pbkeylen 16 # 16|24|32
 #pbkeylen: 16

@@ -38,6 +38,9 @@ typedef struct {
   int daemonize; /* -d, --daemonize: fork to background after startup */
   int color_mode;
   int insecure_tls; /* -k, --insecure, -i https:// source only */
+  int pace;         /* --pace: file/stdin source released at PCR/RTP rate */
+  int out_ttl;      /* --ttl: rtp/udp send TTL/hop-limit. 0 = kernel default */
+  int out_tos;      /* --dscp: full tos byte. 0 = kernel default */
   const char *metrics_sock;    /* --metrics. NULL = default socket path */
   const char *metrics_id;      /* --metrics-id. NULL = metrics disabled */
   unsigned metrics_interval_s; /* --metrics-interval. 0 = default */
@@ -52,8 +55,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg);
 /* 1 if -o is rist:// (this process sends into RIST), 0 if -i is (receives from RIST) */
 int config_is_sender(const config_t *cfg);
 
-int rist_cfg_add_endpoint(config_t *cfg, int is_out, const char *uri);
+int dipirist_cfg_add_endpoint(config_t *cfg, int is_out, const char *uri);
 
 void endpoint_describe(const endpoint_t *e, char *buf, size_t n);
+
+/* uri without userinfo, query (secret), fragment, for logs */
+void dipirist_uri_redact(const char *uri, char *buf, size_t n);
 
 #endif

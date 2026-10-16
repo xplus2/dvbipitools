@@ -15,7 +15,7 @@
 
 #include "priv.h"
 
-args_status_t rist_opt_general(rist_opt_t *p, int c) {
+args_status_t dipirist_opt_general(dipirist_opt_t *p, int c) {
   config_t *cfg = p->cfg;
 
   switch (c) {
@@ -25,7 +25,7 @@ args_status_t rist_opt_general(rist_opt_t *p, int c) {
         cfg->n_in = 0;
         p->cli_in = 1;
       }
-      if (rist_parse_endpoint_uri(optarg, &cfg->in, 0, &cfg->n_in)) {
+      if (dipirist_parse_endpoint_uri(optarg, &cfg->in, 0, &cfg->n_in)) {
         argerr("VS000149", "invalid -i: %s", optarg);
         return ARGS_ERR;
       }
@@ -36,7 +36,7 @@ args_status_t rist_opt_general(rist_opt_t *p, int c) {
         cfg->n_out = 0;
         p->cli_out = 1;
       }
-      if (rist_parse_endpoint_uri(optarg, &cfg->out, 1, &cfg->n_out)) {
+      if (dipirist_parse_endpoint_uri(optarg, &cfg->out, 1, &cfg->n_out)) {
         argerr("VS000150", "invalid -o: %s", optarg);
         return ARGS_ERR;
       }
@@ -46,6 +46,24 @@ args_status_t rist_opt_general(rist_opt_t *p, int c) {
       break;
     case 'k':
       cfg->insecure_tls = 1;
+      break;
+    case OPT_PACE:
+      cfg->pace = 1;
+      break;
+    case OPT_TTL: {
+      unsigned v;
+      if (argutil_uint_range(optarg, 0, 255, &v)) {
+        argerr("VS000558", "invalid --ttl: %s (0..255)", optarg);
+        return ARGS_ERR;
+      }
+      cfg->out_ttl = (int)v;
+      break;
+    }
+    case OPT_DSCP:
+      if (net_dscp_parse(optarg, &cfg->out_tos)) {
+        argerr("VS000106", "invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
+        return ARGS_ERR;
+      }
       break;
     case OPT_COLOR: {
       log_color_t v;

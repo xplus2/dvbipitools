@@ -7,6 +7,10 @@
 
 #include "lib/mux/esbuild/esbuild.h"
 
+#define H264_AUD_LEN 6
+#define H265_AUD_LEN 7
+#define H266_AUD_LEN 7
+
 static void avcc_append(unsigned char *buf, size_t *pos, const unsigned char *nal, size_t len) {
   buf[(*pos)++] = (unsigned char)(len >> 24);
   buf[(*pos)++] = (unsigned char)(len >> 16);
@@ -45,14 +49,66 @@ START_TEST(esbuild_h264_idr_gets_sps_pps_reinjected) {
   sample.size = apos;
 
   n = esbuild_convert_sample(&t, &sample, out, sizeof out);
-  /* SPS: start(4)+4B, PPS: start(4)+2B, IDR: start(4)+3B */
-  ck_assert_uint_eq(n, (4 + sizeof sps) + (4 + sizeof pps) + (4 + sizeof idr));
+  /* AUD, SPS: start(4)+4B, PPS: start(4)+2B, IDR: start(4)+3B */
+  ck_assert_uint_eq(n, H264_AUD_LEN + (4 + sizeof sps) + (4 + sizeof pps) + (4 + sizeof idr));
   ck_assert_int_eq(memcmp(out, expect_start, 4), 0);
-  ck_assert_int_eq(memcmp(out + 4, sps, sizeof sps), 0);
-  ck_assert_int_eq(memcmp(out + 4 + sizeof sps, expect_start, 4), 0);
-  ck_assert_int_eq(memcmp(out + 4 + sizeof sps + 4, pps, sizeof pps), 0);
-  ck_assert_int_eq(memcmp(out + 4 + sizeof sps + 4 + sizeof pps, expect_start, 4), 0);
-  ck_assert_int_eq(memcmp(out + 4 + sizeof sps + 4 + sizeof pps + 4, idr, sizeof idr), 0);
+  ck_assert_int_eq(out[4], 0x09);
+  ck_assert_int_eq(memcmp(out + H264_AUD_LEN, expect_start, 4), 0);
+  ck_assert_int_eq(memcmp(out + H264_AUD_LEN + 4, sps, sizeof sps), 0);
+  ck_assert_int_eq(memcmp(out + H264_AUD_LEN + 4 + sizeof sps, expect_start, 4), 0);
+  ck_assert_int_eq(memcmp(out + H264_AUD_LEN + 4 + sizeof sps + 4, pps, sizeof pps), 0);
+  ck_assert_int_eq(memcmp(out + H264_AUD_LEN + 4 + sizeof sps + 4 + sizeof pps, expect_start, 4), 0);
+  ck_assert_int_eq(memcmp(out + H264_AUD_LEN + 4 + sizeof sps + 4 + sizeof pps + 4, idr, sizeof idr), 0);
+}
+END_TEST
+
+START_TEST(esbuild_track_init_copies_parameter_sets) {
+  unsigned char sps[] = {0x67, 0x64, 0x00, 0x1F};
+  unsigned char pps[] = {0x68, 0xEB};
+  static const unsigned char idr[] = {0x65, 0x88, 0x99};
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  unsigned char avcc[16];
+  size_t apos = 0;
+  fmp4_dec_sample_t sample;
+  unsigned char out[64];
+  static const unsigned char want_sps[] = {0x67, 0x64, 0x00, 0x1F};
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = CODEC_H264;
+  stsd.sps[0].data = sps;
+  stsd.sps[0].len = sizeof sps;
+  stsd.n_sps = 1;
+  stsd.pps[0].data = pps;
+  stsd.pps[0].len = sizeof pps;
+  stsd.n_pps = 1;
+  ck_assert_int_eq(esbuild_track_init(&t, &stsd), 1);
+  memset(sps, 0xAA, sizeof sps);
+  memset(pps, 0xAA, sizeof pps);
+
+  avcc_append(avcc, &apos, idr, sizeof idr);
+  memset(&sample, 0, sizeof sample);
+  sample.data = avcc;
+  sample.size = apos;
+  ck_assert_uint_gt(esbuild_convert_sample(&t, &sample, out, sizeof out), 0u);
+  ck_assert_int_eq(memcmp(out + H264_AUD_LEN + 4, want_sps, sizeof want_sps), 0);
+}
+END_TEST
+
+START_TEST(esbuild_track_init_rejects_oversized_parameter_sets) {
+  static unsigned char big[ESBUILD_PS_POOL];
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = CODEC_H264;
+  stsd.sps[0].data = big;
+  stsd.sps[0].len = sizeof big;
+  stsd.n_sps = 1;
+  stsd.pps[0].data = big;
+  stsd.pps[0].len = 1;
+  stsd.n_pps = 1;
+  ck_assert_int_eq(esbuild_track_init(&t, &stsd), 0);
 }
 END_TEST
 
@@ -81,9 +137,10 @@ START_TEST(esbuild_h264_non_idr_gets_no_reinjection) {
   sample.size = apos;
 
   n = esbuild_convert_sample(&t, &sample, out, sizeof out);
-  ck_assert_uint_eq(n, 4 + sizeof pframe);
+  ck_assert_uint_eq(n, H264_AUD_LEN + 4 + sizeof pframe);
   ck_assert_int_eq(memcmp(out, expect_start, 4), 0);
-  ck_assert_int_eq(memcmp(out + 4, pframe, sizeof pframe), 0);
+  ck_assert_int_eq(memcmp(out + H264_AUD_LEN, expect_start, 4), 0);
+  ck_assert_int_eq(memcmp(out + H264_AUD_LEN + 4, pframe, sizeof pframe), 0);
 }
 END_TEST
 
@@ -122,7 +179,7 @@ START_TEST(esbuild_hevc_idr_type19_triggers_reinjection) {
   sample.size = apos;
 
   n = esbuild_convert_sample(&t, &sample, out, sizeof out);
-  ck_assert_uint_eq(n, (4 + sizeof vps) + (4 + sizeof sps) + (4 + sizeof pps) + (4 + sizeof idr));
+  ck_assert_uint_eq(n, H265_AUD_LEN + (4 + sizeof vps) + (4 + sizeof sps) + (4 + sizeof pps) + (4 + sizeof idr));
 }
 END_TEST
 
@@ -158,6 +215,30 @@ START_TEST(esbuild_aac_synthesizes_adts_header) {
   ck_assert_uint_eq(out[5], 0x3F);
   ck_assert_uint_eq(out[6], 0xFC);
   ck_assert_int_eq(memcmp(out + 7, payload, sizeof payload), 0);
+}
+END_TEST
+
+START_TEST(esbuild_aac_sbr_ps_use_lc_adts_profile) {
+  static const unsigned char asc[2][2] = {{0x29, 0x90}, {0xE9, 0x88}}; /* AOT=5 sfi=3 ch=2, AOT=29 sfi=3 ch=1 */
+  static const unsigned char payload[4] = {1, 2, 3, 4};
+
+  for (int i = 0; i < 2; i++) {
+    fmp4_stsd_entry_t stsd;
+    esbuild_track_t t;
+    fmp4_dec_sample_t sample;
+    unsigned char out[32];
+
+    memset(&stsd, 0, sizeof stsd);
+    stsd.codec = CODEC_AAC;
+    stsd.cpriv = asc[i];
+    stsd.cpriv_len = 2;
+    esbuild_track_init(&t, &stsd);
+    memset(&sample, 0, sizeof sample);
+    sample.data = payload;
+    sample.size = sizeof payload;
+    ck_assert_uint_eq(esbuild_convert_sample(&t, &sample, out, sizeof out), 11u);
+    ck_assert_uint_eq(out[2] >> 6, 1u);
+  }
 }
 END_TEST
 
@@ -197,9 +278,9 @@ static const video_case_t video_cases[] = {
     {"length prefix cut", CODEC_H264, {0x00, 0x00, 0x00}, 3, 64, 0},
     {"nal length past end", CODEC_H264, {0x00, 0x00, 0x00, 0x09, 0x65, 0x88}, 6, 64, 0},
     {"zero length nal", CODEC_H264, {0x00, 0x00, 0x00, 0x00}, 4, 64, 0},
-    {"good nal then truncated nal", CODEC_H264, {0x00, 0x00, 0x00, 0x02, 0x41, 0x9A, 0x00, 0x00, 0x00, 0x09, 0x41}, 11, 64, 6},
+    {"good nal then truncated nal", CODEC_H264, {0x00, 0x00, 0x00, 0x02, 0x41, 0x9A, 0x00, 0x00, 0x00, 0x09, 0x41}, 11, 64, 12},
     {"output too small", CODEC_H264, {0x00, 0x00, 0x00, 0x02, 0x41, 0x9A}, 6, 5, 0},
-    {"output exactly fits", CODEC_H264, {0x00, 0x00, 0x00, 0x02, 0x41, 0x9A}, 6, 6, 6},
+    {"output exactly fits", CODEC_H264, {0x00, 0x00, 0x00, 0x02, 0x41, 0x9A}, 6, 12, 12},
     {"hevc nal shorter than its header", CODEC_HEVC, {0x00, 0x00, 0x00, 0x01, 0x26}, 5, 64, 0},
     {"vvc nal shorter than its header", CODEC_VVC, {0x00, 0x00, 0x00, 0x01, 0x00}, 5, 64, 0},
 };
@@ -250,8 +331,8 @@ START_TEST(esbuild_vvc_idr_gets_parameter_sets_reinjected) {
   sample.data = vvc;
   sample.size = vpos;
   n = esbuild_convert_sample(&t, &sample, out, sizeof out);
-  ck_assert_uint_eq(n, (4 + sizeof vps) + (4 + sizeof sps) + (4 + sizeof idr));
-  ck_assert_int_eq(memcmp(out + 4, vps, sizeof vps), 0);
+  ck_assert_uint_eq(n, H266_AUD_LEN + (4 + sizeof vps) + (4 + sizeof sps) + (4 + sizeof idr));
+  ck_assert_int_eq(memcmp(out + H266_AUD_LEN + 4, vps, sizeof vps), 0);
 }
 END_TEST
 
@@ -276,7 +357,7 @@ START_TEST(esbuild_parameter_set_injection_fails_cleanly_when_output_is_too_smal
   sample.data = avcc;
   sample.size = apos;
   ck_assert_uint_eq(esbuild_convert_sample(&t, &sample, out, 4 + sizeof sps + 3), 0u);
-  ck_assert_uint_eq(esbuild_convert_sample(&t, &sample, out, (4 + sizeof sps) + (4 + sizeof idr)), (4 + sizeof sps) + (4 + sizeof idr));
+  ck_assert_uint_eq(esbuild_convert_sample(&t, &sample, out, H264_AUD_LEN + (4 + sizeof sps) + (4 + sizeof idr)), H264_AUD_LEN + (4 + sizeof sps) + (4 + sizeof idr));
 }
 END_TEST
 
@@ -350,13 +431,162 @@ START_TEST(esbuild_passthrough_respects_empty_samples_and_output_size) {
 }
 END_TEST
 
+static size_t convert_one(codec_t codec, unsigned lsz, const unsigned char *nal, size_t nal_len, unsigned char *out, size_t outcap) {
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  fmp4_dec_sample_t sample;
+  unsigned char in[32];
+  static const unsigned char vps[] = {0x40, 0x01};
+  static const unsigned char sps[] = {0x42, 0x01};
+  static const unsigned char pps[] = {0x44, 0x01};
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = codec;
+  stsd.nal_len_size = lsz;
+  stsd.vps[0].data = vps;
+  stsd.vps[0].len = sizeof vps;
+  stsd.n_vps = 1;
+  stsd.sps[0].data = sps;
+  stsd.sps[0].len = sizeof sps;
+  stsd.n_sps = 1;
+  stsd.pps[0].data = pps;
+  stsd.pps[0].len = sizeof pps;
+  stsd.n_pps = 1;
+  esbuild_track_init(&t, &stsd);
+  for (unsigned i = 0; i < lsz; i++) in[i] = (unsigned char)(nal_len >> (8 * (lsz - 1 - i)));
+  memcpy(in + lsz, nal, nal_len);
+  memset(&sample, 0, sizeof sample);
+  sample.data = in;
+  sample.size = lsz + nal_len;
+  return esbuild_convert_sample(&t, &sample, out, outcap);
+}
+
+START_TEST(esbuild_hevc_random_access_types_get_parameter_sets) {
+  unsigned char out[64];
+  unsigned char nal[2] = {0, 0x01};
+  static const unsigned types[] = {16, 17, 18, 19, 20, 21};
+
+  nal[0] = (unsigned char)(types[_i] << 1);
+  ck_assert_uint_eq(convert_one(CODEC_HEVC, 4, nal, sizeof nal, out, sizeof out), H265_AUD_LEN + 3 * (4 + 2) + (4 + sizeof nal));
+}
+END_TEST
+
+START_TEST(esbuild_hevc_non_random_access_types_get_no_parameter_sets) {
+  unsigned char out[64];
+  unsigned char nal[2] = {0, 0x01};
+  static const unsigned types[] = {0, 1, 15, 22, 32};
+
+  nal[0] = (unsigned char)(types[_i] << 1);
+  ck_assert_uint_eq(convert_one(CODEC_HEVC, 4, nal, sizeof nal, out, sizeof out), H265_AUD_LEN + 4 + sizeof nal);
+}
+END_TEST
+
+START_TEST(esbuild_vvc_random_access_types_get_parameter_sets) {
+  unsigned char out[64];
+  unsigned char nal[2] = {0, 0};
+  static const unsigned types[] = {7, 8, 9, 10};
+
+  nal[1] = (unsigned char)((types[_i] << 3) | 1);
+  ck_assert_uint_eq(convert_one(CODEC_VVC, 4, nal, sizeof nal, out, sizeof out), H266_AUD_LEN + 3 * (4 + 2) + (4 + sizeof nal));
+}
+END_TEST
+
+START_TEST(esbuild_vvc_trail_gets_no_parameter_sets) {
+  unsigned char out[64];
+  static const unsigned char nal[2] = {0, (1 << 3) | 1};
+
+  ck_assert_uint_eq(convert_one(CODEC_VVC, 4, nal, sizeof nal, out, sizeof out), H266_AUD_LEN + 4 + sizeof nal);
+}
+END_TEST
+
+START_TEST(esbuild_aud_matches_codec_and_random_access) {
+  unsigned char out[64];
+  static const unsigned char h264_idr[] = {0x65, 0x88};
+  static const unsigned char hevc_cra[] = {21 << 1, 0x01};
+  static const unsigned char vvc_cra[] = {0x00, (9 << 3) | 1};
+  static const unsigned char vvc_trail[] = {0x00, (1 << 3) | 1};
+  static const unsigned char want_h264[] = {0, 0, 0, 1, 0x09, 0xF0};
+  static const unsigned char want_hevc[] = {0, 0, 0, 1, 0x46, 0x01, 0x50};
+  static const unsigned char want_vvc_rap[] = {0, 0, 0, 1, 0x00, 0xA1, 0xA8};
+  static const unsigned char want_vvc_nonrap[] = {0, 0, 0, 1, 0x00, 0xA1, 0x28};
+
+  convert_one(CODEC_H264, 4, h264_idr, sizeof h264_idr, out, sizeof out);
+  ck_assert_int_eq(memcmp(out, want_h264, sizeof want_h264), 0);
+  convert_one(CODEC_HEVC, 4, hevc_cra, sizeof hevc_cra, out, sizeof out);
+  ck_assert_int_eq(memcmp(out, want_hevc, sizeof want_hevc), 0);
+  convert_one(CODEC_VVC, 4, vvc_cra, sizeof vvc_cra, out, sizeof out);
+  ck_assert_int_eq(memcmp(out, want_vvc_rap, sizeof want_vvc_rap), 0);
+  convert_one(CODEC_VVC, 4, vvc_trail, sizeof vvc_trail, out, sizeof out);
+  ck_assert_int_eq(memcmp(out, want_vvc_nonrap, sizeof want_vvc_nonrap), 0);
+}
+END_TEST
+
+START_TEST(esbuild_existing_aud_is_not_duplicated) {
+  unsigned char out[64];
+  static const unsigned char h264_aud[] = {0x09, 0x10};
+  static const unsigned char hevc_aud[] = {35 << 1, 0x01, 0x50};
+  static const unsigned char vvc_aud[] = {0x00, (20 << 3) | 1, 0x28};
+
+  ck_assert_uint_eq(convert_one(CODEC_H264, 4, h264_aud, sizeof h264_aud, out, sizeof out), 4 + sizeof h264_aud);
+  ck_assert_uint_eq(convert_one(CODEC_HEVC, 4, hevc_aud, sizeof hevc_aud, out, sizeof out), 4 + sizeof hevc_aud);
+  ck_assert_uint_eq(convert_one(CODEC_VVC, 4, vvc_aud, sizeof vvc_aud, out, sizeof out), 4 + sizeof vvc_aud);
+}
+END_TEST
+
+START_TEST(esbuild_short_nal_length_fields_are_converted) {
+  unsigned char out[64];
+  static const unsigned char idr[] = {0x65, 0x88, 0x99};
+  static const unsigned sizes[] = {1, 2, 4};
+  size_t n = convert_one(CODEC_H264, sizes[_i], idr, sizeof idr, out, sizeof out);
+
+  ck_assert_uint_eq(n, H264_AUD_LEN + 3 * (4 + 2) + (4 + sizeof idr));
+  ck_assert_int_eq(memcmp(out + n - sizeof idr, idr, sizeof idr), 0);
+}
+END_TEST
+
+START_TEST(esbuild_es_bound_covers_short_nal_length_fields) {
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  fmp4_dec_sample_t sample;
+  unsigned char in[24];
+  unsigned char out[128];
+  size_t n;
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = CODEC_H264;
+  stsd.nal_len_size = 1;
+  esbuild_track_init(&t, &stsd);
+  for (unsigned i = 0; i < 12; i++) {
+    in[2 * i] = 1;
+    in[2 * i + 1] = 0x41;
+  }
+  memset(&sample, 0, sizeof sample);
+  sample.data = in;
+  sample.size = 24;
+  n = esbuild_convert_sample(&t, &sample, out, sizeof out);
+  ck_assert_uint_eq(n, H264_AUD_LEN + 12 * 5);
+  ck_assert_uint_ge(esbuild_es_bound(&t, sample.size), n);
+}
+END_TEST
+
 static Suite *esbuild_suite(void) {
   Suite *s = suite_create("esbuild");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, esbuild_h264_idr_gets_sps_pps_reinjected);
+  tcase_add_test(tc, esbuild_track_init_copies_parameter_sets);
+  tcase_add_test(tc, esbuild_track_init_rejects_oversized_parameter_sets);
   tcase_add_test(tc, esbuild_h264_non_idr_gets_no_reinjection);
   tcase_add_test(tc, esbuild_hevc_idr_type19_triggers_reinjection);
+  tcase_add_loop_test(tc, esbuild_hevc_random_access_types_get_parameter_sets, 0, 6);
+  tcase_add_loop_test(tc, esbuild_hevc_non_random_access_types_get_no_parameter_sets, 0, 5);
+  tcase_add_loop_test(tc, esbuild_vvc_random_access_types_get_parameter_sets, 0, 4);
+  tcase_add_test(tc, esbuild_vvc_trail_gets_no_parameter_sets);
+  tcase_add_test(tc, esbuild_aud_matches_codec_and_random_access);
+  tcase_add_test(tc, esbuild_existing_aud_is_not_duplicated);
+  tcase_add_loop_test(tc, esbuild_short_nal_length_fields_are_converted, 0, 3);
+  tcase_add_test(tc, esbuild_es_bound_covers_short_nal_length_fields);
   tcase_add_test(tc, esbuild_aac_synthesizes_adts_header);
+  tcase_add_test(tc, esbuild_aac_sbr_ps_use_lc_adts_profile);
   tcase_add_test(tc, esbuild_ac3_passes_through_unchanged);
   tcase_add_loop_test(tc, esbuild_video_conversion_stops_at_malformed_nal_sizes, 0, (int)(sizeof video_cases / sizeof video_cases[0]));
   tcase_add_test(tc, esbuild_vvc_idr_gets_parameter_sets_reinjected);

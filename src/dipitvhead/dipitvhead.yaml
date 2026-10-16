@@ -25,11 +25,17 @@
     #hbbtv-app-id: <n>
     # --hbbtv-name ["HbbTV"]
     #hbbtv-name: <text>
-    # --rist-profile-in simple # simple|main, rist:// only
+    # --rist-profile-in simple # simple|main
     #rist-profile-in: simple
     # --rist-encryption-type-in [not set] # 128|256
     #rist-encryption-type-in: 256
-    # --srt-passphrase-in [not set] # srt:// only
+    # --rist-secret-in [not set]
+    #rist-secret-in: <psk>
+    # --rist-cname-in [not set]
+    #rist-cname-in: <name>
+    # --rist-buffer-in [not set] # ms
+    #rist-buffer-in: 1000
+    # --srt-passphrase-in [not set]
     #srt-passphrase-in: <pw>
     # --srt-pbkeylen-in [not set] # 16|24|32
     #srt-pbkeylen-in: 16
@@ -41,6 +47,10 @@
     #srt-latency-in: <ms>
     # --jitter-ms [off] # 1..2000
     #jitter-ms: <ms>
+    # --al-fec-in [not set]
+    #al-fec-in: <L>:<D>
+    # --al-fec-port-in [not set]
+    #al-fec-port-in: <port>
 
 # -m|--mcast [not set]
 #mcast: 239.1.1.1:5000

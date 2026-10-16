@@ -44,9 +44,20 @@ int argutil_bufcpy_opt(const char *tool, char *dst, size_t dstsz, const char *va
   return 0;
 }
 
-int argutil_srt_passphrase_opt(const char *tool, const char *passphrase, const char *optname) {
+int argutil_srt_passphrase_valid(const char *passphrase) {
   size_t len = strlen(passphrase);
-  if (passphrase[0] && (len < 10 || len > 79)) {
+  return !passphrase[0] || (len >= 10 && len <= 79);
+}
+
+int argutil_srt_pbkeylen(const char *s, int *out) {
+  unsigned v;
+  if (argutil_uint_range(s, 16, 32, &v) || (v != 16 && v != 24 && v != 32)) return -1;
+  *out = (int)v;
+  return 0;
+}
+
+int argutil_srt_passphrase_opt(const char *tool, const char *passphrase, const char *optname) {
+  if (!argutil_srt_passphrase_valid(passphrase)) {
     argutil_err(tool, "LS000686", "%s must be 10..79 characters", optname);
     return -1;
   }
@@ -185,5 +196,26 @@ int argutil_addrport_parse(const char *s, int *family, char *addr_out, size_t ad
   alen = strlen(addr);
   if (alen >= addr_out_sz) return -1;
   memcpy(addr_out, addr, alen + 1);
+  return 0;
+}
+
+int argutil_hostport_parse(const char *s, int *family, char *host_out, size_t host_out_sz, unsigned *port_out) {
+  const char *colon;
+  size_t len;
+  if (*s == '[') return argutil_addrport_parse(s, family, host_out, host_out_sz, port_out);
+  if (!argutil_addrport_parse(s, family, host_out, host_out_sz, port_out)) return 0;
+  colon = strrchr(s, ':');
+  if (!colon) return -1;
+  len = (size_t)(colon - s);
+  if (len == 0 || len > 253 || len >= host_out_sz) return -1;
+  for (size_t i = 0; i < len; i++) {
+    char c = s[i];
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_')) return -1;
+  }
+  if (s[0] == '.' || s[0] == '-' || s[len - 1] == '-') return -1;
+  if (argutil_port_parse(colon + 1, port_out)) return -1;
+  memcpy(host_out, s, len);
+  host_out[len] = '\0';
+  *family = AF_UNSPEC;
   return 0;
 }

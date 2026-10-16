@@ -18,6 +18,9 @@ int cam378_cfg_load(config_t *cfg, const char *path, int strict);
 
 int cam378_cfg_test(const char *path, int strict);
 
+/* wipes config file auth string. invalidates cfg username/password */
+void cam378_cfg_wipe_auth(void);
+
 int cam378_cfg_caid(const char *p, unsigned *out);
 
 #endif

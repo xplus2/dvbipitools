@@ -269,6 +269,24 @@ START_TEST(a_stopped_listener_gives_up) {
 }
 END_TEST
 
+START_TEST(retry_open_keeps_dialing_until_stopped) {
+  opener_t o;
+  pthread_t th;
+
+  memset(&o, 0, sizeof o);
+  in_cfg(&o.cfg, free_udp_port(), 0);
+  o.cfg.connect_timeout_ms = 300;
+  o.cfg.retry_open = 1;
+  o.cfg.stop = &o.stop;
+  ck_assert_int_eq(pthread_create(&th, NULL, open_thread, &o), 0);
+  usleep(1500000);
+  ck_assert_int_eq(atomic_load(&o.finished), 0);
+  atomic_store(&o.stop, 1);
+  pthread_join(th, NULL);
+  ck_assert_ptr_null(o.in);
+}
+END_TEST
+
 START_TEST(invalid_configurations_are_refused) {
   srtin_cfg_t ic;
   srtout_cfg_t oc;
@@ -284,10 +302,10 @@ START_TEST(invalid_configurations_are_refused) {
   ic.rendezvous = 1;
   ck_assert_ptr_null(srtin_open(&ic));
   in_cfg(&ic, 1, 0);
-  ic.peers[0].host = "no.such.host.invalid";
+  ic.peers[0].host = "no.such.host.invalid.";
   ck_assert_ptr_null(srtin_open(&ic));
   in_cfg(&ic, 1, 1);
-  ic.peers[0].host = "no.such.host.invalid";
+  ic.peers[0].host = "no.such.host.invalid.";
   ck_assert_ptr_null(srtin_open(&ic));
 
   out_cfg(&oc, 1);
@@ -303,7 +321,7 @@ START_TEST(invalid_configurations_are_refused) {
   oc.rendezvous = 1;
   ck_assert_ptr_null(srtout_open(&oc));
   out_cfg(&oc, 1);
-  oc.peers[0].host = "no.such.host.invalid";
+  oc.peers[0].host = "no.such.host.invalid.";
   ck_assert_ptr_null(srtout_open(&oc));
 }
 END_TEST
@@ -349,12 +367,32 @@ START_TEST(the_queue_drops_oldest_chunks_while_unconnected) {
   srtout_queue_stats(out, &qs);
   for (int i = 0; i < qs.capacity; i++) ck_assert_int_eq(srtout_write(out, chunk, sizeof chunk), 0);
   for (int i = 0; i < 50; i++) ck_assert_int_eq(srtout_write(out, chunk, sizeof chunk), -1);
-  ck_assert_int_eq(srtout_write(out, chunk, 100), -1);
+  ck_assert_int_eq(srtout_write(out, chunk, 100), 0);
   srtout_queue_stats(out, &qs);
   ck_assert_int_eq(qs.chunks, qs.capacity);
   ck_assert_uint_ge(qs.dropped, 50u);
   ck_assert_int_ge(qs.high_watermark, qs.capacity);
   srtout_close(out);
+}
+END_TEST
+
+START_TEST(a_partial_tail_is_carried_into_the_next_write) {
+  srtout_cfg_t oc;
+  srtout_t *out;
+  srtout_queue_stats_t qs;
+  unsigned char buf[65424];
+
+  out_cfg(&oc, free_udp_port());
+  out = srtout_open(&oc);
+  ck_assert_ptr_nonnull(out);
+  memset(buf, 0x47, sizeof buf);
+  ck_assert_int_eq(srtout_write(out, buf, sizeof buf), 0);
+  srtout_queue_stats(out, &qs);
+  ck_assert_int_eq(qs.chunks, 49);
+  ck_assert_int_eq(srtout_write(out, buf, 376), 0);
+  srtout_queue_stats(out, &qs);
+  ck_assert_int_eq(qs.chunks, 50);
+  srtout_close_now(out);
 }
 END_TEST
 
@@ -457,9 +495,11 @@ static Suite *srtin_out_suite(void) {
   tcase_add_test(tc, mismatched_passphrases_never_link);
   tcase_add_test(tc, second_listener_on_a_busy_port_fails);
   tcase_add_test(tc, a_stopped_listener_gives_up);
+  tcase_add_test(tc, retry_open_keeps_dialing_until_stopped);
   tcase_add_test(tc, invalid_configurations_are_refused);
   tcase_add_test(tc, bonded_groups_open_only_where_libsrt_supports_them);
   tcase_add_test(tc, the_queue_drops_oldest_chunks_while_unconnected);
+  tcase_add_test(tc, a_partial_tail_is_carried_into_the_next_write);
   tcase_add_test(tc, a_dead_peer_makes_the_receiver_fail_and_the_sender_reconnect);
   tcase_add_test(tc, the_listener_reaccepts_after_the_sender_vanishes);
   suite_add_tcase(s, tc);

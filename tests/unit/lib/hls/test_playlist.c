@@ -353,7 +353,7 @@ START_TEST(hls_playlist_parse_accepts_identity_keyformat_and_lowercase_iv) {
 }
 END_TEST
 
-START_TEST(hls_playlist_parse_caps_segments_and_skips_unresolvable_uris) {
+START_TEST(hls_playlist_parse_keeps_newest_segments_when_over_cap) {
   char body[HLS_MAX_SEGMENTS * 40 + 256];
   size_t n = 0;
   http_url_t base = make_base("example.com", 80, "/index.m3u8");
@@ -363,7 +363,9 @@ START_TEST(hls_playlist_parse_caps_segments_and_skips_unresolvable_uris) {
   for (unsigned i = 0; i < HLS_MAX_SEGMENTS + 5; i++) n += (size_t)snprintf(body + n, sizeof body - n, "#EXTINF:4.0,\ns%u.ts\n", i);
   ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
   ck_assert_uint_eq(pl.n_segments, HLS_MAX_SEGMENTS);
-  ck_assert_str_eq(pl.segments[HLS_MAX_SEGMENTS - 1].url, "http://example.com/s63.ts");
+  ck_assert_str_eq(pl.segments[0].url, "http://example.com/s5.ts");
+  ck_assert_str_eq(pl.segments[HLS_MAX_SEGMENTS - 1].url, "http://example.com/s68.ts");
+  ck_assert_uint_eq((unsigned)pl.media_sequence, 5u);
 }
 END_TEST
 
@@ -486,7 +488,7 @@ static Suite *hls_playlist_suite(void) {
   tcase_add_loop_test(tc, hls_playlist_parse_rejects_malformed_or_unsupported_keys, 0, (int)(sizeof reject_cases / sizeof reject_cases[0]));
   tcase_add_test(tc, hls_playlist_parse_reuses_a_key_seen_again);
   tcase_add_test(tc, hls_playlist_parse_accepts_identity_keyformat_and_lowercase_iv);
-  tcase_add_test(tc, hls_playlist_parse_caps_segments_and_skips_unresolvable_uris);
+  tcase_add_test(tc, hls_playlist_parse_keeps_newest_segments_when_over_cap);
   tcase_add_test(tc, hls_playlist_parse_server_control_without_block_reload_is_not_low_latency);
   tcase_add_test(tc, hls_playlist_parse_map_without_uri_leaves_ts_mode);
   tcase_add_test(tc, hls_body_is_master_requires_tag_at_line_start);

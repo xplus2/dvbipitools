@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dipirec/filter/pace.h"
+#include "lib/net/ts/pace.h"
 
 /* adaptation field only, PCR_flag set, no extension (ext9=0).
    same layout as tspacket_write.c's put_pcr(), inverse-checked by hand */

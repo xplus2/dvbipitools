@@ -9,6 +9,7 @@
 #include "tspack.h"
 
 #define PES_MAX 16
+#define PES_MAX_BYTES (16u << 20) /* per-PES buffer cap */
 
 typedef struct {
   unsigned pid;
@@ -88,6 +89,13 @@ static void deliver(pes_t *p, stream_t *s) {
 }
 
 static void append(stream_t *s, const unsigned char *d, size_t n) {
+  if (s->len + n > PES_MAX_BYTES) {
+    log_throttled(&s->drop_throttle, LOG_THROTTLE_WINDOW_S, "LW500249", "pes: pid %u PES exceeds %u bytes, dropped until next start", s->pid, PES_MAX_BYTES);
+    s->started = 0;
+    s->hdr = 0;
+    s->len = 0;
+    return;
+  }
   if (sgrow(s, n) == 0) {
     memcpy(s->buf + s->len, d, n);
     s->len += n;

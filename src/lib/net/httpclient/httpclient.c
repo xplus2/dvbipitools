@@ -47,7 +47,7 @@ ssize_t raw_recv(struct http *h, void *buf, size_t cap, net_err_reason_t *reason
 
   if (h->tls) {
     n = tls_read(h->tls, buf, cap);
-    if (n < 0 && reason_out) *reason_out = NET_ERR_TLS;
+    if (n < 0 && reason_out) *reason_out = tls_eof(h->tls) ? NET_ERR_EOF : NET_ERR_TLS;
     return n;
   }
   for (;;) {
@@ -175,7 +175,7 @@ int try_parse_response(struct http *h, size_t *gotp, net_err_reason_t *reason_ou
     unsigned long v;
     errno = 0;
     v = strtoul(cl, &end, 10);
-    if (*cl && !*end && errno != ERANGE) {
+    if (*cl >= '0' && *cl <= '9' && !*end && errno != ERANGE) {
       h->has_content_length = 1;
       h->content_length = v;
     } else {
@@ -211,7 +211,7 @@ int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out) {
   return 0;
 }
 
-/* GET line + Host/User-Agent/Icy-MetaData/optional extra header/Connection: close.
+/* GET line + Host/User-Agent/optional extra header. Persistent by default.
    ret: request length, or -1 if it doesn't fit cap */
 int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *user_agent, const char *extra_header) {
   char hostport[300];
@@ -225,17 +225,20 @@ int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *
     sbuf_add(&hb, extra_header);
     sbuf_add(&hb, "\r\n");
   }
-  if (url->port == default_port) {
-    bufcpy(hostport, sizeof hostport, url->host);
-  } else {
+  {
     sbuf_t pb;
+    int v6 = strchr(url->host, ':') != NULL;
     sbuf_init(&pb, hostport, sizeof hostport);
+    if (v6) sbuf_add(&pb, "[");
     sbuf_add(&pb, url->host);
-    sbuf_add(&pb, ":");
-    sbuf_add_uint(&pb, url->port);
+    if (v6) sbuf_add(&pb, "]");
+    if (url->port != default_port) {
+      sbuf_add(&pb, ":");
+      sbuf_add_uint(&pb, url->port);
+    }
   }
 
-  rl = snprintf(buf, cap, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nIcy-MetaData: 1\r\n%sConnection: close\r\n\r\n", url->path, hostport, user_agent, hdrline);
+  rl = snprintf(buf, cap, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\n%s\r\n", url->path, hostport, user_agent, hdrline);
   if (rl < 0 || rl >= (int)cap) {
     log_code("LE000310", "http request too long");
     return -1;
@@ -379,7 +382,7 @@ static int resolve_redirect(struct http *h, http_url_t *next, net_err_reason_t *
     if (reason_out) *reason_out = NET_ERR_FORMAT;
     return -1;
   }
-  return 0;
+  return check_redirect_scheme(&h->url, next, reason_out);
 }
 
 http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure, const char *extra_header, net_err_reason_t *reason_out) {
@@ -400,7 +403,7 @@ http_t *http_get(const http_url_t *url_in, const char *user_agent, int insecure,
     }
     if (h->status == 304) return h; /* not-modified: caller checks http_status(), body is empty */
     if (h->status < 200 || h->status >= 300) {
-      log_code("LE600125", "http %d fetching %s%s", h->status, h->url.host, h->url.path);
+      log_code("LE600125", "http %d fetching %s%.*s", h->status, h->url.host, (int)strcspn(h->url.path, "?"), h->url.path);
       http_close(h);
       if (reason_out) *reason_out = NET_ERR_HTTP;
       return NULL;

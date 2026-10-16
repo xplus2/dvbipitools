@@ -9,10 +9,11 @@
 #include "lib/helper/argutil.h"
 #include "lib/sys/ioutil.h"
 #include "lib/mux/fec2022.h"
+#include "lib/net/netconnect.h"
 #include "config.h"
 #include "version.h"
 
-void rist_cfg_defaults(config_t *cfg) {
+void dipirist_cfg_defaults(config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
   cfg->profile = RIST_PROF_SIMPLE;
 }
@@ -22,8 +23,27 @@ static int apply_iface(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_str(&cfg->str_pool, &cfg->iface, v, e, n);
 }
 
+static int apply_pace(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_bool(&((config_t *)c)->pace, v, e, n);
+}
+
 static int apply_insecure(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_bool(&((config_t *)c)->insecure_tls, v, e, n);
+}
+
+static int apply_ttl(void *c, const char *v, char *e, size_t n) {
+  unsigned u;
+  if (yamlcfg_set_uint(&u, v, 0, 255, e, n)) return -1;
+  ((config_t *)c)->out_ttl = (int)u;
+  return 0;
+}
+
+static int apply_dscp(void *c, const char *v, char *e, size_t n) {
+  if (net_dscp_parse(v, &((config_t *)c)->out_tos)) {
+    bufcpy(e, n, "must be video-high|video-low|voice|signalling|best-effort|0..63");
+    return -1;
+  }
+  return 0;
 }
 
 static int apply_al_fec(void *c, const char *v, char *e, size_t n) {
@@ -83,7 +103,7 @@ static int set_buf(char *dst, size_t sz, const char *v, char *e, size_t n) {
 }
 
 static int apply_in(void *c, const char *v, char *e, size_t n) {
-  if (rist_cfg_add_endpoint(c, 0, v)) {
+  if (dipirist_cfg_add_endpoint(c, 0, v)) {
     snprintf(e, n, "invalid endpoint '%s'", v);
     return -1;
   }
@@ -91,7 +111,7 @@ static int apply_in(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_out(void *c, const char *v, char *e, size_t n) {
-  if (rist_cfg_add_endpoint(c, 1, v)) {
+  if (dipirist_cfg_add_endpoint(c, 1, v)) {
     snprintf(e, n, "invalid endpoint '%s'", v);
     return -1;
   }
@@ -136,6 +156,9 @@ static const yamlcfg_key_t keys[] = {
     {"out", apply_out, 0, 1},
     {"iface", apply_iface, 0, 0},
     {"insecure", apply_insecure, 0, 0},
+    {"pace", apply_pace, 0, 0},
+    {"ttl", apply_ttl, 0, 0},
+    {"dscp", apply_dscp, 0, 0},
     {"profile", apply_profile, 0, 0},
     {"secret", apply_secret, 0, 0},
     {"encryption-type", apply_encryption_type, 0, 0},
@@ -152,7 +175,7 @@ static const yamlcfg_key_t keys[] = {
     {"daemonize", apply_daemonize, 0, 0},
 };
 
-int rist_cfg_load(config_t *cfg, const char *path, int strict) {
+int dipirist_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
   int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
@@ -163,12 +186,12 @@ static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
   if (cond) yamlcfg_warn(y, code, "%s", msg);
 }
 
-int rist_cfg_test(const char *path, int strict) {
+int dipirist_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   int rc;
   config_t cfg;
 
-  rist_cfg_defaults(&cfg);
+  dipirist_cfg_defaults(&cfg);
   if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
@@ -178,7 +201,10 @@ int rist_cfg_test(const char *path, int strict) {
   warn_if(&y, cfg.n_in && cfg.n_out && cfg.in.is_rist == cfg.out.is_rist, "VA000158", "exactly one of in/out must be rist://, the other a plain endpoint");
   warn_if(&y, cfg.secret[0] && cfg.profile != RIST_PROF_MAIN, "VA000159", "secret requires profile main");
   warn_if(&y, cfg.key_size && cfg.profile != RIST_PROF_MAIN, "VA000160", "encryption-type requires profile main");
+  warn_if(&y, cfg.key_size && !cfg.secret[0], "VA000720", "encryption-type requires secret");
   warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "VA000120", "metrics.sock and metrics.interval require metrics.id");
+  warn_if(&y, cfg.pace && cfg.n_in && (cfg.in.is_rist || cfg.in.nonrist.kind != PLAIN_EP_FILE), "VA000566", "pace requires in - or a file path");
+  warn_if(&y, (cfg.out_ttl || cfg.out_tos) && cfg.n_out && (cfg.out.is_rist || cfg.out.nonrist.kind == PLAIN_EP_FILE), "VA000535", "ttl/dscp need out rtp:// or udp://");
   warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "VA000161", "metrics.inspect-ts requires metrics.id");
   warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "VA000162", "al-fec requires al-fec-port");
   warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "VA000163", "al-fec-port has no effect without al-fec");

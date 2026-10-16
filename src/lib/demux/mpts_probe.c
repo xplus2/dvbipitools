@@ -74,26 +74,20 @@ mpts_probe_result_t mpts_probe_run(tssrc_t *src, int pat_wait_ms, int name_wait_
   tssrc_capture_start(src);
 
   for (;;) {
-    ssize_t n = tssrc_read(src, buf, sizeof buf, NULL);
+    ssize_t n;
     int count;
     int named;
-    if (n < 0 || signal_stop_requested()) {
-      r.kind = MPTS_PROBE_FAIL;
-      psi_free(ctx.psi);
-      return r;
+    int w;
+    if (signal_stop_requested()) goto fail;
+    w = tssrc_wait(src, 50); /* read only when ready: blocking sources honor deadlines */
+    if (w < 0) goto fail;
+    if (w > 0) {
+      n = tssrc_read(src, buf, sizeof buf, NULL);
+      if (n < 0) goto fail;
+      if (n > 0) tspack_feed(&pz, buf, (size_t)n, probe_cb, &ctx);
     }
-    if (n > 0) tspack_feed(&pz, buf, (size_t)n, probe_cb, &ctx);
     if (!psi_have_pat(ctx.psi)) {
-      if (mono() >= pat_deadline) {
-        r.kind = MPTS_PROBE_FAIL;
-        psi_free(ctx.psi);
-        return r;
-      }
-      if (n == 0 && tssrc_wait(src, 50) < 0) {
-        r.kind = MPTS_PROBE_FAIL;
-        psi_free(ctx.psi);
-        return r;
-      }
+      if (mono() >= pat_deadline) goto fail;
       continue;
     }
     named = all_named(ctx.psi, &count);
@@ -105,6 +99,11 @@ mpts_probe_result_t mpts_probe_run(tssrc_t *src, int pat_wait_ms, int name_wait_
     if (named || mono() >= name_deadline) break;
   }
   fill_result(ctx.psi, &r);
+  psi_free(ctx.psi);
+  return r;
+
+fail:
+  r.kind = MPTS_PROBE_FAIL;
   psi_free(ctx.psi);
   return r;
 }

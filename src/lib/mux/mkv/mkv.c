@@ -60,8 +60,9 @@ const psi_t *mkv_psi(const mkv_t *m) { return m->psi[0]; }
 
 int mkv_error(const mkv_t *m) { return m->err; }
 
-void mkv_close(mkv_t *m) {
-  if (!m) return;
+int mkv_close(mkv_t *m) {
+  int rc;
+  if (!m) return 0;
   m->flushing = 1;
   if (m->pes) pes_flush(m->pes);
   for (int i = 0; i < m->ntrk; i++) {
@@ -70,6 +71,7 @@ void mkv_close(mkv_t *m) {
   if (!m->started && m->ntrk) start(m);
   cluster_flush(m);
   seg_finish(m);
+  rc = m->err ? -1 : 0;
   for (int i = 0; i < m->ntrk; i++) track_free(&m->trk[i]);
   ebuf_free(&m->cl);
   free(m->cue);
@@ -77,4 +79,5 @@ void mkv_close(mkv_t *m) {
   for (int i = 0; i < m->npsi; i++) psi_free(m->psi[i]);
   free(m->pend_arena);
   free(m);
+  return rc;
 }

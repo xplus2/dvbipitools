@@ -172,6 +172,68 @@ START_TEST(ecm_with_mismatched_esid_is_rejected) {
 }
 END_TEST
 
+START_TEST(foreign_emm_cannot_lock_esid) {
+  biss_ca_key_t *pub;
+  biss_ca_state_t *s;
+  unsigned char ekid[BISS_CA_EKID_LEN];
+  unsigned char other_ekid[BISS_CA_EKID_LEN] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11};
+  unsigned char sk[BISS_CA_SK_LEN] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+  unsigned char sw[BISS_CA_SW_LEN] = {0};
+  unsigned char emm[4096], ecm[128];
+  unsigned char out_even[BISS_CA_SW_LEN], out_odd[BISS_CA_SW_LEN];
+  size_t emm_len, ecm_len;
+
+  gen_keypair();
+  pub = biss_ca_key_load_public_file(g_pub_path);
+  ck_assert_int_eq(biss_ca_entitlement_key_id(pub, ekid), 0);
+  s = state_from(g_priv_path);
+
+  emm_len = build_test_emm(0x9999, other_ekid, pub, sk, 0, emm, sizeof emm);
+  ck_assert_int_eq(biss_ca_state_on_emm(s, emm, emm_len), 0);
+  emm_len = build_test_emm(0x1234, ekid, pub, sk, 0, emm, sizeof emm);
+  ck_assert_int_eq(biss_ca_state_on_emm(s, emm, emm_len), 1);
+  ecm_len = build_test_ecm(0x1234, sk, 0, sw, sw, ecm, sizeof ecm);
+  ck_assert_int_eq(biss_ca_state_resolve_ecm(s, ecm, ecm_len, out_even, out_odd), 0);
+
+  biss_ca_state_free(s);
+  biss_ca_key_free(pub);
+  cleanup_keypair();
+}
+END_TEST
+
+START_TEST(esid_change_relearned_and_drops_sk) {
+  biss_ca_key_t *pub;
+  biss_ca_state_t *s;
+  unsigned char ekid[BISS_CA_EKID_LEN];
+  unsigned char sk[BISS_CA_SK_LEN] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+  unsigned char sw[BISS_CA_SW_LEN] = {0};
+  unsigned char emm[4096], ecm[128];
+  unsigned char out_even[BISS_CA_SW_LEN], out_odd[BISS_CA_SW_LEN];
+  size_t emm_len, ecm_len;
+
+  gen_keypair();
+  pub = biss_ca_key_load_public_file(g_pub_path);
+  ck_assert_int_eq(biss_ca_entitlement_key_id(pub, ekid), 0);
+  s = state_from(g_priv_path);
+
+  emm_len = build_test_emm(0x1234, ekid, pub, sk, 0, emm, sizeof emm);
+  ck_assert_int_eq(biss_ca_state_on_emm(s, emm, emm_len), 1);
+  emm_len = build_test_emm(0x5678, ekid, pub, sk, 1, emm, sizeof emm);
+  ck_assert_int_eq(biss_ca_state_on_emm(s, emm, emm_len), 1);
+
+  ecm_len = build_test_ecm(0x1234, sk, 1, sw, sw, ecm, sizeof ecm);
+  ck_assert_int_eq(biss_ca_state_resolve_ecm(s, ecm, ecm_len, out_even, out_odd), -1);
+  ecm_len = build_test_ecm(0x5678, sk, 0, sw, sw, ecm, sizeof ecm);
+  ck_assert_int_eq(biss_ca_state_resolve_ecm(s, ecm, ecm_len, out_even, out_odd), -1);
+  ecm_len = build_test_ecm(0x5678, sk, 1, sw, sw, ecm, sizeof ecm);
+  ck_assert_int_eq(biss_ca_state_resolve_ecm(s, ecm, ecm_len, out_even, out_odd), 0);
+
+  biss_ca_state_free(s);
+  biss_ca_key_free(pub);
+  cleanup_keypair();
+}
+END_TEST
+
 static char g_dir[] = "/tmp/dipidescramble_test_biss_ca_dir_XXXXXX";
 
 static void gen_two_keys(void) {
@@ -291,6 +353,8 @@ static Suite *biss_ca_state_suite(void) {
   tcase_add_test(tc, emm_for_different_receiver_is_ignored);
   tcase_add_test(tc, ecm_before_emm_has_no_sk_yet);
   tcase_add_test(tc, ecm_with_mismatched_esid_is_rejected);
+  tcase_add_test(tc, foreign_emm_cannot_lock_esid);
+  tcase_add_test(tc, esid_change_relearned_and_drops_sk);
   tcase_add_test(tc, directory_loads_every_private_key);
   tcase_add_test(tc, repeated_paths_load_every_key);
   tcase_add_test(tc, multi_key_pem_file_loads_every_key);

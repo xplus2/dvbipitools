@@ -29,9 +29,13 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "out: rtp://239.1.2.3:5000\n", CFG_UINT, out.nonrist.port, 5000, NULL),
   CFG_FIELD(config_t, "iface: eth7\n", CFG_STRPTR, iface, 0, "eth7"),
   CFG_FIELD(config_t, "insecure: true\n", CFG_INT, insecure_tls, 1, NULL),
+  CFG_FIELD(config_t, "pace: true\n", CFG_INT, pace, 1, NULL),
+  CFG_FIELD(config_t, "ttl: 16\n", CFG_INT, out_ttl, 16, NULL),
+  CFG_FIELD(config_t, "dscp: video-high\n", CFG_INT, out_tos, 0x22 << 2, NULL),
+  CFG_FIELD(config_t, "dscp: 10\n", CFG_INT, out_tos, 10 << 2, NULL),
   CFG_FIELD(config_t, "profile: main\n", CFG_INT, profile, RIST_PROF_MAIN, NULL),
   CFG_FIELD(config_t, "secret: s3cret\n", CFG_CHARARR, secret, 0, "s3cret"),
-  CFG_FIELD(config_t, "encryption-type: 256\n", CFG_INT, key_size, 256, NULL),
+  CFG_FIELD(config_t, "secret: s3cret\nencryption-type: 256\n", CFG_INT, key_size, 256, NULL),
   CFG_FIELD(config_t, "cname: cam1\n", CFG_CHARARR, cname, 0, "cam1"),
   CFG_FIELD(config_t, "buffer: 750\n", CFG_UINT, buffer_ms, 750, NULL),
   CFG_FIELD(config_t, "al-fec: 10:5\n", CFG_UINT, al_fec_l, 10, NULL),
@@ -52,6 +56,10 @@ static const char *const bad_cases[] = {
   "out: rist://@0.0.0.0:6000\n",
   "out: http://example.org/live.ts\n",
   "iface: eth7\ninsecure: maybe\n",
+  "pace: sometimes\n",
+  "ttl: 256\n",
+  "dscp: loud\n",
+  "dscp: 64\n",
   "profile: ultra\n",
   "secret: " A128 "\n",
   "encryption-type: 192\n",
@@ -73,8 +81,8 @@ static int load(const char *text, config_t *cfg) {
   int rc;
 
   cfg_fixture_write(&g_fx, text);
-  rist_cfg_defaults(cfg);
-  rc = rist_cfg_load(cfg, g_fx.path, 1);
+  dipirist_cfg_defaults(cfg);
+  rc = dipirist_cfg_load(cfg, g_fx.path, 1);
   cfg_fixture_remove(&g_fx);
   return rc;
 }
@@ -107,10 +115,30 @@ START_TEST(bonded_rist_peers_are_collected) {
 }
 END_TEST
 
+START_TEST(repeated_list_key_accumulates_rist_peers) {
+  config_t cfg;
+
+  ck_assert_int_eq(load("out: rist://1.2.3.4:6000\nout: rist://1.2.3.5:6000\n", &cfg), 0);
+  ck_assert_int_eq(cfg.out.n_rist, 2);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(invalid_value_is_error_without_strict) {
+  config_t cfg;
+
+  cfg_fixture_write(&g_fx, "buffer: 0\ncname: ok\n");
+  dipirist_cfg_defaults(&cfg);
+  ck_assert_int_eq(dipirist_cfg_load(&cfg, g_fx.path, 0), -1);
+  cfg_fixture_remove(&g_fx);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(defaults_are_the_documented_values) {
   config_t cfg;
 
-  rist_cfg_defaults(&cfg);
+  dipirist_cfg_defaults(&cfg);
   ck_assert_int_eq(cfg.profile, RIST_PROF_SIMPLE);
   ck_assert_int_eq(cfg.n_in, 0);
   ck_assert_int_eq(cfg.n_out, 0);
@@ -121,10 +149,10 @@ START_TEST(unknown_key_is_rejected_in_strict_mode_only) {
   config_t cfg;
 
   cfg_fixture_write(&g_fx, "bogus-key: 1\n");
-  rist_cfg_defaults(&cfg);
-  ck_assert_int_eq(rist_cfg_load(&cfg, g_fx.path, 1), -1);
-  rist_cfg_defaults(&cfg);
-  ck_assert_int_eq(rist_cfg_load(&cfg, g_fx.path, 0), 0);
+  dipirist_cfg_defaults(&cfg);
+  ck_assert_int_eq(dipirist_cfg_load(&cfg, g_fx.path, 1), -1);
+  dipirist_cfg_defaults(&cfg);
+  ck_assert_int_eq(dipirist_cfg_load(&cfg, g_fx.path, 0), 0);
   cfg_fixture_remove(&g_fx);
   yamlcfg_strpool_free(cfg.str_pool);
 }
@@ -133,8 +161,8 @@ END_TEST
 START_TEST(missing_explicit_file_fails) {
   config_t cfg;
 
-  rist_cfg_defaults(&cfg);
-  ck_assert_int_eq(rist_cfg_load(&cfg, "/nonexistent/dipirist.yaml", 0), -1);
+  dipirist_cfg_defaults(&cfg);
+  ck_assert_int_eq(dipirist_cfg_load(&cfg, "/nonexistent/dipirist.yaml", 0), -1);
 }
 END_TEST
 
@@ -155,24 +183,28 @@ static const cfgtest_case_t cfgtest_cases[] = {
   {SEND "secret: s3cret\n", -1},
   {SEND "secret: s3cret\nprofile: main\n", 0},
   {SEND "encryption-type: 128\n", -1},
+  {SEND "profile: main\nencryption-type: 128\n", -1},
+  {SEND "profile: main\nsecret: s3cret\nencryption-type: 128\n", 0},
   {SEND "metrics:\n  sock: /tmp/x.sock\n", -1},
   {SEND "metrics:\n  interval: 10\n", -1},
   {SEND "metrics:\n  inspect-ts: basic\n", -1},
   {SEND "al-fec: 10:5\n", -1},
   {SEND "al-fec: 10:5\nal-fec-port: 6004\n", 0},
   {SEND "al-fec-port: 6004\n", -1},
+  {SEND "ttl: 4\n", -1},
+  {SEND "dscp: voice\n", -1},
 };
 
 START_TEST(config_test_reports_warnings_and_fails_only_in_strict_mode) {
   cfg_fixture_write(&g_fx, cfgtest_cases[_i].yaml);
-  ck_assert_int_eq(rist_cfg_test(g_fx.path, 0), 0);
-  ck_assert_int_eq(rist_cfg_test(g_fx.path, 1), cfgtest_cases[_i].strict_result);
+  ck_assert_int_eq(dipirist_cfg_test(g_fx.path, 0), 0);
+  ck_assert_int_eq(dipirist_cfg_test(g_fx.path, 1), cfgtest_cases[_i].strict_result);
   cfg_fixture_remove(&g_fx);
 }
 END_TEST
 
 START_TEST(config_test_missing_file_fails) {
-  ck_assert_int_eq(rist_cfg_test("/nonexistent/dipirist.yaml", 0), -1);
+  ck_assert_int_eq(dipirist_cfg_test("/nonexistent/dipirist.yaml", 0), -1);
 }
 END_TEST
 
@@ -183,6 +215,8 @@ static Suite *config_suite(void) {
   tcase_add_loop_test(tc, each_key_sets_its_config_field, 0, (int)(sizeof field_cases / sizeof field_cases[0]));
   tcase_add_loop_test(tc, invalid_values_are_rejected, 0, (int)(sizeof bad_cases / sizeof bad_cases[0]));
   tcase_add_test(tc, bonded_rist_peers_are_collected);
+  tcase_add_test(tc, repeated_list_key_accumulates_rist_peers);
+  tcase_add_test(tc, invalid_value_is_error_without_strict);
   tcase_add_test(tc, defaults_are_the_documented_values);
   tcase_add_test(tc, unknown_key_is_rejected_in_strict_mode_only);
   tcase_add_test(tc, missing_explicit_file_fails);

@@ -9,6 +9,14 @@
 
 #include "rtx_session_table.h"
 
+typedef struct {
+  int valid;
+  struct sockaddr_storage addr;
+  socklen_t addrlen;
+  uint16_t seq; /* stripe lock */
+  time_t last_seen;
+} rtx_session_slot_t;
+
 #define RTX_STRIPE_COUNT_MAX 8 /* client addr hashed to one of these, independent lock each */
 
 typedef struct {
@@ -98,19 +106,19 @@ static rtx_session_stripe_t *pick_stripe(rtx_session_table_t *t, const struct so
   return &t->stripes[sockaddr_stripe_of(addr, addrlen, t->stripe_count)];
 }
 
-static rtx_session_slot_t *stripe_get(rtx_session_stripe_t *t, const struct sockaddr *addr, socklen_t addrlen) {
+static uint16_t stripe_next_seq(rtx_session_stripe_t *t, const struct sockaddr *addr, socklen_t addrlen) {
   time_t now = time(NULL);
   size_t idx, found;
-  rtx_session_slot_t *result;
+  uint16_t seq;
 
   pthread_mutex_lock(&t->lock);
 
   found = sockaddr_index_find(t->index, addr, addrlen);
   if (found != SIZE_MAX) {
     t->slots[found].last_seen = now;
-    result = &t->slots[found];
+    seq = t->slots[found].seq++;
     pthread_mutex_unlock(&t->lock);
-    return result;
+    return seq;
   }
 
   if (t->free_count > 0) {
@@ -132,7 +140,7 @@ static rtx_session_slot_t *stripe_get(rtx_session_stripe_t *t, const struct sock
     }
     if (!have) {
       pthread_mutex_unlock(&t->lock);
-      return NULL; /* cap == 0, shouldn't happen: rtx_session_table_new rejects it */
+      return 0; /* cap == 0, shouldn't happen: rtx_session_table_new rejects it */
     }
     sockaddr_index_remove(t->index, (const struct sockaddr *)&t->slots[oldest].addr, t->slots[oldest].addrlen);
     idx = oldest;
@@ -149,14 +157,14 @@ static rtx_session_slot_t *stripe_get(rtx_session_stripe_t *t, const struct sock
 
   sockaddr_index_insert(t->index, addr, addrlen, idx);
 
-  result = &t->slots[idx];
+  seq = t->slots[idx].seq++;
   pthread_mutex_unlock(&t->lock);
-  return result;
+  return seq;
 }
 
 /* no protocol path exists to reject a repair: full stripe evicts its own coldest session */
-rtx_session_slot_t *rtx_session_table_get(rtx_session_table_t *t, const struct sockaddr *addr, socklen_t addrlen) {
-  return stripe_get(pick_stripe(t, addr, addrlen), addr, addrlen);
+uint16_t rtx_session_table_next_seq(rtx_session_table_t *t, const struct sockaddr *addr, socklen_t addrlen) {
+  return stripe_next_seq(pick_stripe(t, addr, addrlen), addr, addrlen);
 }
 
 /* checks+reclaims one slot if stale. caller holds stripe lock */

@@ -1,8 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#ifndef DIPIREC_FILTER_PACE_H
-#define DIPIREC_FILTER_PACE_H
+#ifndef DVBIPITOOLS_LIB_NET_TS_PACE_H
+#define DVBIPITOOLS_LIB_NET_TS_PACE_H
 
 #include <stdint.h>
 

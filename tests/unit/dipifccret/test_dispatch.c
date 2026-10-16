@@ -91,7 +91,6 @@ static void fx_open(fx_t *fx, int with_ret, int with_bursts) {
   fx->d.rtx_pt = RTX_PT;
   fx->d.burst_multiplier = 2.0;
   fx->d.duration_cap_ms = 1000;
-  fx->rsc.last_dscp = -1;
   if (with_ret) {
     fx->ret = ret_ctx_new(fx->ch, RTX_PT, 8, mc_record, ret_send_unicast_impl, &fx->rsc);
     ck_assert_ptr_nonnull(fx->ret);
@@ -501,6 +500,7 @@ START_TEST(rams_r_accept_carries_rams_i_tlvs_and_repeat_gets_update) {
   fx_drain(&fx, &r);
   ck_assert_int_eq(r.n_rams_i, 1);
   ck_assert_uint_eq(r.rams_i[0].response, (unsigned)BURST_UPDATE);
+  ck_assert_uint_eq(r.rams_i[0].media_ssrc, MEDIA_SSRC);
   ck_assert_uint_eq(r.rams_i[0].msn, 1u);
   fx_close(&fx);
 }
@@ -776,6 +776,7 @@ START_TEST(nack_threshold_halves_the_rate_then_terminates) {
   fx_drain(&fx, &r);
   ck_assert_int_eq(r.n_rams_i, 1);
   ck_assert_uint_eq(r.rams_i[0].response, (unsigned)BURST_CONGESTION);
+  ck_assert_uint_eq(r.rams_i[0].media_ssrc, MEDIA_SSRC);
   ck_assert_int_eq(burst_is_done(b), 1);
   fx_close(&fx);
 }
@@ -1044,7 +1045,7 @@ START_TEST(ret_send_mc_impl_sends_only_when_the_channel_socket_exists) {
   int rx = udp_bound(&rx_addr);
   channel_table_t *ch = channel_table_new(4, 8, 0);
   mcsend_table_t *mt = mcsend_table_new(4, NULL, 1);
-  ret_send_ctx_t ctx = {NULL, -1};
+  ret_send_ctx_t ctx = {NULL};
   unsigned char addr[4] = {127, 0, 0, 1};
   unsigned char buf[16];
   channel_t *c = channel_lookup(ch, AF_INET, addr, sizeof addr, ntohs(rx_addr.sin_port));
@@ -1074,10 +1075,8 @@ START_TEST(burst_send_cb_flags_congestion_only_for_would_block_errors) {
   dst.to = (const struct sockaddr *)&to;
   dst.tolen = sizeof to;
   dst.congestion = 0;
-  dst.last_dscp = -1;
   burst_send_cb(b, sizeof b, 0x28, &dst);
   ck_assert_int_eq(dst.congestion, 0);
-  ck_assert_int_eq(dst.last_dscp, 0x28);
   close(fd);
   burst_send_cb(b, sizeof b, 0x28, &dst);
   ck_assert_int_eq(dst.congestion, 0);

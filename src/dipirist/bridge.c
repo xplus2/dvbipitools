@@ -1,15 +1,20 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <poll.h>
+#include <pthread.h>
 #include <string.h>
 
 #include <librist/librist.h>
 
+#include "lib/demux/psi/psi.h"
+#include "lib/demux/tspack.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/rist/ristout.h"
 #include "lib/net/rist/ristpeer.h"
 #include "lib/net/send_result.h"
+#include "lib/net/ts/pace.h"
 #include "lib/net/ts/sink.h"
 #include "lib/net/ts/source.h"
 #include "lib/tsinspect/inspect.h"
@@ -19,83 +24,128 @@
 #include "bridge.h"
 #include "version.h"
 
-#define RIST_READ_TIMEOUT_MS 200
-
 enum rist_profile profile_of(rist_profile_sel_t p) {
   return p == RIST_PROF_MAIN ? RIST_PROFILE_MAIN : RIST_PROFILE_SIMPLE;
 }
 
-static int rist_log_cb(void *arg, enum rist_log_level level, const char *msg) {
-  (void)arg;
-  if (level <= RIST_LOG_ERROR)     log_code("VE700010", "rist: %s", msg);
-  else if (level <= RIST_LOG_WARN) log_code("VW700010", "rist: %s", msg);
-  else                             log_code("VD700010", "rist: %s", msg);
-  return 0;
-}
+#define FLOW_STATS_FRESH_S 3.0
 
-/* NULL on failure. verbose enables INFO/DEBUG, else WARN+ */
-static struct rist_logging_settings *open_logging(int verbose) {
-  struct rist_logging_settings *ls = NULL;
-
-  if (rist_logging_set(&ls, verbose ? RIST_LOG_DEBUG : RIST_LOG_WARN, rist_log_cb, NULL, NULL, NULL) != 0)
-    return NULL;
-  rist_logging_set_global(ls); /* udpsocket_* internals log via global settings, not ctx's */
-  return ls;
-}
-
-#define RIST_STATS_INTERVAL_MS 1000 /* metrics_exporter_due() gates actual push cadence */
+/* exporter is not thread safe: stats cb thread vs main loop */
+static pthread_mutex_t push_lock = PTHREAD_MUTEX_INITIALIZER;
+static double flow_stats_mono;
 
 int bridge_receiver_stats_cb(void *arg, const struct rist_stats *stats) {
   metrics_exporter_t *mx = arg;
-  const struct rist_stats_receiver_flow *f = &stats->stats.receiver_flow;
-  metrics_writer_t w;
+  metrics_entry_t e[RIST_RECEIVER_FLOW_ENTRIES];
+  size_t n = ristpeer_receiver_flow_entries(stats, e);
 
-  if (stats->stats_type == RIST_STATS_RECEIVER_FLOW && metrics_exporter_due(mx, mono_seconds()) && !metrics_exporter_begin(mx, &w, TOOL_VERSION)) {
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_RECEIVED_TOTAL, NULL, f->received);
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_MISSING_TOTAL, NULL, f->missing);
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_RECOVERED_TOTAL, NULL, f->recovered);
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_LOST_TOTAL, NULL, f->lost);
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_RTT_MILLISECONDS, NULL, f->rtt);
-#ifdef DIPIRIST_HAVE_AVG_BUFFER_TIME
-    metrics_writer_put(&w, METRICS_ID_RIST_RECEIVER_BUFFER_MILLISECONDS, NULL, f->avg_buffer_time);
-#endif
-    metrics_exporter_send(mx, &w);
+  if (n) {
+    double now = mono_seconds();
+    pthread_mutex_lock(&push_lock);
+    flow_stats_mono = now;
+    if (metrics_exporter_due(mx, now)) metrics_push_entries(mx, TOOL_VERSION, e, n);
+    pthread_mutex_unlock(&push_lock);
   }
   rist_stats_free(stats);
   return 0;
 }
 
-/* one rist_peer_create() per e bonded URI, receiver side (always listens). --secret --encryption-type
-   --cname --buffer override URI's own query params. 0 ok, -1 error */
-static int add_peers(struct rist_ctx *ctx, const endpoint_t *e, const config_t *cfg) {
-  for (int i = 0; i < e->n_rist; i++) {
-    struct rist_peer_config *pc = NULL;
-    struct rist_peer *peer;
-    if (rist_parse_address2(e->rist_uri[i], &pc) != 0 || !pc) {
-      log_code("VS000140", "rist: invalid peer url: %s", e->rist_uri[i]);
-      if (pc) rist_peer_config_free2(&pc);
-      return -1;
-    }
-    pc->initiate_conn = 0;
-    if (!rist_listen_ports_usable(e->rist_uri[i], cfg->profile == RIST_PROF_SIMPLE)) {
-      rist_peer_config_free2(&pc);
-      return -1;
-    }
-    if (cfg->secret[0]) bufcpy(pc->secret, sizeof pc->secret, cfg->secret);
-    if (cfg->key_size) pc->key_size = cfg->key_size;
-    if (cfg->cname[0]) bufcpy(pc->cname, sizeof pc->cname, cfg->cname);
-    if (cfg->buffer_ms) {
-      pc->recovery_length_min = cfg->buffer_ms;
-      pc->recovery_length_max = cfg->buffer_ms;
-    }
-    if (rist_peer_create(ctx, &peer, pc) != 0) {
-      log_code("VS600102", "rist: failed to add peer: %s", e->rist_uri[i]);
-      rist_peer_config_free2(&pc);
-      return -1;
-    }
-    rist_peer_config_free2(&pc);
+void bridge_receiver_idle_push(metrics_exporter_t *mx, double now_mono) {
+  metrics_writer_t w;
+  pthread_mutex_lock(&push_lock);
+  if ((flow_stats_mono == 0.0 || now_mono - flow_stats_mono >= FLOW_STATS_FRESH_S) && metrics_exporter_due(mx, now_mono) &&
+      !metrics_exporter_begin(mx, &w, TOOL_VERSION))
+    metrics_exporter_send(mx, &w);
+  pthread_mutex_unlock(&push_lock);
+}
+
+#define SRC_OPEN_TIMEOUT_S 30.0
+#define HTTP_IDLE_S 30.0
+#define RECONNECT_MIN_S 1.0
+#define RECONNECT_MAX_S 10.0
+
+static tssrc_t *open_source(const tssrc_cfg_t *tc, metrics_exporter_t *mx) {
+  net_err_reason_t reason = NET_ERR_OTHER;
+  tssrc_open_t *o = tssrc_open_async_start(tc, &reason);
+  double deadline = mono_seconds() + SRC_OPEN_TIMEOUT_S;
+  if (!o) {
+    metrics_exporter_note_error(mx, reason);
+    return NULL;
   }
+  while (!signal_stop_requested()) {
+    tssrc_open_state_t st = tssrc_open_async_step(o, &reason);
+    if (st == TSSRC_OPEN_DONE) return tssrc_open_async_take(o);
+    if (st == TSSRC_OPEN_ERROR) {
+      metrics_exporter_note_error(mx, reason);
+      break;
+    }
+    if (mono_seconds() >= deadline) {
+      log_code("VS600164", "http source: no response within %.0fs", SRC_OPEN_TIMEOUT_S);
+      metrics_exporter_note_error(mx, NET_ERR_TIMEOUT);
+      break;
+    }
+    struct pollfd pfd = {tssrc_open_async_poll_fd(o), tssrc_open_async_poll_events(o), 0};
+    poll(&pfd, 1, 100);
+  }
+  tssrc_open_async_free(o);
+  return NULL;
+}
+
+#define PACED_READ_CAP (7 * 188)
+
+typedef struct {
+  psi_t *psi;
+  pace_ctrl_t *pace;
+} pace_ctx_t;
+
+static int pace_pkt_cb(void *v, const unsigned char *pkt) {
+  pace_ctx_t *c = v;
+  pace_feed_pcr_pkt(c->pace, pkt, psi_pcr_pid(c->psi));
+  psi_feed(c->psi, pkt);
   return 0;
+}
+
+typedef struct {
+  tssrc_open_t *op;
+  double retry_at;
+  double deadline;
+  double backoff;
+} reconn_t;
+
+static void reconn_failed(reconn_t *r, metrics_exporter_t *mx, net_err_reason_t why, double now) {
+  metrics_exporter_note_error(mx, why);
+  r->retry_at = now + r->backoff;
+  r->backoff *= 2;
+  if (r->backoff > RECONNECT_MAX_S) r->backoff = RECONNECT_MAX_S;
+}
+
+/* one nonblocking step, source once connected else NULL */
+static tssrc_t *reconn_step(reconn_t *r, const tssrc_cfg_t *tc, metrics_exporter_t *mx, double now) {
+  net_err_reason_t why = NET_ERR_OTHER;
+  tssrc_open_state_t st;
+
+  if (!r->op) {
+    if (now < r->retry_at) return NULL;
+    r->op = tssrc_open_async_start(tc, &why);
+    if (!r->op) {
+      reconn_failed(r, mx, why, now);
+      return NULL;
+    }
+    r->deadline = now + SRC_OPEN_TIMEOUT_S;
+  }
+  st = tssrc_open_async_step(r->op, &why);
+  if (st == TSSRC_OPEN_DONE) {
+    tssrc_t *src = tssrc_open_async_take(r->op);
+    r->op = NULL;
+    r->backoff = RECONNECT_MIN_S;
+    return src;
+  }
+  if (st == TSSRC_OPEN_PENDING && now < r->deadline) return NULL;
+  if (st == TSSRC_OPEN_PENDING) why = NET_ERR_TIMEOUT;
+  tssrc_open_async_free(r->op);
+  r->op = NULL;
+  reconn_failed(r, mx, why, now);
+  return NULL;
 }
 
 static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
@@ -108,12 +158,26 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   unsigned char buf[65536];
   int rc = 0;
   int rist_had_error = 0;
+  pace_ctx_t pc = {NULL, NULL};
+  tspack_t pz = {{0}, 0, 0};
+  size_t read_cap = sizeof buf;
+  reconn_t rcn = {NULL, 0.0, 0.0, RECONNECT_MIN_S};
+  double last_data;
 
   plain_endpoint_to_tssrc_cfg(&cfg->in.nonrist, cfg->iface, TOOL_NAME "/" TOOL_VERSION, cfg->insecure_tls, &tc);
-  src = tssrc_open(&tc, NULL);
+  src = open_source(&tc, mx);
   if (!src) {
     tsinspect_free(insp);
     return 1;
+  }
+  if (cfg->pace) {
+    pc.pace = pace_new();
+    pc.psi = psi_new();
+    if (!pc.pace || !pc.psi) {
+      log_code("VS500101", "out of memory");
+      goto fail;
+    }
+    read_cap = PACED_READ_CAP;
   }
   if (insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
   if (tsinspect_wants_rx_ns(insp)) tssrc_enable_rx_timestamps(src);
@@ -134,26 +198,74 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   rist = ristout_open(&rcfg);
   if (!rist) {
     if (insp) metrics_exporter_set_extra(mx, NULL, NULL);
-    tsinspect_free(insp);
-    tssrc_close(src);
-    return 1;
+    goto fail;
   }
 
+  last_data = mono_seconds();
   while (!signal_stop_requested()) {
     net_err_reason_t reason = NET_ERR_OTHER;
-    ssize_t n = tssrc_read(src, buf, sizeof buf, &reason);
+    ssize_t n;
+    double now;
 
-    if (insp) tsinspect_tick(insp, mono_seconds());
+    if (!src) {
+      struct pollfd pfd = {-1, 0, 0};
+      now = mono_seconds();
+      if (insp) tsinspect_tick(insp, now);
+      ristout_idle_push(rist, now);
+      src = reconn_step(&rcn, &tc, mx, now);
+      if (src) {
+        log_line("http source: reconnected");
+        pz = (tspack_t){{0}, 0, 0};
+        last_data = now;
+        continue;
+      }
+      if (rcn.op) {
+        pfd.fd = tssrc_open_async_poll_fd(rcn.op);
+        pfd.events = tssrc_open_async_poll_events(rcn.op);
+      }
+      poll(&pfd, 1, 100);
+      continue;
+    }
+    n = tssrc_read(src, buf, read_cap, &reason);
+    now = mono_seconds();
+    if (insp) tsinspect_tick(insp, now);
+    ristout_idle_push(rist, now);
+    if (n > 0) last_data = now;
+    if (n >= 0 && tc.kind == TSSRC_HTTP && now - last_data >= HTTP_IDLE_S) {
+      n = -1;
+      reason = NET_ERR_TIMEOUT;
+    }
     if (n < 0) {
+      if (tc.kind == TSSRC_HTTP && !signal_stop_requested()) {
+        log_code("VW600163", "http source lost: %s, reconnecting", net_err_reason_name(reason));
+        metrics_exporter_note_error(mx, reason);
+        tssrc_close(src);
+        src = NULL;
+        rcn.retry_at = now + rcn.backoff;
+        continue;
+      }
+      metrics_exporter_note_error(mx, reason);
       rc = 1;
       break;
     }
-    if (n == 0) continue;
+    if (n == 0) {
+      if (tssrc_wait(src, 50) < 0) {
+        metrics_exporter_note_error(mx, NET_ERR_OTHER);
+        rc = 1;
+        break;
+      }
+      continue;
+    }
+    if (pc.pace) {
+      if (tssrc_is_rtp_framed(src)) pace_feed_rtp_ts(pc.pace, tssrc_last_rtp_ts(src));
+      else tspack_feed(&pz, buf, (size_t)n, pace_pkt_cb, &pc);
+    }
     if (insp) {
       tsinspect_set_rx_ns(insp, tssrc_last_rx_ns(src));
       tsinspect_grid(insp, buf, (size_t)n);
     }
     if (ristout_write(rist, buf, (size_t)n) < 0) {
+      metrics_exporter_note_error(mx, NET_ERR_OTHER);
       if (!rist_had_error) {
         log_code("VW100107", "rist output: write failed, will keep retrying");
         rist_had_error = 1;
@@ -164,86 +276,106 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
     }
   }
   ristout_close(rist);
+  tssrc_open_async_free(rcn.op);
   if (insp) metrics_exporter_set_extra(mx, NULL, NULL);
   tsinspect_free(insp);
   tssrc_close(src);
+  psi_free(pc.psi);
+  pace_free(pc.pace);
   return rc;
+
+fail:
+  tsinspect_free(insp);
+  tssrc_close(src);
+  psi_free(pc.psi);
+  pace_free(pc.pace);
+  return 1;
 }
 
-static struct rist_ctx *receiver_start(const config_t *cfg, metrics_exporter_t *mx, struct rist_logging_settings *log_settings) {
-  struct rist_ctx *ctx;
+/* --secret --encryption-type --cname --buffer override URI's own query params */
+static struct rist_ctx *receiver_start(const config_t *cfg, metrics_exporter_t *mx) {
+  const char *uris[DIPIRIST_MAX_PEERS];
+  rist_recv_cfg_t rc;
 
-  if (rist_receiver_create(&ctx, profile_of(cfg->profile), log_settings) != 0) {
-    log_code("VS500113", "rist: receiver create failed");
-    return NULL;
-  }
-  if (add_peers(ctx, &cfg->in, cfg) || rist_start(ctx) != 0) {
-    rist_destroy(ctx);
-    return NULL;
-  }
-  rist_stats_callback_set(ctx, RIST_STATS_INTERVAL_MS, bridge_receiver_stats_cb, mx);
-  return ctx;
+  memset(&rc, 0, sizeof rc);
+  for (int i = 0; i < cfg->in.n_rist; i++)
+    uris[i] = cfg->in.rist_uri[i];
+  rc.uris = uris;
+  rc.n = (unsigned)cfg->in.n_rist;
+  rc.simple = cfg->profile == RIST_PROF_SIMPLE;
+  rc.secret = cfg->secret;
+  rc.key_size = cfg->key_size;
+  rc.cname = cfg->cname;
+  rc.buffer_ms = cfg->buffer_ms;
+  rc.verbose = cfg->verbose;
+  rc.stats_cb = bridge_receiver_stats_cb;
+  rc.stats_arg = mx;
+  return rist_receiver_open(&rc);
 }
 
 static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   tssink_cfg_t tk;
   tssink_t *sink;
   struct rist_ctx *ctx;
-  struct rist_logging_settings *log_settings;
   tsinspect_t *insp = tsinspect_new_relay(cfg->metrics_inspect_ts);
   tsinspect_set_t set = {&insp, 1, NULL, 0};
   int net_had_error = 0;
   unsigned long long net_errors = 0;
   int net_retry;
   int rc = 0;
-  unsigned idle_ms = 0;
-  unsigned reset_ms = 2 * cfg->buffer_ms + RIST_READ_TIMEOUT_MS;
-  int got = 0;
+  ristpeer_flow_watch_t watch;
 
   plain_endpoint_to_tssink_cfg(&cfg->out.nonrist, cfg->iface, &tk);
+  tk.ttl = cfg->out_ttl;
+  tk.tos = cfg->out_tos;
+  tk.pack = 1;
   net_retry = tk.kind == TSSINK_UDP || tk.kind == TSSINK_RTP;
   sink = tssink_open(&tk);
   if (!sink) {
     tsinspect_free(insp);
     return 1;
   }
-  log_settings = open_logging(cfg->verbose);
-  ctx = receiver_start(cfg, mx, log_settings);
+  ctx = receiver_start(cfg, mx);
   if (!ctx) {
-    if (log_settings) rist_logging_settings_free2(&log_settings);
     tssink_close(sink);
     tsinspect_free(insp);
     return 1;
   }
   if (insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
+  ristpeer_flow_watch_init(&watch, cfg->buffer_ms);
 
   while (!signal_stop_requested()) {
     struct rist_data_block *db = NULL;
     int wr;
     int ret = rist_receiver_data_read2(ctx, &db, RIST_READ_TIMEOUT_MS);
-    if (insp) tsinspect_tick(insp, mono_seconds());
+    double now = mono_seconds();
+    if (insp) tsinspect_tick(insp, now);
+    bridge_receiver_idle_push(mx, now);
     if (ret < 0) {
       rc = 1;
       break;
     }
     if (ret == 0 || !db) {
-      idle_ms += RIST_READ_TIMEOUT_MS;
-      if (got && cfg->buffer_ms && idle_ms >= reset_ms) {
+      tssink_flush(sink);
+      if (ristpeer_flow_watch_idle(&watch)) {
         /* stale flow lingers to session timeout, restart collides */
         rist_destroy(ctx);
-        ctx = receiver_start(cfg, mx, log_settings);
+        ctx = receiver_start(cfg, mx);
         if (!ctx) {
+          log_code("VE500242", "rist: receiver restart failed");
           rc = 1;
           break;
         }
-        got = 0;
       }
       continue;
     }
-    idle_ms = 0;
-    got = 1;
+    if (!ristpeer_flow_watch_data(&watch, db->flow_id)) {
+      rist_receiver_data_block_free2(&db);
+      continue;
+    }
     if (insp) tsinspect_grid(insp, db->payload, db->payload_len);
     wr = tssink_write(sink, db->payload, db->payload_len);
+    if (wr < 0) metrics_exporter_note_error(mx, NET_ERR_OTHER);
     if (wr < 0 && !net_retry) {
       rc = 1;
       rist_receiver_data_block_free2(&db);
@@ -256,7 +388,6 @@ static int run_receiver(const config_t *cfg, metrics_exporter_t *mx) {
   if (ctx) rist_destroy(ctx);
   if (insp) metrics_exporter_set_extra(mx, NULL, NULL);
   tsinspect_free(insp);
-  if (log_settings) rist_logging_settings_free2(&log_settings);
   tssink_close(sink);
   return rc;
 }

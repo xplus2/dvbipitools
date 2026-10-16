@@ -283,7 +283,6 @@ END_TEST
 static const char *const bad_locations[] = {
     "",
     "ftp://127.0.0.1/x",
-    "relative/path",
     "http://",
     "http://127.0.0.1:0/x",
     "https://",
@@ -300,6 +299,50 @@ START_TEST(redirect_with_unusable_location_fails_on_first_hop) {
   ck_assert_int_eq(reason, NET_ERR_FORMAT);
   ck_assert_uint_eq(atomic_load(&s.requests), 1u);
   server_stop(&s);
+}
+END_TEST
+
+typedef struct {
+  const char *base;
+  const char *loc;
+  const char *want;
+} resolve_case_t;
+
+static const resolve_case_t resolve_cases[] = {
+    {"/a/b/c", "d", "/a/b/d"},
+    {"/a/b/c", "./d", "/a/b/d"},
+    {"/a/b/c", "../d", "/a/d"},
+    {"/a/b/c", "../../../d", "/d"},
+    {"/a/b/c", "d/e?x=1", "/a/b/d/e?x=1"},
+    {"/a/b/c?q=1", "?r=2", "/a/b/c?r=2"},
+    {"/a/b/c", "/x/./y/../z", "/x/z"},
+    {"/a/b/c", "d#frag", "/a/b/d"},
+    {"/a/b/c", "..", "/a/"},
+    {"/a/b/c", ".", "/a/b/"},
+};
+
+START_TEST(resolve_location_merges_relative_references) {
+  http_url_t u;
+  memset(&u, 0, sizeof u);
+  strcpy(u.host, "h");
+  u.port = 80;
+  strcpy(u.path, resolve_cases[_i].base);
+  ck_assert_int_eq(resolve_location(&u, resolve_cases[_i].loc), 0);
+  ck_assert_str_eq(u.path, resolve_cases[_i].want);
+}
+END_TEST
+
+START_TEST(resolve_location_scheme_relative_keeps_scheme) {
+  http_url_t u;
+  memset(&u, 0, sizeof u);
+  u.tls = 1;
+  strcpy(u.host, "h");
+  strcpy(u.path, "/a");
+  ck_assert_int_eq(resolve_location(&u, "//other.example:8443/z"), 0);
+  ck_assert_int_eq(u.tls, 1);
+  ck_assert_str_eq(u.host, "other.example");
+  ck_assert_uint_eq(u.port, 8443u);
+  ck_assert_str_eq(u.path, "/z");
 }
 END_TEST
 
@@ -335,6 +378,23 @@ START_TEST(async_redirect_with_unusable_location_fails_on_first_hop) {
 }
 END_TEST
 
+START_TEST(redirect_scheme_refuses_https_to_http_only) {
+  http_url_t secure;
+  http_url_t plain;
+  net_err_reason_t reason = NET_ERR_COUNT;
+
+  ck_assert_int_eq(http_url_parse("https://example.org/a", &secure), 0);
+  ck_assert_int_eq(http_url_parse("http://example.org/a", &plain), 0);
+  ck_assert_int_eq(check_redirect_scheme(&secure, &plain, &reason), -1);
+  ck_assert_int_eq(reason, NET_ERR_HTTP);
+  reason = NET_ERR_COUNT;
+  ck_assert_int_eq(check_redirect_scheme(&plain, &secure, &reason), 0);
+  ck_assert_int_eq(check_redirect_scheme(&secure, &secure, &reason), 0);
+  ck_assert_int_eq(check_redirect_scheme(&plain, &plain, &reason), 0);
+  ck_assert_int_eq(reason, NET_ERR_COUNT);
+}
+END_TEST
+
 static Suite *redirect_suite(void) {
   Suite *s = suite_create("httpclient_redirect");
   TCase *tc = tcase_create("core");
@@ -345,7 +405,10 @@ static Suite *redirect_suite(void) {
   tcase_add_loop_test(tc, async_redirect_chain_follows_up_to_limit_only, 0, (int)(sizeof chain_hops / sizeof chain_hops[0]));
   tcase_add_loop_test(tc, redirect_with_unusable_location_fails_on_first_hop, 0, (int)(sizeof bad_locations / sizeof bad_locations[0]));
   tcase_add_test(tc, redirect_without_location_fails_on_first_hop);
+  tcase_add_loop_test(tc, resolve_location_merges_relative_references, 0, (int)(sizeof resolve_cases / sizeof resolve_cases[0]));
+  tcase_add_test(tc, resolve_location_scheme_relative_keeps_scheme);
   tcase_add_loop_test(tc, async_redirect_with_unusable_location_fails_on_first_hop, 0, (int)(sizeof bad_locations / sizeof bad_locations[0]));
+  tcase_add_test(tc, redirect_scheme_refuses_https_to_http_only);
   suite_add_tcase(s, tc);
   return s;
 }

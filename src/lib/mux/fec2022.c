@@ -22,19 +22,28 @@ typedef struct {
   unsigned char payload[FEC2022_MAX_PKT - 12];
 } fec2022_col_t;
 
+typedef struct {
+  size_t len;
+  unsigned char data[FEC2022_MAX_REPAIR];
+} fec2022_rep_t;
+
 struct fec2022_enc {
   unsigned l;
   unsigned d;
   unsigned char pt;
   uint16_t seq;
   unsigned next_col;
+  unsigned since_rel;
+  unsigned q_head;
+  unsigned q_count;
+  fec2022_rep_t q[FEC2022_MAX_L];
   fec2022_col_t cols[FEC2022_MAX_L];
 };
 
 fec2022_enc_t *fec2022_enc_new(unsigned l, unsigned d, unsigned char pt) {
   fec2022_enc_t *e;
 
-  if (l == 0 || d == 0 || l > FEC2022_MAX_L || l * d > FEC2022_MAX_LD) return NULL;
+  if (l == 0 || d == 0 || l > FEC2022_MAX_L || d > FEC2022_MAX_LD / l) return NULL;
   e = calloc(1, sizeof *e);
   if (!e) return NULL;
   e->l = l;
@@ -55,7 +64,7 @@ int fec2022_parse_ld(const char *s, unsigned *l_out, unsigned *d_out) {
   if (*end != ':' || l == 0) return -1;
   d = strtoul(end + 1, &end, 10);
   if (*end != '\0' || d == 0) return -1;
-  if (l > FEC2022_MAX_L || l * d > FEC2022_MAX_LD) return -1;
+  if (l > FEC2022_MAX_L || d > FEC2022_MAX_LD / l) return -1;
   *l_out = (unsigned)l;
   *d_out = (unsigned)d;
   return 0;
@@ -83,26 +92,49 @@ size_t fec2022_enc_feed(fec2022_enc_t *e, const unsigned char *pkt, size_t len, 
   for (size_t i = 0; i < plen; i++) c->payload[i] ^= pkt[12 + i];
   if (plen > c->payload_len) c->payload_len = plen;
   c->count++;
-  if (c->count < e->d) return 0;
-  out[0] = (unsigned char)(0x80 | (c->p << 5) | (c->x << 4) | c->cc);
-  out[1] = (unsigned char)((c->m << 7) | (e->pt & 0x7F));
-  be16_put(out + 2, e->seq++);
-  be32_put(out + 4, pts_90k);
-  be32_put(out + 8, 0);                   /* Annex E Table E.2: SSRC fixed 0 not RFC6015 random */
-  be16_put(out + 12, c->snb);               /* RFC6015 SN base low */
-  be16_put(out + 14, c->len_xor);           /* RFC6015 Length recovery */
-  out[16] = (unsigned char)(0x80 | c->pt_xor); /* RFC6015 E, PT recovery */
-  out[17] = 0;                                 /* RFC6015 Mask */
-  out[18] = 0;
-  out[19] = 0;
-  be32_put(out + 20, c->ts_xor);            /* RFC6015 TS recovery */
-  out[24] = 0;                                 /* RFC6015 N, D, Type, Index */
-  out[25] = (unsigned char)e->l;               /* RFC6015 Offset = L */
-  out[26] = (unsigned char)e->d;               /* RFC6015 NA = D */
-  out[27] = 0;                                 /* RFC6015 SN base ext */
-  memcpy(out + 28, c->payload, c->payload_len);
+  if (c->count == e->d) {
+    fec2022_rep_t *r = &e->q[(e->q_head + e->q_count) % e->l];
+    unsigned char *o = r->data;
 
-  plen = 28 + c->payload_len;
-  memset(c, 0, sizeof *c);
+    if (e->q_count == e->l) {
+      e->q_head = (e->q_head + 1) % e->l;
+      e->q_count--;
+    }
+    o[0] = (unsigned char)(0x80 | (c->p << 5) | (c->x << 4) | c->cc);
+    o[1] = (unsigned char)((c->m << 7) | (e->pt & 0x7F));
+    be16_put(o + 2, e->seq++);
+    be32_put(o + 4, pts_90k);
+    be32_put(o + 8, 0);                   /* Annex E Table E.2: SSRC fixed 0 not RFC6015 random */
+    be16_put(o + 12, c->snb);               /* RFC6015 SN base low */
+    be16_put(o + 14, c->len_xor);           /* RFC6015 Length recovery */
+    o[16] = (unsigned char)(0x80 | c->pt_xor); /* RFC6015 E, PT recovery */
+    o[17] = 0;                                 /* RFC6015 Mask */
+    o[18] = 0;
+    o[19] = 0;
+    be32_put(o + 20, c->ts_xor);            /* RFC6015 TS recovery */
+    o[24] = 0;                                 /* RFC6015 N, D, Type, Index */
+    o[25] = (unsigned char)e->l;               /* RFC6015 Offset = L */
+    o[26] = (unsigned char)e->d;               /* RFC6015 NA = D */
+    o[27] = 0;                                 /* RFC6015 SN base ext */
+    memcpy(o + 28, c->payload, c->payload_len);
+    r->len = 28 + c->payload_len;
+    memset(c, 0, sizeof *c);
+    e->q_count++;
+  }
+
+  if (e->since_rel < e->d) e->since_rel++;
+  if (e->since_rel < e->d) return 0;
+  return fec2022_enc_drain(e, out, cap);
+}
+
+size_t fec2022_enc_drain(fec2022_enc_t *e, unsigned char *out, size_t cap) {
+  size_t plen;
+
+  if (e->q_count == 0 || cap < FEC2022_MAX_REPAIR) return 0;
+  plen = e->q[e->q_head].len;
+  memcpy(out, e->q[e->q_head].data, plen);
+  e->q_head = (e->q_head + 1) % e->l;
+  e->q_count--;
+  e->since_rel = 0;
   return plen;
 }

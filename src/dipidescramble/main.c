@@ -3,7 +3,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -33,6 +32,7 @@
 #include "pmt_select.h"
 #include "version.h"
 
+#define DIPIDESCRAMBLE_READS_MAX 64 /* datagrams drained per wakeup, keeps service ticking */
 #define DIPIDESCRAMBLE_SRT_DRAIN_MS_DEFAULT 1000 /* srt's own default latency buffer */
 
 static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
@@ -46,8 +46,17 @@ static tssrc_kind_t tssrc_kind_of(input_kind_t k) {
   return TSSRC_STDIN;
 }
 
+static void wipe_cfg_secrets(config_t *cfg) {
+  secure_zero(cfg->biss2_sw, sizeof cfg->biss2_sw);
+  secure_zero(cfg->biss2_esw, sizeof cfg->biss2_esw);
+  secure_zero(cfg->biss2_id, sizeof cfg->biss2_id);
+  secure_zero(cfg->biss1_sw, sizeof cfg->biss1_sw);
+  secure_zero(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in);
+  secure_zero(cfg->srt_passphrase, sizeof cfg->srt_passphrase);
+}
+
 int main(int argc, char **argv) {
-  config_t cfg;
+  config_t cfg = {0};
   tssrc_cfg_t tc;
   tssrc_t *src = NULL;
   tspack_t pz;
@@ -69,11 +78,15 @@ int main(int argc, char **argv) {
   int mkv_fd = -1;
   int rc = 1;
   int on = 0;
+  int drain;
 
   memset(&lc, 0, sizeof lc);
   antidebug_install();
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
-  if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) return 1;
+  if (toolmain_daemonize(cfg.daemonize, TOOL_NAME)) {
+    wipe_cfg_secrets(&cfg);
+    return 1;
+  }
 
   for (int i = 0; i < cfg.n_out; i++) {
     char one[600];
@@ -85,6 +98,7 @@ int main(int argc, char **argv) {
   input_describe(&cfg.input, in_desc, sizeof in_desc);
   log_line(TOOL_NAME ": i:%s k:%s s:%s e:%s o:%s%s", in_desc, cfg.key_path ? cfg.key_path : "(none)", cfg.serial ? cfg.serial : "(none)", cfg.emm_file ? cfg.emm_file : "(none)", outdesc, cfg.unicast_emm_uri ? " unicast-emm:yes" : "");
 
+  signals_install();
   lc.cache = emmcache_new(cfg.max_services);
   if (!lc.cache) goto cleanup;
 
@@ -119,7 +133,7 @@ int main(int argc, char **argv) {
       break;
   }
 
-  src = tssrc_open(&tc, NULL);
+  src = tssrc_open_blocking(&tc, 30.0, NULL);
   if (!src) {
     log_code("DS000420", TOOL_NAME ": cannot open -i %s", in_desc);
     goto cleanup;
@@ -167,7 +181,6 @@ int main(int argc, char **argv) {
   if (pmt_pid) psi_select_pmt_pid(lc.psi, pmt_pid); /* CW derivation is mux-wide either way, nicer stats only */
 
   memset(&pz, 0, sizeof pz);
-  signals_install();
   start = last_stat = mono_seconds();
   metrics_exporter_init(&mx, METRICS_COMPONENT_DESCRAMBLE, cfg.metrics_id, cfg.metrics_sock, (double)cfg.metrics_interval_s);
   lc.insp_in = tsinspect_new(cfg.metrics_inspect_ts);
@@ -188,42 +201,60 @@ int main(int argc, char **argv) {
   qctx.queue_metrics = metrics_queue_level(cfg.metrics_inspect_ts);
   if (lc.n_srt > 0 && qctx.queue_metrics) metrics_exporter_add_extra(&mx, srtsink_put_queue_metrics, &qctx);
 
+  drain = tssrc_set_nonblock(src);
+
   while (!signal_stop_requested()) {
-    struct pollfd pfd;
     ssize_t n;
     int pr;
+    int done = 0;
+    net_err_reason_t reason = NET_ERR_OTHER;
     if (lc.insp_in || lc.insp_out) {
       double now = mono_seconds();
       if (lc.insp_in) tsinspect_tick(lc.insp_in, now);
       if (lc.insp_out) tsinspect_tick(lc.insp_out, now);
     }
+    if (metrics_exporter_enabled(&mx)) pipeline_push_metrics(&mx, &lc);
     srt_service_all(&lc);
+    rtmp_service_all(&lc);
     pipeline_service_unicast_emm(&lc);
     pipeline_service_emmcache(&lc);
 
-    pfd.fd = tssrc_fd(src);
-    pfd.events = POLLIN;
-    pr = poll(&pfd, 1, 100); /* bounded: keeps srt_service_all() ticking on quiet input too */
+    pr = tssrc_wait(src, 100); /* bounded: keeps srt/rtmp service ticking on quiet input too. sees replay */
     if (pr < 0) {
-      if (errno == EINTR) continue;
+      log_code("DE500247", TOOL_NAME ": input poll failed: %s", strerror(errno));
+      lc.fatal = 1;
       break;
     }
-    if (pr == 0) continue;
+    if (pr == 0) {
+      pipeline_flush(&lc); /* idle: release held batches */
+      if (lc.emit_failed) break;
+      continue;
+    }
 
-    n = tssrc_read(src, buf, sizeof buf, NULL);
-    if (n < 0) break;
-    if (n == 0) continue;
-    if (lc.insp_in) {
-      tsinspect_set_rx_ns(lc.insp_in, tssrc_last_rx_ns(src));
-      if (tspack_feed_sync(&pz, buf, (size_t)n, pkt_cb_inspect, &lc, tsinspect_sync(lc.insp_in))) break;
-    } else if (tspack_feed(&pz, buf, (size_t)n, pkt_cb, &lc)) {
-      break;
+    for (unsigned reads = 0; reads < DIPIDESCRAMBLE_READS_MAX; reads++) {
+      n = tssrc_read(src, buf, sizeof buf, &reason);
+      if (n < 0) {
+        if (reason != NET_ERR_EOF) {
+          log_code("DE500248", TOOL_NAME ": input read error: %s", net_err_reason_name(reason));
+          lc.fatal = 1;
+        }
+        done = 1;
+        break;
+      }
+      if (n == 0) break;
+      if (lc.insp_in) {
+        tsinspect_set_rx_ns(lc.insp_in, tssrc_last_rx_ns(src));
+        done = tspack_feed_sync(&pz, buf, (size_t)n, pkt_cb_inspect, &lc, tsinspect_sync(lc.insp_in));
+      } else {
+        done = tspack_feed(&pz, buf, (size_t)n, pkt_cb, &lc);
+      }
+      if (done || !drain) break;
     }
+    if (done) break;
     if (cfg.verbose && mono_seconds() - last_stat >= 1.0) {
       log_line(TOOL_NAME ": %llu packets, %.0fs elapsed", lc.packets, mono_seconds() - start);
       last_stat = mono_seconds();
     }
-    if (metrics_exporter_enabled(&mx)) pipeline_push_metrics(&mx, &lc);
   }
 
   metrics_exporter_clear_extras(&mx);
@@ -245,13 +276,16 @@ cleanup:
   ipiclient_free(lc.ipi);
   scrambler_free(lc.scr);
   psi_free(lc.psi);
-  flv_close(lc.flv);
-  mkv_close(lc.mkv);
+  if (flv_close(lc.flv) < 0 || mkv_close(lc.mkv) < 0) {
+    lc.emit_failed = 1;
+    rc = 1;
+  }
   dscr_close_outputs(&lc, mkv_fd);
   tssrc_close(src);
   emmcache_free(lc.cache);
   device_state_free(lc.dev);
   biss_ca_state_free(lc.biss_ca);
   secure_zero(lc.last_cw, sizeof lc.last_cw);
+  wipe_cfg_secrets(&cfg);
   return rc;
 }

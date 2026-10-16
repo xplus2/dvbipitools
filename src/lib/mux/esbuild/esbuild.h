@@ -10,20 +10,35 @@
 #include "lib/demux/fmp4/track.h"
 #include "lib/demux/psi/psi.h"
 
+#define ESBUILD_PS_POOL 4096
+
+/* offset and length into esbuild_track_t.ps_pool, copy-safe */
+typedef struct {
+  unsigned short off;
+  unsigned short len;
+} esbuild_ps_t;
+
 typedef struct {
   codec_t codec;
-  fmp4_nal_t vps[FMP4_PS_MAX];
+  unsigned nal_len_size;
+  esbuild_ps_t vps[FMP4_PS_MAX];
   unsigned n_vps;
-  fmp4_nal_t sps[FMP4_PS_MAX];
+  esbuild_ps_t sps[FMP4_PS_MAX];
   unsigned n_sps;
-  fmp4_nal_t pps[FMP4_PS_MAX];
+  esbuild_ps_t pps[FMP4_PS_MAX];
   unsigned n_pps;
+  unsigned char ps_pool[ESBUILD_PS_POOL];
+  unsigned ps_used;
   unsigned aac_object_type;
   unsigned aac_sr_index;
   unsigned aac_channels;
 } esbuild_track_t;
 
-void esbuild_track_init(esbuild_track_t *out, const fmp4_stsd_entry_t *stsd);
+/* copies parameter sets, stsd may be freed afterwards. 0 if they do not fit ps_pool */
+int esbuild_track_init(esbuild_track_t *out, const fmp4_stsd_entry_t *stsd);
+
+/* upper bound of esbuild_convert_sample() output for a sample of sample_size bytes */
+size_t esbuild_es_bound(const esbuild_track_t *t, size_t sample_size);
 
 size_t esbuild_convert_sample(const esbuild_track_t *t, const fmp4_dec_sample_t *sample, unsigned char *out, size_t outcap);
 

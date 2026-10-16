@@ -27,10 +27,13 @@ int bitreader_get(bitreader_t *br, int nbits, uint64_t *out) {
       nbits -= 8;
     }
   }
-  for (int i = 0; i < nbits; i++) {
-    unsigned bit = (br->buf[br->byte_pos] >> (7 - br->bit_pos)) & 1;
-    v = (v << 1) | bit;
-    br->bit_pos++;
+  while (nbits > 0) {
+    int avail = 8 - br->bit_pos;
+    int take = nbits < avail ? nbits : avail;
+    unsigned bits = (br->buf[br->byte_pos] >> (avail - take)) & ((1u << take) - 1);
+    v = (v << take) | bits;
+    br->bit_pos += take;
+    nbits -= take;
     if (br->bit_pos == 8) {
       br->bit_pos = 0;
       br->byte_pos++;

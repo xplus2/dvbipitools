@@ -48,7 +48,7 @@ RET and FCC can each be disabled independently (\fB\-\-no\-ret\fR,
 served by \fB\-w\fR event-driven worker threads. Raw packet capture requires
 the \fBCAP_NET_RAW\fR capability. Either grant it to the binary and run
 unprivileged (recommended), or start it with elevated privileges
-and use \fB\-u\fR to drop them  right after the capture handle opens.
+and use \fB\-u\fR to drop them  once capture and listen sockets are open.
 .SH OPTIONS
 .SS General options
 .TP
@@ -88,7 +88,7 @@ picks explicit CPUs and leaves surplus threads unpinned.
 socket workers are never pinned. Default: off.
 .TP
 .BR \-u ", " \-\-user\ \fI<user>\fR
-Drop privileges to this user after opening the capture handle.
+Drop privileges to this user after opening capture and listen sockets.
 .TP
 .BR \-v ", " \-\-verbose
 Periodic stats on stderr.
@@ -145,7 +145,10 @@ Show usage and exit.
 Disable RET entirely.
 .TP
 .BR \-B ", " \-\-buffer\ \fI<ms>\fR
-Per-channel retransmission buffer depth. Default: 2000.
+Per-channel retransmission buffer depth, one packet slot per unit
+(about 1.5 KB each). Time depth is about \fI<ms>\fR at 1000 packets/s,
+about half that at 20 Mbps. Capped to 65536 (16-bit sequence).
+Default: 2000.
 .TP
 .BR \-F ", " \-\-ff\-port\ \fI<port>\fR
 Multicast RET session port. Default: 0 (= original channel's port).
@@ -250,7 +253,7 @@ Edge box on a SPAN port mirroring the access switch, RET and FCC both on,
 all other settings at their defaults.
 .TP
 .B dipifccret \-g 239.0.0.0/8,224.1.2.0/24 \-l 10.0.0.1:6000 \-I eth0 \-w 4 \-u dipifccret
-Fixed worker count, privilege drop after opening the capture handle.
+Fixed worker count, privilege drop after opening capture and listen sockets.
 .TP
 .B dipifccret \-g 239.0.0.0/8 \-l 10.0.0.1:6000 \-I eth0 \-\-no\-fcc
 RET only, no FCC.

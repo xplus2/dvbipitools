@@ -91,11 +91,28 @@ static int key_parse(const char *attrs, const http_url_t *base, hls_playlist_t *
 #define TAG_MATCH(line, tag) (!strncmp((line), (tag), sizeof(tag) - 1))
 #define TAG_VALUE(line, tag) ((line) + sizeof(tag) - 1)
 
+static void seg_reverse(hls_segment_t *a, unsigned n) {
+  hls_segment_t tmp;
+  for (unsigned i = 0; i < n / 2; i++) {
+    tmp = a[i];
+    a[i] = a[n - 1 - i];
+    a[n - 1 - i] = tmp;
+  }
+}
+
+/* ring wrapped: oldest entry at index start. rotate to 0 */
+static void seg_rotate_left(hls_segment_t *a, unsigned n, unsigned start) {
+  seg_reverse(a, start);
+  seg_reverse(a + start, n - start);
+  seg_reverse(a, n);
+}
+
 int hls_playlist_parse(char *body, const http_url_t *base, hls_playlist_t *out) {
   char *cur = playlist_skip_blank(body);
   const char *line;
   int have_extinf = 0;
   unsigned cur_key = 0;
+  unsigned long long total = 0;
 
   memset(out, 0, sizeof *out);
   if (strncmp(cur, "#EXTM3U", 7)) return 0;
@@ -140,12 +157,18 @@ int hls_playlist_parse(char *body, const http_url_t *base, hls_playlist_t *out) 
     if (line[0] == '#') continue;
     if (!have_extinf) continue;
     have_extinf = 0;
-    if (out->n_segments >= HLS_MAX_SEGMENTS) continue;
-    seg = &out->segments[out->n_segments];
+    seg = &out->segments[total % HLS_MAX_SEGMENTS];
     playlist_resolve_uri(base, line, seg->url, sizeof seg->url);
     seg->key = cur_key;
-    if (seg->url[0]) out->n_segments++;
+    if (!seg->url[0]) continue;
+    total++;
   }
+  if (total > HLS_MAX_SEGMENTS) {
+    seg_rotate_left(out->segments, HLS_MAX_SEGMENTS, (unsigned)(total % HLS_MAX_SEGMENTS));
+    out->media_sequence += total - HLS_MAX_SEGMENTS;
+    total = HLS_MAX_SEGMENTS;
+  }
+  out->n_segments = (unsigned)total;
   return 1;
 }
 

@@ -133,7 +133,7 @@ size_t rtcp_build_rsi_srbt_bandwidth(double kbps, unsigned char *out, size_t cap
 size_t rtcp_build_rsi_srbt_collision(const uint32_t *ssrcs, size_t count, unsigned char *out, size_t cap) {
   size_t total, i;
 
-  if (count == 0 || count > 255)
+  if (count == 0 || count > 254) /* length byte = count + 1 words, max 255 */
     return 0;
 
   total = 4 + count * 4; /* SRBT(1)+Length(1)+Reserved(2), then n x 32-bit Collision SSRC, Figure F.9 */
