@@ -206,7 +206,8 @@ static int copy_to_output(FILE *tmp, const char *path) {
 
 int main(int argc, char **argv) {
   config_t cfg = {0};
-  FILE *in, *tmp;
+  FILE *in;
+  FILE *tmp;
   int rc;
 
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);

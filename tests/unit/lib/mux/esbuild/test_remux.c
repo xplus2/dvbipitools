@@ -89,7 +89,10 @@ static void bump_size(unsigned char *buf, size_t len, const char *cc, unsigned a
 static unsigned char *to_v1(const unsigned char *in, size_t len, const char *cc, size_t id_len, int in_mdia, size_t *outlen) {
   unsigned char *out = calloc(1, len + 16);
   unsigned char *b;
-  size_t boff, bsz, body, tail;
+  size_t boff;
+  size_t bsz;
+  size_t body;
+  size_t tail;
   ck_assert_ptr_nonnull(out);
   memcpy(out, in, len);
   b = find_fourcc(out, len, cc);
@@ -134,11 +137,15 @@ END_TEST
 
 START_TEST(esbuild_remux_produces_pat_pmt_and_pes_for_one_sample) {
   fmp4_mux_t *m = build_mux();
-  unsigned char *initbuf, *segbuf;
-  size_t initlen, seglen;
+  unsigned char *initbuf;
+  unsigned char *segbuf;
+  size_t initlen;
+  size_t seglen;
   esbuild_remux_t r;
   collected_t c;
-  int saw_pat = 0, saw_pmt = 0, saw_es_pid = 0;
+  int saw_pat = 0;
+  int saw_pmt = 0;
+  int saw_es_pid = 0;
   int i;
 
   ck_assert_ptr_nonnull(m);
@@ -209,11 +216,16 @@ END_TEST
 
 START_TEST(esbuild_remux_feeds_every_fragment_of_a_chunked_segment) {
   fmp4_mux_t *m = build_mux();
-  unsigned char *initbuf, *segbuf, *both;
-  size_t initlen, len1, len2;
+  unsigned char *initbuf;
+  unsigned char *segbuf;
+  unsigned char *both;
+  size_t initlen;
+  size_t len1;
+  size_t len2;
   esbuild_remux_t r;
   collected_t c;
-  int pes_starts = 0, pats = 0;
+  int pes_starts = 0;
+  int pats = 0;
 
   ck_assert_ptr_nonnull(m);
   initlen = fmp4_init_segment(m, &initbuf);
@@ -405,8 +417,10 @@ START_TEST(esbuild_remux_epoch_tfdt_high_timescale_no_overflow) {
   const uint64_t secs = 1760000000ULL;
   static const unsigned char frame[] = {0x00, 0x00, 0x00, 0x03, 0x65, 0x11, 0x22};
   fmp4_mux_t *m = build_mux_ts(TS);
-  unsigned char *initbuf, *segbuf;
-  size_t initlen, seglen;
+  unsigned char *initbuf;
+  unsigned char *segbuf;
+  size_t initlen;
+  size_t seglen;
   esbuild_remux_t r;
   counted_t c;
   fmp4_sample_t s;

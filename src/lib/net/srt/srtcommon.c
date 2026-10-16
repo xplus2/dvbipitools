@@ -198,7 +198,7 @@ static resolve_job_t *resolve_job_start(const char *host, unsigned port, int *sy
   return j;
 }
 
-int srtcommon_resolve_stoppable(const char *host, unsigned port, struct sockaddr_storage *ss, int *len, unsigned timeout_ms, int (*stop)(void *), void *arg) {
+int srtcommon_resolve_stoppable(const char *host, unsigned port, struct sockaddr_storage *ss, int *len, unsigned timeout_ms, int (*stop)(const void *), const void *arg) {
   resolve_job_t *j;
   struct timespec t0;
   int sync_ok;

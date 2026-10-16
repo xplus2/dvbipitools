@@ -82,12 +82,13 @@ void mcsend_ensure(mcsend_table_t *t, channel_t *c, unsigned ff_port) {
   unsigned gen = atomic_load_explicit(&c->generation, memory_order_relaxed);
   unsigned port;
   mcast_t *m;
-  struct mcsend_slot *ns, *old;
+  struct mcsend_slot *ns;
+  struct mcsend_slot *old;
 
   for (;;) {
     channel_t *cur = atomic_load_explicit(&t->entries[h].key, memory_order_acquire);
     if (cur == c) {
-      struct mcsend_slot *sl = atomic_load_explicit(&t->entries[h].cur, memory_order_relaxed);
+      const struct mcsend_slot *sl = atomic_load_explicit(&t->entries[h].cur, memory_order_relaxed);
       if (sl && sl->generation == gen)
         return;   /* already have a current socket for this channel */
       break;      /* stale entry from a reaped/reclaimed slot: reopen below, same bucket */
@@ -121,7 +122,7 @@ void mcsend_ensure(mcsend_table_t *t, channel_t *c, unsigned ff_port) {
   t->entries[h].retired = old;
 }
 
-mcast_t *mcsend_get(mcsend_table_t *t, const channel_t *c) {
+mcast_t *mcsend_get(const mcsend_table_t *t, const channel_t *c) {
   size_t h = ptr_hash(c) & t->hash_mask;
   size_t start = h;
   unsigned gen = atomic_load_explicit(&c->generation, memory_order_relaxed);
@@ -129,7 +130,7 @@ mcast_t *mcsend_get(mcsend_table_t *t, const channel_t *c) {
   for (;;) {
     channel_t *cur = atomic_load_explicit(&t->entries[h].key, memory_order_acquire);
     if (cur == c) {
-      struct mcsend_slot *sl = atomic_load_explicit(&t->entries[h].cur, memory_order_acquire);
+      const struct mcsend_slot *sl = atomic_load_explicit(&t->entries[h].cur, memory_order_acquire);
       return (sl && sl->generation == gen) ? sl->sock : NULL;
     }
     if (cur == NULL)

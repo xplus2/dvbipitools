@@ -403,7 +403,8 @@ static int parse_program_texts(const char *buf, const char *end, progtext_list_t
 
 typedef struct {
   bcg_channel_t *c;
-  const char *svc, *svc_end;
+  const char *svc;
+  const char *svc_end;
   const char *pos;
   int inside;
 } service_name_ctx_t;

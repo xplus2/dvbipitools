@@ -103,7 +103,7 @@ int tssrc_timer_driven(const tssrc_t *s);
 int tssrc_wait(const tssrc_t *s, int timeout_ms);
 
 /* TSSRC_UDP/TSSRC_RTP: socket non-blocking, tssrc_read() returns 0 when empty so callers may drain. 1 on success, else 0 */
-int tssrc_set_nonblock(tssrc_t *s);
+int tssrc_set_nonblock(const tssrc_t *s);
 
 int tssrc_fec_fd(const tssrc_t *s);
 void tssrc_fec_poll(tssrc_t *s);

@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <srt/srt.h>
@@ -56,7 +57,7 @@ START_TEST(resolver_settles_numeric_hosts) {
   int len;
 
   ck_assert_ptr_nonnull(r);
-  for (int i = 0; i < 2000 && !srtcommon_resolver_poll(r); i++) usleep(1000);
+  for (int i = 0; i < 2000 && !srtcommon_resolver_poll(r); i++) nanosleep(&(struct timespec){0, 1000000L}, NULL);
   ck_assert_int_eq(srtcommon_resolver_poll(r), 1);
   ck_assert_int_eq(srtcommon_resolver_get(r, 0, &ss, &len), 0);
   ck_assert_int_eq(ss.ss_family, AF_INET);
@@ -73,7 +74,7 @@ START_TEST(resolver_reports_failed_host) {
   int len;
 
   ck_assert_ptr_nonnull(r);
-  for (int i = 0; i < 2000 && !srtcommon_resolver_poll(r); i++) usleep(1000);
+  for (int i = 0; i < 2000 && !srtcommon_resolver_poll(r); i++) nanosleep(&(struct timespec){0, 1000000L}, NULL);
   ck_assert_int_eq(srtcommon_resolver_poll(r), 1);
   ck_assert_int_eq(srtcommon_resolver_get(r, 0, &ss, &len), 0);
   ck_assert_int_ne(srtcommon_resolver_get(r, 1, &ss, &len), 0);

@@ -15,6 +15,7 @@
 #include <sys/ioctl.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <linux/if_ether.h>
@@ -927,7 +928,8 @@ END_TEST
 
 START_TEST(capture_run_reports_poll_failure) {
   unsigned char ring[RING_BLOCK_SIZE];
-  struct rlimit old, rl;
+  struct rlimit old;
+  struct rlimit rl;
   capture_t *cap = capture_from_ring(ring, RING_BLOCK_SIZE, 1, NULL, 0);
 
   ck_assert_ptr_nonnull(cap);
@@ -960,7 +962,7 @@ START_TEST(capture_run_fails_on_socket_error) {
   s = socket(AF_INET, SOCK_DGRAM, 0);
   ck_assert_int_eq(connect(s, (struct sockaddr *)&sa, sizeof sa), 0);
   ck_assert_int_eq(send(s, "x", 1, 0), 1);
-  usleep(50000); /* let ICMP unreachable land */
+  nanosleep(&(struct timespec){0, 50000000L}, NULL); /* let ICMP unreachable land */
   capture_set_fd(cap, s);
   ck_assert_int_eq(capture_run(cap, NULL, NULL), -1);
   ck_assert_int_eq(errno, ECONNREFUSED);

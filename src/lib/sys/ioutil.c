@@ -140,7 +140,7 @@ int growbuf_reserve(void **buf, size_t *cap, size_t elem_size, size_t need_elems
     }
     ncap *= 2;
   }
-  if (elem_size && ncap > SIZE_MAX / elem_size) return -1;
+  if (!elem_size || ncap > SIZE_MAX / elem_size) return -1;
   np = realloc(*buf, ncap * elem_size);
   if (!np) return -1;
   *buf = np;

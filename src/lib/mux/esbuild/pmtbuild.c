@@ -113,7 +113,6 @@ static size_t build_es_descriptor(codec_t codec, unsigned char *out, size_t cap)
 size_t esbuild_build_pmt(unsigned version, unsigned program_number, const esbuild_es_t *es, unsigned n_es, unsigned char *out, size_t cap) {
   size_t n = 0;
   unsigned pcr_pid;
-  unsigned i;
 
   if (!n_es || n_es > ESBUILD_MAX_ES || cap < 32) return 0;
   pcr_pid = esbuild_pcr_pid(es, n_es);
@@ -130,7 +129,7 @@ size_t esbuild_build_pmt(unsigned version, unsigned program_number, const esbuil
   psi_put16(out + n, 0xF000);
   n += 2;
 
-  for (i = 0; i < n_es; i++) {
+  for (unsigned i = 0; i < n_es; i++) {
     size_t es_info_pos;
     unsigned esinfo;
     size_t dlen;

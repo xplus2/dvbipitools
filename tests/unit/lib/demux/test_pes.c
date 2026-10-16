@@ -248,7 +248,8 @@ END_TEST
 
 START_TEST(pes_drops_oversized_pes_until_next_start) {
   pes_t *p = pes_new(capture_cb, NULL);
-  unsigned char payload[184], pkt[188];
+  unsigned char payload[184];
+  unsigned char pkt[188];
   size_t i;
 
   ck_assert_int_eq(pes_track(p, 0x101), 0);

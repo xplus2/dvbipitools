@@ -152,9 +152,7 @@ void ristpeer_flow_watch_init(ristpeer_flow_watch_t *w, unsigned buffer_ms) {
 int ristpeer_flow_watch_data(ristpeer_flow_watch_t *w, uint32_t flow_id) {
   double now = mono_seconds();
 
-  if (w->got && flow_id != w->flow_id) {
-    if (now - w->last < w->reset_ms / 1000.0) return 0;
-  }
+  if (w->got && flow_id != w->flow_id && now - w->last < w->reset_ms / 1000.0) return 0;
   w->flow_id = flow_id;
   w->last = now;
   w->idle_ms = 0;

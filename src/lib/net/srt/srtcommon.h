@@ -42,7 +42,7 @@ int srtcommon_resolve(const char *host, unsigned port, struct sockaddr_storage *
 
 /* resolve on detached helper, abandoned on stop()/timeout (helper frees itself when the resolver returns).
    timeout_ms 0: no limit. at most 16 in flight process-wide. 0 ok, -1 err/stopped */
-int srtcommon_resolve_stoppable(const char *host, unsigned port, struct sockaddr_storage *ss, int *len, unsigned timeout_ms, int (*stop)(void *), void *arg);
+int srtcommon_resolve_stoppable(const char *host, unsigned port, struct sockaddr_storage *ss, int *len, unsigned timeout_ms, int (*stop)(const void *), const void *arg);
 
 /* non-blocking resolve of n (<= SRTCOMMON_MAX_PEERS + 1) hosts on detached helpers. NULL: error.
    poll: 1 once every lookup settled. get: 0 ok, -1 failed or unsettled. free abandons unsettled lookups */

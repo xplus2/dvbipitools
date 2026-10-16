@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "../../tls_fixture.h"
@@ -216,7 +217,7 @@ START_TEST(https_clean_close_reports_eof_not_tls_error) {
   h = http_async_take(a);
   for (int i = 0; i < 400 && n >= 0; i++) {
     n = http_read(h, buf, sizeof buf, &reason);
-    if (n == 0) usleep(5000);
+    if (n == 0) nanosleep(&(struct timespec){0, 5000000L}, NULL);
   }
   ck_assert_int_eq(n, -1);
   ck_assert_int_eq(reason, NET_ERR_EOF);

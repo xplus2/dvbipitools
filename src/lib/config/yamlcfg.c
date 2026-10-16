@@ -100,7 +100,8 @@ void yamlcfg_warn(yamlcfg_t *y, const char *code, const char *fmt, ...) {
 
 int yamlcfg_report(const yamlcfg_t *y) {
   int as_error = y->strict || y->errors;
-  unsigned n = y->errors + (y->strict ? y->warnings : y->errors ? 0 : y->warnings);
+  unsigned n = y->errors;
+  if (y->strict || !y->errors) n += y->warnings;
   const char *noun = as_error ? "error" : "warning";
   char cb[16];
   snprintf(cb, sizeof cb, "%s", as_error ? "LS700001" : "LA700001");

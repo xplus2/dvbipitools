@@ -179,9 +179,12 @@ START_TEST(foreign_emm_cannot_lock_esid) {
   unsigned char other_ekid[BISS_CA_EKID_LEN] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11};
   unsigned char sk[BISS_CA_SK_LEN] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
   unsigned char sw[BISS_CA_SW_LEN] = {0};
-  unsigned char emm[4096], ecm[128];
-  unsigned char out_even[BISS_CA_SW_LEN], out_odd[BISS_CA_SW_LEN];
-  size_t emm_len, ecm_len;
+  unsigned char emm[4096];
+  unsigned char ecm[128];
+  unsigned char out_even[BISS_CA_SW_LEN];
+  unsigned char out_odd[BISS_CA_SW_LEN];
+  size_t emm_len;
+  size_t ecm_len;
 
   gen_keypair();
   pub = biss_ca_key_load_public_file(g_pub_path);
@@ -207,9 +210,12 @@ START_TEST(esid_change_relearned_and_drops_sk) {
   unsigned char ekid[BISS_CA_EKID_LEN];
   unsigned char sk[BISS_CA_SK_LEN] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
   unsigned char sw[BISS_CA_SW_LEN] = {0};
-  unsigned char emm[4096], ecm[128];
-  unsigned char out_even[BISS_CA_SW_LEN], out_odd[BISS_CA_SW_LEN];
-  size_t emm_len, ecm_len;
+  unsigned char emm[4096];
+  unsigned char ecm[128];
+  unsigned char out_even[BISS_CA_SW_LEN];
+  unsigned char out_odd[BISS_CA_SW_LEN];
+  size_t emm_len;
+  size_t ecm_len;
 
   gen_keypair();
   pub = biss_ca_key_load_public_file(g_pub_path);

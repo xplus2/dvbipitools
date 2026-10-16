@@ -329,7 +329,8 @@ static int expand_template(const char *src, const dash_representation_t *r, unsi
     const char *fmt;
     size_t idlen;
     unsigned width = 0;
-    if (*src != '$' || !(close = strchr(src + 1, '$'))) {
+    close = *src == '$' ? strchr(src + 1, '$') : NULL;
+    if (!close) {
       put_str(out, n, &pos, src++, 1);
       continue;
     }

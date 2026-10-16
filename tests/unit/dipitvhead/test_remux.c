@@ -1809,15 +1809,22 @@ START_TEST(remux_keeps_es_sources_valid_across_repeated_pmt_pid_moves) {
   for (size_t m = 0; m < sizeof moves / sizeof moves[0]; m++) {
     slen = psi_build_pat(0x1234, 0, 101, moves[m], section, sizeof section);
     wrap_ts_packet(pkt, 0x0000, section, slen);
-    remux_feed(r, now += 0.1, pkt, version_cb, NULL, NULL);
-    remux_feed(r, now += 0.1, pkt, version_cb, NULL, NULL);
+    now += 0.1;
+    remux_feed(r, now, pkt, version_cb, NULL, NULL);
+    now += 0.1;
+    remux_feed(r, now, pkt, version_cb, NULL, NULL);
     src_pmt_packet(pkt, 1, 0x0101, 3);
     pkt[1] = (unsigned char)((pkt[1] & 0xE0) | (moves[m] >> 8));
     pkt[2] = (unsigned char)moves[m];
-    remux_feed(r, now += 0.1, pkt, version_cb, NULL, NULL);
-    remux_feed(r, now += 0.1, pkt, version_cb, NULL, NULL);
+    now += 0.1;
+    remux_feed(r, now, pkt, version_cb, NULL, NULL);
+    now += 0.1;
+    remux_feed(r, now, pkt, version_cb, NULL, NULL);
   }
-  for (int i = 0; i < 40; i++) remux_feed(r, now += 0.1, pkt, version_cb, NULL, NULL);
+  for (int i = 0; i < 40; i++) {
+    now += 0.1;
+    remux_feed(r, now, pkt, version_cb, NULL, NULL);
+  }
   (void)remux_es(r, &count);
   ck_assert_int_eq(count, 3);
   remux_free(r);

@@ -83,8 +83,8 @@ START_TEST(esbuild_track_init_copies_parameter_sets) {
   stsd.pps[0].len = sizeof pps;
   stsd.n_pps = 1;
   ck_assert_int_eq(esbuild_track_init(&t, &stsd), 1);
-  memset(sps, 0xAA, sizeof sps);
-  memset(pps, 0xAA, sizeof pps);
+  for (size_t i = 0; i < sizeof sps; i++) ((volatile unsigned char *)sps)[i] = 0xAA;
+  for (size_t i = 0; i < sizeof pps; i++) ((volatile unsigned char *)pps)[i] = 0xAA;
 
   avcc_append(avcc, &apos, idr, sizeof idr);
   memset(&sample, 0, sizeof sample);

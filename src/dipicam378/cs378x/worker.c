@@ -196,7 +196,6 @@ static void *worker_main(void *arg) {
 int tcp_listen(const char *bind_addr, unsigned port) {
   struct addrinfo hints;
   struct addrinfo *ai;
-  struct addrinfo *cur;
   char portstr[8];
   int fd;
   int on = 1;
@@ -215,7 +214,7 @@ int tcp_listen(const char *bind_addr, unsigned port) {
     return -1;
   }
   fd = -1;
-  for (cur = ai; cur != NULL; cur = cur->ai_next) {
+  for (struct addrinfo *cur = ai; cur != NULL; cur = cur->ai_next) {
     fd = socket(cur->ai_family, cur->ai_socktype | SOCK_CLOEXEC, cur->ai_protocol);
     if (fd < 0) {
       log_code("3S500103", TOOL_NAME ": socket: %s", strerror(errno));

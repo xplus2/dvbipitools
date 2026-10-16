@@ -68,7 +68,8 @@ int strrepo_reader_seek(strrepo_reader_t *sr, size_t off) {
 }
 
 int strrepo_reader_next(strrepo_reader_t *sr, char *out, size_t outcap) {
-  size_t start = sr->pos, i;
+  size_t start = sr->pos;
+  size_t i;
   if (start >= sr->len) return -1;
   for (i = start; i < sr->len && sr->buf[i] != '\0'; i++);
   if (i >= sr->len || i - start >= outcap) return -1;

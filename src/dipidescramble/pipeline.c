@@ -60,7 +60,7 @@ void rtmp_fanout_cb(void *ctx, flv_tag_type_t type, uint32_t timestamp_ms, const
   for (int i = 0; i < lc->n_rtmp; i++) descramble_rtmp_note_result(rtmpout_write(lc->rtmp[i], type, timestamp_ms, hdr, hn, payload, pn) >= 0, &lc->rtmp_had_error[i], i);
 }
 
-void rtmp_service_all(loop_ctx_t *lc) {
+void rtmp_service_all(const loop_ctx_t *lc) {
   for (int i = 0; i < lc->n_rtmp; i++) rtmpout_service(lc->rtmp[i]);
 }
 
@@ -77,7 +77,8 @@ void srt_service_all(loop_ctx_t *lc) {
 }
 
 void pipeline_ecm_cache_invalidate(loop_ctx_t *lc) {
-  lc->last_ecm_len[0] = lc->last_ecm_len[1] = 0;
+  lc->last_ecm_len[0] = 0;
+  lc->last_ecm_len[1] = 0;
 }
 
 static void handle_ecm_section(loop_ctx_t *lc) {

@@ -148,7 +148,7 @@ int biss_ca_state_on_emm(biss_ca_state_t *s, const unsigned char *emm, size_t em
   return changed;
 }
 
-int biss_ca_state_resolve_ecm(biss_ca_state_t *s, const unsigned char *ecm, size_t ecm_len, unsigned char sw_even_out[BISS_CA_SW_LEN], unsigned char sw_odd_out[BISS_CA_SW_LEN]) {
+int biss_ca_state_resolve_ecm(const biss_ca_state_t *s, const unsigned char *ecm, size_t ecm_len, unsigned char sw_even_out[BISS_CA_SW_LEN], unsigned char sw_odd_out[BISS_CA_SW_LEN]) {
   biss_ca_ecm_parsed_t parsed;
 
   if (biss_ca_parse_ecm_section(ecm, ecm_len, &parsed) != 0) return -1;

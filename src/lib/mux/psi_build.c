@@ -286,7 +286,9 @@ static void put_utc(unsigned char *p, time_t utc) {
   time_t days = utc / 86400;
   unsigned sod = (unsigned)(utc % 86400);
   unsigned mjd = (unsigned)days + 40587;
-  unsigned hh = sod / 3600, mm = sod % 3600 / 60, ss = sod % 60;
+  unsigned hh = sod / 3600;
+  unsigned mm = sod % 3600 / 60;
+  unsigned ss = sod % 60;
   psi_put16(p, mjd);
   p[2] = (unsigned char)(((hh / 10) << 4) | (hh % 10));
   p[3] = (unsigned char)(((mm / 10) << 4) | (mm % 10));

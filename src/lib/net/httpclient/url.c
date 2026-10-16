@@ -97,8 +97,8 @@ static int remove_dot_segments(const char *path, char *out, size_t cap) {
 /* RFC 3986 scheme: ALPHA *( ALPHA / DIGIT / + - . ) ':' */
 static int has_scheme(const char *s) {
   if (!((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z'))) return 0;
-  for (s++; (*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || (*s >= '0' && *s <= '9') || *s == '+' || *s == '-' || *s == '.'; s++) {
-  }
+  s++;
+  while ((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || (*s >= '0' && *s <= '9') || *s == '+' || *s == '-' || *s == '.') s++;
   return *s == ':';
 }
 

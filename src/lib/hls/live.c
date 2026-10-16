@@ -371,7 +371,9 @@ ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_rea
         }
         return 0;
       }
-      if (!seg || ++h->seg_fail_count >= HLS_MAX_SEGMENT_FAILS) return -1;
+      if (!seg) return -1;
+      h->seg_fail_count++;
+      if (h->seg_fail_count >= HLS_MAX_SEGMENT_FAILS) return -1;
       log_throttled(&h->fail_throttle, LOG_THROTTLE_WINDOW_S, "LW400238", "input %u (%s): HLS segment unavailable, skipped", h->idx, h->label ? h->label : "?");
       h->pending_idx++;
       h->next_seq++;

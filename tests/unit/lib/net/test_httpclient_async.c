@@ -278,7 +278,7 @@ END_TEST
 
 /* terminal chunk in own TCP segment, conn kept open: EOF must not come from close */
 static void *serve_split_chunked(void *arg) {
-  server_arg_t *a = arg;
+  const server_arg_t *a = arg;
   static const char head[] = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nDATA\r\n";
   static const char tail[] = "0\r\n\r\n";
   struct timespec gap = {0, 100000000L};

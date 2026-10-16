@@ -146,9 +146,9 @@ START_TEST(burst_multiplier_is_overridable) {
 END_TEST
 
 START_TEST(burst_multiplier_rejects_nonfinite_and_huge) {
-  const char *bad[] = {"nan", "inf", "-inf", "1e300", "1000001"};
+  char *bad[] = {"nan", "inf", "-inf", "1e300", "1000001"};
   for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
-    char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "-X", (char *)bad[i], NULL};
+    char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0", "-X", bad[i], NULL};
     config_t cfg = {0};
     ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
     yamlcfg_strpool_free(cfg.str_pool);
@@ -512,10 +512,10 @@ START_TEST(fcc_client_range_rejects_malformed_cidr) {
 END_TEST
 
 START_TEST(fcc_range_rejects_bad_prefix_text) {
-  const char *bad[] = {"10.0.0.0/", "10.0.0.0/x", "10.0.0.0/8x", "10.0.0.0/ 8", "ff3e::/", "10.0.0.0/33", "10.0.0.0/-1"};
-  for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
+  char *bad[] = {"10.0.0.0/", "10.0.0.0/x", "10.0.0.0/8x", "10.0.0.0/ 8", "ff3e::/", "10.0.0.0/33", "10.0.0.0/-1"};
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
     char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0",
-                    "--fcc-range", (char *)bad[i], NULL};
+                    "--fcc-range", bad[i], NULL};
     config_t cfg = {0};
     ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
     yamlcfg_strpool_free(cfg.str_pool);
@@ -524,10 +524,10 @@ START_TEST(fcc_range_rejects_bad_prefix_text) {
 END_TEST
 
 START_TEST(fcc_client_range_rejects_bad_prefix_text) {
-  const char *bad[] = {"10.0.0.0/", "10.0.0.0/x", "10.0.0.0/8x", "10.0.0.0/ 8", "ff3e::/", "10.0.0.0/33", "10.0.0.0/-1"};
-  for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
+  char *bad[] = {"10.0.0.0/", "10.0.0.0/x", "10.0.0.0/8x", "10.0.0.0/ 8", "ff3e::/", "10.0.0.0/33", "10.0.0.0/-1"};
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
     char *argv[] = {"dipifccret", "-g", "239.0.0.0/8", "-l", "10.0.0.1:6000", "-I", "eth0",
-                    "--fcc-client-range", (char *)bad[i], NULL};
+                    "--fcc-client-range", bad[i], NULL};
     config_t cfg = {0};
     ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_ERR);
     yamlcfg_strpool_free(cfg.str_pool);

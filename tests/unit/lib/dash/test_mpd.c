@@ -251,7 +251,9 @@ START_TEST(dash_mpd_parse_timeline_with_repeats_and_implicit_times) {
     "</SegmentTemplate><Representation id=\"a\" bandwidth=\"1\"/></AdaptationSet></Period></MPD>";
   dash_mpd_t mpd;
   const dash_representation_t *r;
-  unsigned long long t, d, k;
+  unsigned long long t;
+  unsigned long long d;
+  unsigned long long k;
   ck_assert_int_eq(dash_mpd_parse(body, NULL, &mpd), 1);
   r = &mpd.periods[0].adaptation_sets[0].representations[0];
   ck_assert_uint_eq(r->n_timeline, 4u);
@@ -274,14 +276,16 @@ START_TEST(dash_mpd_parse_timeline_with_repeats_and_implicit_times) {
 END_TEST
 
 START_TEST(dash_mpd_parse_timeline_drops_oldest_beyond_capacity) {
-  char *body = malloc(DASH_MAX_TIMELINE * 40 + 512);
+  size_t cap = DASH_MAX_TIMELINE * 40 + 512;
+  char *body = malloc(cap);
   char *p = body;
   dash_mpd_t *mpd = malloc(sizeof *mpd);
   const dash_representation_t *r;
-  unsigned long long d, k;
-  p += sprintf(p, "<MPD><Period><AdaptationSet><SegmentTemplate media=\"s$Time$\" timescale=\"1\"><SegmentTimeline>");
-  for (unsigned i = 0; i < DASH_MAX_TIMELINE + 3; i++) p += sprintf(p, "<S t=\"%u\" d=\"1\"/>", i * 10);
-  sprintf(p, "</SegmentTimeline></SegmentTemplate><Representation id=\"a\"/></AdaptationSet></Period></MPD>");
+  unsigned long long d;
+  unsigned long long k;
+  p += snprintf(p, cap, "<MPD><Period><AdaptationSet><SegmentTemplate media=\"s$Time$\" timescale=\"1\"><SegmentTimeline>");
+  for (unsigned i = 0; i < DASH_MAX_TIMELINE + 3; i++) p += snprintf(p, cap - (size_t)(p - body), "<S t=\"%u\" d=\"1\"/>", i * 10);
+  snprintf(p, cap - (size_t)(p - body), "</SegmentTimeline></SegmentTemplate><Representation id=\"a\"/></AdaptationSet></Period></MPD>");
   ck_assert_int_eq(dash_mpd_parse(body, NULL, mpd), 1);
   r = &mpd->periods[0].adaptation_sets[0].representations[0];
   ck_assert_uint_eq(r->n_timeline, (unsigned)DASH_MAX_TIMELINE);

@@ -109,7 +109,7 @@ out:
 
 static void idle_wait(void);
 
-static int stop_cb(void *arg) { return stop_wanted(arg); }
+static int stop_cb(const void *arg) { return stop_wanted(arg); }
 
 /* transient (nullable): set when failure is peer-side and worth retrying */
 static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg, int *transient) {
@@ -120,7 +120,7 @@ static SRTSOCKET open_single_caller(const srtin_cfg_t *cfg, int *transient) {
   int local_len;
 
   if (transient) *transient = 0;
-  if (srtcommon_resolve_stoppable(cfg->peers[0].host, cfg->peers[0].port, &remote, &remote_len, connect_total_ms(cfg), stop_cb, (void *)cfg)) {
+  if (srtcommon_resolve_stoppable(cfg->peers[0].host, cfg->peers[0].port, &remote, &remote_len, connect_total_ms(cfg), stop_cb, cfg)) {
     if (transient) *transient = 1;
     return SRT_INVALID_SOCK;
   }

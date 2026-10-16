@@ -19,6 +19,6 @@ void biss_ca_state_free(biss_ca_state_t *s);
 int biss_ca_state_on_emm(biss_ca_state_t *s, const unsigned char *emm, size_t emm_len);
 
 /* 0 ok, sw_even_out/sw_odd_out filled. -1: parse fail/esid mismatch/SK for that parity not cached yet */
-int biss_ca_state_resolve_ecm(biss_ca_state_t *s, const unsigned char *ecm, size_t ecm_len, unsigned char sw_even_out[BISS_CA_SW_LEN], unsigned char sw_odd_out[BISS_CA_SW_LEN]);
+int biss_ca_state_resolve_ecm(const biss_ca_state_t *s, const unsigned char *ecm, size_t ecm_len, unsigned char sw_even_out[BISS_CA_SW_LEN], unsigned char sw_odd_out[BISS_CA_SW_LEN]);
 
 #endif

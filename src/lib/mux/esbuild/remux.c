@@ -113,8 +113,10 @@ int esbuild_remux_add_init(esbuild_remux_t *r, unsigned stream_idx, const unsign
 void esbuild_remux_free(esbuild_remux_t *r) {
   free(r->pesbuf);
   free(r->esbuf);
-  r->pesbuf = r->esbuf = NULL;
-  r->pes_cap = r->es_cap = 0;
+  r->pesbuf = NULL;
+  r->esbuf = NULL;
+  r->pes_cap = 0;
+  r->es_cap = 0;
 }
 
 int esbuild_remux_init(esbuild_remux_t *r, const unsigned char *init_data, size_t init_len) {

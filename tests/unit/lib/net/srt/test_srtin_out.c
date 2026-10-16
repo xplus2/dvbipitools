@@ -279,7 +279,7 @@ START_TEST(retry_open_keeps_dialing_until_stopped) {
   o.cfg.retry_open = 1;
   o.cfg.stop = &o.stop;
   ck_assert_int_eq(pthread_create(&th, NULL, open_thread, &o), 0);
-  usleep(1500000);
+  nanosleep(&(struct timespec){1, 500000000L}, NULL);
   ck_assert_int_eq(atomic_load(&o.finished), 0);
   atomic_store(&o.stop, 1);
   pthread_join(th, NULL);

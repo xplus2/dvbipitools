@@ -104,7 +104,7 @@ void channel_table_free(channel_table_t *t) {
 }
 
 /* entry (chan index + 1) still owns slot: channel in use and carries that slot */
-static int resolve_entry_live(channel_table_t *t, size_t entry, size_t slot) {
+static int resolve_entry_live(const channel_table_t *t, size_t entry, size_t slot) {
   if (entry == 0) return 0;
   return atomic_load_explicit(&t->chan[entry - 1].in_use, memory_order_acquire) == 1 && t->chan[entry - 1].resolve_slot == slot;
 }

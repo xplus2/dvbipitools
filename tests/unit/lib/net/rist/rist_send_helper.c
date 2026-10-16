@@ -16,6 +16,7 @@ int main(int argc, char **argv) {
   struct rist_peer *peer;
   struct rist_data_block db;
   int tries;
+  int sent = 0;
 
   if (argc != 3) {
     fprintf(stderr, "usage: %s <rist://host:port> <payload>\n", argv[0]);
@@ -45,23 +46,20 @@ int main(int argc, char **argv) {
   memset(&db, 0, sizeof db);
   db.payload = argv[2];
   db.payload_len = strlen(argv[2]);
-  for (tries = 0; tries < 50; tries++) {
-    struct timespec retry_wait = {0, 20000000L};
+  /* receiver drops data until RTCP handshake completes: resend through the window */
+  for (tries = 0; tries < 40; tries++) {
+    struct timespec resend_wait = {0, 50000000L};
 
     if (rist_sender_data_write(ctx, &db) >= 0)
-      break;
-    nanosleep(&retry_wait, NULL);
+      sent++;
+    nanosleep(&resend_wait, NULL);
   }
-  if (tries >= 50) {
+  if (sent == 0) {
     fprintf(stderr, "rist_sender_data_write never succeeded\n");
     rist_destroy(ctx);
     return 1;
   }
 
-  {
-    struct timespec drain_wait = {0, 300000000L}; /* let it actually go out before tearing down */
-    nanosleep(&drain_wait, NULL);
-  }
   rist_destroy(ctx);
   return 0;
 }

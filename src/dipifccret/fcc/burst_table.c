@@ -289,7 +289,7 @@ int burst_table_terminate(burst_table_t *t, const struct sockaddr *addr, socklen
 
 int burst_table_acquire(burst_table_t *t, size_t idx, burst_snap_t *out) {
   burst_stripe_t *st;
-  burst_slot_t *slot;
+  const burst_slot_t *slot;
   int live;
 
   if (idx >= t->cap) return 0;

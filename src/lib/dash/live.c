@@ -182,7 +182,7 @@ static int pick_representation(dash_live_t *h, unsigned period) {
   const dash_period_t *p = &h->mpd.periods[period];
   const dash_representation_t *r;
   unsigned ai = h->adaptation_set_index;
-  char old_init[2048];
+  char old_init[2048] = "";
   char new_init[2048];
   int best;
   if (h->as_mime[0] && (ai >= p->n_adaptation_sets || strcmp(p->adaptation_sets[ai].mime_type, h->as_mime))) {
@@ -209,7 +209,9 @@ static int pick_representation(dash_live_t *h, unsigned period) {
 }
 
 static void join_position(dash_live_t *h) {
-  unsigned long long t, d, k;
+  unsigned long long t;
+  unsigned long long d;
+  unsigned long long k;
   h->positioned = 1;
   h->fail_count = 0;
   if (uses_timeline(h)) {
@@ -245,7 +247,8 @@ static void switch_period_if_due(dash_live_t *h) {
 typedef enum { PREP_WAIT, PREP_READY, PREP_NEED_MPD } prep_t;
 
 static prep_t prepare_timeline(dash_live_t *h, char *url, size_t n) {
-  unsigned long long d, k;
+  unsigned long long d;
+  unsigned long long k;
   double now = mono_seconds();
   if (!dash_timeline_find(&h->repr, h->seg_time, &d, &k)) {
     if (h->mpd.is_dynamic && h->seg_time < dash_timeline_first(&h->repr)) {
@@ -274,7 +277,8 @@ static prep_t prepare_timeline(dash_live_t *h, char *url, size_t n) {
 static prep_t prepare_duration(dash_live_t *h, char *url, size_t n) {
   if (wall_anchored(h)) {
     unsigned long long el = elapsed_ms(h);
-    unsigned long long edge, avail;
+    unsigned long long edge;
+    unsigned long long avail;
     unsigned long long dur_ms = dash_segment_duration_ms(&h->repr);
     unsigned long long lag = (h->mpd.time_shift_buffer_ms ? h->mpd.time_shift_buffer_ms : DASH_MAX_LAG_MS) / (dur_ms ? dur_ms : 1);
     if (lag < 2) lag = 2;

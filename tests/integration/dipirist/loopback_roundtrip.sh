@@ -34,6 +34,7 @@ send_fixture() {
     exec 3>&-
     # file source hits EOF -> nonzero rc by this toolkit's convention, not a failure here
     wait $sf_pid || true
+    return 0
 }
 
 "$BIN" -i "rist://@0.0.0.0:$PORT" -o "$out" --buffer 200 >"$WORK/recv.log" 2>&1 &

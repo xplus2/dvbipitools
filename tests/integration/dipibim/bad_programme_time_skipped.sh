@@ -7,9 +7,11 @@ BIN=$1
 
 prog() {
     printf '<ProgramInformation programId="crid://dipixmltv.invalid/channel1/%s"><BasicDescription><Title>T %s</Title></BasicDescription></ProgramInformation>\n' "$1" "$1"
+    return 0
 }
 ev() {
     printf '<ScheduleEvent><Program crid="crid://dipixmltv.invalid/channel1/%s"/><PublishedStartTime>%s</PublishedStartTime><PublishedEndTime>%s</PublishedEndTime></ScheduleEvent>\n' "$1" "$2" "$3"
+    return 0
 }
 {
     printf '<?xml version="1.0" encoding="UTF-8"?>\n<TVAMain xmlns="urn:tva:metadata:2004">\n<ProgramDescription>\n<ProgramInformationTable>\n'

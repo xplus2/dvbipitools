@@ -42,7 +42,13 @@ static int walk_ipv6_ext_headers(const unsigned char *pkt, size_t len, size_t *h
 }
 
 void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ranges, size_t range_count, capture_frame_cb cb, void *user) {
-  size_t off, ip_off, udp_off, rtp_off, addr_len, end, payload_len;
+  size_t off;
+  size_t ip_off;
+  size_t udp_off;
+  size_t rtp_off;
+  size_t addr_len;
+  size_t end;
+  size_t payload_len;
   unsigned ethertype, dport, udp_len;
   int family;
   struct in_addr dst4;

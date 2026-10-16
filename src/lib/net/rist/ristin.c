@@ -39,7 +39,7 @@ static struct rist_ctx *ctx_start(ristin_t *r) {
   rc.buffer_ms = r->buffer_ms;
   rc.verbose = r->verbose;
   if (r->mx) {
-    rc.stats_cb = ristin_stats_cb;
+    rc.stats_cb = &ristin_stats_cb;
     rc.stats_arg = r;
   }
   return rist_receiver_open(&rc);

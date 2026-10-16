@@ -137,9 +137,7 @@ static ssize_t stream_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_r
 
 /* leading bytes to skip so buf starts on a 0x47 pair 188 apart, or have if none */
 static size_t stream_find_sync(const unsigned char *buf, size_t have) {
-  size_t i;
-
-  for (i = 0; i + 188 < have; i++)
+  for (size_t i = 0; i + 188 < have; i++)
     if (buf[i] == 0x47 && buf[i + 188] == 0x47) return i;
   return have;
 }
@@ -339,7 +337,7 @@ int tssrc_rewind(tssrc_t *s) {
 
 mcast_t *tssrc_mcast(const tssrc_t *s) { return s->m; }
 
-int tssrc_set_nonblock(tssrc_t *s) {
+int tssrc_set_nonblock(const tssrc_t *s) {
   if ((s->kind != TSSRC_UDP && s->kind != TSSRC_RTP) || !s->m) return 0;
   return mcast_set_nonblock(s->m) == 0;
 }

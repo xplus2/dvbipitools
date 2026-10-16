@@ -55,8 +55,10 @@ START_TEST(dvb_locator_decode_rejects_value_longer_than_buffer) {
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bwdata, *swdata;
-  size_t bwlen, swlen;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  size_t bwlen;
+  size_t swlen;
   char uri[300];
   char out[128];
   memset(uri, 'a', sizeof uri - 1);
@@ -291,19 +293,19 @@ END_TEST
 
 START_TEST(uvlu8_encode_rejects_garbage) {
   const char *bad[] = {"", " ", "abc", "-1", "+1", "12x", "1 2", "0x10", "18446744073709551616"};
-  for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) ck_assert_int_eq(encode_simple(BIM_UVLU8, bad[i]), -1);
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) ck_assert_int_eq(encode_simple(BIM_UVLU8, bad[i]), -1);
 }
 END_TEST
 
 START_TEST(boolean_encode_accepts_xml_lexical_forms) {
   const char *good[] = {"true", "false", "1", "0", " true\n"};
-  for (size_t i = 0; i < sizeof good / sizeof *good; i++) ck_assert_int_eq(encode_simple(BIM_BOOLEAN, good[i]), 0);
+  for (size_t i = 0; i < sizeof good / sizeof good[0]; i++) ck_assert_int_eq(encode_simple(BIM_BOOLEAN, good[i]), 0);
 }
 END_TEST
 
 START_TEST(boolean_encode_rejects_garbage) {
   const char *bad[] = {"", "yes", "TRUE", "2", "-1", "truee", "10", "tru"};
-  for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) ck_assert_int_eq(encode_simple(BIM_BOOLEAN, bad[i]), -1);
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) ck_assert_int_eq(encode_simple(BIM_BOOLEAN, bad[i]), -1);
 }
 END_TEST
 

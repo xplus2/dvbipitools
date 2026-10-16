@@ -499,13 +499,16 @@ START_TEST(codec_payload_round_trips_choice_and_repeated_sequence) {
   static const bim_part_t top = {BIM_PART_SEQ, NULL, NULL, 1, 1, kids, 2};
   static const bim_type_t root_type = {NULL, 0, BIM_CONTENT_SEQ, BIM_UNSUPPORTED, &top};
   static const char *const names[] = {"B", "C", "D", "C", "D"};
-  bim_node_t *root = bim_node_new("R"), *got = NULL;
+  bim_node_t *root = bim_node_new("R");
+  bim_node_t *got = NULL;
   bitwriter_t bw;
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bwdata, *swdata;
-  size_t bwlen, swlen;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  size_t bwlen;
+  size_t swlen;
   ck_assert_ptr_nonnull(root);
   for (int i = 0; i < 5; i++) ck_assert_ptr_nonnull(bim_node_add_new(root, names[i], "v"));
   bitwriter_init(&bw);
@@ -546,14 +549,21 @@ START_TEST(codec_payload_encode_rejects_missing_required_choice) {
 END_TEST
 
 START_TEST(fragment_title_type_and_short_title_attrs_round_trip) {
-  bim_node_t *root = bim_node_new("ProgramInformation"), *bd, *t, *st, *got = NULL;
+  bim_node_t *root = bim_node_new("ProgramInformation");
+  bim_node_t *bd;
+  bim_node_t *t;
+  bim_node_t *st;
+  bim_node_t *got = NULL;
   const bim_node_t *gbd;
+  const bim_node_t *gst;
   bitwriter_t bw;
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bwdata, *swdata;
-  size_t bwlen, swlen;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  size_t bwlen;
+  size_t swlen;
   ck_assert_ptr_nonnull(root);
   ck_assert_int_eq(bim_node_set_attr(root, "programId", "crid://x/1"), 0);
   bd = bim_node_add_new(root, "BasicDescription", NULL);
@@ -574,11 +584,11 @@ START_TEST(fragment_title_type_and_short_title_attrs_round_trip) {
   gbd = bim_node_child(got, "BasicDescription");
   ck_assert_ptr_nonnull(gbd);
   ck_assert_str_eq(bim_node_attr(bim_node_child(gbd, "Title"), "type"), "secondary");
-  st = (bim_node_t *)bim_node_child(gbd, "ShortTitle");
-  ck_assert_str_eq(st->text, "Sh");
-  ck_assert_str_eq(bim_node_attr(st, "length"), "2");
-  ck_assert_str_eq(bim_node_attr(st, "type"), "main");
-  ck_assert_str_eq(bim_node_attr(st, "xml:lang"), "en");
+  gst = bim_node_child(gbd, "ShortTitle");
+  ck_assert_str_eq(gst->text, "Sh");
+  ck_assert_str_eq(bim_node_attr(gst, "length"), "2");
+  ck_assert_str_eq(bim_node_attr(gst, "type"), "main");
+  ck_assert_str_eq(bim_node_attr(gst, "xml:lang"), "en");
   bim_node_free(got);
   bim_node_free(root);
   bitwriter_free(&bw);

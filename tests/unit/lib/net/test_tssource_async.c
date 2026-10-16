@@ -510,7 +510,7 @@ START_TEST(tssrc_fec_rx_ns_follows_released_packet) {
   for (unsigned i = 0; i < PKTS; i++) {
     build_rtp_ts(pkt, (uint16_t)(0x3000 + i), (unsigned char)i);
     ck_assert_int_eq((int)sendto(src_sock, pkt, LEN, 0, (struct sockaddr *)&src_dst, sizeof src_dst), LEN);
-    usleep(20000);
+    nanosleep(&(struct timespec){0, 20000000L}, NULL);
   }
   for (unsigned tries = 0; tries < 40 && nread < PKTS; tries++) {
     ssize_t n;

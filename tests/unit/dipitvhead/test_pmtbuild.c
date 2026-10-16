@@ -563,7 +563,9 @@ START_TEST(pmtbuild_pmt_writes_ac3_eac3_as_dvb_private_with_descriptor) {
   out_program_pids_t pids;
   unsigned char sec[256];
   unsigned pcr_pid;
-  int n, dropped, trunc;
+  int n;
+  int dropped;
+  int trunc;
   size_t slen;
 
   out_program_pids(0, &pids);

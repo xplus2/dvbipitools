@@ -428,7 +428,8 @@ static int walk_one(enc_t *e, const bim_part_t *p, const bim_node_t *node, int *
   }
   if (p->kind == BIM_PART_CHOICE) {
     enc_t dry = {NULL, NULL, 1};
-    int pick = -1, empty = -1;
+    int pick = -1;
+    int empty = -1;
     for (int i = 0; i < p->nkids && pick < 0; i++) {
       int c = *ci;
       if (walk_one(&dry, &p->kids[i], node, &c)) continue;
@@ -447,7 +448,8 @@ static size_t out_mark(const enc_t *e) { return e->bw->len * 8 + (size_t)e->bw->
 
 static int walk_part(enc_t *e, const bim_part_t *p, const bim_node_t *node, int *ci) {
   enc_t dry = {NULL, NULL, 1};
-  int cur = *ci, count = 0;
+  int cur = *ci;
+  int count = 0;
   while (p->max == BIM_UNBOUNDED || (unsigned)count < p->max) {
     int c = cur;
     if (walk_one(&dry, p, node, &c)) break;

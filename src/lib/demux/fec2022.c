@@ -137,7 +137,7 @@ static void skip_lost(fec2022_dec_t *dec) {
 }
 
 /* rebuild the single missing member in place */
-static void rep_recover(fec2022_dec_t *dec, fec2022_rep_t *r) {
+static void rep_recover(const fec2022_dec_t *dec, fec2022_rep_t *r) {
   int64_t missing = 0;
   unsigned present = 0;
   unsigned char p;

@@ -434,12 +434,15 @@ ssize_t net_sendto_tos(int fd, const void *buf, size_t len, const struct sockadd
   struct iovec iov;
   struct msghdr msg;
   struct cmsghdr *cm;
+  struct sockaddr_storage dst;
 
+  if (tolen > sizeof dst) return -1;
+  memcpy(&dst, to, tolen);
   iov.iov_base = (void *)buf;
   iov.iov_len = len;
   memset(&msg, 0, sizeof msg);
   memset(&ctl, 0, sizeof ctl);
-  msg.msg_name = (void *)to;
+  msg.msg_name = &dst;
   msg.msg_namelen = tolen;
   msg.msg_iov = &iov;
   msg.msg_iovlen = 1;

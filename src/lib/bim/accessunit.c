@@ -105,7 +105,6 @@ done:
 
 int accessunit_encode_range(accessunit_scratch_t *sc, const bcg_doc_t *doc, const accessunit_index_t *ix, int ch_from, int ch_to, bitwriter_t *bw, strrepo_writer_t *sw, int *out_nfuu, int *out_nchan_prog) {
   int i;
-  int p;
   int nfuu = 0;
   int nchan_prog = 0;
   int nref = 0;
@@ -126,7 +125,7 @@ int accessunit_encode_range(accessunit_scratch_t *sc, const bcg_doc_t *doc, cons
   if (bitwriter_put_vluimsbf8(bw, (uint64_t)nfuu)) return -1;
   for (i = ch_from; i < ch_to; i++) {
     if (!doc->channels[i].uri[0]) continue;
-    for (p = ix->first[i]; p >= 0; p = ix->next[p]) {
+    for (int p = ix->first[i]; p >= 0; p = ix->next[p]) {
       bitwriter_reset(&sc->fbw);
       if (record_ref(sc, nref++, bw, sw)) return -1;
       if (fragment_encode_program_information(&doc->programmes[p], &sc->fbw, sw) || emit_fuu(bw, DVBCTXPATH_PROGRAM_INFORMATION, &sc->fbw)) return -1;
@@ -305,7 +304,6 @@ int accessunit_decode_refs(accessunit_scratch_t *sc, bitreader_t *br, strrepo_re
   size_t bytes_left;
   int phase;
   int reordered = 0;
-  int pass;
 
   if (bitreader_get_vluimsbf8(br, &n64)) return -1;
   bytes_left = bitreader_bits_left(br) / 8;
@@ -347,7 +345,7 @@ int accessunit_decode_refs(accessunit_scratch_t *sc, bitreader_t *br, strrepo_re
     br->byte_pos += (size_t)flen;
   }
   /* phase order: schedules need all program texts */
-  for (pass = 0; pass < 3; pass++) {
+  for (int pass = 0; pass < 3; pass++) {
     for (i = 0; i < nfuu; i++) {
       if (resolve_fuu_phase(fuus[i].context_path) != pass) continue;
       if (sync_strings(sr, refs, nrefs, i, fuus[i].start, reordered)) {
