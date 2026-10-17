@@ -84,7 +84,7 @@ static int dash_resolve_seg(const capture_ctx_t *ctx, const pid_filter_t *filter
   return 1;
 }
 
-int dash_serve_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
+int dash_serve_seg(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
   char cors_hdr[192];
   dash_seg_resolve_t r;
   if (!dash_resolve_seg(ctx, filter, pmt_pid, lcevc, filename, &r)) return 0;
@@ -103,7 +103,7 @@ int dash_serve_seg(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, un
   return 1;
 }
 
-int dash_render_seg(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, hls_resp_t *out) {
+int dash_render_seg(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, hls_resp_t *out) {
   dash_seg_resolve_t r;
   memset(out, 0, sizeof *out);
   if (!dash_resolve_seg(ctx, filter, pmt_pid, lcevc, filename, &r)) return 0;

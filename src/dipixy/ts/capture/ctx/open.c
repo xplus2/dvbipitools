@@ -75,7 +75,8 @@ static fcc_client_t *open_fcc(const sds_fcc_t *fcc) {
 }
 
 capture_ctx_t *capture_open(int family, const char *group, const char *source, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d) {
-  capture_ctx_t *c, *dup;
+  capture_ctx_t *c;
+  capture_ctx_t *dup;
   if (!source) source = "";
   pthread_mutex_lock(&g_lock);
   c = find_existing(family, group, source, port, iface);

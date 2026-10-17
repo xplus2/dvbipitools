@@ -423,4 +423,204 @@ static inline unsigned count_frame_markers(const unsigned char *buf, size_t len)
   return n;
 }
 
+static inline unsigned char rev8_local(unsigned char b) {
+  b = (unsigned char)((b >> 4) | (b << 4));
+  b = (unsigned char)(((b & 0xCC) >> 2) | ((b & 0x33) << 2));
+  b = (unsigned char)(((b & 0xAA) >> 1) | ((b & 0x55) << 1));
+  return b;
+}
+
+static inline unsigned char hamm_raw(unsigned d) {
+  unsigned D1 = d & 1, D2 = (d >> 1) & 1, D3 = (d >> 2) & 1, D4 = (d >> 3) & 1;
+  unsigned P1 = D1 ^ D2 ^ D4, P2 = D1 ^ D3 ^ D4, P3 = D2 ^ D3 ^ D4;
+  unsigned c = P1 | (P2 << 1) | (D1 << 2) | (P3 << 3) | (D2 << 4) | (D3 << 5) | (D4 << 6);
+  unsigned ones = 0;
+  for (int k = 0; k < 7; k++)
+    ones += (c >> k) & 1;
+  c |= (ones & 1) << 7;
+  return (unsigned char)c;
+}
+
+static inline size_t build_ttx_pes(unsigned char *out, unsigned page, unsigned pkt, const char *text) {
+  unsigned mag = (page / 100) & 0x07;
+  unsigned d0 = (mag & 0x07) | ((pkt & 1) << 3);
+  unsigned d1 = (pkt >> 1) & 0x0F;
+  size_t n = 0;
+  size_t tlen = strlen(text);
+
+  out[n++] = 0x10;
+  out[n++] = 0x03;
+  out[n++] = 0x2C;
+  out[n++] = 0xFF;
+  out[n++] = 0xFF;
+  out[n++] = hamm_raw(d0);
+  out[n++] = hamm_raw(d1);
+  for (size_t i = 0; i < 40; i++) {
+    unsigned char c = 0x20;
+    if (i < tlen) c = (unsigned char)text[i];
+    out[n++] = rev8_local(c);
+  }
+  if (pkt == 0) {
+    out[7] = hamm_raw(page % 10);
+    out[8] = hamm_raw((page / 10) % 10);
+  }
+  return n;
+}
+
+typedef struct {
+  unsigned char stream_type;
+  unsigned pid;
+  const unsigned char *desc;
+  size_t desc_len;
+} ts_es_spec_t;
+
+static inline size_t build_pmt_es_list(unsigned char *out, unsigned prog_num, unsigned pcr_pid, const unsigned char *pi_desc, size_t pi_len, const ts_es_spec_t *es, size_t n_es) {
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
+  uint32_t crc;
+
+  out[n++] = 0x02;
+  out[n++] = 0xB0;
+  out[n++] = 0x00;
+  out[n++] = (unsigned char)(prog_num >> 8);
+  out[n++] = (unsigned char)prog_num;
+  out[n++] = 0xC1;
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  out[n++] = (unsigned char)(0xE0 | ((pcr_pid >> 8) & 0x1F));
+  out[n++] = (unsigned char)pcr_pid;
+  out[n++] = (unsigned char)(0xF0 | ((pi_len >> 8) & 0x0F));
+  out[n++] = (unsigned char)pi_len;
+  if (pi_len) memcpy(out + n, pi_desc, pi_len);
+  n += pi_len;
+  for (size_t i = 0; i < n_es; i++) {
+    out[n++] = es[i].stream_type;
+    out[n++] = (unsigned char)(0xE0 | ((es[i].pid >> 8) & 0x1F));
+    out[n++] = (unsigned char)es[i].pid;
+    out[n++] = (unsigned char)(0xF0 | ((es[i].desc_len >> 8) & 0x0F));
+    out[n++] = (unsigned char)es[i].desc_len;
+    if (es[i].desc_len) memcpy(out + n, es[i].desc, es[i].desc_len);
+    n += es[i].desc_len;
+  }
+  hdr = n - 3 + 4;
+  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
+  out[2] = (unsigned char)hdr;
+  crc_at = n;
+  crc = crc32_mpeg(out, crc_at);
+  out[crc_at + 0] = (unsigned char)(crc >> 24);
+  out[crc_at + 1] = (unsigned char)(crc >> 16);
+  out[crc_at + 2] = (unsigned char)(crc >> 8);
+  out[crc_at + 3] = (unsigned char)crc;
+  return crc_at + 4;
+}
+
+static inline void put_pes_ts(unsigned char *out, uint64_t v, unsigned char marker) {
+  out[0] = (unsigned char)(marker | ((v >> 29) & 0x0E) | 0x01);
+  out[1] = (unsigned char)(v >> 22);
+  out[2] = (unsigned char)(((v >> 14) & 0xFE) | 0x01);
+  out[3] = (unsigned char)(v >> 7);
+  out[4] = (unsigned char)(((v << 1) & 0xFE) | 0x01);
+}
+
+static inline size_t build_pes_any(unsigned char *out, unsigned char stream_id, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *payload, size_t plen) {
+  size_t n = 0;
+  size_t hdr_len = (has_pts ? 5u : 0u) + (has_dts ? 5u : 0u);
+  size_t body = 3 + hdr_len + plen;
+
+  out[n++] = 0x00;
+  out[n++] = 0x00;
+  out[n++] = 0x01;
+  out[n++] = stream_id;
+  if (stream_id >= 0xE0 || body > 0xFFFF) {
+    out[n++] = 0x00;
+    out[n++] = 0x00;
+  } else {
+    out[n++] = (unsigned char)(body >> 8);
+    out[n++] = (unsigned char)body;
+  }
+  out[n++] = 0x80;
+  out[n++] = (unsigned char)((has_pts ? (has_dts ? 0xC0 : 0x80) : 0x00));
+  out[n++] = (unsigned char)hdr_len;
+  if (has_pts) {
+    put_pes_ts(out + n, pts, has_dts ? 0x30 : 0x20);
+    n += 5;
+  }
+  if (has_dts) {
+    put_pes_ts(out + n, dts, 0x10);
+    n += 5;
+  }
+  if (plen) memcpy(out + n, payload, plen);
+  return n + plen;
+}
+
+typedef struct {
+  unsigned char *pkt;
+  size_t n;
+  size_t cap;
+  unsigned char cc[0x2000];
+} ts_script_t;
+
+static inline unsigned char *ts_script_slot(ts_script_t *s) {
+  if (s->n == s->cap) {
+    s->cap = s->cap ? s->cap * 2 : 64;
+    s->pkt = realloc(s->pkt, s->cap * 188);
+    if (!s->pkt) abort();
+  }
+  return s->pkt + (s->n++) * 188;
+}
+
+static inline void ts_script_free(ts_script_t *s) {
+  free(s->pkt);
+  memset(s, 0, sizeof *s);
+}
+
+static inline void ts_script_section(ts_script_t *s, unsigned pid, const unsigned char *section, size_t len) {
+  wrap_section_packet(ts_script_slot(s), pid, section, len);
+}
+
+static inline void ts_script_pes(ts_script_t *s, unsigned pid, const unsigned char *pes, size_t len) {
+  size_t off = 0;
+  int first = 1;
+
+  while (off < len) {
+    unsigned char *p = ts_script_slot(s);
+    size_t rem = len - off;
+    unsigned cc = s->cc[pid]++ & 0x0F;
+
+    p[0] = 0x47;
+    p[1] = (unsigned char)((first ? 0x40 : 0x00) | ((pid >> 8) & 0x1F));
+    p[2] = (unsigned char)pid;
+    if (rem >= 184) {
+      p[3] = (unsigned char)(0x10 | cc);
+      memcpy(p + 4, pes + off, 184);
+      off += 184;
+    } else {
+      size_t af = 183 - rem;
+      p[3] = (unsigned char)(0x30 | cc);
+      p[4] = (unsigned char)af;
+      if (af) {
+        p[5] = 0x00;
+        memset(p + 6, 0xFF, af - 1);
+      }
+      memcpy(p + 5 + af, pes + off, rem);
+      off += rem;
+    }
+    first = 0;
+  }
+}
+
+static inline void ts_script_discovery(ts_script_t *s, unsigned prog_num, unsigned pmt_pid, const unsigned char *pi_desc, size_t pi_len, const ts_es_spec_t *es, size_t n_es, int with_sdt) {
+  unsigned char sec[1024];
+  size_t slen = psi_build_pat(0x1234, 0, prog_num, pmt_pid, sec, sizeof sec);
+
+  ts_script_section(s, 0x0000, sec, slen);
+  slen = build_pmt_es_list(sec, prog_num, n_es ? es[0].pid : 0x1FFF, pi_desc, pi_len, es, n_es);
+  ts_script_section(s, pmt_pid, sec, slen);
+  if (with_sdt) {
+    slen = psi_build_sdt(0, 0x1234, 2, prog_num, 0x01, "Provider", "Service", sec, sizeof sec);
+    ts_script_section(s, 0x0011, sec, slen);
+  }
+}
+
 #endif

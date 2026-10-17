@@ -31,7 +31,8 @@ static void read_stop(const char *etag, const char *eend, const char *start, cha
 /* processes one ScheduleEvent [etag,eend) for channel. 0 ok, -1 OOM */
 static int parse_schedule_event(bcg_doc_t *doc, const progtext_list_t *pl, const char *channel, const char *etag, const char *eend) {
   char crid[BCG_ID_LEN * 3 + 64];
-  char start[BCG_TIME_LEN], stop[BCG_TIME_LEN];
+  char start[BCG_TIME_LEN];
+  char stop[BCG_TIME_LEN];
   const bcg_progtext_t *pt;
   bcg_programme_t *pr;
 

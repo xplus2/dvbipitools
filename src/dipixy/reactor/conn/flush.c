@@ -59,11 +59,9 @@ int conn_flush(conn_t *c, int epfd) {
          EPOLLOUT added: full send buffer also wakes */
       if (last_errno == EAGAIN || last_errno == EWOULDBLOCK) {
         unsigned char want_expected = 0;
-        if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 1, memory_order_relaxed, memory_order_relaxed)) {
-          if (conn_epoll_mod(c, epfd, 1) < 0) {
-            atomic_store_explicit(&c->want_write, 0, memory_order_relaxed);
-            return CONN_FLUSH_ERROR;
-          }
+        if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 1, memory_order_relaxed, memory_order_relaxed) && conn_epoll_mod(c, epfd, 1) < 0) {
+          atomic_store_explicit(&c->want_write, 0, memory_order_relaxed);
+          return CONN_FLUSH_ERROR;
         }
         atomic_store_explicit(&c->last_active, conn_now_s(), memory_order_relaxed);
         return CONN_FLUSH_MORE;
@@ -99,11 +97,9 @@ int conn_flush(conn_t *c, int epfd) {
     }
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
       unsigned char want_expected = 0;
-      if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 1, memory_order_relaxed, memory_order_relaxed)) {
-        if (conn_epoll_mod(c, epfd, 1) < 0) {
-          atomic_store_explicit(&c->want_write, 0, memory_order_relaxed);
-          return CONN_FLUSH_ERROR;
-        }
+      if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 1, memory_order_relaxed, memory_order_relaxed) && conn_epoll_mod(c, epfd, 1) < 0) {
+        atomic_store_explicit(&c->want_write, 0, memory_order_relaxed);
+        return CONN_FLUSH_ERROR;
       }
       atomic_store_explicit(&c->last_active, conn_now_s(), memory_order_relaxed);
       return CONN_FLUSH_MORE;
@@ -119,12 +115,10 @@ int conn_flush(conn_t *c, int epfd) {
     return conn_flush(c, epfd);
   }
   unsigned char want_expected = 1;
-  if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 0, memory_order_relaxed, memory_order_relaxed)) {
-    if (conn_epoll_mod(c, epfd, 0) < 0) {
-      atomic_store_explicit(&c->want_write, 1, memory_order_relaxed);
-      pthread_mutex_unlock(&c->out_lock);
-      return CONN_FLUSH_ERROR;
-    }
+  if (atomic_compare_exchange_strong_explicit(&c->want_write, &want_expected, 0, memory_order_relaxed, memory_order_relaxed) && conn_epoll_mod(c, epfd, 0) < 0) {
+    atomic_store_explicit(&c->want_write, 1, memory_order_relaxed);
+    pthread_mutex_unlock(&c->out_lock);
+    return CONN_FLUSH_ERROR;
   }
   pthread_mutex_unlock(&c->out_lock);
   return CONN_FLUSH_DONE;

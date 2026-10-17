@@ -826,6 +826,12 @@ START_TEST(drop_privileges_fails_for_an_unknown_user_and_ignores_null) {
 }
 END_TEST
 
+START_TEST(drop_privileges_to_another_user_is_refused_without_privileges) {
+  if (geteuid() == 0) return;
+  ck_assert_int_eq(capture_drop_privileges("root"), -1);
+}
+END_TEST
+
 static int have_packet_socket(void) {
   int fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 
@@ -1031,6 +1037,7 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, frame_with_null_callback_is_accepted_silently);
   tcase_add_test(tc, bpf_rejects_range_sets_over_the_kernel_instruction_limit);
   tcase_add_test(tc, drop_privileges_fails_for_an_unknown_user_and_ignores_null);
+  tcase_add_test(tc, drop_privileges_to_another_user_is_refused_without_privileges);
   tcase_add_test(tc, capture_open_rejects_bad_arguments);
   tcase_add_test(tc, capture_open_reports_why_an_interface_cannot_be_used);
   tcase_add_test(tc, capture_open_on_an_ethernet_interface_succeeds_or_explains);

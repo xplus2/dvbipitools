@@ -27,7 +27,9 @@ static char *extinf_comma(char *line) {
 int load_m3u(FILE *f, input_t *in) {
   char line[2048];
   char pending_name[SDS_MAX_NAME];
-  unsigned pending_tsid = 1, pending_onid = 1, pending_sid = 0;
+  unsigned pending_tsid = 1;
+  unsigned pending_onid = 1;
+  unsigned pending_sid = 0;
   int have_pending = 0;
   int idx = 0;
   int lineno = 0;
@@ -50,7 +52,8 @@ int load_m3u(FILE *f, input_t *in) {
         return -1;
       }
       bufcpy(pending_name, sizeof pending_name, comma + 1);
-      pending_tsid = pending_onid = 1;
+      pending_tsid = 1;
+      pending_onid = 1;
       pending_sid = 0;
       if ((xml_attr_list(line, comma, "tsid", tmp, sizeof tmp) == 0 && dvb_id("tsid", tmp, &pending_tsid)) ||
           (xml_attr_list(line, comma, "onid", tmp, sizeof tmp) == 0 && dvb_id("onid", tmp, &pending_onid)) ||

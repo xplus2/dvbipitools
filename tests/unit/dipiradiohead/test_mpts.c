@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "lib/sys/ioutil.h"
 #include "lib/sys/signal.h"
@@ -425,6 +426,65 @@ START_TEST(run_mpts_sets_up_and_tears_down_for_each_configuration) {
 }
 END_TEST
 
+static void *loop_stopper(void *arg) {
+  (void)arg;
+  usleep(1500000);
+  signal_request_stop();
+  return NULL;
+}
+
+START_TEST(run_mpts_loop_carries_a_live_input_until_stopped) {
+  static unsigned char body[MP3_FRAMES * MP3_FRAME_LEN];
+  static const char head[] = "HTTP/1.1 200 OK\r\nContent-Type: audio/mpeg\r\nConnection: close\r\n\r\n";
+  static unsigned char resp[24576];
+  static config_t cfg;
+  metrics_exporter_t mx;
+  http_fixture_t fx;
+  pthread_t th_srv;
+  pthread_t th_stop;
+  unsigned port;
+  int lfd;
+  char uri[64];
+  int rc;
+  fixture_mp3_frames(body, MP3_FRAMES);
+  memcpy(resp, head, sizeof head - 1);
+  memcpy(resp + sizeof head - 1, body, sizeof body);
+  lfd = fixture_listener(&port);
+  fixture_single(&fx, lfd, (const char *)resp, sizeof head - 1 + sizeof body);
+  ck_assert_int_eq(pthread_create(&th_srv, NULL, fixture_serve, &fx), 0);
+  snprintf(uri, sizeof uri, "http://127.0.0.1:%u/stream", port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.n_inputs = 2;
+  cfg.tsid = 1;
+  cfg.onid = 1;
+  cfg.verbose = _i;
+  cfg.metrics_inspect_ts = _i ? METRICS_INSPECT_TS_BASIC : 0;
+  for (unsigned i = 0; i < 2; i++) {
+    cfg.inputs[i].sid = i + 1;
+    cfg.inputs[i].uri = i == 0 ? uri : "http://127.0.0.1:1/stream";
+    bufcpy(cfg.inputs[i].sdt_text, sizeof cfg.inputs[i].sdt_text, "Svc");
+  }
+  if (_i) {
+    cfg.cas_algo = CAS_ALGO_CSA2;
+    cfg.cas_cp_duration_ms = 10000;
+    cfg.n_cas_vendors = 1;
+    bufcpy(cfg.cas_vendors[0].ecmg_host, sizeof cfg.cas_vendors[0].ecmg_host, "127.0.0.1");
+    cfg.cas_vendors[0].ecmg_port = 1;
+    cfg.cas_vendors[0].super_cas_id = (0x4A75u << 16) | 1u;
+    cfg.cas_vendors[0].ecm_id = 1;
+    cfg.cas_vendors[0].ecm_pid = 0x1FF0;
+    cfg.cas_vendors[0].emm_pid = 0x1FF1;
+  }
+  metrics_exporter_init(&mx, METRICS_COMPONENT_RADIOHEAD, NULL, NULL, 0.0);
+  ck_assert_int_eq(pthread_create(&th_stop, NULL, loop_stopper, NULL), 0);
+  rc = radiohead_run_mpts(&cfg, &mx);
+  pthread_join(th_stop, NULL);
+  pthread_join(th_srv, NULL);
+  close(lfd);
+  ck_assert_int_eq(rc, 0);
+}
+END_TEST
+
 static Suite *mpts_suite(void) {
   Suite *s = suite_create("dipiradiohead_mpts");
   TCase *tc = tcase_create("core");
@@ -439,6 +499,7 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, pacing_deadline_ahead_of_the_clock_defers_all_frames);
   tcase_add_test(tc, framing_failure_marks_the_input_down_and_counts_the_error);
   tcase_add_loop_test(tc, run_mpts_sets_up_and_tears_down_for_each_configuration, 0, (int)(sizeof run_cases / sizeof run_cases[0]));
+  tcase_add_loop_test(tc, run_mpts_loop_carries_a_live_input_until_stopped, 0, 2);
   suite_add_tcase(s, tc);
   return s;
 }

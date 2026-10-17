@@ -20,8 +20,10 @@
 #include "lib/sys/ioutil.h"
 
 static void reactor_read_once(int epfd, conn_t *c) {
-  const char *method, *path;
-  size_t method_len, path_len;
+  const char *method;
+  const char *path;
+  size_t method_len;
+  size_t path_len;
   int minor_version;
   struct phr_header headers[REACTOR_MAX_HEADERS];
   size_t num_headers;

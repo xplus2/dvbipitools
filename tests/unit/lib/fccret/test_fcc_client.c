@@ -262,7 +262,9 @@ END_TEST
 START_TEST(burst_packet_after_done_is_ignored) {
   fcc_client_t *c = open_client(9);
   mcast_t *main_ = open_scratch_main();
-  unsigned char pkt[32], rtx[128], buf[64];
+  unsigned char pkt[32];
+  unsigned char rtx[128];
+  unsigned char buf[64];
   _Atomic uint16_t rtx_seq = 0;
   size_t n;
   size_t rtxlen;

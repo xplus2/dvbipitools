@@ -203,8 +203,6 @@ typedef struct {
   int wfd;
 } nc_resolver_arg_t;
 
-#define NC_RESOLVER_STACK (512 * 1024)
-
 /* getaddrinfo not fork-safe in threaded process */
 static void *resolver_thread(void *arg) {
   nc_resolver_arg_t *a = arg;
@@ -262,7 +260,6 @@ static int resolver_spawn(netconnect_pending_t *p, const char *portstr, int *rfd
   a->wfd = sv[1];
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-  pthread_attr_setstacksize(&attr, NC_RESOLVER_STACK);
   e = pthread_create(&tid, &attr, resolver_thread, a);
   pthread_attr_destroy(&attr);
   if (e) {

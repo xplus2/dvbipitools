@@ -21,7 +21,8 @@ typedef struct {
 
 typedef struct {
   bcg_progtext_t *items;
-  int n, cap;
+  int n;
+  int cap;
   progtext_idx_t *idx; /* sorted by crid, built once after parse_program_texts */
 } progtext_list_t;
 

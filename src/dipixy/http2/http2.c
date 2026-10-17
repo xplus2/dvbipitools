@@ -223,13 +223,6 @@ static void h2_respond_hls(h2_conn_t *conn, int32_t stream_id, int handled, cons
     h2_submit_resp(conn, stream_id, resp->status, resp->content_type, resp->etag, resp->body_len, resp->body, resp->owner, resp->zc, origin_hdr);
 }
 
-/* httpng_dispatch() opaque req: h2 per-request state spans transient stream
-   slot plus owning conn_t (out_lock/epfd), unlike h3's single h3_req_t */
-typedef struct {
-  conn_t *c;
-  h2_stream_t *stream;
-} h2_req_ctx_t;
-
 static void h2ops_respond_status(void *connv, void *reqv, const char *status) {
   h2_respond_status(connv, ((h2_req_ctx_t *)reqv)->stream->id, status);
 }
@@ -290,7 +283,7 @@ static int h2ops_llhls_try_park(void *connv, void *reqv, const llhls_park_req_t 
   return h2_llhls_try_park(connv, rq->c, rq->stream->id, req);
 }
 
-static const httpng_ops_t h2_httpng_ops = {
+const httpng_ops_t h2_httpng_ops = {
     .proto = CONN_PROTO_H2,
     .respond_status = h2ops_respond_status,
     .respond_401 = h2ops_respond_401,

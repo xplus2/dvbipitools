@@ -233,6 +233,8 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *
       return;
     }
     memcpy(s->buf + s->len, out_pkt, n_pkts * 188);
+    if (pid == 0) hls_seg_stamp_cc(&s->buf_cc_pat, s->buf + s->len, n_pkts, pid);
+    else if (pid == psi_pmt_pid(s->demux.psi)) hls_seg_stamp_cc(&s->buf_cc_pmt, s->buf + s->len, n_pkts, pid);
     s->len += n_pkts * 188;
     if (pid == 0 || pid == psi_pmt_pid(s->demux.psi)) psi_cache_note(s, pid, out_pkt, n_pkts);
   }

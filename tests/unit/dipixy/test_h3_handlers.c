@@ -683,10 +683,135 @@ START_TEST(rawaudio_subscription_keeps_its_own_pid_filter) {
 }
 END_TEST
 
+static void noop_wake(int tid) { (void)tid; }
+
+static int cond_response_started(h3rig_t *h, void *arg) {
+  return h3r_resp_for(h, *(int64_t *)arg)->status != 0;
+}
+
+START_TEST(ops_answer_content_on_a_parked_stream) {
+  h3rig_t h;
+  int64_t sid;
+  uint8_t *body = malloc(5);
+
+  ck_assert_ptr_nonnull(body);
+  memcpy(body, "hello", 5);
+  h3r_open(&h);
+  sid = parked_request(&h, PARK_PATH);
+  h3_httpng_ops.respond_content(server_conn(), find_req(server_conn(), sid), 200, "text/plain", NULL, 0, body, 5, NULL);
+  flush_server(&h);
+  ck_assert_int_eq(h3r_wait_response(&h, sid), 1);
+  ck_assert_int_eq(h3r_resp_for(&h, sid)->status, 200);
+  h3r_close(&h);
+}
+END_TEST
+
+START_TEST(deferred_consume_extends_the_flow_control_windows) {
+  h3rig_t h;
+  int64_t sid;
+
+  h3r_open(&h);
+  sid = parked_request(&h, PARK_PATH);
+  ck_assert_int_eq(cb_h3_deferred_consume(NULL, sid, 128, server_conn(), NULL), 0);
+  h3r_close(&h);
+}
+END_TEST
+
+START_TEST(ops_challenge_a_stream_with_a_401) {
+  h3rig_t h;
+  int64_t sid;
+
+  h3r_open(&h);
+  sid = parked_request(&h, PARK_PATH);
+  h3_httpng_ops.respond_401(server_conn(), find_req(server_conn(), sid));
+  flush_server(&h);
+  ck_assert_int_eq(h3r_wait_response(&h, sid), 1);
+  ck_assert_int_eq(h3r_resp_for(&h, sid)->status, 401);
+  h3r_close(&h);
+}
+END_TEST
+
+START_TEST(ops_llhls_try_park_parks_on_the_stream) {
+  h3rig_t h;
+  int64_t sid;
+  capture_ctx_t *ctx;
+  pid_filter_t filter = {0};
+  lcevc_select_t lcevc = {0};
+  llhls_park_req_t req = {0};
+
+  h3r_open(&h);
+  ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ck_assert_ptr_nonnull(ctx);
+  sid = parked_request(&h, PARK_PATH);
+  req.cap_ctx = ctx;
+  req.filter = &filter;
+  req.lcevc = &lcevc;
+  req.filename = "index_ll.m3u8";
+  req.want_seg = 5;
+  req.want_part = 1;
+  req.timeout_ms = 0;
+  req.ws_handle = -1;
+  ck_assert_int_eq(h3_httpng_ops.llhls_try_park(server_conn(), find_req(server_conn(), sid), &req), 1);
+  h3_llhls_flush_waiters();
+  ck_assert_int_eq(h3r_wait_response(&h, sid), 1);
+  capture_close(ctx);
+  h3r_close(&h);
+}
+END_TEST
+
+START_TEST(ops_dashchunk_dispatch_binds_a_subscription) {
+  h3rig_t h;
+  int64_t sid;
+  capture_ctx_t *ctx;
+  pid_filter_t filter = {0};
+  lcevc_select_t lcevc = {0};
+  int sub;
+
+  h3r_open(&h);
+  ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ck_assert_ptr_nonnull(ctx);
+  hls_store_open(ctx, &filter, 0, &lcevc, 0.5, 6, SEG_CONTAINER_FMP4);
+  hls_llhls_enable(ctx, &filter, 0, &lcevc, SEG_CONTAINER_FMP4, 0.5);
+  sid = parked_request(&h, PARK_PATH);
+  sub = dash_lldash_subscribe(ctx, &filter, 0, &lcevc, "dseg0.m4s", CONN_PROTO_H3);
+  ck_assert_int_ge(sub, 0);
+  ck_assert_int_eq(h3_httpng_ops.dashchunk_dispatch(server_conn(), find_req(server_conn(), sid), sub, -1), 1);
+  flush_server(&h);
+  ck_assert_int_eq(h3r_pump_until(&h, cond_response_started, &sid), 1);
+  ck_assert_int_eq(h3r_resp_for(&h, sid)->status, 200);
+  h3r_close(&h);
+  hls_store_close(ctx, &filter, 0, &lcevc, SEG_CONTAINER_FMP4);
+  capture_close(ctx);
+}
+END_TEST
+
+START_TEST(cold_ts_request_parks_through_open_and_startup_waiters) {
+  h3rig_t h;
+  int64_t sid;
+  char path[96];
+
+  capture_pump_set_thread_count(1);
+  ck_assert_int_eq(capture_lifecycle_start(noop_wake), 0);
+  h3r_open(&h);
+  h.cfg.ts_startup_timeout_s = 0.05;
+  snprintf(path, sizeof path, "/udp/%.31s:%u", PARK_GROUP, PARK_PORT);
+  sid = h3r_request(&h, "GET", path, NULL, 0);
+  for (int waited = 0; waited < COLD_WAIT_MS && !cond_response_started(&h, &sid); waited += SETTLE_MS) {
+    h3_open_flush_waiters();
+    h3_ts_cold_flush_waiters();
+    (void)h3r_pump_timed(&h, cond_response_started, &sid, SETTLE_MS);
+  }
+  ck_assert_int_eq(cond_response_started(&h, &sid), 1);
+  h3r_close(&h);
+  capture_lifecycle_stop();
+}
+END_TEST
+
 static void setup_registries(void) {
   ws_clients_init(8);
   hls_store_init(8);
   hls_seg_init(8);
+  dash_lldash_init(8);
 }
 
 static Suite *handlers_suite(void) {
@@ -718,6 +843,12 @@ static Suite *handlers_suite(void) {
   tcase_add_test(tc, connection_teardown_releases_open_websockets);
   tcase_add_test(tc, ts_push_streams_deliver_ring_data_and_release_the_subscription);
   tcase_add_test(tc, rawaudio_subscription_keeps_its_own_pid_filter);
+  tcase_add_test(tc, ops_answer_content_on_a_parked_stream);
+  tcase_add_test(tc, deferred_consume_extends_the_flow_control_windows);
+  tcase_add_test(tc, ops_challenge_a_stream_with_a_401);
+  tcase_add_test(tc, ops_llhls_try_park_parks_on_the_stream);
+  tcase_add_test(tc, ops_dashchunk_dispatch_binds_a_subscription);
+  tcase_add_test(tc, cold_ts_request_parks_through_open_and_startup_waiters);
   suite_add_tcase(s, tc);
   return s;
 }

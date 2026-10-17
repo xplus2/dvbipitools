@@ -29,11 +29,8 @@ int conn_send_buffered3(conn_t *c, const void *a, size_t alen, const void *b, si
     return -1;
   }
   size_t pending = conn_out_pending(c);
-  if (pending + alen + blen + clen > CONN_OUT_MAX) {
-    c->dead = 1; /* slow consumer: owner closes on next visit */
-    rc = -1;
-  } else if ((alen && conn_queue(c, a, alen) < 0) || (blen && conn_queue(c, b, blen) < 0) || (clen && conn_queue(c, cc, clen) < 0)) {
-    c->dead = 1; /* OOM */
+  if (pending + alen + blen + clen > CONN_OUT_MAX || (alen && conn_queue(c, a, alen) < 0) || (blen && conn_queue(c, b, blen) < 0) || (clen && conn_queue(c, cc, clen) < 0)) {
+    c->dead = 1; /* owner closes on next visit */
     rc = -1;
   }
   /* cross-thread EPOLLOUT arm: safe, interrupts owner's epoll_wait */

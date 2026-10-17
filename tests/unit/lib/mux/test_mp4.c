@@ -779,29 +779,6 @@ START_TEST(mp4_checkpoint_stays_exact_across_relayouts) {
 }
 END_TEST
 
-static unsigned char rev8_local(unsigned char b) {
-  b = (unsigned char)((b >> 4) | (b << 4));
-  b = (unsigned char)(((b & 0xCC) >> 2) | ((b & 0x33) << 2));
-  b = (unsigned char)(((b & 0xAA) >> 1) | ((b & 0x55) << 1));
-  return b;
-}
-
-static unsigned char hamm_raw(unsigned d) {
-  unsigned D1 = d & 1;
-  unsigned D2 = (d >> 1) & 1;
-  unsigned D3 = (d >> 2) & 1;
-  unsigned D4 = (d >> 3) & 1;
-  unsigned P1 = D1 ^ D2 ^ D4;
-  unsigned P2 = D1 ^ D3 ^ D4;
-  unsigned P3 = D2 ^ D3 ^ D4;
-  unsigned c = P1 | (P2 << 1) | (D1 << 2) | (P3 << 3) | (D2 << 4) | (D3 << 5) | (D4 << 6);
-  unsigned ones = 0;
-  for (int k = 0; k < 7; k++) ones += (c >> k) & 1;
-  c |= (ones & 1) << 7;
-  return (unsigned char)c;
-}
-
-/* one EN 300 472 data unit: magazine 7, packet 1, row text */
 static size_t build_ttx_packet(unsigned char *out, unsigned row, const char *text) {
   size_t n = 0;
   size_t tlen = strlen(text);

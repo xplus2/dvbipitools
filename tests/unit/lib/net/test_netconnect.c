@@ -10,12 +10,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "lib/net/netconnect.h"
+#include "lib/sys/signal.h"
 
 static double mono(void) {
   struct timespec t;
@@ -146,6 +148,7 @@ static int first_candidate_is_ipv6(const char *host, unsigned port, int *count) 
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   ck_assert_int_eq(getaddrinfo(host, portstr, &hints, &res), 0);
+  ck_assert_ptr_nonnull(res);
   *count = 0;
   for (const struct addrinfo *ai = res; ai; ai = ai->ai_next) (*count)++;
   v6 = res->ai_family == AF_INET6;
@@ -239,6 +242,48 @@ START_TEST(sendto_tos_marks_each_packet_without_socket_state) {
   }
   close(rx);
   close(tx);
+}
+END_TEST
+
+#define HELD_FDS_MAX 64
+static int held_fds[HELD_FDS_MAX];
+static int n_held_fds;
+
+static void exhaust_fds(void) {
+  struct rlimit rl;
+  int fd;
+
+  ck_assert_int_eq(getrlimit(RLIMIT_NOFILE, &rl), 0);
+  rl.rlim_cur = HELD_FDS_MAX;
+  ck_assert_int_eq(setrlimit(RLIMIT_NOFILE, &rl), 0);
+  n_held_fds = 0;
+  while (n_held_fds < HELD_FDS_MAX && (fd = open("/dev/null", O_RDONLY)) >= 0) held_fds[n_held_fds++] = fd;
+}
+
+static void release_fds(void) {
+  while (n_held_fds > 0) close(held_fds[--n_held_fds]);
+}
+
+START_TEST(netconnect_tcp_fails_when_no_descriptor_is_left) {
+  net_err_reason_t reason = NET_ERR_COUNT;
+  int port = free_loopback_tcp_port();
+
+  exhaust_fds();
+  ck_assert_int_eq(netconnect_tcp("127.0.0.1", (unsigned)port, 200, &reason), -1);
+  release_fds();
+}
+END_TEST
+
+START_TEST(netconnect_tcp_start_fails_when_no_descriptor_is_left) {
+  netconnect_pending_t *pending = NULL;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  int port = free_loopback_tcp_port();
+
+  exhaust_fds();
+  ck_assert_int_eq(netconnect_tcp_start("127.0.0.1", (unsigned)port, &pending, &reason), -1);
+  ck_assert_ptr_null(pending);
+  ck_assert_int_eq(netconnect_tcp_start("localhost", (unsigned)port, &pending, &reason), -1);
+  release_fds();
 }
 END_TEST
 
@@ -384,6 +429,58 @@ START_TEST(netconnect_tcp_finish_reports_error_after_all_candidates_fail) {
 }
 END_TEST
 
+START_TEST(reason_names_cover_every_value_and_out_of_range) {
+  ck_assert_str_eq(net_err_reason_name(NET_ERR_DNS), "dns");
+  ck_assert_str_eq(net_err_reason_name(NET_ERR_CONNECT), "connect");
+  ck_assert_str_eq(net_err_reason_name(NET_ERR_TIMEOUT), "timeout");
+  ck_assert_str_eq(net_err_reason_name(NET_ERR_TLS), "tls");
+  ck_assert_str_eq(net_err_reason_name(NET_ERR_HTTP), "http");
+  ck_assert_str_eq(net_err_reason_name(NET_ERR_FORMAT), "format");
+  ck_assert_str_eq(net_err_reason_name(NET_ERR_READ), "read");
+  ck_assert_str_eq(net_err_reason_name(NET_ERR_EOF), "eof");
+  ck_assert_str_eq(net_err_reason_name(NET_ERR_OTHER), "other");
+  ck_assert_str_eq(net_err_reason_name(NET_ERR_COUNT), "other");
+  ck_assert_str_eq(net_err_reason_name((net_err_reason_t)99), "other");
+}
+END_TEST
+
+START_TEST(netconnect_tcp_gives_up_when_stop_is_requested) {
+  unsigned port;
+  int lfd = listen_loopback(&port, 0);
+  int fillers[8];
+  net_err_reason_t reason = NET_ERR_COUNT;
+  for (int i = 0; i < 8; i++) {
+    struct sockaddr_in addr;
+    fillers[i] = socket(AF_INET, SOCK_STREAM, 0);
+    ck_assert_int_eq(fcntl(fillers[i], F_SETFL, fcntl(fillers[i], F_GETFL, 0) | O_NONBLOCK), 0);
+    memset(&addr, 0, sizeof addr);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((unsigned short)port);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    connect(fillers[i], (struct sockaddr *)&addr, sizeof addr);
+  }
+  signal_request_stop();
+  ck_assert_int_eq(netconnect_tcp("127.0.0.1", port, 5000, &reason), -1);
+  for (int i = 0; i < 8; i++) close(fillers[i]);
+  close(lfd);
+}
+END_TEST
+
+START_TEST(sendto_tos_rejects_oversized_address) {
+  char big[sizeof(struct sockaddr_storage) + 8];
+  memset(big, 0, sizeof big);
+  ck_assert_int_eq(net_sendto_tos(-1, "x", 1, (const struct sockaddr *)big, (socklen_t)sizeof big, 0), -1);
+}
+END_TEST
+
+START_TEST(netaddr_fill_rejects_bad_text) {
+  struct sockaddr_storage ss;
+  socklen_t len;
+  ck_assert_int_eq(netaddr_fill(AF_INET, "not-an-ip", 1, &ss, &len), -1);
+  ck_assert_int_eq(netaddr_fill(AF_INET6, "not-an-ip", 1, &ss, &len), -1);
+}
+END_TEST
+
 static Suite *netconnect_suite(void) {
   Suite *s = suite_create("netconnect");
   TCase *tc = tcase_create("core");
@@ -405,6 +502,12 @@ static Suite *netconnect_suite(void) {
   tcase_add_test(tc, dscp_parse_symbolic_names);
   tcase_add_test(tc, dscp_parse_raw_numeric);
   tcase_add_test(tc, dscp_parse_rejects_invalid);
+  tcase_add_test(tc, reason_names_cover_every_value_and_out_of_range);
+  tcase_add_test(tc, netconnect_tcp_gives_up_when_stop_is_requested);
+  tcase_add_test(tc, sendto_tos_rejects_oversized_address);
+  tcase_add_test(tc, netaddr_fill_rejects_bad_text);
+  tcase_add_test(tc, netconnect_tcp_fails_when_no_descriptor_is_left);
+  tcase_add_test(tc, netconnect_tcp_start_fails_when_no_descriptor_is_left);
   suite_add_tcase(s, tc);
   return s;
 }

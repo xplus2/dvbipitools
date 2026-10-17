@@ -813,6 +813,33 @@ START_TEST(unknown_method_is_405) {
 }
 END_TEST
 
+START_TEST(gena_errors_map_to_their_status_codes) {
+  g_cfg.enable_dlna = 1;
+  dispatch_gena("SUBSCRIBE", "/dlna/cd_event", "", "upnp:event", "", "", "");
+  ck_assert_int_eq(g_fake.n_content, 0);
+  ck_assert_str_eq(g_fake.status, "412");
+  dispatch_gena("SUBSCRIBE", "/dlna/cd_event", "uuid:bogus", "upnp:event", "<http://192.0.2.1:9/ev>", "", "");
+  ck_assert_str_eq(g_fake.status, "400");
+  dispatch_gena("UNSUBSCRIBE", "/dlna/cd_event", "uuid:unknown", "", "", "", "");
+  ck_assert_str_eq(g_fake.status, "412");
+  dispatch_gena("UNSUBSCRIBE", "/dlna/cm_event", "", "", "", "", "");
+  ck_assert_str_eq(g_fake.status, "412");
+}
+END_TEST
+
+START_TEST(export_playlist_paths_are_answered) {
+  static const char *const paths[] = {"/export/nosuchformat.m3u", "/export/ts.m3u", "/export/hls.m3u", "/export/ts.xspf", "/export/ts.json"};
+  dispatch_request("GET", paths[_i], "", "");
+  ck_assert_int_gt(g_fake.n_content + (g_fake.status[0] != '\0'), 0);
+}
+END_TEST
+
+START_TEST(export_playlist_head_has_no_body) {
+  dispatch_request("HEAD", "/export/ts.m3u", "", "");
+  if (g_fake.n_content) ck_assert_int_eq(g_fake.content_has_body, 0);
+}
+END_TEST
+
 static Suite *httpng_suite(void) {
   Suite *s = suite_create("dipixy_httpng");
   TCase *tc = tcase_create("routes");
@@ -857,6 +884,9 @@ static Suite *httpng_suite(void) {
   tcase_add_test(tc, dlna_unsubscribe_is_empty_200);
   tcase_add_test(tc, dlna_control_without_soapaction_is_400);
   tcase_add_test(tc, unknown_method_is_405);
+  tcase_add_test(tc, gena_errors_map_to_their_status_codes);
+  tcase_add_loop_test(tc, export_playlist_paths_are_answered, 0, 5);
+  tcase_add_test(tc, export_playlist_head_has_no_body);
   suite_add_tcase(s, tc);
   return s;
 }

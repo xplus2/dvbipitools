@@ -2927,6 +2927,141 @@ START_TEST(remux_builds_the_hbbtv_ait_or_reports_a_url_that_does_not_fit) {
 }
 END_TEST
 
+START_TEST(lifecycle_service_type_follows_the_streams_when_the_sdt_has_none) {
+  static const struct {
+    unsigned stream_type;
+    unsigned want;
+  } t[] = {{0x1B, 0x01}, {0x0F, 0x02}, {0x06, 0x01}};
+  unsigned char pkts[2][188];
+  psi_t *psi = psi_new();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  fixture_programme_packets(101, 0x0101, t[_i].stream_type, 0x0101, pkts);
+  psi_feed(psi, pkts[0]);
+  psi_feed(psi, pkts[1]);
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  ck_assert_uint_eq(r->service_type, t[_i].want);
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+START_TEST(lifecycle_sdt_and_nit_modes_choose_names_and_presence) {
+  static const struct {
+    int sdt_mode;
+    const char *sdt_text;
+    const char *provider;
+    const char *default_provider;
+    int nit_mode;
+    const char *nit_text;
+    int send_sdt;
+    int send_nit;
+  } t[] = {
+      {TABLE_DROP, "", "", "", TABLE_DROP, "", 0, 0},
+      {TABLE_OVERRIDE, "Svc", "Prov", "", TABLE_OVERRIDE, "Net", 1, 1},
+      {TABLE_OVERRIDE, "Svc", "", "DefProv", TABLE_OVERRIDE, "Net", 1, 1},
+      {TABLE_OVERRIDE, "Svc", "", "", TABLE_DROP, "", 1, 0},
+      {TABLE_PASSTHROUGH, "", "OwnProv", "", TABLE_PASSTHROUGH, "", 0, 0},
+  };
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  input.sdt_mode = t[_i].sdt_mode;
+  bufcpy(input.sdt_text, sizeof input.sdt_text, t[_i].sdt_text);
+  bufcpy(input.provider_text, sizeof input.provider_text, t[_i].provider);
+  bufcpy(cfg.default_provider_text, sizeof cfg.default_provider_text, t[_i].default_provider);
+  cfg.nit_mode = t[_i].nit_mode;
+  bufcpy(cfg.nit_text, sizeof cfg.nit_text, t[_i].nit_text);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  ck_assert_int_eq(r->send_sdt, t[_i].send_sdt);
+  ck_assert_int_eq(r->send_nit, t[_i].send_nit);
+  if (t[_i].sdt_mode == TABLE_OVERRIDE && !t[_i].provider[0] && !t[_i].default_provider[0]) ck_assert_str_eq(r->provider_name, TOOL_NAME);
+  if (t[_i].sdt_mode == TABLE_OVERRIDE && t[_i].default_provider[0] && !t[_i].provider[0]) ck_assert_str_eq(r->provider_name, t[_i].default_provider);
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+START_TEST(lifecycle_hbbtv_url_too_long_disables_the_ait) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  static char url[4096];
+  memset(url, 'u', sizeof url - 1);
+  memcpy(url, "http://", 7);
+  url[sizeof url - 1] = '\0';
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  input.hbbtv_url = url;
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  ck_assert_int_eq(r->send_ait, 0);
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
+START_TEST(lifecycle_hold_setup_picks_a_reference_stream_and_updates_lead) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  ck_assert_int_eq(remux_set_hold(r, NULL, NULL, NULL, 40), 0);
+  ck_assert_uint_eq((unsigned)r->hold_lead_cfg90, 3600u);
+  ck_assert_int_ge(r->hold_ref, 0);
+  ck_assert_int_eq(remux_set_hold(r, NULL, NULL, NULL, 80), 0);
+  ck_assert_uint_eq((unsigned)r->hold_lead_cfg90, 7200u);
+  remux_free(r);
+  remux_free(NULL);
+  psi_free(psi);
+}
+END_TEST
+
+START_TEST(lifecycle_cc_offsets_mark_known_counters) {
+  psi_t *psi = build_discovery_psi();
+  config_t cfg;
+  dipitvhead_input_t input;
+  remux_t *r;
+  out_program_pids_t pids;
+  cc_offsets_t m;
+  memset(&m, 0, sizeof m);
+  m.last[0] = 0x10;
+  m.last[1] = 0x00;
+  base_cfg(&cfg);
+  base_input(&input);
+  out_program_pids(0, &pids);
+  r = remux_new(&cfg, &input, psi, &pids, 1);
+  ck_assert_ptr_nonnull(r);
+  remux_set_cc_offsets(r, &m);
+  ck_assert_uint_eq(m.last[0], 0x30u);
+  ck_assert_uint_eq(m.last[1], 0x00u);
+  remux_set_cc_offsets(r, NULL);
+  remux_free(r);
+  psi_free(psi);
+}
+END_TEST
+
 static Suite *remux_suite(void) {
   Suite *s = suite_create("remux");
   TCase *tc = tcase_create("core");
@@ -2997,6 +3132,11 @@ static Suite *remux_suite(void) {
   tcase_add_loop_test(tc, remux_resolves_sdt_names_and_providers, 0, (int)(sizeof sdt_cases / sizeof sdt_cases[0]));
   tcase_add_loop_test(tc, remux_resolves_nit_names, 0, (int)(sizeof nit_cases / sizeof nit_cases[0]));
   tcase_add_test(tc, remux_builds_the_hbbtv_ait_or_reports_a_url_that_does_not_fit);
+  tcase_add_loop_test(tc, lifecycle_service_type_follows_the_streams_when_the_sdt_has_none, 0, 3);
+  tcase_add_loop_test(tc, lifecycle_sdt_and_nit_modes_choose_names_and_presence, 0, 5);
+  tcase_add_test(tc, lifecycle_hbbtv_url_too_long_disables_the_ait);
+  tcase_add_test(tc, lifecycle_hold_setup_picks_a_reference_stream_and_updates_lead);
+  tcase_add_test(tc, lifecycle_cc_offsets_mark_known_counters);
   suite_add_tcase(s, tc);
   return s;
 }

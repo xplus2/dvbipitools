@@ -743,6 +743,50 @@ START_TEST(cmdline_pcr_mode_wins_over_config) {
 }
 END_TEST
 
+START_TEST(config_input_iface_and_al_fec_keys_pair_with_their_input) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, NULL};
+  config_t cfg = {0};
+  write_cfg(path, "input:\n  - rtp://@239.1.1.1:5000:\n      iface: eth7\n      al-fec-in: 10:5\n      al-fec-port-in: 6004\nmcast: 239.1.3.1:5000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_str_eq(cfg.inputs[0].iface_in, "eth7");
+  ck_assert_uint_eq(cfg.inputs[0].al_fec_l_in, 10u);
+  ck_assert_uint_eq(cfg.inputs[0].al_fec_d_in, 5u);
+  ck_assert_uint_eq(cfg.inputs[0].al_fec_port_in, 6004u);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(config_input_al_fec_rejects_bad_values) {
+  static const char *const bad[] = {
+      "input:\n  - rtp://@239.1.1.1:5000:\n      al-fec-in: 41:1\nmcast: 239.1.3.1:5000\n",
+      "input:\n  - rtp://@239.1.1.1:5000:\n      al-fec-port-in: 0\nmcast: 239.1.3.1:5000\n",
+  };
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, NULL};
+  config_t cfg = {0};
+  write_cfg(path, bad[_i]);
+  ck_assert_int_ne(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(config_out_iface_and_remote_peers) {
+  char path[] = "/tmp/dipitvhead_cfg_XXXXXX";
+  char *argv[] = {"dipitvhead", "-c", path, NULL};
+  config_t cfg = {0};
+  write_cfg(path, "input: udp://@239.1.1.1:5000\nout-iface: eth9\nremote:\n  - rist://1.2.3.4:6000\n  - rist://1.2.3.5:6000\n");
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  unlink(path);
+  ck_assert_str_eq(cfg.iface_out, "eth9");
+  ck_assert_uint_eq(cfg.n_rist, 2u);
+  ck_assert_str_eq(cfg.rist_uri[1], "rist://1.2.3.5:6000");
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(config_missing_file_is_error) {
   char *argv[] = {"dipitvhead", "-c", "/nonexistent/dipitvhead.yaml", NULL};
   config_t cfg = {0};
@@ -1409,6 +1453,9 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, config_inputs_take_keyed_items);
   tcase_add_test(tc, config_input_srt_keys_pair_with_their_input);
   tcase_add_test(tc, config_cas_ecmg_takes_keyed_items);
+  tcase_add_test(tc, config_input_iface_and_al_fec_keys_pair_with_their_input);
+  tcase_add_loop_test(tc, config_input_al_fec_rejects_bad_values, 0, 2);
+  tcase_add_test(tc, config_out_iface_and_remote_peers);
   tcase_add_test(tc, config_item_without_source_is_error);
   tcase_add_test(tc, cmdline_lists_replace_config_lists);
   tcase_add_test(tc, cmdline_scoped_option_needs_its_own_input);

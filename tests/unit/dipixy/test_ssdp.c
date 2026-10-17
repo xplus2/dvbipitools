@@ -250,6 +250,60 @@ START_TEST(start_and_stop_are_idempotent) {
 }
 END_TEST
 
+static int bind_udp_any(unsigned short *port_out) {
+  struct sockaddr_in a;
+  socklen_t len = sizeof a;
+  int fd = socket(AF_INET, SOCK_DGRAM, 0);
+  ck_assert_int_ge(fd, 0);
+  memset(&a, 0, sizeof a);
+  a.sin_family = AF_INET;
+  a.sin_addr.s_addr = htonl(INADDR_ANY);
+  ck_assert_int_eq(bind(fd, (struct sockaddr *)&a, sizeof a), 0);
+  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&a, &len), 0);
+  *port_out = ntohs(a.sin_port);
+  return fd;
+}
+
+static void send_to(int fd, const char *ip, unsigned short port, const char *msg) {
+  struct sockaddr_in d;
+  memset(&d, 0, sizeof d);
+  d.sin_family = AF_INET;
+  d.sin_port = htons(port);
+  ck_assert_int_eq(inet_pton(AF_INET, ip, &d.sin_addr), 1);
+  ck_assert_int_gt((int)sendto(fd, msg, strlen(msg), 0, (struct sockaddr *)&d, sizeof d), 0);
+}
+
+START_TEST(running_thread_answers_group_searches_only) {
+  config_t cfg;
+  unsigned short port;
+  int fd = bind_udp_any(&port);
+  struct timeval tv = {3, 0};
+  char buf[1024];
+  int replies = 0;
+  static const char search[] = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 1\r\nST: upnp:rootdevice\r\n\r\n";
+
+  init_cfg(&cfg);
+  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+  ssdp_start(&cfg);
+  usleep(300000);
+  send_to(fd, "239.255.255.250", 1900, "garbage datagram");
+  send_to(fd, "239.255.255.250", 1900, "M-SEARCH * HTTP/1.1\r\nMAN: \"bad\"\r\nMX: 1\r\nST: ssdp:all\r\n\r\n");
+  send_to(fd, "127.0.0.1", 1900, search);
+  send_to(fd, "239.255.255.250", 1900, search);
+  send_to(fd, "239.255.255.250", 1900, search);
+  for (int i = 0; i < 20; i++) {
+    ssize_t n = recv(fd, buf, sizeof buf - 1, 0);
+    if (n <= 0) break;
+    buf[n] = '\0';
+    if (strstr(buf, "HTTP/1.1 200 OK") && strstr(buf, "upnp:rootdevice")) replies++;
+    if (replies) break;
+  }
+  ssdp_stop();
+  close(fd);
+  ck_assert_int_eq(replies, 1);
+}
+END_TEST
+
 START_TEST(disabled_dlna_starts_nothing) {
   config_t cfg;
 
@@ -270,6 +324,7 @@ static Suite *ssdp_suite(void) {
   tcase_add_test(tc, msearch_header_truncates_to_the_buffer);
   tcase_add_test(tc, device_uuid_is_a_stable_version_4_uuid);
   tcase_add_test(tc, disabled_dlna_starts_nothing);
+  tcase_add_test(tc, running_thread_answers_group_searches_only);
   tcase_add_test(tc, search_all_answers_for_every_type);
   tcase_add_test(tc, search_for_a_type_answers_once);
   tcase_add_test(tc, search_for_the_device_uuid_answers_once);

@@ -21,7 +21,10 @@ static size_t build_mpd(const mpd_fmt_ctx_t *ctx, char *mpd, size_t cap) {
   char avail[32];
   char publish[32];
   char codecs[64];
-  double min_update, tsb_depth, pres_delay, min_buffer;
+  double min_update;
+  double tsb_depth;
+  double pres_delay;
+  double min_buffer;
   int ll = ctx->want_ll && snap->part_target > 0.0;
   size_t utc_len = ll ? xml_escaped_len(ctx->utc_url) : 0;
   size_t audio_max = split ? DASH_MPD_AUDIO_MAX + utc_len : 0;
@@ -224,7 +227,7 @@ static int dash_resolve_mpd(const capture_ctx_t *ctx, const pid_filter_t *filter
   return 1;
 }
 
-int dash_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int want_ll, const char *utc_url, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
+int dash_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int want_ll, const char *utc_url, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
   char cors_hdr[192];
   dash_mpd_resolve_t r;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
@@ -239,7 +242,7 @@ int dash_serve(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsign
   return 1;
 }
 
-int dash_render(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int want_ll, const char *utc_url, int is_head, hls_resp_t *out) {
+int dash_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int want_ll, const char *utc_url, int is_head, hls_resp_t *out) {
   dash_mpd_resolve_t r;
   memset(out, 0, sizeof *out);
   dash_resolve_mpd(ctx, filter, pmt_pid, lcevc, want_ll, utc_url, &r);

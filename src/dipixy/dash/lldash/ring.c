@@ -24,7 +24,7 @@ size_t dash_lldash_ring_read(int slot, uint8_t *buf, size_t maxlen) {
 }
 
 int dash_lldash_ring_pending(int slot) {
-  dashchunk_sub_t *s;
+  const dashchunk_sub_t *s;
   if (slot < 0 || slot >= g_lldash_subs_n) return 0;
   s = &g_lldash_subs[slot];
   return byte_ring_unsent(&s->ring) != 0;

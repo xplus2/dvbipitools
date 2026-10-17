@@ -255,10 +255,44 @@ START_TEST(malformed_request_streams_never_break_the_server) {
 }
 END_TEST
 
+static void build_post_with_body(buf_t *out, size_t body_len) {
+  buf_t *sec = heap_buf();
+
+  put_text_field(sec, ":method", "POST");
+  put_text_field(sec, ":scheme", "https");
+  put_text_field(sec, ":authority", "localhost");
+  put_text_field(sec, ":path", "/no/such/route");
+  put_headers_frame(out, sec);
+  put_varint(out, FT_DATA);
+  put_varint(out, body_len);
+  ck_assert_uint_le(out->len + body_len, sizeof out->data);
+  memset(out->data + out->len, 'b', body_len);
+  out->len += body_len;
+  free(sec);
+}
+
+START_TEST(post_body_is_collected_and_the_request_is_answered) {
+  static const size_t sizes[] = {16, 9000};
+  h3rig_t h;
+  buf_t *wire = heap_buf();
+  int64_t sid;
+
+  h3r_open(&h);
+  build_post_with_body(wire, sizes[_i]);
+  ck_assert_int_eq(ngtcp2_conn_open_bidi_stream(h.qc, &sid, NULL), 0);
+  h3r_send_raw(&h, sid, wire->data, wire->len, 1);
+  ck_assert_int_eq(h3r_pump_until(&h, h3r_cond_raw_status, &sid), 1);
+  ck_assert_int_ne(h3r_raw_status(&h, sid), 0);
+  free(wire);
+  h3r_close(&h);
+}
+END_TEST
+
 static Suite *req_suite(void) {
   Suite *s = suite_create("dipixy_h3_req");
   TCase *tc = tcase_create("core");
   tcase_set_timeout(tc, 30);
+  tcase_add_loop_test(tc, post_body_is_collected_and_the_request_is_answered, 0, 2);
   tcase_add_loop_test(tc, malformed_request_streams_never_break_the_server, 0, (int)(sizeof cases / sizeof cases[0]));
   suite_add_tcase(s, tc);
   return s;

@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "lib/dash/live.h"
+#include "lib/dash/live/live_int.h"
 
 typedef struct {
   int listen_fd;
@@ -765,6 +766,133 @@ START_TEST(dash_live_joins_timeline_at_newest_segment) {
 }
 END_TEST
 
+static dash_live_t *live_with_periods(unsigned n, const unsigned long long *starts, int timeline, int dynamic) {
+  dash_live_t *h = calloc(1, sizeof *h);
+  ck_assert_ptr_nonnull(h);
+  h->mpd.is_dynamic = dynamic;
+  h->mpd.has_availability_start = dynamic;
+  h->mpd.availability_start_ms = dash_wall_ms();
+  h->mpd.n_periods = n;
+  for (unsigned i = 0; i < n; i++) {
+    dash_adaptation_set_t *as = &h->mpd.periods[i].adaptation_sets[0];
+    dash_representation_t *r = &as->representations[0];
+    h->mpd.periods[i].start_ms = starts[i];
+    h->mpd.periods[i].n_adaptation_sets = 1;
+    snprintf(as->mime_type, sizeof as->mime_type, "video/mp4");
+    as->n_representations = 1;
+    r->bandwidth = 1000 + i;
+    r->timescale = 1000;
+    r->duration = 2000;
+    snprintf(r->id, sizeof r->id, "r%u", i);
+    snprintf(r->init_url, sizeof r->init_url, "http://x/init%u.mp4", i);
+    snprintf(r->media_url_tmpl, sizeof r->media_url_tmpl, "http://x/s%u-$Number$.m4s", i);
+    if (timeline) {
+      r->n_timeline = 1;
+      r->timeline[0].t = 0;
+      r->timeline[0].d = 2000;
+      r->timeline[0].r = 9;
+    }
+  }
+  return h;
+}
+
+START_TEST(period_helpers_find_pick_and_report_last) {
+  static const unsigned long long starts[3] = {0, 20000, 40000};
+  dash_live_t *h = live_with_periods(3, starts, 0, 0);
+  unsigned out = 99;
+  ck_assert_int_eq(pick_representation(h, 0), 1);
+  ck_assert_int_eq(h->period_idx, 0);
+  ck_assert_int_eq(last_period(h), 0);
+  ck_assert_int_eq(find_period(h, &out), 1);
+  ck_assert_uint_eq(out, 0u);
+  ck_assert_int_eq(pick_representation(h, 2), 1);
+  ck_assert_int_eq(last_period(h), 1);
+  ck_assert_int_eq(find_period(h, &out), 1);
+  ck_assert_uint_eq(out, 2u);
+  h->cur_period_start_ms = 12345;
+  ck_assert_int_eq(find_period(h, &out), 0);
+  h->as_mime[0] = '\0';
+  h->adaptation_set_index = 5;
+  ck_assert_int_eq(pick_representation(h, 1), 0);
+  h->adaptation_set_index = 0;
+  snprintf(h->as_mime, sizeof h->as_mime, "audio/mp4");
+  ck_assert_int_eq(pick_representation(h, 1), 1);
+  free(h);
+}
+END_TEST
+
+START_TEST(switch_period_follows_the_playback_position) {
+  static const unsigned long long starts[3] = {0, 4000, 8000};
+  dash_live_t *h = live_with_periods(3, starts, _i, 0);
+  ck_assert_int_eq(pick_representation(h, 0), 1);
+  h->seg_idx = 0;
+  h->seg_time = 0;
+  switch_period_if_due(h);
+  ck_assert_uint_eq(h->period_idx, 0u);
+  h->seg_idx = 2;
+  h->seg_time = 4000;
+  switch_period_if_due(h);
+  ck_assert_uint_eq(h->period_idx, 1u);
+  h->seg_idx = 9;
+  h->seg_time = 9000;
+  switch_period_if_due(h);
+  ck_assert_uint_eq(h->period_idx, 2u);
+  switch_period_if_due(h);
+  ck_assert_uint_eq(h->period_idx, 2u);
+  free(h);
+}
+END_TEST
+
+START_TEST(switch_period_is_a_noop_for_single_period_and_wall_anchored_resets_index) {
+  static const unsigned long long one[1] = {0};
+  static const unsigned long long two[2] = {0, 4000};
+  dash_live_t *h = live_with_periods(1, one, 0, 0);
+  ck_assert_int_eq(pick_representation(h, 0), 1);
+  switch_period_if_due(h);
+  ck_assert_uint_eq(h->period_idx, 0u);
+  free(h);
+  h = live_with_periods(2, two, 0, 1);
+  h->mpd.availability_start_ms = dash_wall_ms() - 60000;
+  ck_assert_int_eq(pick_representation(h, 0), 1);
+  h->seg_idx = 3;
+  switch_period_if_due(h);
+  ck_assert_uint_eq(h->period_idx, 1u);
+  free(h);
+}
+END_TEST
+
+START_TEST(join_position_modes) {
+  static const unsigned long long starts[1] = {0};
+  dash_live_t *h = live_with_periods(1, starts, 1, 1);
+  ck_assert_int_eq(pick_representation(h, 0), 1);
+  join_position(h);
+  ck_assert_uint_eq(h->seg_time, 18000ULL);
+  free(h);
+  h = live_with_periods(1, starts, 1, 0);
+  ck_assert_int_eq(pick_representation(h, 0), 1);
+  join_position(h);
+  ck_assert_uint_eq(h->seg_time, 0ULL);
+  free(h);
+  h = live_with_periods(1, starts, 0, 1);
+  h->mpd.availability_start_ms = dash_wall_ms() - 10000;
+  ck_assert_int_eq(pick_representation(h, 0), 1);
+  join_position(h);
+  ck_assert_uint_gt(h->seg_idx, 0u);
+  h->mpd.availability_start_ms = dash_wall_ms() + 100000;
+  join_position(h);
+  ck_assert_uint_eq(h->seg_idx, 0u);
+  free(h);
+  h = live_with_periods(1, starts, 0, 0);
+  ck_assert_int_eq(pick_representation(h, 0), 1);
+  join_position(h);
+  ck_assert_uint_eq(h->seg_idx, 0u);
+  ck_assert_double_eq(segment_duration_s(h), 2.0);
+  h->repr.duration = 0;
+  ck_assert_double_eq(segment_duration_s(h), (double)DASH_DEFAULT_SEGMENT_DURATION_S);
+  free(h);
+}
+END_TEST
+
 static Suite *dash_live_suite(void) {
   Suite *s = suite_create("dash_live");
   TCase *tc = tcase_create("core");
@@ -790,6 +918,10 @@ static Suite *dash_live_suite(void) {
   tcase_add_test(tc, dash_live_joins_wall_clock_edge);
   tcase_add_test(tc, dash_live_retries_unavailable_segment);
   tcase_add_test(tc, dash_live_joins_timeline_at_newest_segment);
+  tcase_add_test(tc, period_helpers_find_pick_and_report_last);
+  tcase_add_loop_test(tc, switch_period_follows_the_playback_position, 0, 2);
+  tcase_add_test(tc, switch_period_is_a_noop_for_single_period_and_wall_anchored_resets_index);
+  tcase_add_test(tc, join_position_modes);
   suite_add_tcase(s, tc);
   return s;
 }

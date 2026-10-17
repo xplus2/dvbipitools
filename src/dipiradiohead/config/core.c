@@ -139,7 +139,7 @@ int rdh_item_hook(void *c, const char *list, int begin, char *e, size_t n) {
 }
 
 radio_input_t *rdh_cur_input(config_t *cfg, char *e, size_t n) {
-  if (!cfg->parse_item.input) {
+  if (!cfg->parse_item.input || !cfg->parse_item.have_input) {
     bufcpy(e, n, "only valid inside an input list");
     return NULL;
   }
@@ -147,7 +147,7 @@ radio_input_t *rdh_cur_input(config_t *cfg, char *e, size_t n) {
 }
 
 cas_vendor_t *rdh_cur_vendor(config_t *cfg, char *e, size_t n) {
-  if (!cfg->parse_item.vendor) {
+  if (!cfg->parse_item.vendor || !cfg->parse_item.have_vendor) {
     bufcpy(e, n, "only valid inside a cas.ecmg list");
     return NULL;
   }

@@ -115,7 +115,7 @@ void dash_lldash_flush_ready(int tid) {
   if (tid < 0 || tid >= DASHCHUNK_MAX_REACTOR_THREADS) return;
   i = g_lldash_tid_head[tid];
   while (i != -1) {
-    dashchunk_sub_t *s = &g_lldash_subs[i];
+    const dashchunk_sub_t *s = &g_lldash_subs[i];
     int next = s->tid_next;
     if (atomic_load_explicit(&s->alive, memory_order_relaxed) == DASHCHUNK_SUB_ALIVE &&
         (dash_lldash_ring_pending(i) || atomic_load_explicit(&s->finalized, memory_order_acquire) ||

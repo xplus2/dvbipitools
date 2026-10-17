@@ -423,6 +423,26 @@ START_TEST(overflowed_ring_resets_the_stream) {
 }
 END_TEST
 
+START_TEST(tspush_reset_resets_a_bound_stream_and_ignores_the_rest) {
+  mem_t m;
+  int32_t sid;
+  client_resp_t *st;
+
+  mem_open(&m);
+  h2_tspush_reset(-1);
+  h2_tspush_reset(FAKE_SUBS);
+  h2_tspush_reset(3);
+  sid = mem_request(&m);
+  ck_assert_int_eq(h2_tspush_dispatch(&m.conn, &m.fake_conn, sid, 0, 0), 1);
+  h2_tspush_reset(0);
+  mem_pump(&m);
+  st = h2c_stream_for(&m.cl, sid);
+  ck_assert_int_eq(st->closed, 1);
+  ck_assert_uint_eq(st->close_code, NGHTTP2_INTERNAL_ERROR);
+  mem_close(&m);
+}
+END_TEST
+
 START_TEST(finalized_dash_segment_ends_the_stream_once_drained) {
   static const uint8_t payload[] = "chunk";
   mem_t m;
@@ -456,6 +476,7 @@ static Suite *push_suite(void) {
   tcase_add_loop_test(tc, closing_an_unrelated_stream_changes_nothing, 0, KIND_COUNT);
   tcase_add_loop_test(tc, wake_of_an_unbound_subscription_is_a_noop, 0, KIND_COUNT);
   tcase_add_test(tc, tspush_wake_ignores_out_of_range_indexes);
+  tcase_add_test(tc, tspush_reset_resets_a_bound_stream_and_ignores_the_rest);
   tcase_add_loop_test(tc, overflowed_ring_resets_the_stream, 0, 2);
   tcase_add_test(tc, finalized_dash_segment_ends_the_stream_once_drained);
   suite_add_tcase(s, tc);

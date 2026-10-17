@@ -278,6 +278,79 @@ START_TEST(duplicate_path_pseudo_header_is_rejected_with_protocol_error) {
 }
 END_TEST
 
+static size_t raw_headers_open(uint8_t *out, int32_t sid, const nghttp2_nv *nva, size_t n) {
+  nghttp2_hd_deflater *d;
+  uint8_t block[1024];
+  ssize_t blen;
+  ck_assert_int_eq(nghttp2_hd_deflate_new(&d, 4096), 0);
+  blen = nghttp2_hd_deflate_hd(d, block, sizeof block, nva, n);
+  ck_assert_int_gt((int)blen, 0);
+  nghttp2_hd_deflate_del(d);
+  return h2c_raw_frame(out, NGHTTP2_HEADERS, NGHTTP2_FLAG_END_HEADERS, sid, block, (size_t)blen);
+}
+
+static int count_response_headers(rig_t *r, int32_t sid) {
+  h2c_frame_t out[16];
+  size_t frames = rig_scan_frames(r, out, 16);
+  int n = 0;
+  for (size_t i = 0; i < frames; i++)
+    if (out[i].type == NGHTTP2_HEADERS && out[i].sid == sid) n++;
+  return n;
+}
+
+static void post_with_chunks(rig_t *r, int32_t sid, const char *path, size_t chunk, size_t nchunks, int end_with_empty) {
+  uint8_t frame[H2C_IO_BUF];
+  uint8_t payload[4096];
+  nghttp2_nv nva[] = {
+      MAKE_NV_LIT(":method", "POST"),
+      MAKE_NV_LIT(":scheme", "https"),
+      MAKE_NV_LIT(":authority", "localhost"),
+      {(uint8_t *)":path", (uint8_t *)path, 5, strlen(path), NGHTTP2_NV_FLAG_NONE},
+  };
+  size_t n = raw_headers_open(frame, sid, nva, 4);
+  memset(payload, 'b', sizeof payload);
+  rig_client_send_raw(r, frame, n);
+  if (rig_server_alive(r)) rig_server_read(r);
+  for (size_t i = 0; i < nchunks; i++) {
+    int last = (i + 1 == nchunks) && !end_with_empty;
+    n = h2c_raw_frame(frame, NGHTTP2_DATA, last ? NGHTTP2_FLAG_END_STREAM : NGHTTP2_FLAG_NONE, sid, payload, chunk);
+    rig_client_send_raw(r, frame, n);
+    if (rig_server_alive(r)) rig_server_read(r);
+  }
+  if (end_with_empty) {
+    n = h2c_raw_frame(frame, NGHTTP2_DATA, NGHTTP2_FLAG_END_STREAM, sid, payload, 0);
+    rig_client_send_raw(r, frame, n);
+    if (rig_server_alive(r)) rig_server_read(r);
+  }
+}
+
+START_TEST(post_body_is_collected_until_end_stream_then_dispatched) {
+  static const struct {
+    size_t chunk;
+    size_t nchunks;
+    int empty_end;
+  } t[] = {{100, 1, 0}, {1000, 3, 0}, {1000, 2, 1}, {4096, 3, 0}};
+  rig_t r;
+  rig_open(&r);
+  rig_exchange(&r);
+  post_with_chunks(&r, 1, "/dlna/cd_control", t[_i].chunk, t[_i].nchunks, t[_i].empty_end);
+  ck_assert(rig_server_alive(&r));
+  ck_assert_int_eq(count_response_headers(&r, 1), 1);
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(post_body_over_the_limit_is_flagged_and_still_answered) {
+  rig_t r;
+  rig_open(&r);
+  rig_exchange(&r);
+  post_with_chunks(&r, 1, "/dlna/cd_control", 4096, 4, 0);
+  ck_assert(rig_server_alive(&r));
+  ck_assert_int_eq(count_response_headers(&r, 1), 1);
+  rig_close(&r);
+}
+END_TEST
+
 START_TEST(reactor_loop_routes_h2_connections_by_event_type) {
   rig_t r;
   reactor_listeners_t rl;
@@ -364,6 +437,85 @@ START_TEST(peer_hangup_closes_the_connection) {
 }
 END_TEST
 
+static h2_stream_t *ops_rig_stream(rig_t *r, int32_t *sid_out) {
+  int32_t sid = rig_request(r, "GET", PATH_UNKNOWN, NULL, 0);
+  h2_stream_t *s;
+
+  rig_feed_server_direct(r);
+  s = h2_find_stream(r->h2, sid);
+  ck_assert_ptr_nonnull(s);
+  *sid_out = sid;
+  return s;
+}
+
+START_TEST(ops_respond_content_submits_the_body) {
+  rig_t r;
+  int32_t sid;
+  h2_stream_t *s;
+  h2_req_ctx_t ctx;
+  uint8_t *body = malloc(5);
+
+  ck_assert_ptr_nonnull(body);
+  memcpy(body, "hello", 5);
+  rig_open(&r);
+  s = ops_rig_stream(&r, &sid);
+  ctx.c = r.c;
+  ctx.stream = s;
+  h2_httpng_ops.respond_content(r.h2, &ctx, 200, "text/plain", NULL, 0, body, 5, NULL);
+  h2_flush_tx(r.h2, r.c);
+  rig_settle_server_output(&r);
+  ck_assert_int_eq(h2c_stream_for(&r.cl, sid)->status, 200);
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(ops_push_dispatch_reports_full_slot_tables) {
+  rig_t r;
+  int32_t sid;
+  h2_stream_t *s;
+  h2_req_ctx_t ctx;
+  int i;
+
+  rig_open(&r);
+  s = ops_rig_stream(&r, &sid);
+  ctx.c = r.c;
+  ctx.stream = s;
+  for (i = 0; i < H2_TSPUSH_MAX; i++) r.h2->tspush[i].sid = 1000 + i;
+  for (i = 0; i < H2_DASHCHUNK_MAX; i++) r.h2->dashchunk[i].sid = 2000 + i;
+  ck_assert_int_eq(h2_httpng_ops.tspush_dispatch(r.h2, &ctx, 0, 0), 0);
+  ck_assert_int_eq(h2_httpng_ops.dashchunk_dispatch(r.h2, &ctx, 0, 0), 0);
+  for (i = 0; i < H2_TSPUSH_MAX; i++) r.h2->tspush[i].sid = 0;
+  for (i = 0; i < H2_DASHCHUNK_MAX; i++) r.h2->dashchunk[i].sid = 0;
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(ops_llhls_try_park_parks_and_clears_on_close) {
+  rig_t r;
+  int32_t sid;
+  h2_stream_t *s;
+  h2_req_ctx_t ctx;
+  pid_filter_t filter;
+  lcevc_select_t lcevc;
+  llhls_park_req_t req;
+
+  rig_open(&r);
+  s = ops_rig_stream(&r, &sid);
+  ctx.c = r.c;
+  ctx.stream = s;
+  memset(&filter, 0, sizeof filter);
+  memset(&lcevc, 0, sizeof lcevc);
+  memset(&req, 0, sizeof req);
+  req.filter = &filter;
+  req.lcevc = &lcevc;
+  req.filename = "x.m3u8";
+  req.timeout_ms = 1000;
+  ck_assert_int_eq(h2_httpng_ops.llhls_try_park(r.h2, &ctx, &req), 1);
+  h2_llhls_on_stream_close(r.h2, sid);
+  rig_close(&r);
+}
+END_TEST
+
 static Suite *http2_suite(void) {
   Suite *s = suite_create("dipixy_http2");
   TCase *tc = tcase_create("core");
@@ -379,11 +531,16 @@ static Suite *http2_suite(void) {
   tcase_add_test(tc, data_before_headers_is_a_connection_error);
   tcase_add_test(tc, headers_after_stream_close_are_ignored);
   tcase_add_test(tc, duplicate_path_pseudo_header_is_rejected_with_protocol_error);
+  tcase_add_loop_test(tc, post_body_is_collected_until_end_stream_then_dispatched, 0, 4);
+  tcase_add_test(tc, post_body_over_the_limit_is_flagged_and_still_answered);
   tcase_add_test(tc, reactor_loop_routes_h2_connections_by_event_type);
   tcase_add_test(tc, peer_goaway_without_streams_closes_gracefully);
   tcase_add_test(tc, idle_close_sends_goaway);
   tcase_add_test(tc, garbage_input_closes_the_connection);
   tcase_add_test(tc, peer_hangup_closes_the_connection);
+  tcase_add_test(tc, ops_respond_content_submits_the_body);
+  tcase_add_test(tc, ops_push_dispatch_reports_full_slot_tables);
+  tcase_add_test(tc, ops_llhls_try_park_parks_and_clears_on_close);
   suite_add_tcase(s, tc);
   return s;
 }

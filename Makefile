@@ -1960,19 +1960,19 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 dvbipitools: $(DVBIPITOOLS_OBJS)
 	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) -o $@
 
-UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
+UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_net_tls_stub_lib lib_cas_biss_ca_stub lib_cas_cw_encryption_stub lib_net_rist_stubs lib_net_srt_stubs lib_sys_ioutil lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_ac4 lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
-	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mp4 lib_mux_flv lib_mux_fmp4 lib_mux_cadescbuild lib_demux_fmp4_box lib_demux_fmp4_track lib_demux_fmp4_sample lib_mux_esbuild lib_mux_esbuild_pes lib_mux_esbuild_pmtbuild lib_mux_esbuild_remux \
-	lib_net_netconnect lib_net_tssink lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_httpclient_fetch lib_net_httpclient_headers lib_net_httpclient_redirect lib_net_tssource_async lib_net_tssource_http_dispatch lib_net_tssource_dash_fmp4 lib_net_tssource_file lib_net_retryset lib_net_tls_server_stub lib_scrambler_stubs dipitvhead_mpts dipitvhead_retryset_adapter dipitvhead_single lib_net_dvbstp \
+	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mkv_feed lib_mux_mp4 lib_mux_mp4_feed lib_mux_flv lib_mux_flv_feed lib_mux_fmp4 lib_mux_cadescbuild lib_demux_fmp4_box lib_demux_fmp4_track lib_demux_fmp4_sample lib_mux_esbuild lib_mux_esbuild_pes lib_mux_esbuild_pmtbuild lib_mux_esbuild_remux \
+	lib_net_netconnect lib_net_tssink lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_httpclient_fetch lib_net_httpclient lib_net_httpclient_headers lib_net_httpclient_redirect lib_net_tssource_async lib_net_tssource_http_dispatch lib_net_tssource_dash_fmp4 lib_net_open_async lib_net_tssource_file lib_net_source lib_net_retryset lib_net_tls_server_stub lib_scrambler_stubs dipitvhead_mpts dipitvhead_retryset_adapter dipitvhead_single lib_net_dvbstp \
 	lib_mux_mpts \
 	lib_cas_cas_group \
-	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec \
+	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec lib_bim_dvbtypes \
 	lib_xml_util lib_yamlcfg lib_tva_timefmt lib_tva_bcg_doc lib_tva_mapping lib_tva_xmltv lib_tva_tva_xml \
 	lib_bim_fragment lib_bim_accessunit \
 	lib_sds_xml lib_fccret_fcc_client dipibim_args dipiscan_format dipiscan_scan dipixmltv_args dipixmltv_revmap dipixmltv_suggest \
 	dipiradiohead_mpegaudio dipiradiohead_aac_adts dipiradiohead_aac_latm \
-	dipiradiohead_psi dipiradiohead_id3 dipiradiohead_icy dipiradiohead_pes dipiradiohead_tspacketizer dipiradiohead_radiohead dipiradiohead_mpts dipiradiohead_cas dipiradiohead_args dipiradiohead_args_cas dipiradiohead_args_general dipiradiohead_args_net \
+	dipiradiohead_psi dipiradiohead_id3 dipiradiohead_icy dipiradiohead_pes dipiradiohead_tspacketizer dipiradiohead_radiohead dipiradiohead_mpts dipiradiohead_cas dipiradiohead_args dipiradiohead_config dipiradiohead_args_cas dipiradiohead_args_general dipiradiohead_args_net \
 	dipiradiohead_framequeue dipiradiohead_source_async dipiradiohead_source_frame dipiradiohead_source_hls dipiradiohead_inputset dipiradiohead_playlist lib_hls_playlist lib_hls_live lib_hls_tspassthrough lib_dash_mpd lib_dash_live \
 	dipitvhead_source dipitvhead_args dipitvhead_args_cas dipitvhead_args_input dipitvhead_args_net dipitvhead_args_general dipitvhead_discover dipitvhead_output dipitvhead_pmtbuild dipitvhead_aitbuild dipitvhead_bitrate dipitvhead_pcrclock dipitvhead_pesstamp dipitvhead_timemap dipitvhead_releaseq dipitvhead_scte35stamp dipitvhead_remux \
 	dipitvhead_simulcrypt_msg dipitvhead_ecmg_client dipitvhead_emmg_server dipitvhead_cas \
@@ -3581,6 +3581,44 @@ lib_helper_describe_SRCS := \
 	src/lib/helper/describe.c \
 	src/lib/sys/ioutil.c
 
+lib_net_tls_stub_lib_BIN := tests/unit/lib/net/test_tls_stub
+lib_net_tls_stub_lib_SRCS := \
+	tests/unit/lib/net/test_tls_stub.c \
+	src/lib/net/tls_stub.c \
+	src/lib/helper/log.c
+
+lib_cas_biss_ca_stub_BIN := tests/unit/lib/cas/test_biss_ca_stub
+lib_cas_biss_ca_stub_SRCS := \
+	tests/unit/lib/cas/test_biss_ca_stub.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/helper/log.c
+
+lib_cas_cw_encryption_stub_BIN := tests/unit/lib/cas/test_cw_encryption_stub
+lib_cas_cw_encryption_stub_SRCS := \
+	tests/unit/lib/cas/test_cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/helper/log.c
+
+lib_net_rist_stubs_BIN := tests/unit/lib/net/rist/test_rist_stubs
+lib_net_rist_stubs_SRCS := \
+	tests/unit/lib/net/rist/test_rist_stubs.c \
+	src/lib/net/rist/ristout_stub.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
+	src/lib/helper/log.c
+
+lib_net_srt_stubs_BIN := tests/unit/lib/net/srt/test_srt_stubs
+lib_net_srt_stubs_SRCS := \
+	tests/unit/lib/net/srt/test_srt_stubs.c \
+	src/lib/net/srt/srtsink_stub.c \
+	src/lib/net/srt/srtsrc_stub.c \
+	src/lib/helper/log.c
+
+lib_sys_ioutil_BIN := tests/unit/lib/sys/test_ioutil
+lib_sys_ioutil_SRCS := \
+	tests/unit/lib/sys/test_ioutil.c \
+	src/lib/sys/ioutil.c
+
 lib_sys_signal_BIN := tests/unit/lib/sys/test_signal
 lib_sys_signal_SRCS := \
 	tests/unit/lib/sys/test_signal.c \
@@ -3759,6 +3797,20 @@ lib_demux_escodec_audio_SRCS := \
 	src/lib/demux/bitreader.c \
 	src/lib/bim/bitwriter.c
 
+lib_demux_escodec_ac4_BIN := tests/unit/lib/demux/escodec/test_ac4
+lib_demux_escodec_ac4_SRCS := \
+	tests/unit/lib/demux/escodec/test_ac4.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
+	src/lib/demux/bitreader.c \
+	src/lib/bim/bitwriter.c
+
 lib_demux_escodec_video_BIN := tests/unit/lib/demux/escodec/test_video
 lib_demux_escodec_video_SRCS := \
 	tests/unit/lib/demux/escodec/test_video.c \
@@ -3922,9 +3974,78 @@ lib_mux_mkv_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c
 
+lib_mux_mkv_feed_BIN := tests/unit/lib/mux/test_mkv_feed
+lib_mux_mkv_feed_SRCS := \
+	tests/unit/lib/mux/test_mkv_feed.c \
+	src/lib/mux/mkv/mkv.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
+	src/lib/demux/escodec/video.c \
+	src/lib/mux/mkv/video.c \
+	src/lib/mux/mkv/write.c \
+	src/lib/mux/mkv/feed.c \
+	src/lib/sys/ioutil.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
+	src/lib/mux/teletext.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/pes.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/log.c
+
 lib_mux_mp4_BIN := tests/unit/lib/mux/test_mp4
 lib_mux_mp4_SRCS := \
 	tests/unit/lib/mux/test_mp4.c \
+	src/lib/mux/mp4/mp4.c \
+	src/lib/mux/mp4/moov/head.c \
+	src/lib/mux/mp4/moov/stbl.c \
+	src/lib/mux/mp4/moov/trak.c \
+	src/lib/mux/mp4/moov/checkpoint.c \
+	src/lib/mux/fmp4/box.c \
+	src/lib/mux/growbuf.c \
+	src/lib/mux/mp4/write.c \
+	src/lib/mux/mp4/feed.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
+	src/lib/demux/escodec/video.c \
+	src/lib/sys/ioutil.c \
+	src/lib/mux/teletext.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/pes.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/log.c
+
+lib_mux_mp4_feed_BIN := tests/unit/lib/mux/test_mp4_feed
+lib_mux_mp4_feed_SRCS := \
+	tests/unit/lib/mux/test_mp4_feed.c \
 	src/lib/mux/mp4/mp4.c \
 	src/lib/mux/mp4/moov/head.c \
 	src/lib/mux/mp4/moov/stbl.c \
@@ -4073,6 +4194,38 @@ lib_mux_flv_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/sys/ioutil.c
 
+lib_mux_flv_feed_BIN := tests/unit/lib/mux/test_flv_feed
+lib_mux_flv_feed_SRCS := \
+	tests/unit/lib/mux/test_flv_feed.c \
+	src/lib/mux/flv/flv.c \
+	src/lib/mux/flv/write.c \
+	src/lib/mux/flv/feed.c \
+	src/lib/demux/bitreader.c \
+	src/lib/demux/escodec/aubuild.c \
+	src/lib/demux/escodec/audio/ac3.c \
+	src/lib/demux/escodec/audio/mpeg.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/opus.c \
+	src/lib/demux/escodec/audio/truehd.c \
+	src/lib/demux/escodec/audio/dts.c \
+	src/lib/demux/escodec/audio/ac4.c \
+	src/lib/demux/escodec/audio/audio.c \
+	src/lib/demux/escodec/video.c \
+	src/lib/mux/amf.c \
+	src/lib/mux/ebml.c \
+	src/lib/mux/growbuf.c \
+	src/lib/mux/psi_build.c \
+	src/lib/demux/pes.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/log.c \
+	src/lib/sys/ioutil.c
+
 lib_bim_bitwriter_BIN := tests/unit/lib/bim/test_bitwriter
 lib_bim_bitwriter_SRCS := \
 	tests/unit/lib/bim/test_bitwriter.c \
@@ -4096,6 +4249,15 @@ lib_bim_codec_SRCS := \
 	src/lib/bim/codec/node.c \
 	src/lib/bim/codec/encode.c \
 	src/lib/bim/codec/decode.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_dvbtypes_BIN := tests/unit/lib/bim/test_dvbtypes
+lib_bim_dvbtypes_SRCS := \
+	tests/unit/lib/bim/test_dvbtypes.c \
+	src/lib/bim/codec/dvbtypes.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
@@ -4220,6 +4382,11 @@ BIM_FRAGMENT_DEPS := \
 lib_bim_fragment_BIN := tests/unit/lib/bim/test_fragment
 lib_bim_fragment_SRCS := \
 	tests/unit/lib/bim/test_fragment.c \
+	$(BIM_FRAGMENT_DEPS)
+
+lib_bim_coding_BIN := tests/unit/lib/bim/test_coding
+lib_bim_coding_SRCS := \
+	tests/unit/lib/bim/test_coding.c \
 	$(BIM_FRAGMENT_DEPS)
 
 lib_bim_accessunit_BIN := tests/unit/lib/bim/test_accessunit
@@ -4585,6 +4752,44 @@ dipiradiohead_cas_SRCS := \
 dipiradiohead_args_BIN := tests/unit/dipiradiohead/test_args
 dipiradiohead_args_SRCS := \
 	tests/unit/dipiradiohead/test_args.c \
+	src/dipiradiohead/cli/args.c \
+	src/dipiradiohead/cli/check.c \
+	src/dipiradiohead/cli/help.c \
+	src/dipiradiohead/cli/opt_cas.c \
+	src/dipiradiohead/cli/opt_general.c \
+	src/dipiradiohead/cli/opt_net.c \
+	src/dipiradiohead/cli/values.c \
+	src/dipiradiohead/config/core.c \
+	src/dipiradiohead/config/input.c \
+	src/dipiradiohead/config/network.c \
+	src/dipiradiohead/config/cas.c \
+	src/dipiradiohead/config/general.c \
+	src/dipiradiohead/config/load.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/mux/fec2022.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/uriparse.c \
+	src/lib/sys/ioutil.c \
+	src/lib/cas/cas_args.c \
+	src/lib/scrambler/scrambler.c \
+	src/lib/scrambler/cissa_stub.c \
+	src/lib/scrambler/csa2_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_stub.c \
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/biss/stub.c \
+	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/ca_stub.c \
+	src/lib/helper/log.c
+
+dipiradiohead_config_BIN := tests/unit/dipiradiohead/test_config
+dipiradiohead_config_SRCS := \
+	tests/unit/dipiradiohead/test_config.c \
 	src/dipiradiohead/cli/args.c \
 	src/dipiradiohead/cli/check.c \
 	src/dipiradiohead/cli/help.c \
@@ -6195,6 +6400,22 @@ lib_net_httpclient_fetch_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
 
+lib_net_httpclient_BIN := tests/unit/lib/net/test_httpclient
+lib_net_httpclient_SRCS := \
+	tests/unit/lib/net/test_httpclient.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/sys/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/tls_stub.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/log.c
+
 lib_net_tssource_async_BIN := tests/unit/lib/net/test_tssource_async
 lib_net_tssource_async_SRCS := \
 	tests/unit/lib/net/test_tssource_async.c \
@@ -6405,9 +6626,150 @@ lib_net_tssource_dash_fmp4_SRCS := \
 	src/lib/mux/fmp4/fmp4_frag.c \
 	src/lib/mux/growbuf.c
 
+lib_net_open_async_BIN := tests/unit/lib/net/test_open_async
+lib_net_open_async_SRCS := \
+	tests/unit/lib/net/test_open_async.c \
+	src/lib/net/ts/source.c \
+	src/lib/net/ts/deframe.c \
+	src/lib/net/ts/jitter.c \
+	src/lib/net/ts/http.c \
+	src/lib/net/ts/open_async.c \
+	src/lib/net/jitbuf.c \
+	src/lib/demux/fec2022.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
+	src/lib/net/srt/srtsrc_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/sys/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/multicast.c \
+	src/lib/demux/rtp.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/log.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c \
+	src/lib/mux/fmp4/box.c \
+	src/lib/mux/fmp4/fmp4.c \
+	src/lib/mux/fmp4/fmp4_moov.c \
+	src/lib/mux/fmp4/fmp4_frag.c \
+	src/lib/mux/growbuf.c
+
 lib_net_tssource_file_BIN := tests/unit/lib/net/test_tssource_file
 lib_net_tssource_file_SRCS := \
 	tests/unit/lib/net/test_tssource_file.c \
+	src/lib/net/ts/source.c \
+	src/lib/net/ts/deframe.c \
+	src/lib/net/ts/jitter.c \
+	src/lib/net/ts/http.c \
+	src/lib/net/ts/open_async.c \
+	src/lib/net/jitbuf.c \
+	src/lib/demux/fec2022.c \
+	src/lib/net/rist/ristin_stub.c \
+	src/lib/net/rist/ristlog_stub.c \
+	src/lib/net/srt/srtsrc_stub.c \
+	src/lib/net/httpclient/httpclient.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/net/httpclient/read.c \
+	src/lib/vendor/picohttpparser/picohttpparser.c \
+	src/lib/net/httpclient/async.c \
+	src/lib/net/httpclient/fetch.c \
+	src/lib/sys/ioutil.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/tls_stub.c \
+	src/lib/net/multicast.c \
+	src/lib/demux/rtp.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/log.c \
+	src/lib/hls/m3u_lines.c \
+	src/lib/hls/playlist.c \
+	src/lib/hls/live.c \
+	src/lib/hls/aes128cbc.c \
+	src/lib/hls/tspassthrough.c \
+	src/lib/dash/mpd.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
+	src/lib/demux/fmp4/box.c \
+	src/lib/demux/fmp4/track.c \
+	src/lib/demux/fmp4/sample.c \
+	src/lib/mux/esbuild/esbuild.c \
+	src/lib/mux/esbuild/pes.c \
+	src/lib/mux/esbuild/tspacketize.c \
+	src/lib/mux/esbuild/pmtbuild.c \
+	src/lib/mux/esbuild/remux.c \
+	src/lib/mux/psi_build.c \
+	src/lib/mux/tspacket_write.c \
+	src/lib/demux/crc32.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/tsinspect/core.c \
+	src/lib/tsinspect/tick.c \
+	src/lib/tsinspect/packet.c \
+	src/lib/tsinspect/metrics.c \
+	src/lib/tsinspect/agg.c \
+	src/lib/metrics/protocol.c \
+	src/lib/demux/tspack.c \
+	src/lib/demux/psi/psi.c \
+	src/lib/demux/psi/parse.c \
+	src/lib/demux/psi/descriptors.c \
+	src/lib/demux/psi/dvbtext.c \
+	src/lib/demux/psi/section_asm.c \
+	src/lib/demux/bitreader.c
+
+lib_net_source_BIN := tests/unit/lib/net/test_source
+lib_net_source_SRCS := \
+	tests/unit/lib/net/test_source.c \
 	src/lib/net/ts/source.c \
 	src/lib/net/ts/deframe.c \
 	src/lib/net/ts/jitter.c \
@@ -7699,6 +8061,7 @@ dipixy_dispatch_SRCS := \
 	src/dipixy/reactor/dispatch/route.c \
 	src/dipixy/reactor/dispatch/route_common.c \
 	src/dipixy/reactor/dispatch/waiters.c \
+	src/dipixy/core/route.c \
 	src/dipixy/core/time_ep.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/sys/ioutil.c
@@ -7888,6 +8251,7 @@ dipixy_segment_video_SRCS := \
 	tests/unit/dipixy/test_segment_video.c \
 	src/dipixy/segment/video.c \
 	src/dipixy/segment/mux.c \
+	src/lib/demux/tspack.c \
 	src/lib/demux/escodec/aubuild.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/demux/escodec/audio/aac.c \

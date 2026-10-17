@@ -354,7 +354,11 @@ ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_rea
       const hls_segment_t *seg = &h->pl.segments[h->pending_idx];
       const hls_key_t *k = seg->key ? &h->pl.keys[seg->key - 1] : NULL;
       int need_init = h->init_cb && h->pl.map_uri[0] && strcmp(h->init_url, h->pl.map_uri);
-      int ok = need_init ? start_init_fetch(h) : k && !(h->have_key && !strcmp(h->key_url, k->url)) ? start_key_fetch(h, k->url) : start_segment_fetch(h, seg->url, seg->range_off, seg->range_len);
+      int need_key = k && !(h->have_key && !strcmp(h->key_url, k->url));
+      int ok;
+      if (need_init) ok = start_init_fetch(h);
+      else if (need_key) ok = start_key_fetch(h, k->url);
+      else ok = start_segment_fetch(h, seg->url, seg->range_off, seg->range_len);
       if (!ok) {
         if (reason_out) *reason_out = NET_ERR_OTHER;
         return -1;

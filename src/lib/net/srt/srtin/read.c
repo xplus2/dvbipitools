@@ -43,7 +43,8 @@ void idle_wait(void) {
     struct pollfd pfd = {wfd, POLLIN, 0};
     poll(&pfd, 1, SRT_RCVTIMEO_MS);
   } else {
-    usleep(SRT_RCVTIMEO_MS * 1000);
+    struct timespec ts = {0, SRT_RCVTIMEO_MS * 1000000L};
+    nanosleep(&ts, NULL);
   }
 }
 

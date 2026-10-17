@@ -180,6 +180,8 @@ typedef struct hls_seg_ctx {
   unsigned pmt_pid; /* 0 = auto */
   unsigned char cc_pmt; /* SEG_CONTAINER_TS: rewritten PMT packets' own cc */
   unsigned char cc_pat; /* SEG_CONTAINER_TS: rewritten PAT packets' own cc */
+  unsigned char buf_cc_pmt; /* SEG_CONTAINER_TS: cc of last PMT packet in buf, segments continue it */
+  unsigned char buf_cc_pat; /* SEG_CONTAINER_TS: cc of last PAT packet in buf */
   unsigned char psi_pat[188];
   int psi_pat_ok;
   unsigned char psi_pmt[PMT_FILTER_PKT_MAX * 188];
@@ -241,6 +243,7 @@ void fmp4_mux_free_all(hls_seg_ctx_t *s);
 int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned char *cpriv, size_t cpriv_cap);
 
 /* video.c */
+void hls_seg_stamp_cc(unsigned char *cc, unsigned char *pkts, size_t n_pkts, unsigned pid);
 void video_reset(hls_seg_ctx_t *s);
 void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len);
 void handle_lcevc_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigned char *data, size_t len);

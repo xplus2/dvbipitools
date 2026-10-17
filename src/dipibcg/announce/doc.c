@@ -49,7 +49,9 @@ int load_doc(const config_t *cfg, bcg_doc_t *out) {
   for (int i = 0; i < out->channel_count; i++) {
     bcg_channel_t *c = &out->channels[i];
     char uri[BCG_ID_LEN];
-    unsigned tsid, onid, sid;
+    unsigned tsid;
+    unsigned onid;
+    unsigned sid;
     if (!mapping_lookup(&map, c->id, uri, sizeof uri, &tsid, &onid, &sid)) {
       bufcpy(c->uri, sizeof c->uri, uri);
       c->tsid = tsid;

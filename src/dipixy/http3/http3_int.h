@@ -332,5 +332,8 @@ void h3_ws_on_conn_close(h3_conn_t *c);
 void h3_ws_data_chunk(h3_conn_t *c, h3_req_t *r, const uint8_t *data, size_t len);
 void h3_ws_acked(h3_req_t *r, size_t n);
 
+extern const httpng_ops_t h3_httpng_ops;
+int cb_h3_deferred_consume(nghttp3_conn *h3, int64_t sid, size_t consumed, void *ud, void *stream_ud);
+
 #endif /* HAVE_HTTP3 */
 #endif /* DIPIXY_HTTP3_INT_H */

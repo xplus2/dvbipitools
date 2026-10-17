@@ -91,7 +91,8 @@ int prog_times_build(const bcg_doc_t *doc, prog_time_t **out) {
 }
 
 void window_select(const bcg_doc_t *src, const prog_time_t *times, long now, int64_t window_min, int *sel, int *nsel, long *out_sched_start, long *out_sched_end, int *out_have_sched) {
-  long sched_start = 0, sched_end = 0;
+  long sched_start = 0;
+  long sched_end = 0;
   int have_sched = 0;
   int n = 0;
 

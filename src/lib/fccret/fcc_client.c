@@ -100,7 +100,7 @@ static int queue_push(fcc_client_t *r, const unsigned char *payload, size_t len)
   return 1;
 }
 static size_t queue_pop(fcc_client_t *r, unsigned char *buf, size_t cap) {
-  fcc_slot_t *slot = &r->queue[r->q_head];
+  const fcc_slot_t *slot = &r->queue[r->q_head];
   size_t n = slot->len < cap ? slot->len : cap;
   memcpy(buf, slot->data, n);
   r->q_head = (r->q_head + 1) % FCC_QUEUE_SLOTS;

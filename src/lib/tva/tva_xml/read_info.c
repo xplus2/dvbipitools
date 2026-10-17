@@ -31,7 +31,8 @@ int progtext_list_build_index(progtext_list_t *pl) {
 }
 
 bcg_progtext_t *find_progtext(const progtext_list_t *pl, const char *crid) {
-  int lo = 0, hi = pl->n - 1;
+  int lo = 0;
+  int hi = pl->n - 1;
   while (lo <= hi) {
     int mid = (lo + hi) / 2;
     int c = strcmp(crid, pl->idx[mid].crid);
@@ -114,7 +115,9 @@ static int service_url_cb(const char *tag, const char *blk_end, void *vctx) {
   service_url_ctx_t *u = vctx;
   char kind[16];
   char text[sizeof u->c->uri];
-  unsigned onid, tsid, sid;
+  unsigned onid;
+  unsigned tsid;
+  unsigned sid;
   int cut = 0;
 
   if (xml_tag_attr(tag, blk_end, "name", kind, sizeof kind) || xml_span_text_chk(tag, blk_end, text, sizeof text, &cut)) return 0;

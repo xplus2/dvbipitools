@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -431,6 +432,355 @@ START_TEST(dash_mpd_parse_reads_multi_unit_durations) {
 }
 END_TEST
 
+static int parse_one(const char *xml, dash_mpd_t *m) {
+  char *body = strdup(xml);
+  int rc;
+  ck_assert_ptr_nonnull(body);
+  rc = dash_mpd_parse(body, NULL, m);
+  free(body);
+  return rc;
+}
+
+START_TEST(duration_attribute_forms) {
+  static const struct {
+    const char *v;
+    unsigned long long ms;
+  } t[] = {
+      {"PT1H2M3.5S", 3723500ULL},
+      {"P1DT1H", 90000000ULL},
+      {"P1W", 604800000ULL},
+      {"P1Y", 31536000000ULL},
+      {"P1M", 2592000000ULL},
+      {"PT1M", 60000ULL},
+      {"PT0S", 0ULL},
+      {"1H", 0ULL},
+      {"P5X", 0ULL},
+      {"P", 0ULL},
+      {"P12", 0ULL},
+      {"PTS", 0ULL},
+  };
+  char xml[256];
+  dash_mpd_t m;
+  snprintf(xml, sizeof xml, "<MPD timeShiftBufferDepth=\"%s\"><Period><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>", t[_i].v);
+  ck_assert_int_eq(parse_one(xml, &m), 1);
+  ck_assert_uint_eq(m.time_shift_buffer_ms, t[_i].ms);
+}
+END_TEST
+
+START_TEST(availability_start_forms) {
+  static const struct {
+    const char *v;
+    int has;
+    unsigned long long ms;
+  } t[] = {
+      {"2024-03-05T10:20:30Z", 1, 1709634030000ULL},
+      {"2024-03-05T10:20:30.5Z", 1, 1709634030500ULL},
+      {"2024-03-05T10:20:30.123456Z", 1, 1709634030123ULL},
+      {"2024-03-05T10:20:30", 1, 1709634030000ULL},
+      {"1969-12-31T23:59:59Z", 0, 0ULL},
+      {"garbage", 0, 0ULL},
+  };
+  char xml[256];
+  dash_mpd_t m;
+  snprintf(xml, sizeof xml, "<MPD type=\"dynamic\" availabilityStartTime=\"%s\"><Period><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>", t[_i].v);
+  ck_assert_int_eq(parse_one(xml, &m), 1);
+  ck_assert_int_eq(m.has_availability_start, t[_i].has);
+  if (t[_i].has) ck_assert_uint_eq(m.availability_start_ms, t[_i].ms);
+}
+END_TEST
+
+START_TEST(media_presentation_duration_and_type_attributes) {
+  dash_mpd_t m;
+  ck_assert_int_eq(parse_one("<MPD type=\"static\" mediaPresentationDuration=\"PT1M\"><Period><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>", &m), 1);
+  ck_assert_int_eq(m.is_dynamic, 0);
+  ck_assert_uint_eq(m.media_presentation_duration_ms, 60000ULL);
+  ck_assert_int_eq(parse_one("<MPD><Period><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>", &m), 1);
+  ck_assert_int_eq(m.is_dynamic, 0);
+  ck_assert_uint_eq(m.media_presentation_duration_ms, 0ULL);
+}
+END_TEST
+
+START_TEST(service_description_partial_elements) {
+  dash_mpd_t m;
+  ck_assert_int_eq(parse_one("<MPD><ServiceDescription><Latency target=\"3000\" min=\"2000\" max=\"5000\"/><PlaybackRate min=\"0.9\" max=\"1.1\"/></ServiceDescription><Period><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>", &m), 1);
+  ck_assert_int_eq(m.is_low_latency, 1);
+  ck_assert_uint_eq(m.latency_target_ms, 3000u);
+  ck_assert_uint_eq(m.latency_min_ms, 2000u);
+  ck_assert_uint_eq(m.latency_max_ms, 5000u);
+  ck_assert(m.playback_rate_min > 0.89 && m.playback_rate_min < 0.91);
+  ck_assert(m.playback_rate_max > 1.09 && m.playback_rate_max < 1.11);
+  ck_assert_int_eq(parse_one("<MPD><ServiceDescription><Latency/><PlaybackRate/></ServiceDescription><Period><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>", &m), 1);
+  ck_assert_int_eq(m.is_low_latency, 1);
+  ck_assert_uint_eq(m.latency_target_ms, 0u);
+  ck_assert_int_eq(parse_one("<MPD><ServiceDescription></ServiceDescription><Period><AdaptationSet><Representation id=\"a\"/></AdaptationSet></Period></MPD>", &m), 1);
+  ck_assert_int_eq(m.is_low_latency, 1);
+}
+END_TEST
+
+START_TEST(timeline_entry_edge_forms) {
+  dash_mpd_t m;
+  const dash_representation_t *r;
+  ck_assert_int_eq(parse_one(
+      "<MPD><Period><AdaptationSet><Representation id=\"a\"><SegmentTemplate timescale=\"1000\" media=\"m$Time$\"><SegmentTimeline>"
+      "<S d=\"0\"/><S t=\"5\"/><S t=\"100\" d=\"50\" r=\"2\"/><S d=\"25\"/><S t=\"500\" d=\"10\" r=\"-1\"/><S t=\"540\" d=\"10\" r=\"-1\"/>"
+      "</SegmentTimeline></SegmentTemplate></Representation></AdaptationSet></Period></MPD>", &m), 1);
+  r = &m.periods[0].adaptation_sets[0].representations[0];
+  ck_assert_uint_eq(r->n_timeline, 4u);
+  ck_assert_uint_eq(r->timeline[0].t, 100ULL);
+  ck_assert_uint_eq(r->timeline[1].t, 250ULL);
+  ck_assert_uint_eq(r->timeline[2].t, 500ULL);
+  ck_assert_uint_eq(r->timeline[2].r, 3ULL);
+  ck_assert_uint_eq(r->timeline[3].t, 540ULL);
+}
+END_TEST
+
+START_TEST(open_ended_timeline_with_period_duration_and_clock) {
+  char body[512];
+  dash_mpd_t m;
+  const dash_representation_t *r;
+  snprintf(body, sizeof body,
+           "<MPD type=\"dynamic\" availabilityStartTime=\"2000-01-01T00:00:00Z\"><Period start=\"PT0S\" duration=\"PT20S\"><AdaptationSet><Representation id=\"a\">"
+           "<SegmentTemplate timescale=\"1000\" media=\"m$Time$\"><SegmentTimeline><S t=\"0\" d=\"2000\" r=\"-1\"/></SegmentTimeline></SegmentTemplate>"
+           "</Representation></AdaptationSet></Period></MPD>");
+  ck_assert_int_eq(parse_one(body, &m), 1);
+  r = &m.periods[0].adaptation_sets[0].representations[0];
+  ck_assert_int_eq(r->timeline_open_ended, 0);
+  ck_assert_uint_eq(r->timeline[0].r, 9ULL);
+  ck_assert_int_eq(parse_one(
+      "<MPD type=\"dynamic\" availabilityStartTime=\"2099-01-01T00:00:00Z\"><Period><AdaptationSet><Representation id=\"a\">"
+      "<SegmentTemplate timescale=\"1000\" media=\"m$Time$\"><SegmentTimeline><S t=\"0\" d=\"2000\" r=\"-1\"/></SegmentTimeline></SegmentTemplate>"
+      "</Representation></AdaptationSet></Period></MPD>", &m), 1);
+  ck_assert_uint_eq(m.periods[0].adaptation_sets[0].representations[0].timeline[0].r, 0ULL);
+  ck_assert_int_eq(parse_one(
+      "<MPD type=\"static\" mediaPresentationDuration=\"PT10S\"><Period><AdaptationSet><Representation id=\"a\">"
+      "<SegmentTemplate timescale=\"1000\" presentationTimeOffset=\"0\" media=\"m$Time$\"><SegmentTimeline><S t=\"20000\" d=\"2000\" r=\"-1\"/></SegmentTimeline></SegmentTemplate>"
+      "</Representation></AdaptationSet></Period></MPD>", &m), 1);
+  ck_assert_uint_eq(m.periods[0].adaptation_sets[0].representations[0].timeline[0].r, 0ULL);
+  ck_assert_int_eq(parse_one(
+      "<MPD type=\"static\"><Period><AdaptationSet><Representation id=\"a\">"
+      "<SegmentTemplate timescale=\"1000\" media=\"m$Time$\"><SegmentTimeline><S t=\"0\" d=\"2000\" r=\"-1\"/></SegmentTimeline></SegmentTemplate>"
+      "</Representation></AdaptationSet></Period></MPD>", &m), 1);
+  ck_assert_uint_eq(m.periods[0].adaptation_sets[0].representations[0].timeline[0].r, 0ULL);
+}
+END_TEST
+
+START_TEST(open_ended_timeline_dynamic_without_clock_uses_period_end) {
+  dash_mpd_t m;
+  ck_assert_int_eq(parse_one(
+      "<MPD type=\"dynamic\"><Period duration=\"PT10S\"><AdaptationSet><Representation id=\"a\">"
+      "<SegmentTemplate timescale=\"1000\" media=\"m$Time$\"><SegmentTimeline><S t=\"0\" d=\"2000\" r=\"-1\"/></SegmentTimeline></SegmentTemplate>"
+      "</Representation></AdaptationSet></Period></MPD>", &m), 1);
+  ck_assert_uint_eq(m.periods[0].adaptation_sets[0].representations[0].timeline[0].r, 4ULL);
+}
+END_TEST
+
+START_TEST(template_inheritance_and_attributes) {
+  dash_mpd_t m;
+  const dash_representation_t *r;
+  http_url_t base = make_base("origin.example", 80, "/live/stream.mpd");
+  char body[] =
+      "<MPD><Period><SegmentTemplate timescale=\"90000\" duration=\"180000\" startNumber=\"7\" availabilityTimeOffset=\"1.5\" presentationTimeOffset=\"9\"/>"
+      "<AdaptationSet mimeType=\"audio/mp4\"><SegmentTemplate media=\"as$Number$.m4s\" initialization=\"as-init.mp4\"/>"
+      "<Representation id=\"r\" bandwidth=\"128000\" width=\"640\" height=\"360\"/>"
+      "<Representation id=\"r2\"><SegmentTemplate media=\"own$Number$.m4s\"/></Representation></AdaptationSet></Period></MPD>";
+  ck_assert_int_eq(dash_mpd_parse(body, &base, &m), 1);
+  r = &m.periods[0].adaptation_sets[0].representations[0];
+  ck_assert_uint_eq(r->timescale, 90000u);
+  ck_assert_uint_eq(r->duration, 180000ULL);
+  ck_assert_uint_eq(r->start_number, 7ULL);
+  ck_assert_uint_eq(r->availability_time_offset_ms, 1500ULL);
+  ck_assert_uint_eq(r->presentation_time_offset, 9ULL);
+  ck_assert_uint_eq(r->width, 640u);
+  ck_assert_uint_eq(r->height, 360u);
+  ck_assert_str_eq(r->media_url_tmpl, "http://origin.example/live/as$Number$.m4s");
+  ck_assert_str_eq(m.periods[0].adaptation_sets[0].representations[1].media_url_tmpl, "http://origin.example/live/own$Number$.m4s");
+  ck_assert_int_eq(m.is_low_latency, 1);
+}
+END_TEST
+
+START_TEST(base_url_edge_forms) {
+  static const char *const forms[] = {
+      "<BaseURL></BaseURL>",
+      "<BaseURL>http://[bad</BaseURL>",
+      "<BaseURL>rel/</BaseURL>",
+  };
+  char xml[512];
+  dash_mpd_t m;
+  http_url_t base = make_base("origin.example", 80, "/live/stream.mpd");
+  snprintf(xml, sizeof xml, "<MPD>%s<Period><AdaptationSet><SegmentTemplate media=\"s$Number$\"/><Representation id=\"a\"/></AdaptationSet></Period></MPD>", forms[_i]);
+  ck_assert_int_eq(dash_mpd_parse(xml, &base, &m), 1);
+  ck_assert_uint_gt((unsigned)strlen(m.periods[0].adaptation_sets[0].representations[0].media_url_tmpl), 0u);
+}
+END_TEST
+
+START_TEST(base_url_longer_than_buffer_is_ignored) {
+  char *xml = malloc(4096);
+  dash_mpd_t m;
+  http_url_t base = make_base("origin.example", 80, "/live/stream.mpd");
+  int n;
+  ck_assert_ptr_nonnull(xml);
+  n = snprintf(xml, 4096, "<MPD><BaseURL>http://h/");
+  memset(xml + n, 'a', 2100);
+  n += 2100;
+  snprintf(xml + n, 4096 - (size_t)n, "/</BaseURL><Period><AdaptationSet><SegmentTemplate media=\"s$Number$\"/><Representation id=\"a\"/></AdaptationSet></Period></MPD>");
+  ck_assert_int_eq(dash_mpd_parse(xml, &base, &m), 1);
+  ck_assert_str_eq(m.periods[0].adaptation_sets[0].representations[0].media_url_tmpl, "http://origin.example/live/s$Number$");
+  free(xml);
+}
+END_TEST
+
+START_TEST(structure_limits_are_enforced) {
+  char *xml = malloc(65536);
+  size_t n = 0;
+  dash_mpd_t *m = malloc(sizeof *m);
+  ck_assert_ptr_nonnull(xml);
+  ck_assert_ptr_nonnull(m);
+  n += (size_t)snprintf(xml + n, 65536 - n, "<MPD>");
+  for (int p = 0; p < DASH_MAX_PERIODS + 2; p++) {
+    n += (size_t)snprintf(xml + n, 65536 - n, "<Period>");
+    for (int a = 0; a < DASH_MAX_ADAPTATION_SETS + 2; a++) {
+      n += (size_t)snprintf(xml + n, 65536 - n, "<AdaptationSet>");
+      for (int r = 0; r < DASH_MAX_REPRESENTATIONS + 2; r++) n += (size_t)snprintf(xml + n, 65536 - n, "<Representation id=\"r%d\"/>", r);
+      n += (size_t)snprintf(xml + n, 65536 - n, "</AdaptationSet>");
+    }
+    n += (size_t)snprintf(xml + n, 65536 - n, "</Period>");
+  }
+  n += (size_t)snprintf(xml + n, 65536 - n, "</MPD>");
+  ck_assert_int_eq(dash_mpd_parse(xml, NULL, m), 1);
+  ck_assert_uint_eq(m->n_periods, (unsigned)DASH_MAX_PERIODS);
+  ck_assert_uint_eq(m->periods[0].n_adaptation_sets, (unsigned)DASH_MAX_ADAPTATION_SETS);
+  ck_assert_uint_eq(m->periods[0].adaptation_sets[0].n_representations, (unsigned)DASH_MAX_REPRESENTATIONS);
+  free(xml);
+  free(m);
+}
+END_TEST
+
+START_TEST(long_representation_id_is_truncated) {
+  char xml[512];
+  dash_mpd_t m;
+  char id[100];
+  memset(id, 'i', sizeof id - 1);
+  id[sizeof id - 1] = '\0';
+  snprintf(xml, sizeof xml, "<MPD><Period><AdaptationSet><Representation id=\"%s\"/></AdaptationSet></Period></MPD>", id);
+  ck_assert_int_eq(parse_one(xml, &m), 1);
+  ck_assert_uint_eq((unsigned)strlen(m.periods[0].adaptation_sets[0].representations[0].id), 63u);
+}
+END_TEST
+
+START_TEST(url_template_expansion_forms) {
+  static const struct {
+    const char *tmpl;
+    const char *want;
+    int rc;
+  } t[] = {
+      {"a$$b", "a$b", 1},
+      {"a$unterminated", "a$unterminated", 1},
+      {"$Unknown$x", "$Unknown$x", 1},
+      {"$Number%05d$", "00042", 1},
+      {"$Time%030d$", "00000000000000000099", 1},
+      {"$Bandwidth%03d$", "5000", 1},
+      {"$RepresentationID$-$Number$", "rep-42", 1},
+      {"$Number%x$", "42", 1},
+      {"", "", 0},
+  };
+  dash_representation_t r;
+  char out[64];
+  memset(&r, 0, sizeof r);
+  bufcpy(r.id, sizeof r.id, "rep");
+  r.bandwidth = 5000;
+  bufcpy(r.media_url_tmpl, sizeof r.media_url_tmpl, t[_i].tmpl);
+  ck_assert_int_eq(dash_media_url(&r, 42, 99, out, sizeof out), t[_i].rc);
+  ck_assert_str_eq(out, t[_i].want);
+}
+END_TEST
+
+START_TEST(url_template_output_is_clipped) {
+  dash_representation_t r;
+  char out[6];
+  memset(&r, 0, sizeof r);
+  bufcpy(r.id, sizeof r.id, "representation");
+  bufcpy(r.init_url, sizeof r.init_url, "$RepresentationID$/init.mp4");
+  ck_assert_int_eq(dash_init_url(&r, out, sizeof out), 1);
+  ck_assert_str_eq(out, "repre");
+}
+END_TEST
+
+START_TEST(timeline_helpers) {
+  dash_representation_t r;
+  unsigned long long t;
+  unsigned long long d;
+  unsigned long long k;
+  memset(&r, 0, sizeof r);
+  r.timescale = 1000;
+  ck_assert_int_eq(dash_timeline_last(&r, &t, &d, &k), 0);
+  ck_assert_int_eq(dash_timeline_find(&r, 0, &d, &k), 0);
+  ck_assert_uint_eq(dash_timeline_first(&r), 0ULL);
+  ck_assert_uint_eq(dash_segment_duration_ms(&r), 0ULL);
+  r.n_timeline = 2;
+  r.timeline[0].t = 1000;
+  r.timeline[0].d = 500;
+  r.timeline[0].r = 2;
+  r.timeline[1].t = 2500;
+  r.timeline[1].d = 250;
+  r.timeline[1].r = 1;
+  r.timeline_skipped = 10;
+  ck_assert_uint_eq(dash_timeline_first(&r), 1000ULL);
+  ck_assert_uint_eq(dash_segment_duration_ms(&r), 250ULL);
+  ck_assert_int_eq(dash_timeline_last(&r, &t, &d, &k), 1);
+  ck_assert_uint_eq(t, 2750ULL);
+  ck_assert_uint_eq(d, 250ULL);
+  ck_assert_uint_eq(k, 14ULL);
+  ck_assert_int_eq(dash_timeline_find(&r, 1500, &d, &k), 1);
+  ck_assert_uint_eq(k, 11ULL);
+  ck_assert_int_eq(dash_timeline_find(&r, 2750, &d, &k), 1);
+  ck_assert_uint_eq(k, 14ULL);
+  ck_assert_int_eq(dash_timeline_find(&r, 1250, &d, &k), 0);
+  ck_assert_int_eq(dash_timeline_find(&r, 900, &d, &k), 0);
+  ck_assert_int_eq(dash_timeline_find(&r, 9000, &d, &k), 0);
+}
+END_TEST
+
+START_TEST(edge_index_and_duration_without_addressing) {
+  dash_representation_t r;
+  unsigned long long idx = 0;
+  memset(&r, 0, sizeof r);
+  r.timescale = 1000;
+  ck_assert_int_eq(dash_edge_index(&r, 10000, &idx), 0);
+  r.duration = 90000;
+  ck_assert_int_eq(dash_edge_index(&r, 500, &idx), 0);
+  ck_assert_uint_eq(dash_segment_duration_ms(&r), 90000ULL);
+  r.availability_time_offset_ms = 5000;
+  ck_assert_uint_eq(dash_index_available_ms(&r, 0), 85000ULL);
+  r.availability_time_offset_ms = 500000;
+  ck_assert_uint_eq(dash_index_available_ms(&r, 0), 0ULL);
+}
+END_TEST
+
+START_TEST(live_period_degenerate_inputs) {
+  dash_mpd_t m;
+  memset(&m, 0, sizeof m);
+  ck_assert_uint_eq(dash_mpd_live_period(&m), 0u);
+  m.is_dynamic = 1;
+  ck_assert_uint_eq(dash_mpd_live_period(&m), 0u);
+  m.n_periods = 2;
+  m.periods[1].start_ms = 1000;
+  m.has_availability_start = 1;
+  m.availability_start_ms = dash_wall_ms() + 100000;
+  ck_assert_uint_eq(dash_mpd_live_period(&m), 0u);
+}
+END_TEST
+
+START_TEST(pick_highest_chooses_largest_bandwidth) {
+  dash_adaptation_set_t as;
+  memset(&as, 0, sizeof as);
+  as.n_representations = 3;
+  as.representations[0].bandwidth = 100;
+  as.representations[1].bandwidth = 300;
+  as.representations[2].bandwidth = 200;
+  ck_assert_int_eq(dash_pick_highest(&as), 1);
+}
+END_TEST
+
 static Suite *dash_mpd_suite(void) {
   Suite *s = suite_create("dash_mpd");
   TCase *tc = tcase_create("core");
@@ -458,6 +808,24 @@ static Suite *dash_mpd_suite(void) {
   tcase_add_test(tc, dash_edge_index_follows_wall_clock);
   tcase_add_test(tc, dash_mpd_live_period_picks_by_wall_clock);
   tcase_add_test(tc, dash_mpd_parse_reads_multi_unit_durations);
+  tcase_add_loop_test(tc, duration_attribute_forms, 0, 12);
+  tcase_add_loop_test(tc, availability_start_forms, 0, 6);
+  tcase_add_test(tc, media_presentation_duration_and_type_attributes);
+  tcase_add_test(tc, service_description_partial_elements);
+  tcase_add_test(tc, timeline_entry_edge_forms);
+  tcase_add_test(tc, open_ended_timeline_with_period_duration_and_clock);
+  tcase_add_test(tc, open_ended_timeline_dynamic_without_clock_uses_period_end);
+  tcase_add_test(tc, template_inheritance_and_attributes);
+  tcase_add_loop_test(tc, base_url_edge_forms, 0, 3);
+  tcase_add_test(tc, base_url_longer_than_buffer_is_ignored);
+  tcase_add_test(tc, structure_limits_are_enforced);
+  tcase_add_test(tc, long_representation_id_is_truncated);
+  tcase_add_loop_test(tc, url_template_expansion_forms, 0, 9);
+  tcase_add_test(tc, url_template_output_is_clipped);
+  tcase_add_test(tc, timeline_helpers);
+  tcase_add_test(tc, edge_index_and_duration_without_addressing);
+  tcase_add_test(tc, live_period_degenerate_inputs);
+  tcase_add_test(tc, pick_highest_chooses_largest_bandwidth);
   suite_add_tcase(s, tc);
   return s;
 }

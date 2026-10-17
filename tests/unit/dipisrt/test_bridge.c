@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -477,6 +478,74 @@ START_TEST(sender_recovers_lost_packet_from_repair_without_further_source) {
 }
 END_TEST
 
+typedef struct {
+  unsigned ms;
+} srt_stopper_t;
+
+static void *srt_stopper_main(void *arg) {
+  const srt_stopper_t *st = arg;
+  usleep(st->ms * 1000u);
+  signal_request_stop();
+  return NULL;
+}
+
+START_TEST(listening_receiver_idles_until_stopped) {
+  config_t cfg;
+  metrics_exporter_t mx;
+  srt_stopper_t stop = {1500};
+  pthread_t th;
+  int rc;
+  memset(&cfg, 0, sizeof cfg);
+  memset(&mx, 0, sizeof mx);
+  srt_peer_endpoint(&cfg.in, 1, 1);
+  cfg.in.srt_port[0] = bridge_free_udp_port();
+  srt_file_endpoint(&cfg.out, "/dev/null");
+  cfg.n_in = 1;
+  cfg.n_out = 1;
+  cfg.verbose = _i;
+  ck_assert_int_eq(pthread_create(&th, NULL, srt_stopper_main, &stop), 0);
+  rc = bridge_run(&cfg, &mx);
+  pthread_join(th, NULL);
+  ck_assert_int_eq(rc, 0);
+}
+END_TEST
+
+START_TEST(sender_reads_a_file_to_the_end_without_a_listener) {
+  config_t cfg;
+  metrics_exporter_t mx;
+  srt_stopper_t stop = {6000};
+  pthread_t th;
+  char path[] = "/tmp/dvbipitools_test_srtbridge_XXXXXX";
+  int fd = mkstemp(path);
+  unsigned char ts[188 * 30];
+  int rc;
+  memset(ts, 0xAB, sizeof ts);
+  for (size_t i = 0; i < 30; i++) {
+    ts[i * 188] = 0x47;
+    ts[i * 188 + 1] = 0x01;
+    ts[i * 188 + 2] = 0x00;
+    ts[i * 188 + 3] = 0x10;
+  }
+  ck_assert_int_eq(write(fd, ts, sizeof ts), (ssize_t)sizeof ts);
+  close(fd);
+  memset(&cfg, 0, sizeof cfg);
+  memset(&mx, 0, sizeof mx);
+  srt_file_endpoint(&cfg.in, path);
+  srt_peer_endpoint(&cfg.out, 1, 0);
+  cfg.out.srt_port[0] = bridge_free_udp_port();
+  cfg.n_in = 1;
+  cfg.n_out = 1;
+  cfg.pace = _i;
+  cfg.verbose = 1;
+  ck_assert_int_eq(pthread_create(&th, NULL, srt_stopper_main, &stop), 0);
+  rc = bridge_run(&cfg, &mx);
+  signal_request_stop();
+  pthread_join(th, NULL);
+  unlink(path);
+  ck_assert_int_eq(rc, 0);
+}
+END_TEST
+
 static Suite *bridge_suite(void) {
   Suite *s = suite_create("dipisrt_bridge");
   TCase *tc = tcase_create("core");
@@ -494,6 +563,8 @@ static Suite *bridge_suite(void) {
   tcase_add_test(tc, srtout_queue_watermark_stays_zero_below_level_two);
   tcase_add_loop_test(tc, bridge_run_fails_cleanly_when_setup_cannot_complete, 0, (int)(sizeof srt_bridge_fail_cases / sizeof srt_bridge_fail_cases[0]));
   tcase_add_test(tc, sender_recovers_lost_packet_from_repair_without_further_source);
+  tcase_add_loop_test(tc, listening_receiver_idles_until_stopped, 0, 2);
+  tcase_add_loop_test(tc, sender_reads_a_file_to_the_end_without_a_listener, 0, 2);
   tcase_add_test(tc, dedup_replay_no_match_on_empty_history);
   tcase_add_test(tc, dedup_record_advances_and_wraps_ring);
   tcase_add_test(tc, dedup_replay_skips_ordered_replay_then_passes_new);

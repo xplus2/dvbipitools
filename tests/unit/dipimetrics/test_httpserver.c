@@ -856,6 +856,100 @@ START_TEST(overlong_path_is_truncated_in_the_log_and_still_gets_404) {
 }
 END_TEST
 
+START_TEST(listen_rejects_bad_addresses_and_busy_ports) {
+  struct sockaddr_in sa;
+  socklen_t sl = sizeof sa;
+  int a;
+  int b;
+  ck_assert_int_eq(http_listen(AF_INET, "not-an-ip", 0), -1);
+  ck_assert_int_eq(http_listen(AF_INET6, "not-an-ip", 0), -1);
+  a = http_listen(AF_INET, "127.0.0.1", 0);
+  ck_assert_int_ge(a, 0);
+  ck_assert_int_eq(getsockname(a, (struct sockaddr *)&sa, &sl), 0);
+  b = http_listen(AF_INET, "127.0.0.1", ntohs(sa.sin_port));
+  ck_assert_int_eq(b, -1);
+  close(a);
+}
+END_TEST
+
+START_TEST(listen_on_ipv6_loopback_when_available) {
+  int probe = socket(AF_INET6, SOCK_STREAM, 0);
+  int fd;
+  if (probe < 0) return;
+  close(probe);
+  fd = http_listen(AF_INET6, "::1", 0);
+  if (fd >= 0) close(fd);
+}
+END_TEST
+
+START_TEST(poll_fds_respects_capacity_and_free_closes_live_connections) {
+  store_t st;
+  int lfd;
+  int clients[3];
+  http_server_t *hs;
+  struct pollfd pfds[1 + HTTP_MAX_CONNS];
+  int n = 0;
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  hs = http_server_new(lfd, NULL, "");
+  ck_assert_ptr_nonnull(hs);
+  http_server_poll_fds(hs, pfds, 0, &n);
+  ck_assert_int_eq(n, 0);
+  for (int i = 0; i < 3; i++) clients[i] = connect_to(lfd);
+  n = 0;
+  http_server_poll_fds(hs, pfds, 1 + HTTP_MAX_CONNS, &n);
+  poll(pfds, (nfds_t)n, 200);
+  http_server_service(hs, pfds, n, &st, mono(), 0);
+  n = 0;
+  http_server_poll_fds(hs, pfds, 2, &n);
+  ck_assert_int_eq(n, 2);
+  http_server_service(hs, pfds, n, &st, mono(), 0);
+  n = 0;
+  http_server_poll_fds(hs, pfds, 1 + HTTP_MAX_CONNS, &n);
+  ck_assert_int_eq(n, 4);
+  http_server_service(hs, pfds, 1, &st, mono(), 0);
+  for (int i = 0; i < 3; i++) close(clients[i]);
+  http_server_free(hs);
+  http_server_free(NULL);
+  close(lfd);
+}
+END_TEST
+
+START_TEST(peer_closing_before_a_full_request_frees_the_slot) {
+  store_t st;
+  int lfd;
+  int c;
+  http_server_t *hs;
+  int open_conns = 0;
+  struct pollfd pfds[1 + HTTP_MAX_CONNS];
+  int n;
+  store_init(&st);
+  lfd = http_listen(AF_INET, "127.0.0.1", 0);
+  hs = http_server_new(lfd, NULL, "");
+  c = connect_to(lfd);
+  ck_assert_int_eq((int)send(c, "GET /met", 8, 0), 8);
+  for (int i = 0; i < 5; i++) {
+    n = 0;
+    http_server_poll_fds(hs, pfds, 1 + HTTP_MAX_CONNS, &n);
+    poll(pfds, (nfds_t)n, 50);
+    http_server_service(hs, pfds, n, &st, mono(), 0);
+  }
+  close(c);
+  for (int i = 0; i < 5; i++) {
+    n = 0;
+    http_server_poll_fds(hs, pfds, 1 + HTTP_MAX_CONNS, &n);
+    poll(pfds, (nfds_t)n, 50);
+    http_server_service(hs, pfds, n, &st, mono(), 0);
+  }
+  n = 0;
+  http_server_poll_fds(hs, pfds, 1 + HTTP_MAX_CONNS, &n);
+  open_conns = n - 1;
+  ck_assert_int_eq(open_conns, 0);
+  http_server_free(hs);
+  close(lfd);
+}
+END_TEST
+
 static Suite *httpserver_suite(void) {
   Suite *s = suite_create("dipimetrics_httpserver");
   TCase *tc = tcase_create("core");
@@ -881,6 +975,10 @@ static Suite *httpserver_suite(void) {
   tcase_add_test(tc, full_pool_evicts_oldest_idle_connection_for_a_new_peer);
   tcase_add_loop_test(tc, other_methods_and_malformed_requests_get_404, 0, (int)(sizeof method_cases / sizeof method_cases[0]));
   tcase_add_test(tc, overlong_path_is_truncated_in_the_log_and_still_gets_404);
+  tcase_add_test(tc, listen_rejects_bad_addresses_and_busy_ports);
+  tcase_add_test(tc, listen_on_ipv6_loopback_when_available);
+  tcase_add_test(tc, poll_fds_respects_capacity_and_free_closes_live_connections);
+  tcase_add_test(tc, peer_closing_before_a_full_request_frees_the_slot);
   suite_add_tcase(s, tc);
   return s;
 }

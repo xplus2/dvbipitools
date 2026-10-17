@@ -110,7 +110,7 @@ static int cb_h3_end_headers(nghttp3_conn *h3, int64_t sid, int fin, void *ud, v
   return 0;
 }
 
-static int cb_h3_deferred_consume(nghttp3_conn *h3, int64_t sid, size_t consumed, void *ud, void *stream_ud) {
+int cb_h3_deferred_consume(nghttp3_conn *h3, int64_t sid, size_t consumed, void *ud, void *stream_ud) {
   h3_conn_t *c = ud;
   (void)h3;
   (void)stream_ud;
@@ -220,7 +220,7 @@ static int h3ops_llhls_try_park(void *connv, void *reqv, const llhls_park_req_t 
   return h3_llhls_try_park(connv, ((h3_req_t *)reqv)->stream_id, req);
 }
 
-static const httpng_ops_t h3_httpng_ops = {
+const httpng_ops_t h3_httpng_ops = {
     .proto = CONN_PROTO_H3,
     .respond_status = h3ops_respond_status,
     .respond_401 = h3ops_respond_401,

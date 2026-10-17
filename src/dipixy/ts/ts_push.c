@@ -59,7 +59,7 @@ void ts_push_wake_batch_begin(void) {
 }
 
 void ts_push_wake_batch_end(void) {
-  uint64_t *b = t_wake_batch;
+  const uint64_t *b = t_wake_batch;
   t_wake_batch = NULL;
   if (!b) return;
   for (int w = 0; w < WAKE_BATCH_WORDS; w++) {

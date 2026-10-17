@@ -592,6 +592,52 @@ static const sink_case_t sink_cases[] = {
     {"fec is ignored for plain udp", 0, 5, 0, 0},
 };
 
+START_TEST(rtp_output_with_fec_sends_repair_datagrams) {
+  config_t cfg;
+  out_ctx_t o;
+  mcast_t *recv;
+  unsigned char pkt[188];
+  unsigned char rbuf[4096];
+  int repairs = 0;
+
+  init_mcast_cfg(&cfg, run_helper_group_n(94), run_helper_port(94), 1);
+  cfg.al_fec_l = 2;
+  cfg.al_fec_d = 2;
+  cfg.al_fec_port = run_helper_port(95);
+  cfg.iface_out = "lo";
+  memset(&o, 0, sizeof o);
+  ck_assert_int_eq(tvhead_output_open(&cfg, &o), 0);
+  o.pacer = bitrate_pacer_new(0, 0, 0);
+  recv = mcast_open(AF_INET, run_helper_group_n(94), run_helper_port(95), "lo", 200);
+  ck_assert_ptr_nonnull(recv);
+  for (int i = 0; i < 16 * TS_PER_DGRAM; i++) {
+    make_packet(pkt, (unsigned char)i);
+    pkt[3] = (unsigned char)(0x10 | (i & 0x0F));
+    packet_cb(&o, pkt);
+  }
+  while (mcast_recv(recv, rbuf, sizeof rbuf, NULL) > 0) repairs++;
+  ck_assert_int_gt(repairs, 0);
+  mcast_close(recv);
+  bitrate_pacer_free(o.pacer);
+  o.pacer = NULL;
+  tvhead_output_close(&o);
+}
+END_TEST
+
+START_TEST(continuity_gap_on_an_output_pid_is_reported) {
+  out_ctx_t o;
+  unsigned char pkt[188];
+
+  memset(&o, 0, sizeof o);
+  make_packet(pkt, 0x40);
+  pkt[3] = 0x10;
+  packet_cb(&o, pkt);
+  pkt[3] = 0x15;
+  packet_cb(&o, pkt);
+  ck_assert_uint_eq(o.cc_seen[0x40] & 0x0F, 5u);
+}
+END_TEST
+
 START_TEST(output_open_builds_the_configured_sinks) {
   const sink_case_t *c = &sink_cases[_i];
   config_t cfg;
@@ -682,6 +728,8 @@ static Suite *output_suite(void) {
   tcase_add_loop_test(tc, output_open_builds_the_configured_sinks, 0, (int)(sizeof sink_cases / sizeof sink_cases[0]));
   tcase_add_test(tc, output_open_with_no_destination_and_inspection_succeeds);
   tcase_add_test(tc, relay_sinks_fail_without_their_backends_and_leave_no_leaks);
+  tcase_add_test(tc, rtp_output_with_fec_sends_repair_datagrams);
+  tcase_add_test(tc, continuity_gap_on_an_output_pid_is_reported);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -236,6 +236,44 @@ START_TEST(emm_u_decrypt_rejects_plaintext_of_wrong_length) {
 }
 END_TEST
 
+static int des_encrypt_for_test(const EVP_CIPHER *evp, const unsigned char *key, const unsigned char *iv, const unsigned char *pt, size_t len, unsigned char *out) {
+  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+  int n = 0;
+  int f = 0;
+  int ok = ctx && EVP_EncryptInit_ex(ctx, evp, NULL, key, iv) == 1 && EVP_CIPHER_CTX_set_padding(ctx, 0) == 1 && EVP_EncryptUpdate(ctx, out, &n, pt, (int)len) == 1 &&
+           EVP_EncryptFinal_ex(ctx, out + n, &f) == 1;
+  EVP_CIPHER_CTX_free(ctx);
+  return ok;
+}
+
+START_TEST(triple_des_ecm_blocks_round_trip) {
+  unsigned char key[24];
+  unsigned char iv[8];
+  unsigned char pt[16];
+  unsigned char ct[16];
+  unsigned char out[16];
+  for (unsigned i = 0; i < sizeof key; i++) key[i] = (unsigned char)(i * 7 + 3);
+  for (unsigned i = 0; i < sizeof iv; i++) iv[i] = (unsigned char)(0xA0 + i);
+  for (unsigned i = 0; i < sizeof pt; i++) pt[i] = (unsigned char)(i * 11 + 1);
+  ck_assert_int_eq(crypto_ecm_block_decrypt(CRYPTO_ECM_DES_EDE3, 0, key, NULL, pt, 0, out), -1);
+  ck_assert(des_encrypt_for_test(EVP_des_ede3_ecb(), key, NULL, pt, sizeof pt, ct));
+  ck_assert_int_eq(crypto_ecm_block_decrypt(CRYPTO_ECM_DES_EDE3, 0, key, NULL, ct, sizeof ct, out), 0);
+  ck_assert_int_eq(memcmp(out, pt, sizeof pt), 0);
+  ck_assert(des_encrypt_for_test(EVP_des_ede3_cbc(), key, iv, pt, sizeof pt, ct));
+  ck_assert_int_eq(crypto_ecm_block_decrypt(CRYPTO_ECM_DES_EDE3, 1, key, iv, ct, sizeof ct, out), 0);
+  ck_assert_int_eq(memcmp(out, pt, sizeof pt), 0);
+  ck_assert(des_encrypt_for_test(EVP_des_ede_ecb(), key, NULL, pt, sizeof pt, ct));
+  ck_assert_int_eq(crypto_ecm_block_decrypt(CRYPTO_ECM_DES_EDE, 0, key, NULL, ct, sizeof ct, out), 0);
+  ck_assert_int_eq(memcmp(out, pt, sizeof pt), 0);
+  ck_assert(des_encrypt_for_test(EVP_des_ede_cbc(), key, iv, pt, sizeof pt, ct));
+  ck_assert_int_eq(crypto_ecm_block_decrypt(CRYPTO_ECM_DES_EDE, 1, key, iv, ct, sizeof ct, out), 0);
+  ck_assert_int_eq(memcmp(out, pt, sizeof pt), 0);
+  ck_assert(des_encrypt_for_test(EVP_aes_128_ecb(), key, NULL, pt, sizeof pt, ct));
+  ck_assert_int_eq(crypto_ecm_block_decrypt(CRYPTO_ECM_AES128, 0, key, NULL, ct, sizeof ct, out), 0);
+  ck_assert_int_eq(memcmp(out, pt, sizeof pt), 0);
+}
+END_TEST
+
 static Suite *crypto_suite(void) {
   Suite *s = suite_create("crypto");
   TCase *tc = tcase_create("core");
@@ -250,6 +288,7 @@ static Suite *crypto_suite(void) {
   tcase_add_test(tc, ecm_decrypt_recovers_csa2_cw);
   tcase_add_test(tc, ecm_decrypt_recovers_cissa_cw);
   tcase_add_test(tc, ecm_decrypt_rejects_bad_cw_len);
+  tcase_add_test(tc, triple_des_ecm_blocks_round_trip);
   suite_add_tcase(s, tc);
   return s;
 }

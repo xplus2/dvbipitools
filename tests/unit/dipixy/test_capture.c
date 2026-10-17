@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "lib/net/multicast.h"
@@ -162,24 +163,29 @@ END_TEST
 
 typedef struct {
   int listen_fd;
-  volatile int accepts;
+  _Atomic int accepts;
 } http_dedup_server_t;
+
+static void http_send_ts_reply(int fd) {
+  static const char resp[] = "HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\n\r\n";
+
+  send(fd, resp, sizeof resp - 1, MSG_NOSIGNAL);
+  for (unsigned k = 0; k < 3; k++) {
+    unsigned char pkt[188];
+
+    make_ts_packet(pkt, (unsigned char)k);
+    send(fd, pkt, sizeof pkt, MSG_NOSIGNAL);
+  }
+}
 
 static void *http_dedup_server_thread(void *arg) {
   http_dedup_server_t *s = arg;
-  static const char resp[] = "HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\n\r\n";
   for (;;) {
     int fd = accept(s->listen_fd, NULL, NULL);
     if (fd < 0)
       return NULL;
     s->accepts++;
-    send(fd, resp, sizeof resp - 1, MSG_NOSIGNAL);
-    for (unsigned k = 0; k < 3; k++) {
-      unsigned char pkt[188];
-
-      make_ts_packet(pkt, (unsigned char)k);
-      send(fd, pkt, sizeof pkt, MSG_NOSIGNAL);
-    }
+    http_send_ts_reply(fd);
   }
 }
 
@@ -238,9 +244,10 @@ typedef struct {
 
 static void *drain_thread_fn(void *arg) {
   drain_args_t *a = arg;
+  const struct timespec nap = {0, 1000000L};
   for (;;) {
     capture_drain(a->cap, drain_sink, a->d);
-    usleep(1000);
+    nanosleep(&nap, NULL);
   }
   return NULL;
 }
@@ -598,6 +605,129 @@ START_TEST(cancelled_job_closes_its_result) {
 }
 END_TEST
 
+START_TEST(async_http_open_failure_is_remembered_and_refused_for_a_while) {
+  capture_open_job_t *job;
+  char url[96];
+  char longurl[2200];
+  snprintf(url, sizeof url, "http://127.0.0.1:1/never.ts");
+  memset(longurl, 'u', sizeof longurl - 1);
+  longurl[sizeof longurl - 1] = '\0';
+  capture_pump_set_thread_count(1);
+  ck_assert_int_eq(capture_lifecycle_start(wake_cb), 0);
+  ck_assert_ptr_null(capture_open_http_async(0, longurl, 0));
+  job = capture_open_http_async(5, url, 0);
+  ck_assert_ptr_nonnull(job);
+  ck_assert(wait_job(job));
+  ck_assert_ptr_null(capture_open_job_take(job));
+  ck_assert_ptr_null(capture_open_http_async(5, url, 0));
+  capture_lifecycle_stop();
+}
+END_TEST
+
+static void *http_slow_server_thread(void *arg) {
+  http_dedup_server_t *s = arg;
+  int fd = accept(s->listen_fd, NULL, NULL);
+
+  if (fd < 0) return NULL;
+  s->accepts++;
+  nanosleep(&(const struct timespec){0, 300000000L}, NULL);
+  http_send_ts_reply(fd);
+  nanosleep(&(const struct timespec){1, 0}, NULL);
+  close(fd);
+  return NULL;
+}
+
+START_TEST(async_open_cancelled_mid_flight_releases_the_opened_context) {
+  struct sockaddr_in addr;
+  socklen_t addrlen = sizeof addr;
+  int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+  pthread_t tid;
+  http_dedup_server_t srv;
+  capture_open_job_t *job;
+  char url[64];
+
+  ck_assert_int_ge(listen_fd, 0);
+  memset(&addr, 0, sizeof addr);
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ck_assert_int_eq(bind(listen_fd, (struct sockaddr *)&addr, sizeof addr), 0);
+  ck_assert_int_eq(listen(listen_fd, 4), 0);
+  ck_assert_int_eq(getsockname(listen_fd, (struct sockaddr *)&addr, &addrlen), 0);
+  snprintf(url, sizeof url, "http://127.0.0.1:%u/slow", (unsigned)ntohs(addr.sin_port));
+  srv.listen_fd = listen_fd;
+  srv.accepts = 0;
+  ck_assert_int_eq(pthread_create(&tid, NULL, http_slow_server_thread, &srv), 0);
+
+  capture_pump_set_thread_count(1);
+  ck_assert_int_eq(capture_lifecycle_start(wake_cb), 0);
+  job = capture_open_http_async(5, url, 0);
+  ck_assert_ptr_nonnull(job);
+  nanosleep(&(const struct timespec){0, 100000000L}, NULL);
+  capture_open_job_cancel(job);
+  for (int i = 0; i < 3000 && !(srv.accepts == 1 && capture_active_count() == 0); i++) nanosleep(&(const struct timespec){0, 1000000L}, NULL);
+  ck_assert_int_eq(srv.accepts, 1);
+  ck_assert_int_eq(capture_active_count(), 0);
+  capture_lifecycle_stop();
+  pthread_join(tid, NULL);
+  close(listen_fd);
+}
+END_TEST
+
+START_TEST(al_fec_repair_stream_that_cannot_open_is_dropped_but_capture_works) {
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.41", 15841, NULL, 1);
+  sds_fec_t fec;
+  capture_ctx_t *cap;
+  capture_reader_t *r;
+  unsigned char dgram[12 + 188], out[512];
+  memset(&fec, 0, sizeof fec);
+  snprintf(fec.addr, sizeof fec.addr, "not-a-group");
+  fec.port = 15842;
+  cap = capture_open(AF_INET, "239.8.8.41", NULL, 15841, NULL, 1, NULL, NULL, &fec, 5, 2);
+  ck_assert_ptr_nonnull(cap);
+  r = capture_reader_open(cap);
+  make_rtp_header(dgram);
+  make_ts_packet(dgram + 12, 3);
+  ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), (int)sizeof dgram);
+  ck_assert_uint_eq(drain(cap, r, out, sizeof out), 188u);
+  capture_reader_close(r);
+  mcast_close(send);
+  capture_close(cap);
+}
+END_TEST
+
+START_TEST(al_fec_decoder_passes_in_order_source_packets) {
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.42", 15843, NULL, 1);
+  sds_fec_t fec;
+  capture_ctx_t *cap;
+  capture_reader_t *r;
+  unsigned char dgram[12 + 188], out[2048];
+  size_t total = 0;
+  memset(&fec, 0, sizeof fec);
+  snprintf(fec.addr, sizeof fec.addr, "239.8.8.42");
+  fec.port = 15845;
+  cap = capture_open(AF_INET, "239.8.8.42", NULL, 15843, NULL, 1, NULL, NULL, &fec, 5, 2);
+  ck_assert_ptr_nonnull(cap);
+  r = capture_reader_open(cap);
+  for (unsigned i = 0; i < 12; i++) {
+    make_rtp_header(dgram);
+    dgram[2] = (unsigned char)(i >> 8);
+    dgram[3] = (unsigned char)i;
+    make_ts_packet(dgram + 12, (unsigned char)(10 + i));
+    ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), (int)sizeof dgram);
+    usleep(2000);
+  }
+  for (int i = 0; i < 100 && total < 188; i++) {
+    size_t n = drain(cap, r, out + total, sizeof out - total);
+    total += n;
+    if (!n) usleep(5000);
+  }
+  ck_assert_uint_ge(total, 188u);
+  capture_reader_close(r);
+  mcast_close(send);
+  capture_close(cap);
+}
+END_TEST
+
 static Suite *capture_suite(void) {
   Suite *s = suite_create("dipixy_capture");
   TCase *tc = tcase_create("core");
@@ -617,10 +747,14 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, datagram_larger_than_the_ring_keeps_only_its_tail);
   tcase_add_test(tc, http_stream_reassembles_packets_split_across_reads);
   tcase_add_test(tc, rtp_source_drain_unwraps_and_skips_non_rtp_datagrams);
+  tcase_add_test(tc, al_fec_repair_stream_that_cannot_open_is_dropped_but_capture_works);
+  tcase_add_test(tc, al_fec_decoder_passes_in_order_source_packets);
   tcase_add_test(tc, async_open_unavailable_before_lifecycle_start);
   tcase_add_test(tc, async_open_completes_wakes_and_dedups);
   tcase_add_test(tc, close_returns_without_waiting_for_pump_quiescence);
   tcase_add_test(tc, cancelled_job_closes_its_result);
+  tcase_add_test(tc, async_http_open_failure_is_remembered_and_refused_for_a_while);
+  tcase_add_test(tc, async_open_cancelled_mid_flight_releases_the_opened_context);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -727,6 +727,54 @@ START_TEST(rtmpout_peer_that_hangs_up_is_retried) {
 }
 END_TEST
 
+START_TEST(rtmpout_replays_cached_config_tags_when_the_link_becomes_ready) {
+  unsigned port;
+  int listen_fd = make_listener(&port, 0);
+  pthread_t th;
+  fake_server_t srv;
+  char url[64];
+  rtmpout_cfg_t cfg;
+  rtmpout_t *o;
+  unsigned char meta[4] = {2, 0, 0, 'M'};
+  unsigned char vseq_classic[8] = {0x17, 0x00, 0, 0, 0, 'V', 'S', 'Q'};
+  unsigned char vseq_enh[6] = {0x90, 'h', 'v', 'c', '1', 'E'};
+  unsigned char aseq_aac[6] = {0xAF, 0x00, 'A', 'S', 'Q', 'x'};
+  unsigned char aseq_enh[6] = {0x90, 'o', 'p', 'u', 's', 'E'};
+  unsigned char short_tag[1] = {0x17};
+  unsigned char big_tag[600];
+  unsigned char audio_frame[6] = {0xAF, 0x01, 'A', 'F', 'R', 'M'};
+  unsigned char data_tag[4] = {2, 0, 1, 'D'};
+  unsigned char key[8] = {0x17, 0x01, 0, 0, 0, 'K', 'E', 'Y'};
+
+  memset(big_tag, 0x17, sizeof big_tag);
+  memset(&srv, 0, sizeof srv);
+  srv.listen_fd = listen_fd;
+  ck_assert_int_eq(pthread_create(&th, NULL, fake_server_thread, &srv), 0);
+  snprintf(url, sizeof url, "rtmp://127.0.0.1:%u/live/key123", port);
+  memset(&cfg, 0, sizeof cfg);
+  cfg.url = url;
+  o = rtmpout_open(&cfg);
+  ck_assert_ptr_nonnull(o);
+  (void)rtmpout_write(o, FLV_TAG_SCRIPT, 0, meta, sizeof meta, NULL, 0);
+  (void)rtmpout_write(o, FLV_TAG_VIDEO, 0, short_tag, sizeof short_tag, NULL, 0);
+  (void)rtmpout_write(o, FLV_TAG_VIDEO, 0, vseq_enh, sizeof vseq_enh, NULL, 0);
+  (void)rtmpout_write(o, FLV_TAG_VIDEO, 0, vseq_classic, sizeof vseq_classic, NULL, 0);
+  (void)rtmpout_write(o, FLV_TAG_VIDEO, 0, big_tag, sizeof big_tag, NULL, 0);
+  (void)rtmpout_write(o, FLV_TAG_AUDIO, 0, short_tag, sizeof short_tag, NULL, 0);
+  (void)rtmpout_write(o, FLV_TAG_AUDIO, 0, aseq_enh, sizeof aseq_enh, NULL, 0);
+  (void)rtmpout_write(o, FLV_TAG_AUDIO, 0, aseq_aac, sizeof aseq_aac, NULL, 0);
+  ck_assert_int_eq(drive_until_sent(o, FLV_TAG_VIDEO, key, sizeof key, 600), 1);
+  (void)rtmpout_write(o, FLV_TAG_AUDIO, 40, audio_frame, sizeof audio_frame, NULL, 0);
+  (void)rtmpout_write(o, FLV_TAG_SCRIPT, 0, data_tag, sizeof data_tag, NULL, 0);
+  pthread_join(th, NULL);
+  close(listen_fd);
+  ck_assert_ptr_nonnull(memmem(srv.captured, srv.captured_len, "VSQ", 3));
+  ck_assert_ptr_nonnull(memmem(srv.captured, srv.captured_len, "ASQ", 3));
+  ck_assert_ptr_nonnull(memmem(srv.captured, srv.captured_len, "KEY", 3));
+  rtmpout_close(o);
+}
+END_TEST
+
 static Suite *rtmpout_suite(void) {
   Suite *s = suite_create("rtmpout");
   TCase *tc = tcase_create("core");
@@ -745,6 +793,7 @@ static Suite *rtmpout_suite(void) {
   tcase_add_test(tc, rtmpout_oversized_and_bad_url_parts_are_rejected);
   tcase_add_loop_test(tc, rtmpout_unreachable_peers_stay_non_fatal, 0, 2);
   tcase_add_loop_test(tc, rtmpout_peer_that_hangs_up_is_retried, 0, 2);
+  tcase_add_test(tc, rtmpout_replays_cached_config_tags_when_the_link_becomes_ready);
   suite_add_tcase(s, tc);
   return s;
 }

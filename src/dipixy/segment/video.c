@@ -4,6 +4,7 @@
 #include "priv.h"
 
 #include "lib/demux/bitreader.h"
+#include "lib/demux/tspack.h"
 #include "lib/sys/ioutil.h"
 
 #include <string.h>
@@ -111,18 +112,48 @@ static void ts_part_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts, size_t au_off,
   s->part.have_last_au = 0;
 }
 
+void hls_seg_stamp_cc(unsigned char *cc, unsigned char *pkts, size_t n_pkts, unsigned pid) {
+  for (size_t i = 0; i < n_pkts; i++) {
+    unsigned char *p = pkts + i * 188;
+    if (tspack_pid(p) != pid || !(p[3] & 0x10)) continue;
+    *cc = (*cc + 1) & 0x0F;
+    p[3] = (p[3] & 0xF0) | *cc;
+  }
+}
+
+static unsigned char psi_next_cc(const hls_seg_ctx_t *s, unsigned pid, unsigned char last) {
+  for (size_t off = 0; off + 188 <= s->len; off += 188)
+    if (tspack_pid(s->buf + off) == pid && (s->buf[off + 3] & 0x10)) return s->buf[off + 3] & 0x0F;
+  return (last + 1) & 0x0F;
+}
+
+static void psi_restamp(hls_seg_ctx_t *s, unsigned pmt_pid, unsigned char pat_next, unsigned char pmt_next) {
+  s->buf_cc_pat = (pat_next - 1) & 0x0F;
+  hls_seg_stamp_cc(&s->buf_cc_pat, s->buf, s->len / 188, 0);
+  if (!pmt_pid) return;
+  s->buf_cc_pmt = (pmt_next - 1) & 0x0F;
+  hls_seg_stamp_cc(&s->buf_cc_pmt, s->buf, s->len / 188, pmt_pid);
+}
+
 /* fmp4 doesn't keep raw ts */
 static void buf_trim(hls_seg_ctx_t *s, size_t cut_off) {
   size_t n;
+  unsigned pmt_pid;
+  unsigned char pat_next;
+  unsigned char pmt_next;
   if (s->container != SEG_CONTAINER_TS) return;
   memmove(s->buf, s->buf + cut_off, s->len - cut_off);
   s->len -= cut_off;
   n = (s->psi_pat_ok ? 188u : 0u) + (size_t)s->psi_pmt_n * 188;
   if (!n || (s->len >= 188 && !(s->buf[1] & 0x1F) && !s->buf[2]) || buf_reserve(&s->buf, &s->cap, s->len + n) < 0) return;
+  pmt_pid = s->psi_pmt_n ? tspack_pid(s->psi_pmt) : 0;
+  pat_next = psi_next_cc(s, 0, s->buf_cc_pat);
+  pmt_next = pmt_pid ? psi_next_cc(s, pmt_pid, s->buf_cc_pmt) : 0;
   memmove(s->buf + n, s->buf, s->len);
   if (s->psi_pat_ok) memcpy(s->buf, s->psi_pat, 188);
   memcpy(s->buf + (s->psi_pat_ok ? 188 : 0), s->psi_pmt, (size_t)s->psi_pmt_n * 188);
   s->len += n;
+  psi_restamp(s, pmt_pid, pat_next, pmt_next);
 }
 
 void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len) {

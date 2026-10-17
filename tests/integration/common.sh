@@ -166,6 +166,23 @@ gen_test_clip() {
     return $?
 }
 
+run_as_applet() {
+    raa_script=$1
+    raa_tool=$2
+    shift 2
+    raa_sibs="$*"
+    for raa_name in "$raa_tool" $raa_sibs; do
+        mkdir -p "$WORK/applets/$raa_name"
+        ln -s "$BIN" "$WORK/applets/$raa_name/$raa_name" || skip "cannot create symlink"
+    done
+    set -- "$WORK/applets/$raa_tool/$raa_tool"
+    for raa_name in $raa_sibs; do
+        set -- "$@" "$WORK/applets/$raa_name/$raa_name"
+    done
+    sh "$raa_script" "$@"
+    exit $?
+}
+
 run_tvhead_link_validation() {
     label=$1
     out_uri=$2

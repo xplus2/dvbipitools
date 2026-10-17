@@ -17,9 +17,11 @@
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 static OSSL_PROVIDER *ecm_legacy_provider;
+static OSSL_PROVIDER *ecm_default_provider;
 
 static void ecm_unload_legacy_provider(void) {
   if (ecm_legacy_provider) OSSL_PROVIDER_unload(ecm_legacy_provider);
+  if (ecm_default_provider) OSSL_PROVIDER_unload(ecm_default_provider);
 }
 #endif
 
@@ -28,6 +30,7 @@ static void ecm_unload_legacy_provider(void) {
 static pthread_once_t ecm_legacy_provider_once = PTHREAD_ONCE_INIT;
 
 static void ecm_load_legacy_provider(void) {
+  ecm_default_provider = OSSL_PROVIDER_load(NULL, "default");
   ecm_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
   atexit(ecm_unload_legacy_provider);
 }

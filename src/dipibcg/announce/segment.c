@@ -27,7 +27,9 @@
 #include "dipibcg/announce/announce_int.h"
 
 int build_segment(bitwriter_t *bw, const strrepo_writer_t *sw, const accessunit_ref_t *refs, int nrefs, bcg_version_t *ver, int compress, seg_cache_t *seg) {
-  size_t bits_len, strs_len, cont_len;
+  size_t bits_len;
+  size_t strs_len;
+  size_t cont_len;
   const unsigned char *bits = bitwriter_data(bw, &bits_len);
   const unsigned char *strs = strrepo_writer_data(sw, &strs_len);
   unsigned char *cont;

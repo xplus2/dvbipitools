@@ -48,8 +48,10 @@ void append_base_labels(dstrbuf_t *sb, const store_slot_t *slot) {
 }
 
 void append_composite_input_reason(dstrbuf_t *sb, const char *label) {
-  char input_part[METRICS_LABEL_MAX + 1], reason_part[METRICS_LABEL_MAX + 1];
-  char esc_input[2 * METRICS_LABEL_MAX + 2], esc_reason[2 * METRICS_LABEL_MAX + 2];
+  char input_part[METRICS_LABEL_MAX + 1];
+  char reason_part[METRICS_LABEL_MAX + 1];
+  char esc_input[2 * METRICS_LABEL_MAX + 2];
+  char esc_reason[2 * METRICS_LABEL_MAX + 2];
   const char *sep = strchr(label, METRICS_LABEL_SEP);
   if (sep) {
     size_t ilen = (size_t)(sep - label);

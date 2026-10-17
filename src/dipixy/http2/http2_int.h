@@ -176,5 +176,12 @@ void h2_ws_flush(h2_conn_t *conn);
 void h2_ws_on_stream_close(h2_conn_t *conn, int32_t stream_id);
 void h2_ws_on_conn_close(h2_conn_t *conn);
 
+typedef struct {
+  conn_t *c;
+  h2_stream_t *stream;
+} h2_req_ctx_t;
+
+extern const httpng_ops_t h2_httpng_ops;
+
 #endif /* HAVE_HTTP2 */
 #endif /* DIPIXY_HTTP2_INT_H */

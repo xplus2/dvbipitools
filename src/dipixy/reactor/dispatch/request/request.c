@@ -40,7 +40,7 @@ void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t method_len
   const char *want_auth;
   c->req_bytes = header_bytes + body_len;
   if (!t_open_replay) dipixy_metrics_note_request();
-  path = (char *)path_in;
+  path = (char *)c->in.buf + (path_in - (const char *)c->in.buf);
   path_end = path[path_len];
   path[path_len] = '\0';
   keep_alive = wants_keepalive(minor_version, headers, num_headers);

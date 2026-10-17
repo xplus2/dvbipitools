@@ -396,6 +396,53 @@ START_TEST(hls_media_playlist_with_map_fetches_init_and_remuxes) {
 }
 END_TEST
 
+START_TEST(hls_fmp4_segment_feed_remuxes_into_hls_output) {
+  static const unsigned char avcc[] = {0x01, 0x64, 0x00, 0x1F, 0xFF, 0xE1, 0x00, 0x00, 0x01, 0x00, 0x00};
+  static const unsigned char frame[] = {0x00, 0x00, 0x00, 0x03, 0x65, 0x11, 0x22};
+  unsigned char init[2048];
+  size_t init_len = build_avc_init(init, sizeof init);
+  fmp4_track_cfg_t tcfg;
+  fmp4_sample_t sample;
+  fmp4_mux_t *m;
+  unsigned char *seg;
+  size_t seglen;
+  script_t sc = {0};
+  tssrc_t *s;
+
+  memset(&tcfg, 0, sizeof tcfg);
+  tcfg.codec = CODEC_H264;
+  tcfg.track_id = 1;
+  tcfg.timescale = 90000;
+  tcfg.width = 1280;
+  tcfg.height = 720;
+  tcfg.cpriv = avcc;
+  tcfg.cpriv_len = sizeof avcc;
+  m = fmp4_mux_new(&tcfg, 1);
+  ck_assert_ptr_nonnull(m);
+  fmp4_init_segment(m, &seg);
+  fmp4_segment_begin(m, 1);
+  memset(&sample, 0, sizeof sample);
+  sample.data = frame;
+  sample.size = sizeof frame;
+  sample.duration = 3000;
+  sample.keyframe = 1;
+  fmp4_segment_add_sample(m, &sample);
+  seglen = fmp4_segment_end(m, &seg);
+  ck_assert_uint_gt(seglen, 0u);
+
+  script_add(&sc, hls_fmp4_media, strlen(hls_fmp4_media));
+  script_add(&sc, init, init_len);
+  script_start(&sc);
+  s = open_hls(&sc, "/live.m3u8");
+  ck_assert_ptr_nonnull(s);
+  tssrc_hls_fmp4_segment_feed(&s->media_ctx[0], s->hls[0], seg, seglen);
+  ck_assert_uint_eq(s->remux.n_tracks, 1u);
+  tssrc_close(s);
+  fmp4_mux_free(m);
+  script_stop(&sc);
+}
+END_TEST
+
 static Suite *tssource_dash_fmp4_suite(void) {
   Suite *s = suite_create("tssource_dash_fmp4");
   TCase *tc = tcase_create("core");
@@ -405,6 +452,7 @@ static Suite *tssource_dash_fmp4_suite(void) {
   tcase_add_test(tc, hls_master_picks_variant_without_map_as_ts_passthrough);
   tcase_add_test(tc, hls_master_with_audio_rendition_lacking_map_drops_audio);
   tcase_add_test(tc, hls_media_playlist_with_map_fetches_init_and_remuxes);
+  tcase_add_test(tc, hls_fmp4_segment_feed_remuxes_into_hls_output);
   suite_add_tcase(s, tc);
   return s;
 }

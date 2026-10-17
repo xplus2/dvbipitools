@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "dipixy/segment/priv.h"
+#include "lib/demux/tspack.h"
 
 static int g_mux_enabled;
 static char g_mux_dummy;
@@ -978,6 +979,102 @@ START_TEST(low_latency_ts_closes_parts_and_cuts_segments_on_keyframes) {
 }
 END_TEST
 
+#define PSI_TEST_PMT_PID 0x100
+#define PSI_TEST_VIDEO_PID 0x101
+
+static void psi_pkt(unsigned char *out, unsigned pid, unsigned cc) {
+  memset(out, 0xFF, 188);
+  out[0] = 0x47;
+  out[1] = (unsigned char)(pid >> 8);
+  out[2] = (unsigned char)pid;
+  out[3] = (unsigned char)(0x10 | (cc & 0x0F));
+}
+
+static void psi_load(hls_seg_ctx_t *s, const unsigned *pid_cc, size_t n, size_t pes_pkt) {
+  s->buf = realloc(s->buf, n * 188);
+  ck_assert_ptr_nonnull(s->buf);
+  for (size_t i = 0; i < n; i++) psi_pkt(s->buf + i * 188, pid_cc[i * 2], pid_cc[i * 2 + 1]);
+  s->len = n * 188;
+  s->pending_pes_off = pes_pkt * 188;
+}
+
+static void psi_cache(hls_seg_ctx_t *s, unsigned pat_cc, unsigned pmt_cc) {
+  psi_pkt(s->psi_pat, 0, pat_cc);
+  s->psi_pat_ok = 1;
+  psi_pkt(s->psi_pmt, PSI_TEST_PMT_PID, pmt_cc);
+  s->psi_pmt_n = 1;
+  s->buf_cc_pat = (unsigned char)pat_cc;
+  s->buf_cc_pmt = (unsigned char)pmt_cc;
+}
+
+static void expect_pkt(const hls_seg_ctx_t *s, size_t idx, unsigned pid, unsigned cc) {
+  ck_assert_uint_eq(tspack_pid(s->buf + idx * 188), pid);
+  ck_assert_uint_eq(s->buf[idx * 188 + 3] & 0x0F, cc);
+}
+
+START_TEST(cut_psi_continues_the_previous_segment_counters) {
+  hls_seg_ctx_t *s = ts_ctx(0.0, 0);
+  const unsigned pkts[][2] = {{PSI_TEST_VIDEO_PID, 0}, {0, 4}, {PSI_TEST_PMT_PID, 8}, {PSI_TEST_VIDEO_PID, 1}, {PSI_TEST_VIDEO_PID, 2}};
+
+  psi_load(s, pkts[0], 5, 3);
+  psi_cache(s, 4, 8);
+  feed_idr(s, 0);
+  ck_assert_uint_eq(s->len, 4u * 188);
+  expect_pkt(s, 0, 0, 5);
+  expect_pkt(s, 1, PSI_TEST_PMT_PID, 9);
+  expect_pkt(s, 2, PSI_TEST_VIDEO_PID, 1);
+  ts_free(s);
+}
+END_TEST
+
+START_TEST(cut_psi_is_renumbered_ahead_of_kept_psi) {
+  hls_seg_ctx_t *s = ts_ctx(0.0, 0);
+  const unsigned pkts[][2] = {{PSI_TEST_VIDEO_PID, 0}, {0, 4}, {PSI_TEST_PMT_PID, 8}, {PSI_TEST_VIDEO_PID, 1}, {0, 5}, {PSI_TEST_VIDEO_PID, 2}, {PSI_TEST_PMT_PID, 9}, {PSI_TEST_VIDEO_PID, 3}};
+
+  psi_load(s, pkts[0], 8, 3);
+  psi_cache(s, 5, 9);
+  feed_idr(s, 0);
+  ck_assert_uint_eq(s->len, 7u * 188);
+  expect_pkt(s, 0, 0, 5);
+  expect_pkt(s, 1, PSI_TEST_PMT_PID, 9);
+  expect_pkt(s, 2, PSI_TEST_VIDEO_PID, 1);
+  expect_pkt(s, 3, 0, 6);
+  expect_pkt(s, 5, PSI_TEST_PMT_PID, 10);
+  ck_assert_uint_eq(s->buf_cc_pat, 6u);
+  ck_assert_uint_eq(s->buf_cc_pmt, 10u);
+  ts_free(s);
+}
+END_TEST
+
+START_TEST(cut_psi_counters_wrap_at_16) {
+  hls_seg_ctx_t *s = ts_ctx(0.0, 0);
+  const unsigned pkts[][2] = {{PSI_TEST_VIDEO_PID, 0}, {0, 15}, {PSI_TEST_PMT_PID, 15}, {PSI_TEST_VIDEO_PID, 1}};
+
+  psi_load(s, pkts[0], 4, 3);
+  psi_cache(s, 15, 15);
+  feed_idr(s, 0);
+  expect_pkt(s, 0, 0, 0);
+  expect_pkt(s, 1, PSI_TEST_PMT_PID, 0);
+  ts_free(s);
+}
+END_TEST
+
+START_TEST(stamp_cc_skips_other_pids_and_payloadless_packets) {
+  unsigned char pk[3 * 188];
+  unsigned char cc = 14;
+
+  psi_pkt(pk, 0, 9);
+  psi_pkt(pk + 188, PSI_TEST_VIDEO_PID, 9);
+  psi_pkt(pk + 376, 0, 9);
+  pk[376 + 3] = 0x20;
+  hls_seg_stamp_cc(&cc, pk, 3, 0);
+  ck_assert_uint_eq(pk[3] & 0x0F, 15u);
+  ck_assert_uint_eq(pk[188 + 3] & 0x0F, 9u);
+  ck_assert_uint_eq(pk[376 + 3], 0x20u);
+  ck_assert_uint_eq(cc, 15u);
+}
+END_TEST
+
 START_TEST(fmp4_container_hands_access_units_to_the_mux) {
   hls_seg_ctx_t *s = ready_ctx();
   static const unsigned char idr[] = {0x65, 0xAA, 0xBB};
@@ -1052,6 +1149,10 @@ static Suite *segment_video_suite(void) {
   tcase_add_loop_test(tc, mpeg2_intra_pictures_are_keyframes, 0, (int)(sizeof mpeg2_cases / sizeof mpeg2_cases[0]));
   tcase_add_test(tc, video_pes_without_a_recorded_offset_is_ignored);
   tcase_add_test(tc, classic_ts_cuts_segments_at_keyframes_after_the_target);
+  tcase_add_test(tc, cut_psi_continues_the_previous_segment_counters);
+  tcase_add_test(tc, cut_psi_is_renumbered_ahead_of_kept_psi);
+  tcase_add_test(tc, cut_psi_counters_wrap_at_16);
+  tcase_add_test(tc, stamp_cc_skips_other_pids_and_payloadless_packets);
   tcase_add_test(tc, first_keyframe_anchors_the_store_at_its_pes_arrival);
   tcase_add_test(tc, classic_ts_boot_cuts_early_keyframes_then_follows_the_target);
   tcase_add_test(tc, low_latency_ts_closes_parts_and_cuts_segments_on_keyframes);

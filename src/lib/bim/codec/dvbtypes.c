@@ -166,7 +166,8 @@ int dvb_datetime_encode(bitwriter_t *bw, const char *iso8601) {
   long total_minutes;
   long mjd_utc;
   long minute_of_day;
-  int hour, min;
+  int hour;
+  int min;
   uint64_t ms;
 
   if (iso8601_split(iso8601, &f)) return -1;

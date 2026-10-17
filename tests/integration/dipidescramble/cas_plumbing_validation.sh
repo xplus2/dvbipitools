@@ -36,6 +36,7 @@ emm="$WORK/emm_cache.bin"
 out="$WORK/descrambled.ts"
 
 openssl genrsa -out "$key" 2048 >/dev/null 2>&1
+printf '\204\000\004\000\000\000\000' >"$emm"
 
 tsecmg -p $ECMG_PORT -s >"$WORK/tsecmg.log" 2>&1 &
 ECMGPID=$!
