@@ -16,6 +16,8 @@ static void server_with_capacity(h3rig_t *h, int max_conns) {
   h3_set_max_conns_per_thread(max_conns);
 }
 
+#define HASH_CAP_1 64u
+
 static void make_cid(ngtcp2_cid *cid, unsigned seed) {
   uint8_t data[H3_SCID_LEN];
 
@@ -62,7 +64,7 @@ START_TEST(tables_allocate_once_and_reset_on_free) {
   ck_assert_int_eq(h3_tables_alloc(), 1);
   ck_assert_int_eq(t_h3_init, 1);
   ck_assert_int_eq(t_h3_pool_free_n, 4);
-  ck_assert_uint_eq(t_h3_hash_cap, 32u);
+  ck_assert_uint_eq(t_h3_hash_cap, 256u);
   active = t_h3_active;
   ck_assert_int_eq(h3_tables_alloc(), 1);
   ck_assert_ptr_eq(t_h3_active, active);
@@ -114,25 +116,25 @@ END_TEST
 
 START_TEST(deleted_ids_leave_the_probe_chain_intact) {
   h3rig_t h;
-  ngtcp2_cid cids[9];
-  h3_conn_t conns[9];
+  ngtcp2_cid cids[HASH_CAP_1 + 1];
+  h3_conn_t conns[HASH_CAP_1 + 1];
 
   server_with_capacity(&h, 1);
   ck_assert_int_eq(h3_tables_alloc(), 1);
-  ck_assert_uint_eq(t_h3_hash_cap, 8u);
+  ck_assert_uint_eq(t_h3_hash_cap, HASH_CAP_1);
   memset(conns, 0, sizeof conns);
-  for (unsigned i = 0; i < 9; i++) make_cid(&cids[i], i + 10);
-  for (int i = 0; i < 8; i++) ck_assert_int_eq(h3_hash_insert(&cids[i], &conns[i]), 0);
-  ck_assert_int_eq(h3_hash_insert(&cids[8], &conns[8]), -1);
+  for (unsigned i = 0; i <= HASH_CAP_1; i++) make_cid(&cids[i], i + 10);
+  for (unsigned i = 0; i < HASH_CAP_1; i++) ck_assert_int_eq(h3_hash_insert(&cids[i], &conns[i]), 0);
+  ck_assert_int_eq(h3_hash_insert(&cids[HASH_CAP_1], &conns[HASH_CAP_1]), -1);
 
   h3_hash_delete(&cids[3], &conns[3]);
   ck_assert_ptr_null(lookup(&cids[3]));
-  for (int i = 0; i < 8; i++) {
+  for (unsigned i = 0; i < HASH_CAP_1; i++) {
     if (i != 3) ck_assert_ptr_eq(lookup(&cids[i]), &conns[i]);
   }
-  ck_assert_int_eq(h3_hash_insert(&cids[8], &conns[8]), 0);
-  ck_assert_ptr_eq(lookup(&cids[8]), &conns[8]);
-  for (int i = 0; i < 8; i++) {
+  ck_assert_int_eq(h3_hash_insert(&cids[HASH_CAP_1], &conns[HASH_CAP_1]), 0);
+  ck_assert_ptr_eq(lookup(&cids[HASH_CAP_1]), &conns[HASH_CAP_1]);
+  for (unsigned i = 0; i < HASH_CAP_1; i++) {
     if (i != 3) ck_assert_ptr_eq(lookup(&cids[i]), &conns[i]);
   }
   ck_assert_int_eq(h3_hash_insert(&cids[3], &conns[3]), -1);
@@ -235,16 +237,16 @@ END_TEST
 
 START_TEST(adding_an_id_fails_cleanly_when_the_table_is_full) {
   h3rig_t h;
-  ngtcp2_cid cids[9];
-  h3_conn_t fillers[8];
+  ngtcp2_cid cids[HASH_CAP_1 + 1];
+  h3_conn_t fillers[HASH_CAP_1];
   h3_conn_t conn = {0};
 
   server_with_capacity(&h, 1);
   ck_assert_int_eq(h3_tables_alloc(), 1);
   memset(fillers, 0, sizeof fillers);
-  for (unsigned i = 0; i < 9; i++) make_cid(&cids[i], i + 40);
-  for (int i = 0; i < 8; i++) ck_assert_int_eq(h3_hash_insert(&cids[i], &fillers[i]), 0);
-  ck_assert_int_eq(h3_cid_add(&conn, &cids[8]), -1);
+  for (unsigned i = 0; i <= HASH_CAP_1; i++) make_cid(&cids[i], i + 40);
+  for (unsigned i = 0; i < HASH_CAP_1; i++) ck_assert_int_eq(h3_hash_insert(&cids[i], &fillers[i]), 0);
+  ck_assert_int_eq(h3_cid_add(&conn, &cids[HASH_CAP_1]), -1);
   ck_assert_int_eq(conn.ncids, 0);
   h3r_server_stop(&h);
 }

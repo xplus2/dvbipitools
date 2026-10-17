@@ -3,6 +3,7 @@
 
 #include "live.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -146,7 +147,14 @@ static int start_playlist_fetch(hls_live_t *h) {
   return h->fetch != NULL;
 }
 
-static int start_segment_fetch(hls_live_t *h, const char *url) {
+static const char *range_header(char *buf, size_t cap, unsigned long long off, unsigned long long len) {
+  if (!len) return NULL;
+  snprintf(buf, cap, "Range: bytes=%llu-%llu", off, off + len - 1);
+  return buf;
+}
+
+static int start_segment_fetch(hls_live_t *h, const char *url, unsigned long long range_off, unsigned long long range_len) {
+  char range[64];
   http_url_t u;
   http_t *reuse = http_take_reuse(&h->reuse, &h->reuse_established_at, HLS_MAX_REUSE_AGE_S);
   if (http_url_parse(url, &u)) {
@@ -154,7 +162,7 @@ static int start_segment_fetch(hls_live_t *h, const char *url) {
     return 0;
   }
   h->fetch_reused = reuse != NULL;
-  h->fetch = http_fetch_start(&u, h->user_agent, h->insecure, NULL, NULL, h->segment_buf, sizeof h->segment_buf, reuse, NULL);
+  h->fetch = http_fetch_start(&u, h->user_agent, h->insecure, range_header(range, sizeof range, range_off, range_len), NULL, h->segment_buf, sizeof h->segment_buf, reuse, NULL);
   h->phase = HLS_LIVE_FETCHING_SEGMENT;
   return h->fetch != NULL;
 }
@@ -174,6 +182,7 @@ static int start_key_fetch(hls_live_t *h, const char *url) {
 }
 
 static int start_init_fetch(hls_live_t *h) {
+  char range[64];
   http_url_t u;
   http_t *reuse = http_take_reuse(&h->reuse, &h->reuse_established_at, HLS_MAX_REUSE_AGE_S);
   if (http_url_parse(h->pl.map_uri, &u)) {
@@ -181,7 +190,7 @@ static int start_init_fetch(hls_live_t *h) {
     return 0;
   }
   h->fetch_reused = reuse != NULL;
-  h->fetch = http_fetch_start(&u, h->user_agent, h->insecure, NULL, NULL, h->segment_buf, sizeof h->segment_buf, reuse, NULL);
+  h->fetch = http_fetch_start(&u, h->user_agent, h->insecure, range_header(range, sizeof range, h->pl.map_range_off, h->pl.map_range_len), NULL, h->segment_buf, sizeof h->segment_buf, reuse, NULL);
   h->phase = HLS_LIVE_FETCHING_INIT;
   return h->fetch != NULL;
 }
@@ -197,7 +206,7 @@ static int restart_fetch(hls_live_t *h, hls_live_phase_t phase) {
       return start_key_fetch(h, h->pl.keys[seg->key - 1].url);
     case HLS_LIVE_FETCHING_SEGMENT:
       seg = &h->pl.segments[h->pending_idx];
-      return start_segment_fetch(h, seg->url);
+      return start_segment_fetch(h, seg->url, seg->range_off, seg->range_len);
     case HLS_LIVE_IDLE: break;
   }
   return 0;
@@ -345,7 +354,7 @@ ssize_t hls_live_read(hls_live_t *h, unsigned char *buf, size_t cap, net_err_rea
       const hls_segment_t *seg = &h->pl.segments[h->pending_idx];
       const hls_key_t *k = seg->key ? &h->pl.keys[seg->key - 1] : NULL;
       int need_init = h->init_cb && h->pl.map_uri[0] && strcmp(h->init_url, h->pl.map_uri);
-      int ok = need_init ? start_init_fetch(h) : k && !(h->have_key && !strcmp(h->key_url, k->url)) ? start_key_fetch(h, k->url) : start_segment_fetch(h, seg->url);
+      int ok = need_init ? start_init_fetch(h) : k && !(h->have_key && !strcmp(h->key_url, k->url)) ? start_key_fetch(h, k->url) : start_segment_fetch(h, seg->url, seg->range_off, seg->range_len);
       if (!ok) {
         if (reason_out) *reason_out = NET_ERR_OTHER;
         return -1;

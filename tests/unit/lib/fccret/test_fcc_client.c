@@ -69,7 +69,7 @@ static int read_quiet(fcc_client_t *c, mcast_t *main_, unsigned char *buf, size_
   memset(&it, 0, sizeof it);
   it.it_value.tv_usec = 20000;
   ck_assert_int_eq(setitimer(ITIMER_REAL, &it, NULL), 0);
-  return (int)fcc_client_read(c, main_, buf, cap);
+  return (int)fcc_client_read(c, main_, buf, cap, 1000);
 }
 
 static int g_rams_r_calls;
@@ -119,7 +119,7 @@ START_TEST(burst_packet_is_delivered_before_cutover) {
   fcc_on_uni(c, rtx, rtxlen, mono_seconds());
 
   ck_assert_int_eq(fcc_client_done(c), 0);
-  ck_assert_int_eq(fcc_client_read(c, main_, buf, sizeof buf), 5);
+  ck_assert_int_eq(fcc_client_read(c, main_, buf, sizeof buf, 1000), 5);
   ck_assert_mem_eq(buf, "burst", 5);
 
   fcc_client_close(c);
@@ -136,14 +136,16 @@ static void rams_t_cb(const rtcp_rams_t_t *term, void *user) {
   g_rams_t = *term;
 }
 
-START_TEST(first_multicast_packet_triggers_rams_t_and_cutover) {
+START_TEST(first_multicast_packet_sends_rams_t_and_waits_for_the_burst_end) {
   unsigned port;
   int listener = bind_listener(&port);
   fcc_client_t *c;
   mcast_t *main_ = open_scratch_main();
-  unsigned char buf[64], rbuf[256];
+  unsigned char buf[64], rbuf[256], rtx[128];
+  _Atomic uint16_t rtx_seq = 0;
   rtp_hdr_t h;
   ssize_t n;
+  size_t rtxlen;
 
   ck_assert_ptr_nonnull(main_);
 
@@ -153,10 +155,7 @@ START_TEST(first_multicast_packet_triggers_rams_t_and_cutover) {
 
   h = make_hdr(0xBBBB, 42);
   fcc_on_multicast(c, &h, (const unsigned char *)"live!", 5, mono_seconds());
-
-  ck_assert_int_eq(fcc_client_done(c), 1);
-  ck_assert_int_eq(fcc_client_read(c, main_, buf, sizeof buf), 5);
-  ck_assert_mem_eq(buf, "live!", 5);
+  ck_assert_int_eq(fcc_client_done(c), 0);
 
   n = recv(listener, rbuf, sizeof rbuf, 0);
   ck_assert_int_gt(n, 0);
@@ -167,9 +166,80 @@ START_TEST(first_multicast_packet_triggers_rams_t_and_cutover) {
   ck_assert_uint_eq(g_rams_t.first_mc_seqnum, 42u);
   ck_assert_uint_eq(g_rams_t.media_ssrc, 0xBBBBu);
 
+  rtxlen = rtx_build(&rtx_seq, 0xBBBB, 99, 90000, 41, (const unsigned char *)"burst", 5, rtx, sizeof rtx);
+  fcc_on_uni(c, rtx, rtxlen, mono_seconds());
+  ck_assert_int_eq(fcc_client_done(c), 0);
+  ck_assert_int_eq(fcc_client_read(c, main_, buf, sizeof buf, 1000), 5);
+  ck_assert_mem_eq(buf, "burst", 5);
+  ck_assert_int_eq(fcc_client_done(c), 0);
+  ck_assert_int_eq(fcc_client_read(c, main_, buf, sizeof buf, 1000), 5);
+  ck_assert_mem_eq(buf, "live!", 5);
+  ck_assert_int_eq(fcc_client_done(c), 1);
+
   fcc_client_close(c);
   mcast_close(main_);
   close(listener);
+}
+END_TEST
+
+START_TEST(burst_and_buffered_multicast_come_out_in_order) {
+  fcc_client_t *c = open_client(9);
+  mcast_t *main_ = open_scratch_main();
+  unsigned char rtx[128], buf[64];
+  _Atomic uint16_t rtx_seq = 0;
+  static const char *const want[4] = {"b40", "b41", "m42", "m43"};
+  rtp_hdr_t h;
+  size_t rtxlen;
+  ck_assert_ptr_nonnull(c);
+  ck_assert_ptr_nonnull(main_);
+
+  rtxlen = rtx_build(&rtx_seq, 0xAAAA, 99, 90000, 40, (const unsigned char *)"b40", 3, rtx, sizeof rtx);
+  fcc_on_uni(c, rtx, rtxlen, mono_seconds());
+  ck_assert_int_eq(fcc_client_read(c, main_, buf, sizeof buf, 1000), 3);
+  ck_assert_mem_eq(buf, want[0], 3);
+  h = make_hdr(0xAAAA, 42);
+  fcc_on_multicast(c, &h, (const unsigned char *)"m42", 3, mono_seconds());
+  h = make_hdr(0xAAAA, 43);
+  fcc_on_multicast(c, &h, (const unsigned char *)"m43", 3, mono_seconds());
+  ck_assert_int_eq(fcc_client_done(c), 0);
+  rtxlen = rtx_build(&rtx_seq, 0xAAAA, 99, 90000, 41, (const unsigned char *)"b41", 3, rtx, sizeof rtx);
+  fcc_on_uni(c, rtx, rtxlen, mono_seconds());
+  rtxlen = rtx_build(&rtx_seq, 0xAAAA, 99, 90000, 42, (const unsigned char *)"dup", 3, rtx, sizeof rtx);
+  fcc_on_uni(c, rtx, rtxlen, mono_seconds());
+  for (int i = 1; i < 4; i++) {
+    ck_assert_int_eq(fcc_client_done(c), 0);
+    ck_assert_int_eq(fcc_client_read(c, main_, buf, sizeof buf, 1000), 3);
+    ck_assert_mem_eq(buf, want[i], 3);
+  }
+  ck_assert_int_eq(fcc_client_done(c), 1);
+
+  fcc_client_close(c);
+  mcast_close(main_);
+}
+END_TEST
+
+START_TEST(silent_burst_gives_way_to_buffered_multicast) {
+  fcc_client_t *c = open_client(9);
+  mcast_t *main_ = open_scratch_main();
+  unsigned char buf[64];
+  double t0 = mono_seconds();
+  rtp_hdr_t h;
+  ck_assert_ptr_nonnull(c);
+  ck_assert_ptr_nonnull(main_);
+
+  h = make_hdr(0xAAAA, 10);
+  fcc_on_multicast(c, &h, (const unsigned char *)"m10", 3, t0);
+  ck_assert_int_eq(fcc_client_done(c), 0);
+  h = make_hdr(0xAAAA, 11);
+  fcc_on_multicast(c, &h, (const unsigned char *)"m11", 3, t0 + 2.0);
+  ck_assert_int_eq(fcc_client_read(c, main_, buf, sizeof buf, 1000), 3);
+  ck_assert_mem_eq(buf, "m10", 3);
+  ck_assert_int_eq(fcc_client_read(c, main_, buf, sizeof buf, 1000), 3);
+  ck_assert_mem_eq(buf, "m11", 3);
+  ck_assert_int_eq(fcc_client_done(c), 1);
+
+  fcc_client_close(c);
+  mcast_close(main_);
 }
 END_TEST
 
@@ -192,16 +262,16 @@ END_TEST
 START_TEST(burst_packet_after_done_is_ignored) {
   fcc_client_t *c = open_client(9);
   mcast_t *main_ = open_scratch_main();
-  unsigned char rtx[128], buf[64];
+  unsigned char pkt[32], rtx[128], buf[64];
   _Atomic uint16_t rtx_seq = 0;
-  rtp_hdr_t h;
+  size_t n;
   size_t rtxlen;
   ck_assert_ptr_nonnull(c);
   ck_assert_ptr_nonnull(main_);
 
-  h = make_hdr(0xCCCC, 7);
-  fcc_on_multicast(c, &h, (const unsigned char *)"live", 4, mono_seconds());
-  ck_assert_int_eq(fcc_client_read(c, main_, buf, sizeof buf), 4); /* consume the cutover payload */
+  n = rtcp_build_rams_i(0, 0, 0, 510, NULL, pkt, sizeof pkt);
+  fcc_on_uni(c, pkt, n, mono_seconds());
+  ck_assert_int_eq(fcc_client_done(c), 1);
 
   rtxlen = rtx_build(&rtx_seq, 0xCCCC, 99, 90000, 8, (const unsigned char *)"late", 4, rtx, sizeof rtx);
   fcc_on_uni(c, rtx, rtxlen, mono_seconds());
@@ -301,7 +371,7 @@ START_TEST(unicast_burst_arrives_through_read) {
   rtxlen = rtx_build(&rtx_seq, 0xAAAA, 99, 90000, 5, (const unsigned char *)"wire!", 5, rtx, sizeof rtx);
   ck_assert_int_eq(sendto(server, rtx, rtxlen, 0, (struct sockaddr *)&client, clen), (int)rtxlen);
   for (i = 0; i < 20; i++) {
-    ssize_t n = fcc_client_read(c, main_, buf, sizeof buf);
+    ssize_t n = fcc_client_read(c, main_, buf, sizeof buf, 1000);
     if (n > 0) {
       ck_assert_int_eq(n, 5);
       ck_assert_mem_eq(buf, "wire!", 5);
@@ -358,7 +428,7 @@ START_TEST(read_truncates_to_caller_capacity_and_clips_oversized_cutover) {
   ck_assert_ptr_nonnull(main_);
   memset(big, 0x42, sizeof big);
   fcc_on_multicast(c, &h, big, sizeof big, mono_seconds());
-  ck_assert_int_eq(fcc_client_read(c, main_, out, 10), 10);
+  ck_assert_int_eq(fcc_client_read(c, main_, out, 10, 1000), 10);
   fcc_on_multicast(c, &h, big, 5, mono_seconds());
   ck_assert_int_eq(read_quiet(c, main_, out, sizeof out), 0);
   fcc_client_close(c);
@@ -372,7 +442,9 @@ static Suite *fcc_client_suite(void) {
   tcase_set_timeout(tc, 10);
   tcase_add_test(tc, open_sends_rams_r_with_ignore_media_ssrc_on_the_wire);
   tcase_add_test(tc, burst_packet_is_delivered_before_cutover);
-  tcase_add_test(tc, first_multicast_packet_triggers_rams_t_and_cutover);
+  tcase_add_test(tc, first_multicast_packet_sends_rams_t_and_waits_for_the_burst_end);
+  tcase_add_test(tc, burst_and_buffered_multicast_come_out_in_order);
+  tcase_add_test(tc, silent_burst_gives_way_to_buffered_multicast);
   tcase_add_test(tc, rejected_rams_i_response_sets_done_without_multicast);
   tcase_add_test(tc, burst_packet_after_done_is_ignored);
   tcase_add_test(tc, rams_r_carries_configured_buffer_fill_bounds);

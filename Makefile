@@ -44,7 +44,10 @@ dipimetrics_SRCS := \
 	src/dipimetrics/cli/help.c \
 	src/dipimetrics/config.c \
 	src/lib/metrics/store.c \
-	src/lib/metrics/render.c \
+	src/lib/metrics/render/families.c \
+	src/lib/metrics/render/labels.c \
+	src/lib/metrics/render/series.c \
+	src/lib/metrics/render/openmetrics.c \
 	src/dipimetrics/httpserver.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/vendor/libyaml/api.c \
@@ -84,7 +87,11 @@ dipiscan_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -123,7 +130,12 @@ dipisds_SRCS := \
 	src/lib/vendor/libyaml/scanner.c \
 	src/lib/vendor/libyaml/parser.c \
 	src/lib/config/yamlcfg.c \
-	src/dipisds/input.c \
+	src/dipisds/input/util.c \
+	src/dipisds/input/csv.c \
+	src/dipisds/input/m3u.c \
+	src/dipisds/input/xspf.c \
+	src/dipisds/input/load.c \
+	src/dipisds/input/packages.c \
 	src/dipisds/format_out.c \
 	src/lib/helper/describe.c \
 	src/dipisds/announce.c \
@@ -139,7 +151,11 @@ dipisds_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -157,10 +173,18 @@ dipixmltv_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/tva/bcg_doc.c \
-	src/lib/tva/tva_xml.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
 	src/lib/tva/mapping.c \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c
@@ -173,15 +197,30 @@ dipibim_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/tva/bcg_doc.c \
-	src/lib/tva/tva_xml.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
-	src/lib/bim/codec.c \
-	src/lib/bim/fragment.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode.c \
+	src/lib/bim/codec/decode.c \
+	src/lib/bim/fragment/types_media.c \
+	src/lib/bim/fragment/types_text.c \
+	src/lib/bim/fragment/types_desc.c \
+	src/lib/bim/fragment/types_prog.c \
+	src/lib/bim/fragment/coding.c \
 	src/lib/bim/accessunit.c
 
 LDFLAGS += -latomic
@@ -219,7 +258,11 @@ dipibcg_SRCS := \
 	src/lib/vendor/libyaml/scanner.c \
 	src/lib/vendor/libyaml/parser.c \
 	src/lib/config/yamlcfg.c \
-	src/dipibcg/announce.c \
+	src/dipibcg/announce/time.c \
+	src/dipibcg/announce/programmes.c \
+	src/dipibcg/announce/doc.c \
+	src/dipibcg/announce/segment.c \
+	src/dipibcg/announce/run.c \
 	src/lib/net/announce_driver.c \
 	src/dipibcg/listen.c \
 	src/lib/helper/fileutil.c \
@@ -232,22 +275,37 @@ dipibcg_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/dvbstp.c \
 	src/lib/demux/crc32.c \
 	src/lib/tva/bcg_doc.c \
-	src/lib/tva/tva_xml.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
 	src/lib/tva/mapping.c \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
-	src/lib/bim/codec.c \
-	src/lib/bim/fragment.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode.c \
+	src/lib/bim/codec/decode.c \
+	src/lib/bim/fragment/types_media.c \
+	src/lib/bim/fragment/types_text.c \
+	src/lib/bim/fragment/types_desc.c \
+	src/lib/bim/fragment/types_prog.c \
+	src/lib/bim/fragment/coding.c \
 	src/lib/bim/accessunit.c
 
 ifeq ($(CSA),no)
@@ -339,9 +397,9 @@ dipirec_RIST_SRC := src/lib/net/rist/ristout_stub.c src/lib/net/rist/ristin_stub
 endif
 
 ifeq ($(HAVE_SRT),yes)
-dipirec_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c \
+dipirec_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin/connect.c src/lib/net/srt/srtin/group.c src/lib/net/srt/srtin/open.c src/lib/net/srt/srtin/read.c \
 src/lib/helper/pipereader.c \
-	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
+	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout/connect.c src/lib/net/srt/srtout/pending.c src/lib/net/srt/srtout/service.c src/lib/net/srt/srtout/close.c src/lib/net/srt/srtcommon.c
 dipirec_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipirec_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt) -latomic
@@ -387,7 +445,11 @@ dipirec_SRCS := \
 	src/lib/hls/tspassthrough.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -398,7 +460,11 @@ dipirec_SRCS := \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/dipirec/record/rtmp_fanout.c \
 	src/dipirec/record/stats.c \
 	src/dipirec/record/run.c \
@@ -464,7 +530,10 @@ dipirec_SRCS := \
 	src/lib/mux/mp4/mp4.c \
 	src/lib/mux/mp4/write.c \
 	src/lib/mux/mp4/feed.c \
-	src/lib/mux/mp4/moov.c \
+	src/lib/mux/mp4/moov/head.c \
+	src/lib/mux/mp4/moov/stbl.c \
+	src/lib/mux/mp4/moov/trak.c \
+	src/lib/mux/mp4/moov/checkpoint.c \
 	src/lib/mux/teletext.c \
 	src/lib/mux/amf.c \
 	src/lib/mux/flv/flv.c \
@@ -548,7 +617,7 @@ dipiradiohead_RIST_SRC := src/lib/net/rist/ristout_stub.c src/lib/net/rist/ristl
 endif
 
 ifeq ($(HAVE_SRT),yes)
-dipiradiohead_SRT_SRC := src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
+dipiradiohead_SRT_SRC := src/lib/net/srt/srtsink.c src/lib/net/srt/srtout/connect.c src/lib/net/srt/srtout/pending.c src/lib/net/srt/srtout/service.c src/lib/net/srt/srtout/close.c src/lib/net/srt/srtcommon.c
 dipiradiohead_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipiradiohead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt) -latomic
@@ -735,9 +804,9 @@ dipitvhead_RIST_SRC := src/lib/net/rist/ristout_stub.c src/lib/net/rist/ristin_s
 endif
 
 ifeq ($(HAVE_SRT),yes)
-dipitvhead_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c \
+dipitvhead_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin/connect.c src/lib/net/srt/srtin/group.c src/lib/net/srt/srtin/open.c src/lib/net/srt/srtin/read.c \
 src/lib/helper/pipereader.c \
-	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
+	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout/connect.c src/lib/net/srt/srtout/pending.c src/lib/net/srt/srtout/service.c src/lib/net/srt/srtout/close.c src/lib/net/srt/srtcommon.c
 dipitvhead_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipitvhead_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt) -latomic
@@ -793,7 +862,11 @@ dipitvhead_SRCS := \
 	src/lib/hls/tspassthrough.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -802,7 +875,11 @@ dipitvhead_SRCS := \
 	src/lib/mux/esbuild/tspacketize.c \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
 	src/dipitvhead/mux/remux/lifecycle.c \
@@ -1022,9 +1099,9 @@ dipidescramble_RIST_SRC := src/lib/net/rist/ristin_stub.c src/lib/net/rist/ristl
 endif
 
 ifeq ($(HAVE_SRT),yes)
-dipidescramble_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c \
+dipidescramble_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin/connect.c src/lib/net/srt/srtin/group.c src/lib/net/srt/srtin/open.c src/lib/net/srt/srtin/read.c \
 src/lib/helper/pipereader.c \
-	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
+	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout/connect.c src/lib/net/srt/srtout/pending.c src/lib/net/srt/srtout/service.c src/lib/net/srt/srtout/close.c src/lib/net/srt/srtcommon.c
 dipidescramble_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipidescramble_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt) -latomic
@@ -1097,7 +1174,11 @@ dipidescramble_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -1106,7 +1187,11 @@ dipidescramble_SRCS := \
 	src/lib/mux/esbuild/tspacketize.c \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c \
@@ -1201,7 +1286,7 @@ dipirist_TLS_SRC := src/lib/net/tls_stub.c
 endif
 
 ifeq ($(HAVE_SRT),yes)
-dipirist_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c src/lib/net/srt/srtcommon.c \
+dipirist_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin/connect.c src/lib/net/srt/srtin/group.c src/lib/net/srt/srtin/open.c src/lib/net/srt/srtin/read.c src/lib/net/srt/srtcommon.c \
 src/lib/helper/pipereader.c
 dipirist_EXTRA_CFLAGS += -pthread $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
@@ -1263,7 +1348,11 @@ dipirist_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -1272,7 +1361,11 @@ dipirist_SRCS := \
 	src/lib/mux/esbuild/tspacketize.c \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c \
@@ -1393,7 +1486,11 @@ dipisrt_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -1402,7 +1499,11 @@ dipisrt_SRCS := \
 	src/lib/mux/esbuild/tspacketize.c \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/mux/psi_build.c \
 	src/lib/net/httpclient/fetch.c \
@@ -1414,8 +1515,14 @@ dipisrt_SRCS := \
 	src/lib/net/srt/srtsrc.c \
 	src/lib/helper/pipereader.c \
 	src/lib/net/srt/srtcommon.c \
-	src/lib/net/srt/srtout.c \
-	src/lib/net/srt/srtin.c \
+	src/lib/net/srt/srtout/connect.c \
+	src/lib/net/srt/srtout/pending.c \
+	src/lib/net/srt/srtout/service.c \
+	src/lib/net/srt/srtout/close.c \
+	src/lib/net/srt/srtin/connect.c \
+	src/lib/net/srt/srtin/group.c \
+	src/lib/net/srt/srtin/open.c \
+	src/lib/net/srt/srtin/read.c \
 	$(dipisrt_TLS_SRC) \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -1471,9 +1578,9 @@ dipixy_RIST_SRC := src/lib/net/rist/ristin_stub.c src/lib/net/rist/ristlog_stub.
 endif
 
 ifeq ($(HAVE_SRT),yes)
-dipixy_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin.c \
+dipixy_SRT_SRC := src/lib/net/srt/srtsrc.c src/lib/net/srt/srtin/connect.c src/lib/net/srt/srtin/group.c src/lib/net/srt/srtin/open.c src/lib/net/srt/srtin/read.c \
 src/lib/helper/pipereader.c \
-	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout.c src/lib/net/srt/srtcommon.c
+	src/lib/net/srt/srtsink.c src/lib/net/srt/srtout/connect.c src/lib/net/srt/srtout/pending.c src/lib/net/srt/srtout/service.c src/lib/net/srt/srtout/close.c src/lib/net/srt/srtcommon.c
 dipixy_EXTRA_CFLAGS += $(shell pkg-config --cflags srt)
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipixy_EXTRA_LDFLAGS += $(shell pkg-config --static --libs srt) -latomic
@@ -1566,7 +1673,10 @@ dipixy_SRCS := \
 	src/dipixy/ts/channels/channels.c \
 	src/dipixy/ts/channels/build.c \
 	src/dipixy/ts/channels/reload.c \
-	src/dipixy/ts/capture/capture.c \
+	src/dipixy/ts/capture/ctx/ctx.c \
+	src/dipixy/ts/capture/ctx/snapshot.c \
+	src/dipixy/ts/capture/ctx/open.c \
+	src/dipixy/ts/capture/ctx/lifecycle.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
@@ -1577,7 +1687,11 @@ dipixy_SRCS := \
 	src/lib/hls/tspassthrough.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -1599,9 +1713,15 @@ dipixy_SRCS := \
 	src/lib/net/httpclient/read.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
-	src/dipixy/reactor/conn.c \
+	src/dipixy/reactor/conn/pool.c \
+	src/dipixy/reactor/conn/table.c \
+	src/dipixy/reactor/conn/queue.c \
+	src/dipixy/reactor/conn/flush.c \
 	src/dipixy/reactor/handshake.c \
-	src/dipixy/reactor/dispatch/dispatch.c \
+	src/dipixy/reactor/dispatch/request/path.c \
+	src/dipixy/reactor/dispatch/request/routes.c \
+	src/dipixy/reactor/dispatch/request/request.c \
+	src/dipixy/reactor/dispatch/request/read.c \
 	src/dipixy/reactor/dispatch/resp.c \
 	src/dipixy/reactor/dispatch/content.c \
 	src/dipixy/reactor/dispatch/route.c \
@@ -1641,8 +1761,15 @@ dipixy_SRCS := \
 	src/dipixy/altsvc.c \
 	src/dipixy/hls/hls_serve.c \
 	src/dipixy/hls/hls_llhls.c \
-	src/dipixy/dash/dash.c \
-	src/dipixy/dash/lldash.c \
+	src/dipixy/dash/dash/mpd_xml.c \
+	src/dipixy/dash/dash/codecs.c \
+	src/dipixy/dash/dash/mpd.c \
+	src/dipixy/dash/dash/seg.c \
+	src/dipixy/dash/lldash/sub.c \
+	src/dipixy/dash/lldash/chain.c \
+	src/dipixy/dash/lldash/subscribe.c \
+	src/dipixy/dash/lldash/bind.c \
+	src/dipixy/dash/lldash/ring.c \
 	src/dipixy/hls/hls_render.c \
 	src/dipixy/segment/segment.c \
 	src/dipixy/segment/demux.c \
@@ -1667,7 +1794,10 @@ dipixy_SRCS := \
 	src/lib/mux/fmp4/fmp4_frag.c \
 	src/lib/metrics/protocol.c \
 	src/lib/metrics/export.c \
-	src/lib/metrics/render.c \
+	src/lib/metrics/render/families.c \
+	src/lib/metrics/render/labels.c \
+	src/lib/metrics/render/series.c \
+	src/lib/metrics/render/openmetrics.c \
 	src/lib/metrics/store.c \
 	src/lib/helper/log.c \
 	src/lib/helper/secure_zero.c \
@@ -1683,7 +1813,11 @@ dipixy_SRCS := \
 	src/lib/helper/playlist_in.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/dvbstp.c \
@@ -2202,7 +2336,11 @@ dipidescramble_pmt_select_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -2212,7 +2350,11 @@ dipidescramble_pmt_select_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
@@ -2690,7 +2832,10 @@ dipimetrics_store_SRCS := \
 dipimetrics_render_BIN := tests/unit/dipimetrics/test_render
 dipimetrics_render_SRCS := \
 	tests/unit/dipimetrics/test_render.c \
-	src/lib/metrics/render.c \
+	src/lib/metrics/render/families.c \
+	src/lib/metrics/render/labels.c \
+	src/lib/metrics/render/series.c \
+	src/lib/metrics/render/openmetrics.c \
 	src/lib/metrics/store.c \
 	src/lib/metrics/protocol.c \
 	src/lib/helper/log.c \
@@ -2850,7 +2995,11 @@ dipirist_bridge_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -2860,7 +3009,11 @@ dipirist_bridge_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/net/ts/sink.c \
@@ -3028,7 +3181,11 @@ dipisrt_bridge_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -3038,7 +3195,11 @@ dipisrt_bridge_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/mux/psi_build.c \
 	src/lib/net/ts/sink.c \
@@ -3049,8 +3210,14 @@ dipisrt_bridge_SRCS := \
 	src/lib/net/rist/ristlog_stub.c \
 	src/lib/net/srt/srtsrc_stub.c \
 	src/lib/net/srt/srtcommon.c \
-	src/lib/net/srt/srtout.c \
-	src/lib/net/srt/srtin.c \
+	src/lib/net/srt/srtout/connect.c \
+	src/lib/net/srt/srtout/pending.c \
+	src/lib/net/srt/srtout/service.c \
+	src/lib/net/srt/srtout/close.c \
+	src/lib/net/srt/srtin/connect.c \
+	src/lib/net/srt/srtin/group.c \
+	src/lib/net/srt/srtin/open.c \
+	src/lib/net/srt/srtin/read.c \
 	src/lib/net/tls_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -3078,8 +3245,14 @@ lib_net_srt_srtsrc_sink_SRCS := \
 	tests/unit/lib/net/srt/test_srtsrc_sink.c \
 	src/lib/net/srt/srtsrc.c \
 	src/lib/net/srt/srtsink.c \
-	src/lib/net/srt/srtin.c \
-	src/lib/net/srt/srtout.c \
+	src/lib/net/srt/srtin/connect.c \
+	src/lib/net/srt/srtin/group.c \
+	src/lib/net/srt/srtin/open.c \
+	src/lib/net/srt/srtin/read.c \
+	src/lib/net/srt/srtout/connect.c \
+	src/lib/net/srt/srtout/pending.c \
+	src/lib/net/srt/srtout/service.c \
+	src/lib/net/srt/srtout/close.c \
 	src/lib/net/srt/srtcommon.c \
 	src/lib/helper/pipereader.c \
 	src/lib/sys/ioutil.c \
@@ -3095,8 +3268,14 @@ lib_net_srt_srtin_out_EXTRA_CFLAGS := $(shell pkg-config --cflags srt)
 lib_net_srt_srtin_out_EXTRA_LDFLAGS := $(shell pkg-config --libs srt)
 lib_net_srt_srtin_out_SRCS := \
 	tests/unit/lib/net/srt/test_srtin_out.c \
-	src/lib/net/srt/srtin.c \
-	src/lib/net/srt/srtout.c \
+	src/lib/net/srt/srtin/connect.c \
+	src/lib/net/srt/srtin/group.c \
+	src/lib/net/srt/srtin/open.c \
+	src/lib/net/srt/srtin/read.c \
+	src/lib/net/srt/srtout/connect.c \
+	src/lib/net/srt/srtout/pending.c \
+	src/lib/net/srt/srtout/service.c \
+	src/lib/net/srt/srtout/close.c \
 	src/lib/net/srt/srtcommon.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c \
@@ -3110,9 +3289,18 @@ endif
 dipisds_input_BIN := tests/unit/dipisds/test_input
 dipisds_input_SRCS := \
 	tests/unit/dipisds/test_input.c \
-	src/dipisds/input.c \
+	src/dipisds/input/util.c \
+	src/dipisds/input/csv.c \
+	src/dipisds/input/m3u.c \
+	src/dipisds/input/xspf.c \
+	src/dipisds/input/load.c \
+	src/dipisds/input/packages.c \
 	src/lib/sys/ioutil.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/helper/log.c
 
 dipisds_format_out_BIN := tests/unit/dipisds/test_format_out
@@ -3123,7 +3311,11 @@ dipisds_format_out_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/playlist_out.c \
-	src/lib/helper/xml_util.c
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c
 
 dipisds_listen_BIN := tests/unit/dipisds/test_listen
 dipisds_listen_SRCS := \
@@ -3149,7 +3341,11 @@ dipisds_listen_SRCS := \
 	src/lib/helper/describe.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
 	src/lib/sys/ioutil.c \
@@ -3164,9 +3360,18 @@ dipisds_announce_SRCS := \
 	tests/unit/dipisds/test_announce.c \
 	src/dipisds/announce.c \
 	src/lib/net/announce_driver.c \
-	src/dipisds/input.c \
+	src/dipisds/input/util.c \
+	src/dipisds/input/csv.c \
+	src/dipisds/input/m3u.c \
+	src/dipisds/input/xspf.c \
+	src/dipisds/input/load.c \
+	src/dipisds/input/packages.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
@@ -3184,7 +3389,10 @@ dipimetrics_httpserver_SRCS := \
 	tests/unit/dipimetrics/test_httpserver.c \
 	src/dipimetrics/httpserver.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
-	src/lib/metrics/render.c \
+	src/lib/metrics/render/families.c \
+	src/lib/metrics/render/labels.c \
+	src/lib/metrics/render/series.c \
+	src/lib/metrics/render/openmetrics.c \
 	src/lib/metrics/store.c \
 	src/lib/metrics/protocol.c \
 	src/lib/sys/signal.c \
@@ -3241,7 +3449,11 @@ dipibcg_config_SRCS := \
 dipibcg_announce_BIN := tests/unit/dipibcg/test_announce
 dipibcg_announce_SRCS := \
 	tests/unit/dipibcg/test_announce.c \
-	src/dipibcg/announce.c \
+	src/dipibcg/announce/time.c \
+	src/dipibcg/announce/programmes.c \
+	src/dipibcg/announce/doc.c \
+	src/dipibcg/announce/segment.c \
+	src/dipibcg/announce/run.c \
 	src/lib/net/announce_driver.c \
 	src/dipibcg/cli/args.c \
 	src/dipibcg/cli/help.c \
@@ -3257,15 +3469,30 @@ dipibcg_announce_SRCS := \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
 	src/lib/tva/mapping.c \
-	src/lib/tva/tva_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/bim/accessunit.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
-	src/lib/bim/fragment.c \
-	src/lib/bim/codec.c \
+	src/lib/bim/fragment/types_media.c \
+	src/lib/bim/fragment/types_text.c \
+	src/lib/bim/fragment/types_desc.c \
+	src/lib/bim/fragment/types_prog.c \
+	src/lib/bim/fragment/coding.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode.c \
+	src/lib/bim/codec/decode.c \
 	src/lib/demux/crc32.c \
 	src/dipibcg/container.c \
 	src/dipibcg/wrapper_stub.c \
@@ -3298,15 +3525,30 @@ dipibcg_listen_SRCS := \
 	src/lib/tva/bcg_doc.c \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/bim/accessunit.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
-	src/lib/bim/fragment.c \
-	src/lib/bim/codec.c \
-	src/lib/tva/tva_xml.c \
+	src/lib/bim/fragment/types_media.c \
+	src/lib/bim/fragment/types_text.c \
+	src/lib/bim/fragment/types_desc.c \
+	src/lib/bim/fragment/types_prog.c \
+	src/lib/bim/fragment/coding.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode.c \
+	src/lib/bim/codec/decode.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
 	src/lib/demux/crc32.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
@@ -3449,7 +3691,11 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -3459,7 +3705,11 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
@@ -3676,7 +3926,10 @@ lib_mux_mp4_BIN := tests/unit/lib/mux/test_mp4
 lib_mux_mp4_SRCS := \
 	tests/unit/lib/mux/test_mp4.c \
 	src/lib/mux/mp4/mp4.c \
-	src/lib/mux/mp4/moov.c \
+	src/lib/mux/mp4/moov/head.c \
+	src/lib/mux/mp4/moov/stbl.c \
+	src/lib/mux/mp4/moov/trak.c \
+	src/lib/mux/mp4/moov/checkpoint.c \
 	src/lib/mux/fmp4/box.c \
 	src/lib/mux/growbuf.c \
 	src/lib/mux/mp4/write.c \
@@ -3839,7 +4092,10 @@ lib_bim_strrepo_SRCS := \
 lib_bim_codec_BIN := tests/unit/lib/bim/test_codec
 lib_bim_codec_SRCS := \
 	tests/unit/lib/bim/test_codec.c \
-	src/lib/bim/codec.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode.c \
+	src/lib/bim/codec/decode.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
@@ -3848,7 +4104,11 @@ lib_bim_codec_SRCS := \
 lib_xml_util_BIN := tests/unit/lib/test_xml_util
 lib_xml_util_SRCS := \
 	tests/unit/lib/test_xml_util.c \
-	src/lib/helper/xml_util.c
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c
 
 lib_yamlcfg_BIN := tests/unit/lib/test_yamlcfg
 lib_yamlcfg_SRCS := \
@@ -3866,7 +4126,11 @@ lib_sds_xml_BIN := tests/unit/lib/test_sds_xml
 lib_sds_xml_SRCS := \
 	tests/unit/lib/test_sds_xml.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c
 
 lib_tva_timefmt_BIN := tests/unit/lib/tva/test_timefmt
@@ -3879,7 +4143,11 @@ lib_tva_bcg_doc_BIN := tests/unit/lib/tva/test_bcg_doc
 lib_tva_bcg_doc_SRCS := \
 	tests/unit/lib/tva/test_bcg_doc.c \
 	src/lib/tva/bcg_doc.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
@@ -3897,28 +4165,55 @@ lib_tva_xmltv_SRCS := \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
 	src/lib/tva/bcg_doc.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
 lib_tva_tva_xml_BIN := tests/unit/lib/tva/test_tva_xml
 lib_tva_tva_xml_SRCS := \
 	tests/unit/lib/tva/test_tva_xml.c \
-	src/lib/tva/tva_xml.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
 	src/lib/tva/bcg_doc.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
 BIM_FRAGMENT_DEPS := \
-	src/lib/bim/fragment.c \
-	src/lib/bim/codec.c \
+	src/lib/bim/fragment/types_media.c \
+	src/lib/bim/fragment/types_text.c \
+	src/lib/bim/fragment/types_desc.c \
+	src/lib/bim/fragment/types_prog.c \
+	src/lib/bim/fragment/coding.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode.c \
+	src/lib/bim/codec/decode.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
-	src/lib/tva/tva_xml.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
 	src/lib/tva/bcg_doc.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
@@ -3948,7 +4243,11 @@ dipiscan_format_SRCS := \
 	src/dipiscan/format.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c
 
 UNIT_TESTS += dipiscan_config
@@ -4006,7 +4305,11 @@ dipiscan_scan_SRCS := \
 	src/dipiscan/format.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
@@ -4053,7 +4356,11 @@ dipixmltv_suggest_SRCS := \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
 	src/lib/tva/bcg_doc.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
@@ -4638,16 +4945,28 @@ lib_dash_mpd_SRCS := \
 	src/lib/hls/m3u_lines.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/helper/log.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c
 
 lib_dash_live_BIN := tests/unit/lib/dash/test_live
 lib_dash_live_SRCS := \
 	tests/unit/lib/dash/test_live.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/dash/mpd.c \
 	src/lib/hls/m3u_lines.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -4821,7 +5140,11 @@ dipitvhead_source_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -4831,7 +5154,11 @@ dipitvhead_source_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/tspack.c \
@@ -5123,7 +5450,11 @@ dipitvhead_discover_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -5133,7 +5464,11 @@ dipitvhead_discover_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/rist/ristin_stub.c \
@@ -5355,7 +5690,11 @@ dipitvhead_output_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -5365,7 +5704,11 @@ dipitvhead_output_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -5467,7 +5810,11 @@ dipitvhead_mpts_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -5477,7 +5824,11 @@ dipitvhead_mpts_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -5574,7 +5925,11 @@ dipitvhead_single_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -5584,7 +5939,11 @@ dipitvhead_single_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/demux/fec2022.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -5870,7 +6229,11 @@ lib_net_tssource_async_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -5882,7 +6245,11 @@ lib_net_tssource_async_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/crc32.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -5930,7 +6297,11 @@ lib_net_tssource_http_dispatch_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -5942,7 +6313,11 @@ lib_net_tssource_http_dispatch_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/crc32.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -5990,7 +6365,11 @@ lib_net_tssource_dash_fmp4_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -6002,7 +6381,11 @@ lib_net_tssource_dash_fmp4_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/crc32.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -6055,7 +6438,11 @@ lib_net_tssource_file_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -6067,7 +6454,11 @@ lib_net_tssource_file_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/crc32.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -6195,7 +6586,10 @@ dipirec_record_SRCS := \
 	src/lib/mux/mp4/mp4.c \
 	src/lib/mux/mp4/write.c \
 	src/lib/mux/mp4/feed.c \
-	src/lib/mux/mp4/moov.c \
+	src/lib/mux/mp4/moov/head.c \
+	src/lib/mux/mp4/moov/stbl.c \
+	src/lib/mux/mp4/moov/trak.c \
+	src/lib/mux/mp4/moov/checkpoint.c \
 	src/lib/mux/fmp4/box.c \
 	src/lib/mux/growbuf.c \
 	src/dipirec/cli/args.c \
@@ -6235,7 +6629,11 @@ dipirec_record_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -6245,7 +6643,11 @@ dipirec_record_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/fec2022.c \
@@ -6331,7 +6733,10 @@ dipirec_record_net_SRCS := \
 	src/lib/mux/mp4/mp4.c \
 	src/lib/mux/mp4/write.c \
 	src/lib/mux/mp4/feed.c \
-	src/lib/mux/mp4/moov.c \
+	src/lib/mux/mp4/moov/head.c \
+	src/lib/mux/mp4/moov/stbl.c \
+	src/lib/mux/mp4/moov/trak.c \
+	src/lib/mux/mp4/moov/checkpoint.c \
 	src/lib/mux/fmp4/box.c \
 	src/lib/mux/growbuf.c \
 	src/dipirec/cli/args.c \
@@ -6371,7 +6776,11 @@ dipirec_record_net_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -6381,7 +6790,11 @@ dipirec_record_net_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/fec2022.c \
@@ -6396,8 +6809,14 @@ dipirec_record_net_SRCS := \
 	src/lib/net/rist/ristlog.c \
 	src/lib/net/srt/srtsrc.c \
 	src/lib/net/srt/srtsink.c \
-	src/lib/net/srt/srtin.c \
-	src/lib/net/srt/srtout.c \
+	src/lib/net/srt/srtin/connect.c \
+	src/lib/net/srt/srtin/group.c \
+	src/lib/net/srt/srtin/open.c \
+	src/lib/net/srt/srtin/read.c \
+	src/lib/net/srt/srtout/connect.c \
+	src/lib/net/srt/srtout/pending.c \
+	src/lib/net/srt/srtout/service.c \
+	src/lib/net/srt/srtout/close.c \
 	src/lib/net/srt/srtcommon.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -6875,7 +7294,10 @@ dipixy_playlist_SRCS := \
 	src/dipixy/dlna/dlna_didl.c \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/ssdp.c \
-	src/dipixy/ts/capture/capture.c \
+	src/dipixy/ts/capture/ctx/ctx.c \
+	src/dipixy/ts/capture/ctx/snapshot.c \
+	src/dipixy/ts/capture/ctx/open.c \
+	src/dipixy/ts/capture/ctx/lifecycle.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -6904,7 +7326,11 @@ dipixy_playlist_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/helper/jsonbuf.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
@@ -6923,7 +7349,11 @@ dipixy_playlist_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -6956,7 +7386,10 @@ dipixy_playlist_SRCS := \
 dipixy_capture_BIN := tests/unit/dipixy/test_capture
 dipixy_capture_SRCS := \
 	tests/unit/dipixy/test_capture.c \
-	src/dipixy/ts/capture/capture.c \
+	src/dipixy/ts/capture/ctx/ctx.c \
+	src/dipixy/ts/capture/ctx/snapshot.c \
+	src/dipixy/ts/capture/ctx/open.c \
+	src/dipixy/ts/capture/ctx/lifecycle.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -6995,7 +7428,11 @@ dipixy_capture_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -7005,7 +7442,11 @@ dipixy_capture_SRCS := \
 	src/lib/mux/esbuild/pmtbuild.c \
 	src/lib/mux/esbuild/remux.c \
 	src/lib/net/httpclient/fetch.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/demux/fec2022.c \
@@ -7041,7 +7482,10 @@ dipixy_channels_SRCS := \
 	src/dipixy/dlna/dlna_didl.c \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/ssdp.c \
-	src/dipixy/ts/capture/capture.c \
+	src/dipixy/ts/capture/ctx/ctx.c \
+	src/dipixy/ts/capture/ctx/snapshot.c \
+	src/dipixy/ts/capture/ctx/open.c \
+	src/dipixy/ts/capture/ctx/lifecycle.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -7071,7 +7515,11 @@ dipixy_channels_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/helper/jsonbuf.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
@@ -7090,7 +7538,11 @@ dipixy_channels_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -7238,7 +7690,10 @@ dipixy_reactor_SRCS := \
 dipixy_dispatch_BIN := tests/unit/dipixy/test_dispatch
 dipixy_dispatch_SRCS := \
 	tests/unit/dipixy/test_dispatch.c \
-	src/dipixy/reactor/dispatch/dispatch.c \
+	src/dipixy/reactor/dispatch/request/path.c \
+	src/dipixy/reactor/dispatch/request/routes.c \
+	src/dipixy/reactor/dispatch/request/request.c \
+	src/dipixy/reactor/dispatch/request/read.c \
 	src/dipixy/reactor/dispatch/resp.c \
 	src/dipixy/reactor/dispatch/content.c \
 	src/dipixy/reactor/dispatch/route.c \
@@ -7263,7 +7718,10 @@ dipixy_hls_SRCS := \
 	src/dipixy/altsvc.c \
 	src/dipixy/hls/hls_serve.c \
 	src/dipixy/hls/hls_llhls.c \
-	src/dipixy/dash/dash.c \
+	src/dipixy/dash/dash/mpd_xml.c \
+	src/dipixy/dash/dash/codecs.c \
+	src/dipixy/dash/dash/mpd.c \
+	src/dipixy/dash/dash/seg.c \
 	src/dipixy/hls/hls_render.c \
 	src/dipixy/ts/pidfilter.c \
 	src/dipixy/ts/lcevcselect.c \
@@ -7447,7 +7905,10 @@ dipixy_segment_video_SRCS := \
 dipixy_conn_BIN := tests/unit/dipixy/test_conn
 dipixy_conn_SRCS := \
 	tests/unit/dipixy/test_conn.c \
-	src/dipixy/reactor/conn.c \
+	src/dipixy/reactor/conn/pool.c \
+	src/dipixy/reactor/conn/table.c \
+	src/dipixy/reactor/conn/queue.c \
+	src/dipixy/reactor/conn/flush.c \
 	src/dipixy/reactor/reactor_tls_stub.c \
 	src/dipixy/reactor/reactor_threadlocal_stub.c \
 	src/dipixy/reactor/qsbr.c \
@@ -7461,7 +7922,10 @@ dipixy_tls_stub_SRCS := \
 dipixy_conn_concurrency_BIN := tests/unit/dipixy/test_conn_concurrency
 dipixy_conn_concurrency_SRCS := \
 	tests/unit/dipixy/test_conn_concurrency.c \
-	src/dipixy/reactor/conn.c \
+	src/dipixy/reactor/conn/pool.c \
+	src/dipixy/reactor/conn/table.c \
+	src/dipixy/reactor/conn/queue.c \
+	src/dipixy/reactor/conn/flush.c \
 	src/dipixy/reactor/reactor_tls_stub.c \
 	src/dipixy/reactor/qsbr.c \
 	src/lib/helper/log.c
@@ -7482,7 +7946,10 @@ dipixy_ws_sources_SRCS := \
 	src/dipixy/dlna/dlna_didl.c \
 	src/dipixy/dlna/dlna_control.c \
 	src/dipixy/dlna/ssdp.c \
-	src/dipixy/ts/capture/capture.c \
+	src/dipixy/ts/capture/ctx/ctx.c \
+	src/dipixy/ts/capture/ctx/snapshot.c \
+	src/dipixy/ts/capture/ctx/open.c \
+	src/dipixy/ts/capture/ctx/lifecycle.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -7511,7 +7978,11 @@ dipixy_ws_sources_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/helper/jsonbuf.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
@@ -7530,7 +8001,11 @@ dipixy_ws_sources_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -7575,7 +8050,10 @@ dipixy_gena_SRCS := \
 	src/dipixy/ts/channels/channels.c \
 	src/dipixy/ts/channels/build.c \
 	src/dipixy/ts/channels/reload.c \
-	src/dipixy/ts/capture/capture.c \
+	src/dipixy/ts/capture/ctx/ctx.c \
+	src/dipixy/ts/capture/ctx/snapshot.c \
+	src/dipixy/ts/capture/ctx/open.c \
+	src/dipixy/ts/capture/ctx/lifecycle.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -7605,7 +8083,11 @@ dipixy_gena_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/helper/jsonbuf.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
@@ -7624,7 +8106,11 @@ dipixy_gena_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -7680,7 +8166,10 @@ dipixy_dlna_SRCS := \
 	src/dipixy/ts/channels/channels.c \
 	src/dipixy/ts/channels/build.c \
 	src/dipixy/ts/channels/reload.c \
-	src/dipixy/ts/capture/capture.c \
+	src/dipixy/ts/capture/ctx/ctx.c \
+	src/dipixy/ts/capture/ctx/snapshot.c \
+	src/dipixy/ts/capture/ctx/open.c \
+	src/dipixy/ts/capture/ctx/lifecycle.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -7710,7 +8199,11 @@ dipixy_dlna_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/helper/jsonbuf.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
@@ -7729,7 +8222,11 @@ dipixy_dlna_SRCS := \
 	src/lib/hls/aes128cbc.c \
 	src/lib/hls/tspassthrough.c \
 	src/lib/dash/mpd.c \
-	src/lib/dash/live.c \
+	src/lib/dash/live/core.c \
+	src/lib/dash/live/position.c \
+	src/lib/dash/live/prepare.c \
+	src/lib/dash/live/events.c \
+	src/lib/dash/live/read.c \
 	src/lib/demux/fmp4/box.c \
 	src/lib/demux/fmp4/track.c \
 	src/lib/demux/fmp4/sample.c \
@@ -7765,7 +8262,11 @@ lib_playlist_in_SRCS := \
 	src/lib/helper/playlist_in.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c \
-	src/lib/helper/xml_util.c
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c
 
 # _BIN/_SRCS/TEST_BINS stay unconditional (unlike TESTS=yes gate below).
 define UNIT_TEST_template
@@ -7860,14 +8361,29 @@ endif
 
 FUZZ_BIM_DEPS := \
 	src/lib/bim/accessunit.c \
-	src/lib/bim/fragment.c \
-	src/lib/bim/codec.c \
+	src/lib/bim/fragment/types_media.c \
+	src/lib/bim/fragment/types_text.c \
+	src/lib/bim/fragment/types_desc.c \
+	src/lib/bim/fragment/types_prog.c \
+	src/lib/bim/fragment/coding.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode.c \
+	src/lib/bim/codec/decode.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
-	src/lib/tva/tva_xml.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
 	src/lib/tva/bcg_doc.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
@@ -7896,7 +8412,11 @@ fuzz_sds_xml_BIN := tests/fuzz/fuzz_sds_xml
 fuzz_sds_xml_SRCS := \
 	tests/fuzz/fuzz_sds_xml.c \
 	src/lib/helper/sds_xml.c \
-	src/lib/helper/xml_util.c
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c
 
 fuzz_rtcp_BIN := tests/fuzz/fuzz_rtcp
 fuzz_rtcp_SRCS := \
@@ -8013,9 +8533,17 @@ fuzz_scte35stamp_SRCS := \
 fuzz_tva_xml_BIN := tests/fuzz/fuzz_tva_xml
 fuzz_tva_xml_SRCS := \
 	tests/fuzz/fuzz_tva_xml.c \
-	src/lib/tva/tva_xml.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
 	src/lib/tva/bcg_doc.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 
@@ -8027,7 +8555,11 @@ fuzz_xmltv_SRCS := \
 	src/lib/tva/bcg_doc.c \
 	src/lib/tva/timefmt.c \
 	src/lib/helper/argutil.c \
-	src/lib/helper/xml_util.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
 

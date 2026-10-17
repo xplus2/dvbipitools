@@ -38,6 +38,14 @@ static size_t id3_skip(const unsigned char *d, size_t len, uint64_t *ts, int *ha
   size = ((size_t)(d[6] & 0x7F) << 21) | ((size_t)(d[7] & 0x7F) << 14) | ((size_t)(d[8] & 0x7F) << 7) | (d[9] & 0x7F);
   size += ID3_HDR + ((d[5] & 0x10) ? ID3_HDR : 0);
   if (size > len) return len;
+  if (d[5] & 0x40) {
+    size_t ext;
+    if (size < ID3_HDR + 4) return size;
+    ext = d[3] == 4 ? (((size_t)(d[10] & 0x7F) << 21) | ((size_t)(d[11] & 0x7F) << 14) | ((size_t)(d[12] & 0x7F) << 7) | (d[13] & 0x7F))
+                    : 4 + (((size_t)d[10] << 24) | ((size_t)d[11] << 16) | ((size_t)d[12] << 8) | d[13]);
+    if (ext > size - ID3_HDR) return size;
+    pos += ext;
+  }
   while (pos + ID3_HDR <= size) {
     size_t fsz = d[3] == 4 ? (((size_t)(d[pos + 4] & 0x7F) << 21) | ((size_t)(d[pos + 5] & 0x7F) << 14) | ((size_t)(d[pos + 6] & 0x7F) << 7) | (d[pos + 7] & 0x7F)) : (((size_t)d[pos + 4] << 24) | ((size_t)d[pos + 5] << 16) | ((size_t)d[pos + 6] << 8) | d[pos + 7]);
     const unsigned char *f = d + pos + ID3_HDR;
@@ -94,7 +102,7 @@ static void adts_to_ts(hls_ts_passthrough_t *p, const unsigned char *d, size_t l
       p->have_pcr = 1;
     }
     esbuild_ts_packetize(ESBUILD_FIRST_ES_PID, &p->es_cc, PES_STREAM_ID_AUDIO, pts, 0, 0, f, flen, pcr, pts, pesbuf, sizeof pesbuf, cb, ctx);
-    p->frames++;
+    p->frames += 1 + (f[6] & 3);
     emitted++;
     off += flen;
   }

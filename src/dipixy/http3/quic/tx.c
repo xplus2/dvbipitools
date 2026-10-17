@@ -23,6 +23,7 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
   size_t pos = 0;
   size_t seg = 0;
   size_t nseg = 0;
+  uint8_t ecn = 0;
 
   if (max_segs > H3_GSO_MAX_SEGS) max_segs = H3_GSO_MAX_SEGS;
   if (max_segs > h3_udp_tx_cap() / max_udp) max_segs = h3_udp_tx_cap() / max_udp;
@@ -55,7 +56,7 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
     if (pktlen == 0) {
       if (nseg == 0) break;
       /* no room at gso size: send queued. retry at full size */
-      h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg);
+      h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg, ecn);
       pos = 0;
       seg = 0;
       nseg = 0;
@@ -79,9 +80,9 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
     }
     socklen_t plen = ps.path.remote.addrlen;
     if (plen > sizeof dst) plen = sizeof dst;
-    if (nseg > 0 && (plen != dstlen || memcmp(ps.path.remote.addr, &dst, plen) != 0)) {
+    if (nseg > 0 && (plen != dstlen || memcmp(ps.path.remote.addr, &dst, plen) != 0 || pi.ecn != ecn)) {
       /* validation probes to new path, rest to old */
-      h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg);
+      h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg, ecn);
       memmove(buf, buf + pos, (size_t)pktlen);
       pos = 0;
       seg = 0;
@@ -93,18 +94,19 @@ void flush_tx(h3_conn_t *c, int udp_fd) {
       tx_fd = dst.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4;
       if (tx_fd < 0) tx_fd = udp_fd;
       seg = (size_t)pktlen;
+      ecn = pi.ecn;
     }
     pos += (size_t)pktlen;
     nseg++;
     if (ndatalen >= 0 && c->h3conn) nghttp3_conn_add_write_offset(c->h3conn, stream_id, (uint64_t)ndatalen);
     if ((size_t)pktlen < seg || nseg >= max_segs) {
-      h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg);
+      h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg, ecn);
       pos = 0;
       seg = 0;
       nseg = 0;
     }
   }
-  h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg);
+  h3_udp_send(tx_fd, &dst, dstlen, &c->local_addr, buf, pos, seg, ecn);
   ngtcp2_conn_update_pkt_tx_time(c->qconn, ts);
 }
 

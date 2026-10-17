@@ -58,6 +58,15 @@ capture_ctx_t *capture_try_ref_srt(const char *host, unsigned port) {
   return c;
 }
 
+capture_ctx_t *capture_try_ref_http(const char *url) {
+  capture_ctx_t *c;
+  pthread_mutex_lock(&g_lock);
+  c = find_existing_tssrc(url);
+  if (c) atomic_fetch_add_explicit(&c->refcount, 1, memory_order_relaxed);
+  pthread_mutex_unlock(&g_lock);
+  return c;
+}
+
 capture_ctx_t *capture_open_srt(const char *host, unsigned port) {
   char key[300];
   capture_ctx_t *c;

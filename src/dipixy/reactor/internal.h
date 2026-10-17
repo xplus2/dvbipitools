@@ -34,9 +34,6 @@
 
 #include <errno.h>
 
-/* threads[] sized to this in reactor_run, -j past it fails at startup */
-#define REACTOR_MAX_WORKERS 256
-
 /* Retry-After secs on 503 cap refusals */
 #define REACTOR_RETRY_AFTER_S "5"
 
@@ -171,14 +168,14 @@ void llhls_waiter_conn_closing(const conn_t *c);
 
 /* now_ms(): lib/sys/ioutil.h */
 
-/* parses _HLS_msn=<N>&_HLS_part=<P> from a query string. 1 if both present */
+/* _HLS_msn[&_HLS_part]: 1 if msn present, *want_part -1 without part */
 static inline int parse_blocking_reload(const char *query, uint32_t *want_seg, int *want_part) {
   const char *msn = query ? strstr(query, "_HLS_msn=") : NULL;
   const char *part = query ? strstr(query, "_HLS_part=") : NULL;
   long p;
-  if (!msn || !part) return 0;
-  p = strtol(part + 10, NULL, 10);
-  if (p < 0 || p > INT_MAX) return 0;
+  if (!msn) return 0;
+  p = part ? strtol(part + 10, NULL, 10) : -1;
+  if (p > INT_MAX || (part && p < 0)) return 0;
   *want_seg = (uint32_t)strtoul(msn + 9, NULL, 10);
   *want_part = (int)p;
   return 1;
@@ -568,5 +565,9 @@ void reactor_ws_flush(int epfd, conn_t *c);
 
 /* 1: handled (upgraded or rejected), 0: not WS */
 int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers, size_t num_headers);
+
+void conn_add_bytes_served(size_t len);
+int buf_ensure(conn_buf *b, size_t need);
+void buf_compact(conn_buf *b);
 
 #endif

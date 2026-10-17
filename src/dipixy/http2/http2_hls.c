@@ -17,7 +17,9 @@
 #include <string.h>
 #include <time.h>
 
-typedef struct {
+typedef struct h2_body_src {
+  struct h2_body_src *next;
+  int32_t sid;
   uint8_t *data;
   uint8_t *owner;
   size_t len;
@@ -35,11 +37,38 @@ static h2_body_src_t *h2_body_src_alloc(void) {
   return malloc(sizeof(h2_body_src_t));
 }
 
+static void h2_body_src_unlink(h2_conn_t *conn, const h2_body_src_t *src) {
+  for (h2_body_src_t **pp = &conn->body_srcs; *pp; pp = &(*pp)->next) {
+    if (*pp != src) continue;
+    *pp = src->next;
+    return;
+  }
+}
+
 static void h2_body_src_free(h2_body_src_t *src) {
   if (t_h2_body_src_pool_n < H2_BODY_SRC_POOL_MAX)
     t_h2_body_src_pool[t_h2_body_src_pool_n++] = src;
   else
     free(src);
+}
+
+void h2_body_on_stream_close(h2_conn_t *conn, int32_t stream_id) {
+  for (h2_body_src_t *src = conn->body_srcs; src; src = src->next) {
+    if (src->sid != stream_id) continue;
+    h2_body_src_unlink(conn, src);
+    hls_resp_body_release(src->data, src->owner, src->zc);
+    h2_body_src_free(src);
+    return;
+  }
+}
+
+void h2_body_on_conn_close(h2_conn_t *conn) {
+  while (conn->body_srcs) {
+    h2_body_src_t *src = conn->body_srcs;
+    conn->body_srcs = src->next;
+    hls_resp_body_release(src->data, src->owner, src->zc);
+    h2_body_src_free(src);
+  }
 }
 
 /* safe: nghttp2 never touches source->ptr again after EOF */
@@ -48,12 +77,12 @@ static ssize_t body_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *buf
   size_t n = src->len - src->off;
   (void)ng;
   (void)stream_id;
-  (void)ud;
   if (n > length) n = length;
   if (n) memcpy(buf, src->data + src->off, n);
   src->off += n;
   if (src->off >= src->len) {
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+    h2_body_src_unlink(ud, src);
     hls_resp_body_release(src->data, src->owner, src->zc);
     h2_body_src_free(src);
   }
@@ -108,9 +137,12 @@ void h2_submit_resp_ex(h2_conn_t *conn, int32_t stream_id, int status, const cha
   src->len = content_length;
   src->off = 0;
   src->zc = zc;
+  src->sid = stream_id;
+  src->next = conn->body_srcs;
+  conn->body_srcs = src;
   dp.read_callback = body_read_cb;
   dp.source.ptr = src;
-  nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, &dp);
+  if (nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, &dp) != 0) h2_body_on_stream_close(conn, stream_id);
 }
 
 void h2_submit_resp(h2_conn_t *conn, int32_t stream_id, int status, const char *content_type, const char *etag, size_t content_length, uint8_t *body, uint8_t *owner, int zc, const char *origin_hdr) {

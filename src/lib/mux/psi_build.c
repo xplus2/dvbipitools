@@ -224,12 +224,15 @@ size_t psi_build_sdt_multi(unsigned version, unsigned tsid, unsigned onid, const
   return psi_build_sdt_section(version, tsid, onid, services, n_services, 0, out, cap);
 }
 
+#define NIT_TAIL_BYTES 12
+
 size_t psi_build_nit(unsigned version, unsigned onid, unsigned tsid, const char *network_name, unsigned char *out, size_t cap) {
   size_t n = 0;
   size_t ndl_pos;
   size_t nd_start;
   size_t dlen_pos;
   size_t nlen;
+  size_t room;
   size_t tsl_pos;
   size_t ts_start;
   unsigned ndl;
@@ -249,7 +252,8 @@ size_t psi_build_nit(unsigned version, unsigned onid, unsigned tsid, const char 
   out[n++] = 0x40; /* network_name_descriptor */
   dlen_pos = n;
   n++;
-  nlen = psi_put_text(out + n, cap - n < NIT_NAME_MAX ? cap - n : NIT_NAME_MAX, network_name);
+  room = cap - n - NIT_TAIL_BYTES;
+  nlen = psi_put_text(out + n, room < NIT_NAME_MAX ? room : NIT_NAME_MAX, network_name);
   n += nlen;
   out[dlen_pos] = (unsigned char)nlen;
   ndl = (unsigned)(n - nd_start);

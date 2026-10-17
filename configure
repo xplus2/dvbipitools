@@ -86,7 +86,7 @@ fi
 
 BUILD_ARCH=$(uname -m)
 
-CFLAGS="-std=gnu11 -Wall -Wextra -Werror -Isrc"
+CFLAGS="-std=gnu11 -Wall -Wextra -Werror -Isrc -pthread"
 CFLAGS="$CFLAGS -DBUILD_ARCH=\\\"$BUILD_ARCH\\\""
 CFLAGS="$CFLAGS -DBUILD_TYPE=\\\"$BUILD_TYPE\\\""
 CFLAGS="$CFLAGS -DBUILD_LINK=\\\"$BUILD_LINK\\\""
@@ -96,7 +96,7 @@ else
   CFLAGS="$CFLAGS -g -O0"
 fi
 
-LDFLAGS=""
+LDFLAGS="-pthread"
 [ "$BUILD_LINK" = static ] && LDFLAGS="$LDFLAGS -static"
 [ "$BUILD_TYPE" = Release ] && LDFLAGS="$LDFLAGS -s"
 

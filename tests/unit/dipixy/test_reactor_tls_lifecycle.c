@@ -59,7 +59,7 @@ static SSL *client_handshake(int server_fd, int client_fd, SSL_CTX *cctx) {
 }
 
 START_TEST(init_with_an_unusable_certificate_leaves_tls_off) {
-  ck_assert_int_eq(tls_init("/nonexistent/cert.pem", "/nonexistent/key.pem", FD_TABLE), 0);
+  ck_assert_int_eq(tls_init("/nonexistent/cert.pem", "/nonexistent/key.pem", FD_TABLE), 1);
   ck_assert_int_eq(tls_is_running(), 0);
   ck_assert_int_eq(tls_accept(5), -1);
   ck_assert_int_eq(reload_tls(), -1);

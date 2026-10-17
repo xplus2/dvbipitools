@@ -32,6 +32,8 @@ ssize_t dash_live_read(dash_live_t *h, unsigned char *buf, size_t cap, net_err_r
 
 int dash_live_has_buffered(const dash_live_t *h);
 
+int dash_live_finished(const dash_live_t *h);
+
 void dash_live_emit(dash_live_t *h, const unsigned char *data, size_t len);
 
 #endif

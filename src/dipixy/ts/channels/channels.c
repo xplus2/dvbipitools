@@ -145,16 +145,21 @@ int channel_uri_is_static(const char *uri) {
   return !strncmp(uri, "srt://", 6) || !strncmp(uri, "http://", 7) || !strncmp(uri, "https://", 8);
 }
 
-capture_ctx_t *channels_resolve_static(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name) {
+int channels_static_target(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, char *uri, size_t urisz, int *insecure_tls) {
   const channel_list_t *l;
   const channel_item_t *it;
-  char uri[1024];
-  int insecure_tls;
   l = channels_get(ch, list_num);
   it = l ? (item_name ? channel_list_find_name(l, item_name) : channel_list_get_item(l, item_num)) : NULL;
-  if (!it || !channel_uri_is_static(it->uri) || strlen(it->uri) >= sizeof uri) return NULL;
-  bufcpy(uri, sizeof uri, it->uri);
-  insecure_tls = it->insecure_tls;
+  if (!it || !channel_uri_is_static(it->uri) || strlen(it->uri) >= urisz) return 0;
+  bufcpy(uri, urisz, it->uri);
+  *insecure_tls = it->insecure_tls;
+  return 1;
+}
+
+capture_ctx_t *channels_resolve_static(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name) {
+  char uri[1024];
+  int insecure_tls;
+  if (!channels_static_target(ch, list_num, item_num, item_name, uri, sizeof uri, &insecure_tls)) return NULL;
   if (!strncmp(uri, "srt://", 6)) {
     char host[256];
     unsigned port;

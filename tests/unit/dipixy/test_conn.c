@@ -411,7 +411,7 @@ START_TEST(sweep_idle_wakes_owner_when_epollout_already_armed) {
   c = conn_new(fds[0], NULL);
   c->epfd = epfd;
   atomic_store(&c->want_write, 1); /* stalled writer: EPOLLOUT armed, never fires */
-  atomic_store(&c->last_active, 1);
+  atomic_store(&c->last_active, conn_now_s() - 100);
   memset(&ev, 0, sizeof ev);
   ev.events = EPOLLIN;
   ev.data.ptr = c;

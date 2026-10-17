@@ -412,6 +412,7 @@ static void ac4_build_dsi(esc_track_t *t, unsigned bitstream_version, unsigned f
   ac4_bw_put(&w, fs_index, 1);
   ac4_bw_put(&w, frame_rate_index, 4);
   ac4_bw_put(&w, 0, 9);
+  if (bitstream_version > 1) ac4_bw_put(&w, 0, 1);
   ac4_bw_put(&w, 0, 2);
   ac4_bw_put(&w, 0, 32);
   ac4_bw_put(&w, 0xFFFFFFFFu, 32);

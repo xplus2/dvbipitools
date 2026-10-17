@@ -41,6 +41,7 @@ struct capture_ctx {
   size_t leftover_len;
 
   _Atomic int refcount;
+  _Atomic int dead;
 
   unsigned char *ring; /* CAP_BACKEND_MCAST only, capture_service()/capture_reader_* */
   _Atomic uint64_t write_total; /* monotonic bytes ever written */
@@ -94,7 +95,12 @@ ssize_t capture_read_dispatch(capture_ctx_t *ctx, unsigned char *buf, size_t buf
 
 /* pump.c */
 int next_pump_shard(void);
-void capture_pump_mark(uint64_t *mark); /* CAPTURE_PUMP_MAX_THREADS entries */
-int capture_pump_mark_passed(const uint64_t *mark); /* all pumps quiescent since mark */
+
+capture_ctx_t *find_existing(int family, const char *group, const char *source, unsigned port, const char *iface);
+capture_snapshot_t *snapshot_alloc(int need);
+int open_count(void);
+void publish_snapshot(capture_snapshot_t *snap);
+void free_snapshots(capture_snapshot_t *list);
+int pumps_joined(void);
 
 #endif

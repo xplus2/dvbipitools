@@ -38,6 +38,6 @@ typedef struct {
 
 unsigned fmp4_parse_trun_samples(const unsigned char *trun_body, size_t trun_len, const fmp4_tfhd_t *tfhd, const fmp4_box_t *moof, const unsigned char *mdat_body, size_t mdat_len, fmp4_dec_sample_t *out, unsigned max);
 
-int fmp4_sample_is_keyframe(uint32_t sample_flags);
+static inline int fmp4_sample_is_keyframe(uint32_t sample_flags) { return !(sample_flags & 0x00010000); }
 
 #endif

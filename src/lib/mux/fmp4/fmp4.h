@@ -26,7 +26,7 @@ typedef struct {
   unsigned char ac3_bsmod;
   unsigned char ac3_acmod;
   unsigned char ac3_lfeon;
-  unsigned ac3_bitrate_code; /* AC3: 5-bit frmsizecod. EAC3: 13-bit data_rate estimate, kbps */
+  unsigned ac3_bitrate_code; /* AC3: frmsizecod >> 1. EAC3: 13-bit data_rate estimate, kbps */
   unsigned truehd_format_info; /* dmlp fields */
   unsigned truehd_peak_data_rate; /* dmlp fields */
   int dts_has_core; /* DTS/DTS-HD/DTS-HD-MA: core substream */

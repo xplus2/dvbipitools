@@ -20,6 +20,7 @@ unsigned long long reactor_bytes_served_total(void) { return g_out_bytes; }
 double mono_seconds(void) { return g_now; }
 int reactor_worker_count(void) { return 2; }
 int channels_refresh_active(void) { return 0; }
+int capture_pump_thread_count(void) { return 1; }
 int tls_is_running(void) { return 0; }
 
 int tls_cert_detail(const char *path, int from_file, tls_cert_detail_t *out) {

@@ -23,6 +23,7 @@ typedef struct {
   dash_timeline_entry_t timeline[DASH_MAX_TIMELINE];
   unsigned n_timeline;
   unsigned long long timeline_skipped;
+  int timeline_open_ended;
 } segtmpl_defaults_t;
 
 static unsigned long long seconds_attr_to_ms(const char *v) { return (unsigned long long)(strtod(v, NULL) * 1000.0 + 0.5); }
@@ -81,6 +82,7 @@ static void parse_mpd_attrs(const char *mpd_tag, const char *mpd_end, dash_mpd_t
   if (xml_tag_attr(mpd_tag, mpd_end, "minimumUpdatePeriod", v, sizeof v) == 0) out->minimum_update_period_ms = (unsigned)duration_to_ms(v);
   if (xml_tag_attr(mpd_tag, mpd_end, "timeShiftBufferDepth", v, sizeof v) == 0) out->time_shift_buffer_ms = duration_to_ms(v);
   if (xml_tag_attr(mpd_tag, mpd_end, "availabilityStartTime", v, sizeof v) == 0) out->has_availability_start = iso_datetime_to_ms(v, &out->availability_start_ms);
+  if (xml_tag_attr(mpd_tag, mpd_end, "mediaPresentationDuration", v, sizeof v) == 0) out->media_presentation_duration_ms = duration_to_ms(v);
 }
 
 typedef struct {
@@ -102,7 +104,10 @@ static int timeline_s_cb(const char *tag, const char *blk_end, void *vctx) {
   if (st->n_timeline) {
     dash_timeline_entry_t *prev = &st->timeline[st->n_timeline - 1];
     if (!has_t) e.t = prev->t + prev->d * (prev->r + 1);
-    else if (ctx->open_ended && e.t > prev->t) prev->r = (e.t - prev->t) / prev->d - 1;
+    else if (ctx->open_ended && e.t > prev->t) {
+      unsigned long long n = (e.t - prev->t) / prev->d;
+      prev->r = n ? n - 1 : 0;
+    }
   }
   ctx->open_ended = 0;
   if (xml_attr(tag, blk_end, "r", v, sizeof v) == 0) {
@@ -127,6 +132,7 @@ static void parse_segment_timeline(const xml_span_t *st_span, segtmpl_defaults_t
   ctx.st = out;
   ctx.open_ended = 0;
   for_each_xml_elem(tl.tag, tl.end, "S", timeline_s_cb, &ctx);
+  out->timeline_open_ended = ctx.open_ended && out->n_timeline;
 }
 
 static const http_url_t *base_url_for(const http_url_t *parent, const char *s, const char *end, http_url_t *store) {
@@ -213,6 +219,7 @@ static int representation_cb(const char *tag, const char *blk_end, void *vctx) {
   memcpy(r->timeline, st.timeline, st.n_timeline * sizeof st.timeline[0]);
   r->n_timeline = st.n_timeline;
   r->timeline_skipped = st.timeline_skipped;
+  r->timeline_open_ended = st.timeline_open_ended;
   ctx->as->n_representations++;
   return 0;
 }
@@ -264,6 +271,7 @@ static int period_cb(const char *tag, const char *blk_end, void *vctx) {
   memset(period, 0, sizeof *period);
   period->start_ms = xml_tag_attr(tag, blk_end, "start", v, sizeof v) == 0 ? duration_to_ms(v) : ctx->prev_end_ms;
   if (xml_tag_attr(tag, blk_end, "duration", v, sizeof v) == 0) dur_ms = duration_to_ms(v);
+  period->duration_ms = dur_ms;
   ctx->prev_end_ms = period->start_ms + dur_ms;
   memset(&defaults, 0, sizeof defaults);
   defaults.start_number = 1;
@@ -274,6 +282,37 @@ static int period_cb(const char *tag, const char *blk_end, void *vctx) {
   for_each_xml_elem(tag, blk_end, "AdaptationSet", adaptation_set_cb, &actx);
   ctx->mpd->n_periods++;
   return 0;
+}
+
+static unsigned long long ms_to_ticks(const dash_representation_t *r, unsigned long long ms) {
+  unsigned long long ts = r->timescale ? r->timescale : 1;
+  return ms / 1000ULL * ts + ms % 1000ULL * ts / 1000ULL;
+}
+
+static void expand_open_ended(const dash_mpd_t *m, unsigned period_idx, dash_representation_t *r) {
+  const dash_period_t *p = &m->periods[period_idx];
+  dash_timeline_entry_t *e = &r->timeline[r->n_timeline - 1];
+  unsigned long long end_ms = 0;
+  unsigned long long period_end_ms = 0;
+  unsigned long long end_ticks;
+  unsigned long long n;
+  if (p->duration_ms) period_end_ms = p->duration_ms;
+  else if (!m->is_dynamic && m->media_presentation_duration_ms > p->start_ms) period_end_ms = m->media_presentation_duration_ms - p->start_ms;
+  if (m->is_dynamic && m->has_availability_start) {
+    unsigned long long now = dash_wall_ms();
+    unsigned long long el = now > m->availability_start_ms ? now - m->availability_start_ms : 0;
+    end_ms = el > p->start_ms ? el - p->start_ms : 0;
+    if (period_end_ms && end_ms > period_end_ms) end_ms = period_end_ms;
+  } else {
+    end_ms = period_end_ms;
+  }
+  r->timeline_open_ended = 0;
+  e->r = 0;
+  if (!e->d) return;
+  end_ticks = ms_to_ticks(r, end_ms) + r->presentation_time_offset;
+  if (end_ticks <= e->t) return;
+  n = (end_ticks - e->t) / e->d;
+  e->r = n ? n - 1 : 0;
 }
 
 int dash_mpd_parse(const char *body, const http_url_t *base, dash_mpd_t *out) {
@@ -290,6 +329,12 @@ int dash_mpd_parse(const char *body, const http_url_t *base, dash_mpd_t *out) {
   ctx.base = base_url_for(base, mpd_tag, children_start(mpd_tag, end, "Period"), &mbase_store);
   ctx.prev_end_ms = 0;
   for_each_xml_elem(body, end, "Period", period_cb, &ctx);
+  for (unsigned p = 0; p < out->n_periods; p++)
+    for (unsigned a = 0; a < out->periods[p].n_adaptation_sets; a++)
+      for (unsigned r = 0; r < out->periods[p].adaptation_sets[a].n_representations; r++) {
+        dash_representation_t *rep = &out->periods[p].adaptation_sets[a].representations[r];
+        if (rep->timeline_open_ended && rep->n_timeline) expand_open_ended(out, p, rep);
+      }
   for (unsigned p = 0; !out->is_low_latency && p < out->n_periods; p++)
     for (unsigned a = 0; !out->is_low_latency && a < out->periods[p].n_adaptation_sets; a++)
       for (unsigned r = 0; !out->is_low_latency && r < out->periods[p].adaptation_sets[a].n_representations; r++)

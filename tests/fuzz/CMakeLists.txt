@@ -18,14 +18,29 @@ dvbipitools_add_fuzz_harness(psi
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 set(FUZZ_BIM_DEPS
-    ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
-    ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_media.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_text.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_desc.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_prog.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/coding.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/dvbtypes.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/node.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode.c
+    ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
-    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/crid.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/time.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/write.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_info.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_schedule.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -37,7 +52,7 @@ dvbipitools_add_fuzz_harness(bim_accessunit
 dvbipitools_add_fuzz_harness(sds_xml
     fuzz_sds_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c)
 
 dvbipitools_add_fuzz_harness(rtcp
     fuzz_rtcp.c
@@ -129,9 +144,17 @@ dvbipitools_add_fuzz_harness(yamlcfg
 
 dvbipitools_add_fuzz_harness(tva_xml
     fuzz_tva_xml.c
-    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/crid.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/time.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/write.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_info.c
+    ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_schedule.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
@@ -142,7 +165,11 @@ dvbipitools_add_fuzz_harness(xmltv
     ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
     ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 

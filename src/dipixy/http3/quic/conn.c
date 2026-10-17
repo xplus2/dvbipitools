@@ -82,6 +82,8 @@ h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *
   qcbs.extend_max_stream_data = cb_extend_max_stream_data;
   qcbs.stream_open = cb_stream_open;
   qcbs.stream_close = cb_stream_close;
+  qcbs.stream_reset = cb_stream_reset;
+  qcbs.recv_stop_sending = cb_recv_stop_sending;
   qcbs.rand = cb_rand;
   qcbs.get_new_connection_id2 = cb_get_new_connection_id2;
   qcbs.remove_connection_id = cb_remove_connection_id;
@@ -153,6 +155,21 @@ h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *
     return NULL;
   }
   return c;
+}
+
+void h3conn_send_close(h3_conn_t *c, int udp_fd, int liberr) {
+  uint8_t buf[H3_CLOSE_PKT_MAX];
+  ngtcp2_ccerr ccerr;
+  ngtcp2_path_storage ps;
+  ngtcp2_pkt_info pi;
+  ngtcp2_ssize n;
+  if (!c->qconn || udp_fd < 0 || ngtcp2_conn_in_closing_period(c->qconn) || ngtcp2_conn_in_draining_period(c->qconn)) return;
+  if (liberr == NGTCP2_ERR_DRAINING || liberr == NGTCP2_ERR_CLOSING || liberr == NGTCP2_ERR_DROP_CONN || liberr == NGTCP2_ERR_IDLE_CLOSE) return;
+  ngtcp2_ccerr_default(&ccerr);
+  if (liberr) ngtcp2_ccerr_set_liberr(&ccerr, liberr, NULL, 0);
+  ngtcp2_path_storage_zero(&ps);
+  n = ngtcp2_conn_write_connection_close_versioned(c->qconn, &ps.path, NGTCP2_PKT_INFO_VERSION, &pi, buf, sizeof buf, &ccerr, h3_ts());
+  if (n > 0) h3_udp_send(udp_fd, &c->peer_addr, c->peer_addrlen, &c->local_addr, buf, (size_t)n, (size_t)n, 0);
 }
 
 void h3conn_del(h3_conn_t *c) {

@@ -4,6 +4,7 @@
 #include "reactor_tls_int.h"
 
 #include <errno.h>
+#include <openssl/err.h>
 #include <openssl/x509.h>
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -91,6 +92,7 @@ int tls_handshake(int fd) {
   if (fd < 0 || fd >= g_tls_fd_max) return -1;
   SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
   if (!ssl) return -1;
+  ERR_clear_error();
   int r = SSL_do_handshake(ssl);
   if (r == 1) return 1;
   int err = SSL_get_error(ssl, r);

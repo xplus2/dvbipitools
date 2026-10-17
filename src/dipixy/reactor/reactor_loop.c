@@ -142,7 +142,9 @@ void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, struct epo
       reactor_handshake(epfd, c);
       break;
     case CONN_DISPATCH:
-      break; /* LL-HLS blocking-reload park: llhls_flush_waiters() resumes it, not epoll events */
+      /* parked: waiter resumes it. level-triggered input would spin */
+      epoll_ctl(epfd, EPOLL_CTL_MOD, c->fd, &(struct epoll_event){.events = 0, .data.ptr = c});
+      break;
 #ifdef HAVE_HTTP2
     case CONN_H2:
       if (e & EPOLLIN) h2_handle_readable(epfd, c);
@@ -233,6 +235,7 @@ void *worker_thread(void *arg) {
     for (int i = 0; i < nev; i++) reactor_handle_event(epfd, &rl, tid, &events[i]);
     if (tid == 0) conn_sweep_idle(reactor_cfg()->idle_timeout_s);
     capture_flush_deferred_quiescent();
+    conn_zc_linger_poll();
     llhls_flush_waiters();
     hls_cold_flush_waiters();
     ts_cold_flush_waiters();
@@ -259,6 +262,7 @@ out:
   reactor_teardown_listeners(&rl);
   close(epfd);
   reactor_ws_pool_release();
+  conn_zc_linger_flush();
   conn_retire_handoff();
   return NULL;
 }
@@ -272,7 +276,7 @@ static void capture_pump_feed(capture_ctx_t *ctx, void *user, const unsigned cha
 
 #define PUMP_MAINT_INTERVAL_S 1.0
 #define PUMP_IDLE_BACKOFF_MIN_US 200
-#define PUMP_IDLE_BACKOFF_MAX_US 2000
+#define PUMP_IDLE_BACKOFF_MAX_US 5000
 
 void *pump_thread(void *arg) {
   int pid = (int)(intptr_t)arg;

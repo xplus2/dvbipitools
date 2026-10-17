@@ -113,9 +113,12 @@ static size_t build_es_descriptor(codec_t codec, unsigned char *out, size_t cap)
 size_t esbuild_build_pmt(unsigned version, unsigned program_number, const esbuild_es_t *es, unsigned n_es, unsigned char *out, size_t cap) {
   size_t n = 0;
   unsigned pcr_pid;
+  int has_truehd = 0;
 
   if (!n_es || n_es > ESBUILD_MAX_ES || cap < 32) return 0;
   pcr_pid = esbuild_pcr_pid(es, n_es);
+  for (unsigned i = 0; i < n_es; i++)
+    if (es[i].codec == CODEC_TRUEHD) has_truehd = 1;
 
   out[n++] = 0x02;
   n += 2;
@@ -126,8 +129,14 @@ size_t esbuild_build_pmt(unsigned version, unsigned program_number, const esbuil
   out[n++] = 0x00;
   psi_put16(out + n, 0xE000 | (pcr_pid & 0x1FFF));
   n += 2;
-  psi_put16(out + n, 0xF000);
-  n += 2;
+  if (has_truehd) { /* demux need HDMV to classify 0x83 */
+    psi_put16(out + n, 0xF006);
+    n += 2;
+    n += build_registration_desc(out + n, "HDMV");
+  } else {
+    psi_put16(out + n, 0xF000);
+    n += 2;
+  }
 
   for (unsigned i = 0; i < n_es; i++) {
     size_t es_info_pos;

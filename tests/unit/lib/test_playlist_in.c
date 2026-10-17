@@ -50,6 +50,23 @@ START_TEST(m3u_dipiscan_shaped_parses_triplet) {
 }
 END_TEST
 
+START_TEST(m3u_extinf_name_splits_at_the_comma_outside_quotes) {
+  char path[160];
+  playlist_list_t *pl;
+  write_temp_file(path, ".m3u",
+    "#EXTM3U\n"
+    "#EXTINF:-1 tvg-name=\"One, Two\" tsid=\"1\" onid=\"2\" sid=\"3\",Channel\n"
+    "udp://239.2.2.2:6000\n");
+  pl = playlist_in_parse_m3u(path);
+  unlink(path);
+  ck_assert_ptr_nonnull(pl);
+  ck_assert_int_eq(pl->count, 1);
+  ck_assert_str_eq(pl->items[0].name, "Channel");
+  ck_assert_int_eq(pl->items[0].has_triplet, 1);
+  playlist_list_free(pl);
+}
+END_TEST
+
 START_TEST(m3u_generic_third_party_parses_without_triplet) {
   char path[160];
   playlist_list_t *pl;
@@ -243,6 +260,7 @@ static Suite *playlist_in_suite(void) {
   tcase_add_test(tc, csv_missing_file_returns_null);
   tcase_add_test(tc, xspf_dipiscan_shaped_parses_triplet);
   tcase_add_test(tc, xspf_generic_third_party_without_extension);
+  tcase_add_test(tc, m3u_extinf_name_splits_at_the_comma_outside_quotes);
   tcase_add_test(tc, xspf_multiple_tracks_parse_in_order);
   tcase_add_test(tc, xspf_missing_file_returns_null);
   suite_add_tcase(s, tc);

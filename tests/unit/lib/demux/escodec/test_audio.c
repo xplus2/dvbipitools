@@ -975,6 +975,8 @@ static const latm_case_t latm_cases[] = {
   {"sbr with 24-bit extension rate", 0, 0, 0, 0, 1, 0, 5, 0, 6, 2, 15, 2, 0, 0, 0, 0, 0, 4, 0, 24000, 2},
   {"ps with extension rate index", 0, 0, 0, 0, 1, 0, 29, 0, 6, 2, 3, 2, 0, 0, 0, 0, 0, 4, 0, 24000, 2},
   {"audio mux version 1", 0, 1, 0, 1, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 4, 0, 44100, 2},
+  {"audio mux version 1 sbr", 0, 1, 0, 1, 1, 0, 5, 0, 6, 2, 3, 2, 0, 0, 0, 0, 0, 4, 0, 24000, 2},
+  {"audio mux version 1 other data", 0, 1, 0, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 2, 0, 4, 0, 44100, 2},
   {"audio mux version A set", 0, 1, 1, 0, 1, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 4, -1, 0, 0},
   {"streams not time framed together", 0, 0, 0, 0, 0, 0, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 4, -1, 0, 0},
   {"sub frames present", 0, 0, 0, 0, 1, 1, 2, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 4, -1, 0, 0},
@@ -1014,6 +1016,12 @@ static size_t build_latm_case(const latm_case_t *c, unsigned char *out, size_t c
       bitwriter_put(&bw, c->num_sub, 6);
       bitwriter_put(&bw, 0, 4);
       bitwriter_put(&bw, 0, 3);
+      if (c->amv) {
+        unsigned asc_bits = (c->aot == 31 ? 11u : 5u) + 4 + 4 + 1 + 1 + (c->depends_core ? 14u : 0u) + 1;
+        if (c->aot == 5 || c->aot == 29) asc_bits += 4 + (c->ext_sfi == 15 ? 24u : 0u) + 5;
+        bitwriter_put(&bw, 0, 2);
+        bitwriter_put(&bw, asc_bits, 8);
+      }
       if (c->aot == 31) {
         bitwriter_put(&bw, 31, 5);
         bitwriter_put(&bw, c->aot_ext, 6);
@@ -1034,7 +1042,11 @@ static size_t build_latm_case(const latm_case_t *c, unsigned char *out, size_t c
       bitwriter_put(&bw, c->flt, 3);
       bitwriter_put(&bw, 0, 8);
       bitwriter_put(&bw, c->other_data ? 1 : 0, 1);
-      for (unsigned i = 0; i < c->other_data; i++) {
+      if (c->amv && c->other_data) {
+        bitwriter_put(&bw, 0, 2);
+        bitwriter_put(&bw, c->other_data * 8, 8);
+      }
+      for (unsigned i = 0; i < c->other_data && !c->amv; i++) {
         bitwriter_put(&bw, i + 1 < c->other_data, 1);
         bitwriter_put(&bw, 0, 8);
       }
@@ -1119,6 +1131,67 @@ START_TEST(latm_framing_errors) {
   d[0] = 0x56;
   d[1] &= 0x1F;
   ck_assert_int_eq(next_frame(&t, d, len, &f), -1);
+}
+END_TEST
+
+START_TEST(ac3_bit_rate_code_is_half_frmsizecod) {
+  unsigned char buf[FRAME_BUF_MAX];
+  esc_track_t t;
+  esc_frame_t f;
+
+  memset(buf, 0, sizeof buf);
+  buf[0] = 0x0B;
+  buf[1] = 0x77;
+  buf[4] = 0x0A; /* fscod 0, frmsizecod 10 */
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AC3;
+  ck_assert_int_eq(next_frame(&t, buf, sizeof buf, &f), 0);
+  ck_assert_uint_eq(f.bitrate_code, 5u);
+}
+END_TEST
+
+START_TEST(eac3_dependent_substream_joins_the_access_unit) {
+  unsigned char buf[FRAME_BUF_MAX];
+  esc_track_t t;
+  esc_frame_t f;
+
+  memset(buf, 0, sizeof buf);
+  buf[0] = 0x0B;
+  buf[1] = 0x77;
+  buf[3] = 0x3F; /* indie, 128 bytes */
+  buf[4] = 0x30; /* fscod 0, numblkscod 3 */
+  buf[128] = 0x0B;
+  buf[129] = 0x77;
+  buf[130] = 0x40; /* strmtyp 1 */
+  buf[131] = 0x1F; /* 64 bytes */
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_EAC3;
+  ck_assert_int_eq(next_frame(&t, buf, 192, &f), 0);
+  ck_assert_uint_eq(f.consumed, 192u);
+  ck_assert_uint_eq(f.outlen, 192u);
+  ck_assert_uint_eq(f.samples, 1536u);
+  ck_assert_int_eq(next_frame(&t, buf, 128 + 40, &f), 1);
+  ck_assert_int_eq(next_frame(&t, buf + 128, 64, &f), -1);
+}
+END_TEST
+
+START_TEST(adts_counts_raw_data_blocks_per_frame) {
+  unsigned char d[128];
+  esc_track_t t;
+  esc_frame_t f;
+
+  memset(d, 0, sizeof d);
+  d[0] = 0xFF;
+  d[1] = 0xF1;
+  d[2] = 0x50;
+  d[3] = 0x80;
+  d[4] = 0x10; /* 128 bytes */
+  d[5] = 0x00;
+  d[6] = 0x01;
+  memset(&t, 0, sizeof t);
+  t.codec = CODEC_AAC;
+  ck_assert_int_eq(next_frame(&t, d, sizeof d, &f), 0);
+  ck_assert_uint_eq(f.samples, 2048u);
 }
 END_TEST
 
@@ -1442,6 +1515,9 @@ static Suite *audio_suite(void) {
   tcase_add_test(tc, latm_same_mux_reuses_the_cached_config);
   tcase_add_test(tc, latm_framing_errors);
   tcase_add_test(tc, adts_with_crc_header_and_codec_private_set_once);
+  tcase_add_test(tc, ac3_bit_rate_code_is_half_frmsizecod);
+  tcase_add_test(tc, adts_counts_raw_data_blocks_per_frame);
+  tcase_add_test(tc, eac3_dependent_substream_joins_the_access_unit);
   tcase_add_loop_test(tc, ac4_frame_header_variants, 0, (int)(sizeof ac4_hdr_cases / sizeof ac4_hdr_cases[0]));
   tcase_add_loop_test(tc, ac4_sample_rate_frame_rate_and_wait_frames, 0, (int)(sizeof ac4_rate_cases / sizeof ac4_rate_cases[0]));
   tcase_add_loop_test(tc, ac4_presentation_parsing_variants, 0, (int)(sizeof ac4_pres_cases / sizeof ac4_pres_cases[0]));

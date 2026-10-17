@@ -30,6 +30,17 @@ START_TEST(xml_escape_drops_chars_invalid_in_xml_10) {
 }
 END_TEST
 
+START_TEST(xml_escape_replaces_invalid_utf8) {
+  char *buf;
+  size_t len;
+  FILE *f = open_memstream(&buf, &len);
+  xml_escape(f, "a\xFF" "b\xC0\x80" "c\xE2\x82" "d\xED\xA0\x80" "e\xF4\x90\x80\x80" "f\xE2\x82\xAC");
+  fclose(f);
+  ck_assert_str_eq(buf, "a\xEF\xBF\xBD" "b\xEF\xBF\xBD\xEF\xBF\xBD" "c\xEF\xBF\xBD\xEF\xBF\xBD" "d\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD" "e\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD" "f\xE2\x82\xAC");
+  free(buf);
+}
+END_TEST
+
 START_TEST(xml_elem_text_rejects_control_char_refs) {
   static const char doc[] = "<t>a&#x1;b&#9;c&#xFFFE;</t>";
   char out[32];
@@ -344,6 +355,7 @@ static Suite *xml_util_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, xml_escape_escapes_all_five_entities);
   tcase_add_test(tc, xml_escape_drops_chars_invalid_in_xml_10);
+  tcase_add_test(tc, xml_escape_replaces_invalid_utf8);
   tcase_add_test(tc, xml_elem_text_rejects_control_char_refs);
   tcase_add_test(tc, xml_to_utf8_converts_declared_latin1);
   tcase_add_test(tc, xml_to_utf8_converts_windows_1252);

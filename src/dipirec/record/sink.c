@@ -93,7 +93,7 @@ int src_open(const config_t *cfg, src_t *s) {
 
 ssize_t src_read_reason(src_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason) {
   *reason = NET_ERR_OTHER;
-  if (s->ret && !tssrc_replay_pending(s->t)) return ret_client_read(s->ret, tssrc_mcast(s->t), buf, cap);
+  if (s->ret && !tssrc_replay_pending(s->t)) return ret_client_read(s->ret, tssrc_mcast(s->t), buf, cap, 1000);
   return tssrc_read(s->t, buf, cap, reason);
 }
 

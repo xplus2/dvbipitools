@@ -37,7 +37,7 @@ ssize_t capture_read_dispatch(capture_ctx_t *ctx, unsigned char *buf, size_t buf
   switch (backend) {
     case CAP_RD_FCC:
       *unwrapped = 1;
-      n = fcc_client_read(ctx->fcc, ctx->m, buf, bufcap);
+      n = fcc_client_read(ctx->fcc, ctx->m, buf, bufcap, 0);
       if (fcc_client_done(ctx->fcc)) {
         fcc_client_close(ctx->fcc);
         ctx->fcc = NULL;
@@ -45,7 +45,7 @@ ssize_t capture_read_dispatch(capture_ctx_t *ctx, unsigned char *buf, size_t buf
       break;
     case CAP_RD_RET:
       *unwrapped = 1;
-      n = ret_client_read(ctx->ret, ctx->m, buf, bufcap);
+      n = ret_client_read(ctx->ret, ctx->m, buf, bufcap, 0);
       break;
     case CAP_RD_FEC:
       n = capture_fec_read(ctx, buf, bufcap);

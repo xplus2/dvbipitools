@@ -1255,6 +1255,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 700158  | YW        | hls: track init segment lost, DASH falls back to muxed                                       |
 | 700159  | YW        | hls: track store push failed, DASH track data lost                                           |
 | 700160  | YW        | hls: audio parameters not recorded, DASH audio rate and channels missing                     |
+| 700161  | YW        | hls: video timestamp jump, segmenter restarted on video pid 0x%04x                           |
 | 700163  | LW        | mapping: duplicate id %s, first entry wins                                                   |
 | 700164  | MD        | 405 %s %s                                                                                    |
 | 700165  | TW        | program %u: PES header split across packets, timestamps not shifted                          |

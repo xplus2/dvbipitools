@@ -30,7 +30,9 @@ static pthread_mutex_t g_chain_mtx = PTHREAD_MUTEX_INITIALIZER;
    every begin/close path for subscription runs on its own owning thread (H1/H2/H3 don't migrate threads) */
 int g_tid_head[TS_PUSH_MAX_REACTOR_THREADS];
 
-static _Thread_local uint32_t *t_wake_batch;
+#define WAKE_BATCH_WORDS ((TS_PUSH_MAX_REACTOR_THREADS + 63) / 64)
+
+static _Thread_local uint64_t *t_wake_batch;
 
 static void ts_push_wake_reactor_now(int tid) {
   int efd = __atomic_load_n(&g_ts_push_reactor_efds[tid], __ATOMIC_RELAXED);
@@ -44,25 +46,29 @@ static void ts_push_wake_reactor_now(int tid) {
 void ts_push_wake_reactor(int tid) {
   if (tid < 0 || tid >= TS_PUSH_MAX_REACTOR_THREADS) return;
   if (t_wake_batch) {
-    *t_wake_batch |= 1u << tid;
+    t_wake_batch[tid / 64] |= 1ULL << (tid % 64);
     return;
   }
   ts_push_wake_reactor_now(tid);
 }
 
 void ts_push_wake_batch_begin(void) {
-  static _Thread_local uint32_t batch;
-  batch = 0;
-  t_wake_batch = &batch;
+  static _Thread_local uint64_t batch[WAKE_BATCH_WORDS];
+  memset(batch, 0, sizeof batch);
+  t_wake_batch = batch;
 }
 
 void ts_push_wake_batch_end(void) {
-  uint32_t m = t_wake_batch ? *t_wake_batch : 0;
+  uint64_t *b = t_wake_batch;
   t_wake_batch = NULL;
-  while (m) {
-    int tid = __builtin_ctz(m);
-    m &= m - 1;
-    ts_push_wake_reactor_now(tid);
+  if (!b) return;
+  for (int w = 0; w < WAKE_BATCH_WORDS; w++) {
+    uint64_t m = b[w];
+    while (m) {
+      int tid = w * 64 + __builtin_ctzll(m);
+      m &= m - 1;
+      ts_push_wake_reactor_now(tid);
+    }
   }
 }
 

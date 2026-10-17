@@ -7,12 +7,11 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <poll.h>
-#include <signal.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #include "../helper/argutil.h"
@@ -139,7 +138,6 @@ typedef struct {
   struct sockaddr_storage ss;
 } nc_cand_t;
 
-/* resolver child -> parent, one pipe write (< PIPE_BUF) */
 typedef struct {
   int err; /* getaddrinfo code, 0 ok */
   unsigned count;
@@ -149,7 +147,7 @@ typedef struct {
 struct netconnect_pending {
   nc_resolved_t r;
   unsigned cur; /* candidate fd is connecting on */
-  pid_t pid;    /* resolver child, 0 once resolved */
+  int resolving; /* lookup thread running, 0 once resolved */
   char host[256];
   unsigned port;
 };
@@ -199,65 +197,83 @@ static int try_addrs(const nc_resolved_t *r, unsigned idx, unsigned *used, int *
   return -1;
 }
 
-static void resolver_child(const char *host, const char *portstr, int wfd) {
+typedef struct {
+  char host[256];
+  char portstr[6];
+  int wfd;
+} nc_resolver_arg_t;
+
+#define NC_RESOLVER_STACK (512 * 1024)
+
+/* getaddrinfo not fork-safe in threaded process */
+static void *resolver_thread(void *arg) {
+  nc_resolver_arg_t *a = arg;
   struct addrinfo hints;
   struct addrinfo *res = NULL;
   nc_resolved_t r;
-  ssize_t w;
 
-  signal(SIGTERM, SIG_DFL);
-  signal(SIGINT, SIG_DFL);
-  signal(SIGPIPE, SIG_DFL);
   memset(&r, 0, sizeof r);
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
-  r.err = getaddrinfo(host, portstr, &hints, &res);
-  if (!r.err) cands_from_ai(&r, res);
+  r.err = getaddrinfo(a->host, a->portstr, &hints, &res);
+  if (!r.err) {
+    cands_from_ai(&r, res);
+    freeaddrinfo(res);
+  }
   if (!r.err && !r.count) r.err = EAI_NONAME;
-  do w = write(wfd, &r, sizeof r);
-  while (w < 0 && errno == EINTR);
-  _exit(0);
+  (void)send(a->wfd, &r, sizeof r, MSG_NOSIGNAL); /* reader may be gone */
+  close(a->wfd);
+  free(a);
+  return NULL;
 }
 
 static void pending_free(netconnect_pending_t *p) {
-  if (p->pid > 0) {
-    kill(p->pid, SIGKILL);
-    waitpid(p->pid, NULL, 0);
-  }
   free(p);
 }
 
-/* forks resolver, *rfd_out = nonblocking read end. 0 ok, -1 failed (errno set) */
+/* starts the lookup thread, *rfd_out = nonblocking read end. 0 ok, -1 failed (errno set) */
 static int resolver_spawn(netconnect_pending_t *p, const char *portstr, int *rfd_out) {
-  int pfd[2];
-  pid_t pid;
+  int sv[2];
   int flags;
+  int e;
+  pthread_t tid;
+  pthread_attr_t attr;
+  nc_resolver_arg_t *a;
 
-  if (pipe(pfd) < 0) return -1;
-  flags = fcntl(pfd[0], F_GETFL, 0);
-  if (flags < 0 || fcntl(pfd[0], F_SETFL, flags | O_NONBLOCK) < 0 || fcntl(pfd[0], F_SETFD, FD_CLOEXEC) < 0) {
-    int e = errno;
-    close(pfd[0]);
-    close(pfd[1]);
+  if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) < 0) return -1;
+  flags = fcntl(sv[0], F_GETFL, 0);
+  if (flags < 0 || fcntl(sv[0], F_SETFL, flags | O_NONBLOCK) < 0) {
+    e = errno;
+    close(sv[0]);
+    close(sv[1]);
     errno = e;
     return -1;
   }
-  pid = fork();
-  if (pid < 0) {
-    int e = errno;
-    close(pfd[0]);
-    close(pfd[1]);
+  a = malloc(sizeof *a);
+  if (!a) {
+    close(sv[0]);
+    close(sv[1]);
+    errno = ENOMEM;
+    return -1;
+  }
+  bufcpy(a->host, sizeof a->host, p->host);
+  bufcpy(a->portstr, sizeof a->portstr, portstr);
+  a->wfd = sv[1];
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  pthread_attr_setstacksize(&attr, NC_RESOLVER_STACK);
+  e = pthread_create(&tid, &attr, resolver_thread, a);
+  pthread_attr_destroy(&attr);
+  if (e) {
+    free(a);
+    close(sv[0]);
+    close(sv[1]);
     errno = e;
     return -1;
   }
-  if (pid == 0) {
-    close(pfd[0]);
-    resolver_child(p->host, portstr, pfd[1]);
-  }
-  close(pfd[1]);
-  p->pid = pid;
-  *rfd_out = pfd[0];
+  p->resolving = 1;
+  *rfd_out = sv[0];
   return 0;
 }
 
@@ -314,7 +330,7 @@ int netconnect_tcp_start(const char *host, unsigned port, netconnect_pending_t *
 }
 
 short netconnect_tcp_events(const netconnect_pending_t *pending) {
-  return (pending && pending->pid > 0) ? POLLIN : POLLOUT;
+  return (pending && pending->resolving) ? POLLIN : POLLOUT;
 }
 
 /* resolver result readable. 1 candidate connecting on *fd, 0 not ready yet, -1 failed */
@@ -328,8 +344,7 @@ static int finish_resolve(netconnect_pending_t *p, int *fd, net_err_reason_t *re
   if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) return 0;
   close(*fd);
   *fd = -1;
-  waitpid(p->pid, NULL, 0);
-  p->pid = 0;
+  p->resolving = 0;
   if (n != (ssize_t)sizeof r || r.err || !r.count) {
     log_code("LE600131", "resolve %s: %s", p->host, (n == (ssize_t)sizeof r && r.err) ? gai_strerror(r.err) : "resolver failed");
     set_reason(reason_out, NET_ERR_DNS);
@@ -356,7 +371,7 @@ int netconnect_tcp_finish(netconnect_pending_t **pending, int *fd, net_err_reaso
   unsigned used;
   int nfd;
 
-  if (p->pid > 0) {
+  if (p->resolving) {
     int rr = finish_resolve(p, fd, reason_out);
     if (rr < 0) {
       save_errno = errno;

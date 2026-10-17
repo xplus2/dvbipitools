@@ -31,7 +31,7 @@ typedef struct ret_client ret_client_t;
 ret_client_t *ret_client_open(const ret_client_cfg_t *cfg);
 
 /* seq-ordered TS payload, gaps NACKed and repaired within cfg->wait_ms. >0 len, 0 no data, -1 error */
-ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size_t cap);
+ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size_t cap, int max_wait_ms);
 
 void ret_client_close(ret_client_t *r);
 

@@ -113,7 +113,7 @@ int hls_store_ready(const capture_ctx_t *ctx, const pid_filter_t *filter, unsign
 /* same, LL: 1 once store has its first part/chunk or segment */
 int hls_ll_store_ready(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container);
 
-/* 1 if part want_part of segment want_seg exists, ring or in-progress.
+/* 1 if part want_part of segment want_seg exists, ring or in-progress. want_part == parts of closed seg: part 0 of next. < 0: seg complete.
    0 if not yet, or ctx unknown */
 int hls_part_available(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, uint32_t want_seg, int want_part);
 

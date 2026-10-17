@@ -20,6 +20,7 @@ extern qsbr_domain_t *g_segstore_qsbr;
 extern _Atomic int *g_slot_state;
 
 hls_snapshot_t *snap_clone(const hls_snapshot_t *base);
+void seq_floor_note(uint32_t next_seq);
 void snap_free(hls_snapshot_t *ns);
 
 void ring_ref(hls_seg_ring_t *r);

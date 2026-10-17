@@ -9,25 +9,25 @@
 #include "../ws/ws_frame.h"
 #include "../ws/ws_sources.h"
 
+#include <stdatomic.h>
 #include <string.h>
 #include <time.h>
 
 #define WS_RELOAD_MIN_INTERVAL_MS 5000
 
-/* reactor thread only, shared by all WS conns */
-static int reload_allowed(int64_t *last_ms) {
+static int reload_allowed(_Atomic int64_t *last_ms) {
   struct timespec ts;
   int64_t now;
+  int64_t last = atomic_load_explicit(last_ms, memory_order_relaxed);
   clock_gettime(CLOCK_MONOTONIC, &ts);
   now = (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-  if (*last_ms && now - *last_ms < WS_RELOAD_MIN_INTERVAL_MS) return 0;
-  *last_ms = now;
-  return 1;
+  if (last && now - last < WS_RELOAD_MIN_INTERVAL_MS) return 0;
+  return atomic_compare_exchange_strong_explicit(last_ms, &last, now, memory_order_relaxed, memory_order_relaxed);
 }
 
 void ws_dispatch_frame(void *ctx, ws_dispatch_queue_fn queue, int opcode, const uint8_t *payload, size_t plen) {
-  static int64_t last_playlists_ms;
-  static int64_t last_tls_ms;
+  static _Atomic int64_t last_playlists_ms;
+  static _Atomic int64_t last_tls_ms;
   char *json;
   switch (opcode) {
     case WS_OP_PING:

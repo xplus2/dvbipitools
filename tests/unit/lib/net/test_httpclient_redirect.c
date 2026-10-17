@@ -378,6 +378,23 @@ START_TEST(async_redirect_with_unusable_location_fails_on_first_hop) {
 }
 END_TEST
 
+START_TEST(url_authority_ends_at_query_and_rejects_userinfo) {
+  http_url_t u;
+
+  ck_assert_int_eq(http_url_parse("http://example.org?a=1", &u), 0);
+  ck_assert_str_eq(u.host, "example.org");
+  ck_assert_str_eq(u.path, "/?a=1");
+  ck_assert_int_eq(http_url_parse("http://example.org:8080?a=1", &u), 0);
+  ck_assert_uint_eq(u.port, 8080u);
+  ck_assert_str_eq(u.path, "/?a=1");
+  ck_assert_int_eq(http_url_parse("http://[::1]:8081/x", &u), 0);
+  ck_assert_str_eq(u.host, "::1");
+  ck_assert_uint_eq(u.port, 8081u);
+  ck_assert_int_ne(http_url_parse("http://user@example.org/x", &u), 0);
+  ck_assert_int_ne(http_url_parse("http://example.org:80x/x", &u), 0);
+}
+END_TEST
+
 START_TEST(redirect_scheme_refuses_https_to_http_only) {
   http_url_t secure;
   http_url_t plain;
@@ -409,6 +426,7 @@ static Suite *redirect_suite(void) {
   tcase_add_test(tc, resolve_location_scheme_relative_keeps_scheme);
   tcase_add_loop_test(tc, async_redirect_with_unusable_location_fails_on_first_hop, 0, (int)(sizeof bad_locations / sizeof bad_locations[0]));
   tcase_add_test(tc, redirect_scheme_refuses_https_to_http_only);
+  tcase_add_test(tc, url_authority_ends_at_query_and_rejects_userinfo);
   suite_add_tcase(s, tc);
   return s;
 }

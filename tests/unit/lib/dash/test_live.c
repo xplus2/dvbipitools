@@ -713,14 +713,14 @@ START_TEST(dash_live_joins_wall_clock_edge) {
 
   rig_init(&r);
   snprintf(attrs, sizeof attrs, "type=\"dynamic\" availabilityStartTime=\"");
-  format_ast(attrs + strlen(attrs), sizeof attrs - strlen(attrs), 101);
+  format_ast(attrs + strlen(attrs), sizeof attrs - strlen(attrs), 210);
   strcat(attrs, "\"");
-  add_dynamic_mpd(&r, attrs, "<SegmentTemplate initialization=\"init.mp4\" media=\"seg$Number$.m4s\" timescale=\"1000\" duration=\"2000\" startNumber=\"1\"/>");
+  add_dynamic_mpd(&r, attrs, "<SegmentTemplate initialization=\"init.mp4\" media=\"seg$Number$.m4s\" timescale=\"1000\" duration=\"20000\" startNumber=\"1\"/>");
   rig_add_text(&r, "INIT");
   rig_add_text(&r, "SEG");
   rig_open(&r, 0, NULL);
   ck_assert_int_eq(drive_until_len(r.h, acc, sizeof acc, &len, 7, 300), 1);
-  ck_assert_str_eq(r.reqs[2], "GET /seg50.m4s HTTP/1.1");
+  ck_assert_str_eq(r.reqs[2], "GET /seg10.m4s HTTP/1.1");
   rig_close(&r);
 }
 END_TEST
@@ -733,9 +733,9 @@ START_TEST(dash_live_retries_unavailable_segment) {
 
   rig_init(&r);
   snprintf(attrs, sizeof attrs, "type=\"dynamic\" availabilityStartTime=\"");
-  format_ast(attrs + strlen(attrs), sizeof attrs - strlen(attrs), 101);
+  format_ast(attrs + strlen(attrs), sizeof attrs - strlen(attrs), 210);
   strcat(attrs, "\"");
-  add_dynamic_mpd(&r, attrs, "<SegmentTemplate initialization=\"init.mp4\" media=\"seg$Number$.m4s\" timescale=\"1000\" duration=\"2000\" startNumber=\"1\"/>");
+  add_dynamic_mpd(&r, attrs, "<SegmentTemplate initialization=\"init.mp4\" media=\"seg$Number$.m4s\" timescale=\"1000\" duration=\"20000\" startNumber=\"1\"/>");
   rig_add_text(&r, "INIT");
   rig_add_raw(&r, "HTTP/1.1 404 Not Found\r\nContent-Length: 4\r\nConnection: close\r\n\r\nGONE");
   rig_add_text(&r, "SEG");

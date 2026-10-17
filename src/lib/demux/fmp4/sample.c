@@ -61,8 +61,6 @@ int fmp4_parse_tfdt(const unsigned char *body, size_t len, uint64_t *base_decode
   return 1;
 }
 
-int fmp4_sample_is_keyframe(uint32_t sample_flags) { return !(sample_flags & 0x00010000); }
-
 unsigned fmp4_parse_trun_samples(const unsigned char *trun_body, size_t trun_len, const fmp4_tfhd_t *tfhd, const fmp4_box_t *moof, const unsigned char *mdat_body, size_t mdat_len, fmp4_dec_sample_t *out, unsigned max) {
   const unsigned char *p = trun_body;
   const unsigned char *end = trun_body + trun_len;

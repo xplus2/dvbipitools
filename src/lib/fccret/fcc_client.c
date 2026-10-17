@@ -22,6 +22,14 @@
 #define FCC_RTCP_PT_MIN 192 /* RFC 5761 mux range, distinguishes RAMS-I from burst RTP on one socket */
 #define FCC_RTCP_PT_MAX 223
 #define FCC_PENDING_CAP 65536
+#define FCC_QUEUE_SLOTS 1024
+#define FCC_QUEUE_SLOT_BYTES 1500
+#define FCC_BURST_END_WAIT_S 1.0
+
+typedef struct {
+  size_t len;
+  unsigned char data[FCC_QUEUE_SLOT_BYTES];
+} fcc_slot_t;
 
 struct fcc_client {
   int uni_fd;
@@ -30,6 +38,16 @@ struct fcc_client {
 
   int done;
   int rejected;
+
+  int terminating;
+  uint16_t first_mc_seq;
+  int have_osn;
+  uint16_t last_osn;
+  double term_at;
+
+  fcc_slot_t *queue;
+  unsigned q_head;
+  unsigned q_count;
 
   unsigned char pending[FCC_PENDING_CAP];
   size_t pending_len;
@@ -44,9 +62,13 @@ static void rams_i_cb(const rtcp_rams_i_t *info, void *user) {
   }
 }
 
+static void fcc_check_splice(fcc_client_t *r, double now) {
+  if (!r->terminating || r->done) return;
+  if ((r->have_osn && (int16_t)((uint16_t)(r->last_osn + 1) - r->first_mc_seq) >= 0) || now - r->term_at > FCC_BURST_END_WAIT_S) r->done = 1;
+}
+
 void fcc_on_uni(fcc_client_t *r, const unsigned char *pkt, size_t len, double now) {
   rtx_pkt_t rx;
-  (void)now;
   if (len < 2) return;
   if (pkt[1] >= FCC_RTCP_PT_MIN && pkt[1] <= FCC_RTCP_PT_MAX) {
     rtcp_parse(pkt, len, &(rtcp_cbs_t){.rams_i_cb = rams_i_cb, .user = r});
@@ -56,31 +78,66 @@ void fcc_on_uni(fcc_client_t *r, const unsigned char *pkt, size_t len, double no
 
   if (!rtx_parse(pkt, len, r->rtx_pt, &rx)) return;
   if (rx.payload_len > sizeof r->pending) return;
+  if (r->terminating && (int16_t)(rx.osn - r->first_mc_seq) >= 0) return;
   memcpy(r->pending, rx.payload, rx.payload_len);
   r->pending_len = rx.payload_len;
+  r->last_osn = rx.osn;
+  r->have_osn = 1;
+  fcc_check_splice(r, now);
+}
+
+static int queue_push(fcc_client_t *r, const unsigned char *payload, size_t len) {
+  fcc_slot_t *slot;
+  if (len > FCC_QUEUE_SLOT_BYTES || r->q_count == FCC_QUEUE_SLOTS) return 0;
+  if (!r->queue) {
+    r->queue = calloc(FCC_QUEUE_SLOTS, sizeof *r->queue);
+    if (!r->queue) return 0;
+  }
+  slot = &r->queue[(r->q_head + r->q_count) % FCC_QUEUE_SLOTS];
+  slot->len = len;
+  memcpy(slot->data, payload, len);
+  r->q_count++;
+  return 1;
+}
+static size_t queue_pop(fcc_client_t *r, unsigned char *buf, size_t cap) {
+  fcc_slot_t *slot = &r->queue[r->q_head];
+  size_t n = slot->len < cap ? slot->len : cap;
+  memcpy(buf, slot->data, n);
+  r->q_head = (r->q_head + 1) % FCC_QUEUE_SLOTS;
+  r->q_count--;
+  return n;
 }
 
 void fcc_on_multicast(fcc_client_t *r, const rtp_hdr_t *hdr, const unsigned char *payload, size_t len, double now) {
-  rtcp_rams_t_t term;
-  unsigned char pkt[32];
-  size_t n;
-  (void)now;
   if (r->done) return;
-
-  memset(&term, 0, sizeof term);
-  term.sender_ssrc = r->sender_ssrc;
-  term.media_ssrc = hdr->ssrc;
-  term.has_first_mc_seqnum = 1;
-  term.first_mc_seqnum = hdr->seq;
-  n = rtcp_build_rams_t(&term, pkt, sizeof pkt);
-  if (n) send(r->uni_fd, pkt, n, 0);
-  r->done = 1;
-  if (len > sizeof r->pending) len = sizeof r->pending;
-  memcpy(r->pending, payload, len);
-  r->pending_len = len;
+  if (!r->terminating) {
+    rtcp_rams_t_t term;
+    unsigned char pkt[32];
+    size_t n;
+    memset(&term, 0, sizeof term);
+    term.sender_ssrc = r->sender_ssrc;
+    term.media_ssrc = hdr->ssrc;
+    term.has_first_mc_seqnum = 1;
+    term.first_mc_seqnum = hdr->seq;
+    n = rtcp_build_rams_t(&term, pkt, sizeof pkt);
+    if (n) send(r->uni_fd, pkt, n, 0);
+    r->terminating = 1;
+    r->first_mc_seq = hdr->seq;
+    r->term_at = now;
+  }
+  if (!queue_push(r, payload, len)) {
+    r->done = 1; /* queue full: cut over, burst remainder lost */
+    if (!r->pending_len) {
+      if (len > sizeof r->pending) len = sizeof r->pending;
+      memcpy(r->pending, payload, len);
+      r->pending_len = len;
+    }
+    return;
+  }
+  fcc_check_splice(r, now);
 }
 
-int fcc_client_done(const fcc_client_t *r) { return r->done; }
+int fcc_client_done(const fcc_client_t *r) { return r->done && !r->pending_len && !r->q_count; }
 
 static int uni_socket_open(const fcc_client_cfg_t *cfg) {
   int fd;
@@ -142,7 +199,7 @@ fcc_client_t *fcc_client_open(const fcc_client_cfg_t *cfg) {
   return r;
 }
 
-ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size_t cap) {
+ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size_t cap, int max_wait_ms) {
   struct pollfd pfd[2];
   int nfds = 0;
   int mi;
@@ -156,6 +213,7 @@ ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size
     r->pending_len = 0;
     return (ssize_t)n;
   }
+  if (r->done && r->q_count) return (ssize_t)queue_pop(r, buf, cap);
 
   mi = nfds;
   pfd[nfds].fd = mcast_fd(main);
@@ -166,7 +224,7 @@ ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size
   pfd[nfds].events = POLLIN;
   nfds++;
 
-  if (poll(pfd, (nfds_t)nfds, 1000) < 0) {
+  if (poll(pfd, (nfds_t)nfds, max_wait_ms) < 0) {
     if (errno == EINTR) return 0;
     log_code("LE500139", "fcc: poll: %s", strerror(errno));
     return -1;
@@ -190,17 +248,20 @@ ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size
     if (rn > 0) fcc_on_uni(r, raw, (size_t)rn, now);
   }
 
+  fcc_check_splice(r, now);
   if (r->pending_len) {
     n = r->pending_len < cap ? r->pending_len : cap;
     memcpy(buf, r->pending, n);
     r->pending_len = 0;
     return (ssize_t)n;
   }
+  if (r->done && r->q_count) return (ssize_t)queue_pop(r, buf, cap);
   return 0;
 }
 
 void fcc_client_close(fcc_client_t *r) {
   if (!r) return;
   close(r->uni_fd);
+  free(r->queue);
   free(r);
 }

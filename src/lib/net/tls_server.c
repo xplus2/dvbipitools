@@ -91,6 +91,7 @@ tls_handshake_status_t tls_server_handshake_step(const tls_t *t) {
   int r;
   int err;
   if (!t) return TLS_HANDSHAKE_ERROR;
+  ERR_clear_error();
   r = SSL_accept(t->ssl);
   if (r == 1) return TLS_HANDSHAKE_DONE;
   err = SSL_get_error(t->ssl, r);

@@ -45,7 +45,7 @@ int next_ac3(const esc_track_t *t, const unsigned char *d, size_t len, esc_frame
   f->outlen = f->consumed;
   f->rate = ac3_rate[fscod];
   f->samples = 1536;
-  f->bitrate_code = frmsizecod;
+  f->bitrate_code = frmsizecod >> 1;
   b.d = d + 5;
   b.len = 2;
   b.bit = 0;
@@ -77,6 +77,7 @@ int next_eac3(const esc_track_t *t, const unsigned char *d, size_t len, esc_fram
   f->consumed = ((size_t)frmsiz + 1) * 2;
   if (f->consumed < 6) return -1;
   if (len < f->consumed) return 1;
+  if ((d[2] >> 6) == 1) return -1;
   fscod = d[4] >> 6;
   numblkscod = (d[4] >> 4) & 3;
   if (fscod == 3) {
@@ -93,6 +94,12 @@ int next_eac3(const esc_track_t *t, const unsigned char *d, size_t len, esc_fram
   f->bsid = d[5] >> 3;
   f->bsmod = 0; /* no fixed E-AC-3 bit position, dec3 leaves 0 */
   ac3_chcfg(f);
+  while (len >= f->consumed + 6 && d[f->consumed] == 0x0B && d[f->consumed + 1] == 0x77 && (d[f->consumed + 2] >> 6) == 1) {
+    size_t dep = ((((size_t)d[f->consumed + 2] & 0x07) << 8 | d[f->consumed + 3]) + 1) * 2;
+    if (dep < 6) return -1;
+    if (len < f->consumed + dep) return 1;
+    f->consumed += dep;
+  }
   f->out = d;
   f->outlen = f->consumed;
   return 0;

@@ -142,6 +142,9 @@ int reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
 
 void reactor_teardown_listeners(const reactor_listeners_t *rl) {
   reactor_accept_fini();
+#ifdef HAVE_HTTP3
+  h3_notify_close_all();
+#endif
   /* wake eventfds closed by reactor_run after pump join */
   for (int i = 0; i < rl->nL; i++) {
     if (rl->L[i].kind == RL_ACCEPT || rl->L[i].kind == RL_H3_UDP) close(rl->L[i].fd);

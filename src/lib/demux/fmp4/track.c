@@ -191,12 +191,41 @@ void fmp4_parse_dac4(const unsigned char *p, const unsigned char *end, fmp4_stsd
   out->cpriv_len = (size_t)(end - p);
 }
 
+static size_t vvcc_ptl_len(const unsigned char *p, const unsigned char *end) {
+  size_t n = 3;
+  unsigned nsub;
+  unsigned ncon;
+  unsigned nsubprof;
+  if (end - p < 6) return 0;
+  nsub = (p[1] >> 4) & 7;
+  ncon = p[3] & 0x3F;
+  n += 3 + ncon; /* bytes: constraint count, profile+tier, level, constraint info */
+  if (nsub > 1) {
+    unsigned flags;
+    if ((size_t)(end - p) <= n) return 0;
+    flags = p[n] >> (9 - nsub);
+    n++;
+    for (; flags; flags >>= 1) n += flags & 1;
+  }
+  if ((size_t)(end - p) <= n) return 0;
+  nsubprof = p[n];
+  n += 1 + 4 * (size_t)nsubprof + 6;
+  return (size_t)(end - p) < n ? 0 : n;
+}
+
 void fmp4_parse_vvcc(const unsigned char *p, const unsigned char *end, fmp4_stsd_entry_t *out) {
   unsigned num_arrays;
   if (end - p < 2) return;
-  num_arrays = p[1];
-  set_nal_len_size(out, (unsigned)(p[0] >> 6) + 1);
-  p += 2; /* byte0: lengthSizeMinusOne + ptl_present_flag + reserved. byte1: numOfArrays */
+  set_nal_len_size(out, (unsigned)((p[0] >> 1) & 3) + 1);
+  if (p[0] & 1) {
+    size_t skip = vvcc_ptl_len(p + 1, end);
+    if (!skip) return;
+    p += skip;
+  }
+  p++;
+  if (p >= end) return;
+  num_arrays = p[0];
+  p++;
   for (unsigned a = 0; a < num_arrays && end - p >= 5; a++) {
     unsigned nal_type = p[0] & 0x1F;
     unsigned num_nalus;
@@ -221,6 +250,10 @@ static void parse_video_config(const fmp4_box_t *cfg, fmp4_stsd_entry_t *out) {
   if (!memcmp(cfg->fourcc, "avcC", 4)) fmp4_parse_avcc(p, end, out);
   else if (!memcmp(cfg->fourcc, "hvcC", 4)) fmp4_parse_hvcc(p, end, out);
   else if (!memcmp(cfg->fourcc, "vvcC", 4)) fmp4_parse_vvcc(p, end, out);
+  else if (!memcmp(cfg->fourcc, "av1C", 4) && end - p > 4) {
+    out->cpriv = p + 4;
+    out->cpriv_len = (size_t)(end - p - 4);
+  }
 }
 
 int fmp4_parse_stsd_entry(const fmp4_box_t *entry_box, fmp4_stsd_entry_t *out) {
@@ -237,7 +270,7 @@ int fmp4_parse_stsd_entry(const fmp4_box_t *entry_box, fmp4_stsd_entry_t *out) {
     if (len < 78) return 0;
     out->width = fmp4_rb_u16(body + 24);
     out->height = fmp4_rb_u16(body + 26);
-    if (fmp4_box_find(body + 78, len - 78, "avcC", &cfg) || fmp4_box_find(body + 78, len - 78, "hvcC", &cfg) || fmp4_box_find(body + 78, len - 78, "vvcC", &cfg))
+    if (fmp4_box_find(body + 78, len - 78, "avcC", &cfg) || fmp4_box_find(body + 78, len - 78, "hvcC", &cfg) || fmp4_box_find(body + 78, len - 78, "vvcC", &cfg) || fmp4_box_find(body + 78, len - 78, "av1C", &cfg))
       parse_video_config(&cfg, out);
     return 1;
   }

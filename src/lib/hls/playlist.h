@@ -21,6 +21,8 @@ typedef struct {
 typedef struct {
   char url[2048];
   unsigned key; /* 0 clear, else 1-based index into keys */
+  unsigned long long range_off;
+  unsigned long long range_len;
 } hls_segment_t;
 
 typedef struct {
@@ -31,6 +33,8 @@ typedef struct {
   int endlist;
   int low_latency;
   char map_uri[2048];
+  unsigned long long map_range_off;
+  unsigned long long map_range_len;
   hls_key_t keys[HLS_MAX_KEYS];
   unsigned n_keys;
 } hls_playlist_t;

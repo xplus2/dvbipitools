@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <errno.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdatomic.h>
@@ -22,12 +23,14 @@ static atomic_int g_tls_reload = 0;
 static int g_wake_fd = -1;
 
 void signal_request_stop(void) {
+  int saved_errno = errno;
   atomic_store_explicit(&g_stop, 1, memory_order_relaxed);
   if (g_wake_fd >= 0) {
     uint64_t one = 1;
     ssize_t r = write(g_wake_fd, &one, sizeof one);
     (void)r;
   }
+  errno = saved_errno;
 }
 
 static void on_stop(int sig) {

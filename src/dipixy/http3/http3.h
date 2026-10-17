@@ -43,6 +43,8 @@ void h3_ws_flush(void);
 /* ms until nearest QUIC timer, for epoll_wait sizing. -1 = no active conns */
 int h3_next_timeout_ms(void);
 
+void h3_notify_close_all(void);
+
 /* releases thread's live QUIC conns, called once per worker on exit */
 void h3_thread_cleanup(void);
 

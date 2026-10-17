@@ -41,6 +41,7 @@ void capture_lifecycle_stop(void);
 /* capture_open() dedup, never blocks. ref++ or NULL */
 capture_ctx_t *capture_try_ref(int family, const char *group, const char *source, unsigned port, const char *iface);
 capture_ctx_t *capture_try_ref_srt(const char *host, unsigned port);
+capture_ctx_t *capture_try_ref_http(const char *url);
 
 /* 1: lifecycle thread accepts jobs. 0: caller must open in sync */
 int capture_lifecycle_active(void);
@@ -48,6 +49,9 @@ int capture_lifecycle_active(void);
 /* capture_open()/capture_open_srt() on lifecycle thread, params copied. NULL: not queued (queue full, bad params, or lifecycle inactive) */
 capture_open_job_t *capture_open_async(int wake_tid, int family, const char *group, const char *source, unsigned port, const char *iface, int rtp, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned al_fec_l, unsigned al_fec_d);
 capture_open_job_t *capture_open_srt_async(int wake_tid, const char *host, unsigned port);
+
+/* capture_open_http_static() on lifecycle thread. NULL also if url failed in last 5 s */
+capture_open_job_t *capture_open_http_async(int wake_tid, const char *url, int insecure_tls);
 
 int capture_open_job_done(const capture_open_job_t *job);
 
@@ -80,6 +84,13 @@ size_t capture_reader_dropped(const capture_reader_t *r);
 /* reactor_run() only, before spawning any pump/worker threads. clamps to
    [1, CAPTURE_PUMP_MAX_THREADS] */
 void capture_pump_set_thread_count(int n);
+int capture_pump_thread_count(void);
+
+/* CAPTURE_PUMP_MAX_THREADS entries */
+void capture_pump_mark(uint64_t *mark);
+
+/* all pumps quiescent since mark */
+int capture_pump_mark_passed(const uint64_t *mark);
 
 /* drains pid's shard once, sink(source, user, pkt) per packet.
    0 return: shard idle, caller can sleep */

@@ -24,6 +24,14 @@ static ssize_t ws_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *buf, 
   (void)ud;
   h2_ws_stream_t *ws = source->ptr;
   if (!ws->send_len) {
+    int fin;
+    pthread_mutex_lock(&ws->pending_lock);
+    fin = ws->closing && !ws->pending_len;
+    pthread_mutex_unlock(&ws->pending_lock);
+    if (fin) {
+      *data_flags = NGHTTP2_DATA_FLAG_EOF;
+      return 0;
+    }
     *data_flags = NGHTTP2_DATA_FLAG_NO_END_STREAM;
     return NGHTTP2_ERR_DEFERRED;
   }
@@ -156,6 +164,12 @@ void h2_ws_data_chunk(h2_conn_t *conn, int32_t stream_id, const uint8_t *data, s
     if (got < 0) ws_fail(conn, ws);
     if (got <= 0) return;
     ws_dispatch_frame(ws, queue_frame_cb, opcode, payload, plen);
+    if (opcode == WS_OP_CLOSE) {
+      pthread_mutex_lock(&ws->pending_lock);
+      ws->closing = 1;
+      pthread_mutex_unlock(&ws->pending_lock);
+      nghttp2_session_resume_data(conn->ng, stream_id);
+    }
   }
 }
 

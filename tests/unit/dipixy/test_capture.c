@@ -238,21 +238,26 @@ typedef struct {
 
 static void *drain_thread_fn(void *arg) {
   drain_args_t *a = arg;
-  capture_drain(a->cap, drain_sink, a->d);
+  for (;;) {
+    capture_drain(a->cap, drain_sink, a->d);
+    usleep(1000);
+  }
   return NULL;
 }
 
-static void run_drain_until(capture_ctx_t *cap, drain_thread_ctx_t *d) {
+static void run_drain_for(capture_ctx_t *cap, drain_thread_ctx_t *d, int polls) {
   pthread_t tid;
   drain_args_t a;
   a.cap = cap;
   a.d = d;
   pthread_create(&tid, NULL, drain_thread_fn, &a);
-  for (int i = 0; i < 60 && !atomic_load(&d->got); i++)
+  for (int i = 0; i < polls && !atomic_load(&d->got); i++)
     usleep(5000);
   pthread_cancel(tid);
   pthread_join(tid, NULL);
 }
+
+static void run_drain_until(capture_ctx_t *cap, drain_thread_ctx_t *d) { run_drain_for(cap, d, 60); }
 
 START_TEST(ret_wired_capture_delivers_plain_packet) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.6", 15806, NULL, 1);
@@ -294,7 +299,7 @@ START_TEST(fcc_wired_capture_delivers_plain_multicast_after_cutover) {
 
   memset(&fcc, 0, sizeof fcc);
   strcpy(fcc.addr, "127.0.0.1");
-  fcc.port = 15907; /* no real FCC server: burst never arrives, plain multicast still cuts over */
+  fcc.port = 15907; /* no real FCC server: burst never arrives, queued multicast comes out after the burst wait */
   fcc.rtx_pt = 99;
 
   cap = capture_open(AF_INET, "239.8.8.7", NULL, 15807, NULL, 1, NULL, &fcc, NULL, 0, 0);
@@ -307,7 +312,7 @@ START_TEST(fcc_wired_capture_delivers_plain_multicast_after_cutover) {
   memcpy(dgram + 12, ts, 188);
   ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), (int)sizeof dgram);
 
-  run_drain_until(cap, &d);
+  run_drain_for(cap, &d, 400);
   ck_assert_int_eq(d.got, 1);
   ck_assert_int_eq(memcmp(d.pkt, ts, 188), 0);
 

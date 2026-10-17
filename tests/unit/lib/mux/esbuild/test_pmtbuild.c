@@ -108,6 +108,24 @@ START_TEST(esbuild_build_pmt_emits_dvb_ext_descriptor_for_ac4) {
 }
 END_TEST
 
+START_TEST(esbuild_build_pmt_marks_truehd_with_hdmv_registration) {
+  codec_t codecs[2] = {CODEC_H264, CODEC_TRUEHD};
+  esbuild_es_t es[2];
+  unsigned char out[188];
+  size_t n;
+
+  esbuild_assign_pids(codecs, 2, es);
+  n = esbuild_build_pmt(0, 1, es, 2, out, sizeof out);
+  ck_assert_uint_gt(n, 0u);
+  ck_assert_uint_eq(out[10] & 0x0F, 0u);
+  ck_assert_uint_eq(out[11], 6u);
+  ck_assert_uint_eq(out[12], 0x05);
+  ck_assert_uint_eq(out[13], 4u);
+  ck_assert_int_eq(memcmp(out + 14, "HDMV", 4), 0);
+  ck_assert_uint_eq(out[18], 0x1B);
+}
+END_TEST
+
 START_TEST(esbuild_build_pmt_rejects_zero_es) {
   unsigned char out[188];
   ck_assert_uint_eq(esbuild_build_pmt(0, 1, NULL, 0, out, sizeof out), 0u);
@@ -158,6 +176,7 @@ static Suite *esbuild_pmtbuild_suite(void) {
   tcase_add_test(tc, esbuild_build_pmt_emits_registration_descriptor_for_opus);
   tcase_add_test(tc, esbuild_build_pmt_emits_dvb_ext_descriptor_for_ac4);
   tcase_add_loop_test(tc, esbuild_build_pmt_emits_dts_hd_extension_descriptor, 0, (int)(sizeof dts_hd_cases / sizeof dts_hd_cases[0]));
+  tcase_add_test(tc, esbuild_build_pmt_marks_truehd_with_hdmv_registration);
   tcase_add_test(tc, esbuild_build_pmt_rejects_zero_es);
   suite_add_tcase(s, tc);
   return s;

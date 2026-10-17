@@ -72,7 +72,7 @@ void h3_udp_set_gso(int on) {
   t_gso = on;
 }
 
-#define CTL_SZ (CMSG_SPACE(sizeof(uint16_t)) + CMSG_SPACE(sizeof(struct in6_pktinfo)))
+#define CTL_SZ (CMSG_SPACE(sizeof(uint16_t)) + CMSG_SPACE(sizeof(struct in6_pktinfo)) + CMSG_SPACE(sizeof(int)))
 
 typedef union {
   char buf[CTL_SZ];
@@ -81,15 +81,27 @@ typedef union {
 
 int h3_udp_pktinfo(int fd, int family) {
   int on = 1;
-  if (family == AF_INET6) return setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof on);
+  if (family == AF_INET6) {
+    (void)setsockopt(fd, IPPROTO_IPV6, IPV6_RECVTCLASS, &on, sizeof on);
+    (void)setsockopt(fd, IPPROTO_IP, IP_RECVTOS, &on, sizeof on);
+    return setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof on);
+  }
+  (void)setsockopt(fd, IPPROTO_IP, IP_RECVTOS, &on, sizeof on);
   return setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof on);
 }
 
 static void rx_local(struct msghdr *mh, h3_rx_t *out) {
   out->locallen = 0;
+  out->ecn = 0;
   memset(&out->local, 0, sizeof out->local);
   for (struct cmsghdr *c = CMSG_FIRSTHDR(mh); c; c = CMSG_NXTHDR(mh, c)) {
-    if (c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_PKTINFO) {
+    if (c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_TOS && c->cmsg_len >= CMSG_LEN(sizeof(uint8_t))) {
+      out->ecn = *CMSG_DATA(c) & 3;
+    } else if (c->cmsg_level == IPPROTO_IPV6 && c->cmsg_type == IPV6_TCLASS && c->cmsg_len >= CMSG_LEN(sizeof(int))) {
+      int tc;
+      memcpy(&tc, CMSG_DATA(c), sizeof tc);
+      out->ecn = (uint8_t)(tc & 3);
+    } else if (c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_PKTINFO) {
       struct in_pktinfo pi;
       struct sockaddr_in *a = (struct sockaddr_in *)&out->local;
       memcpy(&pi, CMSG_DATA(c), sizeof pi);
@@ -145,8 +157,17 @@ static int src_usable(const struct sockaddr_storage *dst, const struct sockaddr_
   return 0;
 }
 
+static size_t cmsg_put(struct msghdr *msg, struct cmsghdr **cm, int level, int type, const void *data, size_t len) {
+  (*cm)->cmsg_level = level;
+  (*cm)->cmsg_type = type;
+  (*cm)->cmsg_len = CMSG_LEN(len);
+  memcpy(CMSG_DATA(*cm), data, len);
+  *cm = CMSG_NXTHDR(msg, *cm);
+  return CMSG_SPACE(len);
+}
+
 /* fills ctl with source pktinfo and optional GSO size. sets msg control fields */
-static void tx_ctl(struct msghdr *msg, ctl_t *ctl, const struct sockaddr_storage *dst, const struct sockaddr_storage *src, size_t gso) {
+static void tx_ctl(struct msghdr *msg, ctl_t *ctl, const struct sockaddr_storage *dst, const struct sockaddr_storage *src, size_t gso, uint8_t ecn) {
   size_t used = 0;
   struct cmsghdr *cm;
   memset(ctl, 0, sizeof *ctl);
@@ -155,46 +176,38 @@ static void tx_ctl(struct msghdr *msg, ctl_t *ctl, const struct sockaddr_storage
   cm = CMSG_FIRSTHDR(msg);
   if (gso) {
     uint16_t v = (uint16_t)gso;
-    cm->cmsg_level = SOL_UDP;
-    cm->cmsg_type = UDP_SEGMENT;
-    cm->cmsg_len = CMSG_LEN(sizeof v);
-    memcpy(CMSG_DATA(cm), &v, sizeof v);
-    used += CMSG_SPACE(sizeof v);
-    cm = CMSG_NXTHDR(msg, cm);
+    used += cmsg_put(msg, &cm, SOL_UDP, UDP_SEGMENT, &v, sizeof v);
   }
   if (src_usable(dst, src)) {
     if (src->ss_family == AF_INET) {
       struct in_pktinfo pi;
       memset(&pi, 0, sizeof pi);
       pi.ipi_spec_dst = ((const struct sockaddr_in *)src)->sin_addr;
-      cm->cmsg_level = IPPROTO_IP;
-      cm->cmsg_type = IP_PKTINFO;
-      cm->cmsg_len = CMSG_LEN(sizeof pi);
-      memcpy(CMSG_DATA(cm), &pi, sizeof pi);
-      used += CMSG_SPACE(sizeof pi);
+      used += cmsg_put(msg, &cm, IPPROTO_IP, IP_PKTINFO, &pi, sizeof pi);
     } else {
       struct in6_pktinfo pi;
       memset(&pi, 0, sizeof pi);
       pi.ipi6_addr = ((const struct sockaddr_in6 *)src)->sin6_addr;
       pi.ipi6_ifindex = ((const struct sockaddr_in6 *)src)->sin6_scope_id;
-      cm->cmsg_level = IPPROTO_IPV6;
-      cm->cmsg_type = IPV6_PKTINFO;
-      cm->cmsg_len = CMSG_LEN(sizeof pi);
-      memcpy(CMSG_DATA(cm), &pi, sizeof pi);
-      used += CMSG_SPACE(sizeof pi);
+      used += cmsg_put(msg, &cm, IPPROTO_IPV6, IPV6_PKTINFO, &pi, sizeof pi);
     }
+  }
+  if (ecn) {
+    int v = ecn;
+    if (dst->ss_family == AF_INET6) used += cmsg_put(msg, &cm, IPPROTO_IPV6, IPV6_TCLASS, &v, sizeof v);
+    else used += cmsg_put(msg, &cm, IPPROTO_IP, IP_TOS, &v, sizeof v);
   }
   msg->msg_controllen = used;
   if (!used) msg->msg_control = NULL;
 }
 
-static void send_each(int fd, const struct sockaddr_storage *dst, socklen_t dstlen, const struct sockaddr_storage *src, const uint8_t *buf, size_t total, size_t seg) {
+static void send_each(int fd, const struct sockaddr_storage *dst, socklen_t dstlen, const struct sockaddr_storage *src, const uint8_t *buf, size_t total, size_t seg, uint8_t ecn) {
   struct mmsghdr msgs[H3_GSO_MAX_SEGS];
   struct iovec iov[H3_GSO_MAX_SEGS];
   ctl_t ctl;
   struct msghdr tmpl;
   memset(&tmpl, 0, sizeof tmpl);
-  tx_ctl(&tmpl, &ctl, dst, src, 0);
+  tx_ctl(&tmpl, &ctl, dst, src, 0, ecn);
   size_t off = 0;
   int n = 0;
   while (off < total) {
@@ -218,7 +231,7 @@ static void send_each(int fd, const struct sockaddr_storage *dst, socklen_t dstl
   if (n > 0) (void)sendmmsg(fd, msgs, (unsigned)n, 0);
 }
 
-static int send_gso(int fd, const struct sockaddr_storage *dst, socklen_t dstlen, const struct sockaddr_storage *src, const uint8_t *buf, size_t total, size_t seg) {
+static int send_gso(int fd, const struct sockaddr_storage *dst, socklen_t dstlen, const struct sockaddr_storage *src, const uint8_t *buf, size_t total, size_t seg, uint8_t ecn) {
   ctl_t ctl;
   struct iovec iov = {.iov_base = (void *)buf, .iov_len = total};
   struct msghdr msg;
@@ -227,18 +240,18 @@ static int send_gso(int fd, const struct sockaddr_storage *dst, socklen_t dstlen
   msg.msg_namelen = dstlen;
   msg.msg_iov = &iov;
   msg.msg_iovlen = 1;
-  tx_ctl(&msg, &ctl, dst, src, seg);
+  tx_ctl(&msg, &ctl, dst, src, seg, ecn);
   return sendmsg(fd, &msg, 0) < 0 ? -1 : 0;
 }
 
-void h3_udp_send(int fd, const struct sockaddr_storage *dst, socklen_t dstlen, const struct sockaddr_storage *src, const uint8_t *buf, size_t total, size_t seg) {
+void h3_udp_send(int fd, const struct sockaddr_storage *dst, socklen_t dstlen, const struct sockaddr_storage *src, const uint8_t *buf, size_t total, size_t seg, uint8_t ecn) {
   if (total == 0) return;
   if (t_gso && total > seg && seg > 0) {
-    if (send_gso(fd, dst, dstlen, src, buf, total, seg) == 0) return;
+    if (send_gso(fd, dst, dstlen, src, buf, total, seg, ecn) == 0) return;
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS) return;
     t_gso = 0;
   }
-  send_each(fd, dst, dstlen, src, buf, total, seg > 0 ? seg : total);
+  send_each(fd, dst, dstlen, src, buf, total, seg > 0 ? seg : total, ecn);
 }
 
 #endif /* HAVE_HTTP3 */

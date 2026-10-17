@@ -180,6 +180,10 @@ else ()
     set(DVBIPITOOLS_SRT_HAVE_BONDING FALSE)
 endif ()
 
+# netconnect.c resolves names in a thread: every tool needs pthread
+find_package(Threads REQUIRED)
+link_libraries(Threads::Threads)
+
 link_libraries(atomic)
 
 set(BUILD_ARCH "${CMAKE_SYSTEM_PROCESSOR}")

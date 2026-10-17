@@ -9,6 +9,17 @@
 #include "sds_xml.h"
 #include "xml_util.h"
 
+static void put_lang(FILE *f, const char *lang) {
+  char l3[4];
+  size_t n = 0;
+  while (n < 3 && lang[n]) {
+    l3[n] = lang[n];
+    n++;
+  }
+  l3[n] = '\0';
+  xml_escape(f, l3);
+}
+
 void sds_broadcast_open(FILE *f, const char *domain, unsigned version) {
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<BroadcastDiscovery DomainName=\"", f);
   xml_escape(f, domain);
@@ -111,7 +122,9 @@ size_t sds_build_sp(const char *domain, const char *display_name, const char *la
   if (!f) return 0;
   fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<ServiceProviderDiscovery>\n<ServiceProvider DomainName=\"", f);
   xml_escape(f, domain);
-  fprintf(f, "\" Version=\"%u\">\n<Name Language=\"%.3s\">", version, lang);
+  fprintf(f, "\" Version=\"%u\">\n<Name Language=\"", version);
+  put_lang(f, lang);
+  fputs("\">", f);
   xml_escape(f, display_name);
   fprintf(f, "</Name>\n<Offering><Push Address=\"%s\" Port=\"%u\"><PayloadId Id=\"2\"/>", push_addr, push_port);
   for (int i = 0; i < extra_count; i++) fprintf(f, "<PayloadId Id=\"%u\"/>", extra_payload_ids[i]);
@@ -138,7 +151,9 @@ static const sds_service_t *sds_find_service(const char *name, const sds_service
 }
 
 void sds_package_item(FILE *f, const sds_package_t *pkg, const sds_service_t *svcs, int svc_count) {
-  fprintf(f, "<Package Id=\"%u\" Visible=\"%s\">\n<PackageName Language=\"%.3s\">", pkg->id, pkg->visible ? "true" : "false", pkg->lang);
+  fprintf(f, "<Package Id=\"%u\" Visible=\"%s\">\n<PackageName Language=\"", pkg->id, pkg->visible ? "true" : "false");
+  put_lang(f, pkg->lang);
+  fputs("\">", f);
   xml_escape(f, pkg->name);
   fputs("</PackageName>\n", f);
   for (int i = 0; i < pkg->service_count; i++) {
@@ -230,7 +245,9 @@ size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *
       xml_escape(f, rms[i].logo_uri);
       fputs("\"", f);
     }
-    fprintf(f, "><RMSName Language=\"%.3s\">", rms[i].lang);
+    fputs("><RMSName Language=\"", f);
+    put_lang(f, rms[i].lang);
+    fputs("\">", f);
     xml_escape(f, rms[i].name);
     fputs("</RMSName></RMSProvider>\n", f);
   }
@@ -241,7 +258,9 @@ size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *
       xml_escape(f, fus[i].logo_uri);
       fputs("\"", f);
     }
-    fprintf(f, "><FUSName Language=\"%.3s\">", fus[i].lang);
+    fputs("><FUSName Language=\"", f);
+    put_lang(f, fus[i].lang);
+    fputs("\">", f);
     xml_escape(f, fus[i].name);
     fprintf(f, "</FUSName><FUSID>%lu</FUSID><FUSAnnouncement>", fus[i].fus_id);
     if (fus[i].announce_addr) fprintf(f, "<MulticastAnnouncementAddress Address=\"%s\" Port=\"%u\"/>", fus[i].announce_addr, fus[i].announce_port);

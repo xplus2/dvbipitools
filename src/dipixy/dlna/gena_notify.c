@@ -17,6 +17,7 @@
 #include "dlna_int.h"
 
 #define QUEUE_MAX 64
+#define WORKERS 4
 #define IO_TIMEOUT_MS 2000
 
 typedef struct {
@@ -32,11 +33,11 @@ typedef struct {
 static pthread_mutex_t g_mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t g_cv = PTHREAD_COND_INITIALIZER;
 static job_t g_queue[QUEUE_MAX];
-static size_t g_head;
 static size_t g_count;
 static int g_started;
 static int g_stop;
-static pthread_t g_thread;
+static pthread_t g_threads[WORKERS];
+static char g_busy_sid[WORKERS][64]; /* in delivery per worker: same-sid jobs wait, SEQ order */
 
 static int send_all(int fd, const char *p, size_t n) {
   while (n) {
@@ -100,18 +101,32 @@ static int deliver(const job_t *j) {
   return rc;
 }
 
+static int sid_busy(const char *sid) {
+  for (int i = 0; i < WORKERS; i++)
+    if (g_busy_sid[i][0] && !strcmp(g_busy_sid[i], sid)) return 1;
+  return 0;
+}
+
+static int pick_job(void) {
+  for (size_t i = 0; i < g_count; i++)
+    if (!sid_busy(g_queue[i].sid)) return (int)i;
+  return -1;
+}
+
 static void *worker(void *arg) {
+  int me = (int)(intptr_t)arg;
   job_t j;
-  (void)arg;
   pthread_mutex_lock(&g_mtx);
   while (!g_stop) {
-    if (!g_count) {
+    int idx = g_count ? pick_job() : -1;
+    if (idx < 0) {
       pthread_cond_wait(&g_cv, &g_mtx);
       continue;
     }
-    j = g_queue[g_head];
-    g_head = (g_head + 1) % QUEUE_MAX;
+    j = g_queue[idx];
+    memmove(&g_queue[idx], &g_queue[idx + 1], (g_count - (size_t)idx - 1) * sizeof g_queue[0]);
     g_count--;
+    bufcpy(g_busy_sid[me], sizeof g_busy_sid[me], j.sid);
     pthread_mutex_unlock(&g_mtx);
     if (j.delay_ms) {
       struct timespec ts = {(time_t)(j.delay_ms / 1000u), (long)(j.delay_ms % 1000u) * 1000000L};
@@ -122,6 +137,8 @@ static void *worker(void *arg) {
       gena_delivery_failed(j.sid);
     }
     pthread_mutex_lock(&g_mtx);
+    g_busy_sid[me][0] = '\0';
+    pthread_cond_broadcast(&g_cv);
   }
   pthread_mutex_unlock(&g_mtx);
   return NULL;
@@ -132,12 +149,14 @@ int gena_notify_enqueue(const char *host, unsigned port, const char *path, const
   int rc = 0;
   pthread_mutex_lock(&g_mtx);
   if (!g_started && !g_stop) {
-    if (pthread_create(&g_thread, NULL, worker, NULL)) rc = -1;
-    else g_started = 1;
+    int n = 0;
+    while (n < WORKERS && !pthread_create(&g_threads[n], NULL, worker, (void *)(intptr_t)n)) n++;
+    g_started = n;
+    if (!n) rc = -1;
   }
   if (!rc && (!g_started || g_count == QUEUE_MAX || strlen(body) >= sizeof j->body)) rc = -1;
   if (!rc) {
-    j = &g_queue[(g_head + g_count) % QUEUE_MAX];
+    j = &g_queue[g_count];
     bufcpy(j->host, sizeof j->host, host);
     j->port = port;
     bufcpy(j->path, sizeof j->path, path);
@@ -161,7 +180,7 @@ void gena_notify_stop(void) {
   g_count = 0;
   pthread_cond_broadcast(&g_cv);
   pthread_mutex_unlock(&g_mtx);
-  if (join) pthread_join(g_thread, NULL);
+  for (int i = 0; i < join; i++) pthread_join(g_threads[i], NULL);
   pthread_mutex_lock(&g_mtx);
   g_stop = 0;
   pthread_mutex_unlock(&g_mtx);

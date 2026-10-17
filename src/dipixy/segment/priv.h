@@ -13,6 +13,7 @@
 #include "lib/demux/psi/psi.h"
 #include "lib/helper/log.h"
 #include "lib/mux/fmp4/fmp4.h"
+#include "lib/mux/pmt_filter.h"
 
 #include "../ts/lcevcselect.h"
 
@@ -23,6 +24,7 @@
 
 /* pts/dts step beyond this is a splice, not a frame: dropped from timeline */
 #define HLS_JUMP_MAX_TICKS HLS_TS_HZ
+#define HLS_SPLICE_TICKS (PTS_DISC_MS * (HLS_TS_HZ / 1000))
 
 /* pid locking: which pid is video/audio, once psi_ready(). demux.c owns this */
 typedef struct {
@@ -56,6 +58,8 @@ typedef struct {
   pts_unwrap_t dtswrap;
 
   int seg_open;          /* 1 once first keyframe seen */
+  int64_t last_ts;
+  int have_last_ts;
   int64_t first_ts;   /* decode-order ticks (dts, or pts if no dts) at segment start, -1 if unknown */
   double seg_target;
   int max_segs;
@@ -76,7 +80,7 @@ typedef struct {
   unsigned bsmod;
   unsigned acmod;
   unsigned lfeon;
-  unsigned bitrate_code; /* AC3: frmsizecod. EAC3: estimated data_rate kbps */
+  unsigned bitrate_code; /* AC3: frmsizecod >> 1. EAC3: estimated data_rate kbps */
   unsigned truehd_format_info; /* TrueHD only */
   unsigned truehd_peak_data_rate; /* TrueHD only */
   int dts_has_core; /* DTS/DTS-HD/DTS-HD-MA only */
@@ -155,6 +159,7 @@ typedef struct {
   int64_t part_start_ts;
   int part_key;
   int part_open;
+  int n_parts; /* last slot reserved for segment-ending part */
 
   /* fallback close point: avoids exceeding part_target */
   size_t last_au_off;
@@ -164,6 +169,7 @@ typedef struct {
 } seg_part_t;
 
 typedef struct hls_seg_ctx {
+  int splice_pending;
   capture_ctx_t *cap_ctx;
   _Atomic(struct hls_seg_ctx *) chain_next;
   hls_store_t *store;
@@ -174,6 +180,10 @@ typedef struct hls_seg_ctx {
   unsigned pmt_pid; /* 0 = auto */
   unsigned char cc_pmt; /* SEG_CONTAINER_TS: rewritten PMT packets' own cc */
   unsigned char cc_pat; /* SEG_CONTAINER_TS: rewritten PAT packets' own cc */
+  unsigned char psi_pat[188];
+  int psi_pat_ok;
+  unsigned char psi_pmt[PMT_FILTER_PKT_MAX * 188];
+  unsigned psi_pmt_n;
   lcevc_select_t lcevc;
   _Atomic int64_t last_request_ms;
   _Atomic int refcount;

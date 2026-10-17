@@ -138,6 +138,7 @@ static http_async_state_t async_after_headers(http_async_t *a, net_err_reason_t 
     } else if (h->fd >= 0) {
       close(h->fd);
     }
+    h->fd = -1;
     a->redirects++;
     a->url = next;
     if (async_start_connect(a, reason_out) != 0) return HTTP_ASYNC_ERROR;

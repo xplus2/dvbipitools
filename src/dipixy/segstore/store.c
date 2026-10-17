@@ -127,7 +127,10 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
 
   pthread_mutex_lock(store_lock(s));
   cur = atomic_exchange_explicit(&s->snap, NULL, memory_order_acq_rel);
-  if (cur) node->snaps[node->nsnaps++] = cur;
+  if (cur) {
+    seq_floor_note(cur->next_seq);
+    node->snaps[node->nsnaps++] = cur;
+  }
   for (int i = 0; i < s->retiring_n; i++) node->snaps[node->nsnaps++] = s->retiring[i];
   s->retiring_n = 0;
   pthread_mutex_unlock(store_lock(s));

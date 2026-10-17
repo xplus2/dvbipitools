@@ -975,6 +975,7 @@ typedef struct {
 
 static const codec_case_t codec_cases[] = {
     {"hevc", CODEC_HEVC, {0}, 8, "hvc1.1.6.L93.B0", ""},
+    {"hevc main10 with box", CODEC_HEVC, {0, 'h', 'v', 'c', 'C', 1, 0x02, 0x20, 0, 0, 0, 0xB0, 0, 0, 0, 0, 0, 120}, 18, "hvc1.2.4.L120.B0", ""},
     {"vvc", CODEC_VVC, {0}, 8, "vvc1.1.L1.CQ", ""},
     {"av1 without box", CODEC_AV1, {0}, 8, "av01.0.04M.08", ""},
     {"av1 10 bit high tier", CODEC_AV1, {0, 0, 'a', 'v', '1', 'C', 0, 0x28, 0xC0}, 9, "av01.1.08H.10", ""},

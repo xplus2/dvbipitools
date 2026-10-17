@@ -54,7 +54,7 @@ typedef struct netconnect_pending netconnect_pending_t;
 
 /* async pair: for callers running their own poll() loop over many connections at once (netconnect_tcp's own wait_connect() would serialize them).
    IP: starts connect() on first usable address, fd stays O_NONBLOCK.
-   hostnames: lookup runs in forked child, fd = result pipe (not a socket yet). neither waits.
+   hostnames: lookup thread, fd = its result socket. neither waits.
    *pending_out receives state on success, pass it to netconnect_tcp_finish().
    -1 on immediate failure (*pending_out untouched), else poll fd for netconnect_tcp_events(*pending_out), then call netconnect_tcp_finish().
    reason_out: nullable, set only on -1 */

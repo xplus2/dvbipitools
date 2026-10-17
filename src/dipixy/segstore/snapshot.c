@@ -34,6 +34,14 @@ hls_seg_ring_t *ring_cow(hls_snapshot_t *ns) {
   return nr;
 }
 
+/* floor for reopened stores: seq and ETags stay unique */
+static _Atomic uint32_t g_seq_floor;
+
+void seq_floor_note(uint32_t next_seq) {
+  uint32_t cur = atomic_load_explicit(&g_seq_floor, memory_order_relaxed);
+  while (next_seq > cur && !atomic_compare_exchange_weak_explicit(&g_seq_floor, &cur, next_seq, memory_order_relaxed, memory_order_relaxed)) {}
+}
+
 hls_snapshot_t *snap_clone(const hls_snapshot_t *base) {
   hls_snapshot_t *ns = malloc(sizeof *ns);
   if (!ns) return NULL;
@@ -46,6 +54,9 @@ hls_snapshot_t *snap_clone(const hls_snapshot_t *base) {
     }
     memset(ns->ring, 0, sizeof *ns->ring);
     atomic_init(&ns->ring->refcount, 1);
+    ns->next_seq = atomic_load_explicit(&g_seq_floor, memory_order_relaxed);
+    ns->oldest_seq = ns->next_seq;
+    ns->live_msn = ns->next_seq;
     return ns;
   }
   *ns = *base;

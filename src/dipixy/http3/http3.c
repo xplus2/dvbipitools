@@ -11,6 +11,14 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+void h3_notify_close_all(void) {
+  if (!t_h3_init) return;
+  for (int i = 0; i < t_h3_active_cnt; i++) {
+    h3_conn_t *c = t_h3_active[i];
+    h3conn_send_close(c, c->local_addr.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4, 0);
+  }
+}
+
 void h3_thread_cleanup(void) {
   /* releases live QUIC conns at shutdown */
   if (t_h3_init) {
@@ -51,12 +59,17 @@ static void handle_dgram(int udp_fd, const h3_rx_t *rx, const struct sockaddr_st
   ngtcp2_path_storage_zero(&ps);
   ngtcp2_addr_init(&ps.path.local, (const struct sockaddr *)&local, local_len);
   ngtcp2_addr_init(&ps.path.remote, peer, rx->peerlen);
-  ngtcp2_pkt_info pi = {0};
-  if (ngtcp2_conn_read_pkt_versioned(c->qconn, &ps.path, NGTCP2_PKT_INFO_VERSION, &pi, rx->data, rx->len, ts) < 0) c->done = 1;
-  if (!c->done && c->h3conn) {
+  ngtcp2_pkt_info pi = {.ecn = rx->ecn};
+  int rv = ngtcp2_conn_read_pkt_versioned(c->qconn, &ps.path, NGTCP2_PKT_INFO_VERSION, &pi, rx->data, rx->len, ts);
+  if (rv < 0) {
+    c->done = 1;
+    h3conn_send_close(c, udp_fd, rv);
+  }
+  if (!c->done && c->h3conn && c->dispatch_pending_n) {
     for (int i = 0; i < c->max_reqs; i++) {
       if (c->reqs[i].active && c->reqs[i].dispatch_pending) {
         c->reqs[i].dispatch_pending = 0;
+        c->dispatch_pending_n--;
         dispatch_req(c, &c->reqs[i]);
       }
     }

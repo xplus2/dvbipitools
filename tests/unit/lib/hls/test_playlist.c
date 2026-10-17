@@ -38,6 +38,27 @@ START_TEST(hls_playlist_parse_realistic_live_manifest) {
 }
 END_TEST
 
+START_TEST(hls_playlist_parse_reads_byte_ranges) {
+  char body[] =
+    "#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MAP:URI=\"init.mp4\",BYTERANGE=\"720@0\"\n"
+    "#EXTINF:6.0,\n#EXT-X-BYTERANGE:1000@720\nmedia.ts\n"
+    "#EXTINF:6.0,\n#EXT-X-BYTERANGE:500\nmedia.ts\n"
+    "#EXTINF:6.0,\nplain.ts\n";
+  http_url_t base = make_base("live.example.com", 80, "/live/x.m3u8");
+  hls_playlist_t pl;
+
+  ck_assert_int_eq(hls_playlist_parse(body, &base, &pl), 1);
+  ck_assert_uint_eq(pl.n_segments, 3);
+  ck_assert_uint_eq((unsigned)pl.map_range_off, 0u);
+  ck_assert_uint_eq((unsigned)pl.map_range_len, 720u);
+  ck_assert_uint_eq((unsigned)pl.segments[0].range_off, 720u);
+  ck_assert_uint_eq((unsigned)pl.segments[0].range_len, 1000u);
+  ck_assert_uint_eq((unsigned)pl.segments[1].range_off, 1720u);
+  ck_assert_uint_eq((unsigned)pl.segments[1].range_len, 500u);
+  ck_assert_uint_eq((unsigned)pl.segments[2].range_len, 0u);
+}
+END_TEST
+
 START_TEST(hls_playlist_parse_absolute_segment_url) {
   char body[] = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4.0,\nhttp://cdn.example.com/seg1.ts\n";
   http_url_t base = make_base("cdn.example.com", 80, "/live/index.m3u8");
@@ -464,6 +485,7 @@ static Suite *hls_playlist_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, hls_playlist_parse_realistic_live_manifest);
   tcase_add_test(tc, hls_playlist_parse_absolute_segment_url);
+  tcase_add_test(tc, hls_playlist_parse_reads_byte_ranges);
   tcase_add_test(tc, hls_playlist_parse_endlist_flag);
   tcase_add_test(tc, hls_playlist_parse_rejects_non_extm3u_body);
   tcase_add_test(tc, hls_playlist_parse_ignores_uri_without_extinf);

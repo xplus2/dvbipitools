@@ -141,6 +141,88 @@ static size_t convert_aac_adts(const esbuild_track_t *t, const fmp4_dec_sample_t
   return framelen;
 }
 
+#define AV1_OBU_SEQ_HDR 1
+#define AV1_OBU_TD 2
+
+static void av1_scan(const unsigned char *p, const unsigned char *end, int *has_td, int *has_seq) {
+  *has_td = 0;
+  *has_seq = 0;
+  while (p < end) {
+    unsigned hdr = p[0];
+    unsigned type = (hdr >> 3) & 0xF;
+    size_t len = 0;
+    unsigned shift = 0;
+    p += 1 + ((hdr >> 2) & 1); /* header, optional extension byte */
+    if (type == AV1_OBU_TD) *has_td = 1;
+    if (type == AV1_OBU_SEQ_HDR) *has_seq = 1;
+    if (!(hdr & 2)) return; /* no size field: last OBU */
+    while (p < end && shift < 35) {
+      len |= (size_t)(*p & 0x7F) << shift;
+      shift += 7;
+      if (!(*p++ & 0x80)) break;
+    }
+    if ((size_t)(end - p) < len) return;
+    p += len;
+  }
+}
+
+static size_t convert_av1(const esbuild_track_t *t, const fmp4_dec_sample_t *sample, unsigned char *out, size_t outcap) {
+  size_t pos = 0;
+  int has_td;
+  int has_seq;
+  int sync = fmp4_sample_is_keyframe(sample->flags);
+  size_t cfg_len = sync ? t->av1_cfg.len : 0;
+  av1_scan(sample->data, sample->data + sample->size, &has_td, &has_seq);
+  if (has_seq) cfg_len = 0;
+  if (!has_td) cfg_len += 2;
+  if (pos + cfg_len + sample->size > outcap) return 0;
+  if (!has_td) {
+    out[pos++] = 0x12;
+    out[pos++] = 0x00;
+  }
+  if (sync && !has_seq && t->av1_cfg.len) {
+    memcpy(out + pos, t->ps_pool + t->av1_cfg.off, t->av1_cfg.len);
+    pos += t->av1_cfg.len;
+  }
+  memcpy(out + pos, sample->data, sample->size);
+  return pos + sample->size;
+}
+
+static size_t convert_opus(const fmp4_dec_sample_t *sample, unsigned char *out, size_t outcap) {
+  size_t n = 2;
+  size_t left = sample->size;
+  if (outcap < 2 + sample->size / 255 + 1 + sample->size) return 0;
+  out[0] = 0x7F;
+  out[1] = 0xE0;
+  while (left >= 255) {
+    out[n++] = 0xFF;
+    left -= 255;
+  }
+  out[n++] = (unsigned char)left;
+  memcpy(out + n, sample->data, sample->size);
+  return n + sample->size;
+}
+
+static size_t convert_ac4(const fmp4_dec_sample_t *sample, unsigned char *out, size_t outcap) {
+  size_t n = 4;
+  if (outcap < 7 + sample->size || sample->size > 0xFFFFFF) return 0;
+  out[0] = 0xAC;
+  out[1] = 0x40;
+  if (sample->size < 0xFFFF) {
+    out[2] = (unsigned char)(sample->size >> 8);
+    out[3] = (unsigned char)sample->size;
+  } else {
+    out[2] = 0xFF;
+    out[3] = 0xFF;
+    out[4] = (unsigned char)(sample->size >> 16);
+    out[5] = (unsigned char)(sample->size >> 8);
+    out[6] = (unsigned char)sample->size;
+    n = 7;
+  }
+  memcpy(out + n, sample->data, sample->size);
+  return n + sample->size;
+}
+
 static size_t convert_passthrough(const fmp4_dec_sample_t *sample, unsigned char *out, size_t outcap) {
   if (sample->size > outcap) return 0;
   memcpy(out, sample->data, sample->size);
@@ -164,6 +246,11 @@ int esbuild_track_init(esbuild_track_t *out, const fmp4_stsd_entry_t *stsd) {
   out->codec = stsd->codec;
   out->nal_len_size = stsd->nal_len_size ? stsd->nal_len_size : 4;
   if (!copy_ps(out, out->vps, &out->n_vps, stsd->vps, stsd->n_vps) || !copy_ps(out, out->sps, &out->n_sps, stsd->sps, stsd->n_sps) || !copy_ps(out, out->pps, &out->n_pps, stsd->pps, stsd->n_pps)) return 0;
+  if (stsd->codec == CODEC_AV1 && stsd->cpriv_len) {
+    fmp4_nal_t cfg = {stsd->cpriv, stsd->cpriv_len};
+    unsigned n = 0;
+    if (!copy_ps(out, &out->av1_cfg, &n, &cfg, 1)) return 0;
+  }
   /* 2 B mini AudioSpecificConfig (next_aac(): aot<<3|sfi>>1, (sfi&1)<<7|chcfg<<3) */
   if (stsd->codec == CODEC_AAC && stsd->cpriv_len >= 2) {
     const unsigned char *c = stsd->cpriv;
@@ -179,11 +266,14 @@ size_t esbuild_es_bound(const esbuild_track_t *t, size_t sample_size) {
   size_t grow = 0;
 
   if (is_video_codec(t->codec) && t->nal_len_size < 4) grow = (sample_size / (t->nal_len_size + nal_header_len(t->codec)) + 1) * (4 - t->nal_len_size);
-  return sample_size + grow + t->ps_used + 4 * (size_t)(t->n_vps + t->n_sps + t->n_pps) + 7 + 7;
+  return sample_size + grow + t->ps_used + 4 * (size_t)(t->n_vps + t->n_sps + t->n_pps) + sample_size / 255 + 7 + 7;
 }
 
 size_t esbuild_convert_sample(const esbuild_track_t *t, const fmp4_dec_sample_t *sample, unsigned char *out, size_t outcap) {
   if (is_video_codec(t->codec)) return convert_video(t, sample, out, outcap);
   if (t->codec == CODEC_AAC) return convert_aac_adts(t, sample, out, outcap);
+  if (t->codec == CODEC_AV1) return convert_av1(t, sample, out, outcap);
+  if (t->codec == CODEC_OPUS) return convert_opus(sample, out, outcap);
+  if (t->codec == CODEC_AC4) return convert_ac4(sample, out, outcap);
   return convert_passthrough(sample, out, outcap);
 }

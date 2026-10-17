@@ -347,7 +347,7 @@ ret_client_t *ret_client_open(const ret_client_cfg_t *cfg) {
   return r;
 }
 
-ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size_t cap) {
+ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size_t cap, int max_wait_ms) {
   struct pollfd pfd[3];
   int nfds = 0;
   int mi;
@@ -361,7 +361,7 @@ ssize_t ret_client_read(ret_client_t *r, mcast_t *main, unsigned char *buf, size
   n = outq_pop(r, buf, cap);
   if (n > 0) return n;
   now = mono_seconds();
-  timeout_ms = 1000;
+  timeout_ms = max_wait_ms;
   if (r->gap_pending) {
     double remain_ms = (gap_wake(r) - now) * 1000.0;
     if (remain_ms < 0) remain_ms = 0;

@@ -95,7 +95,7 @@ SSL_CTX *build_ssl_ctx(const char *cert_path, const char *key_path) {
   return ctx;
 }
 
-/* 0: ok, or TLS off on bad cert. -1: fd_table_cap exceeds fd_ssl's cap, caller aborts */
+/* 0: ok. 1:TLS stays off (bad cert/key, oom). -1: fd_table_cap exceeds fd_ssl's cap */
 int tls_init(const char *cert_path, const char *key_path, int fd_table_cap) {
   SSL_CTX *ctx;
   bufcpy(g_tls_cert, sizeof g_tls_cert, cert_path);
@@ -103,7 +103,7 @@ int tls_init(const char *cert_path, const char *key_path, int fd_table_cap) {
 
   OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
   ctx = build_ssl_ctx(cert_path, key_path);
-  if (!ctx) return 0;
+  if (!ctx) return 1;
 
   if (fd_table_cap > CONN_TABLE_MAX) {
     log_code("YS000671", "tls_init: fd table cap %d exceeds max supported %d", fd_table_cap, CONN_TABLE_MAX);
@@ -114,7 +114,7 @@ int tls_init(const char *cert_path, const char *key_path, int fd_table_cap) {
   if (!fd_ssl) {
     log_code("YA500212", TOOL_NAME ": out of memory sizing fd_ssl table (%d entries), TLS not bound", fd_table_cap);
     SSL_CTX_free(ctx);
-    return 0;
+    return 1;
   }
   g_tls_fd_max = fd_table_cap;
   g_ssl_ctx = ctx;

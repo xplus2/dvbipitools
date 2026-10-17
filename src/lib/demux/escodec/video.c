@@ -99,8 +99,7 @@ int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
   return (*w && *h) ? 0 : -1;
 }
 
-/* HEVC SPS -> profile_tier_level, chroma, dimensions */
-int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned *chroma, unsigned *w, unsigned *h) {
+static int hevc_parse_sps(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned *chroma, unsigned *w, unsigned *h, unsigned *bd_luma, unsigned *bd_chroma) {
   unsigned char rb[ESCODEC_PS_MAX];
   br_t b;
   unsigned maxsub;
@@ -147,7 +146,29 @@ int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned
     *h -= (t + bo) * subh;
   }
   if (b.err || !*w || !*h) return -1;
+  *bd_luma = br_ue(&b) + 8;
+  *bd_chroma = br_ue(&b) + 8;
+  if (b.err) {
+    *bd_luma = 0;
+    *bd_chroma = 0;
+  }
   return 0;
+}
+
+/* HEVC SPS -> profile_tier_level, chroma, dimensions */
+int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned *chroma, unsigned *w, unsigned *h) {
+  unsigned bd_luma;
+  unsigned bd_chroma;
+  return hevc_parse_sps(nal, len, ptl, chroma, w, h, &bd_luma, &bd_chroma);
+}
+
+int hevc_bit_depth(const unsigned char *nal, size_t len, unsigned *luma, unsigned *chroma) {
+  unsigned char ptl[12];
+  unsigned cf;
+  unsigned w;
+  unsigned h;
+  if (hevc_parse_sps(nal, len, ptl, &cf, &w, &h, luma, chroma) != 0) return -1;
+  return *luma ? 0 : -1;
 }
 
 void br_align(br_t *b) {
@@ -258,6 +279,8 @@ size_t build_hvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   const unsigned char *ps[3];
   size_t pl[3];
   size_t n = 0;
+  unsigned bd_luma;
+  unsigned bd_chroma;
 
   ps[0] = t->vps;
   pl[0] = t->vpslen;
@@ -273,8 +296,12 @@ size_t build_hvcc(const esc_track_t *t, unsigned char *o, size_t cap) {
   o[n++] = 0x00;
   o[n++] = 0xFC; /* parallelismType 0 */
   o[n++] = (unsigned char)(0xFC | (t->chroma & 3));
-  o[n++] = 0xF8; /* bitDepthLumaMinus8 0 */
-  o[n++] = 0xF8; /* bitDepthChromaMinus8 0 */
+  if (hevc_bit_depth(t->sps, t->spslen, &bd_luma, &bd_chroma) != 0 || bd_luma > 16 || bd_chroma > 16) {
+    bd_luma = 8;
+    bd_chroma = 8;
+  }
+  o[n++] = (unsigned char)(0xF8 | (bd_luma - 8));
+  o[n++] = (unsigned char)(0xF8 | (bd_chroma - 8));
   o[n++] = 0x00; /* avgFrameRate */
   o[n++] = 0x00;
   o[n++] = 0x03; /* 4-byte NALU length */

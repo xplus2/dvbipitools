@@ -85,7 +85,7 @@ static void ts_part_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts, size_t au_off,
   }
 
   part_elapsed = (ts >= 0 && s->part.part_start_ts >= 0) ? (double)(ts - s->part.part_start_ts) / HLS_TS_HZ : 0.0;
-  if (!will_trim && part_elapsed < atomic_load_explicit(&s->part.part_target, memory_order_acquire)) {
+  if (!will_trim && (part_elapsed < atomic_load_explicit(&s->part.part_target, memory_order_acquire) || s->part.n_parts >= HLS_MAX_PARTS - 1)) {
     s->part.last_au_off = au_off;
     s->part.last_au_ts = ts;
     s->part.last_au_key = kf;
@@ -104,6 +104,7 @@ static void ts_part_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts, size_t au_off,
 
   if (au_off > s->part.part_start_off && (!s->store || hls_push_part_at(s->store, s->buf + s->part.part_start_off, au_off - s->part.part_start_off, part_elapsed, s->part.part_key) < 0))
     log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700148", "hls: hls_push_part failed, part lost");
+  s->part.n_parts = will_trim ? 0 : s->part.n_parts + 1;
   s->part.part_start_off = will_trim ? 0 : au_off;
   s->part.part_start_ts = ts;
   s->part.part_key = new_part_key;
@@ -112,9 +113,16 @@ static void ts_part_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts, size_t au_off,
 
 /* fmp4 doesn't keep raw ts */
 static void buf_trim(hls_seg_ctx_t *s, size_t cut_off) {
+  size_t n;
   if (s->container != SEG_CONTAINER_TS) return;
   memmove(s->buf, s->buf + cut_off, s->len - cut_off);
   s->len -= cut_off;
+  n = (s->psi_pat_ok ? 188u : 0u) + (size_t)s->psi_pmt_n * 188;
+  if (!n || (s->len >= 188 && !(s->buf[1] & 0x1F) && !s->buf[2]) || buf_reserve(&s->buf, &s->cap, s->len + n) < 0) return;
+  memmove(s->buf + n, s->buf, s->len);
+  if (s->psi_pat_ok) memcpy(s->buf, s->psi_pat, 188);
+  memcpy(s->buf + (s->psi_pat_ok ? 188 : 0), s->psi_pmt, (size_t)s->psi_pmt_n * 188);
+  s->len += n;
 }
 
 void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len) {
@@ -133,6 +141,15 @@ void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, 
   pts_t = has_pts ? pts_unwrap_ticks(&s->video.ptswrap, pts) : -1;
   ts = has_dts ? pts_unwrap_ticks(&s->video.dtswrap, dts) : pts_t;
   cts_ticks = (has_dts && pts_t >= 0) ? (int32_t)(pts_t - ts) : 0;
+  if (ts >= 0) {
+    int64_t step = ts - s->video.last_ts;
+    if (s->video.have_last_ts && (step > HLS_SPLICE_TICKS || step < -HLS_SPLICE_TICKS)) {
+      s->splice_pending = 1;
+      return;
+    }
+    s->video.last_ts = ts;
+    s->video.have_last_ts = 1;
+  }
   open_now = kf && !s->video.seg_open;
   elapsed = (kf && s->video.seg_open && ts >= 0 && s->video.first_ts >= 0) ? (double)(ts - s->video.first_ts) / HLS_TS_HZ : 0.0;
   pt = atomic_load_explicit(&s->part.part_target, memory_order_acquire);

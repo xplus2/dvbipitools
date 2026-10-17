@@ -51,4 +51,22 @@ int hls_cold_try_park(conn_t *c, const hls_cold_park_req_t *req);
 /* 1 parked, 0 table full: caller serves */
 int ts_cold_try_park(conn_t *c, const ts_cold_park_req_t *req);
 
+#define REACTOR_MAX_REQ 8192
+
+typedef enum { HTTP_METHOD_GET, HTTP_METHOD_HEAD, HTTP_METHOD_POST, HTTP_METHOD_SUBSCRIBE, HTTP_METHOD_UNSUBSCRIBE, HTTP_METHOD_OTHER } http_method_t;
+typedef enum { ROUTE_RESULT_FINISH, ROUTE_RESULT_PARKED, ROUTE_RESULT_OPENING } route_result_t;
+#define REACTOR_MAX_HEADERS 100
+
+typedef enum { BODY_FRAMING_OK, BODY_FRAMING_BAD, BODY_FRAMING_UNSUPPORTED } body_framing_t;
+http_method_t parse_http_method(const char *method, size_t method_len);
+void dispatch_dlna_subprotocol(int epfd, conn_t *c, const char *path, http_method_t method_kind, const struct phr_header *headers, size_t num_headers, size_t body_len, int keep_alive);
+int dispatch_special_path(conn_t *c, const char *path, int is_head, const struct phr_header *headers, size_t num_headers, int keep_alive, const pid_filter_t *filter, const lcevc_select_t *lcevc, const char *query);
+route_result_t dispatch_route_ts(conn_t *c, const route_t *rt, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int is_head, int keep_alive);
+route_result_t dispatch_route_hls(conn_t *c, const route_t *rt, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr);
+route_result_t dispatch_route_llhls(conn_t *c, const route_t *rt, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, const char *query);
+route_result_t dispatch_route_dash(conn_t *c, const route_t *rt, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int is_head, int keep_alive, const char *origin_hdr, const char *host_hdr);
+route_result_t dispatch_route_mp4(conn_t *c, const route_t *rt, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int is_head, int keep_alive, const char *origin_hdr);
+void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t method_len, const char *path_in, size_t path_len, int minor_version, const struct phr_header *headers, size_t num_headers, size_t header_bytes, size_t body_len);
+body_framing_t request_body_len(const struct phr_header *headers, size_t num_headers, size_t *body_len);
+
 #endif

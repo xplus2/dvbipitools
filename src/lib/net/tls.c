@@ -119,6 +119,7 @@ fail:
 tls_t *tls_connect(int fd, const char *host, int insecure) {
   tls_t *t = tls_setup(fd, host, insecure);
   if (!t) return NULL;
+  ERR_clear_error();
   if (SSL_connect(t->ssl) != 1) {
     log_code("LE300137", "tls handshake with %s failed", host);
     tls_log_ssl_error("SSL_connect");
@@ -134,7 +135,9 @@ tls_t *tls_connect_start(int fd, const char *host, int insecure) {
 }
 
 tls_handshake_status_t tls_handshake_step(tls_t *t) {
-  int r = SSL_connect(t->ssl);
+  int r;
+  ERR_clear_error();
+  r = SSL_connect(t->ssl);
   int err;
   if (r == 1) return TLS_HANDSHAKE_DONE;
   err = SSL_get_error(t->ssl, r);
@@ -151,6 +154,7 @@ tls_handshake_status_t tls_handshake_step(tls_t *t) {
 ssize_t tls_read(tls_t *t, void *buf, size_t cap) {
   int n, err;
   if (cap > INT_MAX) cap = INT_MAX;
+  ERR_clear_error();
   n = SSL_read(t->ssl, buf, (int)cap);
   if (n > 0) return n;
   err = SSL_get_error(t->ssl, n);
@@ -175,6 +179,7 @@ int tls_want_read(const tls_t *t) { return t->want_read; }
 ssize_t tls_write(tls_t *t, const void *buf, size_t len) {
   int n, err;
   if (len > INT_MAX) len = INT_MAX;
+  ERR_clear_error();
   n = SSL_write(t->ssl, buf, (int)len);
   if (n > 0) return n;
   err = SSL_get_error(t->ssl, n);

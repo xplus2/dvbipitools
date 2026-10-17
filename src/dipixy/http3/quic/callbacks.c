@@ -102,4 +102,23 @@ int cb_stream_close(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id, uint6
   return 0;
 }
 
+int cb_stream_reset(ngtcp2_conn *qconn, int64_t stream_id, uint64_t final_size, uint64_t app_err, void *ud, void *stream_ud) {
+  h3_conn_t *c = ud;
+  (void)qconn;
+  (void)final_size;
+  (void)app_err;
+  (void)stream_ud;
+  if (c->h3conn && nghttp3_conn_shutdown_stream_read(c->h3conn, stream_id) != 0) return NGTCP2_ERR_CALLBACK_FAILURE;
+  return 0;
+}
+
+int cb_recv_stop_sending(ngtcp2_conn *qconn, int64_t stream_id, uint64_t app_err, void *ud, void *stream_ud) {
+  h3_conn_t *c = ud;
+  (void)qconn;
+  (void)app_err;
+  (void)stream_ud;
+  if (c->h3conn) nghttp3_conn_shutdown_stream_write(c->h3conn, stream_id);
+  return 0;
+}
+
 #endif /* HAVE_HTTP3 */

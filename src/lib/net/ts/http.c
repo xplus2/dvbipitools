@@ -62,9 +62,19 @@ ssize_t tssrc_http_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_reas
     }
     return 0;
   case HTTP_SUB_DASH:
-    for (i = 0; i < s->n_media; i++) {
-      ssize_t n = dash_live_read(s->dash[i], buf, cap, reason_out);
-      if (n != 0) return n;
+    {
+      unsigned open_media = 0;
+      for (i = 0; i < s->n_media; i++) {
+        ssize_t n;
+        if (dash_live_finished(s->dash[i])) continue;
+        open_media++;
+        n = dash_live_read(s->dash[i], buf, cap, reason_out);
+        if (n != 0) return n;
+      }
+      if (s->n_media && !open_media) {
+        if (reason_out) *reason_out = NET_ERR_EOF;
+        return -1;
+      }
     }
     return 0;
   }

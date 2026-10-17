@@ -2,6 +2,8 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -155,8 +157,9 @@ static int uint_parse(const char *s, unsigned *out) {
   char *end;
   unsigned long v;
   if (*s == '\0' || !isdigit((unsigned char)*s)) return -1;
+  errno = 0;
   v = strtoul(s, &end, 10);
-  if (*end != '\0') return -1;
+  if (*end != '\0' || errno == ERANGE || v > UINT_MAX) return -1;
   *out = (unsigned)v;
   return 0;
 }

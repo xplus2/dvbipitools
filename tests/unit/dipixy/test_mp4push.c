@@ -177,10 +177,10 @@ END_TEST
 START_TEST(deliver_overflow_marks_ring_errored) {
   int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 2);
   ck_assert_int_ge(idx, 0);
-  unsigned char *big = malloc(600000);
+  unsigned char *big = malloc(9u << 20);
   ck_assert_ptr_nonnull(big);
-  memset(big, 'x', 600000);
-  mp4push_deliver(&g_fake_seg, big, 600000);
+  memset(big, 'x', 9u << 20);
+  mp4push_deliver(&g_fake_seg, big, 9u << 20);
   ck_assert_int_eq(mp4push_ring_errored(idx), 1);
   free(big);
   mp4push_sub_close(idx);

@@ -161,7 +161,7 @@ static int apply_capture_ring_size(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_ts_startup_timeout(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_double(&((config_t *)c)->ts_startup_timeout_s, v, 0.0, 1e9, 1, e, n);
+  return yamlcfg_set_double(&((config_t *)c)->ts_startup_timeout_s, v, 0.0, 2e6, 1, e, n);
 }
 
 static int apply_join_all(void *c, const char *v, char *e, size_t n) {

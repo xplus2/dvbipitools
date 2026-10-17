@@ -127,11 +127,12 @@ static void relock_program(hls_seg_ctx_t *s, const psi_es_t *es, int n, const pr
   video_reset(s);
   audio_reset(s);
   fmp4_reset(s, base_ms);
+  s->psi_pat_ok = 0;
+  s->psi_pmt_n = 0;
   s->demux.audio_pid_known = 0;
   s->demux.lcevc_pid_known = 0;
   s->drop = s->filter;
   lock_program(s, es, n, sel);
-  log_code("YW700154", "hls: program layout changed, relocked on video pid 0x%04x", sel->video_pid);
 }
 
 /* PMT parsed again: relock if locked program's layout differs. PMT without video keeps old lock */
@@ -147,6 +148,18 @@ static void check_program_change(hls_seg_ctx_t *s) {
   pidlock_snapshot(s->demux.psi, allowed, &n_allowed, (int)(sizeof allowed / sizeof allowed[0]));
   if (selection_unchanged(s, &sel) && n_allowed == s->demux.n_allowed && !memcmp(allowed, s->demux.allowed_pids, (size_t)n_allowed * sizeof allowed[0])) return;
   relock_program(s, es, n, &sel);
+  log_code("YW700154", "hls: program layout changed, relocked on video pid 0x%04x", sel.video_pid);
+}
+
+/* never from inside PES callback */
+static void splice_restart(hls_seg_ctx_t *s) {
+  program_sel_t sel;
+  int n;
+  const psi_es_t *es = psi_es(s->demux.psi, &n);
+  s->splice_pending = 0;
+  if (!select_program(s, es, n, &sel)) return;
+  relock_program(s, es, n, &sel);
+  log_code("YW700161", "hls: video timestamp jump, segmenter restarted on video pid 0x%04x", sel.video_pid);
 }
 
 static uint64_t wall_ms(void) {
@@ -165,11 +178,27 @@ static void drop_stalled_buf(hls_seg_ctx_t *s) {
   s->part.have_last_au = 0;
 }
 
+static void psi_cache_note(hls_seg_ctx_t *s, unsigned pid, const unsigned char *pkts, size_t n_pkts) {
+  size_t sec_end;
+  if (!(pkts[1] & 0x40) || pkts[3] & 0x20 || pkts[4] > 182) return;
+  sec_end = 5 + (size_t)pkts[4] + 3 + (((size_t)(pkts[6 + pkts[4]] & 0x0F) << 8) | pkts[7 + pkts[4]]);
+  if (n_pkts == 1 && sec_end > 188) return; /* section continues in packets not seen here */
+  if (pid == 0) {
+    if (n_pkts != 1) return;
+    memcpy(s->psi_pat, pkts, 188);
+    s->psi_pat_ok = 1;
+  } else if (n_pkts <= PMT_FILTER_PKT_MAX) {
+    memcpy(s->psi_pmt, pkts, n_pkts * 188);
+    s->psi_pmt_n = (unsigned)n_pkts;
+  }
+}
+
 static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *pmt_rw, unsigned char *pmt_pkt) {
   unsigned pid = tspack_pid(pkt);
   int pusi = 0;
   size_t n_pkts = 1;
   const unsigned char *out_pkt;
+  if (s->splice_pending) splice_restart(s);
   if (pid_filter_excludes(&s->drop, pid)) return;
   if (psi_wants_pid(s->demux.psi, pid)) psi_feed(s->demux.psi, pkt);
   if (!s->demux.video_pid_known) {
@@ -205,6 +234,7 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *
     }
     memcpy(s->buf + s->len, out_pkt, n_pkts * 188);
     s->len += n_pkts * 188;
+    if (pid == 0 || pid == psi_pmt_pid(s->demux.psi)) psi_cache_note(s, pid, out_pkt, n_pkts);
   }
 
   /* pes_feed's callback may trim s->buf. packet bytes always survive as new tail: offset valid only post-call */

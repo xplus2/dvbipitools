@@ -52,7 +52,7 @@
 #define H3_PATH_MAX 8192
 #define H3_DEFAULT_MAX_CONNS 256
 #define H3_MAX_CIDS 16
-#define H3_HASH_PER_CONN 8
+#define H3_HASH_PER_CONN (2 * (H3_MAX_CIDS + 1)) /* issued CIDs + original DCID, max half full */
 
 extern int g_h3_max_reqs;
 extern int g_h3_max_conns;
@@ -108,6 +108,9 @@ typedef struct h3_req {
   int ws_inflight;
   int ws_dead;  /* under ws_lock: overflow or protocol error, stream reset by reactor */
   int ws_reset; /* stream shutdown issued */
+  int ws_closing;
+  int ws_fin;
+  int ws_tid;
   uint8_t *ws_send_data; /* currently being read by nghttp3, zero-copy. owned by ws_unacked tail */
   size_t ws_send_len, ws_send_off;
   struct h3_ws_buf *ws_unacked; /* handed to nghttp3, freed once acked: it re-reads them for retransmits */
@@ -143,6 +146,7 @@ typedef struct h3_conn {
   int active_idx; /* position in t_h3_active[], for O(1) swap-remove */
   int pool_slot;
   int ws_active_count;
+  int dispatch_pending_n; /* reqs with dispatch_pending set: lets rx skip the req scan */
   ngtcp2_tstamp last_rx;
 } h3_conn_t;
 
@@ -230,12 +234,21 @@ static inline void release_req(h3_req_t *r) {
 
 static inline void free_req(h3_conn_t *c, int64_t sid) {
   h3_req_t *r = find_req(c, sid);
-  if (r) release_req(r);
+  if (!r) return;
+  if (r->dispatch_pending) {
+    r->dispatch_pending = 0;
+    c->dispatch_pending_n--;
+  }
+  release_req(r);
 }
 
 /* from http3_quic.c */
 h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr *local, socklen_t locallen, const h3_admit_t *ai);
+#define H3_CLOSE_PKT_MAX 1280
+
 void h3conn_del(h3_conn_t *c);
+
+void h3conn_send_close(h3_conn_t *c, int udp_fd, int liberr);
 h3_conn_t *find_conn(const uint8_t *pkt, size_t pktlen);
 void flush_tx(h3_conn_t *c, int udp_fd);
 void h3_tables_free(void);
@@ -253,6 +266,8 @@ int cb_acked_stream_data_offset(ngtcp2_conn *qconn, int64_t stream_id, uint64_t 
 int cb_extend_max_stream_data(ngtcp2_conn *qconn, int64_t stream_id, uint64_t max_data, void *ud, void *stream_ud);
 int cb_stream_open(ngtcp2_conn *qconn, int64_t stream_id, void *ud);
 int cb_stream_close(ngtcp2_conn *qconn, uint32_t flags, int64_t stream_id, uint64_t app_err, void *ud, void *stream_ud);
+int cb_stream_reset(ngtcp2_conn *qconn, int64_t stream_id, uint64_t final_size, uint64_t app_err, void *ud, void *stream_ud);
+int cb_recv_stop_sending(ngtcp2_conn *qconn, int64_t stream_id, uint64_t app_err, void *ud, void *stream_ud);
 
 static inline void h3_push_resume(h3_conn_t *c, int64_t sid) {
   int fd = c->local_addr.ss_family == AF_INET6 ? t_h3_udp6 : t_h3_udp4;

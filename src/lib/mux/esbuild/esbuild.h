@@ -29,6 +29,7 @@ typedef struct {
   unsigned n_pps;
   unsigned char ps_pool[ESBUILD_PS_POOL];
   unsigned ps_used;
+  esbuild_ps_t av1_cfg;
   unsigned aac_object_type;
   unsigned aac_sr_index;
   unsigned aac_channels;

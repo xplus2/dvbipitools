@@ -242,6 +242,86 @@ START_TEST(esbuild_aac_sbr_ps_use_lc_adts_profile) {
 }
 END_TEST
 
+START_TEST(esbuild_opus_gets_control_header_and_size) {
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  unsigned char pkt[300];
+  unsigned char out[400];
+  fmp4_dec_sample_t sample;
+  size_t n;
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = CODEC_OPUS;
+  esbuild_track_init(&t, &stsd);
+  memset(pkt, 0xAB, sizeof pkt);
+  memset(&sample, 0, sizeof sample);
+  sample.data = pkt;
+  sample.size = sizeof pkt;
+  n = esbuild_convert_sample(&t, &sample, out, sizeof out);
+  ck_assert_uint_eq(n, 2 + 2 + sizeof pkt);
+  ck_assert_uint_eq(out[0], 0x7F);
+  ck_assert_uint_eq(out[1], 0xE0);
+  ck_assert_uint_eq(out[2], 0xFF);
+  ck_assert_uint_eq(out[3], 300 - 255);
+  ck_assert_int_eq(memcmp(out + 4, pkt, sizeof pkt), 0);
+}
+END_TEST
+
+START_TEST(esbuild_ac4_gets_sync_frame_header) {
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  static const unsigned char frame[] = {1, 2, 3, 4, 5};
+  unsigned char out[32];
+  fmp4_dec_sample_t sample;
+  size_t n;
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = CODEC_AC4;
+  esbuild_track_init(&t, &stsd);
+  memset(&sample, 0, sizeof sample);
+  sample.data = frame;
+  sample.size = sizeof frame;
+  n = esbuild_convert_sample(&t, &sample, out, sizeof out);
+  ck_assert_uint_eq(n, 4 + sizeof frame);
+  ck_assert_uint_eq(out[0], 0xAC);
+  ck_assert_uint_eq(out[1], 0x40);
+  ck_assert_uint_eq(out[2], 0x00);
+  ck_assert_uint_eq(out[3], sizeof frame);
+  ck_assert_int_eq(memcmp(out + 4, frame, sizeof frame), 0);
+}
+END_TEST
+
+START_TEST(esbuild_av1_gets_temporal_delimiter_and_sequence_header) {
+  fmp4_stsd_entry_t stsd;
+  esbuild_track_t t;
+  static const unsigned char cfg[] = {0x0A, 0x02, 0xAA, 0xBB};
+  static const unsigned char frame[] = {0x32, 0x02, 0x11, 0x22}; /* OBU_FRAME, size 2 */
+  unsigned char out[32];
+  fmp4_dec_sample_t sample;
+  size_t n;
+
+  memset(&stsd, 0, sizeof stsd);
+  stsd.codec = CODEC_AV1;
+  stsd.cpriv = cfg;
+  stsd.cpriv_len = sizeof cfg;
+  ck_assert_int_eq(esbuild_track_init(&t, &stsd), 1);
+  memset(&sample, 0, sizeof sample);
+  sample.data = frame;
+  sample.size = sizeof frame;
+  sample.flags = 0x00010000u;
+  n = esbuild_convert_sample(&t, &sample, out, sizeof out);
+  ck_assert_uint_eq(n, 2 + sizeof frame);
+  ck_assert_uint_eq(out[0], 0x12);
+  ck_assert_uint_eq(out[1], 0x00);
+  ck_assert_int_eq(memcmp(out + 2, frame, sizeof frame), 0);
+  sample.flags = 0;
+  n = esbuild_convert_sample(&t, &sample, out, sizeof out);
+  ck_assert_uint_eq(n, 2 + sizeof cfg + sizeof frame);
+  ck_assert_int_eq(memcmp(out + 2, cfg, sizeof cfg), 0);
+  ck_assert_int_eq(memcmp(out + 2 + sizeof cfg, frame, sizeof frame), 0);
+}
+END_TEST
+
 START_TEST(esbuild_ac3_passes_through_unchanged) {
   fmp4_stsd_entry_t stsd;
   esbuild_track_t t;
@@ -588,6 +668,9 @@ static Suite *esbuild_suite(void) {
   tcase_add_test(tc, esbuild_aac_synthesizes_adts_header);
   tcase_add_test(tc, esbuild_aac_sbr_ps_use_lc_adts_profile);
   tcase_add_test(tc, esbuild_ac3_passes_through_unchanged);
+  tcase_add_test(tc, esbuild_opus_gets_control_header_and_size);
+  tcase_add_test(tc, esbuild_ac4_gets_sync_frame_header);
+  tcase_add_test(tc, esbuild_av1_gets_temporal_delimiter_and_sequence_header);
   tcase_add_loop_test(tc, esbuild_video_conversion_stops_at_malformed_nal_sizes, 0, (int)(sizeof video_cases / sizeof video_cases[0]));
   tcase_add_test(tc, esbuild_vvc_idr_gets_parameter_sets_reinjected);
   tcase_add_test(tc, esbuild_parameter_set_injection_fails_cleanly_when_output_is_too_small);

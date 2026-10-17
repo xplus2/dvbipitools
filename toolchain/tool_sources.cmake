@@ -38,7 +38,11 @@ function(dipibcg_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
             ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
-            ${CMAKE_SOURCE_DIR}/src/dipibcg/announce.c
+            ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/time.c
+            ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/programmes.c
+            ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/doc.c
+            ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/segment.c
+            ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/run.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/announce_driver.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/listen.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
@@ -51,22 +55,37 @@ function(dipibcg_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/crid.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/time.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/write.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_info.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_schedule.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/mapping.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/xmltv.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/dvbtypes.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/node.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_media.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_text.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_desc.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_prog.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/coding.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/accessunit.c)
     set(DIPIBCG_SRCS ${DIPIBCG_SRCS} PARENT_SCOPE)
     set(DIPIBCG_HAVE_ZLIB ${DIPIBCG_HAVE_ZLIB} PARENT_SCOPE)
@@ -81,15 +100,30 @@ function(dipibim_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/crid.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/time.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/write.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_info.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_schedule.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/dvbtypes.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/node.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_media.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_text.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_desc.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_prog.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/coding.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/accessunit.c)
     set(DIPIBIM_SRCS ${DIPIBIM_SRCS} PARENT_SCOPE)
 endfunction()
@@ -168,9 +202,15 @@ function(dipidescramble_resolve_sources)
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/connect.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/group.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/open.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/read.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/connect.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/pending.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/service.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/close.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
     else ()
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
@@ -239,7 +279,11 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
-            ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/position.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/prepare.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/events.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/read.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
@@ -249,7 +293,11 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -410,7 +458,10 @@ function(dipimetrics_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/cli/help.c
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/config.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/store.c
-            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render/families.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render/labels.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render/series.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render/openmetrics.c
             ${CMAKE_SOURCE_DIR}/src/dipimetrics/httpserver.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
@@ -514,7 +565,10 @@ function(dipiradiohead_resolve_sources)
 
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/connect.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/pending.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/service.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/close.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
     else ()
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink_stub.c)
@@ -679,9 +733,15 @@ function(dipirec_resolve_sources)
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/connect.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/group.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/open.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/read.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/connect.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/pending.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/service.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/close.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
     else ()
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
@@ -720,7 +780,11 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
-            ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/position.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/prepare.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/events.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/read.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
@@ -731,7 +795,11 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record/rtmp_fanout.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record/stats.c
             ${CMAKE_SOURCE_DIR}/src/dipirec/record/run.c
@@ -796,7 +864,10 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/mp4.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/write.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/feed.c
-            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov/head.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov/stbl.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov/trak.c
+            ${CMAKE_SOURCE_DIR}/src/lib/mux/mp4/moov/checkpoint.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/flv.c
@@ -851,7 +922,10 @@ function(dipirist_resolve_sources)
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/connect.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/group.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/open.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/read.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
     else ()
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c)
@@ -907,7 +981,11 @@ function(dipirist_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
-            ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/position.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/prepare.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/events.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/read.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
@@ -917,7 +995,11 @@ function(dipirist_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -1036,7 +1118,11 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/aes128cbc.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
-            ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/position.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/prepare.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/events.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/read.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
@@ -1046,7 +1132,11 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
@@ -1057,8 +1147,14 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c
-            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
-            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/connect.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/pending.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/service.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/close.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/connect.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/group.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/open.c
+            ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/read.c
             ${TLS_SRC}
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -1095,7 +1191,11 @@ function(dipiscan_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -1156,9 +1256,15 @@ function(dipixy_resolve_sources)
     if (DVBIPITOOLS_HAVE_SRT)
         set(DIPIXY_SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/connect.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/group.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/open.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/read.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/connect.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/pending.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/service.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/close.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
     else ()
         set(DIPIXY_SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
@@ -1330,7 +1436,10 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/channels.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/build.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/channels/reload.c
-            ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/capture.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/ctx/ctx.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/ctx/snapshot.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/ctx/open.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/ctx/lifecycle.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
@@ -1341,7 +1450,11 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
-            ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/position.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/prepare.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/events.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/read.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
@@ -1363,9 +1476,15 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
-            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/conn.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/conn/pool.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/conn/table.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/conn/queue.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/conn/flush.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/handshake.c
-            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/dispatch.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/request/path.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/request/routes.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/request/request.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/request/read.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/resp.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/content.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/dispatch/route.c
@@ -1405,8 +1524,15 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/altsvc.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_serve.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_llhls.c
-            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/dash.c
-            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/lldash.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/dash/mpd_xml.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/dash/codecs.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/dash/mpd.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/dash/seg.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/lldash/sub.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/lldash/chain.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/lldash/subscribe.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/lldash/bind.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/dash/lldash/ring.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/hls/hls_render.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/segment/segment.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/segment/demux.c
@@ -1431,7 +1557,10 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fmp4/fmp4_frag.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
-            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render/families.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render/labels.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render/series.c
+            ${CMAKE_SOURCE_DIR}/src/lib/metrics/render/openmetrics.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/store.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
@@ -1447,7 +1576,11 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_in.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/playlist_out.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
@@ -1507,7 +1640,12 @@ function(dipisds_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
             ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
-            ${CMAKE_SOURCE_DIR}/src/dipisds/input.c
+            ${CMAKE_SOURCE_DIR}/src/dipisds/input/util.c
+            ${CMAKE_SOURCE_DIR}/src/dipisds/input/csv.c
+            ${CMAKE_SOURCE_DIR}/src/dipisds/input/m3u.c
+            ${CMAKE_SOURCE_DIR}/src/dipisds/input/xspf.c
+            ${CMAKE_SOURCE_DIR}/src/dipisds/input/load.c
+            ${CMAKE_SOURCE_DIR}/src/dipisds/input/packages.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/format_out.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/describe.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/announce.c
@@ -1523,7 +1661,11 @@ function(dipisds_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -1599,9 +1741,15 @@ function(dipitvhead_resolve_sources)
     if (DVBIPITOOLS_HAVE_SRT)
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/pipereader.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/connect.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/group.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/open.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtin/read.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsink.c
-                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/connect.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/pending.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/service.c
+                ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtout/close.c
                 ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtcommon.c)
     else ()
         set(SRT_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/srt/srtsrc_stub.c
@@ -1653,7 +1801,11 @@ function(dipitvhead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/hls/tspassthrough.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/dash/mpd.c
-            ${CMAKE_SOURCE_DIR}/src/lib/dash/live.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/core.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/position.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/prepare.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/events.c
+            ${CMAKE_SOURCE_DIR}/src/lib/dash/live/read.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/box.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/track.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fmp4/sample.c
@@ -1662,7 +1814,11 @@ function(dipitvhead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/tspacketize.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/pmtbuild.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/esbuild/remux.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/pmtbuild.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/aitbuild.c
             ${CMAKE_SOURCE_DIR}/src/dipitvhead/mux/remux/lifecycle.c
@@ -1760,10 +1916,18 @@ function(dipixmltv_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/crid.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/time.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/write.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_info.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_schedule.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/mapping.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/xmltv.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c)

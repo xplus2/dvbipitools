@@ -163,4 +163,19 @@ void p4_all_ready(mp4_t *m);
 void p4_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len);
 void p4_setup(mp4_t *m);
 
+typedef struct {
+  uint32_t empty_ms; /* leading gap vs movie origin */
+  uint32_t skip_ms;  /* media arrival time, first presented sample */
+} track_edit_t;
+void put_be32(unsigned char *p, uint32_t v);
+void put_be64(unsigned char *p, uint64_t v);
+void trak_meta_from_track(trak_meta_t *tm, const track_t *t);
+void build_stbl(mp4buf_t *out, const track_t *t, int ck);
+track_edit_t track_edit(const track_t *t, int64_t origin_ms);
+uint32_t track_movie_duration_ms(uint32_t d, const track_edit_t *e);
+int build_moov(const mp4_t *m, mp4buf_t *top, int ck);
+int fits_region(const mp4buf_t *moov);
+void write_region(mp4_t *m, const mp4buf_t *moov);
+void ck_pwrite(mp4_t *m, const unsigned char *p, size_t n, size_t pos);
+
 #endif

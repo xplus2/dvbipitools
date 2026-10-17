@@ -275,6 +275,34 @@ START_TEST(dash_mpd_parse_timeline_with_repeats_and_implicit_times) {
 }
 END_TEST
 
+START_TEST(dash_mpd_parse_open_ended_repeat_closer_than_one_duration_is_single) {
+  char body[] =
+    "<MPD type=\"dynamic\"><Period><AdaptationSet mimeType=\"video/mp4\">"
+    "<SegmentTemplate initialization=\"i.mp4\" media=\"s$Time$.m4s\" timescale=\"1000\">"
+    "<SegmentTimeline><S t=\"0\" d=\"2000\" r=\"-1\"/><S t=\"1500\" d=\"2000\"/></SegmentTimeline>"
+    "</SegmentTemplate><Representation id=\"a\" bandwidth=\"1\"/></AdaptationSet></Period></MPD>";
+  dash_mpd_t mpd;
+  const dash_representation_t *r;
+  ck_assert_int_eq(dash_mpd_parse(body, NULL, &mpd), 1);
+  r = &mpd.periods[0].adaptation_sets[0].representations[0];
+  ck_assert_uint_eq(r->timeline[0].r, 0ULL);
+}
+END_TEST
+
+START_TEST(dash_mpd_parse_trailing_open_ended_repeat_runs_to_the_period_end) {
+  char body[] =
+    "<MPD type=\"static\" mediaPresentationDuration=\"PT10S\"><Period><AdaptationSet mimeType=\"video/mp4\">"
+    "<SegmentTemplate initialization=\"i.mp4\" media=\"s$Time$.m4s\" timescale=\"1000\">"
+    "<SegmentTimeline><S t=\"0\" d=\"2000\" r=\"-1\"/></SegmentTimeline>"
+    "</SegmentTemplate><Representation id=\"a\" bandwidth=\"1\"/></AdaptationSet></Period></MPD>";
+  dash_mpd_t mpd;
+  const dash_representation_t *r;
+  ck_assert_int_eq(dash_mpd_parse(body, NULL, &mpd), 1);
+  r = &mpd.periods[0].adaptation_sets[0].representations[0];
+  ck_assert_uint_eq(r->timeline[0].r, 4ULL);
+}
+END_TEST
+
 START_TEST(dash_mpd_parse_timeline_drops_oldest_beyond_capacity) {
   size_t cap = DASH_MAX_TIMELINE * 40 + 512;
   char *body = malloc(cap);
@@ -283,6 +311,12 @@ START_TEST(dash_mpd_parse_timeline_drops_oldest_beyond_capacity) {
   const dash_representation_t *r;
   unsigned long long d;
   unsigned long long k;
+  if (body == NULL || mpd == NULL) {
+    free(body);
+    free(mpd);
+    ck_abort_msg("oom");
+    return;
+  }
   p += snprintf(p, cap, "<MPD><Period><AdaptationSet><SegmentTemplate media=\"s$Time$\" timescale=\"1\"><SegmentTimeline>");
   for (unsigned i = 0; i < DASH_MAX_TIMELINE + 3; i++) p += snprintf(p, cap - (size_t)(p - body), "<S t=\"%u\" d=\"1\"/>", i * 10);
   snprintf(p, cap - (size_t)(p - body), "</SegmentTimeline></SegmentTemplate><Representation id=\"a\"/></AdaptationSet></Period></MPD>");
@@ -414,6 +448,8 @@ static Suite *dash_mpd_suite(void) {
   tcase_add_test(tc, dash_mpd_parse_static_type);
   tcase_add_test(tc, dash_media_url_expands_identifier_bandwidth_and_widths);
   tcase_add_test(tc, dash_mpd_parse_timeline_with_repeats_and_implicit_times);
+  tcase_add_test(tc, dash_mpd_parse_open_ended_repeat_closer_than_one_duration_is_single);
+  tcase_add_test(tc, dash_mpd_parse_trailing_open_ended_repeat_runs_to_the_period_end);
   tcase_add_test(tc, dash_mpd_parse_timeline_drops_oldest_beyond_capacity);
   tcase_add_test(tc, dash_mpd_parse_reads_availability_start_and_buffer_depth);
   tcase_add_test(tc, dash_mpd_parse_offset_availability_start_is_converted_to_utc);

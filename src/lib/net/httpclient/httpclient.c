@@ -208,6 +208,7 @@ int setup_transfer_encoding(struct http *h, net_err_reason_t *reason_out) {
     return -1;
   }
   h->chunked = 1;
+  h->decoder.consume_trailer = 1;
   return 0;
 }
 

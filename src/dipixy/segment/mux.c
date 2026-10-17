@@ -251,6 +251,7 @@ static void fmp4_close_fragment(hls_seg_ctx_t *s, double pt) {
   if (!outlen) return;
   mp4push_deliver(s, out, outlen);
   if (pt > 0.0) {
+    s->part.n_parts = s->fmp4.pend_ends_seg ? 0 : s->part.n_parts + 1;
     if (!s->store || hls_push_part_at(s->store, out, outlen, chunk_dur, s->fmp4.fmp4_frag_key) < 0)
       log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700145", "hls: hls_push_part failed, fmp4 chunk lost");
     if (s->fmp4.pend_ends_seg && (!s->store || hls_push_segment_ll_at(s->store, s->fmp4.pend_elapsed) < 0))
@@ -304,7 +305,7 @@ void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts, int32_t cts_ticks, int o
   try_create_fmux(s);
   if (!s->fmp4.fmux) return;
   pt = atomic_load_explicit(&s->part.part_target, memory_order_acquire);
-  chunk_now = pt > 0.0 && s->fmp4.fmp4_frag_open && ts >= 0 && s->fmp4.fmp4_frag_start_ts >= 0 && (double)(ts - s->fmp4.fmp4_frag_start_ts) / HLS_TS_HZ >= pt;
+  chunk_now = pt > 0.0 && s->part.n_parts + (s->fmp4.fmp4_have_pend && s->fmp4.pend_starts_frag && s->fmp4.fmp4_frag_open) < HLS_MAX_PARTS - 1 && s->fmp4.fmp4_frag_open && ts >= 0 && s->fmp4.fmp4_frag_start_ts >= 0 && (double)(ts - s->fmp4.fmp4_frag_start_ts) / HLS_TS_HZ >= pt;
   wants_cut = open_now || cut_now || chunk_now;
   ac4_defer_apply(s, &wants_cut, &cut_now, &elapsed);
   if (s->fmp4.fmp4_have_pend && ts >= 0 && s->fmp4.pend_ts >= 0 && (s->fmp4.fmp4_frag_open || s->fmp4.pend_starts_frag)) {

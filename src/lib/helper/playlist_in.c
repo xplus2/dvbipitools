@@ -64,8 +64,17 @@ static int uint_attr(const char *s, const char *name, unsigned *out) {
 
 /* "-1 tsid=\"1\" onid=\"2\" sid=\"3\",name" or generic "-1,name" after "#EXTINF:".
    tvg-logo="..." (de facto M3U icon attribute) recognized alongside the triplet */
+static const char *extinf_comma(const char *body) {
+  int quoted = 0;
+  for (const char *p = body; *p; p++) {
+    if (*p == '"') quoted = !quoted;
+    else if (*p == ',' && !quoted) return p;
+  }
+  return NULL;
+}
+
 static void extinf_parse(const char *body, playlist_item_t *it) {
-  const char *comma = strchr(body, ',');
+  const char *comma = extinf_comma(body);
   char attrs[1024];
   char icon[512];
   size_t alen;

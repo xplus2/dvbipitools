@@ -83,6 +83,9 @@ int channels_refresh_active(void);
    item_name non-NULL: sel by name[item_num]. rf: NULL ok. thread-safe vs concurrent refresh. 0 ok, -1 not found/malformed */
 int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, int *family, char *addr, size_t addrsz, char *src, size_t srcsz, unsigned *port, int *rtp, channel_ret_fcc_t *rf);
 
+/* srt/http item: 1 with uri/insecure_tls, else 0. never opens */
+int channels_static_target(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, char *uri, size_t urisz, int *insecure_tls);
+
 /* same params as channels_resolve(). srt/http items only: opens on demand (deduped), ref++'d ctx instead of family/addr/port.
    no connection held while unused. NULL otherwise or open failed */
 capture_ctx_t *channels_resolve_static(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name);

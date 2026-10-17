@@ -80,7 +80,7 @@ static void send_pkt(int fd, const uint8_t *buf, size_t len, const struct sockad
   struct sockaddr_storage dst;
   if (peerlen > sizeof dst) return;
   memcpy(&dst, peer, peerlen);
-  h3_udp_send(fd, &dst, peerlen, local, buf, len, len);
+  h3_udp_send(fd, &dst, peerlen, local, buf, len, len, 0);
 }
 
 static void send_version_neg(int fd, const ngtcp2_version_cid *vc, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr_storage *local) {

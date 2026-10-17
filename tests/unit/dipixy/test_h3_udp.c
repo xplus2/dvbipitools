@@ -62,7 +62,7 @@ static void check_burst(void) {
   uint8_t buf[5 * 1000 + 400];
   h3_rx_t rx[H3_RX_BATCH];
   for (size_t i = 0; i < sizeof buf; i++) buf[i] = (uint8_t)(i / 100);
-  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, 1000);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, 1000, 0);
   ck_assert_int_eq(recv_all(rx, 6), 6);
   for (int i = 0; i < 6; i++) {
     size_t want = i < 5 ? 1000 : 400;
@@ -87,7 +87,7 @@ START_TEST(single_datagram_needs_no_gso) {
   uint8_t buf[300];
   h3_rx_t rx[H3_RX_BATCH];
   memset(buf, 7, sizeof buf);
-  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf, 0);
   ck_assert_int_eq(recv_all(rx, 1), 1);
   ck_assert_uint_eq(rx[0].len, sizeof buf);
 }
@@ -98,7 +98,7 @@ START_TEST(recv_reports_sender) {
   h3_rx_t rx[H3_RX_BATCH];
   struct sockaddr_in me;
   socklen_t len = sizeof me;
-  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf, 0);
   ck_assert_int_eq(recv_all(rx, 1), 1);
   ck_assert_int_eq(getsockname(tx_fd, (struct sockaddr *)&me, &len), 0);
   ck_assert_int_eq(rx[0].peer.ss_family, AF_INET);
@@ -116,7 +116,7 @@ START_TEST(recv_marks_oversized_datagram) {
   uint8_t big[PAYLOAD + 200];
   h3_rx_t rx[H3_RX_BATCH];
   memset(big, 1, sizeof big);
-  h3_udp_send(tx_fd, &dst, dstlen, NULL, big, sizeof big, sizeof big);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, big, sizeof big, sizeof big, 0);
   ck_assert_int_eq(recv_all(rx, 1), 1);
   ck_assert_uint_eq(rx[0].len, 0);
 }
@@ -126,7 +126,7 @@ START_TEST(recv_batches_many_datagrams) {
   uint8_t buf[40];
   h3_rx_t rx[H3_RX_BATCH];
   memset(buf, 3, sizeof buf);
-  for (int i = 0; i < 20; i++) h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf);
+  for (int i = 0; i < 20; i++) h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf, 0);
   ck_assert_int_eq(recv_all(rx, 20), 20);
 }
 END_TEST
@@ -154,7 +154,7 @@ START_TEST(recv_reports_local_destination) {
   to = w;
   inet_pton(AF_INET, "127.0.0.2", &to.sin_addr);
   memcpy(&d, &to, sizeof to);
-  h3_udp_send(tx_fd, &d, sizeof to, NULL, buf, sizeof buf, sizeof buf);
+  h3_udp_send(tx_fd, &d, sizeof to, NULL, buf, sizeof buf, sizeof buf, 0);
   rx_fd = wfd;
   ck_assert_int_eq(recv_all(rx, 1), 1);
   rx_fd = saved;
@@ -168,7 +168,7 @@ END_TEST
 START_TEST(recv_without_pktinfo_has_no_local) {
   uint8_t buf[20] = {1};
   h3_rx_t rx[H3_RX_BATCH];
-  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf, 0);
   ck_assert_int_eq(recv_all(rx, 1), 1);
   ck_assert_uint_eq(rx[0].locallen, 0);
 }
@@ -185,13 +185,27 @@ START_TEST(send_uses_requested_source) {
   src = w;
   inet_pton(AF_INET, "127.0.0.2", &src.sin_addr);
   memcpy(&s, &src, sizeof src);
-  h3_udp_send(wfd, &dst, dstlen, &s, buf, sizeof buf, 1000);
+  h3_udp_send(wfd, &dst, dstlen, &s, buf, sizeof buf, 1000, 0);
   close(wfd);
   ck_assert_int_eq(recv_all(rx, 3), 3);
   for (int i = 0; i < 3; i++) {
     ck_assert_int_eq(rx[i].peer.ss_family, AF_INET);
     ck_assert_uint_eq(((struct sockaddr_in *)&rx[i].peer)->sin_addr.s_addr, src.sin_addr.s_addr);
   }
+}
+END_TEST
+
+START_TEST(ecn_marks_roundtrip) {
+  uint8_t buf[100];
+  h3_rx_t rx[H3_RX_BATCH];
+  memset(buf, 7, sizeof buf);
+  ck_assert_int_eq(h3_udp_pktinfo(rx_fd, AF_INET), 0);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf, 2);
+  ck_assert_int_eq(recv_all(rx, 1), 1);
+  ck_assert_uint_eq(rx[0].ecn, 2);
+  h3_udp_send(tx_fd, &dst, dstlen, NULL, buf, sizeof buf, sizeof buf, 0);
+  ck_assert_int_eq(recv_all(rx, 1), 1);
+  ck_assert_uint_eq(rx[0].ecn, 0);
 }
 END_TEST
 
@@ -209,6 +223,7 @@ static Suite *h3_udp_suite(void) {
   tcase_add_test(tc, recv_reports_local_destination);
   tcase_add_test(tc, recv_without_pktinfo_has_no_local);
   tcase_add_test(tc, send_uses_requested_source);
+  tcase_add_test(tc, ecn_marks_roundtrip);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -6,14 +6,22 @@
 #include <errno.h>
 #include <linux/errqueue.h>
 #include <netinet/in.h>
+#include <openssl/err.h>
 #include <string.h>
 #include <sys/socket.h>
 
 ssize_t tls_net_send(int fd, const void *buf, size_t len) {
-  if (fd < 0 || fd >= g_tls_fd_max) return send(fd, buf, len, MSG_NOSIGNAL);
+  if (fd < 0 || fd >= g_tls_fd_max) {
+    t_tls_want_write = 0;
+    return send(fd, buf, len, MSG_NOSIGNAL);
+  }
 
   SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
-  if (!ssl) return send(fd, buf, len, MSG_NOSIGNAL);
+  if (!ssl) {
+    t_tls_want_write = 0;
+    return send(fd, buf, len, MSG_NOSIGNAL);
+  }
+  ERR_clear_error();
   int n = SSL_write(ssl, buf, (int)len);
   if (n <= 0) {
     int ssl_err = SSL_get_error(ssl, n);
@@ -41,11 +49,13 @@ ssize_t tls_net_send_zc(int fd, const void *buf, size_t len, int *used_zc) {
   return r;
 }
 
+#define TLS_ZC_DRAIN_MAX 256
+
 int tls_zc_drain(int fd, void (*cb)(uint32_t lo, uint32_t hi, void *arg), void *arg) {
   char cbuf[128];
   struct msghdr msg;
   int found = 0;
-  for (;;) {
+  for (int iter = 0; iter < TLS_ZC_DRAIN_MAX; iter++) { /* 0-byte reads loop forever at EOF */
     memset(&msg, 0, sizeof msg);
     msg.msg_control = cbuf;
     msg.msg_controllen = sizeof cbuf;
@@ -66,9 +76,11 @@ int tls_zc_drain(int fd, void (*cb)(uint32_t lo, uint32_t hi, void *arg), void *
 }
 
 ssize_t tls_net_recv(int fd, void *buf, size_t len) {
+  t_tls_want_write = 0;
   if (fd < 0 || fd >= g_tls_fd_max) return recv(fd, buf, len, 0);
   SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
   if (!ssl) return recv(fd, buf, len, 0);
+  ERR_clear_error();
   int n = SSL_read(ssl, buf, (int)len);
   if (n <= 0) {
     int ssl_err = SSL_get_error(ssl, n);

@@ -34,6 +34,7 @@ typedef struct {
   dash_timeline_entry_t timeline[DASH_MAX_TIMELINE];
   unsigned n_timeline;
   unsigned long long timeline_skipped;
+  int timeline_open_ended;
 } dash_representation_t;
 
 typedef struct {
@@ -46,6 +47,7 @@ typedef struct {
   dash_adaptation_set_t adaptation_sets[DASH_MAX_ADAPTATION_SETS];
   unsigned n_adaptation_sets;
   unsigned long long start_ms;
+  unsigned long long duration_ms; /* 0 unknown */
 } dash_period_t;
 
 typedef struct {
@@ -61,6 +63,7 @@ typedef struct {
   int has_availability_start;
   unsigned long long availability_start_ms;
   unsigned long long time_shift_buffer_ms;
+  unsigned long long media_presentation_duration_ms; /* 0 unknown */
   dash_period_t periods[DASH_MAX_PERIODS]; /* last: dash_mpd_parse() leaves it alone, bounded by n_periods */
 } dash_mpd_t;
 

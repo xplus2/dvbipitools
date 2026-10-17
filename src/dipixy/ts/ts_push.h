@@ -25,7 +25,7 @@
 #include "../ws/ws_clients.h"
 
 #define TS_PUSH_MAX_SUBS 4096
-#define TS_PUSH_MAX_REACTOR_THREADS 32
+#define TS_PUSH_MAX_REACTOR_THREADS REACTOR_MAX_WORKERS
 /* byte rings, not packet-count. ts/spts always push 188B/call.
    rawaudio push variable length. capacity stays ^2, wrap bitmask */
 #define TS_RING_H3_BYTES (1u << 19) /* 512 KiB: holds the unacked QUIC window plus fresh data */

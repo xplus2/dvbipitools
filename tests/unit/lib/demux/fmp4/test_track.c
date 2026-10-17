@@ -438,7 +438,7 @@ START_TEST(fmp4_parse_config_nal_length_size_codes) {
 
   avcc[4] = (unsigned char)(0xFC | _i);
   hvcc[21] = (unsigned char)(0xFC | _i);
-  vvcc[0] = (unsigned char)((_i << 6) | 0x3E);
+  vvcc[0] = (unsigned char)(0xF8 | (_i << 1));
   memset(&out, 0, sizeof out);
   fmp4_parse_avcc(avcc, avcc + sizeof avcc, &out);
   ck_assert_uint_eq(out.nal_len_size, want[_i]);
@@ -448,6 +448,25 @@ START_TEST(fmp4_parse_config_nal_length_size_codes) {
   memset(&out, 0, sizeof out);
   fmp4_parse_vvcc(vvcc, vvcc + sizeof vvcc, &out);
   ck_assert_uint_eq(out.nal_len_size, want[_i]);
+}
+END_TEST
+
+START_TEST(fmp4_parse_vvcc_skips_the_ptl_block) {
+  static const unsigned char vvcc[] = {
+      0xFF,                               /* reserved, length size 4, ptl present */
+      0x00, 0x10, 0x00,                   /* ols_idx, 1 sublayer, depth */
+      0x01, 0x20, 0x33, 0xAA,             /* constraint bytes, profile+tier, level, constraint info */
+      0x00,                               /* num_sub_profiles */
+      0x07, 0x80, 0x04, 0x38, 0x00, 0x19, /* max picture size, frame rate */
+      0x01,                               /* numOfArrays */
+      0x8E, 0x00, 0x01, 0x00, 0x01, 0xAA, /* VPS */
+  };
+  fmp4_stsd_entry_t out;
+
+  memset(&out, 0, sizeof out);
+  fmp4_parse_vvcc(vvcc, vvcc + sizeof vvcc, &out);
+  ck_assert_uint_eq(out.nal_len_size, 4u);
+  ck_assert_uint_eq(out.n_vps, 1u);
 }
 END_TEST
 
@@ -706,6 +725,7 @@ static Suite *fmp4_track_suite(void) {
   Suite *s = suite_create("fmp4_track");
   TCase *tc = tcase_create("core");
   tcase_add_loop_test(tc, fmp4_parse_config_nal_length_size_codes, 0, 4);
+  tcase_add_test(tc, fmp4_parse_vvcc_skips_the_ptl_block);
   tcase_add_test(tc, fmp4_parse_stsd_entry_h264_avcc_extracts_sps_pps);
   tcase_add_test(tc, fmp4_parse_stsd_entry_hevc_hvcc_extracts_vps_sps_pps);
   tcase_add_test(tc, fmp4_parse_stsd_entry_inband_and_dv_fourccs_map_to_video_codecs);

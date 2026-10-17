@@ -63,11 +63,10 @@ cmake --build build
 ### Dependencies
 
 * libssl
-  + Required for HTTPS sources in `dipitvhead` and `dipiradiohead`.
+  + Required for HTTPS sources in `dipitvhead`, `dipiradiohead`, `dipixy`, `dipirist`, `dipisrt` and `dipirec`.
   + Enables _CISSA/AES-128_ Conditional Access, and BISS2 (Mode 1/E Session Word AES-128,
     Mode CA RSA-OAEP receiver keys) in `dipitvhead` and `dipiradiohead`.
-  + Required to build `dipicam378`/`dipidescramble` at all - RSA/AES crypto is their
-    whole purpose, so both are skipped entirely if not found.
+  + Required to build `dipicam378`/`dipidescramble` at all - RSA/AES crypto is their whole purpose.
   + Required for `dipimetrics` and `dipixy` to serve HTTPS.
 * zlib
   * Optional: `-Z`/`--compress` in `dipibcg` (zlib/RFC 1950 compression of BCG containers)

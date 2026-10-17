@@ -19,7 +19,7 @@ int next_aac(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f)
   sfi = (d[2] >> 2) & 0x0F;
   chcfg = (unsigned)((d[2] & 1) << 2) | ((d[3] >> 6) & 3);
   fl = ((unsigned)(d[3] & 3) << 11) | ((unsigned)d[4] << 3) | (d[5] >> 5);
-  hl = (d[1] & 1) ? 7 : 9;
+  hl = (d[1] & 1) ? 7 : 9 + 2 * (d[6] & 3);
   if (sfi > 12 || fl <= hl) return -1;
   if (len < fl) return 1;
   if (!t->cpriv_len) {
@@ -33,7 +33,7 @@ int next_aac(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f)
   f->outlen = fl - hl;
   f->rate = aac_sample_rates[sfi];
   f->ch = chcfg ? chcfg : 2;
-  f->samples = 1024;
+  f->samples = 1024 * (1 + (d[6] & 3));
   return 0;
 }
 
@@ -46,22 +46,29 @@ static void skip_ext_sampling_freq(br_t *b) {
   if (br_u(b, 4) == 0x0F) br_u(b, 24);
 }
 
+static unsigned latm_value(br_t *b) {
+  unsigned n = br_u(b, 2);
+  unsigned v = 0;
+  for (unsigned i = 0; i <= n; i++) v = (v << 8) | br_u(b, 8);
+  return v;
+}
+
 static int latm_cfg(br_t *b, esc_track_t *t) {
+  unsigned asc_len = 0;
   unsigned amv;
   unsigned sfi;
   unsigned ch;
   unsigned aot;
   size_t asc_start;
   size_t asc_end;
-  unsigned n;
   amv = br_u(b, 1);
   if (amv) {
     if (br_u(b, 1)) return -1;
-    n = br_u(b, 2);
-    for (unsigned i = 0; i <= n; i++) br_u(b, 8);
+    latm_value(b);
   }
   if (!br_u(b, 1)) return -1;
   if (br_u(b, 6) || br_u(b, 4) || br_u(b, 3)) return -1;
+  if (amv) asc_len = latm_value(b);
   asc_start = b->bit;
   aot = read_aot(b);
   sfi = br_u(b, 4);
@@ -76,6 +83,10 @@ static int latm_cfg(br_t *b, esc_track_t *t) {
   if (br_u(b, 1)) return -1;
   asc_end = b->bit;
   if (b->err || sfi > 12) return -1;
+  if (amv) {
+    if (asc_len < asc_end - asc_start || asc_start + asc_len > b->len * 8) return -1;
+    b->bit = asc_start + asc_len;
+  }
   t->cpriv_len = br_slice(b, asc_start, asc_end, t->cpriv, sizeof t->cpriv);
   if (!t->cpriv_len) return -1;
   t->rate = aac_sample_rates[sfi];
@@ -84,11 +95,15 @@ static int latm_cfg(br_t *b, esc_track_t *t) {
   if (t->latm_flt == 0) br_u(b, 8);
   else                  return -1;
   if (br_u(b, 1)) {
-    unsigned esc;
-    do {
-      esc = br_u(b, 1);
-      br_u(b, 8);
-    } while (esc && !b->err);
+    if (amv) {
+      latm_value(b);
+    } else {
+      unsigned esc;
+      do {
+        esc = br_u(b, 1);
+        br_u(b, 8);
+      } while (esc && !b->err);
+    }
   }
   if (br_u(b, 1)) br_u(b, 8);
   return b->err ? -1 : 0;

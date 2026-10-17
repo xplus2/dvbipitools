@@ -13,7 +13,8 @@
 int http_url_parse(const char *uri, http_url_t *u) {
   const char *p = uri;
   const char *host;
-  const char *rest;
+  const char *ae;
+  const char *colon;
   size_t hostlen;
   http_url_t out;
   memset(&out, 0, sizeof out);
@@ -30,34 +31,35 @@ int http_url_parse(const char *uri, http_url_t *u) {
   }
   if (!*p) return -1;
 
+  ae = p + strcspn(p, "/?#"); /* authority ends here: userinfo not supported */
+  if (memchr(p, '@', (size_t)(ae - p))) return -1;
   if (*p == '[') {
-    const char *close = strchr(p, ']');
+    const char *close = memchr(p, ']', (size_t)(ae - p));
     if (!close) return -1;
     host = p + 1;
     hostlen = (size_t)(close - host);
-    rest = close + 1;
-    if (*rest != '\0' && *rest != ':' && *rest != '/') return -1;
-    if (*rest == '\0') rest = NULL;
+    colon = close + 1 < ae && close[1] == ':' ? close + 1 : NULL;
+    if (close + 1 != ae && !colon) return -1;
   } else {
     host = p;
-    rest = strpbrk(p, ":/");
-    hostlen = rest ? (size_t)(rest - host) : strlen(host);
+    colon = memchr(p, ':', (size_t)(ae - p));
+    hostlen = colon ? (size_t)(colon - host) : (size_t)(ae - host);
   }
   if (hostlen == 0 || hostlen >= sizeof out.host) return -1;
   memcpy(out.host, host, hostlen);
   out.host[hostlen] = '\0';
 
-  if (rest && *rest == ':') {
+  if (colon) {
     char *end;
-    unsigned long port = strtoul(rest + 1, &end, 10);
-    if (end == rest + 1 || port == 0 || port > 65535) return -1;
+    unsigned long port = strtoul(colon + 1, &end, 10);
+    if (end == colon + 1 || end != ae || port == 0 || port > 65535) return -1;
     out.port = (unsigned)port;
-    rest = strchr(rest, '/');
   }
-  if (rest) {
-    if (bufcpy(out.path, sizeof out.path, rest) >= sizeof out.path) return -1;
+  if (*ae == '/') {
+    if (bufcpy(out.path, sizeof out.path, ae) >= sizeof out.path) return -1;
   } else {
     bufcpy(out.path, sizeof out.path, "/");
+    if (*ae == '?' && bufcpy(out.path + 1, sizeof out.path - 1, ae) >= sizeof out.path - 1) return -1;
   }
   *u = out;
   return 0;

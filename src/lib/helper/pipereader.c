@@ -23,7 +23,7 @@ static void pipe_grow(int fd) {
 int pipereader_start(pipereader_t *p, void *(*thread_fn)(void *), void *arg) {
   if (pipe(p->pfd) < 0) return -1;
   pipe_grow(p->pfd[1]);
-  if (fcntl(p->pfd[1], F_SETFL, O_NONBLOCK) < 0) {
+  if (fcntl(p->pfd[0], F_SETFD, FD_CLOEXEC) < 0 || fcntl(p->pfd[1], F_SETFD, FD_CLOEXEC) < 0 || fcntl(p->pfd[1], F_SETFL, O_NONBLOCK) < 0) {
     close(p->pfd[0]);
     close(p->pfd[1]);
     return -1;

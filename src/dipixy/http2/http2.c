@@ -32,6 +32,7 @@
 
 #define H2_READ_BUF 65536
 #define H2_READ_MAX_ITER 16
+#define H2_TX_HIGH (1u << 20)
 
 h2_stream_t *h2_find_stream(h2_conn_t *conn, int32_t id) {
   for (int i = 0; i < H2_MAX_STREAMS; i++) {
@@ -54,6 +55,8 @@ h2_stream_t *h2_alloc_stream(h2_conn_t *conn, int32_t id) {
 void h2_free_stream(h2_conn_t *conn, int32_t id) {
   for (int i = 0; i < H2_MAX_STREAMS; i++) {
     if (conn->streams[i].id != id) continue;
+    for (int j = 0; j < conn->pending_n; j++)
+      if (conn->pending[j] == &conn->streams[i]) conn->pending[j] = NULL;
     free(conn->streams[i].body);
     conn->streams[i].body = NULL;
     conn->streams[i].id = 0;
@@ -126,6 +129,11 @@ static int cb_data_chunk_recv(nghttp2_session *ng, uint8_t flags, int32_t stream
 static void h2_queue_dispatch(h2_conn_t *conn, h2_stream_t *s) {
   if (s->dispatch_pending) return;
   s->dispatch_pending = 1;
+  for (int i = 0; i < conn->pending_n; i++) {
+    if (conn->pending[i]) continue;
+    conn->pending[i] = s;
+    return;
+  }
   conn->pending[conn->pending_n++] = s;
 }
 
@@ -143,7 +151,6 @@ static int cb_frame_recv(nghttp2_session *ng, const nghttp2_frame *frame, void *
     h2_stream_t *s = h2_find_stream(conn, frame->hd.stream_id);
     if (s && s->body_wait) h2_queue_dispatch(conn, s);
   }
-  if (frame->hd.type == NGHTTP2_GOAWAY) conn->done = 1;
   return 0;
 }
 
@@ -160,6 +167,7 @@ static int cb_stream_close(nghttp2_session *ng, int32_t stream_id, uint32_t erro
   h2_ts_cold_on_stream_close(conn, stream_id);
   h2_open_on_stream_close(conn, stream_id);
   h2_ws_on_stream_close(conn, stream_id);
+  h2_body_on_stream_close(conn, stream_id);
   return 0;
 }
 
@@ -170,14 +178,23 @@ void h2_wake_stream(conn_t *c, int32_t sid) {
 }
 
 void h2_flush_tx(h2_conn_t *conn, conn_t *c) {
-  const uint8_t *out;
-  ssize_t outlen;
-  while ((outlen = nghttp2_session_mem_send(conn->ng, &out)) > 0)
-    if (conn_queue(c, (const char *)out, (size_t)outlen) < 0) {
-      conn->done = 1;
-      break;
+  int throttled;
+  int rc;
+  do {
+    const uint8_t *out;
+    ssize_t outlen;
+    throttled = 0;
+    while (!conn->done) {
+      if (conn_out_pending(c) >= H2_TX_HIGH) {
+        throttled = 1;
+        break;
+      }
+      outlen = nghttp2_session_mem_send(conn->ng, &out);
+      if (outlen <= 0) break;
+      if (conn_queue(c, (const char *)out, (size_t)outlen) < 0) conn->done = 1;
     }
-  conn_flush(c, c->epfd);
+    rc = conn_flush(c, c->epfd);
+  } while (throttled && rc == CONN_FLUSH_DONE && !conn->done);
 }
 
 static void h2_respond_status(h2_conn_t *conn, int32_t stream_id, const char *status) {
@@ -359,7 +376,7 @@ void h2_handle_readable(int epfd, conn_t *c) {
 
   for (int i = 0; i < conn->pending_n; i++) {
     h2_stream_t *s = conn->pending[i];
-    if (!s->id || !s->dispatch_pending) continue;
+    if (!s || !s->id || !s->dispatch_pending) continue;
     int32_t sid = s->id;
     s->dispatch_pending = 0;
     h2_dispatch_stream(conn, c, s);
@@ -383,20 +400,21 @@ void h2_handle_writable(int epfd, conn_t *c) {
   }
   if (r == CONN_FLUSH_MORE) return; /* still backpressured, retry next EPOLLOUT */
   h2_ws_flush(conn);
-  const uint8_t *out;
-  ssize_t outlen;
-  while ((outlen = nghttp2_session_mem_send(conn->ng, &out)) > 0)
-    if (conn_queue(c, (const char *)out, (size_t)outlen) < 0) {
-      conn->done = 1;
-      break;
-    }
-  conn_flush(c, c->epfd);
+  h2_flush_tx(conn, c);
   if (conn->done || (!nghttp2_session_want_read(conn->ng) && !nghttp2_session_want_write(conn->ng)))
     h2_conn_close(epfd, c);
 }
 
 void h2_conn_close(int epfd, conn_t *c) {
   h2_conn_t *conn = (h2_conn_t *)c->h2;
+  if (!conn->done && atomic_load_explicit(&c->close_requested, memory_order_acquire)) {
+    const uint8_t *out;
+    ssize_t outlen;
+    nghttp2_session_terminate_session(conn->ng, NGHTTP2_NO_ERROR);
+    while ((outlen = nghttp2_session_mem_send(conn->ng, &out)) > 0)
+      if (conn_queue(c, (const char *)out, (size_t)outlen) < 0) break;
+    conn_flush(c, c->epfd);
+  }
   for (int i = 0; i < H2_TSPUSH_MAX; i++) {
     if (conn->tspush[i].sid) h2_tspush_on_stream_close(conn, conn->tspush[i].sid);
   }
@@ -411,6 +429,7 @@ void h2_conn_close(int epfd, conn_t *c) {
   h2_ts_cold_on_conn_close(conn);
   h2_open_on_conn_close(conn);
   h2_ws_on_conn_close(conn);
+  h2_body_on_conn_close(conn);
   for (int i = 0; i < H2_MAX_STREAMS; i++) free(conn->streams[i].body);
   nghttp2_session_del(conn->ng);
   free(conn);

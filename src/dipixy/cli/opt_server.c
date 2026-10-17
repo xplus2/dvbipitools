@@ -107,7 +107,7 @@ args_status_t dixy_opt_server(dixy_opt_t *p, int c) {
     case OPT_TS_STARTUP_TIMEOUT: {
       char *end;
       double v = strtod(optarg, &end);
-      if (*end != '\0' || !isfinite(v) || v < 0.0 || v > 1e9) {
+      if (*end != '\0' || !isfinite(v) || v < 0.0 || v > 2e6) {
         argerr("YS000651", "invalid --ts-startup-timeout: %s (seconds, 0=off)", optarg);
         args_free(cfg);
         return ARGS_ERR;

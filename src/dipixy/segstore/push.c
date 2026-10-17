@@ -436,15 +436,17 @@ int hls_part_available(const capture_ctx_t *ctx, const pid_filter_t *filter, uns
   const hls_snapshot_t *snap;
   if (!s) return 0;
   snap = atomic_load_explicit(&s->snap, memory_order_acquire);
-  if (!snap || want_part < 0) return 0;
-  if (snap->live_msn == want_seg && snap->live_parts.count > want_part) return 1;
-  if (snap->count > 0) {
+  if (!snap) return 0;
+  if (want_part < 0) return want_seg < snap->live_msn;
+  for (;;) {
     uint32_t oldest = snap->oldest_seq;
-    uint32_t last = oldest + (uint32_t)snap->count - 1u;
-    if (want_seg >= oldest && want_seg <= last) {
-      const hls_seg_t *seg = &snap->ring->segs[(snap->head + (int)(want_seg - oldest)) % HLS_MAX_SEGS];
-      return seg->parts.count > want_part || (want_part == 0 && seg->parts.count == 0);
-    }
+    const hls_seg_t *seg;
+    if (snap->live_msn == want_seg) return snap->live_parts.count > want_part;
+    if (snap->count <= 0 || want_seg < oldest || want_seg > oldest + (uint32_t)snap->count - 1u) return 0;
+    seg = &snap->ring->segs[(snap->head + (int)(want_seg - oldest)) % HLS_MAX_SEGS];
+    if (seg->parts.count > want_part || (want_part == 0 && seg->parts.count == 0)) return 1;
+    if (seg->parts.count < want_part) return 0;
+    want_seg++; /* closed with exactly want_part parts: M.P is M+1.0 */
+    want_part = 0;
   }
-  return 0;
 }

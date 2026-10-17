@@ -50,7 +50,8 @@ static void send_frame(conn_t *c, int opcode, const void *payload, size_t len) {
   }
   ws_frame_encode(ws->out_buf, opcode, payload, len);
   pthread_mutex_lock(&c->out_lock); /* c->out also written by ws_sink() on other threads */
-  conn_queue(c, ws->out_buf, flen);
+  if (conn_out_pending(c) + flen > CONN_OUT_MAX) c->dead = 1; /* peer not reading */
+  else conn_queue(c, ws->out_buf, flen);
   pthread_mutex_unlock(&c->out_lock);
 }
 

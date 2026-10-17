@@ -250,7 +250,7 @@ static unsigned source_ordinal_by_name(const config_t *cfg, const char *name) {
   return 0;
 }
 
-typedef enum { OPEN_SPEC_CTX, OPEN_SPEC_MCAST, OPEN_SPEC_SRT, OPEN_SPEC_NONE } open_spec_kind_t;
+typedef enum { OPEN_SPEC_CTX, OPEN_SPEC_MCAST, OPEN_SPEC_SRT, OPEN_SPEC_HTTP, OPEN_SPEC_NONE } open_spec_kind_t;
 
 typedef struct {
   open_spec_kind_t kind;
@@ -261,6 +261,8 @@ typedef struct {
   char src[64];
   unsigned port;
   channel_ret_fcc_t rf;
+  char url[1024];
+  int insecure_tls;
 } open_spec_t;
 
 static void open_spec_resolve(const route_t *rt, unsigned *out_list_num, open_spec_t *sp) {
@@ -300,8 +302,15 @@ static void open_spec_resolve(const route_t *rt, unsigned *out_list_num, open_sp
         if (!list_num) return;
       }
       if (out_list_num) *out_list_num = list_num;
-      sp->ctx = channels_resolve_static(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL);
-      if (sp->ctx) break;
+      if (channels_static_target(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL, sp->url, sizeof sp->url, &sp->insecure_tls)) {
+        if (!strncmp(sp->url, "srt://", 6)) {
+          if (route_parse_srt_uri(sp->url, sp->addr, sizeof sp->addr, &sp->port)) return;
+          sp->kind = OPEN_SPEC_SRT;
+        } else {
+          sp->kind = OPEN_SPEC_HTTP;
+        }
+        return;
+      }
       if (channels_resolve(reactor_channels(), list_num, rt->item_num, rt->kind == ROUTE_LIST_NAME ? rt->item_name : NULL, &sp->family, sp->addr, sizeof sp->addr, sp->src, sizeof sp->src, &sp->port,
                            &sp->rtp, &sp->rf))
         return;
@@ -327,6 +336,8 @@ capture_ctx_t *open_source(const route_t *rt, unsigned *out_list_num) {
       return capture_open(sp.family, sp.addr, sp.src, sp.port, cfg->iface, sp.rtp, open_spec_ret(&sp), open_spec_fcc(&sp), open_spec_fec(&sp), cfg->al_fec_l, cfg->al_fec_d);
     case OPEN_SPEC_SRT:
       return capture_open_srt(sp.addr, sp.port);
+    case OPEN_SPEC_HTTP:
+      return capture_open_http_static(sp.url, sp.insecure_tls);
     case OPEN_SPEC_NONE:
       break;
   }
@@ -358,6 +369,10 @@ open_res_t open_source_try(const route_t *rt, unsigned *out_list_num, capture_ct
       ctx = capture_try_ref_srt(sp.addr, sp.port);
       if (!ctx) job = capture_open_srt_async(t_reactor_tid, sp.addr, sp.port);
       break;
+    case OPEN_SPEC_HTTP:
+      ctx = capture_try_ref_http(sp.url);
+      if (!ctx) job = capture_open_http_async(t_reactor_tid, sp.url, sp.insecure_tls);
+      break;
     case OPEN_SPEC_NONE:
       return OPEN_RES_FAIL;
   }
@@ -366,7 +381,8 @@ open_res_t open_source_try(const route_t *rt, unsigned *out_list_num, capture_ct
     return OPEN_RES_PENDING;
   }
   if (!ctx && capture_lifecycle_active()) return OPEN_RES_FAIL;
-  if (!ctx) ctx = sp.kind == OPEN_SPEC_SRT ? capture_open_srt(sp.addr, sp.port)
+  if (!ctx && sp.kind == OPEN_SPEC_HTTP) ctx = capture_open_http_static(sp.url, sp.insecure_tls);
+  else if (!ctx) ctx = sp.kind == OPEN_SPEC_SRT ? capture_open_srt(sp.addr, sp.port)
                                            : capture_open(sp.family, sp.addr, sp.src, sp.port, cfg->iface, sp.rtp, open_spec_ret(&sp), open_spec_fcc(&sp), open_spec_fec(&sp), cfg->al_fec_l, cfg->al_fec_d);
   *out_ctx = ctx;
   return ctx ? OPEN_RES_OK : OPEN_RES_FAIL;

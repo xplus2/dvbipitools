@@ -21,6 +21,7 @@ typedef struct {
   socklen_t peerlen;
   struct sockaddr_storage local; /* addr only, no port. scope id = ifindex (v6) */
   socklen_t locallen;            /* 0: destination unknown */
+  uint8_t ecn;
 } h3_rx_t;
 
 /* per thread buffers. payload: largest datagram. 0 on success */
@@ -42,8 +43,8 @@ int h3_udp_pktinfo(int fd, int family);
 int h3_udp_recv(int fd, h3_rx_t *out, int max);
 
 /* buf holds total B, every datagram seg bytes except for shorter prev.
-   src: source address to reply from (NULL, wildcard or other family: kernel picks) */
-void h3_udp_send(int fd, const struct sockaddr_storage *dst, socklen_t dstlen, const struct sockaddr_storage *src, const uint8_t *buf, size_t total, size_t seg);
+   src: source address to reply from (NULL, wildcard or other family: kernel picks). ecn: IP ECN bits */
+void h3_udp_send(int fd, const struct sockaddr_storage *dst, socklen_t dstlen, const struct sockaddr_storage *src, const uint8_t *buf, size_t total, size_t seg, uint8_t ecn);
 
 #endif /* HAVE_HTTP3 */
 

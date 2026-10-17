@@ -165,9 +165,9 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
 
   JOBJ("threads");
   JFIELD(jbuf_i64, "workers", reactor_worker_count(), ",");
-  JFIELD(jbuf_str, "pump", "1", ",");
+  JFIELD(jbuf_i64, "pump", capture_pump_thread_count(), ",");
   JFIELD(jbuf_i64, "channels_refresh", channels_refresh_active(), ",");
-  JFIELD(jbuf_i64, "total", reactor_worker_count() + 1 + channels_refresh_active(), "},");
+  JFIELD(jbuf_i64, "total", reactor_worker_count() + capture_pump_thread_count() + channels_refresh_active(), "},");
 
   JOBJ("memory");
   JFIELD(jbuf_u64, "rss_bytes", (unsigned long long)status_rss_bytes(), "},");

@@ -15,8 +15,18 @@
 #include "tspacketize.h"
 
 static unsigned char stream_id_for(codec_t c) {
-  if (c == CODEC_H264 || c == CODEC_HEVC || c == CODEC_VVC || c == CODEC_AV1 || c == CODEC_LCEVC || c == CODEC_MPEG2V) return 0xE0;
-  return 0xC0;
+  switch (c) {
+    case CODEC_H264:
+    case CODEC_HEVC:
+    case CODEC_VVC:
+    case CODEC_AV1:
+    case CODEC_LCEVC:
+    case CODEC_MPEG2V: return 0xE0;
+    case CODEC_MP2A:
+    case CODEC_AAC:
+    case CODEC_AAC_LATM: return 0xC0;
+    default: return 0xBD;
+  }
 }
 
 static uint64_t to_90k(uint64_t ticks, unsigned timescale) {
@@ -207,7 +217,8 @@ static unsigned feed_fragment(esbuild_remux_t *r, unsigned stream_idx, const fmp
       if (grow_buf(&r->esbuf, &r->es_cap, bound) && grow_buf(&r->pesbuf, &r->pes_cap, bound + ESBUILD_PES_HDR_MAX)) eslen = esbuild_convert_sample(&rt->track, &samples[i], r->esbuf, r->es_cap);
       if (eslen) {
         uint64_t dts_90k = to_90k(dts, rt->timescale);
-        uint64_t pts_90k = to_90k(dts + (uint64_t)(int64_t)samples[i].cts_offset, rt->timescale);
+        int64_t pts_t = (int64_t)dts + samples[i].cts_offset;
+        uint64_t pts_90k = pts_t < (int64_t)dts ? dts_90k : to_90k((uint64_t)pts_t, rt->timescale); /* PTS < DTS invalid in TS */
         if (!esbuild_ts_packetize(rt->es.pid, &rt->cc, stream_id_for(rt->track.codec), pts_90k, 1, dts_90k, r->esbuf, eslen, rt->es.pid == pcr_pid, dts_90k, r->pesbuf, r->pes_cap, cb, cb_ctx)) dropped++;
       } else dropped++;
       dts += samples[i].duration;

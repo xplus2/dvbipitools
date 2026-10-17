@@ -75,6 +75,10 @@ int dixy_cfg_add_input(config_t *cfg, const char *val, char *err, size_t errsz) 
   source_kind_t kind;
   int ordinal = cfg->input_ordinal + 1;
   if (strcmp(val, "-") == 0) {
+    if (cfg->stdin_path) {
+      bufcpy(err, errsz, "at most one - (stdin) input");
+      return -1;
+    }
     cfg->stdin_path = val;
     cfg->stdin_ordinal = ordinal;
     cfg->last_input = LAST_STDIN;

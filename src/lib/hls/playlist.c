@@ -107,12 +107,23 @@ static void seg_rotate_left(hls_segment_t *a, unsigned n, unsigned start) {
   seg_reverse(a, n);
 }
 
+/* "<length>[@<offset>]". no offset: continues at *next_off */
+static void byterange_parse(const char *v, unsigned long long *off, unsigned long long *len, unsigned long long *next_off) {
+  char *end;
+  *len = strtoull(v, &end, 10);
+  *off = *end == '@' ? strtoull(end + 1, NULL, 10) : *next_off;
+  *next_off = *off + *len;
+}
+
 int hls_playlist_parse(char *body, const http_url_t *base, hls_playlist_t *out) {
   char *cur = playlist_skip_blank(body);
   const char *line;
   int have_extinf = 0;
   unsigned cur_key = 0;
   unsigned long long total = 0;
+  unsigned long long pend_off = 0;
+  unsigned long long pend_len = 0;
+  unsigned long long next_off = 0;
 
   memset(out, 0, sizeof *out);
   if (strncmp(cur, "#EXTM3U", 7)) return 0;
@@ -148,6 +159,14 @@ int hls_playlist_parse(char *body, const http_url_t *base, hls_playlist_t *out) 
       char uri[sizeof out->map_uri];
       if (cur_key) return 0;
       if (attr_find(TAG_VALUE(line, "#EXT-X-MAP:"), "URI", uri, sizeof uri)) playlist_resolve_uri(base, uri, out->map_uri, sizeof out->map_uri);
+      if (attr_find(TAG_VALUE(line, "#EXT-X-MAP:"), "BYTERANGE", uri, sizeof uri)) {
+        unsigned long long map_next = 0;
+        byterange_parse(uri, &out->map_range_off, &out->map_range_len, &map_next);
+      }
+      continue;
+    }
+    if (TAG_MATCH(line, "#EXT-X-BYTERANGE:")) {
+      byterange_parse(TAG_VALUE(line, "#EXT-X-BYTERANGE:"), &pend_off, &pend_len, &next_off);
       continue;
     }
     if (TAG_MATCH(line, "#EXTINF:")) {
@@ -160,6 +179,9 @@ int hls_playlist_parse(char *body, const http_url_t *base, hls_playlist_t *out) 
     seg = &out->segments[total % HLS_MAX_SEGMENTS];
     playlist_resolve_uri(base, line, seg->url, sizeof seg->url);
     seg->key = cur_key;
+    seg->range_off = pend_off;
+    seg->range_len = pend_len;
+    pend_len = 0;
     if (!seg->url[0]) continue;
     total++;
   }

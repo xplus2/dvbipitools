@@ -71,7 +71,7 @@ static int read_quiet(ret_client_t *r, mcast_t *main_, unsigned char *buf, size_
   memset(&it, 0, sizeof it);
   it.it_value.tv_usec = 20000;
   ck_assert_int_eq(setitimer(ITIMER_REAL, &it, NULL), 0);
-  return (int)ret_client_read(r, main_, buf, cap);
+  return (int)ret_client_read(r, main_, buf, cap, 1000);
 }
 
 START_TEST(in_order_packets_pass_straight_through) {
@@ -88,9 +88,9 @@ START_TEST(in_order_packets_pass_straight_through) {
   h = make_hdr(0xAAAA, 11);
   ret_client_on_original(r, &h, (const unsigned char *)"pkt11", 5, now);
 
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 5);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 5);
   ck_assert_mem_eq(buf, "pkt10", 5);
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 5);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 5);
   ck_assert_mem_eq(buf, "pkt11", 5);
 
   ret_client_close(r);
@@ -109,7 +109,7 @@ START_TEST(stale_duplicate_is_dropped) {
 
   h = make_hdr(0xAAAA, 10);
   ret_client_on_original(r, &h, (const unsigned char *)"pkt10", 5, now);
-  ret_client_read(r, main_, buf, sizeof buf); /* consume it, expected_seq now 11 */
+  ret_client_read(r, main_, buf, sizeof buf, 1000); /* consume it, expected_seq now 11 */
 
   h = make_hdr(0xAAAA, 10); /* replay, same seq */
   ret_client_on_original(r, &h, (const unsigned char *)"stale", 5, mono_seconds());
@@ -137,7 +137,7 @@ START_TEST(gap_repaired_by_rtx_packet_flushes_in_order) {
   ret_client_on_original(r, &h, (const unsigned char *)"seq5", 4, now); /* expected_seq -> 6 */
   h = make_hdr(0xBBBB, 7); /* seq 6 missing */
   ret_client_on_original(r, &h, (const unsigned char *)"seq7", 4, now);
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 4); /* seq5, released immediately */
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 4); /* seq5, released immediately */
   ck_assert_mem_eq(buf, "seq5", 4);
   ck_assert_int_eq(read_quiet(r, main_, buf, sizeof buf), 0); /* seq7 held, gap pending */
 
@@ -145,9 +145,9 @@ START_TEST(gap_repaired_by_rtx_packet_flushes_in_order) {
   ck_assert_uint_gt(rtxlen, 0u);
   ret_client_on_repair(r, rtx, rtxlen, mono_seconds());
 
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 4);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 4);
   ck_assert_mem_eq(buf, "seq6", 4);
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 4);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 4);
   ck_assert_mem_eq(buf, "seq7", 4);
 
   ret_client_close(r);
@@ -169,12 +169,12 @@ START_TEST(gap_not_repaired_in_time_drops_the_lost_seq_only) {
   ret_client_on_original(r, &h, (const unsigned char *)"seq20", 5, now);
   h = make_hdr(0xCCCC, 22); /* seq 21 missing */
   ret_client_on_original(r, &h, (const unsigned char *)"seq22", 5, now);
-  ret_client_read(r, main_, buf, sizeof buf); /* seq20 */
+  ret_client_read(r, main_, buf, sizeof buf, 1000); /* seq20 */
 
   nanosleep(&wait, NULL); /* hold deadline elapses */
 
   /* ret_client_flush_ready() drops timed-out seq21 before flushing rest of queue */
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 5);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 5);
   ck_assert_mem_eq(buf, "seq22", 5); /* seq21 lost, not corrupted */
   ck_assert_int_eq(read_quiet(r, main_, buf, sizeof buf), 0);
 
@@ -196,16 +196,16 @@ START_TEST(ssrc_change_resets_tracking_and_abandons_pending_gap) {
   ret_client_on_original(r, &h, (const unsigned char *)"a1", 2, now);
   h = make_hdr(0x1111, 3); /* seq 2 missing: gap opens on ssrc 0x1111, a3 held pending its repair */
   ret_client_on_original(r, &h, (const unsigned char *)"a3", 2, now);
-  ret_client_read(r, main_, buf, sizeof buf); /* a1 */
+  ret_client_read(r, main_, buf, sizeof buf, 1000); /* a1 */
   ck_assert_int_eq(read_quiet(r, main_, buf, sizeof buf), 0); /* a3 held, gap pending */
 
   h = make_hdr(0x2222, 50); /* new ssrc: gap forced closed, tracking restarts at 50 */
   ret_client_on_original(r, &h, (const unsigned char *)"b50", 3, mono_seconds());
 
   /* abandon_gap() flushes a3 (received), drops seq2 (never received) */
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 2);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 2);
   ck_assert_mem_eq(buf, "a3", 2);
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 3);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 3);
   ck_assert_mem_eq(buf, "b50", 3);
   ck_assert_int_eq(read_quiet(r, main_, buf, sizeof buf), 0);
 
@@ -225,12 +225,12 @@ START_TEST(gap_too_large_resyncs_without_holding) {
 
   h = make_hdr(0xDDDD, 1);
   ret_client_on_original(r, &h, (const unsigned char *)"d1", 2, now);
-  ret_client_read(r, main_, buf, sizeof buf);
+  ret_client_read(r, main_, buf, sizeof buf, 1000);
 
   h = make_hdr(0xDDDD, 1000); /* far beyond RET_GAP_MAX: resync immediately, no hold */
   ret_client_on_original(r, &h, (const unsigned char *)"d1000", 5, mono_seconds());
 
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 5);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 5);
   ck_assert_mem_eq(buf, "d1000", 5);
 
   ret_client_close(r);
@@ -252,9 +252,9 @@ START_TEST(sequence_wraps_from_65535_to_0_without_gap) {
   h = make_hdr(0xEEEE, 0);
   ret_client_on_original(r, &h, (const unsigned char *)"wrap", 4, mono_seconds());
 
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 4);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 4);
   ck_assert_mem_eq(buf, "last", 4);
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), 4);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), 4);
   ck_assert_mem_eq(buf, "wrap", 4);
 
   ret_client_close(r);
@@ -329,7 +329,7 @@ static void feed(ret_client_t *r, uint32_t ssrc, uint16_t seq, size_t len, unsig
 
 static void expect_pop(ret_client_t *r, mcast_t *main_, size_t len, unsigned char fill) {
   unsigned char buf[OUTQ_CAP];
-  ssize_t n = ret_client_read(r, main_, buf, sizeof buf);
+  ssize_t n = ret_client_read(r, main_, buf, sizeof buf, 1000);
 
   ck_assert_int_eq(n, (int)len);
   ck_assert_uint_eq(buf[0], fill);
@@ -613,9 +613,9 @@ START_TEST(queued_payload_over_outq_cap_is_clipped) {
   ck_assert_ptr_nonnull(r);
   ck_assert_ptr_nonnull(main_);
   feed(r, 0x59, 1, OUTQ_CAP + 8, 0x5A);
-  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf), OUTQ_CAP);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, sizeof buf, 1000), OUTQ_CAP);
   feed(r, 0x59, 2, 100, 0x5B);
-  ck_assert_int_eq(ret_client_read(r, main_, buf, 10), 10);
+  ck_assert_int_eq(ret_client_read(r, main_, buf, 10, 1000), 10);
   ret_client_close(r);
   mcast_close(main_);
 }
@@ -636,7 +636,7 @@ START_TEST(read_waits_for_gap_deadline_then_releases_held_packet) {
   feed(r, 0x5C, 12, 2, 12);
   t0 = mono_seconds();
   for (;;) {
-    ssize_t n = ret_client_read(r, main_, buf, sizeof buf);
+    ssize_t n = ret_client_read(r, main_, buf, sizeof buf, 1000);
     calls++;
     if (n > 0) {
       ck_assert_int_eq(n, 2);
@@ -699,7 +699,7 @@ START_TEST(unicast_repair_arrives_through_read) {
   ck_assert_int_eq(sendto(server, pkt, n, 0, (struct sockaddr *)&client, clen), (int)n);
 
   for (i = 0; i < 20; i++) {
-    ssize_t got = ret_client_read(r, main_, buf, sizeof buf);
+    ssize_t got = ret_client_read(r, main_, buf, sizeof buf, 1000);
     if (got > 0) {
       ck_assert_int_eq(got, 6);
       ck_assert_uint_eq(buf[0], 0x66u);
@@ -836,7 +836,7 @@ START_TEST(multicast_repair_session_delivers_repair_over_ssm) {
   ck_assert_int_eq(sendto(tx, pkt, n, 0, (struct sockaddr *)&dst, sizeof dst), (int)n);
 
   for (i = 0; i < 20; i++) {
-    ssize_t got = ret_client_read(r, main_, buf, sizeof buf);
+    ssize_t got = ret_client_read(r, main_, buf, sizeof buf, 1000);
     if (got > 0) {
       ck_assert_int_eq(got, 5);
       ck_assert_uint_eq(buf[0], 0x77u);

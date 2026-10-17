@@ -29,6 +29,8 @@ int next_pump_shard(void) {
   return atomic_fetch_add_explicit(&g_shard_ctr, 1, memory_order_relaxed) % g_n_pump_threads;
 }
 
+int capture_pump_thread_count(void) { return g_n_pump_threads; }
+
 void capture_pump_set_thread_count(int n) {
   if (n < 1) n = 1;
   if (n > CAPTURE_PUMP_MAX_THREADS) n = CAPTURE_PUMP_MAX_THREADS;
@@ -140,7 +142,10 @@ static int tssrc_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsign
       if (!pfd[0].revents) continue;
     }
     n = tssrc_read(ctx->ts, buf, sizeof buf, NULL);
-    if (n < 0) return -1;
+    if (n < 0) {
+      atomic_store_explicit(&ctx->dead, 1, memory_order_relaxed);
+      return -1;
+    }
     if (n == 0) return 0;
     atomic_fetch_add_explicit(&ctx->write_total, (uint64_t)n, memory_order_relaxed);
     len = (size_t)n;

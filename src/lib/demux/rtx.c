@@ -18,5 +18,10 @@ int rtx_parse(const unsigned char *p, size_t len, unsigned char rtx_pt, rtx_pkt_
   out->osn = (uint16_t)(((unsigned)p[h.payload_off] << 8) | p[h.payload_off + 1]);
   out->payload = p + h.payload_off + 2;
   out->payload_len = len - (h.payload_off + 2);
+  if (p[0] & 0x20) { /* RTP padding: last byte counts */
+    unsigned char pad = p[len - 1];
+    if (!pad || pad > out->payload_len) return 0;
+    out->payload_len -= pad;
+  }
   return 1;
 }

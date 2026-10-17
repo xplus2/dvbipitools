@@ -88,12 +88,15 @@ typedef struct {
   size_t pending_len;
   size_t pending_cap;
   int inflight;
+  int closing;
   int dead;           /* under pending_lock: overflow or protocol error, reset pending */
   int reset;          /* RST_STREAM submitted */
   uint8_t *send_data;
   size_t send_len;
   size_t send_off;
 } h2_ws_stream_t;
+
+struct h2_body_src;
 
 typedef struct h2_conn {
   int fd;
@@ -108,6 +111,7 @@ typedef struct h2_conn {
   h2_push_slot_t dashchunk[H2_DASHCHUNK_MAX];
   h2_push_slot_t mp4push[H2_MP4PUSH_MAX];
   h2_ws_stream_t ws[H2_WS_MAX];
+  struct h2_body_src *body_srcs;
 } h2_conn_t;
 
 #define MAKE_NV_LIT(k, v) {(uint8_t *)(k), (uint8_t *)(v), sizeof(k)-1, sizeof(v)-1, NGHTTP2_NV_FLAG_NONE}
@@ -159,6 +163,8 @@ void h2_llhls_on_stream_close(const h2_conn_t *conn, int32_t stream_id);
 void h2_llhls_on_conn_close(const h2_conn_t *conn);
 
 /* from http2_hls.c */
+void h2_body_on_stream_close(h2_conn_t *conn, int32_t stream_id);
+void h2_body_on_conn_close(h2_conn_t *conn);
 int h2_hls_cold_try_park(h2_conn_t *conn, int32_t stream_id, const hls_cold_park_req_t *req);
 void h2_hls_cold_on_stream_close(const h2_conn_t *conn, int32_t stream_id);
 void h2_hls_cold_on_conn_close(const h2_conn_t *conn);

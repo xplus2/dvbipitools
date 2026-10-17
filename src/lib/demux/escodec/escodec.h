@@ -60,7 +60,7 @@ typedef struct {
   unsigned bsmod;
   unsigned acmod;
   unsigned lfeon;
-  unsigned bitrate_code;              /* AC3 only: 5-bit frmsizecod, dac3's bit_rate_code */
+  unsigned bitrate_code;              /* AC3 only: frmsizecod >> 1, dac3 bit_rate_code */
   int atmos;
   unsigned truehd_format_info;
   unsigned truehd_peak_data_rate;
@@ -93,6 +93,9 @@ void skip_vvc_gci(br_t *b);
 void skip_vvc_ptl(br_t *b, unsigned max_sublayers_minus1);
 int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h);
 int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned *chroma, unsigned *w, unsigned *h);
+
+/* HEVC SPS luma/chroma bit depth (8..16). 0 ok, -1 malformed */
+int hevc_bit_depth(const unsigned char *nal, size_t len, unsigned *luma, unsigned *chroma);
 int vvc_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h);
 int av1_seq_hdr_info(const unsigned char *obu, size_t len, av1_seq_hdr_t *info, unsigned *w, unsigned *h);
 size_t build_avcc(const esc_track_t *t, unsigned char *o, size_t cap);

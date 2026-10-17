@@ -699,7 +699,7 @@ START_TEST(close_before_headers_flushed_releases_the_slot) {
 END_TEST
 
 START_TEST(oversized_part_flags_the_ring_as_errored) {
-  enum { BIG = 5 << 17 };
+  enum { BIG = 9 << 20 };
   pid_filter_t f;
   uint8_t *big = calloc(1, BIG);
   int idx;

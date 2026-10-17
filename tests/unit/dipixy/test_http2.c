@@ -305,14 +305,35 @@ START_TEST(reactor_loop_routes_h2_connections_by_event_type) {
 }
 END_TEST
 
-START_TEST(peer_goaway_marks_the_connection_done) {
+START_TEST(peer_goaway_without_streams_closes_gracefully) {
   rig_t r;
 
   rig_open(&r);
   rig_exchange(&r);
   ck_assert_int_eq(nghttp2_submit_goaway(r.cl.cli, NGHTTP2_FLAG_NONE, 0, NGHTTP2_NO_ERROR, NULL, 0), 0);
-  rig_feed_server_direct(&r);
-  ck_assert_int_eq(r.h2->done, 1);
+  rig_client_send(&r);
+  rig_server_read(&r);
+  ck_assert_int_eq(rig_server_alive(&r), 0);
+  rig_close(&r);
+}
+END_TEST
+
+START_TEST(idle_close_sends_goaway) {
+  rig_t r;
+  h2c_frame_t frames[8];
+  size_t n;
+  int goaway = 0;
+
+  rig_open(&r);
+  rig_exchange(&r);
+  atomic_store(&r.c->close_requested, 1);
+  shutdown(r.sv[1], SHUT_WR);
+  rig_server_read(&r);
+  ck_assert_int_eq(rig_server_alive(&r), 0);
+  n = rig_scan_frames(&r, frames, 8);
+  for (size_t i = 0; i < n; i++)
+    if (frames[i].type == NGHTTP2_GOAWAY) goaway = 1;
+  ck_assert_int_eq(goaway, 1);
   rig_close(&r);
 }
 END_TEST
@@ -359,7 +380,8 @@ static Suite *http2_suite(void) {
   tcase_add_test(tc, headers_after_stream_close_are_ignored);
   tcase_add_test(tc, duplicate_path_pseudo_header_is_rejected_with_protocol_error);
   tcase_add_test(tc, reactor_loop_routes_h2_connections_by_event_type);
-  tcase_add_test(tc, peer_goaway_marks_the_connection_done);
+  tcase_add_test(tc, peer_goaway_without_streams_closes_gracefully);
+  tcase_add_test(tc, idle_close_sends_goaway);
   tcase_add_test(tc, garbage_input_closes_the_connection);
   tcase_add_test(tc, peer_hangup_closes_the_connection);
   suite_add_tcase(s, tc);

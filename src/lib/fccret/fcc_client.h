@@ -26,7 +26,7 @@ typedef struct fcc_client fcc_client_t;
 fcc_client_t *fcc_client_open(const fcc_client_cfg_t *cfg);
 
 /* burst-then-multicast TS payload. >0 len, 0 no data, -1 error */
-ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size_t cap);
+ssize_t fcc_client_read(fcc_client_t *r, mcast_t *main, unsigned char *buf, size_t cap, int max_wait_ms);
 
 /* 1 once cutover (RAMS-T sent or burst rejected) has happened, 0 while still bursting */
 int fcc_client_done(const fcc_client_t *r);

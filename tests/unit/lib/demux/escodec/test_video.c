@@ -484,6 +484,48 @@ START_TEST(hevc_info_for_sublayers_chroma_and_cropping) {
 }
 END_TEST
 
+START_TEST(hevc_bit_depth_is_read_and_cut_off_sps_is_rejected) {
+  stream_t s;
+  const unsigned char *d;
+  size_t len;
+  unsigned luma = 0;
+  unsigned chroma = 0;
+
+  stream_open(&s);
+  put_bits(&s, 0x4201, 16);
+  put_bits(&s, 0, 4);
+  put_bits(&s, 0, 3);
+  put_bits(&s, 1, 1);
+  for (unsigned i = 0; i < 12; i++) put_bits(&s, i + 1, 8);
+  put_ue(&s, 0);
+  put_ue(&s, 1);
+  put_ue(&s, 1920);
+  put_ue(&s, 1080);
+  put_bits(&s, 0, 1);
+  put_ue(&s, 2);
+  put_ue(&s, 3);
+  d = stream_finish(&s, &len);
+  ck_assert_int_eq(hevc_bit_depth(d, len, &luma, &chroma), 0);
+  ck_assert_uint_eq(luma, 10u);
+  ck_assert_uint_eq(chroma, 11u);
+  stream_close(&s);
+  stream_open(&s);
+  put_bits(&s, 0x4201, 16);
+  put_bits(&s, 0, 4);
+  put_bits(&s, 0, 3);
+  put_bits(&s, 1, 1);
+  for (unsigned i = 0; i < 12; i++) put_bits(&s, i + 1, 8);
+  put_ue(&s, 0);
+  put_ue(&s, 1);
+  put_ue(&s, 1920);
+  put_ue(&s, 1080);
+  put_bits(&s, 0, 1);
+  d = bitwriter_data(&s.bw, &len);
+  ck_assert_int_eq(hevc_bit_depth(d, len, &luma, &chroma), -1);
+  stream_close(&s);
+}
+END_TEST
+
 typedef struct {
   const char *name;
   unsigned ptl_present;
@@ -764,6 +806,7 @@ static Suite *video_suite(void) {
   tcase_add_test(tc, dims_parsers_survive_garbage_of_every_length);
   tcase_add_loop_test(tc, h264_dims_for_each_profile_chroma_and_poc_type, 0, (int)(sizeof h264_cases / sizeof h264_cases[0]));
   tcase_add_loop_test(tc, hevc_info_for_sublayers_chroma_and_cropping, 0, (int)(sizeof hevc_cases / sizeof hevc_cases[0]));
+  tcase_add_test(tc, hevc_bit_depth_is_read_and_cut_off_sps_is_rejected);
   tcase_add_loop_test(tc, vvc_dims_for_sublayers_and_unsupported_signalling, 0, (int)(sizeof vvc_cases / sizeof vvc_cases[0]));
   tcase_add_test(tc, avcc_hvcc_vvcc_av1c_respect_capacity_and_layout);
   tcase_add_loop_test(tc, av1_seq_hdr_info_for_profiles_and_optional_blocks, 0, (int)(sizeof av1_cases / sizeof av1_cases[0]));

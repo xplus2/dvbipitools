@@ -73,7 +73,7 @@ void reactor_teardown_common(int epfd, conn_t *c) {
   c->dead = 1;
   pthread_mutex_unlock(&c->out_lock);
   epoll_ctl(epfd, EPOLL_CTL_DEL, c->fd, NULL);
-  tls_close_fd(c->fd);
+  if (!conn_zc_linger(c)) tls_close_fd(c->fd);
   conn_free(c);
 }
 
@@ -238,6 +238,8 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   channels_set_qsbr(g_reactor_qsbr);
   n_pump = workers > CAPTURE_PUMP_MAX_THREADS ? CAPTURE_PUMP_MAX_THREADS : workers;
   capture_pump_set_thread_count(n_pump);
+  _Static_assert(CONN_PUMP_MARKS == CAPTURE_PUMP_MAX_THREADS, "conn retire pump marks");
+  conn_set_pump_qsbr(capture_pump_mark, capture_pump_mark_passed);
   capture_lifecycle_start(ts_push_wake_reactor);
 
   for (i = 0; i < n_pump; i++) {

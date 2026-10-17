@@ -16,7 +16,7 @@ typedef struct {
   unsigned char pmt_cc;
   unsigned char es_cc;
   uint64_t base_pts;
-  uint64_t frames; /* ADTS frames since base_pts */
+  uint64_t frames; /* 1024-sample raw data blocks since base_pts */
   uint64_t last_pcr_pts;
   int have_pcr;
 } hls_ts_passthrough_t;

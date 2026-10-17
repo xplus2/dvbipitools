@@ -12,6 +12,12 @@
 #include <stdint.h>
 #include <time.h>
 
+/* threads[] sized to this in reactor_run, -j past it fails at startup */
+#define REACTOR_MAX_WORKERS 256
+
+#define CONN_PUMP_MARKS 32
+void conn_set_pump_qsbr(void (*mark)(uint64_t *), int (*passed)(const uint64_t *));
+
 /* reactor conn lifecycle states */
 typedef enum {
   CONN_TLS_HANDSHAKE, /* implicit handshake completing on first SSL_read/write */
@@ -117,6 +123,10 @@ void conn_retire_handoff(void);
 void conn_graveyard_free(void);
 
 /* never touches socket, never blocks */
+#define CONN_OUT_MAX (4u * 1024 * 1024)
+
+size_t conn_out_pending(const conn_t *c);
+
 int conn_queue(conn_t *c, const void *data, size_t len);
 
 /* zc send, no memcpy. falls back to conn_queue()+release: TLS, busy chunk, full await ring */
@@ -130,6 +140,13 @@ void conn_zc_drain(conn_t *c);
 
 /* EPOLLIN, +EPOLLOUT if want_out. return value: epoll_ctl's result */
 int conn_epoll_mod(conn_t *c, int epfd, int want_out);
+
+/* 1: fd parked until zerocopy completions arrive. 0: close now */
+int conn_zc_linger(conn_t *c);
+void conn_zc_linger_poll(void);
+void conn_zc_linger_flush(void);
+
+time_t conn_now_s(void);
 
 /* claims teardown of c under out_lock: 1 if this call won (caller proceeds), 0=sth else already
    did (caller returns, no-op). backpressure doesn't block. must run first on conn/stream/ws/tspush close.

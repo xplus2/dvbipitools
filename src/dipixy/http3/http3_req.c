@@ -89,7 +89,10 @@ static int cb_h3_end_stream(nghttp3_conn *h3, int64_t sid, void *ud, void *strea
   h3_req_t *r = find_req(ud, sid);
   (void)h3;
   (void)stream_ud;
-  if (r && r->body_wait && !r->dispatched) r->dispatch_pending = 1;
+  if (r && r->body_wait && !r->dispatched && !r->dispatch_pending) {
+    r->dispatch_pending = 1;
+    ((h3_conn_t *)ud)->dispatch_pending_n++;
+  }
   return 0;
 }
 
@@ -100,7 +103,10 @@ static int cb_h3_end_headers(nghttp3_conn *h3, int64_t sid, int fin, void *ud, v
   h3_req_t *r = find_req(c, sid);
   if (!r) return 0;
   if (!strcmp(r->method, "POST") && !fin) r->body_wait = 1;
-  else if (!r->dispatched) r->dispatch_pending = 1;
+  else if (!r->dispatched && !r->dispatch_pending) {
+    r->dispatch_pending = 1;
+    c->dispatch_pending_n++;
+  }
   return 0;
 }
 

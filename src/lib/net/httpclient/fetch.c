@@ -27,6 +27,12 @@ struct http_fetch {
   int status;
   int truncated;
   char etag[HTTP_FETCH_ETAG_MAX];
+  int reused;
+  http_url_t url;
+  char user_agent[128];
+  int insecure;
+  char hdr[768];
+  int have_hdr;
 };
 
 http_fetch_t *http_fetch_start(const http_url_t *url, const char *user_agent, int insecure, const char *extra_header, const char *etag_in,
@@ -46,11 +52,19 @@ http_fetch_t *http_fetch_start(const http_url_t *url, const char *user_agent, in
   }
   f->buf = buf;
   f->cap = cap;
+  f->url = *url;
+  bufcpy(f->user_agent, sizeof f->user_agent, user_agent ? user_agent : "dvbipitools");
+  f->insecure = insecure;
+  if (hdr_ptr) {
+    bufcpy(f->hdr, sizeof f->hdr, hdr_ptr);
+    f->have_hdr = 1;
+  }
   if (reuse) {
     const http_url_t *ru = http_final_url(reuse);
-    if (ru->tls == url->tls && ru->port == url->port && !strcasecmp(ru->host, url->host))
+    if (ru->tls == url->tls && ru->port == url->port && !strcasecmp(ru->host, url->host)) {
       f->ha = http_async_start_reuse(reuse, url, user_agent, insecure, hdr_ptr, reason_out);
-    else {
+      f->reused = 1;
+    } else {
       http_close(reuse);
       f->ha = http_async_start(url, user_agent, insecure, hdr_ptr, reason_out);
     }
@@ -77,6 +91,11 @@ http_fetch_state_t http_fetch_step(http_fetch_t *f, net_err_reason_t *reason_out
     if (st == HTTP_ASYNC_ERROR) {
       http_async_free(f->ha);
       f->ha = NULL;
+      if (f->reused) {
+        f->reused = 0;
+        f->ha = http_async_start(&f->url, f->user_agent, f->insecure, f->have_hdr ? f->hdr : NULL, reason_out);
+        if (f->ha) return HTTP_FETCH_PENDING;
+      }
       return HTTP_FETCH_ERROR;
     }
     f->h = http_async_take(f->ha);

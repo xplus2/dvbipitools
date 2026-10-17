@@ -207,7 +207,7 @@ void ws_clients_remove(int handle) {
   int removed;
   if (handle < 0 || idx >= g_clients_cap) return;
   pthread_mutex_lock(&g_clients_mtx);
-  removed = atomic_load_explicit(&g_clients[idx].gen, memory_order_relaxed) == handle_gen(handle);
+  removed = (atomic_load_explicit(&g_clients[idx].gen, memory_order_relaxed) & WS_HANDLE_GEN_MASK) == handle_gen(handle);
   if (removed) {
     if (!g_clients[idx].persistent) {
       ws_stripe_t *stripe = stripe_for_entry(idx);
@@ -303,6 +303,6 @@ int ws_clients_touch(const client_info_t *info) {
 void ws_clients_add_bytes(int handle, size_t n) {
   int idx = handle_idx(handle);
   if (handle < 0 || idx >= g_clients_cap) return;
-  if (atomic_load_explicit(&g_clients[idx].gen, memory_order_acquire) != handle_gen(handle)) return;
+  if ((atomic_load_explicit(&g_clients[idx].gen, memory_order_acquire) & WS_HANDLE_GEN_MASK) != handle_gen(handle)) return;
   atomic_fetch_add_explicit(&g_clients[idx].bytes_total, n, memory_order_relaxed);
 }
