@@ -29,13 +29,29 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake pkg-config libssl-dev check ffmpeg librist-dev libsrt-openssl-dev \
-            libnghttp2-dev libngtcp2-dev libnghttp3-dev libdvbcsa1
+            libnghttp2-dev libdvbcsa1
       - name: install tsduck
         run: |
           curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu26_amd64.deb
           sudo apt-get install -y ./tsduck.deb
+      - name: build ngtcp2 + nghttp3 (static)
+        run: |
+          curl -fsSL https://github.com/ngtcp2/nghttp3/releases/download/v1.17.0/nghttp3-1.17.0.tar.xz | tar xJ -C /tmp
+          curl -fsSL https://github.com/ngtcp2/ngtcp2/releases/download/v1.24.0/ngtcp2-1.24.0.tar.xz | tar xJ -C /tmp
+          H3_ARGS="-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/h3-static -DCMAKE_INSTALL_LIBDIR=lib"
+          H3_ARGS="$H3_ARGS -DENABLE_LIB_ONLY=ON -DENABLE_SHARED_LIB=OFF -DENABLE_STATIC_LIB=ON -DBUILD_TESTING=OFF"
+          cmake -S /tmp/nghttp3-1.17.0 -B /tmp/nghttp3-build $H3_ARGS
+          cmake --build /tmp/nghttp3-build -j"$(nproc)"
+          cmake --install /tmp/nghttp3-build
+          cmake -S /tmp/ngtcp2-1.24.0 -B /tmp/ngtcp2-build $H3_ARGS -DENABLE_OPENSSL=ON
+          cmake --build /tmp/ngtcp2-build -j"$(nproc)"
+          cmake --install /tmp/ngtcp2-build
       - name: configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DDVBIPITOOLS_SANITIZE=${{ matrix.sanitize }} -DDVBIPITOOLS_TSAN=${{ matrix.tsan }}
+        run: |
+          set -o pipefail
+          export PKG_CONFIG_PATH=${{ github.workspace }}/h3-static/lib/pkgconfig
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DDVBIPITOOLS_SANITIZE=${{ matrix.sanitize }} -DDVBIPITOOLS_TSAN=${{ matrix.tsan }} 2>&1 | tee configure.log
+          grep -q "Performing Test DIPIXY_HAVE_OPENSSL_QUIC - Success" configure.log
       - name: build
         run: cmake --build build -j"$(nproc)"
       - name: test
@@ -49,14 +65,30 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake pkg-config libssl-dev check ffmpeg librist-dev libsrt-openssl-dev \
-            libnghttp2-dev libngtcp2-dev libnghttp3-dev libdvbcsa1 jq pipx
+            libnghttp2-dev libdvbcsa1 jq pipx
           pipx install gcovr
       - name: install tsduck
         run: |
           curl -fsSL -o tsduck.deb https://github.com/tsduck/tsduck/releases/download/v3.44-4676/tsduck_3.44-4676.ubuntu26_amd64.deb
           sudo apt-get install -y ./tsduck.deb
+      - name: build ngtcp2 + nghttp3 (static)
+        run: |
+          curl -fsSL https://github.com/ngtcp2/nghttp3/releases/download/v1.17.0/nghttp3-1.17.0.tar.xz | tar xJ -C /tmp
+          curl -fsSL https://github.com/ngtcp2/ngtcp2/releases/download/v1.24.0/ngtcp2-1.24.0.tar.xz | tar xJ -C /tmp
+          H3_ARGS="-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/h3-static -DCMAKE_INSTALL_LIBDIR=lib"
+          H3_ARGS="$H3_ARGS -DENABLE_LIB_ONLY=ON -DENABLE_SHARED_LIB=OFF -DENABLE_STATIC_LIB=ON -DBUILD_TESTING=OFF"
+          cmake -S /tmp/nghttp3-1.17.0 -B /tmp/nghttp3-build $H3_ARGS
+          cmake --build /tmp/nghttp3-build -j"$(nproc)"
+          cmake --install /tmp/nghttp3-build
+          cmake -S /tmp/ngtcp2-1.24.0 -B /tmp/ngtcp2-build $H3_ARGS -DENABLE_OPENSSL=ON
+          cmake --build /tmp/ngtcp2-build -j"$(nproc)"
+          cmake --install /tmp/ngtcp2-build
       - name: configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic -O0" -DCMAKE_EXE_LINKER_FLAGS=--coverage
+        run: |
+          set -o pipefail
+          export PKG_CONFIG_PATH=${{ github.workspace }}/h3-static/lib/pkgconfig
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_TESTS=ON -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic -O0" -DCMAKE_EXE_LINKER_FLAGS=--coverage 2>&1 | tee configure.log
+          grep -q "Performing Test DIPIXY_HAVE_OPENSSL_QUIC - Success" configure.log
       - name: build
         run: cmake --build build -j"$(nproc)"
       - name: test

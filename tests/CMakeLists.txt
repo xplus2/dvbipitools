@@ -5733,13 +5733,12 @@ if (TARGET dipixy)
     endif ()
 endif ()
 if (DIPIXY_TEST_HTTP3)
-    pkg_check_modules(H3TEST REQUIRED IMPORTED_TARGET libngtcp2 libngtcp2_crypto_ossl)
     dvbipitools_add_unit_test(dipixy_h3_stateless
         unit/dipixy/test_h3_stateless.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_udp.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_stateless.c)
     target_compile_definitions(test_dipixy_h3_stateless PRIVATE HAVE_HTTP3)
-    target_link_libraries(test_dipixy_h3_stateless PRIVATE PkgConfig::H3TEST OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(test_dipixy_h3_stateless PRIVATE PkgConfig::NGTCP2_CRYPTO_OSSL OpenSSL::SSL OpenSSL::Crypto)
     dvbipitools_add_unit_test(dipixy_h3_steer
         unit/dipixy/test_h3_steer.c
         ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3_steer.c)
@@ -5756,7 +5755,7 @@ if (DIPIXY_TEST_HTTP3)
         ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/reactor_tls_stub.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
     target_compile_definitions(test_dipixy_h3_quic_tls PRIVATE HAVE_HTTP3)
-    target_link_libraries(test_dipixy_h3_quic_tls PRIVATE PkgConfig::H3TEST OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(test_dipixy_h3_quic_tls PRIVATE PkgConfig::NGTCP2_CRYPTO_OSSL OpenSSL::SSL OpenSSL::Crypto)
 endif ()
 
 dvbipitools_add_unit_test(dipixy_segment_video

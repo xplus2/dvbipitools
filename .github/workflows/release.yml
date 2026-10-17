@@ -374,6 +374,24 @@ jobs:
         cmake -S /tmp/srt-1.5.6 -B /tmp/srt-build $SRT_ARGS
         cmake --build /tmp/srt-build -j"$(nproc)"
         cmake --install /tmp/srt-build
+    - name: build ngtcp2 + nghttp3 (static)
+      if: matrix.arch != 'i386' && matrix.arch != 'armel'
+      run: |
+        curl -sSLf "https://github.com/ngtcp2/nghttp3/releases/download/v1.17.0/nghttp3-1.17.0.tar.xz" | tar xJ -C /tmp
+        curl -sSLf "https://github.com/ngtcp2/ngtcp2/releases/download/v1.24.0/ngtcp2-1.24.0.tar.xz" | tar xJ -C /tmp
+        H3_ARGS="-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/h3-static -DCMAKE_INSTALL_LIBDIR=lib"
+        H3_ARGS="$H3_ARGS -DENABLE_LIB_ONLY=ON -DENABLE_SHARED_LIB=OFF -DENABLE_STATIC_LIB=ON -DBUILD_TESTING=OFF"
+        OSSL_ARGS=""
+        if [ -n "${{ matrix.triplet }}" ]; then
+          H3_ARGS="$H3_ARGS -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc"
+          OSSL_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include;/usr/include/${{ matrix.triplet }} -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.so -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.so"
+        fi
+        cmake -S /tmp/nghttp3-1.17.0 -B /tmp/nghttp3-build $H3_ARGS
+        cmake --build /tmp/nghttp3-build -j"$(nproc)"
+        cmake --install /tmp/nghttp3-build
+        cmake -S /tmp/ngtcp2-1.24.0 -B /tmp/ngtcp2-build $H3_ARGS -DENABLE_OPENSSL=ON $OSSL_ARGS
+        cmake --build /tmp/ngtcp2-build -j"$(nproc)"
+        cmake --install /tmp/ngtcp2-build
     - name: configure
       run: |
         CROSS_ARGS=""
@@ -390,8 +408,13 @@ jobs:
           amd64) ;;
           *) TLS_ARGS="-DOPENSSL_INCLUDE_DIR=/usr/include;/usr/include/${{ matrix.triplet }} -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a" ;;
         esac
-        export PKG_CONFIG_PATH="${{ github.workspace }}/librist-static/lib/pkgconfig:${{ github.workspace }}/srt-static/lib/pkgconfig:${FOREIGN_PKGCONFIG}$PKG_CONFIG_PATH"
-        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS $TLS_ARGS
+        export PKG_CONFIG_PATH="${{ github.workspace }}/librist-static/lib/pkgconfig:${{ github.workspace }}/srt-static/lib/pkgconfig:${{ github.workspace }}/h3-static/lib/pkgconfig:${FOREIGN_PKGCONFIG}$PKG_CONFIG_PATH"
+        set -o pipefail
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release -DDVBIPITOOLS_STATIC=ON $CROSS_ARGS $TLS_ARGS 2>&1 | tee configure.log
+        case "${{ matrix.arch }}" in
+          i386|armel) ;;
+          *) grep -q "Performing Test DIPIXY_HTTP3_STATIC_LINKS - Success" configure.log ;;
+        esac
     - name: make
       run: cmake --build ${{github.workspace}}/build --config Release
     - name: packaging
