@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "../run_helper.h"
 #include "dipixy/http3/http3_udp.h"
 
 #define PAYLOAD 1500
@@ -330,7 +331,7 @@ START_TEST(many_segments_are_sent_in_batches) {
   for (int round = 0; round < 20 && got < 100; round++) {
     int n = h3_udp_recv(rx_fd, rx, H3_RX_BATCH);
     if (n > 0) got += n;
-    else usleep(10000);
+    else sleep_ms(10);
   }
   ck_assert_int_ge(got, 1);
   free(buf);

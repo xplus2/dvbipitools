@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../../run_helper.h"
 #include "lib/mux/mkv/mkv.h"
 #include "lib/mux/psi_build.h"
 
@@ -579,7 +580,7 @@ START_TEST(expired_grace_starts_without_service_name) {
   video_pes(&s, 1, 93600, 1, 93600, au, build_h264_au(au, 0));
   rig_feed(&r, &s);
   ck_assert_uint_eq((unsigned)r.bytes, 0u);
-  usleep(2100000);
+  sleep_ms(2100);
   video_pes(&more, 1, 97200, 1, 97200, au, build_h264_au(au, 0));
   rig_feed(&r, &more);
   ck_assert_uint_gt((unsigned)r.bytes, 0u);

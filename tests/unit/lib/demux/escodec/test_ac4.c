@@ -767,7 +767,7 @@ START_TEST(bit_flip_sweep_stays_in_bounds) {
 END_TEST
 
 START_TEST(random_toc_sweep_stays_in_bounds) {
-  unsigned long long s = 0x9E3779B97F4A7C15ull;
+  unsigned long long s = 0x9E3779B97F4A7C15ULL;
   for (int iter = 0; iter < 60000; iter++) {
     unsigned char d[64];
     esc_track_t t;
@@ -778,7 +778,7 @@ START_TEST(random_toc_sweep_stays_in_bounds) {
     d[2] = 0;
     d[3] = 40;
     for (size_t i = 4; i < sizeof d; i++) {
-      s = s * 6364136223846793005ull + 1442695040888963407ull;
+      s = s * 6364136223846793005ULL + 1442695040888963407ULL;
       d[i] = (unsigned char)(s >> 56);
     }
     d[4] = (unsigned char)((d[4] & 0x3F) | ((iter & 1) ? 0x80 : 0x40));

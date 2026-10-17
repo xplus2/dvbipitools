@@ -12,6 +12,7 @@
 
 #include <srt/srt.h>
 
+#include "../../../run_helper.h"
 #include "lib/net/srt/srtcommon.h"
 
 START_TEST(resolve_ipv4) {
@@ -311,7 +312,7 @@ START_TEST(resolver_rejects_bad_counts_and_long_hosts) {
   peers[0].host = longhost;
   r = srtcommon_resolver_start(peers, 2);
   ck_assert_ptr_nonnull(r);
-  for (int i = 0; i < 200 && !srtcommon_resolver_poll(r); i++) usleep(10000);
+  for (int i = 0; i < 200 && !srtcommon_resolver_poll(r); i++) sleep_ms(10);
   ck_assert_int_eq(srtcommon_resolver_get(r, 0, &ss, &len), -1);
   ck_assert_int_eq(srtcommon_resolver_get(r, 1, &ss, &len), 0);
   srtcommon_resolver_free(r);
@@ -389,7 +390,7 @@ START_TEST(group_revive_on_invalid_or_unsupported_group_is_quiet) {
   if (g != SRT_INVALID_SOCK) {
     for (int i = 0; i < 50 && (i == 0 || res); i++) {
       (void)srtcommon_group_revive(g, peers, 2, &res);
-      usleep(20000);
+      sleep_ms(20);
     }
     srt_close(g);
   }

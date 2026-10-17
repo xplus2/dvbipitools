@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../../run_helper.h"
 #include "lib/mux/mp4/mp4.h"
 #include "lib/mux/psi_build.h"
 
@@ -262,7 +263,7 @@ START_TEST(missing_service_name_delays_start_then_grace_expires) {
   video_pes(&s, 1, 93600, 1, 93600, au, build_h264_au(au, 0));
   rig_feed(&r, &s);
   ck_assert_uint_eq((unsigned)r.bytes, 0u);
-  usleep(2100000);
+  sleep_ms(2100);
   video_pes(&more, 1, 97200, 1, 97200, au, build_h264_au(au, 0));
   video_pes(&more, 1, 100800, 1, 100800, au, build_h264_au(au, 0));
   rig_feed(&r, &more);

@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "../log_capture.h"
+#include "../run_helper.h"
 #include "dipisrt/bridge.h"
 #include "lib/mux/fec2022.h"
 #include "lib/sys/signal.h"
@@ -484,7 +485,7 @@ typedef struct {
 
 static void *srt_stopper_main(void *arg) {
   const srt_stopper_t *st = arg;
-  usleep(st->ms * 1000u);
+  sleep_ms(st->ms);
   signal_request_stop();
   return NULL;
 }

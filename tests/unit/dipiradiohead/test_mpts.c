@@ -11,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../run_helper.h"
 #include "lib/sys/ioutil.h"
 #include "lib/sys/signal.h"
 
@@ -428,7 +429,7 @@ END_TEST
 
 static void *loop_stopper(void *arg) {
   (void)arg;
-  usleep(1500000);
+  sleep_ms(1500);
   signal_request_stop();
   return NULL;
 }

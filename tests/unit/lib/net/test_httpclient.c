@@ -15,6 +15,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "../../run_helper.h"
 #include "lib/net/httpclient/httpclient.h"
 #include "lib/net/httpclient/priv.h"
 
@@ -73,11 +74,11 @@ static void play(int cfd, const script_t *s) {
     }
     for (int i = 0; i < s->nchunks; i++) {
       if (s->req_of[i] != rq) continue;
-      if (s->delay_ms[i]) usleep(s->delay_ms[i] * 1000u);
+      if (s->delay_ms[i]) sleep_ms(s->delay_ms[i]);
       if (send(cfd, s->data[i], s->len[i], MSG_NOSIGNAL) < 0) break;
     }
   }
-  if (s->end == END_HOLD) usleep(s->hold_ms * 1000u);
+  if (s->end == END_HOLD) sleep_ms(s->hold_ms);
   if (s->end == END_RESET) {
     struct linger lg = {1, 0};
     setsockopt(cfd, SOL_SOCKET, SO_LINGER, &lg, sizeof lg);
@@ -86,7 +87,7 @@ static void play(int cfd, const script_t *s) {
 }
 
 static void *serve(void *arg) {
-  fake_t *f = arg;
+  const fake_t *f = arg;
   for (int i = 0; i < f->nscripts; i++) {
     struct pollfd pfd = {.fd = f->listen_fd, .events = POLLIN, .revents = 0};
     int cfd;
@@ -124,7 +125,7 @@ static void fake_end(fake_t *f) {
   free(f);
 }
 
-static http_t *fetch(fake_t *f, const char *path, const char *extra, net_err_reason_t *reason) {
+static http_t *fetch(const fake_t *f, const char *path, const char *extra, net_err_reason_t *reason) {
   char uri[128];
   http_url_t url;
   snprintf(uri, sizeof uri, "http://127.0.0.1:%u%s", f->port, path);
@@ -407,8 +408,13 @@ END_TEST
 
 START_TEST(reuse_decision_matrix) {
   static const struct {
-    int minor, status, chunked, chunk_done, has_cl;
-    size_t cl, consumed;
+    int minor;
+    int status;
+    int chunked;
+    int chunk_done;
+    int has_cl;
+    size_t cl;
+    size_t consumed;
     const char *conn;
     int want;
   } t[] = {
@@ -480,18 +486,19 @@ END_TEST
 
 static http_async_state_t drive(http_async_t *a, net_err_reason_t *reason) {
   http_async_state_t st = HTTP_ASYNC_PENDING;
-  for (int i = 0; i < 400 && st == HTTP_ASYNC_PENDING; i++) {
+  for (int i = 0; i < 400; i++) {
     struct pollfd pfd;
     pfd.fd = http_async_poll_fd(a);
     pfd.events = http_async_poll_events(a);
     pfd.revents = 0;
     poll(&pfd, 1, 50);
     st = http_async_step(a, reason);
+    if (st != HTTP_ASYNC_PENDING) break;
   }
   return st;
 }
 
-static http_async_state_t async_run(fake_t *f, const char *path, const char *extra, net_err_reason_t *reason, http_t **out) {
+static http_async_state_t async_run(const fake_t *f, const char *path, const char *extra, net_err_reason_t *reason, http_t **out) {
   char uri[128];
   http_url_t url;
   http_async_t *a;

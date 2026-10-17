@@ -50,7 +50,7 @@ static bim_node_t *pi_tree(const char *id) {
   return root;
 }
 
-static bim_node_t *bd_of(bim_node_t *root) {
+static bim_node_t *bd_of(const bim_node_t *root) {
   return root->kids[0];
 }
 
@@ -341,7 +341,9 @@ END_TEST
 START_TEST(service_encode_name_and_triplet_forms) {
   static const struct {
     int names;
-    unsigned onid, tsid, sid;
+    unsigned onid;
+    unsigned tsid;
+    unsigned sid;
     const char *dtt;
     const char *synth;
   } t[] = {

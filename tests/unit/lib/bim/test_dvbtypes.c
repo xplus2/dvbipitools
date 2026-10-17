@@ -19,7 +19,9 @@ typedef struct {
 
 typedef struct {
   int prefix;
-  unsigned ts, on, sid;
+  unsigned ts;
+  unsigned on;
+  unsigned sid;
   int nctag;
   int cid_present;
   unsigned cid;
@@ -27,7 +29,9 @@ typedef struct {
   unsigned evt_id;
   int time;
   int day_present;
-  unsigned day, tm, dur;
+  unsigned day;
+  unsigned tm;
+  unsigned dur;
   int path;
 } locspec_t;
 
@@ -73,8 +77,10 @@ static int run_loc(const fld_t *f, size_t nf, const char *path, size_t drop, dvb
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bd, *sd;
-  size_t bl, sl;
+  const unsigned char *bd;
+  const unsigned char *sd;
+  size_t bl;
+  size_t sl;
   int rc;
   dvb_codec_state_t local;
 
@@ -232,8 +238,10 @@ START_TEST(locator_decode_without_state_and_string_branch) {
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bd, *sd;
-  size_t bl, sl;
+  const unsigned char *bd;
+  const unsigned char *sd;
+  size_t bl;
+  size_t sl;
   char out[64];
   bitwriter_init(&bw);
   ck_assert_int_eq(strrepo_writer_init(&sw), 0);
@@ -405,8 +413,10 @@ static int run_ct(const fld_t *f, size_t nf, const char *href, size_t drop, char
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bd, *sd;
-  size_t bl, sl;
+  const unsigned char *bd;
+  const unsigned char *sd;
+  size_t bl;
+  size_t sl;
   int rc;
   bitwriter_init(&bw);
   ck_assert_int_eq(strrepo_writer_init(&sw), 0);

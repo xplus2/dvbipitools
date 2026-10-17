@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "../log_capture.h"
+#include "../run_helper.h"
 #include "../metrics_sink.h"
 #include "dipirist/bridge.h"
 #include "lib/sys/signal.h"
@@ -365,7 +366,7 @@ typedef struct {
 
 static void *stopper_main(void *arg) {
   const stopper_t *st = arg;
-  usleep(st->ms * 1000u);
+  sleep_ms(st->ms);
   signal_request_stop();
   return NULL;
 }
@@ -377,7 +378,7 @@ typedef struct {
 } http_feed_t;
 
 static void *http_feed_main(void *arg) {
-  http_feed_t *f = arg;
+  const http_feed_t *f = arg;
   unsigned char ts[188 * 20];
   memset(ts, 0xAB, sizeof ts);
   for (size_t i = 0; i < 20; i++) {

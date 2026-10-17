@@ -431,8 +431,13 @@ static inline unsigned char rev8_local(unsigned char b) {
 }
 
 static inline unsigned char hamm_raw(unsigned d) {
-  unsigned D1 = d & 1, D2 = (d >> 1) & 1, D3 = (d >> 2) & 1, D4 = (d >> 3) & 1;
-  unsigned P1 = D1 ^ D2 ^ D4, P2 = D1 ^ D3 ^ D4, P3 = D2 ^ D3 ^ D4;
+  unsigned D1 = d & 1;
+  unsigned D2 = (d >> 1) & 1;
+  unsigned D3 = (d >> 2) & 1;
+  unsigned D4 = (d >> 3) & 1;
+  unsigned P1 = D1 ^ D2 ^ D4;
+  unsigned P2 = D1 ^ D3 ^ D4;
+  unsigned P3 = D2 ^ D3 ^ D4;
   unsigned c = P1 | (P2 << 1) | (D1 << 2) | (P3 << 3) | (D2 << 4) | (D3 << 5) | (D4 << 6);
   unsigned ones = 0;
   for (int k = 0; k < 7; k++)
@@ -540,7 +545,9 @@ static inline size_t build_pes_any(unsigned char *out, unsigned char stream_id, 
     out[n++] = (unsigned char)body;
   }
   out[n++] = 0x80;
-  out[n++] = (unsigned char)((has_pts ? (has_dts ? 0xC0 : 0x80) : 0x00));
+  unsigned char flags = 0x00;
+  if (has_pts) flags = has_dts ? 0xC0 : 0x80;
+  out[n++] = flags;
   out[n++] = (unsigned char)hdr_len;
   if (has_pts) {
     put_pes_ts(out + n, pts, has_dts ? 0x30 : 0x20);

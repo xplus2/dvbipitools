@@ -13,6 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../run_helper.h"
 #include "lib/net/multicast.h"
 
 #include "dipixy/ts/capture/capture.h"
@@ -678,7 +679,8 @@ START_TEST(al_fec_repair_stream_that_cannot_open_is_dropped_but_capture_works) {
   sds_fec_t fec;
   capture_ctx_t *cap;
   capture_reader_t *r;
-  unsigned char dgram[12 + 188], out[512];
+  unsigned char dgram[12 + 188];
+  unsigned char out[512];
   memset(&fec, 0, sizeof fec);
   snprintf(fec.addr, sizeof fec.addr, "not-a-group");
   fec.port = 15842;
@@ -700,7 +702,8 @@ START_TEST(al_fec_decoder_passes_in_order_source_packets) {
   sds_fec_t fec;
   capture_ctx_t *cap;
   capture_reader_t *r;
-  unsigned char dgram[12 + 188], out[2048];
+  unsigned char dgram[12 + 188];
+  unsigned char out[2048];
   size_t total = 0;
   memset(&fec, 0, sizeof fec);
   snprintf(fec.addr, sizeof fec.addr, "239.8.8.42");
@@ -714,12 +717,12 @@ START_TEST(al_fec_decoder_passes_in_order_source_packets) {
     dgram[3] = (unsigned char)i;
     make_ts_packet(dgram + 12, (unsigned char)(10 + i));
     ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), (int)sizeof dgram);
-    usleep(2000);
+    sleep_ms(2);
   }
   for (int i = 0; i < 100 && total < 188; i++) {
     size_t n = drain(cap, r, out + total, sizeof out - total);
     total += n;
-    if (!n) usleep(5000);
+    if (!n) sleep_ms(5);
   }
   ck_assert_uint_ge(total, 188u);
   capture_reader_close(r);
