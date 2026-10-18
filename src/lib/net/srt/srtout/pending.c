@@ -53,7 +53,7 @@ int enqueue_pending(srtout_t *r, const unsigned char *buf, int len) {
 
 /* sends what it can without blocking. stops at first still-full result.
    real send error tears down, schedules reconnect */
-void flush_pending(srtout_t *r) {
+void srtout_flush_pending(srtout_t *r) {
   while (r->pending_count > 0 && r->sock != SRT_INVALID_SOCK) {
     int head = r->pending_head;
     int sent = srt_sendmsg2(r->sock, (const char *)pending_slot(r, head), r->pending_len[head], NULL);

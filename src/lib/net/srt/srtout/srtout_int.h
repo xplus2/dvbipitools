@@ -84,7 +84,7 @@ void teardown_for_reconnect(srtout_t *r, const char *why);
 void note_enqueue_off(srtout_t *r);
 void note_enqueue_hwm(srtout_t *r);
 int enqueue_pending(srtout_t *r, const unsigned char *buf, int len);
-void flush_pending(srtout_t *r);
+void srtout_flush_pending(srtout_t *r);
 void resize_pending_if_needed(srtout_t *r);
 void flush_carry(srtout_t *r);
 void service_step(srtout_t *r);

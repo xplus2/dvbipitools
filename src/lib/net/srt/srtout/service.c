@@ -88,7 +88,7 @@ void service_step(srtout_t *r) {
     if (srt_epoll_uwait(r->eid, &ev, 1, 0) > 0 && ev.fd == r->sock) {
       if (ev.events & SRT_EPOLL_OUT) {
         r->connected = 1;
-        flush_pending(r);
+        srtout_flush_pending(r);
       }
       if (ev.events & SRT_EPOLL_ERR) {
         /* ERR can be stale from connect race. confirm broken before teardown */

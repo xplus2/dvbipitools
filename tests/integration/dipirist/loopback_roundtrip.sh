@@ -30,7 +30,12 @@ send_fixture() {
     sf_pid=$!
     exec 3>"$sf_fifo"
     sleep 1
-    cat "$fixture" >&3
+    rm -f "$WORK"/slice.*
+    split -b 18800 "$fixture" "$WORK/slice."
+    for sf_slice in "$WORK"/slice.*; do
+        cat "$sf_slice" >&3
+        sleep 0.1
+    done
     exec 3>&-
     # file source hits EOF -> nonzero rc by this toolkit's convention, not a failure here
     wait $sf_pid || true
