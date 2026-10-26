@@ -99,8 +99,10 @@ int xc_type_codes(cc_t *c, xsd_compiled_t *out) {
     parent[i] = b ? (int)(intptr_t)xc_pmap_get(&index, b) - 1 : -1;
   }
   if (rc) goto done;
-  if (((rc = forest_build(c, &f, parent, n, e)))) goto done;
-  if (((rc = forest_walk(c, &f, n, 0, order, &k, pos, size)))) goto done;
+  rc = forest_build(c, &f, parent, n, e);
+  if (rc) goto done;
+  rc = forest_walk(c, &f, n, 0, order, &k, pos, size);
+  if (rc) goto done;
   for (int i = 0; i < n; i++) {
     int at = order[i];
     if (!(types[i] = xc_pmap_get(&c->types, xt[at]))) {
@@ -182,8 +184,10 @@ int xc_elem_codes(cc_t *c, xsd_compiled_t *out) {
     parent[i] = xe[i]->subst_head ? (int)(intptr_t)xc_pmap_get(&index, xe[i]->subst_head) - 1 : -1;
   }
   if (rc) goto done;
-  if (((rc = forest_build(c, &f, parent, n, e)))) goto done;
-  if (((rc = forest_walk(c, &f, n, 0, pre, &k, pos, size)))) goto done;
+  rc = forest_build(c, &f, parent, n, e);
+  if (rc) goto done;
+  rc = forest_walk(c, &f, n, 0, pre, &k, pos, size);
+  if (rc) goto done;
   memcpy(v, pre, sizeof *v * (size_t)n);
   if (!c->o->hier) isort(v, tmp, n, e);
   for (int i = 0; i < n; i++) sel[i] = xc_pmap_get(&c->elems, xe[v[i]]);

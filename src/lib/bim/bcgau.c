@@ -119,7 +119,7 @@ int bcgau_frags_tva_main(const bcgau_t *a, const bcg_doc_t *doc, bcgau_frags_t *
 
 /* the channel's dvb:// triplet ("" if none) and "1" if Name was made of the id follow a service fragment's strings,
    receivers find strings by fragment reference and never see them */
-static int service_tail(void *ctx, size_t i, strrepo_writer_t *sw) {
+static int service_tail(const void *ctx, size_t i, strrepo_writer_t *sw) {
   const bcg_channel_t *c = ((const bcg_channel_t *const *)ctx)[i];
   char dtt[sizeof ((bcgau_tail_t *)0)->dtt];
   if (!c) return 0;
@@ -133,7 +133,7 @@ int bcgau_write(bcgau_scratch_t *sc, const bcgau_t *a, const dvbtva_fuu_t *f, si
   bim_err_t err;
   int rc = -1;
   if (br && !array_reserve((void **)&sc->refs, &sc->refs_cap, (int)n, sizeof *sc->refs) &&
-      !dvbtva_au_write_ex(dvbtva_tva_root, &r, &a->eo, f, n, bw, sw, br, chan ? &service_tail : NULL, (void *)chan, &err)) {
+      !dvbtva_au_write_ex(dvbtva_tva_root, &r, &a->eo, f, n, bw, sw, br, chan ? &service_tail : NULL, chan, &err)) {
     for (size_t i = 0; i < n; i++) sc->refs[i] = (bcgau_ref_t){.au_off = br[i].au_off, .str_off = br[i].str_off, .kind = BCGAU_OTHER};
     rc = bitwriter_flush(bw);
   }

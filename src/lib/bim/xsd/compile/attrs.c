@@ -28,7 +28,7 @@ const bim_wildcard_t *xc_wc_from(cc_t *c, const xsd_wildcard_t *x) {
   else if (x->kind == XSD_WC_NOT) k = BIM_WC_NOT;
   if (x->process == XSD_PC_STRICT) pc = BIM_PC_STRICT;
   else if (x->process == XSD_PC_LAX) pc = BIM_PC_LAX;
-  return wc_new(c, k, (const char *const *)x->ns, x->nns, pc);
+  return wc_new(c, k, x->ns, x->nns, pc);
 }
 
 static int ns_in(const bim_wildcard_t *w, const char *ns) {

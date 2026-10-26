@@ -165,7 +165,7 @@ void out_free(bcg_out_t *o);
 int send_tva_main(mcast_t *m, unsigned compr, const seg_cache_t *seg, unsigned version);
 int send_index(mcast_t *m, const seg_cache_t *seg, unsigned version, unsigned container_id, int64_t budget_ns);
 /* access unit and string repository of nfuu fragments within BIM_REPO_MAX. 1 fits */
-int segment_fits(bitwriter_t *bw, strrepo_writer_t *sw, size_t nfuu);
+int segment_fits(bitwriter_t *bw, const strrepo_writer_t *sw, size_t nfuu);
 int plan_groups_frags(bcgau_scratch_t *sc, const bcgau_t *a, const dvbtva_fuu_t *f, int n, int **bounds, int *ngroups);
 /* container per channel up to BCG_MAX_SEGMENTS (size checked when built), packed above */
 int plan_groups(bcgau_scratch_t *sc, const bcgau_t *a, const bcg_doc_t *doc, const bcg_doc_index_t *ix, unsigned au_flags, int **bounds, int *ngroups);

@@ -40,11 +40,11 @@ static int take2(const char **p, const char *end, unsigned *v) {
 static int take_tz(const char *p, int *h, unsigned *m) {
   const char *q = p + 1;
   unsigned hh;
-  if ((*p != '+' && *p != '-')) return -1;
+  if (*p != '+' && *p != '-') return -1;
   if (take2(&q, p + 3, &hh)) return -1;
   if (*q++ != ':') return -1;
   if (take2(&q, p + 6, m)) return -1;
-  if ((*p == '-' && !hh && *m)) return -1;
+  if (*p == '-' && !hh && *m) return -1;
   *h = *p == '-' ? -(int)hh : (int)hh;
   return 0;
 }

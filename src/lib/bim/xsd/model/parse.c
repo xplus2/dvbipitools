@@ -299,8 +299,9 @@ static int parse_attrs(ctx_t *c, const bim_node_t *n, xsd_attrs_t *as) {
     } else if (xm_is_xs(k, "attributeGroup")) {
       if (!xm_xattr(k, "ref")) return xsd_set_fail(c->s, "LS400265", "bim: %s: local attributeGroup without ref", c->path);
       if (qname_attr(c, k, "ref", &as->group_refs[as->ngroups++])) return -1;
-    } else if (xm_is_xs(k, "anyAttribute") && !(as->wc = parse_wildcard(c, k))) {
-      return -1;
+    } else if (xm_is_xs(k, "anyAttribute")) {
+      as->wc = parse_wildcard(c, k);
+      if (!as->wc) return -1;
     }
   }
   return xm_plist_add(c->s, &c->s->all_attrsets, as) ? -2 : 0;

@@ -20,7 +20,7 @@ int dvbtva_au_write(dvbtva_root_fn root, const void *rctx, const bim_encode_opts
 }
 
 int dvbtva_au_write_ex(dvbtva_root_fn root, const void *rctx, const bim_encode_opts_t *eo, const dvbtva_fuu_t *f, size_t n,
-  bitwriter_t *bw, strrepo_writer_t *sw, bim_fragref_t *refs, dvbtva_wpost_fn post, void *pctx, bim_err_t *err) {
+  bitwriter_t *bw, strrepo_writer_t *sw, bim_fragref_t *refs, dvbtva_wpost_fn post, const void *pctx, bim_err_t *err) {
   bim_wr_t w = {bw, err};
   memset(err, 0, sizeof *err);
   if (bim_wr_v8(&w, n)) return -1;

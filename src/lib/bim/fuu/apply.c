@@ -89,7 +89,7 @@ static int materialize(const bim_fuu_state_t *st, bim_node_t *parent, const bim_
 }
 
 /* -1 absent, -2 error, -3 position taken by other element */
-static int find_child(bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t *pt, const bim_tbc_t *t, uint64_t pos, bim_err_t *err) {
+static int find_child(const bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t *pt, const bim_tbc_t *t, uint64_t pos, bim_err_t *err) {
   int mpc = bim_fuu_uses_mpc(st, pt);
   if (materialize(st, parent, pt, err)) return -2;
   for (int i = 0; i < parent->nkids; i++) {

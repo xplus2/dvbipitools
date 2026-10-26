@@ -42,10 +42,10 @@ void dvbtva_au_free(dvbtva_fuu_t *f, size_t n);
 
 /* extra strings after payload: called after payload i of f is written (k: kept fragment index on read).
    Non-zero fails unit */
-typedef int (*dvbtva_wpost_fn)(void *ctx, size_t i, strrepo_writer_t *sw);
+typedef int (*dvbtva_wpost_fn)(const void *ctx, size_t i, strrepo_writer_t *sw);
 typedef int (*dvbtva_rpost_fn)(void *ctx, size_t k, const dvbtva_fuu_t *f, strrepo_reader_t *sr);
 int dvbtva_au_write_ex(dvbtva_root_fn root, const void *rctx, const bim_encode_opts_t *eo, const dvbtva_fuu_t *f, size_t n, bitwriter_t *bw, strrepo_writer_t *sw,
-                       bim_fragref_t *refs, dvbtva_wpost_fn post, void *pctx, bim_err_t *err);
+                       bim_fragref_t *refs, dvbtva_wpost_fn post, const void *pctx, bim_err_t *err);
 int dvbtva_au_parse_ex(dvbtva_root_fn root, const void *rctx, const bim_decode_opts_t *o, bitreader_t *br, strrepo_reader_t *sr, const bim_fragref_t *refs, size_t nrefs,
                        dvbtva_rpost_fn post, void *pctx, dvbtva_fuu_t **out, size_t *n, bim_err_t *err);
 

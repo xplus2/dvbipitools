@@ -31,7 +31,8 @@ int dec_zstring(dec_t *d, dstrbuf_t *b) {
       if (bitreader_get_vluimsbf8(d->br, &clen)) return -1;
       if (!clen) return -1;
       if (clen > ZLIB_CHUNK_MAX(zcap)) return -1;
-      if ((!d->zbuf && !(d->zbuf = malloc(zcap)))) return -1;
+      if (!d->zbuf) d->zbuf = malloc(zcap);
+      if (!d->zbuf) return -1;
       if (!(in = malloc((size_t)clen))) return -1;
       rc = bitreader_get_bytes(d->br, in, (size_t)clen) || d->inflate(in, (size_t)clen, d->zbuf, &zl) || !zl;
       free(in);

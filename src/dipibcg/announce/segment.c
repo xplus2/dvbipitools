@@ -121,7 +121,7 @@ static int body_sizes(bitwriter_t *bw, const strrepo_writer_t *sw, size_t nf, si
   return (size_t)bitwriter_vluimsbf8_len((uint64_t)nf) + *au_body > BIM_REPO_MAX || 1 + *str_body > BIM_REPO_MAX ? -1 : 0;
 }
 
-int segment_fits(bitwriter_t *bw, strrepo_writer_t *sw, size_t nfuu) {
+int segment_fits(bitwriter_t *bw, const strrepo_writer_t *sw, size_t nfuu) {
   size_t au_body;
   size_t str_body;
   return !body_sizes(bw, sw, nfuu, &au_body, &str_body);

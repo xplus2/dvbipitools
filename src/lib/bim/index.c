@@ -494,7 +494,7 @@ int bim_typelist_build(const bim_typelist_entry_t *e, int n, strrepo_writer_t *s
     }
     if (put16(&b, 0xF000u | (unsigned)dl)) goto fail;
     if (put16(&b, e[i].fragment_type)) goto fail;
-    if ((xp && put16(&b, (unsigned)off))) goto fail;
+    if (xp && put16(&b, (unsigned)off)) goto fail;
     if (put8(&b, (unsigned)e[i].ncontainers)) goto fail;
     for (int j = 0; j < e[i].ncontainers; j++)
       if (put16(&b, e[i].containers[j])) goto fail;

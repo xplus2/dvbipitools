@@ -115,7 +115,10 @@ static int typeref(gn_t *c, bim_node_t *parent, const char *elname, const xsd_ty
     return -1;
   }
   if (!(r = node(c, tr, "namedTypeReference", NULL))) return fail(c, "out of memory");
-  if (!eq(t->q.ns, c->in->tns) && ((id_ns = ns_id(c, t->q.ns)) < 0 || attru(r, "NamespaceID", (uint64_t)id_ns))) return -1;
+  if (!eq(t->q.ns, c->in->tns)) {
+    id_ns = ns_id(c, t->q.ns);
+    if (id_ns < 0 || attru(r, "NamespaceID", (uint64_t)id_ns)) return -1;
+  }
   return attru(r, "TypeID", id);
 }
 

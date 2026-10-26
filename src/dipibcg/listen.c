@@ -185,7 +185,7 @@ static int decode_container(const listen_ctx_t *c, const unsigned char *data, si
   if (bim_bcg_unwrap(data, len, BCG_INFLATE, unwrapped, unwrapped_len)) return -1;
   if (!bim_container_parse(*unwrapped, *unwrapped_len, &au, &au_len, &sr_bytes, &sr_len) && sr_bytes && !bim_container_parse_refs(*unwrapped, *unwrapped_len, &fmt, &refs, &nrefs)) {
     bitreader_init(&br, au, au_len);
-    bim_fragref_t *use_refs = NULL;
+    const bim_fragref_t *use_refs = NULL;
     if (fmt == BIM_FRAGREF_DVB_BIM) use_refs = refs;
     rc = strrepo_reader_init(&sr, sr_bytes, sr_len) || bcgau_parse(&c->sch.au, &br, &sr, use_refs, nrefs, out) ? -1 : 0;
   }
