@@ -15,7 +15,7 @@ typedef struct {
   uint32_t nfrags; /* fragments 1..nfrags exist in data containers 1..2 */
 } fake_t;
 
-static int f_find(void *ctx, unsigned container, unsigned type, unsigned id, const unsigned char **body, size_t *len) {
+static int f_find(const void *ctx, unsigned container, unsigned type, unsigned id, const unsigned char **body, size_t *len) {
   const fake_t *f = ctx;
   for (int i = 0; i < f->n; i++) {
     if (f->c[i].id != container) continue;
@@ -29,7 +29,7 @@ static int f_find(void *ctx, unsigned container, unsigned type, unsigned id, con
   return -1;
 }
 
-static int f_has(void *ctx, unsigned container, uint32_t fragment) {
+static int f_has(const void *ctx, unsigned container, uint32_t fragment) {
   const fake_t *f = ctx;
   return (container == 1 || container == 2) && fragment >= 1 && fragment <= f->nfrags;
 }
@@ -111,9 +111,9 @@ START_TEST(index_check_needs_list_and_flags_disorder) {
     if (s->type != BIM_STRUCT_SUB_INDEX) continue;
     /* swap 1st and 2nd entry */
     unsigned char t[7];
-    memcpy(t, s->body + 1, 7);
-    memcpy(s->body + 1, s->body + 8, 7);
-    memcpy(s->body + 8, t, 7);
+    memcpy(t, s->heap_body + 1, 7);
+    memcpy(s->heap_body + 1, s->heap_body + 8, 7);
+    memcpy(s->heap_body + 8, t, 7);
   }
   ck_assert_int_eq(bim_index_check(f_find, f_has, &f, &r), 0);
   ck_assert_int_gt(r.misordered, 0);
@@ -149,7 +149,7 @@ END_TEST
 START_TEST(typelist_round_trips) {
   static const uint16_t c1[] = {1, 2, 0x1234};
   static const uint16_t c2[] = {7};
-  bim_typelist_entry_t in[] = {{0x0001, NULL, c1, 3}, {0xFFFF, "/tva:TVAMain/tva:Foo", c2, 1}, {0x0005, NULL, NULL, 0}};
+  bim_typelist_entry_t in[] = {{0x0001, NULL, c1, 3, NULL}, {0xFFFF, "/tva:TVAMain/tva:Foo", c2, 1, NULL}, {0x0005, NULL, NULL, 0, NULL}};
   static const unsigned char want[] = {0x00, 0x03, 0xF0, 0x09, 0x00, 0x01, 0x03, 0x00, 0x01, 0x00, 0x02, 0x12, 0x34, 0xF0, 0x07, 0xFF, 0xFF, 0x00, 0x01, 0x01, 0x00, 0x07, 0xF0, 0x03, 0x00, 0x05, 0x00};
   strrepo_writer_t sw;
   unsigned char *body;
@@ -246,22 +246,22 @@ static bim_index_report_t mutated(unsigned mask, int n, mut_fn mut) {
 
 static void m_sub_absent(fake_t *f) { SUB(f)->type = 0x99; }
 static void m_sub_strings_absent(fake_t *f) { sfind(f, 3, BIM_STRUCT_DATA_REPOSITORY, BIM_DATAREPO_STRINGS)->type = 0x99; }
-static void m_sub_header(fake_t *f) { SUB(f)->body[0] = 0x00; }
+static void m_sub_header(fake_t *f) { SUB(f)->heap_body[0] = 0x00; }
 static void m_sub_short(fake_t *f) { SUB(f)->len--; }
 static void m_sub_empty(fake_t *f) { SUB(f)->len = 0; }
-static void m_sub_bad_string(fake_t *f) { put16be(SUB(f)->body + 8, 0xFFFF); }
+static void m_sub_bad_string(fake_t *f) { put16be(SUB(f)->heap_body + 8, 0xFFFF); }
 static void m_idx_hi_low(fake_t *f) {
   bim_struct_t *i = IDX(f, BIM_INDEX_PI_CRID);
-  put16be(i->body + 2, get16be(SUB(f)->body + 1));
+  put16be(i->heap_body + 2, get16be(SUB(f)->heap_body + 1));
 }
 static void m_idx_absent(fake_t *f) { IDX(f, BIM_INDEX_PI_CRID)->type = 0x99; }
 static void m_idx_tiny(fake_t *f) { IDX(f, BIM_INDEX_PI_CRID)->len = 1; }
-static void m_idx_locator(fake_t *f) { IDX(f, BIM_INDEX_PI_CRID)->body[1] = 0; }
+static void m_idx_locator(fake_t *f) { IDX(f, BIM_INDEX_PI_CRID)->heap_body[1] = 0; }
 static void m_idx_stride(fake_t *f) { IDX(f, BIM_INDEX_PI_CRID)->len--; }
-static void m_idx_bad_hi(fake_t *f) { put16be(IDX(f, BIM_INDEX_PI_CRID)->body + 2, 0xFFFF); }
+static void m_idx_bad_hi(fake_t *f) { put16be(IDX(f, BIM_INDEX_PI_CRID)->heap_body + 2, 0xFFFF); }
 static void m_idx_overlap(fake_t *f) {
   bim_struct_t *i = IDX(f, BIM_INDEX_PI_CRID);
-  unsigned hi = get16be(i->body + 2);
+  unsigned hi = get16be(i->heap_body + 2);
   unsigned char *nb = malloc(9);
   ck_assert_ptr_nonnull(nb);
   nb[0] = 0xBF;
@@ -270,7 +270,8 @@ static void m_idx_overlap(fake_t *f) {
   put16be(nb + 4, hi);
   put16be(nb + 6, 3);
   nb[8] = 0;
-  free(i->body);
+  free(i->heap_body);
+  i->heap_body = nb;
   i->body = nb;
   i->len = 9;
 }
@@ -315,24 +316,24 @@ END_TEST
 #define L2(f) sfind(f, 3, BIM_STRUCT_SUB_INDEX, 1)
 
 static void m_l1_tiny(fake_t *f) { L1(f)->len = 1; }
-static void m_l1_header(fake_t *f) { L1(f)->body[0] = 0xFF; }
+static void m_l1_header(fake_t *f) { L1(f)->heap_body[0] = 0xFF; }
 static void m_l1_stride(fake_t *f) { L1(f)->len--; }
-static void m_l1_link(fake_t *f) { L1(f)->body[1] = 77; }
-static void m_l2_header(fake_t *f) { L2(f)->body[0] = 0; }
+static void m_l1_link(fake_t *f) { L1(f)->heap_body[1] = 77; }
+static void m_l2_header(fake_t *f) { L2(f)->heap_body[0] = 0; }
 static void m_l2_short(fake_t *f) { L2(f)->len--; }
-static void m_l1_end(fake_t *f) { put16be(L1(f)->body + 2, 0xFFFF); }
-static void m_l1_last(fake_t *f) { put16be(L1(f)->body + 4, 0xFFFF); }
-static void m_l2_key(fake_t *f) { put16be(L2(f)->body + 1, 0xFFFF); }
+static void m_l1_end(fake_t *f) { put16be(L1(f)->heap_body + 2, 0xFFFF); }
+static void m_l1_last(fake_t *f) { put16be(L1(f)->heap_body + 4, 0xFFFF); }
+static void m_l2_key(fake_t *f) { put16be(L2(f)->heap_body + 1, 0xFFFF); }
 static void m_l2_swap(fake_t *f) {
   unsigned char t[7];
-  memcpy(t, L2(f)->body + 1, 7);
-  memcpy(L2(f)->body + 1, L2(f)->body + 8, 7);
-  memcpy(L2(f)->body + 8, t, 7);
+  memcpy(t, L2(f)->heap_body + 1, 7);
+  memcpy(L2(f)->heap_body + 1, L2(f)->heap_body + 8, 7);
+  memcpy(L2(f)->heap_body + 8, t, 7);
 }
 static void m_l1_trailing(fake_t *f) {
   bim_struct_t *l = L1(f);
-  unsigned last = get16be(l->body + l->len - 2);
-  put16be(l->body + l->len - 2, last - 1);
+  unsigned last = get16be(l->heap_body + l->len - 2);
+  put16be(l->heap_body + l->len - 2, last - 1);
 }
 static void m_l2_strings_absent(fake_t *f) { sfind(f, 3, BIM_STRUCT_DATA_REPOSITORY, BIM_DATAREPO_STRINGS)->type = 0x99; }
 
@@ -367,9 +368,9 @@ START_TEST(index_check_flags_two_layer_damage) {
 }
 END_TEST
 
-static int raw_find(void *ctx, unsigned container, unsigned type, unsigned id, const unsigned char **body, size_t *len) {
+static int raw_find(const void *ctx, unsigned container, unsigned type, unsigned id, const unsigned char **body, size_t *len) {
   const fake_t *f = ctx;
-  return f_find((void *)f, container, type, id, body, len);
+  return f_find(f, container, type, id, body, len);
 }
 
 static bim_index_report_t raw_list(const unsigned char *list, size_t llen, const unsigned char *strs, size_t slen) {
@@ -377,8 +378,8 @@ static bim_index_report_t raw_list(const unsigned char *list, size_t llen, const
   bim_index_cont_t c;
   fake_t f;
   bim_index_report_t r;
-  st[0] = (bim_struct_t){BIM_STRUCT_INDEX_LIST, BIM_STRUCT_ID_UNUSED, (unsigned char *)list, llen};
-  st[1] = (bim_struct_t){BIM_STRUCT_DATA_REPOSITORY, BIM_DATAREPO_STRINGS, (unsigned char *)strs, slen};
+  st[0] = (bim_struct_t){BIM_STRUCT_INDEX_LIST, BIM_STRUCT_ID_UNUSED, list, llen, NULL};
+  st[1] = (bim_struct_t){BIM_STRUCT_DATA_REPOSITORY, BIM_DATAREPO_STRINGS, strs, slen, NULL};
   c.id = BIM_INDEX_LIST_CONTAINER;
   c.structs = st;
   c.nstructs = strs ? 2 : 1;
@@ -440,11 +441,13 @@ START_TEST(index_build_limits) {
   bim_index_cont_t *c = NULL;
   int n = 0;
   char *big;
+  char *keys[1500];
   memset(in, 0, sizeof in);
   memset(key, 'k', sizeof key - 1);
   for (int i = 0; i < 1500; i++) {
     char *k = malloc(sizeof key);
     ck_assert_ptr_nonnull(k);
+    keys[i] = k;
     memcpy(k, key, sizeof key);
     snprintf(k, 12, "%08d", i);
     k[8] = 'k';
@@ -452,12 +455,13 @@ START_TEST(index_build_limits) {
   }
   ck_assert_int_eq(bim_index_build(1u << BIM_INDEX_PI_TITLE, in, 3, &c, &n), -2);
   ck_assert_ptr_null(c);
-  for (int i = 0; i < in[BIM_INDEX_PI_TITLE].n; i++) free((char *)in[BIM_INDEX_PI_TITLE].e[i].key[0]);
+  for (int i = 0; i < 1500; i++) free(keys[i]);
   bim_index_input_free(&in[BIM_INDEX_PI_TITLE]);
 
   for (int i = 0; i < 300; i++) {
     char *k = malloc(300);
     ck_assert_ptr_nonnull(k);
+    keys[i] = k;
     memset(k, 'a' + i % 26, 299);
     k[299] = 0;
     k[0] = (char)('a' + i / 100 % 26);
@@ -466,7 +470,7 @@ START_TEST(index_build_limits) {
     ck_assert_int_eq(bim_index_add(&in[BIM_INDEX_PI_TITLE], k, NULL, 1, (uint32_t)(1 + i)), 0);
   }
   ck_assert_int_eq(bim_index_build(1u << BIM_INDEX_PI_TITLE, in, 0xFFFF, &c, &n), -3);
-  for (int i = 0; i < in[BIM_INDEX_PI_TITLE].n; i++) free((char *)in[BIM_INDEX_PI_TITLE].e[i].key[0]);
+  for (int i = 0; i < 300; i++) free(keys[i]);
   bim_index_input_free(&in[BIM_INDEX_PI_TITLE]);
 
   big = malloc(70000);
@@ -546,7 +550,7 @@ START_TEST(typelist_build_rejects_invalid) {
   big[69999] = 0;
   memset(many, 0, sizeof many);
   ck_assert_int_eq(strrepo_writer_init(&sw), 0);
-  e[0] = (bim_typelist_entry_t){1, NULL, cs, 1};
+  e[0] = (bim_typelist_entry_t){1, NULL, cs, 1, NULL};
   ck_assert_int_eq(bim_typelist_build(e, -1, &sw, &body, &len), -1);
   ck_assert_int_eq(bim_typelist_build(e, 0x10000, &sw, &body, &len), -1);
   e[0].ncontainers = -1;
@@ -554,11 +558,11 @@ START_TEST(typelist_build_rejects_invalid) {
   e[0].ncontainers = 256;
   e[0].containers = many;
   ck_assert_int_eq(bim_typelist_build(e, 1, &sw, &body, &len), -1);
-  e[0] = (bim_typelist_entry_t){0x10000, NULL, cs, 1};
+  e[0] = (bim_typelist_entry_t){0x10000, NULL, cs, 1, NULL};
   ck_assert_int_eq(bim_typelist_build(e, 1, &sw, &body, &len), -1);
-  e[0] = (bim_typelist_entry_t){0xFFFF, NULL, cs, 1};
+  e[0] = (bim_typelist_entry_t){0xFFFF, NULL, cs, 1, NULL};
   ck_assert_int_eq(bim_typelist_build(e, 1, &sw, &body, &len), -1);
-  e[0] = (bim_typelist_entry_t){0xFFFF, big, cs, 1};
+  e[0] = (bim_typelist_entry_t){0xFFFF, big, cs, 1, NULL};
   ck_assert_int_eq(bim_typelist_build(e, 1, &sw, &body, &len), -1);
   strrepo_writer_free(&sw);
   free(big);
@@ -674,7 +678,7 @@ START_TEST(nsmap_rejects_malformed_and_allocation_failures) {
   for (long k = 0;; k++) {
     strrepo_writer_t sw;
     static const uint16_t cs[2] = {1, 2};
-    bim_typelist_entry_t e[2] = {{1, NULL, cs, 2}, {0xFFFF, "/a/b", cs, 1}};
+    bim_typelist_entry_t e[2] = {{1, NULL, cs, 2, NULL}, {0xFFFF, "/a/b", cs, 1, NULL}};
     unsigned char *b2 = NULL;
     size_t l2;
     int hit;

@@ -1,26 +1,17 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "lib/bim/codec/codec_int.h"
 
-static void addf(sbuf_t *b, const char *fmt, ...)
-#if defined(__GNUC__)
-    __attribute__((format(printf, 2, 3)))
-#endif
-    ;
-
-static void addf(sbuf_t *b, const char *fmt, ...) {
-  char tmp[64];
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(tmp, sizeof tmp, fmt, ap);
-  va_end(ap);
-  sbuf_add(b, tmp);
-}
+#define addf(b, ...) \
+  ({ \
+    char tmp_[64]; \
+    snprintf(tmp_, sizeof tmp_, __VA_ARGS__); \
+    sbuf_add((b), tmp_); \
+  })
 
 /* digits in [*p, end), at least one. advances */
 static int take_num(const char **p, const char *end, uint64_t *v, int *ndig) {
@@ -49,7 +40,11 @@ static int take2(const char **p, const char *end, unsigned *v) {
 static int take_tz(const char *p, int *h, unsigned *m) {
   const char *q = p + 1;
   unsigned hh;
-  if ((*p != '+' && *p != '-') || take2(&q, p + 3, &hh) || *q++ != ':' || take2(&q, p + 6, m) || (*p == '-' && !hh && *m)) return -1;
+  if ((*p != '+' && *p != '-')) return -1;
+  if (take2(&q, p + 3, &hh)) return -1;
+  if (*q++ != ':') return -1;
+  if (take2(&q, p + 6, m)) return -1;
+  if ((*p == '-' && !hh && *m)) return -1;
   *h = *p == '-' ? -(int)hh : (int)hh;
   return 0;
 }
@@ -185,7 +180,8 @@ int m7_duration_parse(const char *s, m7_duration_t *d) {
     d->neg = 1;
     p++;
   }
-  if (p >= end || *p++ != 'P') return -1;
+  if (p >= end) return -1;
+  if (*p++ != 'P') return -1;
   if (p < end && *p >= '0' && *p <= '9') {
     const char *q = p;
     if (take_num(&q, end, &x, NULL)) return -1;
@@ -214,7 +210,9 @@ int m7_duration_parse(const char *s, m7_duration_t *d) {
     }
   }
   if (p < end) {
-    if (take_num(&p, end, &d->frac, NULL) || p >= end || *p++ != 'F') return -1;
+    if (take_num(&p, end, &d->frac, NULL)) return -1;
+    if (p >= end) return -1;
+    if (*p++ != 'F') return -1;
     d->has_frac = 1;
   }
   return p == end ? 0 : -1;
@@ -239,12 +237,15 @@ static unsigned flags_of(const bim_simple_t *s, unsigned compat, const char *con
   return m;
 }
 
-unsigned m7_timepoint_flags(const bim_simple_t *s, unsigned compat) { return flags_of(s, compat, tp_probe, (int)(sizeof tp_probe / sizeof *tp_probe)); }
+unsigned m7_timepoint_flags(const bim_simple_t *s, unsigned compat) { return flags_of(s, compat, tp_probe, (int)(sizeof tp_probe / sizeof tp_probe[0])); }
 
-unsigned m7_duration_flags(const bim_simple_t *s, unsigned compat) { return flags_of(s, compat, dur_probe, (int)(sizeof dur_probe / sizeof *dur_probe)); }
+unsigned m7_duration_flags(const bim_simple_t *s, unsigned compat) { return flags_of(s, compat, dur_probe, (int)(sizeof dur_probe / sizeof dur_probe[0])); }
 
 /* uncoded section must be unused */
-static int wflag(bitwriter_t *bw, unsigned mask, int f, int v) { return M7_HAS(mask, f) ? bit(bw, v) : (v ? -1 : 0); }
+static int wflag(bitwriter_t *bw, unsigned mask, int f, int v) {
+  if (M7_HAS(mask, f)) return bit(bw, v);
+  return v ? -1 : 0;
+}
 
 /* ISO 15938-1:2002 8.5.4.2.5 */
 int m7_timepoint_encode(const char *v, const bim_simple_t *sp, unsigned compat, bitwriter_t *bw) {
@@ -295,7 +296,8 @@ int m7_duration_encode(const char *v, const bim_simple_t *sp, unsigned compat, b
   if (d.has_d && bitwriter_put_vluimsbf5(bw, d.d)) return -1;
   for (int u = 0; d.t && u < 3; u++) {
     int fixed = u ? d.has[u - 1] : d.has_d;
-    if (d.has[u] && (fixed ? bitwriter_put(bw, d.v[u], u ? 6 : 5) : bitwriter_put_vluimsbf5(bw, d.v[u]))) return -1;
+    int width = u ? 6 : 5;
+    if (d.has[u] && (fixed ? bitwriter_put(bw, d.v[u], width) : bitwriter_put_vluimsbf5(bw, d.v[u]))) return -1;
   }
   if (d.has_frac && bitwriter_put_vluimsbf5(bw, d.frac)) return -1;
   if (d.has[3] && (d.has[2] ? bitwriter_put(bw, d.v[3], w) : bitwriter_put_vluimsbf5(bw, d.v[3]))) return -1;

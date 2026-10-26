@@ -65,8 +65,8 @@ int bim_tvainit_decoderinit(const char *uri, const char *const *more, size_t nmo
   di->reserved = 0x1F;
   di->nschemas = 1 + nmore;
   if (!(di->schemas = calloc(di->nschemas, sizeof *di->schemas))) return -1;
-  di->schemas[0].uri = (char *)uri;
-  for (size_t i = 0; i < nmore; i++) di->schemas[1 + i].uri = (char *)more[i];
+  di->schemas[0].uri = uri;
+  for (size_t i = 0; i < nmore; i++) di->schemas[1 + i].uri = more[i];
   return 0;
 }
 

@@ -35,7 +35,12 @@ static int read_tree(const config_t *cfg, bcg_schema_t *s, const char *buf, size
   *x = NULL;
   *tree = NULL;
   if (cfg->format == FMT_TVA) {
-    if (xml_doc_parse(buf, len, x, NULL) || !(root = xml_doc_root(*x)) || !root->ns || strlen(root->ns) >= cap) {
+    int bad = xml_doc_parse(buf, len, x, NULL);
+    if (!bad) {
+      root = xml_doc_root(*x);
+      bad = !root || !root->ns || strlen(root->ns) >= cap;
+    }
+    if (bad) {
       log_code("GE000756", "input is not well-formed XML");
       return -1;
     }

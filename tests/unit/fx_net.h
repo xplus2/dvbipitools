@@ -26,7 +26,7 @@ static inline unsigned free_udp_port(void) {
   int fd = socket(AF_INET, SOCK_DGRAM, 0);
   unsigned port;
 
-  ck_assert_int_ge(fd, 0);
+  if (fd < 0) abort();
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -41,7 +41,7 @@ static inline int make_listener(unsigned *port_out) {
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in addr;
   socklen_t alen = sizeof addr;
-  ck_assert_int_ge(fd, 0);
+  if (fd < 0) abort();
   memset(&addr, 0, sizeof addr);
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -91,7 +91,7 @@ static inline int udp_bound(struct sockaddr_in *addr_out) {
   memset(addr_out, 0, sizeof *addr_out);
   addr_out->sin_family = AF_INET;
   inet_pton(AF_INET, "127.0.0.1", &addr_out->sin_addr);
-  ck_assert_int_ge(fd, 0);
+  if (fd < 0) abort();
   ck_assert_int_eq(bind(fd, (struct sockaddr *)addr_out, sizeof *addr_out), 0);
   ck_assert_int_eq(getsockname(fd, (struct sockaddr *)addr_out, &len), 0);
   return fd;

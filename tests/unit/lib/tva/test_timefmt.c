@@ -159,8 +159,8 @@ START_TEST(timefmt_zone_and_length_edge_cases) {
     {"20240501102030 FOO", "2024-05-01T10:20:30", 1}, {"20240501102030 +0000", "2024-05-01T10:20:30Z", 0},
   };
   char out[40];
-  for (size_t i = 0; i < sizeof rej / sizeof *rej; i++) ck_assert_msg(xmltv_time_to_iso8601(rej[i], out, sizeof out) == -1, "accepted '%s'", rej[i]);
-  for (size_t i = 0; i < sizeof ok / sizeof *ok; i++) {
+  for (size_t i = 0; i < sizeof rej / sizeof rej[0]; i++) ck_assert_msg(xmltv_time_to_iso8601(rej[i], out, sizeof out) == -1, "accepted '%s'", rej[i]);
+  for (size_t i = 0; i < sizeof ok / sizeof ok[0]; i++) {
     ck_assert_msg(xmltv_time_to_iso8601(ok[i].in, out, sizeof out) == ok[i].rc, "rc for '%s'", ok[i].in);
     ck_assert_msg(!strncmp(out, ok[i].want, strlen(ok[i].want)), "'%s' gave '%s'", ok[i].in, out);
   }

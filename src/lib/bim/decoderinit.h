@@ -20,7 +20,8 @@ typedef struct {
 /* hint: BinaryLocationHint for known additional schema */
 typedef struct {
   uint64_t id;
-  char *uri;
+  const char *uri;
+  char *heap_uri;
   char *hint;
   bim_di_codec_t *codecs;
   size_t ncodecs;
@@ -29,7 +30,8 @@ typedef struct {
 } bim_di_schema_t;
 
 typedef struct {
-  unsigned char *bits;
+  const unsigned char *bits;
+  unsigned char *heap_bits;
   uint64_t nbits;
   uint64_t code;
 } bim_di_cpath_t;

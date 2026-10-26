@@ -33,9 +33,12 @@ void bcgau_init(bcgau_t *a, const xsd_compiled_t *c, const char *tva_ns, const b
     a->eo.cs = o->cs;
     a->dop.cs = o->cs;
   }
-  a->eo.schemas = a->dop.schemas = &c->schema;
-  a->eo.nschemas = a->dop.nschemas = 1;
-  a->eo.lax_schema = a->dop.lax_schema = -1;
+  a->dop.schemas = &c->schema;
+  a->eo.schemas = a->dop.schemas;
+  a->dop.nschemas = 1;
+  a->eo.nschemas = a->dop.nschemas;
+  a->dop.lax_schema = -1;
+  a->eo.lax_schema = a->dop.lax_schema;
   a->eo.frag_format = 1;
 }
 
@@ -130,7 +133,7 @@ int bcgau_write(bcgau_scratch_t *sc, const bcgau_t *a, const dvbtva_fuu_t *f, si
   bim_err_t err;
   int rc = -1;
   if (br && !array_reserve((void **)&sc->refs, &sc->refs_cap, (int)n, sizeof *sc->refs) &&
-      !dvbtva_au_write_ex(dvbtva_tva_root, &r, &a->eo, f, n, bw, sw, br, chan ? service_tail : NULL, (void *)chan, &err)) {
+      !dvbtva_au_write_ex(dvbtva_tva_root, &r, &a->eo, f, n, bw, sw, br, chan ? &service_tail : NULL, (void *)chan, &err)) {
     for (size_t i = 0; i < n; i++) sc->refs[i] = (bcgau_ref_t){.au_off = br[i].au_off, .str_off = br[i].str_off, .kind = BCGAU_OTHER};
     rc = bitwriter_flush(bw);
   }
@@ -258,7 +261,9 @@ static int ptext_add(ptext_t *pt, const char *crid, bcg_programme_t *tmp) {
   e->title = tmp->title;
   e->desc = tmp->desc;
   e->category = tmp->category;
-  tmp->title = tmp->desc = tmp->category = NULL;
+  tmp->category = NULL;
+  tmp->desc = tmp->category;
+  tmp->title = tmp->desc;
   pt->n++;
   return 0;
 }
@@ -266,9 +271,12 @@ static int ptext_add(ptext_t *pt, const char *crid, bcg_programme_t *tmp) {
 static int ptext_lookup(void *ctx, const char *crid, bcg_programme_t *pr) {
   ptext_t *pt = ctx;
   int i = -1;
-  if (!pt->idx && pt->n > 0 && (pt->idx = malloc(sizeof *pt->idx * (size_t)pt->n))) {
-    for (int k = 0; k < pt->n; k++) pt->idx[k] = (bcg_key_idx_t){pt->arr[k].crid, k};
-    bcg_key_index_sort(pt->idx, pt->n);
+  if (!pt->idx && pt->n > 0) {
+    pt->idx = malloc(sizeof *pt->idx * (size_t)pt->n);
+    if (pt->idx) {
+      for (int k = 0; k < pt->n; k++) pt->idx[k] = (bcg_key_idx_t){pt->arr[k].crid, k};
+      bcg_key_index_sort(pt->idx, pt->n);
+    }
   }
   if (pt->idx) i = bcg_key_index_find(pt->idx, pt->n, crid);
   for (int k = 0; !pt->idx && k < pt->n && i < 0; k++)
@@ -304,7 +312,8 @@ static int apply_one(const dvbtva_fuu_t *f, const bcgau_tail_t *tail, bcg_doc_t 
     case CODE_TVA_MAIN: return bcgfrag_read_tva_main(f->root, doc);
     default: {
       bcg_channel_t *c = bcg_add_channel(doc);
-      return c ? bcgfrag_read_service(f->root, tail ? tail->dtt : "", tail && tail->no_names, c) : -1;
+      if (!c) return -1;
+      return bcgfrag_read_service(f->root, tail ? tail->dtt : "", tail && tail->no_names, c);
     }
   }
 }

@@ -97,15 +97,22 @@ static int decode_mono(dec_t *d, const bim_part_t *p, const bim_type_t *t, bim_n
     s = d->cast ? bim_subtypes_find(&d->schemas[d->schema], t) : NULL;
     if ((s || d->deferred || nillable) && type_code(d, s, 1, nillable, &idx, deferred, &nil)) return -1;
     if (idx >= 0) {
+      if (!s) return -1;
       t = s->subs[idx];
       k->cast = t;
     }
   }
   if (nil && set_nil(k)) return -1;
-  if (has_len && d->opts && d->opts->aod) d->zlen = d->zpos = 0;
+  if (has_len && d->opts && d->opts->aod) {
+    d->zpos = 0;
+    d->zlen = d->zpos;
+  }
   if (!*deferred && !nil && (!t || decode_body(d, t, k))) return -1;
   if (has_len && start - bitreader_bits_left(d->br) != len) return -1;
-  if (has_len && d->opts && d->opts->aod) d->zlen = d->zpos = 0;
+  if (has_len && d->opts && d->opts->aod) {
+    d->zpos = 0;
+    d->zlen = d->zpos;
+  }
   if (has_len) string_resync(d);
   return 0;
 }
@@ -154,7 +161,14 @@ static int decode_multi(dec_t *d, const bim_part_t *p, const bim_type_t *t, bim_
       continue;
     }
     if (!*deferred) {
-      body = idx < 0 ? (first ? t : NULL) : first ? s->subs[idx] : s->deltas ? s->deltas[idx] : NULL;
+      body = NULL;
+      if (idx < 0) {
+        if (first) body = t;
+      } else if (first) {
+        body = s->subs[idx];
+      } else if (s->deltas) {
+        body = s->deltas[idx];
+      }
       if ((first || idx >= 0) && (!body || decode_body(d, body, k))) goto done;
       if (idx >= 0) {
         t = s->subs[idx];
@@ -211,7 +225,10 @@ int dec_add_child(dec_t *d, bim_node_t *node, const bim_part_t *p, const bim_typ
   bim_node_t *k;
   int deferred;
   int rc;
-  if (++d->nodes > MAX_NODES || d->level >= ELEM_DEPTH_MAX || !(k = bim_node_new(name))) return -1;
+  if (++d->nodes > MAX_NODES) return -1;
+  if (d->level >= ELEM_DEPTH_MAX) return -1;
+  k = bim_node_new(name);
+  if (!k) return -1;
   k->ns = ns;
   d->level++;
   rc = dec_element(d, p, t, k, 0, &deferred);
@@ -226,7 +243,7 @@ int dec_add_child(dec_t *d, bim_node_t *node, const bim_part_t *p, const bim_typ
 
 /* 7.5.2.2.5.2.5: tree of choices over remaining children */
 static int decode_all(dec_t *d, const bim_part_t *p, bim_node_t *node, int mixed) {
-  int left[64];
+  int left[64] = {0};
   int n = p->nkids;
   if (n > 64) return -1;
   for (int i = 0; i < n; i++) left[i] = i;
@@ -234,8 +251,9 @@ static int decode_all(dec_t *d, const bim_part_t *p, bim_node_t *node, int mixed
     uint64_t c = 0;
     int k;
     if (n > 1 && (bitreader_get(d->br, bim_width((uint64_t)n), &c) || c >= (uint64_t)n)) return -1;
+    if (c >= 64) return -1;
     k = left[c];
-    memmove(&left[c], &left[c + 1], (size_t)(n - 1 - (int)c) * sizeof *left);
+    memmove(&left[c], &left[c + 1], (size_t)(n - 1 - (int)c) * sizeof left[0]);
     n--;
     if (decode_part(d, &p->kids[k], node, mixed)) return -1;
   }

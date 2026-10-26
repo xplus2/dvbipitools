@@ -122,7 +122,9 @@ static int put_type_code(enc_t *e, const bim_subtypes_t *s, int flag, int nillab
   uint64_t inc = (uint64_t)e->o->deferred + (uint64_t)!!nillable;
   uint64_t n = (uint64_t)(s ? s->nsubs : 0) + inc;
   int coded = idx >= 0 || deferred || nil;
-  uint64_t code = deferred ? 0 : nil ? (uint64_t)e->o->deferred : inc + (uint64_t)idx;
+  uint64_t code = inc + (uint64_t)idx;
+  if (deferred) code = 0;
+  else if (nil) code = (uint64_t)e->o->deferred;
   if (flag && enc_bit(e->bw, coded)) return -1;
   if (flag && !coded) return 0;
   if (!n) return coded ? -1 : 0;
@@ -165,7 +167,7 @@ static int encode_occurrences(const enc_t *e, const bim_part_t *p, int count) {
 }
 
 static int walk_all(enc_t *e, const bim_part_t *p, const bim_node_t *node, int *ci, int mixed) {
-  int left[64];
+  int left[64] = {0};
   int n = p->nkids;
   if (n > 64) return -1;
   for (int i = 0; i < n; i++) left[i] = i;
@@ -183,7 +185,7 @@ static int walk_all(enc_t *e, const bim_part_t *p, const bim_node_t *node, int *
     }
     if (n > 1 && !e->dry && bitwriter_put(e->bw, (uint64_t)pick, bim_width((uint64_t)n))) return -1;
     k = left[pick];
-    memmove(&left[pick], &left[pick + 1], (size_t)(n - 1 - pick) * sizeof *left);
+    memmove(&left[pick], &left[pick + 1], (size_t)(n - 1 - pick) * sizeof left[0]);
     n--;
     if (walk_part(e, &p->kids[k], node, ci, mixed)) return -1;
   }
@@ -284,7 +286,7 @@ static int enc_body(enc_t *e, const bim_type_t *t, const bim_node_t *node, int *
 
 /* ISO 23001-1 7.4.2 body: substitution, type, body. top: neither code */
 static int mono_inner(enc_t *e, void *arg) {
-  el_t *a = arg;
+  const el_t *a = arg;
   const bim_type_t *t = a->t;
   int ci = 0;
   if (!a->top) {
@@ -294,17 +296,24 @@ static int mono_inner(enc_t *e, void *arg) {
     int idx = -1;
     int deferred = a->k->deferred;
     int nil = enc_is_nil(a->k);
-    if (find_subst(e, a->p, a->k, &s) || put_subst(e, a->p, &s)) return -1;
+    if (find_subst(e, a->p, a->k, &s)) return -1;
+    if (put_subst(e, a->p, &s)) return -1;
     if (s.e) {
       t = s.e->type;
       nillable = s.e->nillable;
     }
     st = e->o->cast ? bim_subtypes_find(&e->schemas[e->schema], t) : NULL;
-    if (a->k->cast && a->k->cast != t && (idx = cast_index(st, a->k->cast)) < 0) return -1;
+    if (a->k->cast && a->k->cast != t) {
+      idx = cast_index(st, a->k->cast);
+      if (idx < 0) return -1;
+    }
     if ((deferred && !e->o->deferred) || (nil && !nillable)) return -1;
     if ((st || e->o->deferred || nillable) && put_type_code(e, st, 1, nillable, idx, deferred, nil)) return -1;
     if (deferred || nil) return 0;
-    if (idx >= 0) t = st->subs[idx];
+    if (idx >= 0) {
+      if (!st) return -1;
+      t = st->subs[idx];
+    }
   }
   return t && !attrs_declared(e, t, a->k) ? enc_body(e, t, a->k, &ci, 1) : -1;
 }
@@ -342,7 +351,7 @@ static int cast_needs_multi(const enc_t *e, const el_t *a) {
 
 /* ISO 23001-1 7.4.3, 7.4.4: chunk of home schema, second for cast of another schema */
 static int multi_inner(enc_t *e, void *arg) {
-  el_t *a = arg;
+  const el_t *a = arg;
   const bim_type_t *t = a->t;
   const bim_type_t *cast = a->k->cast != a->t ? a->k->cast : NULL;
   const bim_subtypes_t *s1;
@@ -362,14 +371,17 @@ static int multi_inner(enc_t *e, void *arg) {
   int rc = -1;
   if (find_subst(e, a->p, a->k, &s) || enc_bit(e->bw, s.e != NULL)) return -1;
   if (s.e) {
-    if (enc_global_ptr(e, s.e, &sid, &code) || bitwriter_put(e->bw, (uint64_t)sid, bim_width((uint64_t)e->nschemas)) || bitwriter_put_vluimsbf5(e->bw, code)) return -1;
+    if (enc_global_ptr(e, s.e, &sid, &code)) return -1;
+    if (bitwriter_put(e->bw, (uint64_t)sid, bim_width((uint64_t)e->nschemas))) return -1;
+    if (bitwriter_put_vluimsbf5(e->bw, code)) return -1;
     t = s.e->type;
     nillable = s.e->nillable;
   }
   if ((deferred && !e->o->deferred) || (nil && !nillable)) return -1;
   home = home_schema(e, t);
   s1 = bim_subtypes_find(&e->schemas[home], t);
-  if (cast && cast != t && (idx = cast_index(s1, cast)) < 0) {
+  if (cast && cast != t) idx = cast_index(s1, cast);
+  if (cast && cast != t && idx < 0) {
     for (int v = 0; v < e->nschemas && sid2 < 0; v++) {
       if (v == home || !e->schemas[v].known) continue;
       s2 = bim_subtypes_find_x(&e->schemas[v], t);
@@ -377,7 +389,12 @@ static int multi_inner(enc_t *e, void *arg) {
     }
     if (sid2 < 0) return -1;
   }
-  if (!deferred && !nil && attrs_declared(e, idx >= 0 ? s1->subs[idx] : sid2 >= 0 ? cast : t, a->k)) return -1;
+  if (!deferred && !nil) {
+    const bim_type_t *declared = t;
+    if (idx >= 0) declared = s1->subs[idx];
+    else if (sid2 >= 0) declared = cast;
+    if (attrs_declared(e, declared, a->k)) return -1;
+  }
   e->schema = home;
   if (bitwriter_put(e->bw, (uint64_t)home, bim_width((uint64_t)e->nschemas)) || put_type_code(e, s1, 1, nillable, idx, deferred, nil)) goto done;
   if (deferred || nil) {
@@ -408,7 +425,11 @@ int enc_element(enc_t *e, const bim_part_t *p, const bim_type_t *t, const bim_no
     int freeze = top && e->o->freeze;
     multi = e->o->multi == 2 || (e->o->multi == 1 && cast_needs_multi(e, &a));
     /* 0 mono, 10 multi, 110 mono frozen, 111 multi frozen */
-    if (freeze ? bitwriter_put(e->bw, multi ? 7 : 6, 3) : bitwriter_put(e->bw, multi ? 2 : 0, multi ? 2 : 1)) return -1;
+    if (freeze) {
+      if (bitwriter_put(e->bw, multi ? 7 : 6, 3)) return -1;
+    } else if (bitwriter_put(e->bw, multi ? 2 : 0, multi ? 2 : 1)) {
+      return -1;
+    }
     if (freeze) e->hot = 0;
   }
   if (multi) {
@@ -460,7 +481,8 @@ int bim_encode_payload_opts(const bim_type_t *t, const bim_node_t *root, const b
   o = e.o;
   if (o->diag && o->ndiag) o->diag[0] = '\0';
   /* ISO 15938-1 8.3.2, ISO 23001-1 7.3.2 */
-  rc = bitwriter_put(bw, (uint64_t)o->len_mode << 6 | (uint64_t)!!o->deferred << 5 | (uint64_t)!!o->cast << 4 | (o->mpegb ? (uint64_t)!o->fragref << 3 | 7 : 0xF), 8) || (o->zgather ? enc_gathered(&e, t, root) : enc_element(&e, NULL, t, root, 1));
+  rc = bitwriter_put(bw, (uint64_t)o->len_mode << 6 | (uint64_t)!!o->deferred << 5 | (uint64_t)!!o->cast << 4 | (o->mpegb ? (uint64_t)!o->fragref << 3 | 7 : 0xF), 8);
+  if (!rc) rc = o->zgather ? enc_gathered(&e, t, root) : enc_element(&e, NULL, t, root, 1);
   sw->resync = NULL;
   return rc ? -1 : 0;
 }

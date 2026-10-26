@@ -235,7 +235,7 @@ static char *csv_field_end(char *p) {
 /* in place: "a""b"c gives a"bc */
 static void csv_unquote(char *p) {
   char *w = p;
-  char *r = p + 1;
+  const char *r = p + 1;
   while (*r) {
     if (*r == '"') {
       if (r[1] != '"') {
@@ -255,13 +255,12 @@ size_t csv_split(char *line, char **fields, size_t max_fields) {
   char *p = line;
   while (nf < max_fields) {
     char *end;
-    char *e;
     int last;
     while (csv_blank(*p)) p++;
     end = csv_field_end(p);
     last = !*end;
     *end = '\0';
-    for (e = end; e > p && csv_blank(e[-1]); e--) e[-1] = '\0';
+    for (char *e = end; e > p && csv_blank(e[-1]); e--) e[-1] = '\0';
     if (*p == '"') csv_unquote(p);
     fields[nf++] = p;
     if (last) break;

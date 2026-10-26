@@ -20,7 +20,10 @@ int bim_fuu_uses_mpc(const bim_fuu_state_t *st, const bim_type_t *t) { return st
 static uint64_t mpa(const bim_part_t *p) {
   uint64_t acc = 0;
   if (p->kind == BIM_PART_ELEM || p->kind == BIM_PART_ANY || p->max == UNB) return p->max;
-  if (p->kind == BIM_PART_ALL) return (uint64_t)p->nkids > UNB / (p->max ? p->max : 1) ? UNB : p->max * (uint64_t)p->nkids;
+  if (p->kind == BIM_PART_ALL) {
+    uint64_t unit = p->max ? p->max : 1;
+    return (uint64_t)p->nkids > UNB / unit ? UNB : p->max * (uint64_t)p->nkids;
+  }
   for (int i = 0; i < p->nkids; i++) {
     uint64_t k = mpa(&p->kids[i]);
     if (k == UNB) return UNB;
@@ -67,8 +70,8 @@ static int rd_pc(fr_t *r, size_t i, uint64_t *pos) {
 /* 6.6.5.6 rational increment order r[i] = (2(i+1) + 1 - 2^j) / 2^j, j = 1 + floor(log2(i+1)) */
 uint64_t fuu_rat_order(uint64_t i) {
   int j = 1;
-  while (j < 63 && (1ull << j) <= i + 1) j++;
-  return (2 * (i + 1) + 1 - (1ull << j)) << (64 - j);
+  while (j < 63 && (1ULL << j) <= i + 1) j++;
+  return (2 * (i + 1) + 1 - (1ULL << j)) << (64 - j);
 }
 
 uint64_t fuu_rat_index(uint64_t v) {
@@ -79,7 +82,7 @@ uint64_t fuu_rat_index(uint64_t v) {
   while (!(v >> tz & 1)) tz++;
   j = 64 - tz;
   if (j > 21) return UNB;
-  i1 = ((v >> tz) - 1 + (1ull << j)) / 2;
+  i1 = ((v >> tz) - 1 + (1ULL << j)) / 2;
   return i1 >= 1 && i1 <= (1u << 20) && fuu_rat_order(i1 - 1) == v ? i1 - 1 : UNB;
 }
 
@@ -100,7 +103,7 @@ static int rd_multi(fr_t *r, const int *has) {
   uint64_t cur[TBC_MAX];
   size_t cap = 1;
   int w;
-  memcpy(cur, f->pos, n * sizeof *cur);
+  memcpy(cur, f->pos, n * sizeof cur[0]);
   for (size_t i = 0; i < n; i++)
     if (has[i]) layers[nl++] = (int)i;
   w = bim_width((uint64_t)nl + 2);
@@ -112,7 +115,7 @@ static int rd_multi(fr_t *r, const int *has) {
       skip = 1;
       if (bim_rd_bits(&r->r, w, &c)) return -1;
     }
-    if (c == (1ull << w) - 1) {
+    if (c == (1ULL << w) - 1) {
       if (skip) return range(r, "Skip_Indication");
       break;
     }
@@ -126,14 +129,14 @@ static int rd_multi(fr_t *r, const int *has) {
       f->pos = np;
       cap *= 2;
     }
-    memcpy(&f->pos[f->npayloads++ * n], cur, n * sizeof *cur);
+    memcpy(&f->pos[f->npayloads++ * n], cur, n * sizeof cur[0]);
   }
   return 0;
 }
 
 int bim_fuu_rd_positions(fr_t *r) {
   bim_fuu_t *f = r->f;
-  int has[TBC_MAX];
+  int has[TBC_MAX] = {0};
   f->npayloads = 1;
   if (!(f->pos = calloc(f->ntbcs ? f->ntbcs : 1, sizeof *f->pos))) return bim_oom(r->r.err);
   for (size_t i = 0; i < f->ntbcs; i++) {

@@ -34,7 +34,7 @@ int bim_bcg_tvainit_parse(const unsigned char *data, size_t len, bim_tvainit_t *
 
 /* payload 0xA2, clause 7.4: TVAMain data container (access unit, string repository, encapsulation) in compression wrapper.
    frag_id: unique in stream (TS 102 822-3-2 4.6.1.1), version 0. *out mallocd. 0 ok, -1 error (err) */
-int bim_bcg_tvamain_write(const dvbtva_roots_t *roots, const bim_encode_opts_t *eo, const bim_node_t *tvamain, uint32_t frag_id, bim_deflate_fn deflate, unsigned char **out, size_t *out_len, bim_err_t *err);
+int bim_bcg_tvamain_write(const dvbtva_roots_t *roots, const bim_encode_opts_t *eo, bim_node_t *tvamain, uint32_t frag_id, bim_deflate_fn deflate, unsigned char **out, size_t *out_len, bim_err_t *err);
 /* *root mallocd. 0 ok, -1 error (err) */
 int bim_bcg_tvamain_parse(const dvbtva_roots_t *roots, const bim_decode_opts_t *o, const unsigned char *data, size_t len, bim_node_t **root, bim_err_t *err);
 

@@ -131,12 +131,12 @@ static int add_struct(bim_index_cont_t *c, unsigned type, unsigned id, bytes_t *
   bim_struct_t *np = realloc(c->structs, sizeof *np * (size_t)(c->nstructs + 1));
   if (!np) return -1;
   c->structs = np;
-  np[c->nstructs++] = (bim_struct_t){(uint8_t)type, (uint8_t)id, b->buf, b->len};
+  np[c->nstructs++] = (bim_struct_t){(uint8_t)type, (uint8_t)id, b->buf, b->len, b->buf};
   memset(b, 0, sizeof *b);
   return 0;
 }
 
-static int add_strings(bim_index_cont_t *c, strrepo_writer_t *sw) {
+static int add_strings(bim_index_cont_t *c, const strrepo_writer_t *sw) {
   size_t n;
   const unsigned char *d = strrepo_writer_data(sw, &n);
   bytes_t b = {NULL, 0, 0};
@@ -280,7 +280,7 @@ done:
 
 void bim_index_conts_free(bim_index_cont_t *conts, int n) {
   for (int i = 0; i < n; i++) {
-    for (int j = 0; j < conts[i].nstructs; j++) free(conts[i].structs[j].body);
+    for (int j = 0; j < conts[i].nstructs; j++) free(conts[i].structs[j].heap_body);
     free(conts[i].structs);
   }
   free(conts);
@@ -289,7 +289,7 @@ void bim_index_conts_free(bim_index_cont_t *conts, int n) {
 typedef struct {
   bim_index_find_fn find;
   bim_index_has_fn has;
-  void *ctx;
+  const void *ctx;
   bim_index_report_t *rep;
 } check_t;
 
@@ -427,7 +427,7 @@ static void check_index(const check_t *c, int kind, unsigned cont, unsigned id) 
   }
 }
 
-int bim_index_check(bim_index_find_fn find, bim_index_has_fn has, void *ctx, bim_index_report_t *rep) {
+int bim_index_check(bim_index_find_fn find, bim_index_has_fn has, const void *ctx, bim_index_report_t *rep) {
   check_t c = {find, has, ctx, rep};
   const unsigned char *b;
   const unsigned char *s;
@@ -488,8 +488,14 @@ int bim_typelist_build(const bim_typelist_entry_t *e, int n, strrepo_writer_t *s
     size_t dl = 2 + (xp ? 2u : 0u) + 1 + 2 * (size_t)e[i].ncontainers;
     long off = 0;
     if (e[i].ncontainers < 0 || e[i].ncontainers > 0xFF || dl > 0xFFF || e[i].fragment_type > 0xFFFF || (xp && !e[i].xpath)) goto fail;
-    if (xp && (off = put_str(sw, e[i].xpath)) < 0) goto fail;
-    if (put16(&b, 0xF000u | (unsigned)dl) || put16(&b, e[i].fragment_type) || (xp && put16(&b, (unsigned)off)) || put8(&b, (unsigned)e[i].ncontainers)) goto fail;
+    if (xp) {
+      off = put_str(sw, e[i].xpath);
+      if (off < 0) goto fail;
+    }
+    if (put16(&b, 0xF000u | (unsigned)dl)) goto fail;
+    if (put16(&b, e[i].fragment_type)) goto fail;
+    if ((xp && put16(&b, (unsigned)off))) goto fail;
+    if (put8(&b, (unsigned)e[i].ncontainers)) goto fail;
     for (int j = 0; j < e[i].ncontainers; j++)
       if (put16(&b, e[i].containers[j])) goto fail;
   }
@@ -502,7 +508,7 @@ fail:
 }
 
 void bim_typelist_free(bim_typelist_entry_t *e, int n) {
-  for (int i = 0; i < n; i++) free((uint16_t *)e[i].containers);
+  for (int i = 0; i < n; i++) free(e[i].heap_containers);
   free(e);
 }
 
@@ -513,7 +519,10 @@ int bim_typelist_parse(const unsigned char *body, size_t len, const unsigned cha
   *n = 0;
   if (len < 2) return -1;
   cnt = (int)be16_get(body);
-  if (cnt && !(*e = calloc((size_t)cnt, sizeof **e))) return -1;
+  if (cnt) {
+    *e = calloc((size_t)cnt, sizeof **e);
+    if (!*e) return -1;
+  }
   for (int i = 0; i < cnt; i++) {
     bim_typelist_entry_t *t = &(*e)[i];
     size_t dl;
@@ -530,13 +539,19 @@ int bim_typelist_parse(const unsigned char *body, size_t len, const unsigned cha
       if (dl < 5) goto bad;
       off = be16_get(body + p + q);
       q += 2;
-      if (!strings || off >= slen || !memchr(strings + off, 0, slen - off)) goto bad;
+      if (!strings) goto bad;
+      if (off >= slen) goto bad;
+      if (!memchr(strings + off, 0, slen - off)) goto bad;
       t->xpath = (const char *)strings + off;
     }
     nc = body[p + q++];
     if (dl != q + 2 * (size_t)nc) goto bad;
-    if (nc && !(c = malloc(2 * (size_t)nc))) goto bad;
+    if (nc) {
+      c = malloc(2 * (size_t)nc);
+      if (!c) goto bad;
+    }
     for (int j = 0; j < nc; j++) c[j] = be16_get(body + p + q + 2 * (size_t)j);
+    t->heap_containers = c;
     t->containers = c;
     t->ncontainers = nc;
     p += dl;
@@ -590,10 +605,14 @@ int bim_nsmap_parse(const unsigned char *body, size_t len, char ***prefix, char 
     size_t l;
     if (len - p < 1) goto bad;
     l = body[p++];
-    if (len - p < l + 1 || !((*prefix)[i] = strndup((const char *)body + p, l))) goto bad;
+    if (len - p < l + 1) goto bad;
+    (*prefix)[i] = strndup((const char *)body + p, l);
+    if (!(*prefix)[i]) goto bad;
     p += l;
     l = body[p++];
-    if (len - p < l || !((*ns)[i] = strndup((const char *)body + p, l))) goto bad;
+    if (len - p < l) goto bad;
+    (*ns)[i] = strndup((const char *)body + p, l);
+    if (!(*ns)[i]) goto bad;
     p += l;
   }
   if (p != len) goto bad;
@@ -605,6 +624,7 @@ bad:
     free(*prefix);
     free(*ns);
   }
-  *prefix = *ns = NULL;
+  *ns = NULL;
+  *prefix = *ns;
   return -1;
 }

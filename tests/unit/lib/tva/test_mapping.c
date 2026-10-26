@@ -16,7 +16,9 @@ START_TEST(mapping_load_accepts_quoted_fields) {
   char path[] = "/tmp/dvbipitools_test_mapping_XXXXXX";
   mapping_t m;
   char uri[128];
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
 
   write_temp_csv(path, "\"a,b\",\"rtp://h/x,y\",1,2,3\n"
                        "\"q\"\"x\",rtp://h/z,4,5,6\n"
@@ -78,7 +80,9 @@ START_TEST(mapping_load_id_may_contain_commas) {
   char path[] = "/tmp/dvbipitools_test_mapping_XXXXXX";
   mapping_t m;
   char uri[128];
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
 
   /* split_last4 anchors on the last 4 commas, so the id itself may contain commas */
   write_temp_csv(path, "Channel, One,rtp://239.1.1.1:5000,1,2,101\n");
@@ -194,7 +198,9 @@ START_TEST(mapping_survives_allocation_failures_and_writes_rows) {
   char path[] = "/tmp/dvbipitools_test_mapping_XXXXXX";
   mapping_t m;
   char uri[128];
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
   bcg_channel_t c;
   char *buf = NULL;
   size_t sz = 0;

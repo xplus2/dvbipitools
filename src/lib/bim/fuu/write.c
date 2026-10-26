@@ -25,10 +25,10 @@ static int nall_bits(const fw_t *x) { return bim_width(bim_di_nall(x->st->di)); 
 
 /* vluimsbf5 bit count, bits of tmp */
 static int wr_counted(fw_t *x, bitwriter_t *tmp) {
-  bim_bits_t b;
+  bim_bits_t b = {NULL, 0, NULL};
   size_t n;
   b.nbits = (uint64_t)tmp->len * 8 + (uint64_t)tmp->cur_bits;
-  b.bits = (unsigned char *)bitwriter_data(tmp, &n);
+  b.bits = bitwriter_data(tmp, &n);
   if (!b.bits && b.nbits) return bim_oom(x->w.err);
   return bim_wr_v5(&x->w, b.nbits) || (b.nbits && bim_wr_bits(&x->w, &b));
 }
@@ -86,7 +86,9 @@ static int wr_subst(fw_t *x, const bim_part_t *p, const bim_tbc_t *t, const char
     *sub = h->substs[idx];
     return (ext && put(x, 0, 1)) || put(x, (uint64_t)idx, bim_width((uint64_t)h->nsubsts));
   }
-  if (!ext || !(g = find_elem(x, t->name, t->ns, NULL, NULL))) return bad(x, "SubstitutionSelect");
+  if (!ext) return bad(x, "SubstitutionSelect");
+  g = find_elem(x, t->name, t->ns, NULL, NULL);
+  if (!g) return bad(x, "SubstitutionSelect");
   *sub = g;
   return put(x, 1, 1) || wr_global(x, 1, g);
 }
@@ -161,14 +163,16 @@ static int wr_selector(fw_t *x, size_t i, int operand, const bim_type_t **cur) {
         e = sc->elems[c];
         k = (uint64_t)c;
       }
-    if (!e && !(e = find_elem(x, t->name, t->ns, &sid, &k))) return bad(x, "SBC_Selector");
+    if (!e) e = find_elem(x, t->name, t->ns, &sid, &k);
+    if (!e) return bad(x, "SBC_Selector");
     if (!di->add_schema && sid != x->f->schema) return bad(x, "SchemaIDOfSBC_Selector");
   }
   if (di->add_schema && put(x, sid, nall_bits(x))) return -1;
   w = bim_width((uint64_t)x->st->schemas[sid].nelems + (uint64_t)!operand);
   book(x, i, NULL, 1, 1);
-  if (t->kind == BIM_TBC_END) return operand ? bad(x, "SBC_Selector") : put(x, (1ull << w) - 1, w);
-  if (put(x, k, w) || wr_type_code(x, e->type, t->type)) return -1;
+  if (t->kind == BIM_TBC_END) return operand ? bad(x, "SBC_Selector") : put(x, (1ULL << w) - 1, w);
+  if (put(x, k, w)) return -1;
+  if (wr_type_code(x, e->type, t->type)) return -1;
   if (cur) *cur = t->type;
   return 0;
 }
@@ -200,7 +204,10 @@ static int wr_elem_ref(fw_t *x, size_t i, const bim_type_t *cur, int k) {
 /* 6.6.5.2.2 ContextTBC */
 static int wr_context_tbc(fw_t *x, size_t i, const bim_type_t **stack, int *depth, int relative) {
   const bim_tbc_t *t = &x->f->tbcs[i];
-  const bim_type_t *cur = stack[*depth - 1];
+  const bim_type_t *cur;
+  if (*depth < 1) return bad(x, "ContextTBC");
+  cur = stack[*depth - 1];
+  if (!cur) return bad(x, "ContextTBC");
   int idx[TBC_MAX];
   int n = 0;
   int w;
@@ -208,7 +215,7 @@ static int wr_context_tbc(fw_t *x, size_t i, const bim_type_t **stack, int *dept
     if ((cur->sbc[j].kind == BIM_SBC_ELEM && fuu_is_complex(cur->sbc[j].type)) || cur->sbc[j].kind == BIM_SBC_ANY) idx[n++] = j;
   w = bim_width((uint64_t)n + 2);
   book(x, i, cur, 1, 0);
-  if (t->kind == BIM_TBC_END) return put(x, (1ull << w) - 1, w);
+  if (t->kind == BIM_TBC_END) return put(x, (1ULL << w) - 1, w);
   if (t->kind == BIM_TBC_PARENT) {
     if (!relative || *depth < 2) return bad(x, "Reference to Parent");
     (*depth)--;
@@ -232,6 +239,7 @@ static int wr_operand(fw_t *x, size_t i, const bim_type_t *cur) {
   int w;
   int k = -1;
   const bim_tbc_t *t = i < x->f->ntbcs ? &x->f->tbcs[i] : NULL;
+  if (!cur) return bad(x, "SBC_Operand");
   for (int j = 0; j < cur->nsbc; j++) {
     if (fuu_is_elem_sbc(&cur->sbc[j])) nel++;
     else if (cur->sbc[j].kind == BIM_SBC_SIMPLE) hs = 1;
@@ -246,8 +254,11 @@ static int wr_operand(fw_t *x, size_t i, const bim_type_t *cur) {
   }
   for (int j = 0; j < cur->nsbc && k < 0; j++) {
     const bim_sbc_t *s = &cur->sbc[j];
-    if (t->kind == BIM_TBC_ELEM ? sbc_match(x, cur, j, t) : t->kind == BIM_TBC_SIMPLE ? s->kind == BIM_SBC_SIMPLE : s->kind == BIM_SBC_ATTR && !t->owned && !strcmp(s->name, t->name) && same(s->ns, t->ns))
-      k = j;
+    int hit;
+    if (t->kind == BIM_TBC_ELEM) hit = sbc_match(x, cur, j, t);
+    else if (t->kind == BIM_TBC_SIMPLE) hit = s->kind == BIM_SBC_SIMPLE;
+    else hit = s->kind == BIM_SBC_ATTR && !t->owned && !strcmp(s->name, t->name) && same(s->ns, t->ns);
+    if (hit) k = j;
   }
   for (int j = 0; j < cur->nsbc && k < 0 && t->kind == BIM_TBC_ATTR; j++)
     if (cur->sbc[j].kind == BIM_SBC_ANYATTR) k = j;
@@ -258,7 +269,7 @@ static int wr_operand(fw_t *x, size_t i, const bim_type_t *cur) {
 }
 
 static int wr_path(fw_t *x, unsigned mode) {
-  const bim_type_t *stack[TBC_MAX];
+  const bim_type_t *stack[TBC_MAX] = {NULL};
   const bim_fuu_t *f = x->f;
   int depth = 0;
   int relative = mode == 2 || mode == 4;
@@ -335,7 +346,7 @@ static int wr_increments(fw_t *x, const ord_t *o, size_t a, size_t b, int w) {
 }
 
 /* 6.6.5.5, 6.6.5.6: positions of first payload, increments for rest. ord: payload order */
-static int wr_positions(fw_t *x, size_t *ord) {
+static int wr_positions(fw_t *x, size_t *ord, size_t nord) {
   const bim_fuu_t *f = x->f;
   size_t n = f->ntbcs;
   int layers[TBC_MAX];
@@ -343,6 +354,7 @@ static int wr_positions(fw_t *x, size_t *ord) {
   ord_t o = {x, layers, 0};
   int multi = f->mode == 3 || f->mode == 4;
   int w;
+  if (nord < f->npayloads) return bad(x, "payload count");
   for (size_t k = 0; k < f->npayloads; k++) ord[k] = k;
   if (!multi && f->npayloads != 1) return bad(x, "payload count");
   for (size_t i = 0; i < n; i++) {
@@ -368,12 +380,13 @@ static int wr_positions(fw_t *x, size_t *ord) {
   w = bim_width((uint64_t)nl + 2);
   for (size_t k = 1; k < f->npayloads; k++)
     if (wr_increments(x, &o, ord[k - 1], ord[k], w)) return -1;
-  return put(x, (1ull << w) - 1, w);
+  return put(x, (1ULL << w) - 1, w);
 }
 
-static int wr_payloads(fw_t *x, const bim_encode_opts_t *eo, strrepo_writer_t *sw, const size_t *ord) {
+static int wr_payloads(fw_t *x, const bim_encode_opts_t *eo, strrepo_writer_t *sw, const size_t *ord, size_t nord) {
   const bim_fuu_t *f = x->f;
   const bim_tbc_t *op = &f->tbcs[f->ntbcs - 1];
+  if (nord < f->npayloads) return bad(x, "payload count");
   for (size_t k = 0; k < f->npayloads; k++) {
     size_t i = ord[k];
     if (op->kind == BIM_TBC_ELEM ? !f->payloads || bim_encode_payload_opts(op->type, f->payloads[i], eo, x->w.bw, sw) : !f->values || bim_encode_simple(op->simple, f->values[i], eo, x->w.bw, sw))
@@ -385,7 +398,8 @@ static int wr_payloads(fw_t *x, const bim_encode_opts_t *eo, strrepo_writer_t *s
 int bim_fuu_write(bim_fuu_state_t *st, const bim_fuu_t *f, const bim_encode_opts_t *eo, strrepo_writer_t *sw, bitwriter_t *bw, bim_err_t *err) {
   const bim_decoderinit_t *di = st->di;
   fw_t *x = calloc(1, sizeof *x);
-  size_t *ord = calloc(f->npayloads ? f->npayloads : 1, sizeof *ord);
+  size_t nord = f->npayloads ? f->npayloads : 1;
+  size_t *ord = calloc(nord, sizeof *ord);
   bim_encode_opts_t o;
   int rc = -1;
   memset(err, 0, sizeof *err);
@@ -445,8 +459,8 @@ int bim_fuu_write(bim_fuu_state_t *st, const bim_fuu_t *f, const bim_encode_opts
     rc = 0;
     goto out;
   }
-  if (wr_positions(x, ord)) goto out;
-  rc = f->command == BIM_CMD_DELETE ? 0 : wr_payloads(x, &o, sw, ord);
+  if (wr_positions(x, ord, nord)) goto out;
+  rc = f->command == BIM_CMD_DELETE ? 0 : wr_payloads(x, &o, sw, ord, nord);
 out:
   free(x);
   free(ord);

@@ -45,7 +45,10 @@ int bcg_schema_open(bcg_schema_t *s, const config_t *cfg, const char *ns, int st
   bim_encode_opts_t eo;
   int rc = -2;
   memset(s, 0, sizeof *s);
-  if (!(s->set = xsd_set_new()) || !(s->idx = xsd_index_new())) goto fail;
+  s->set = xsd_set_new();
+  if (!s->set) goto fail;
+  s->idx = xsd_index_new();
+  if (!s->idx) goto fail;
   rc = xsd_load_for_ns(s->set, s->idx, cfg->schemas, cfg->nschemas, ns, &culprit, s->ns, sizeof s->ns);
   if (rc) goto fail;
   if (!s->ns[0]) snprintf(s->ns, sizeof s->ns, "%s", ns);
@@ -109,7 +112,7 @@ int bcg_schema_wire(bcg_schema_t *s, const char *const *uris, size_t n) {
   const char *more[DVBTVA_SCHEMAS];
   size_t m;
   memcpy(known, s->xc, sizeof known);
-  memcpy(more, uris, n * sizeof *more);
+  memcpy(more, uris, n * sizeof more[0]);
   m = dvbtva_schemas_pack(known, more, n);
   euris_free(s);
   for (size_t k = 1; k < m; k++)

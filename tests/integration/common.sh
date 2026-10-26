@@ -340,12 +340,13 @@ free_port_block() {
 
 # schema dir for dipibcg -s: $1/xml.xsd, $1/tva.xsd (subset of the fragments dipibcg builds)
 make_bcg_schema() {
-    mkdir -p "$1"
-    cat > "$1/xml.xsd" <<'XSD'
+    schema_dir=$1
+    mkdir -p "$schema_dir"
+    cat > "$schema_dir/xml.xsd" <<'XSD'
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://www.w3.org/XML/1998/namespace">
 <xs:attribute name="lang" type="xs:language"/></xs:schema>
 XSD
-    cat > "$1/tva.xsd" <<'XSD'
+    cat > "$schema_dir/tva.xsd" <<'XSD'
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="urn:tva:metadata:2004" targetNamespace="urn:tva:metadata:2004" elementFormDefault="qualified">
 <xs:import namespace="http://www.w3.org/XML/1998/namespace" schemaLocation="xml.xsd"/>
 <xs:complexType name="GenreType"><xs:sequence><xs:element name="Name" type="xs:string" minOccurs="0"/></xs:sequence><xs:attribute name="href" type="xs:string"/></xs:complexType>

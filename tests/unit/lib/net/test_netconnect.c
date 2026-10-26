@@ -7,7 +7,6 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <poll.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,7 +19,7 @@
 #include "lib/sys/signal.h"
 #include "../../fx_net.h"
 
-int __real_fcntl(int fd, int cmd, ...);
+int __real_fcntl(int fd, int cmd, long arg);
 int __real_connect(int fd, const struct sockaddr *addr, socklen_t len);
 int __real_getsockopt(int fd, int level, int name, void *val, socklen_t *len);
 int __real_pthread_create(pthread_t *t, const pthread_attr_t *a, void *(*fn)(void *), void *arg);
@@ -31,12 +30,7 @@ static int g_connect_ok;
 static int g_getsockopt_fail;
 static int g_pthread_fail;
 
-int __wrap_fcntl(int fd, int cmd, ...) {
-  va_list ap;
-  long arg;
-  va_start(ap, cmd);
-  arg = va_arg(ap, long);
-  va_end(ap);
+int __wrap_fcntl(int fd, int cmd, long arg) {
   if (g_fcntl_fail_cmd && cmd == g_fcntl_fail_cmd) {
     g_fcntl_fail_cmd = 0;
     errno = EBADF;

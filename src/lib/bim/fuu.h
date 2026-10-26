@@ -25,6 +25,7 @@ typedef struct {
   int has_pos;
   uint64_t pos;
   int owned; /* name heap (lax attribute) */
+  char *heap_name; /* freed with owned */
 } bim_tbc_t;
 
 #define BIM_CMD_ADD 1

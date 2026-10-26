@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,13 +47,10 @@ int xm_plist_add(xsd_set_t *s, plist_t *l, void *p) {
   return 0;
 }
 
-int xsd_set_fail(xsd_set_t *s, const char *code, const char *fmt, ...) {
-  va_list ap;
+int xsd_set_fail_str(xsd_set_t *s, const char *code, const char *msg) {
   if (!s->err[0]) {
     s->code = code;
-    va_start(ap, fmt);
-    vsnprintf(s->err, sizeof s->err, fmt, ap);
-    va_end(ap);
+    snprintf(s->err, sizeof s->err, "%s", msg);
   }
   return -1;
 }
@@ -64,10 +60,10 @@ int xm_qeq(const xsd_qname_t *a, const char *ns, const char *name) {
 }
 
 static size_t qhash(const char *ns, const char *name) {
-  uint64_t h = 1469598103934665603ull;
-  for (const char *p = ns ? ns : ""; *p; p++) h = (h ^ (unsigned char)*p) * 1099511628211ull;
-  h = (h ^ '}') * 1099511628211ull;
-  for (const char *p = name; *p; p++) h = (h ^ (unsigned char)*p) * 1099511628211ull;
+  uint64_t h = 1469598103934665603ULL;
+  for (const char *p = ns ? ns : ""; *p; p++) h = (h ^ (unsigned char)*p) * 1099511628211ULL;
+  h = (h ^ '}') * 1099511628211ULL;
+  for (const char *p = name; *p; p++) h = (h ^ (unsigned char)*p) * 1099511628211ULL;
   return (size_t)h;
 }
 
@@ -77,7 +73,7 @@ static size_t cmap_slot(const cmap_t *m, const char *ns, const char *name) {
   return i;
 }
 
-const void *xm_cmap_get(const cmap_t *m, const char *ns, const char *name) {
+void *xm_cmap_get(const cmap_t *m, const char *ns, const char *name) {
   size_t i;
   if (!m->nslots || !name) return NULL;
   i = cmap_slot(m, ns, name);
@@ -85,11 +81,11 @@ const void *xm_cmap_get(const cmap_t *m, const char *ns, const char *name) {
 }
 
 /* -1 oom, -2 duplicate */
-int xm_cmap_put(xsd_set_t *s, cmap_t *m, const xsd_qname_t *q) {
+int xm_cmap_put(xsd_set_t *s, cmap_t *m, xsd_qname_t *q) {
   size_t i;
   if ((m->nused + 1) * 2 > m->nslots) {
     size_t old = m->nslots;
-    const xsd_qname_t **os = m->slots;
+    xsd_qname_t **os = m->slots;
     m->nslots = old ? old * 2 : 64;
     m->slots = calloc(m->nslots, sizeof *m->slots);
     if (!m->slots) {
@@ -118,7 +114,7 @@ int xm_cmap_put(xsd_set_t *s, cmap_t *m, const xsd_qname_t *q) {
   return 0;
 }
 
-void xm_cmap_replace(cmap_t *m, const xsd_qname_t *old, const xsd_qname_t *q) {
+void xm_cmap_replace(cmap_t *m, const xsd_qname_t *old, xsd_qname_t *q) {
   m->slots[cmap_slot(m, q->ns, q->name)] = q;
   for (int i = 0; i < m->n; i++)
     if (m->order[i] == old) m->order[i] = q;
@@ -199,11 +195,18 @@ static int add_builtins(xsd_set_t *s) {
   xsd_type_t *any = builtin_type(s, "anyType", XSD_COMPLEX);
   xsd_particle_t *seq;
   xsd_wildcard_t *wc;
-  if (!any || !(seq = xm_arena_alloc(s, sizeof *seq)) || !(seq->kids = xm_arena_alloc(s, sizeof *seq->kids)) || !(wc = xm_arena_alloc(s, sizeof *wc))) return -2;
+  if (!any) return -2;
+  seq = xm_arena_alloc(s, sizeof *seq);
+  if (!seq) return -2;
+  seq->kids = xm_arena_alloc(s, sizeof *seq->kids);
+  if (!seq->kids) return -2;
+  wc = xm_arena_alloc(s, sizeof *wc);
+  if (!wc) return -2;
   wc->kind = XSD_WC_ANY;
   wc->process = XSD_PC_LAX;
   seq->kind = XSD_P_SEQ;
-  seq->min = seq->max = 1;
+  seq->max = 1;
+  seq->min = seq->max;
   seq->nkids = 1;
   seq->kids[0].kind = XSD_P_ANY;
   seq->kids[0].max = XSD_UNBOUNDED;
@@ -217,14 +220,17 @@ static int add_builtins(xsd_set_t *s) {
     xsd_type_t *b;
     int nf = !!builtins[i].min + !!builtins[i].max;
     if (!t) return -2;
-    b = (xsd_type_t *)xm_cmap_get(&s->types, XSD_NS, *builtins[i].base ? builtins[i].base : "anyType");
+    b = xm_cmap_get(&s->types, XSD_NS, *builtins[i].base ? builtins[i].base : "anyType");
     t->deriv = builtins[i].deriv;
     if (t->deriv == XSD_D_LIST) {
       t->item = b;
-      b = (xsd_type_t *)xm_cmap_get(&s->types, XSD_NS, "anySimpleType");
+      b = xm_cmap_get(&s->types, XSD_NS, "anySimpleType");
     }
     t->base = b;
-    if (nf && !(t->facets = xm_arena_alloc(s, sizeof *t->facets * (size_t)nf))) return -2;
+    if (nf) {
+      t->facets = xm_arena_alloc(s, sizeof *t->facets * (size_t)nf);
+      if (!t->facets) return -2;
+    }
     if (builtins[i].min) t->facets[t->nfacets++] = (xsd_facet_t){XSD_F_MININCLUSIVE, builtins[i].min};
     if (builtins[i].max) t->facets[t->nfacets++] = (xsd_facet_t){XSD_F_MAXINCLUSIVE, builtins[i].max};
   }

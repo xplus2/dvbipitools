@@ -93,7 +93,7 @@ static int media_time_unit(const bim_node_t *n) {
   static const char *const ok[] = {"PT1001N24000F", "PT1N24F", "PT1N25F", "PT1001N30000F", "PT1N30F", "PT1N50F", "PT1001N60000F", "PT1N60F", "PT1N1000F"};
   const char *u = attr(n, "mediaTimeUnit");
   int good = !u;
-  for (size_t i = 0; u && i < sizeof ok / sizeof *ok; i++) good = good || !strcmp(u, ok[i]);
+  for (size_t i = 0; u && i < sizeof ok / sizeof ok[0]; i++) good = good || !strcmp(u, ok[i]);
   for (int i = 0; good && i < n->nkids; i++) good = media_time_unit(n->kids[i]);
   return good;
 }

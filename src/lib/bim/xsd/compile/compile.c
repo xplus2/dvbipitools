@@ -49,7 +49,10 @@ int xsd_compile(xsd_set_t *s, const xsd_compile_opts_t *o, const xsd_compiled_t 
   memset(&c, 0, sizeof c);
   c.s = s;
   c.o = o;
-  if (!(c.codecs = xc_alloc(&c, sizeof *c.codecs * (size_t)(o->ncodecs + 6))) || !(res = xc_alloc(&c, sizeof *res))) return xc_oom(&c);
+  c.codecs = xc_alloc(&c, sizeof *c.codecs * (size_t)(o->ncodecs + 6));
+  if (!c.codecs) return xc_oom(&c);
+  res = xc_alloc(&c, sizeof *res);
+  if (!res) return xc_oom(&c);
   for (int i = 0; i < o->ncodecs; i++) c.codecs[c.ncodecs++] = o->codecs[i];
   /* ISO 15938-1:2002 8.5.4.2.5, 8.5.4.2.6 */
   if (!o->mpegb) {

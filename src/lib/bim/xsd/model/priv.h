@@ -22,10 +22,10 @@ typedef struct arena_chunk {
 
 /* components keyed by expanded name, q is first member of each */
 typedef struct {
-  const xsd_qname_t **slots;
+  xsd_qname_t **slots;
   size_t nslots;
   size_t nused;
-  const void **order; /* insertion order */
+  void **order; /* insertion order */
   int n;
   int cap;
 } cmap_t;
@@ -71,10 +71,10 @@ void *xm_arena_alloc(xsd_set_t *s, size_t n);
 char *xm_arena_strndup(xsd_set_t *s, const char *p, size_t n);
 int xm_plist_add(xsd_set_t *s, plist_t *l, void *p);
 int xm_qeq(const xsd_qname_t *a, const char *ns, const char *name);
-const void *xm_cmap_get(const cmap_t *m, const char *ns, const char *name);
+void *xm_cmap_get(const cmap_t *m, const char *ns, const char *name);
 /* -1 oom, -2 duplicate */
-int xm_cmap_put(xsd_set_t *s, cmap_t *m, const xsd_qname_t *q);
-void xm_cmap_replace(cmap_t *m, const xsd_qname_t *old, const xsd_qname_t *q);
+int xm_cmap_put(xsd_set_t *s, cmap_t *m, xsd_qname_t *q);
+void xm_cmap_replace(cmap_t *m, const xsd_qname_t *old, xsd_qname_t *q);
 int xm_is_xs(const bim_node_t *n, const char *name);
 /* unqualified attribute of an XSD element */
 const char *xm_xattr(const bim_node_t *n, const char *name);

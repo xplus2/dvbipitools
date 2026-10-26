@@ -677,7 +677,10 @@ static void rich_doc(bcg_doc_t *d) {
   bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.3:5000");
   for (int i = 0; i < 5; i++) {
     p = bcg_add_programme(d);
-    bufcpy(p->channel_id, sizeof p->channel_id, i == 3 ? "ghost" : i == 4 ? "nouri" : "a");
+    const char *chan = "a";
+    if (i == 3) chan = "ghost";
+    else if (i == 4) chan = "nouri";
+    bufcpy(p->channel_id, sizeof p->channel_id, chan);
     bufcpy(p->start, sizeof p->start, "2024-05-01T10:00:00Z");
     if (i == 1) bufcpy(p->stop, sizeof p->stop, "2024-05-01T11:00:00Z");
     if (i != 2) bcg_set_text(&p->title, "T & <t>");

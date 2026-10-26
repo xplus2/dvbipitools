@@ -228,7 +228,9 @@ int argutil_prescan(int argc, char **argv, const char *shortopts, const struct o
   int help = 0;
   optind = 1;
   opterr = 0;
-  while (!help && (c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+  while (!help) {
+    c = getopt_long(argc, argv, shortopts, longopts, NULL);
+    if (c == -1) break;
     if (c == 'c') *cfg_path = optarg;
     if (c == opt_configtest) *configtest = 1;
     if (c == opt_strict) *strict = 1;

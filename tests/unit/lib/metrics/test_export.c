@@ -324,10 +324,7 @@ START_TEST(failed_part_counts_dropped_and_skips_snapshot) {
 }
 END_TEST
 
-static void noop_extra(metrics_writer_t *w, void *ctx) {
-  (void)w;
-  (void)ctx;
-}
+static void noop_extra(metrics_writer_t *, void *) {}
 
 START_TEST(exporter_edge_cases) {
   metrics_exporter_t mx;

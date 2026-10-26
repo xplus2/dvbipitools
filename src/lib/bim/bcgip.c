@@ -27,7 +27,10 @@ int bim_bcg_wrap(const unsigned char *container, size_t len, bim_deflate_fn defl
   size_t cap = len + (len >> 8) + 64;
   unsigned char *b;
   size_t n = cap;
-  if (!deflate || len > UINT24_MAX || !(b = malloc(4 + cap))) return plain(container, len, out, out_len);
+  if (!deflate) return plain(container, len, out, out_len);
+  if (len > UINT24_MAX) return plain(container, len, out, out_len);
+  b = malloc(4 + cap);
+  if (!b) return plain(container, len, out, out_len);
   if (deflate(container, len, b + 4, &n) || n > UINT24_MAX) {
     free(b);
     return plain(container, len, out, out_len);
@@ -80,8 +83,8 @@ int bim_bcg_tvainit_parse(const unsigned char *data, size_t len, bim_tvainit_t *
   return 0;
 }
 
-int bim_bcg_tvamain_write(const dvbtva_roots_t *roots, const bim_encode_opts_t *eo, const bim_node_t *tvamain, uint32_t frag_id, bim_deflate_fn deflate, unsigned char **out, size_t *out_len, bim_err_t *err) {
-  dvbtva_fuu_t f = {0x000E, (bim_node_t *)tvamain};
+int bim_bcg_tvamain_write(const dvbtva_roots_t *roots, const bim_encode_opts_t *eo, bim_node_t *tvamain, uint32_t frag_id, bim_deflate_fn deflate, unsigned char **out, size_t *out_len, bim_err_t *err) {
+  dvbtva_fuu_t f = {0x000E, tvamain};
   bim_fragref_t ref;
   bitwriter_t bw;
   strrepo_writer_t sw;
@@ -92,7 +95,7 @@ int bim_bcg_tvamain_write(const dvbtva_roots_t *roots, const bim_encode_opts_t *
   int rc = -1;
   bitwriter_init(&bw);
   if (strrepo_writer_init(&sw)) return bim_oom(err);
-  if (dvbtva_au_write(dvbtva_tva_root, (void *)roots, eo, &f, 1, &bw, &sw, &ref, err)) goto out;
+  if (dvbtva_au_write(dvbtva_tva_root, roots, eo, &f, 1, &bw, &sw, &ref, err)) goto out;
   ref.frag_id = frag_id;
   ref.version = 0;
   {
@@ -138,7 +141,7 @@ int bim_bcg_tvamain_parse(const dvbtva_roots_t *roots, const bim_decode_opts_t *
     fail(err, "string repository malformed");
     goto out;
   }
-  if (dvbtva_au_parse(dvbtva_tva_root, (void *)roots, o, &br, &sr, fmt == BIM_FRAGREF_DVB_BIM ? refs : NULL, (size_t)nrefs, &f, &n, err)) goto out;
+  if (dvbtva_au_parse(dvbtva_tva_root, roots, o, &br, &sr, fmt == BIM_FRAGREF_DVB_BIM ? refs : NULL, (size_t)nrefs, &f, &n, err)) goto out;
   for (size_t i = 0; i < n; i++)
     if (f[i].code == 0x000E) {
       *root = f[i].root;

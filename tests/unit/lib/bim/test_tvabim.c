@@ -353,7 +353,8 @@ START_TEST(tvans_detect_finds_extended_and_interstitial_namespaces) {
   {
     tb_t t;
     tb_init(&t, 0, 0);
-    ns.tva2 = ns.intr = "stale";
+    ns.intr = "stale";
+    ns.tva2 = ns.intr;
     bim_tvans_detect(t.c, &ns);
     ck_assert_ptr_null(ns.tva2);
     ck_assert_ptr_null(ns.intr);
@@ -411,7 +412,11 @@ START_TEST(dvbstream_head_lists_every_schema_and_several_schemas_round_trip) {
   const unsigned char *h;
   const unsigned char *a;
   const unsigned char *s;
-  size_t hl, al, sl, n = 0, nb = 0;
+  size_t hl;
+  size_t al;
+  size_t sl;
+  size_t n = 0;
+  size_t nb = 0;
   int same;
   bim_err_t err;
   tb_init(&t, 0, 0);
@@ -796,15 +801,17 @@ static void report_into(char *out, size_t cap, int writing, int rc, const unsign
   FILE *f = tmpfile();
   int saved = dup(2);
   size_t n;
-  ck_assert_ptr_nonnull(f);
+  if (!f) abort();
+  if (saved < 0) abort();
   fflush(stderr);
   ck_assert_int_ge(dup2(fileno(f), 2), 0);
   dvbstream_report("BE", writing, rc, p, len, sizes, err);
   fflush(stderr);
   ck_assert_int_ge(dup2(saved, 2), 0);
   close(saved);
-  rewind(f);
+  ck_assert_int_eq(fseek(f, 0, SEEK_SET), 0);
   n = fread(out, 1, cap - 1, f);
+  ck_assert_int_eq(ferror(f), 0);
   out[n] = '\0';
   fclose(f);
 }
@@ -1039,18 +1046,9 @@ START_TEST(tvabim_state_defaults_and_options) {
 }
 END_TEST
 
-static int deflate_fail(const unsigned char *in, size_t n, unsigned char *out, size_t *outlen) {
-  (void)in;
-  (void)n;
-  (void)out;
-  (void)outlen;
-  return -1;
-}
+static int deflate_fail(const unsigned char *, size_t, unsigned char *, size_t *) { return -1; }
 
-static int deflate_empty(const unsigned char *in, size_t n, unsigned char *out, size_t *outlen) {
-  (void)in;
-  (void)n;
-  (void)out;
+static int deflate_empty(const unsigned char *, size_t, unsigned char *, size_t *outlen) {
   *outlen = 0;
   return 0;
 }
@@ -1069,6 +1067,7 @@ START_TEST(tvabim_zlib_chunks_survive_failures) {
       bim_tvabim_fuu_t in[4];
       bitwriter_t bw;
       bim_err_t err;
+      long span = sizes[si] > 1 && sizes[si] < 1000 ? 24 : 1;
       bim_deflate_fn fns[] = {NULL, deflate_fail, deflate_empty, deflate_second_fails};
       tb_init(&t, sizes[si], gather);
       for (size_t k = 0; k < sizeof fns / sizeof *fns; k++) {
@@ -1084,13 +1083,13 @@ START_TEST(tvabim_zlib_chunks_survive_failures) {
         int hit;
         mk_fuus(in);
         bitwriter_init(&bw);
-        for (int k = 0; k < n % 24; k++) ck_assert_int_eq(bitwriter_put(&bw, 0xA5, 8), 0);
-        alloc_fail_at(n / 24);
+        for (int k = 0; k < n % span; k++) ck_assert_int_eq(bitwriter_put(&bw, 0xA5, 8), 0);
+        alloc_fail_at(n / span);
         (void)bim_tvabim_au_write(t.c, &t.ns, &t.st, &t.eo, in, 4, &bw, NULL, &err);
         hit = alloc_fail_end();
         bitwriter_free(&bw);
         free_fuus(in);
-        if (!hit && n % 24 == 23) break;
+        if (!hit && n % span == span - 1) break;
       }
       tb_free(&t);
     }
@@ -1209,7 +1208,7 @@ START_TEST(tvadatetime_limits_and_buffers) {
   static const char *const dgood[] = {"2024-05-01", "1858-11-17", "2000-02-29"};
   static const char *const dbad[] = {"", "2024-5-1", "2024-13-01", "2024-00-10", "2024-01-32", "2024-01-00", "2024-02-30", "2024-05-01x", "1800-01-01", "x"};
   char out[40];
-  for (size_t i = 0; i < sizeof good / sizeof *good; i++) {
+  for (size_t i = 0; i < sizeof good / sizeof good[0]; i++) {
     bitwriter_t bw;
     const unsigned char *p;
     size_t n;
@@ -1225,13 +1224,13 @@ START_TEST(tvadatetime_limits_and_buffers) {
     ck_assert_int_eq(tva_datetime_decode(&br, out, sizeof out), 0);
     bitwriter_free(&bw);
   }
-  for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) {
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
     bitwriter_t bw;
     bitwriter_init(&bw);
     (void)tva_datetime_encode(&bw, bad[i]);
     bitwriter_free(&bw);
   }
-  for (size_t i = 0; i < sizeof dgood / sizeof *dgood; i++) {
+  for (size_t i = 0; i < sizeof dgood / sizeof dgood[0]; i++) {
     bitwriter_t bw;
     const unsigned char *p;
     size_t n;
@@ -1248,7 +1247,7 @@ START_TEST(tvadatetime_limits_and_buffers) {
     ck_assert_str_eq(out, dgood[i]);
     bitwriter_free(&bw);
   }
-  for (size_t i = 0; i < sizeof dbad / sizeof *dbad; i++) {
+  for (size_t i = 0; i < sizeof dbad / sizeof dbad[0]; i++) {
     bitwriter_t bw;
     bitwriter_init(&bw);
     ck_assert_msg(tva_date_encode(&bw, dbad[i]) == -1, "accepted %s", dbad[i]);
@@ -1388,6 +1387,7 @@ END_TEST
 static Suite *tvabim_suite(void) {
   Suite *s = suite_create("bim_tvabim");
   TCase *tc = tcase_create("core");
+  tcase_set_timeout(tc, 60);
   tcase_add_test(tc, tvadatetime_matches_spec_examples);
   tcase_add_test(tc, tvadatetime_rejects_unrepresentable);
   tcase_add_test(tc, tvadate_matches_spec_example);

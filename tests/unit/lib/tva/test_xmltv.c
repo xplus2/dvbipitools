@@ -220,7 +220,7 @@ END_TEST
 static int read_text(const char *text, bcg_doc_t *doc) {
   FILE *f = tmpfile();
   int rc;
-  ck_assert_ptr_nonnull(f);
+  if (!f) abort();
   fputs(text, f);
   rewind(f);
   bcg_doc_init(doc);

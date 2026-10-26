@@ -280,9 +280,9 @@ START_TEST(mcast_cfg_src_edge_cases_and_redact_oom) {
   ck_assert_int_eq(uriparse_mcast_cfg("239.1.2.3:5000", &family, group, sizeof group, &port, err, sizeof err), 0);
   ck_assert_int_eq(uriparse_mcast_cfg("10.0.0.1:5000", &family, group, sizeof group, &port, err, sizeof err), -1);
   ck_assert_ptr_nonnull(strstr(err, "multicast"));
-  for (size_t k = 0; k < sizeof bad_src / sizeof *bad_src; k++)
+  for (size_t k = 0; k < sizeof bad_src / sizeof bad_src[0]; k++)
     ck_assert_msg(uriparse_mcast_src_addrport(bad_src[k], &family, group, sizeof group, &port, src, sizeof src) == -1, "accepted %s", bad_src[k]);
-  for (size_t k = 0; k < sizeof good_src / sizeof *good_src; k++)
+  for (size_t k = 0; k < sizeof good_src / sizeof good_src[0]; k++)
     ck_assert_msg(uriparse_mcast_src_addrport(good_src[k], &family, group, sizeof group, &port, src, sizeof src) == 0, "rejected %s", good_src[k]);
   ck_assert_int_eq(uriparse_mcast_src_addrport("10.0.0.1@232.1.2.3:5000", &family, group, sizeof group, &port, small, sizeof small), -1);
   alloc_fail_at(0);

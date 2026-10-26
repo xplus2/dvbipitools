@@ -48,7 +48,7 @@ int dvbstream_read(const dvbtva_roots_t *r, const bim_decode_opts_t *o, const un
   if (al > len - 4) return DVBSTREAM_LENGTH;
   bitreader_init(&br, p + 4, al);
   if (strrepo_reader_init(&sr, p + 4 + al, len - 4 - al)) return DVBSTREAM_REPO;
-  if (dvbtva_au_parse(dvbtva_tva_root, (void *)r, o, &br, &sr, NULL, 0, &f, &n, err)) return DVBSTREAM_AU;
+  if (dvbtva_au_parse(dvbtva_tva_root, r, o, &br, &sr, NULL, 0, &f, &n, err)) return DVBSTREAM_AU;
   for (size_t i = 0; i < n; i++) count(counts, f[i].code);
   if (bim_tvafrag_join(r->c, r->ns, f, n, doc)) bim_fail(err, BIM_DVBTVA_ERR, "bim: DVB-TVA %s", "fragments not joinable");
   else rc = DVBSTREAM_OK;
@@ -63,8 +63,13 @@ int dvbstream_write(const dvbtva_roots_t *r, const bim_encode_opts_t *eo, const 
   bitwriter_t head;
   bitwriter_t au;
   strrepo_writer_t sw;
-  const unsigned char *h, *a, *s;
-  size_t n = 0, hl, al, sl;
+  const unsigned char *h;
+  const unsigned char *a;
+  const unsigned char *s;
+  size_t n = 0;
+  size_t hl;
+  size_t al;
+  size_t sl;
   int rc = DVBSTREAM_AU;
   int sp = bim_tvafrag_split(r->c, r->ns, doc, &parts, &n);
   if (sp) {
@@ -85,7 +90,7 @@ int dvbstream_write(const dvbtva_roots_t *r, const bim_encode_opts_t *eo, const 
     goto out;
   }
   if (bim_tvainit_write(&ti, &head, err) || bim_decoderinit_write(&di, NULL, NULL, &head, err)) goto di;
-  if (dvbtva_au_write(dvbtva_tva_root, (void *)r, eo, parts, n, &au, &sw, NULL, err)) goto di;
+  if (dvbtva_au_write(dvbtva_tva_root, r, eo, parts, n, &au, &sw, NULL, err)) goto di;
   h = bitwriter_data(&head, &hl);
   a = bitwriter_data(&au, &al);
   s = strrepo_writer_data(&sw, &sl);
@@ -120,25 +125,34 @@ rule:
   return DVBSTREAM_RULE;
 }
 
+static unsigned report_num(int rc, int writing) {
+  switch (rc) {
+    case DVBSTREAM_INIT: return 400242;
+    case DVBSTREAM_SHORT: return 400103;
+    case DVBSTREAM_LENGTH: return writing ? 400108 : 400104;
+    case DVBSTREAM_REPO: return 400105;
+    case DVBSTREAM_OOM: return 500101;
+    case DVBSTREAM_RULE: return 400318;
+    default: return writing ? 400315 : 400316;
+  }
+}
+
 void dvbstream_report(const char *e, int writing, int rc, const unsigned char *p, size_t len, const size_t sizes[2], const bim_err_t *err) {
   char code[16];
-  const char *fmt;
-  unsigned num;
+  snprintf(code, sizeof code, "%s%06u", e, report_num(rc, writing));
   switch (rc) {
-    case DVBSTREAM_INIT: num = 400242; fmt = "missing or unsupported DVB-TVA-init"; break;
-    case DVBSTREAM_SHORT: num = 400103; fmt = "input truncated: %zu bytes, need 4 byte length header"; break;
-    case DVBSTREAM_LENGTH: num = writing ? 400108 : 400104; fmt = writing ? "encoded size exceeds 4 GiB format limit: %zu+%zu bytes" : "input truncated: bitstream needs %zu bytes, %zu present"; break;
-    case DVBSTREAM_REPO: num = 400105; fmt = "string repository missing or unsupported encoding"; break;
-    case DVBSTREAM_OOM: num = 500101; fmt = "out of memory"; break;
-    case DVBSTREAM_RULE: num = 400318; fmt = "DVB-TVA content rule violated: %s"; break;
-    default: num = writing ? 400315 : 400316; fmt = writing ? "BiM encoding failed: %s" : "BiM decoding failed: %s"; break;
+    case DVBSTREAM_INIT: log_code(code, "missing or unsupported DVB-TVA-init"); break;
+    case DVBSTREAM_SHORT: log_code(code, "input truncated: %zu bytes, need 4 byte length header", len); break;
+    case DVBSTREAM_LENGTH:
+      if (writing) log_code(code, "encoded size exceeds 4 GiB format limit: %zu+%zu bytes", sizes[0], sizes[1]);
+      else if (p) log_code(code, "input truncated: bitstream needs %zu bytes, %zu present", (size_t)be32_get(p), len - 4);
+      break;
+    case DVBSTREAM_REPO: log_code(code, "string repository missing or unsupported encoding"); break;
+    case DVBSTREAM_OOM: log_code(code, "out of memory"); break;
+    case DVBSTREAM_RULE: log_code(code, "DVB-TVA content rule violated: %s", err->msg); break;
+    default:
+      if (writing) log_code(code, "BiM encoding failed: %s", err->msg);
+      else log_code(code, "BiM decoding failed: %s", err->msg);
+      break;
   }
-  snprintf(code, sizeof code, "%s%06u", e, num);
-  if (rc == DVBSTREAM_LENGTH) {
-    if (writing) log_code(code, fmt, sizes[0], sizes[1]);
-    else if (p) log_code(code, fmt, (size_t)be32_get(p), len - 4);
-  }
-  else if (rc == DVBSTREAM_SHORT) log_code(code, fmt, len);
-  else if (rc == DVBSTREAM_INIT || rc == DVBSTREAM_REPO || rc == DVBSTREAM_OOM) log_code(code, "%s", fmt);
-  else log_code(code, fmt, err->msg);
 }

@@ -127,7 +127,6 @@ START_TEST(attrs_wildcard_intersection_of_negations) {
   ck_assert_ptr_nonnull(w->ns[0]);
   xsd_set_free(x.s);
   docs[0] = DOC_T("<xs:import/><xs:attributeGroup name=\"G\"><xs:anyAttribute namespace=\"##other\"/></xs:attributeGroup>");
-  docs[1] = DOC_N("<xs:import namespace=\"urn:t\"/><xs:complexType name=\"T\"><xs:attributeGroup ref=\"t:G\"/><xs:anyAttribute namespace=\"##other\"/></xs:complexType>");
   docs[1] = "<xs:schema " XS "xmlns:t=\"urn:t\"><xs:import namespace=\"urn:t\"/><xs:complexType name=\"T\"><xs:attributeGroup ref=\"t:G\"/><xs:anyAttribute namespace=\"##other\"/></xs:complexType></xs:schema>";
   ck_assert_int_eq(compile(docs, 2, &x, &code), 0);
   w = wc_of(&x, NULL, "T");

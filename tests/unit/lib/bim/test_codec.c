@@ -675,14 +675,14 @@ END_TEST
 /* ISO 15938-1 8.4.5: code over {abstract, mode_sub} */
 START_TEST(decoder_honors_type_cast) {
   bim_node_t *got = NULL;
-  ck_assert_int_eq(decode_modes(0x1F, "1" "1" "1" "1" "0", &got), 0);
+  ck_assert_int_eq(decode_modes(0x1F, "11110", &got), 0);
   ck_assert_uint_eq(got->nkids, 2);
   ck_assert_str_eq(bim_node_attr(got->kids[0], "a"), "true");
   ck_assert_str_eq(got->kids[0]->text, "x");
   ck_assert_ptr_null(bim_node_attr(got->kids[1], "a"));
   ck_assert_str_eq(got->kids[1]->text, "y");
   bim_node_free(got);
-  ck_assert_int_eq(decode_modes(0x1F, "0" "1" "0", &got), -1);
+  ck_assert_int_eq(decode_modes(0x1F, "010", &got), -1);
   ck_assert_int_eq(decode_modes(0x0F, "1", &got), 0);
   ck_assert_uint_eq(got->nkids, 2);
   bim_node_free(got);
@@ -692,13 +692,13 @@ END_TEST
 /* ISO 15938-1 6.7.2, 8.4.5, ISO 23001-1 6.4.1: deferred nodes are instantiated */
 START_TEST(decoder_keeps_deferred_nodes) {
   bim_node_t *got = NULL;
-  ck_assert_int_eq(decode_modes(0x2F, "1" "1" "0", &got), 0);
+  ck_assert_int_eq(decode_modes(0x2F, "110", &got), 0);
   ck_assert_uint_eq(got->nkids, 2);
   ck_assert_int_eq(got->kids[0]->deferred, 1);
   ck_assert_ptr_null(got->kids[0]->text);
   ck_assert_str_eq(got->kids[1]->text, "x");
   bim_node_free(got);
-  ck_assert_int_eq(decode_modes(0x3F, "0" "1" "10" "0", &got), 0);
+  ck_assert_int_eq(decode_modes(0x3F, "01100", &got), 0);
   ck_assert_uint_eq(got->nkids, 1);
   ck_assert_int_eq(got->kids[0]->deferred, 0);
   ck_assert_str_eq(bim_node_attr(got->kids[0], "a"), "false");
@@ -709,11 +709,11 @@ END_TEST
 /* ISO 15938-1 8.4.2 */
 START_TEST(decoder_checks_element_length) {
   bim_node_t *got = NULL;
-  ck_assert_int_eq(decode_modes(0x8F, "00110" "0" "00000", &got), 0);
+  ck_assert_int_eq(decode_modes(0x8F, "00110000000", &got), 0);
   ck_assert_uint_eq(got->nkids, 1);
   bim_node_free(got);
-  ck_assert_int_eq(decode_modes(0x8F, "00101" "0" "00000", &got), -1);
-  ck_assert_int_eq(decode_modes(0x4F, "0" "0" "1" "00000", &got), 0);
+  ck_assert_int_eq(decode_modes(0x8F, "00101000000", &got), -1);
+  ck_assert_int_eq(decode_modes(0x4F, "00100000", &got), 0);
   bim_node_free(got);
   ck_assert_int_eq(decode_modes(0xCF, "0", &got), -1);
 }
@@ -722,13 +722,13 @@ END_TEST
 /* ISO 15938-1 8.4.1, 8.4.3, 8.4.4: chunk 0 base, chunk 1 delta @b */
 START_TEST(decoder_multi_version_chunks) {
   bim_node_t *got = NULL;
-  ck_assert_int_eq(decode_schemas(mode_two, 2, 0x0F, "0" "0" "10" "00101" "0" "0" "0" "1" "1", &got), 0);
+  ck_assert_int_eq(decode_schemas(mode_two, 2, 0x0F, "00100010100011", &got), 0);
   ck_assert_uint_eq(got->nkids, 1);
   ck_assert_str_eq(got->kids[0]->text, "x");
   ck_assert_str_eq(bim_node_attr(got->kids[0], "b"), "true");
   bim_node_free(got);
-  ck_assert_int_eq(decode_schemas(mode_two, 2, 0x0F, "0" "0" "10" "00100" "0" "0" "0" "1" "1", &got), -1);
-  ck_assert_int_eq(decode_schemas(mode_two, 2, 0x0F, "0" "0" "0", &got), 0);
+  ck_assert_int_eq(decode_schemas(mode_two, 2, 0x0F, "00100010000011", &got), -1);
+  ck_assert_int_eq(decode_schemas(mode_two, 2, 0x0F, "000", &got), 0);
   ck_assert_ptr_null(bim_node_attr(got->kids[0], "b"));
   bim_node_free(got);
 }
@@ -737,7 +737,7 @@ END_TEST
 /* TS 102 323 9.4.4, table 58 */
 START_TEST(decoder_skips_unknown_schema_chunk) {
   bim_node_t *got = NULL;
-  ck_assert_int_eq(decode_schemas(mode_two_unknown, 2, 0x0F, "0" "1" "10" "00101" "0" "0" "0" "1" "1" "0" "0000000000000010", &got), 0);
+  ck_assert_int_eq(decode_schemas(mode_two_unknown, 2, 0x0F, "0110001010001100000000000000010", &got), 0);
   ck_assert_uint_eq(got->nkids, 2);
   ck_assert_str_eq(got->kids[0]->text, "x");
   ck_assert_ptr_null(bim_node_attr(got->kids[0], "b"));
@@ -749,15 +749,15 @@ END_TEST
 /* TS 102 323 table 58 */
 START_TEST(decoder_resyncs_strings_after_skippable_element) {
   bim_node_t *got = NULL;
-  ck_assert_int_eq(decode_modes(0x4F, "0" "1" "1" "00000" "0" "0000000000000010", &got), 0);
+  ck_assert_int_eq(decode_modes(0x4F, "0110000000000000000000010", &got), 0);
   ck_assert_uint_eq(got->nkids, 2);
   ck_assert_str_eq(got->kids[0]->text, "x");
   ck_assert_str_eq(got->kids[1]->text, "y");
   bim_node_free(got);
-  ck_assert_int_eq(decode_modes(0x4F, "0" "1" "1" "00000" "0" "0000000000000000", &got), 0);
+  ck_assert_int_eq(decode_modes(0x4F, "0110000000000000000000000", &got), 0);
   ck_assert_str_eq(got->kids[1]->text, "x");
   bim_node_free(got);
-  ck_assert_int_eq(decode_modes(0x4F, "0" "1" "1" "00000" "0" "0000000000000101", &got), -1);
+  ck_assert_int_eq(decode_modes(0x4F, "0110000000000000000000101", &got), -1);
 }
 END_TEST
 

@@ -46,8 +46,8 @@ int enc_parse_double(const char *v, double *out) {
   int digits = 0;
   char *end;
   v = enc_skip_ws(v);
-  for (e = v + strlen(v); e > v && isspace((unsigned char)e[-1]); e--) {
-  }
+  e = v + strlen(v);
+  while (e > v && isspace((unsigned char)e[-1])) e--;
   if (e - v == 3 && !strncmp(v, "INF", 3)) return *out = HUGE_VAL, 0;
   if (e - v == 4 && !strncmp(v, "-INF", 4)) return *out = -HUGE_VAL, 0;
   if (e - v == 3 && !strncmp(v, "NaN", 3)) return *out = NAN, 0;
@@ -126,7 +126,9 @@ static int encode_hex(const char *v, bitwriter_t *bw) {
   v = enc_skip_ws(v);
   len = strlen(v);
   while (len && isspace((unsigned char)v[len - 1])) len--;
-  if (len % 2 || !(raw = malloc(len / 2 + 1))) return -1;
+  if (len % 2) return -1;
+  raw = malloc(len / 2 + 1);
+  if (!raw) return -1;
   for (size_t i = 0; i < len; i += 2) {
     int hi = hex_nibble((unsigned char)v[i]);
     int lo = hex_nibble((unsigned char)v[i + 1]);

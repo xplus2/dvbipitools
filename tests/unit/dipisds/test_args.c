@@ -825,7 +825,7 @@ START_TEST(discovery_and_metrics_options_parse_and_reject) {
   {
     char **bad[] = {bad_interval, bad_rms_lang, bad_fus_lang, bad_fus_id, bad_fus_ann, bad_bcg, too_many};
     int bad_argc[] = {ARGC(bad_interval), ARGC(bad_rms_lang), ARGC(bad_fus_lang), ARGC(bad_fus_id), ARGC(bad_fus_ann), ARGC(bad_bcg), ARGC(too_many)};
-    for (size_t k = 0; k < sizeof bad / sizeof *bad; k++) {
+    for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) {
       memset(&cfg, 0, sizeof cfg);
       ck_assert_msg(args_parse(bad_argc[k], bad[k], &cfg) == ARGS_ERR, "case %zu accepted", k);
       yamlcfg_strpool_free(cfg.str_pool);

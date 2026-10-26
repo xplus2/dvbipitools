@@ -119,7 +119,7 @@ START_TEST(decode_simple_structured_codecs) {
   members[1] = &utf;
   un.members = members;
   un.nmembers = 2;
-  for (size_t i = 0; i < sizeof values / sizeof *values; i++) {
+  for (size_t i = 0; i < sizeof values / sizeof values[0]; i++) {
     sweep_value(&range, values[i], 0);
     sweep_value(&wide, values[i], 0);
     sweep_value(&neg, values[i], 0);
@@ -145,13 +145,13 @@ START_TEST(decode_simple_mpeg7_time_codecs) {
   tp2.npatterns = 1;
   tp2.match = NULL;
   (void)p_all;
-  for (size_t i = 0; i < sizeof tps / sizeof *tps; i++)
+  for (size_t i = 0; i < sizeof tps / sizeof tps[0]; i++)
     for (unsigned compat = 0; compat < 2; compat++) {
       unsigned flags = compat ? BIM_COMPAT_M7_FLAGS : 0;
       sweep_value(&tp, tps[i], flags);
       sweep_value(&tp2, tps[i], flags);
     }
-  for (size_t i = 0; i < sizeof dus / sizeof *dus; i++)
+  for (size_t i = 0; i < sizeof dus / sizeof dus[0]; i++)
     for (unsigned compat = 0; compat < 2; compat++) sweep_value(&du, dus[i], compat ? BIM_COMPAT_M7_FLAGS : 0);
 }
 END_TEST
@@ -431,7 +431,7 @@ START_TEST(encode_simple_survives_allocation_failures) {
   members[1] = &st;
   un.members = members;
   un.nmembers = 2;
-  for (size_t i = 0; i < sizeof all / sizeof *all; i++)
+  for (size_t i = 0; i < sizeof all / sizeof all[0]; i++)
     for (long n = 0;; n++) {
       bim_encode_opts_t eo;
       bitwriter_t bw;
@@ -462,7 +462,7 @@ START_TEST(simple_values_beyond_4k_round_trip) {
   ck_assert_ptr_nonnull(v);
   for (size_t i = 0; i < 20000; i++) v[i] = "0123456789ABCDEF"[i % 16];
   v[20000] = '\0';
-  for (size_t k = 0; k < sizeof s / sizeof *s; k++) {
+  for (size_t k = 0; k < sizeof s / sizeof s[0]; k++) {
     bitwriter_t bw;
     strrepo_writer_t sw;
     bitreader_t br;

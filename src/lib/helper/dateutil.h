@@ -9,7 +9,12 @@
 typedef enum { ISO8601_OFF_NONE, ISO8601_OFF_Z, ISO8601_OFF_NUMERIC } iso8601_offset_kind_t;
 
 typedef struct {
-  int y, mo, d, h, mi, s;
+  int y;
+  int mo;
+  int d;
+  int h;
+  int mi;
+  int s;
   int off_min; /* signed minutes east of UTC, meaningful only if offset_kind == ISO8601_OFF_NUMERIC */
   iso8601_offset_kind_t offset_kind;
 } iso8601_t;

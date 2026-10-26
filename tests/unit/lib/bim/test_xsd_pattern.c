@@ -52,7 +52,7 @@ START_TEST(pattern_matches_the_supported_syntax) {
 END_TEST
 
 START_TEST(pattern_rejects_malformed_syntax) {
-  for (size_t i = 0; i < sizeof invalid / sizeof *invalid; i++) {
+  for (size_t i = 0; i < sizeof invalid / sizeof invalid[0]; i++) {
     xsd_set_t *s = xsd_set_new();
     ck_assert_msg(compile(s, invalid[i]) == NULL, "pattern %s compiled", invalid[i]);
     xsd_set_free(s);

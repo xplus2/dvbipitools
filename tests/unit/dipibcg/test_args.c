@@ -502,13 +502,13 @@ START_TEST(every_option_is_parsed_and_each_conflict_rejected) {
   char *lst[] = {"dipibcg", "-s", "x.xsd", "-l", "-m", "239.1.2.3:5000", "--timeout", "9", "-f", "tva", NULL};
   char *plain_t[] = {"dipibcg", "-s", "x.xsd", "-l", "-m", "239.1.2.3:5000", "-t", "9", NULL};
   char *zero_t[] = {"dipibcg", "-s", "x.xsd", "-l", "-m", "239.1.2.3:5000", "-t", "0", NULL};
-  const char *const base_a[] = {"dipibcg", "-s", "x.xsd", "-a", "-i", "g.xml", "-M", "m.csv", "-m", "239.1.2.3:5000"};
-  const char *const base_l[] = {"dipibcg", "-s", "x.xsd", "-l", "-m", "239.1.2.3:5000"};
-  static const char *const a_extra[][4] = {
+  char *const base_a[] = {"dipibcg", "-s", "x.xsd", "-a", "-i", "g.xml", "-M", "m.csv", "-m", "239.1.2.3:5000"};
+  char *const base_l[] = {"dipibcg", "-s", "x.xsd", "-l", "-m", "239.1.2.3:5000"};
+  static char *const a_extra[][4] = {
     {"-w", "0"}, {"-m", "bogus"}, {"-t", "x"}, {"--refresh", "0"}, {"-f", "json"}, {"--encoding", "gzip"}, {"--color", "rainbow"}, {"--metrics-interval", "0"}, {"--dscp", "bogus"},
     {"--timeout", "5"}, {"-t", "0"}, {"--index", "pi-crid", "-f", "tva"}, {"-T", "0"}, {"--ttl", "256"}, {"--index", "gi-crid"}, {"--index", "pi-crid,gi-title"}, {"--lang", "en"}, {"--metrics", "/tmp/s"}, {"--no-such-option"}, {"stray"},
   };
-  static const char *const l_extra[][4] = {
+  static char *const l_extra[][4] = {
     {"--metrics-id", "m"}, {"-Z"}, {"--refresh", "2"}, {"-T", "8"}, {"--encoding", "plain"}, {"--publisher", "a.b/x"}, {"--dvb-locator"}, {"--interval", "5"},
   };
   config_t cfg;
@@ -525,19 +525,19 @@ START_TEST(every_option_is_parsed_and_each_conflict_rejected) {
   ck_assert_int_eq(args_parse(ARGC(zero_t), zero_t, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.timeout_s, 0);
   ck_assert_uint_eq(cfg.ttl, 16u);
-  for (size_t k = 0; k < sizeof a_extra / sizeof *a_extra; k++) {
+  for (size_t k = 0; k < sizeof a_extra / sizeof a_extra[0]; k++) {
     char *argv[20];
     int n = 0;
-    for (size_t j = 0; j < sizeof base_a / sizeof *base_a; j++) argv[n++] = (char *)base_a[j];
-    for (size_t j = 0; j < 4 && a_extra[k][j]; j++) argv[n++] = (char *)a_extra[k][j];
+    for (size_t j = 0; j < sizeof base_a / sizeof base_a[0]; j++) argv[n++] = base_a[j];
+    for (size_t j = 0; j < 4 && a_extra[k][j]; j++) argv[n++] = a_extra[k][j];
     argv[n] = NULL;
     ck_assert_msg(args_parse(n, argv, &cfg) == ARGS_ERR, "announce case %zu accepted", k);
   }
-  for (size_t k = 0; k < sizeof l_extra / sizeof *l_extra; k++) {
+  for (size_t k = 0; k < sizeof l_extra / sizeof l_extra[0]; k++) {
     char *argv[20];
     int n = 0;
-    for (size_t j = 0; j < sizeof base_l / sizeof *base_l; j++) argv[n++] = (char *)base_l[j];
-    for (size_t j = 0; j < 4 && l_extra[k][j]; j++) argv[n++] = (char *)l_extra[k][j];
+    for (size_t j = 0; j < sizeof base_l / sizeof base_l[0]; j++) argv[n++] = base_l[j];
+    for (size_t j = 0; j < 4 && l_extra[k][j]; j++) argv[n++] = l_extra[k][j];
     argv[n] = NULL;
     ck_assert_msg(args_parse(n, argv, &cfg) == ARGS_ERR, "listen case %zu accepted", k);
   }

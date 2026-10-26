@@ -43,7 +43,8 @@ static int rd_table(rd_t *r, table_kind_t k, int first, uint64_t known, bim_suu_
     if (bim_rd_v5(&r->r, &v)) return -1;
     if (v > bitreader_bits_left(&r->r.br) / (uint64_t)(aw ? aw : 1)) return bim_rd_trunc(&r->r);
     t->n = (size_t)v;
-    if (t->n && !(t->codes = alloc_n(t->n, sizeof *t->codes))) return bim_oom(r->r.err);
+    if (t->n) t->codes = alloc_n(t->n, sizeof *t->codes);
+    if (t->n && !t->codes) return bim_oom(r->r.err);
     for (size_t i = 0; i < t->n; i++) {
       if (bim_rd_bits(&r->r, aw, &t->codes[i])) return -1;
       if (t->codes[i] >= t->nglobal) return range(r->r.err, "TransmittedAttribute");
@@ -53,7 +54,12 @@ static int rd_table(rd_t *r, table_kind_t k, int first, uint64_t known, bim_suu_
   if (t->partial ? bim_rd_v5(&r->r, &v) : (v = t->nglobal, 0)) return -1;
   if (v > bitreader_bits_left(&r->r.br) / (t->partial ? 10 : 5)) return bim_rd_trunc(&r->r);
   t->n = (size_t)v;
-  if (t->n && (!(t->counts = alloc_n(t->n, sizeof *t->counts)) || (t->partial && !(t->codes = alloc_n(t->n, sizeof *t->codes))))) return bim_oom(r->r.err);
+  if (t->n) {
+    t->counts = alloc_n(t->n, sizeof *t->counts);
+    if (!t->counts) return bim_oom(r->r.err);
+    if (t->partial) t->codes = alloc_n(t->n, sizeof *t->codes);
+    if (t->partial && !t->codes) return bim_oom(r->r.err);
+  }
   for (size_t i = 0; i < t->n; i++) {
     if (t->partial) {
       if (bim_rd_v5(&r->r, &t->codes[i])) return -1;
@@ -112,17 +118,19 @@ static int remember(bim_au_state_t *st, const bim_suu_t *s, bim_err_t *err) {
 
 static int rd_suu(rd_t *r, bim_suu_t *s) {
   bim_au_state_t *st = r->st;
-  bim_au_schema_t *a;
+  const bim_au_schema_t *a;
   uint64_t v;
   if (bim_rd_bits(&r->r, bim_width(st->nadd), &s->schema)) return -1;
   if (!schema_ok(st, s->schema)) return range(r->r.err, "SchemaToUpdate");
   a = &st->add[s->schema];
   if (bim_rd_flag(&r->r, &s->first)) return -1;
   if (s->first) {
-    if (rd_str(r, &s->ns) || bim_rd_v8(&r->r, &v)) return -1;
+    if (rd_str(r, &s->ns)) return -1;
+    if (bim_rd_v8(&r->r, &v)) return -1;
     if (v > bitreader_bits_left(&r->r.br) / 16) return bim_rd_trunc(&r->r);
     s->nimported = (size_t)v;
-    if (s->nimported && !(s->imported = alloc_n(s->nimported, sizeof *s->imported))) {
+    if (s->nimported) s->imported = alloc_n(s->nimported, sizeof *s->imported);
+    if (s->nimported && !s->imported) {
       s->nimported = 0;
       return bim_oom(r->r.err);
     }
@@ -141,7 +149,8 @@ static int rd_au(rd_t *r, bim_au_t *au) {
   const bim_decoderinit_t *di = r->st->di;
   if (di->add_schema) {
     if (bim_rd_count(&r->r, 8, &au->nsuus)) return -1;
-    if (au->nsuus && !(au->suus = alloc_n(au->nsuus, sizeof *au->suus))) {
+    if (au->nsuus) au->suus = alloc_n(au->nsuus, sizeof *au->suus);
+    if (au->nsuus && !au->suus) {
       au->nsuus = 0;
       return bim_oom(r->r.err);
     }
@@ -150,7 +159,8 @@ static int rd_au(rd_t *r, bim_au_t *au) {
   }
   if (di->add_schema_only) return 0;
   if (bim_rd_count(&r->r, 8, &au->nfuus)) return -1;
-  if (au->nfuus && !(au->fuus = alloc_n(au->nfuus, sizeof *au->fuus))) {
+  if (au->nfuus) au->fuus = alloc_n(au->nfuus, sizeof *au->fuus);
+  if (au->nfuus && !au->fuus) {
     au->nfuus = 0;
     return bim_oom(r->r.err);
   }
@@ -208,12 +218,18 @@ void bim_au_free(bim_au_t *au) {
     free_table(&s->types);
     free_table(&s->elems);
     free_table(&s->attrs);
-    free(s->encoded.bits);
+    free(s->encoded.heap_bits);
   }
-  for (size_t i = 0; i < au->nfuus; i++) free(au->fuus[i].bits);
+  for (size_t i = 0; i < au->nfuus; i++) free(au->fuus[i].heap_bits);
   free(au->suus);
   free(au->fuus);
   memset(au, 0, sizeof *au);
+}
+
+static const char *transmitted_name(table_kind_t k) {
+  if (k == T_ATTRS) return "TransmittedAttribute";
+  if (k == T_TYPES) return "TransmittedType";
+  return "TransmittedElement";
 }
 
 static int w_table(bim_wr_t *w, table_kind_t k, int first, uint64_t known, const bim_suu_table_t *t) {
@@ -225,7 +241,7 @@ static int w_table(bim_wr_t *w, table_kind_t k, int first, uint64_t known, const
   if (t->partial && bim_wr_v5(w, t->n)) return -1;
   for (size_t i = 0; i < t->n; i++) {
     if (t->partial) {
-      if (t->codes[i] >= nglobal) return range(w->err, k == T_ATTRS ? "TransmittedAttribute" : k == T_TYPES ? "TransmittedType" : "TransmittedElement");
+      if (t->codes[i] >= nglobal) return range(w->err, transmitted_name(k));
       if (k == T_ATTRS ? bim_wr_put(w, t->codes[i], bim_width(nglobal)) : bim_wr_v5(w, t->codes[i])) return -1;
     }
     if (k != T_ATTRS && bim_wr_v5(w, t->counts[i])) return -1;
@@ -234,7 +250,7 @@ static int w_table(bim_wr_t *w, table_kind_t k, int first, uint64_t known, const
 }
 
 static int w_suu(bim_wr_t *w, bim_au_state_t *st, const bim_suu_t *s) {
-  bim_au_schema_t *a;
+  const bim_au_schema_t *a;
   if (!schema_ok(st, s->schema)) return range(w->err, "SchemaToUpdate");
   a = &st->add[s->schema];
   if (!s->first && !a->ns) return first_missing(w->err, s->schema);

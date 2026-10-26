@@ -77,7 +77,7 @@ START_TEST(sleep_interruptible_on_another_thread_wakes_on_stop_from_this_one) {
   signals_install();
   clock_gettime(CLOCK_MONOTONIC, &t0);
   ck_assert_int_eq(pthread_create(&th, NULL, sleeper_thread, &secs), 0);
-  usleep(20000);
+  nanosleep(&(struct timespec){0, 20000000L}, NULL);
   raise(SIGTERM);
   pthread_join(th, NULL);
   elapsed_s = elapsed_since(&t0);
@@ -94,7 +94,7 @@ START_TEST(sleep_longer_than_an_hour_is_clamped_and_still_wakes) {
   signals_install();
   clock_gettime(CLOCK_MONOTONIC, &t0);
   ck_assert_int_eq(pthread_create(&th, NULL, sleeper_thread, &secs), 0);
-  usleep(20000);
+  nanosleep(&(struct timespec){0, 20000000L}, NULL);
   raise(SIGTERM);
   pthread_join(th, NULL);
   elapsed_s = elapsed_since(&t0);

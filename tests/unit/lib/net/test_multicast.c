@@ -338,7 +338,12 @@ END_TEST
 
 START_TEST(open_fails_when_socket_fails) {
   char group[32];
-  mcast_t *a, *b, *c, *d, *e, *f;
+  mcast_t *a;
+  mcast_t *b;
+  mcast_t *c;
+  mcast_t *d;
+  mcast_t *e;
+  mcast_t *f;
   unsigned p1 = open_port();
   unsigned p2 = open_port();
   unsigned p3 = open_port();
@@ -382,7 +387,9 @@ START_TEST(open_fails_on_allocation_failure) {
 
   unique_group(group, sizeof group);
   for (long n = 0; n < 6; n++) {
-    mcast_t *a, *b, *c;
+    mcast_t *a;
+    mcast_t *b;
+    mcast_t *c;
     int hit;
     alloc_fail_at(n);
     a = mcast_open(AF_INET, group, p1, NULL, 100);
@@ -401,7 +408,7 @@ START_TEST(open_ipv6_and_ssm_variants) {
   unsigned port = open_port();
   const char *groups[] = {"ff02::1234", "ff01::1234", "ff05::1234", "ff0e::1234"};
 
-  for (size_t i = 0; i < sizeof groups / sizeof *groups; i++) {
+  for (size_t i = 0; i < sizeof groups / sizeof groups[0]; i++) {
     mcast_t *m = mcast_open(AF_INET6, groups[i], port, "lo", 100);
     mcast_t *s = mcast_open_ssm(AF_INET6, groups[i], port + 1, "2001:db8::1", "lo", 100);
     mcast_t *n = mcast_open(AF_INET6, groups[i], port + 2, NULL, 100);
@@ -513,13 +520,19 @@ START_TEST(open_fails_when_no_descriptor_is_left) {
   int n = 0;
   int fd;
   char group[32];
-  mcast_t *a, *b, *c;
+  mcast_t *a;
+  mcast_t *b;
+  mcast_t *c;
 
   unique_group(group, sizeof group);
   ck_assert_int_eq(getrlimit(RLIMIT_NOFILE, &rl), 0);
   rl.rlim_cur = 64;
   ck_assert_int_eq(setrlimit(RLIMIT_NOFILE, &rl), 0);
-  while (n < 64 && (fd = open("/dev/null", 0)) >= 0) held[n++] = fd;
+  while (n < 64) {
+    fd = open("/dev/null", 0);
+    if (fd < 0) break;
+    held[n++] = fd;
+  }
   a = mcast_open(AF_INET, group, 5000, NULL, 100);
   b = mcast_open_ssm(AF_INET, group, 5000, "192.0.2.1", NULL, 100);
   c = mcast_open_send(AF_INET, group, 9, NULL, 0);

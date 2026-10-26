@@ -93,10 +93,18 @@ static void build_full(bim_decoderinit_t *di) {
   di->profile = 300;
   di->unit_size_code = 2;
   di->reserved = 0xF;
-  di->insert = di->aod = di->add_schema = di->frag_ref = di->mpc_only = di->hier = di->cpt = di->prefix_table = 1;
+  di->prefix_table = 1;
+  di->cpt = di->prefix_table;
+  di->hier = di->cpt;
+  di->mpc_only = di->hier;
+  di->frag_ref = di->mpc_only;
+  di->add_schema = di->frag_ref;
+  di->aod = di->add_schema;
+  di->insert = di->aod;
   di->nschemas = 2;
   di->schemas = calloc(2, sizeof *di->schemas);
-  di->schemas[0].uri = dup_checked("urn:a");
+  di->schemas[0].heap_uri = dup_checked("urn:a");
+  di->schemas[0].uri = di->schemas[0].heap_uri;
   di->schemas[0].hint = dup_checked("a.xsd");
   di->schemas[0].ncodecs = 1;
   di->schemas[0].codecs = calloc(1, sizeof *di->schemas[0].codecs);
@@ -105,15 +113,17 @@ static void build_full(bim_decoderinit_t *di) {
   di->schemas[0].codecs[0].types = calloc(2, sizeof(uint64_t));
   di->schemas[0].codecs[0].types[0] = 7;
   di->schemas[0].codecs[0].types[1] = 200;
-  di->schemas[1].uri = dup_checked("urn:b");
+  di->schemas[1].heap_uri = dup_checked("urn:b");
+  di->schemas[1].uri = di->schemas[1].heap_uri;
   di->schemas[1].hint = dup_checked("");
   di->cpt_code_len = 12;
   di->ncpaths = 2;
   di->cpaths = calloc(2, sizeof *di->cpaths);
   for (int i = 0; i < 2; i++) {
     di->cpaths[i].nbits = 9;
-    di->cpaths[i].bits = malloc(2);
-    memcpy(di->cpaths[i].bits, path, 2);
+    di->cpaths[i].heap_bits = malloc(2);
+    memcpy(di->cpaths[i].heap_bits, path, 2);
+    di->cpaths[i].bits = di->cpaths[i].heap_bits;
     di->cpaths[i].code = (uint64_t)(0x101 + i);
   }
   di->naod_types = 3;
@@ -151,7 +161,8 @@ static void build_full(bim_decoderinit_t *di) {
   di->nknown = 1;
   di->known = calloc(1, sizeof *di->known);
   di->known[0].id = 3;
-  di->known[0].uri = dup_checked("urn:add");
+  di->known[0].heap_uri = dup_checked("urn:add");
+  di->known[0].uri = di->known[0].heap_uri;
   di->known[0].hint = dup_checked("add.bim");
   di->known[0].castable.present = 1;
   di->known[0].castable.ncodes = 2;
@@ -280,7 +291,7 @@ static void m_add_without_hier(bim_decoderinit_t *di) { di->hier = 0; }
 static void m_zero_schemas(bim_decoderinit_t *di) { di->nschemas = 0; }
 static void m_cpt_len(bim_decoderinit_t *di) { di->cpt_code_len = 65; }
 static void m_cpt_code_zero(bim_decoderinit_t *di) { di->cpaths[0].code = 0; }
-static void m_cpt_code_big(bim_decoderinit_t *di) { di->cpaths[1].code = 1ull << 20; }
+static void m_cpt_code_big(bim_decoderinit_t *di) { di->cpaths[1].code = 1ULL << 20; }
 static void m_inst_type(bim_decoderinit_t *di) { di->instances[0].type = 1; }
 static void m_inst_range(bim_decoderinit_t *di) { di->instances[1].type = 9; }
 static void m_map_reserved(bim_decoderinit_t *di) { di->mappings[0].reserved = 200; }
@@ -291,8 +302,9 @@ static void m_known_low(bim_decoderinit_t *di) { di->known[0].id = di->nschemas;
 static void m_known_high(bim_decoderinit_t *di) { di->known[0].id = 7; }
 static void m_encoding(bim_decoderinit_t *di) { di->schema_encoding = 300; }
 static void m_counts_unknown(bim_decoderinit_t *di) {
-  free(di->known[0].uri);
-  di->known[0].uri = dup_checked("urn:zzz");
+  free(di->known[0].heap_uri);
+  di->known[0].heap_uri = dup_checked("urn:zzz");
+  di->known[0].uri = di->known[0].heap_uri;
 }
 
 START_TEST(decoderinit_write_rejects_invalid_models) {
@@ -351,7 +363,8 @@ static void minimal(bim_decoderinit_t *di, int mpegb) {
   di->profile = 5;
   di->nschemas = 1;
   di->schemas = calloc(1, sizeof *di->schemas);
-  di->schemas[0].uri = dup_checked("urn:only");
+  di->schemas[0].heap_uri = dup_checked("urn:only");
+  di->schemas[0].uri = di->schemas[0].heap_uri;
   di->schemas[0].hint = dup_checked("");
 }
 

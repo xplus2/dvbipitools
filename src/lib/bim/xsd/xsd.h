@@ -39,7 +39,7 @@ typedef enum { XSD_PC_STRICT, XSD_PC_LAX, XSD_PC_SKIP } xsd_process_t;
 /* wildcard. NOT: all but ns[0] (NULL: absent). LIST: ns[] (NULL entry: absent) */
 typedef struct {
   xsd_wc_kind_t kind;
-  const char **ns;
+  const char *const *ns;
   int nns;
   xsd_process_t process;
 } xsd_wildcard_t;
@@ -192,11 +192,13 @@ int xsd_set_redefine(xsd_set_t *s, const xsd_ref_t *ref, const char *path);
 void *xsd_set_alloc(xsd_set_t *s, size_t n);
 
 /* code and message for xsd_set_error, first one kept. returns -1 */
-int xsd_set_fail(xsd_set_t *s, const char *code, const char *fmt, ...)
-#if defined(__GNUC__)
-    __attribute__((format(printf, 3, 4)))
-#endif
-    ;
+int xsd_set_fail_str(xsd_set_t *s, const char *code, const char *msg);
+#define xsd_set_fail(s, code, ...) \
+  ({ \
+    char xsd_fail_msg_[4608]; \
+    snprintf(xsd_fail_msg_, sizeof xsd_fail_msg_, __VA_ARGS__); \
+    xsd_set_fail_str((s), (code), xsd_fail_msg_); \
+  })
 
 /* binds references across all added documents. 0 ok, -1 unresolved, -2 out of memory */
 int xsd_set_resolve(xsd_set_t *s);

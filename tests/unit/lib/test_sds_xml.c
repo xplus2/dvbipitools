@@ -127,7 +127,8 @@ START_TEST(sds_bcg_discovery_record) {
   ck_assert_ptr_nonnull(strstr((char *)buf, "<DVBSTP Address=\"239.1.1.9\" Port=\"3937\"><PayloadId Id=\"A1\"/><PayloadId Id=\"A3\"/></DVBSTP>"));
   ck_assert_ptr_nonnull(strstr((char *)buf, "</DVBSTP></TransportMode><BCGProviderName Language=\"eng\">Example EPG</BCGProviderName></BCG>"));
   free(buf);
-  bcg.description = bcg.provider_name = NULL;
+  bcg.provider_name = NULL;
+  bcg.description = bcg.provider_name;
   len = sds_build_bcg("example.invalid", 1, &bcg, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_null(strstr((char *)buf, "Description"));

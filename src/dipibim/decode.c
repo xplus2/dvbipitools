@@ -23,7 +23,7 @@ static int decode_failed(job_t *j) {
   return -1;
 }
 
-static int write_xml(job_t *j, const bim_node_t *root, FILE *out) {
+static int write_xml(const job_t *j, const bim_node_t *root, FILE *out) {
   bim_nsdecl_t pre[2];
   bim_xml_opts_t xo = {.prefixes = pre, .nprefixes = 0, .indent = 2, .declaration = 1};
   char *text;
@@ -53,7 +53,8 @@ static int decode_dvbtva(job_t *j, const unsigned char *p, size_t len, FILE *out
   used = j->head.used;
   j->nschemas = j->head.nschemas;
   for (size_t k = 0; k < j->nschemas; k++) j->uris[k] = j->head.uri[k];
-  j->root_ns = j->ns.tva = j->uris[0];
+  j->ns.tva = j->uris[0];
+  j->root_ns = j->ns.tva;
   if (job_schema_load(j, j->root_ns) || job_schema_compile(j) || job_schemas_open(j)) return -1;
   r = (dvbtva_roots_t){j->c, &j->ns};
   p += used;
@@ -76,7 +77,8 @@ static int decode_sdns(job_t *j, const unsigned char *p, size_t len, FILE *out) 
   dvbtva_fuu_t *f = NULL;
   bitreader_t br;
   strrepo_reader_t srd;
-  size_t al, n = 0;
+  size_t al;
+  size_t n = 0;
   int rc = -1;
   if (len < 4) {
     log_code("BE400103", "input truncated: %zu bytes, need 4 byte length header", len);
@@ -108,7 +110,8 @@ static int decode_tva(job_t *j, const unsigned char *p, size_t len, FILE *out) {
   bim_tvabim_fuu_t *f = NULL;
   bim_tvapart_t *parts = NULL;
   bim_node_t *doc = NULL;
-  size_t n = 0, k = 0;
+  size_t n = 0;
+  size_t k = 0;
   int rc = -1;
   bim_tvabim_state(j->c, &j->di, &j->dop, &j->st);
   if (bim_tvabim_au_parse(j->c, &j->ns, &j->st, p, len, &f, &n, &j->err)) return decode_failed(j);
@@ -186,7 +189,9 @@ int job_decode(job_t *j, FILE *in, FILE *out) {
   const config_t *cfg = j->cfg;
   const unsigned char *p;
   bim_tvainit_t ti = {0};
-  size_t len, used = 0, di_used;
+  size_t len;
+  size_t used = 0;
+  size_t di_used;
   if (read_all(in, &j->buf, &len)) {
     log_code("BE000123", "read failed");
     return -1;

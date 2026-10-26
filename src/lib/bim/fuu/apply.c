@@ -44,16 +44,22 @@ static int sbc_index(const bim_type_t *pt, const char *name, const char *ns) {
 /* 6.6.5.5.4 rational: positions of z consecutive nodes */
 static void rat_implicit(uint64_t z, uint64_t *out) {
   int b = bim_width(z + 1);
-  uint64_t step = b >= 64 ? 1 : 1ull << (64 - b);
-  uint64_t n = 1ull << (b < 63 ? b : 63);
+  uint64_t step = b >= 64 ? 1 : 1ULL << (64 - b);
+  uint64_t n = 1ULL << (b < 63 ? b : 63);
   uint64_t p = 0;
   uint64_t i = 0;
-  while (i < z && (i <= (3 * z - n + 3) / 2 || !(i % 2))) out[i++] = p += step;
-  while (i < z) out[i++] = p += 2 * step;
+  while (i < z && (i <= (3 * z - n + 3) / 2 || !(i % 2))) {
+    p += step;
+    out[i++] = p;
+  }
+  while (i < z) {
+    p += 2 * step;
+    out[i++] = p;
+  }
 }
 
 /* 6.6.5.5.4: nodes added by payload get positions in document order, MPC per parent, SPC per name */
-static int materialize(bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t *pt, bim_err_t *err) {
+static int materialize(const bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t *pt, bim_err_t *err) {
   int mpc = bim_fuu_uses_mpc(st, pt);
   for (int i = 0; i < parent->nkids; i++) {
     bim_node_t *k = parent->kids[i];
@@ -67,9 +73,13 @@ static int materialize(bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t
       }
     k->pos = idx;
     if (st->di->insert) {
-      uint64_t *pos = malloc(z * sizeof *pos);
+      uint64_t *pos = malloc((z ? z : 1) * sizeof *pos);
       if (!pos) return bim_oom(err);
       rat_implicit(z, pos);
+      if (idx >= z) {
+        free(pos);
+        return state(err, "position index out of range");
+      }
       k->pos = pos[idx];
       free(pos);
     }
@@ -83,7 +93,7 @@ static int find_child(bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t 
   int mpc = bim_fuu_uses_mpc(st, pt);
   if (materialize(st, parent, pt, err)) return -2;
   for (int i = 0; i < parent->nkids; i++) {
-    bim_node_t *k = parent->kids[i];
+    const bim_node_t *k = parent->kids[i];
     int same = same_name(k, t->name, t->ns);
     if (!t->has_pos) {
       if (same) return i;
@@ -96,13 +106,13 @@ static int find_child(bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t 
 }
 
 /* MPC by position, SPC by SBC index then position */
-static int insert_child(bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t *pt, bim_node_t *k, bim_err_t *err) {
+static int insert_child(const bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t *pt, bim_node_t *k, bim_err_t *err) {
   int mpc = bim_fuu_uses_mpc(st, pt);
   int ki = sbc_index(pt, k->name, k->ns);
   int at;
   if (bim_node_add(parent, k)) return bim_oom(err);
   for (at = 0; at < parent->nkids - 1; at++) {
-    bim_node_t *o = parent->kids[at];
+    const bim_node_t *o = parent->kids[at];
     int oi = sbc_index(pt, o->name, o->ns);
     if (mpc ? o->pos > k->pos : (oi > ki || (oi == ki && o->pos > k->pos))) break;
   }
@@ -197,7 +207,7 @@ static int op_topmost(bim_fuu_state_t *st, bim_fuu_t *f, size_t pi, bim_err_t *e
 }
 
 /* context nodes along path, created for AddContent */
-static int descend(bim_fuu_state_t *st, bim_fuu_t *f, size_t pi, bim_node_t **chain, const bim_type_t **types, int *depth, bim_err_t *err) {
+static int descend(bim_fuu_state_t *st, const bim_fuu_t *f, size_t pi, bim_node_t **chain, const bim_type_t **types, int *depth, bim_err_t *err) {
   const uint64_t *pos = &f->pos[pi * f->ntbcs];
   size_t i = 0;
   if (f->mode != 2 && f->mode != 4) {
@@ -247,25 +257,27 @@ static int descend(bim_fuu_state_t *st, bim_fuu_t *f, size_t pi, bim_node_t **ch
 }
 
 static int apply_one(bim_fuu_state_t *st, bim_fuu_t *f, size_t pi, bim_err_t *err) {
-  bim_node_t *chain[BIM_CTX_MAX];
-  const bim_type_t *types[BIM_CTX_MAX];
+  bim_node_t *chain[BIM_CTX_MAX] = {NULL};
+  const bim_type_t *types[BIM_CTX_MAX] = {NULL};
   const bim_tbc_t *op = &f->tbcs[f->ntbcs - 1];
   int depth = 0;
   int rc;
-  if ((f->mode == 2 || f->mode == 4)) {
+  if (f->mode == 2 || f->mode == 4) {
+    if (st->nctx < 1) return state(err, "relative addressing without context node");
     depth = st->nctx;
-    memcpy(chain, st->ctx, (size_t)depth * sizeof *chain);
-    memcpy(types, st->ctx_type, (size_t)depth * sizeof *types);
+    memcpy(chain, st->ctx, (size_t)depth * sizeof chain[0]);
+    memcpy(types, st->ctx_type, (size_t)depth * sizeof types[0]);
   } else if (f->tbcs[0].kind == BIM_TBC_END) {
     return op_topmost(st, f, pi, err);
   }
   if (descend(st, f, pi, chain, types, &depth, err)) return -1;
+  if (depth < 1) return state(err, "context path empty");
   if (op->kind == BIM_TBC_ATTR) rc = op_attr(chain[depth - 1], op, f->command, &f->values[pi], err);
   else if (op->kind == BIM_TBC_SIMPLE) rc = op_text(chain[depth - 1], f->command, &f->values[pi], err);
   else rc = op_child(st, f, pi, chain[depth - 1], types[depth - 1], err);
   if (rc) return -1;
-  memcpy(st->ctx, chain, (size_t)depth * sizeof *chain);
-  memcpy(st->ctx_type, types, (size_t)depth * sizeof *types);
+  memcpy(st->ctx, chain, (size_t)depth * sizeof chain[0]);
+  memcpy(st->ctx_type, types, (size_t)depth * sizeof types[0]);
   st->nctx = depth;
   st->last_schema = f->schema;
   return 0;

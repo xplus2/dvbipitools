@@ -31,7 +31,8 @@ static int add_doc(xsd_set_t *s, xml_doc_t *doc, const char *path, int include, 
   ctx_init(&c, s, path, root, include ? tns : own);
   for (int i = 0; i < root->nkids && !rc; i++)
     if (root->kids[i]->name) rc = xm_add_component(&c, root->kids[i]);
-  return s->oom ? -2 : rc ? -1 : 0;
+  if (s->oom) return -2;
+  return rc ? -1 : 0;
 }
 
 int xsd_set_add_doc(xsd_set_t *s, xml_doc_t *doc, const char *path) { return add_doc(s, doc, path, 0, NULL); }
@@ -46,15 +47,15 @@ static void bind_self_group(xsd_particle_t *p, const xsd_qname_t *q, xsd_group_t
 static int redefine_one(ctx_t *c, const bim_node_t *k) {
   xsd_set_t *s = c->s;
   cmap_t *m;
-  const xsd_qname_t *nq;
-  const void *orig;
+  xsd_qname_t *nq;
+  void *orig;
   int rc;
   if (xm_is_xs(k, "simpleType") || xm_is_xs(k, "complexType")) {
     xsd_type_t *t = xm_is_xs(k, "simpleType") ? xm_parse_simple_type(c, k) : xm_parse_complex_type(c, k);
     if (!t || !t->q.name) return t ? xsd_set_fail(s, "LS400277", "bim: %s: redefined type without name", c->path) : -1;
     if (!(orig = xm_cmap_get(&s->types, t->q.ns, t->q.name))) return xsd_set_fail(s, "LS400278", "bim: %s: redefine of unknown type %s", c->path, t->q.name);
     if (!t->base_ref.name || !xm_qeq(&t->base_ref, t->q.ns, t->q.name)) return xsd_set_fail(s, "LS400279", "bim: %s: redefined type %s not derived from itself", c->path, t->q.name);
-    t->base = (xsd_type_t *)orig;
+    t->base = orig;
     t->base_ref.name = NULL;
     m = &s->types;
     nq = &t->q;
@@ -62,7 +63,7 @@ static int redefine_one(ctx_t *c, const bim_node_t *k) {
     xsd_group_t *g;
     if ((rc = xm_parse_group(c, k, &g))) return rc;
     if (!(orig = xm_cmap_get(&s->groups, g->q.ns, g->q.name))) return xsd_set_fail(s, "LS400280", "bim: %s: redefine of unknown group %s", c->path, g->q.name);
-    bind_self_group(g->particle, &g->q, (xsd_group_t *)orig);
+    bind_self_group(g->particle, &g->q, orig);
     m = &s->groups;
     nq = &g->q;
   } else if (xm_is_xs(k, "attributeGroup")) {
@@ -70,7 +71,7 @@ static int redefine_one(ctx_t *c, const bim_node_t *k) {
     if ((rc = xm_parse_agroup(c, k, &g))) return rc;
     if (!(orig = xm_cmap_get(&s->agroups, g->q.ns, g->q.name))) return xsd_set_fail(s, "LS400281", "bim: %s: redefine of unknown attributeGroup %s", c->path, g->q.name);
     for (int i = 0; i < g->attrs.ngroups; i++)
-      if (xm_qeq(&g->attrs.group_refs[i], g->q.ns, g->q.name)) g->attrs.groups[i] = (xsd_agroup_t *)orig;
+      if (xm_qeq(&g->attrs.group_refs[i], g->q.ns, g->q.name)) g->attrs.groups[i] = orig;
     m = &s->agroups;
     nq = &g->q;
   } else {
@@ -88,7 +89,8 @@ int xsd_set_redefine(xsd_set_t *s, const xsd_ref_t *ref, const char *path) {
   ctx_init(&c, s, path, root, ref->ns);
   for (int i = 0; i < ref->node->nkids && !rc; i++)
     if (ref->node->kids[i]->name) rc = redefine_one(&c, ref->node->kids[i]);
-  return s->oom ? -2 : rc ? -1 : 0;
+  if (s->oom) return -2;
+  return rc ? -1 : 0;
 }
 
 int xsd_set_doc_refs(const xsd_set_t *s, const xsd_ref_t **refs) {

@@ -39,19 +39,42 @@ int iso_fraction_ms(const char *s, long *ms);
 
 /* basicTimePointType sections, ISO 15938-1:2002 8.5.4.2.5 */
 typedef struct {
-  int date, neg, has_month, has_day;
-  int time, has_min, has_sec, has_n, has_ff;
-  int has_frac, tz;
-  uint64_t year, n, frac;
-  unsigned month, day, hour, min, sec, ff;
+  int date;
+  int neg;
+  int has_month;
+  int has_day;
+  int time;
+  int has_min;
+  int has_sec;
+  int has_n;
+  int has_ff;
+  int has_frac;
+  int tz;
+  uint64_t year;
+  uint64_t n;
+  uint64_t frac;
+  unsigned month;
+  unsigned day;
+  unsigned hour;
+  unsigned min;
+  unsigned sec;
+  unsigned ff;
   int tzh;
   unsigned tzm;
 } m7_timepoint_t;
 
 /* basicDurationType sections, ISO 15938-1:2002 8.5.4.2.6. has/v: H, M, S, N */
 typedef struct {
-  int neg, has_d, t, has[4], has_ff, has_frac, tz;
-  uint64_t d, v[4], frac;
+  int neg;
+  int has_d;
+  int t;
+  int has[4];
+  int has_ff;
+  int has_frac;
+  int tz;
+  uint64_t d;
+  uint64_t v[4];
+  uint64_t frac;
   unsigned ff;
   int tzh;
   unsigned tzm;

@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "bimreader.h"
 #include "bitwriter.h"
@@ -18,8 +19,9 @@ typedef struct {
 } bim_err_t;
 
 typedef struct {
-  unsigned char *bits;
+  const unsigned char *bits;
   uint64_t nbits;
+  unsigned char *heap_bits;
 } bim_bits_t;
 
 /* ExternallyCastableTypeTable / ExternallySubstitutableElementTable, ISO 23001-1 6.7.5.4, 6.7.6.4 (Cor 2) */
@@ -33,11 +35,13 @@ typedef struct {
 /* ceil(log2(n)) */
 int bim_width(uint64_t n);
 
-int bim_fail(bim_err_t *err, const char *code, const char *fmt, ...)
-#if defined(__GNUC__)
-    __attribute__((format(printf, 3, 4)))
-#endif
-    ;
+int bim_fail_str(bim_err_t *err, const char *code, const char *msg);
+#define bim_fail(err, code, ...) \
+  ({ \
+    char bim_fail_msg_[sizeof(((bim_err_t *)0)->msg)]; \
+    snprintf(bim_fail_msg_, sizeof bim_fail_msg_, __VA_ARGS__); \
+    bim_fail_str((err), (code), bim_fail_msg_); \
+  })
 int bim_oom(bim_err_t *err);
 
 /* trunc: code of truncation, what: syntax structure in messages */

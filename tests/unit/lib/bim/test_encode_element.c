@@ -49,9 +49,9 @@ static const char schema_el[] =
   "<xs:element name=\"AnyL\" type=\"AnyList\"/>"
   "<xs:complexType name=\"TxtT\"><xs:simpleContent><xs:extension base=\"xs:int\"><xs:attribute name=\"u\" type=\"xs:string\"/></xs:extension></xs:simpleContent></xs:complexType>"
   "<xs:element name=\"Txt\" type=\"TxtT\"/>"
-  "<xs:complexType name=\"BigAll\"><xs:all>" "BIGALL" "</xs:all></xs:complexType>"
+  "<xs:complexType name=\"BigAll\"><xs:all>BIGALL</xs:all></xs:complexType>"
   "<xs:element name=\"BigA\" type=\"BigAll\"/>"
-  "<xs:complexType name=\"OkAll\"><xs:all>" "OKALL" "</xs:all></xs:complexType>"
+  "<xs:complexType name=\"OkAll\"><xs:all>OKALL</xs:all></xs:complexType>"
   "<xs:element name=\"OkA\" type=\"OkAll\"/>"
   "<xs:element name=\"Inline\"><xs:complexType><xs:sequence><xs:element name=\"Q\" type=\"xs:string\"/></xs:sequence></xs:complexType></xs:element>"
   "</xs:schema>";
@@ -206,7 +206,7 @@ static int dec_bits(const bim_type_t *t, const char *root, const bim_encode_opts
   o.ext_subst = eo->ext_subst;
   o.frag_formats = (const unsigned char *)"\x01";
   o.nfrag_formats = 1;
-  o.resolve = eo->fragref ? frag_resolve : NULL;
+  o.resolve = eo->fragref ? &frag_resolve : NULL;
   bitreader_init(&br, bits, n);
   return bim_decode_payload(t, root, &o, &br, NULL, out);
 }
@@ -759,18 +759,12 @@ static int deflate_copy(const unsigned char *in, size_t n, unsigned char *out, s
   return 0;
 }
 
-static int deflate_never(const unsigned char *in, size_t n, unsigned char *out, size_t *outlen) {
-  (void)in;
-  (void)n;
-  (void)out;
-  (void)outlen;
-  return -1;
-}
+static int deflate_never(const unsigned char *, size_t, unsigned char *, size_t *) { return -1; }
 
-static const char *kept(bim_node_t *owner, const char *fmt, int i) {
+static const char *kept(bim_node_t *owner, const char *prefix, int i) {
   char buf[32];
   const char *k;
-  snprintf(buf, sizeof buf, fmt, i);
+  snprintf(buf, sizeof buf, "%s%d", prefix, i);
   k = bim_node_keep(owner, buf);
   ck_assert_ptr_nonnull(k);
   return k;
@@ -781,13 +775,13 @@ static bim_node_t *lax_tree(int nns, int nattrs, int nelems) {
   bim_node_t *r = nn(top, "Wrap", NULL);
   for (int i = 0; i < nns; i++) {
     bim_node_t *c = nn(r, "E", NULL);
-    c->ns = kept(top, "urn:lax:%d", i);
+    c->ns = kept(top, "urn:lax:", i);
   }
   if (nattrs) {
     bim_node_t *c = nn(r, "Many", NULL);
-    for (int i = 0; i < nattrs; i++) ck_assert_int_eq(bim_node_add_attr_ns(c, NULL, kept(top, "a%d", i), strdup("v")), 0);
+    for (int i = 0; i < nattrs; i++) ck_assert_int_eq(bim_node_add_attr_ns(c, NULL, kept(top, "a", i), strdup("v")), 0);
   }
-  for (int i = 0; i < nelems; i++) nn(r, kept(top, "e%d", i), i % 3 ? "t" : NULL);
+  for (int i = 0; i < nelems; i++) nn(r, kept(top, "e", i), i % 3 ? "t" : NULL);
   return top;
 }
 

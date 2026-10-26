@@ -20,7 +20,7 @@ typedef struct {
   const xsd_compiled_t *c;
   const char *ns; /* SchemaURI[0], urn:dvb:metadata:iptv:sdns:... */
 } bim_sdnsroots_t;
-int bim_sdnsbim_root(void *ctx, unsigned code, bim_tvaroot_t *out);
+int bim_sdnsbim_root(const void *ctx, unsigned code, bim_tvaroot_t *out);
 
 /* 5.5.2.2, 5.5.2.4: SchemaURI[0] = ns, Zlib signalled for the types c codes with it, empty InitialDescription.
    ns borrowed, write with bim_decoderinit_write, free with bim_sdnsbim_decoderinit_free. 0 ok, -1 oom */

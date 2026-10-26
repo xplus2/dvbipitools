@@ -57,8 +57,8 @@ int tva_datetime_decode(bitreader_t *br, char *out, size_t cap) {
     char frac[8];
     size_t k;
     snprintf(frac, sizeof frac, ".%03u", (unsigned)(ms % 1000));
-    for (k = strlen(frac); frac[k - 1] == '0'; k--) {
-    }
+    k = strlen(frac);
+    while (frac[k - 1] == '0') k--;
     frac[k] = '\0';
     if ((size_t)n + strlen(frac) >= cap) return -1;
     strcpy(out + n, frac);

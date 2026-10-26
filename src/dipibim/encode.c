@@ -53,12 +53,14 @@ static int init_bytes(job_t *j, bitwriter_t *bw) {
 }
 
 /* init, then access unit alone or length framed with string repository */
-static int emit(job_t *j, FILE *out, const bitwriter_t *au, strrepo_writer_t *sw, size_t nfuu) {
+static int emit(job_t *j, FILE *out, bitwriter_t *au, const strrepo_writer_t *sw, size_t nfuu) {
   bitwriter_t hd;
   const unsigned char *h;
   const unsigned char *a;
   const unsigned char *s = NULL;
-  size_t hl, al, sl = 0;
+  size_t hl;
+  size_t al;
+  size_t sl = 0;
   unsigned char len[4];
   int framed = j->cfg->profile == PROFILE_DVB_TVA || j->cfg->profile == PROFILE_SDNS;
   int rc;
@@ -68,7 +70,7 @@ static int emit(job_t *j, FILE *out, const bitwriter_t *au, strrepo_writer_t *sw
     return -1;
   }
   h = bitwriter_data(&hd, &hl);
-  a = bitwriter_data((bitwriter_t *)au, &al);
+  a = bitwriter_data(au, &al);
   if (framed && sw) s = strrepo_writer_data(sw, &sl);
   if (al > UINT32_MAX || sl > UINT32_MAX) {
     log_code("BE400108", "encoded size exceeds 4 GiB format limit: %zu+%zu bytes", al, sl);
@@ -110,9 +112,9 @@ static int encode_dvbtva(job_t *j, const bim_node_t *root, FILE *out) {
   return 0;
 }
 
-static int encode_sdns(job_t *j, const bim_node_t *root, FILE *out) {
+static int encode_sdns(job_t *j, bim_node_t *root, FILE *out) {
   bim_sdnsroots_t sr = {j->c, j->root_ns};
-  dvbtva_fuu_t one = {BIM_SDNS_CONTEXT_PATH, (bim_node_t *)root};
+  dvbtva_fuu_t one = {BIM_SDNS_CONTEXT_PATH, root};
   bitwriter_t bw;
   strrepo_writer_t sw;
   int rc = -1;
@@ -141,7 +143,8 @@ static int encode_tva(job_t *j, const bim_node_t *root, FILE *out) {
     log_code("BE400314", "root element %s is not coded by profile %s", root->name, "tva");
     goto out;
   }
-  if (sp || !(f = calloc(n ? n : 1, sizeof *f))) {
+  if (!sp) f = calloc(n ? n : 1, sizeof *f);
+  if (sp || !f) {
     log_code("BE500101", "out of memory");
     goto out;
   }
@@ -162,11 +165,11 @@ out:
   return rc;
 }
 
-static int encode_generic(job_t *j, const bim_node_t *root, FILE *out) {
+static int encode_generic(job_t *j, bim_node_t *root, FILE *out) {
   const bim_elem_t *e = xsd_compiled_elem(j->c, root->ns, root->name);
   bim_tbc_t tbcs[TOPMOST_PATH] = {{.kind = BIM_TBC_END}, {.kind = BIM_TBC_ELEM}};
   uint64_t pos[TOPMOST_PATH] = {0};
-  bim_node_t *payload = (bim_node_t *)root;
+  bim_node_t *payload = root;
   bim_fuu_t u = {.command = BIM_CMD_ADD, .mode = 1, .tbcs = tbcs, .ntbcs = TOPMOST_PATH, .npayloads = 1, .pos = pos, .payloads = &payload};
   bim_au_state_t as;
   bim_au_t au = {0};
@@ -174,7 +177,7 @@ static int encode_generic(job_t *j, const bim_node_t *root, FILE *out) {
   bitwriter_t fb;
   bitwriter_t bw;
   strrepo_writer_t sw;
-  bim_bits_t bits;
+  bim_bits_t bits = {NULL, 0, NULL};
   size_t len;
   int rc = -1;
   if (!e) {
@@ -205,7 +208,7 @@ static int encode_generic(job_t *j, const bim_node_t *root, FILE *out) {
     bim_fail(&j->err, BIM_TVABIM_ERR, "bim: TVA BiM %s", "needs an external string buffer");
     encode_failed(j);
   } else {
-    bits.bits = (unsigned char *)bitwriter_data(&fb, &len);
+    bits.bits = bitwriter_data(&fb, &len);
     bits.nbits = (uint64_t)len * 8;
     au.fuus = &bits;
     au.nfuus = 1;
@@ -221,8 +224,9 @@ out:
 }
 
 int job_encode(job_t *j, FILE *in, FILE *out) {
-  const bim_node_t *root;
+  bim_node_t *root;
   size_t len;
+  int bad;
   if (read_all(in, &j->buf, &len)) {
     log_code("BE000123", "read failed");
     return -1;
@@ -236,7 +240,12 @@ int job_encode(job_t *j, FILE *in, FILE *out) {
       log_code("BE400249", "bim: %s: unsupported encoding", j->cfg->input_path);
       return -1;
   }
-  if (xml_doc_parse(j->buf, len, &j->xml, NULL) || !(root = xml_doc_root(j->xml))) {
+  bad = xml_doc_parse(j->buf, len, &j->xml, NULL);
+  if (!bad) {
+    root = xml_doc_root(j->xml);
+    bad = !root;
+  }
+  if (bad) {
     log_code("BE000756", "input is not well-formed XML");
     return -1;
   }
@@ -247,7 +256,7 @@ int job_encode(job_t *j, FILE *in, FILE *out) {
   j->root_ns = root->ns;
   if (j->cfg->profile == PROFILE_DVB_TVA || j->cfg->profile == PROFILE_TVA) j->ns.tva = root->ns;
   if (job_schema_load(j, root->ns) || job_schema_compile(j) || job_schemas_encode(j, root)) return -1;
-  if (job_cast_bind(j, (bim_node_t *)root)) return -1;
+  if (job_cast_bind(j, root)) return -1;
   if (j->cfg->profile == PROFILE_SDNS) {
     if (bim_sdnsbim_decoderinit(j->c, root->ns, &j->di)) {
       log_code("BE500101", "out of memory");

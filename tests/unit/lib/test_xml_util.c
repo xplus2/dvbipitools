@@ -462,7 +462,7 @@ START_TEST(xml_doc_rejects_more_malformed_forms) {
     "<r a='1\"/>", "<r><![CDATA[x</r>", "<![CDATA[x]]>", "<r><?pi</r>", "<?pi ?", "<!-- c", "<r><!-- c --", "<!DOCTYPE r", "<r>&bogus;</r>", "<:r/>", "<r:/>", "<r:s:t/>",
     "<r a:b:c=\"1\"/>", "<r :a=\"1\"/>", "<r xmlns:p=\"u\" p:/>", "<r/>x", "<r/><!DOCTYPE r>", "<r><r2></r></r2>", "<r\t\n/ >", "<r a=\"1\" / >",
   };
-  for (size_t c = 0; c < sizeof cases / sizeof *cases; c++) {
+  for (size_t c = 0; c < sizeof cases / sizeof cases[0]; c++) {
     xml_doc_t *doc = NULL;
     int rc = xml_doc_parse(cases[c], strlen(cases[c]), &doc, NULL);
     if (!rc) {
@@ -594,7 +594,7 @@ START_TEST(xml_to_utf8_reads_declarations_strictly) {
     "<?xml version=\"1.0\" encoding=\"ASCII\"?><t/>",
   };
   char enc[8];
-  for (size_t i = 0; i < sizeof plain / sizeof *plain; i++) {
+  for (size_t i = 0; i < sizeof plain / sizeof plain[0]; i++) {
     char *buf = strdup(plain[i]);
     size_t len = strlen(plain[i]);
     ck_assert_int_eq(xml_to_utf8(&buf, &len, enc, sizeof enc), 0);
@@ -779,7 +779,7 @@ START_TEST(xml_sink_decodes_entities_and_cuts_on_sequence_boundaries) {
   char out[64];
   sink_t k;
   int trunc = 9;
-  for (size_t i = 0; i < sizeof cases / sizeof *cases; i++) {
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
     sink_init(&k, out, sizeof out);
     sink_decode(&k, cases[i].in, strlen(cases[i].in));
     ck_assert_int_eq(sink_finish(&k, &trunc), 0);

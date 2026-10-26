@@ -440,8 +440,8 @@ START_TEST(iso8601_edge_cases_and_formatting) {
   int y;
   int mo;
   int d;
-  for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) ck_assert_msg(iso8601_split(bad[i], &t) == -1, "accepted %s", bad[i]);
-  for (size_t i = 0; i < sizeof good / sizeof *good; i++) ck_assert_msg(iso8601_split(good[i], &t) == 0, "rejected %s", good[i]);
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) ck_assert_msg(iso8601_split(bad[i], &t) == -1, "accepted %s", bad[i]);
+  for (size_t i = 0; i < sizeof good / sizeof good[0]; i++) ck_assert_msg(iso8601_split(good[i], &t) == 0, "rejected %s", good[i]);
   ck_assert_int_eq(iso8601_split("2024-05-01T10:20:30-23:59", &t), 0);
   ck_assert_int_eq(t.off_min, -(23 * 60 + 59));
   ck_assert_int_eq(t.offset_kind, ISO8601_OFF_NUMERIC);

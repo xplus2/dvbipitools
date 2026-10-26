@@ -17,7 +17,7 @@ int job_mpegb(const config_t *cfg) { return cfg->profile != PROFILE_GENERIC || c
 
 int job_uses_zlib(const config_t *cfg) { return cfg->profile == PROFILE_TVA || cfg->profile == PROFILE_SDNS; }
 
-static int xsd_failed(xsd_set_t *s) {
+static int xsd_failed(const xsd_set_t *s) {
   log_code(xsd_set_error_code(s), "%s", xsd_set_error(s));
   return -1;
 }
@@ -25,7 +25,9 @@ static int xsd_failed(xsd_set_t *s) {
 int job_schema_load(job_t *j, const char *ns) {
   const char *culprit;
   int rc;
-  if (!(j->set = xsd_set_new()) || !(j->idx = xsd_index_new())) {
+  j->set = xsd_set_new();
+  if (j->set) j->idx = xsd_index_new();
+  if (!j->set || !j->idx) {
     log_code("BE500101", "out of memory");
     return -1;
   }
@@ -43,7 +45,8 @@ static void job_options(job_t *j) {
   j->eo.deflate = Z_DEFLATE;
   j->eo.zbuf_size = cfg->zbuf_size;
   j->eo.zgather = cfg->zgather;
-  j->eo.compat = j->dop.compat = cfg->compat;
+  j->dop.compat = cfg->compat;
+  j->eo.compat = j->dop.compat;
   j->eo.diag = j->diag;
   j->eo.ndiag = sizeof j->diag;
   if (cfg->profile == PROFILE_GENERIC) {
@@ -51,7 +54,8 @@ static void job_options(job_t *j) {
     j->eo.deferred = cfg->deferred;
     j->eo.cast = cfg->cast;
   }
-  j->eo.mpegb = j->dop.mpegb = cfg->profile == PROFILE_SDNS; /* TS 102 034 5.5: ISO/IEC 23001-1 */
+  j->dop.mpegb = cfg->profile == PROFILE_SDNS;
+  j->eo.mpegb = j->dop.mpegb;
   if (cfg->profile == PROFILE_DVB_TVA) {
     j->eo.dvb_locator = cfg->dvb_locator;
     j->eo.dvb_duration = cfg->dvb_duration;
@@ -136,8 +140,10 @@ int job_schemas_encode(job_t *j, const bim_node_t *root) {
   }
   j->nschemas = m;
   dvbtva_schemas_init(&j->sch, j->c, m, j->xc);
-  j->eo.schemas = j->dop.schemas = j->sch.v;
-  j->eo.nschemas = j->dop.nschemas = j->sch.n;
+  j->dop.schemas = j->sch.v;
+  j->eo.schemas = j->dop.schemas;
+  j->dop.nschemas = j->sch.n;
+  j->eo.nschemas = j->dop.nschemas;
   j->eo.multi = 1;
   j->eo.schema_uris = &j->uris[1];
   j->eo.nschema_uris = m - 1;

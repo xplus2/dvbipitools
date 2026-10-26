@@ -85,7 +85,13 @@ static int walk(const bim_tvans_t *ns, const bim_type_t *top, const char *path, 
     const char *sns;
     const bim_sbc_t *s;
     if (!end) end = p + strlen(p);
-    if (!colon || colon > end || !(sns = prefix_ns(ns, p, (size_t)(colon - p))) || !(s = child(t, sns, colon + 1, (size_t)(end - colon - 1))) || n >= cap) return -1;
+    if (!colon) return -1;
+    if (colon > end) return -1;
+    sns = prefix_ns(ns, p, (size_t)(colon - p));
+    if (!sns) return -1;
+    s = child(t, sns, colon + 1, (size_t)(end - colon - 1));
+    if (!s) return -1;
+    if (n >= cap) return -1;
     steps[n++] = (bim_tvaroot_t){s->name, s->ns, s->type};
     t = s->type;
     p = *end ? end + 1 : end;
@@ -107,10 +113,11 @@ static int tset_add(tset_t *s, const bim_type_t *t) {
     if (!(g.v = calloc(g.cap, sizeof *g.v))) return -1;
     for (size_t k = 0; k < s->cap; k++)
       if (s->v[k]) tset_add(&g, s->v[k]);
-    free(s->v);
+    const bim_type_t **old = s->v;
     *s = g;
+    free(old);
   }
-  for (i = ((uintptr_t)t >> 4) * 0x9E3779B97F4A7C15ull & (s->cap - 1); s->v[i]; i = (i + 1) & (s->cap - 1))
+  for (i = ((uintptr_t)t >> 4) * 0x9E3779B97F4A7C15ULL & (s->cap - 1); s->v[i]; i = (i + 1) & (s->cap - 1))
     if (s->v[i] == t) return 0;
   s->v[i] = t;
   s->n++;
@@ -164,7 +171,7 @@ out:
 }
 
 const char *bim_tvafrag_name(unsigned code) {
-  for (size_t i = 0; i < sizeof rows / sizeof *rows; i++) {
+  for (size_t i = 0; i < sizeof rows / sizeof rows[0]; i++) {
     const char *slash;
     const char *colon;
     if (rows[i].code != code) continue;
@@ -180,7 +187,7 @@ int bim_tvafrag_steps(const xsd_compiled_t *c, const bim_tvans_t *ns, unsigned c
   const bim_elem_t *main = xsd_compiled_elem(c, ns->tva, "TVAMain");
   if (!main || cap < 1 || cap > STEPS_MAX) return -1;
   steps[0] = (bim_tvaroot_t){main->name, main->ns, main->type};
-  for (size_t i = 0; i < sizeof rows / sizeof *rows; i++) {
+  for (size_t i = 0; i < sizeof rows / sizeof rows[0]; i++) {
     const bim_type_t *want;
     if (rows[i].code != code) continue;
     if (rows[i].path) return walk(ns, main->type, rows[i].path, steps, cap);
@@ -201,7 +208,7 @@ int bim_tvafrag_root(const xsd_compiled_t *c, const bim_tvans_t *ns, unsigned co
 }
 
 int bim_tvafrag_code(const xsd_compiled_t *c, const bim_tvans_t *ns, const char *name, const char *elem_ns, const bim_type_t *type) {
-  for (size_t i = 0; i < sizeof rows / sizeof *rows; i++) {
+  for (size_t i = 0; i < sizeof rows / sizeof rows[0]; i++) {
     bim_tvaroot_t r;
     if (strcmp(bim_tvafrag_name(rows[i].code), name)) continue;
     if (!bim_tvafrag_root(c, ns, rows[i].code, &r) && !strcmp(r.name, name) && same(r.ns, elem_ns) && r.type == type) return (int)rows[i].code;
@@ -260,7 +267,10 @@ static int copy_decls(bim_node_t *to, const bim_node_t *from) {
     to->nsdecls = np;
     for (int i = a->nnsdecls - 1; i >= 0; i--) {
       bim_nsdecl_t *d = &to->nsdecls[to->nnsdecls];
-      if (!(d->prefix = bim_node_keep(to, a->nsdecls[i].prefix)) || !(d->uri = bim_node_keep(to, a->nsdecls[i].uri))) return -1;
+      d->prefix = bim_node_keep(to, a->nsdecls[i].prefix);
+      if (!d->prefix) return -1;
+      d->uri = bim_node_keep(to, a->nsdecls[i].uri);
+      if (!d->uri) return -1;
       to->nnsdecls++;
     }
   }
@@ -350,7 +360,7 @@ int bim_tvafrag_split(const xsd_compiled_t *c, const bim_tvans_t *ns, const bim_
   size_t cnt = 0;
   int rc = -1;
   if (bim_tvafrag_steps(c, ns, 0x000E, steps, STEPS_MAX) != 1 || !bim_node_is(doc, steps[0].ns, steps[0].name)) return -2;
-  for (size_t i = 0; i < sizeof rows / sizeof *rows; i++) {
+  for (size_t i = 0; i < sizeof rows / sizeof rows[0]; i++) {
     int k = bim_tvafrag_steps(c, ns, rows[i].code, steps, STEPS_MAX);
     if (k < 1) continue;
     if (k == 1) {
@@ -407,7 +417,8 @@ int bim_tvafrag_join(const xsd_compiled_t *c, const bim_tvans_t *ns, bim_tvapart
       p[i].root = NULL;
     }
   if (bim_tvafrag_steps(c, ns, 0x000E, steps, STEPS_MAX) != 1) return -3;
-  if (!main && ((main = bim_node_new(steps[0].name)) == NULL)) return -1;
+  if (!main) main = bim_node_new(steps[0].name);
+  if (!main) return -1;
   if (!main->ns) main->ns = steps[0].ns;
   for (size_t i = 0; i < n; i++) {
     bim_node_t *cur = main;

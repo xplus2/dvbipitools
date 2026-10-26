@@ -51,12 +51,14 @@ static int lax_event(lax_t *l, uint32_t *e) {
     } else {
       uint64_t code;
       const lax_sym_t *sym;
-      if (bitreader_get(l->br, 7, &code) || !(sym = lax_syms_by_code(&l->sy, (int)code))) return -1;
+      if (bitreader_get(l->br, 7, &code)) return -1;
+      sym = lax_syms_by_code(&l->sy, (int)code);
+      if (!sym) return -1;
       n = sym->n;
-      memcpy(evs, sym->ev, (size_t)n * sizeof *evs);
+      memcpy(evs, sym->ev, (size_t)n * sizeof evs[0]);
     }
     for (int i = 0; i < n; i++) lax_syms_event(&l->sy, evs[i]);
-    memcpy(l->fifo, evs, (size_t)n * sizeof *evs);
+    memcpy(l->fifo, evs, (size_t)n * sizeof evs[0]);
     l->nfifo = n;
     l->fpos = 0;
   }
@@ -115,8 +117,14 @@ static int lax_events(dec_t *d, bitreader_t *br, int agg, bim_node_t *node);
 static int keep_name(lax_t *l, bim_node_t *node, int el, int i, const char **name, const char **ns) {
   lax_name_t *e = el ? &l->el[i] : &l->at[i];
   const char *uri = l->ns[e->ns];
-  if (!e->kname && !(e->kname = bim_node_keep(node, e->name))) return -1;
-  if (*uri && !e->kns && !(e->kns = bim_node_keep(node, uri))) return -1;
+  if (!e->kname) {
+    e->kname = bim_node_keep(node, e->name);
+    if (!e->kname) return -1;
+  }
+  if (*uri && !e->kns) {
+    e->kns = bim_node_keep(node, uri);
+    if (!e->kns) return -1;
+  }
   *name = e->kname;
   *ns = *uri ? e->kns : NULL;
   return 0;
@@ -131,7 +139,6 @@ int dec_lax(dec_t *d, bitreader_t *br, size_t bits, bim_node_t *node) {
   unsigned char *in;
   unsigned char *out = NULL;
   size_t n;
-  size_t cap;
   bitreader_t zbr;
   int rc = -1;
   /* ReservedBits, AnyElementLaxCompressionScheme, ReservedBits, Agglutinated, zlib */
@@ -145,7 +152,7 @@ int dec_lax(dec_t *d, bitreader_t *br, size_t bits, bim_node_t *node) {
     free(in);
     return -1;
   }
-  for (cap = 4096; cap <= ((size_t)1 << 24); cap *= 4) {
+  for (size_t cap = 4096; cap <= ((size_t)1 << 24); cap *= 4) {
     size_t outlen = cap;
     unsigned char *o = realloc(out, cap);
     if (!o) break;
@@ -205,12 +212,14 @@ static int lax_events(dec_t *d, bitreader_t *br, int agg, bim_node_t *node) {
         if (e == 2) {
           l.el = n;
           l.el[l.nel].ns = id;
-          l.el[l.nel].kname = l.el[l.nel].kns = NULL;
+          l.el[l.nel].kns = NULL;
+          l.el[l.nel].kname = l.el[l.nel].kns;
           l.el[l.nel++].name = s;
         } else {
           l.at = n;
           l.at[l.nat].ns = id;
-          l.at[l.nat].kname = l.at[l.nat].kns = NULL;
+          l.at[l.nat].kns = NULL;
+          l.at[l.nat].kname = l.at[l.nat].kns;
           l.at[l.nat++].name = s;
         }
         break;
@@ -249,7 +258,9 @@ static int lax_events(dec_t *d, bitreader_t *br, int agg, bim_node_t *node) {
           const char *nm;
           const char *ns;
           if (eid >= l.nel || depth >= 64) goto done;
-          if (keep_name(&l, node, 1, eid, &nm, &ns) || !(k = bim_node_new(nm))) goto done;
+          if (keep_name(&l, node, 1, eid, &nm, &ns)) goto done;
+          k = bim_node_new(nm);
+          if (!k) goto done;
           k->ns = ns;
           if (bim_node_add(stack[depth - 1], k)) {
             bim_node_free(k);

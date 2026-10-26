@@ -16,7 +16,7 @@ static int range(wr_t *w, const char *what) { return bim_fail(w->w.err, BIM_DI_R
 
 static int flags(wr_t *w, const char *a, const char *b) { return bim_fail(w->w.err, BIM_DI_FLAGS, "bim: DecoderInit %s requires %s", a, b); }
 
-static int fits(uint64_t v, int bits) { return bits >= 64 || v < (1ull << bits); }
+static int fits(uint64_t v, int bits) { return bits >= 64 || v < (1ULL << bits); }
 
 static int w_codecs(wr_t *w, const bim_di_schema_t *s) {
   if (bim_wr_v8(&w->w, s->ncodecs)) return -1;
@@ -72,7 +72,7 @@ static int w_cpt(wr_t *w) {
   if (bim_wr_v8(&t, di->cpt_code_len) || bim_wr_v8(&t, di->ncpaths) || bim_wr_put(&t, (uint64_t)!!di->cpt_complete, 1)) goto fail;
   for (size_t i = 0; i < di->ncpaths; i++) {
     const bim_di_cpath_t *p = &di->cpaths[i];
-    bim_bits_t b = {p->bits, p->nbits};
+    bim_bits_t b = {p->bits, p->nbits, NULL};
     if (bim_wr_v5(&t, p->nbits) || bim_wr_bits(&t, &b)) goto fail;
     if (!di->cpt_complete) {
       if (!p->code || !fits(p->code, (int)di->cpt_code_len)) {

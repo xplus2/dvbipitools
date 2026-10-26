@@ -168,7 +168,7 @@ static void put_file(const char *dir, const char *name, const char *body) {
   FILE *f;
   snprintf(p, sizeof p, "%s/%s", dir, name);
   f = fopen(p, "w");
-  ck_assert_ptr_nonnull(f);
+  if (!f) abort();
   fputs(body, f);
   fclose(f);
 }

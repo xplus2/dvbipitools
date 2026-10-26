@@ -47,7 +47,10 @@ int fuu_external(const bim_fuu_state_t *st, const void *x, int elems) {
   size_t sid;
   uint64_t code;
   const bim_ext_t *e;
-  if (!tab || fuu_find_code(st, x, elems, &sid, &code) || !(e = tab[sid]) || !e->present) return 0;
+  if (!tab) return 0;
+  if (fuu_find_code(st, x, elems, &sid, &code)) return 0;
+  if (!(e = tab[sid])) return 0;
+  if (!e->present) return 0;
   if (e->all) return 1;
   for (size_t i = 0; i < e->ncodes; i++)
     if (e->codes[i] == code) return 1;

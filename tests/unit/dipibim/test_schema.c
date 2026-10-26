@@ -58,7 +58,9 @@ START_TEST(schema_loads_and_compiles_every_profile) {
       sj_t s;
       sj_init(&s, p);
       s.cfg.syntax = syntax;
-      s.cfg.dvb_locator = s.cfg.dvb_duration = s.cfg.dvb_pubtime = 1;
+      s.cfg.dvb_pubtime = 1;
+      s.cfg.dvb_duration = s.cfg.dvb_pubtime;
+      s.cfg.dvb_locator = s.cfg.dvb_duration;
       s.cfg.len_mode = 1;
       s.cfg.deferred = 1;
       s.cfg.cast = 1;

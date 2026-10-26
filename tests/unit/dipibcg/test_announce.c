@@ -36,8 +36,9 @@
 static void write_temp_file(char *path, const char *content) {
   int fd = mkstemp(path);
   FILE *f;
-  ck_assert_int_ge(fd, 0);
+  if (fd < 0) abort();
   f = fdopen(fd, "w");
+  if (!f) abort();
   fputs(content, f);
   fclose(f);
 }
@@ -1399,8 +1400,9 @@ END_TEST
 static void write_bin(char *path, const unsigned char *p, size_t n) {
   int fd = mkstemp(path);
   FILE *f;
-  ck_assert_int_ge(fd, 0);
+  if (fd < 0) abort();
   f = fdopen(fd, "wb");
+  if (!f) abort();
   ck_assert_uint_eq(fwrite(p, 1, n, f), n);
   fclose(f);
 }
@@ -1427,7 +1429,7 @@ static int ctx_load(bcg_announce_ctx_t *c) {
   return 0;
 }
 
-static unsigned char *bim_stream(config_t *cfg, const char *xml, size_t *len) {
+static unsigned char *bim_stream(const config_t *cfg, const char *xml, size_t *len) {
   bcg_schema_t sch;
   dvbtva_roots_t r;
   xml_doc_t *x = NULL;

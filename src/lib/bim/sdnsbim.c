@@ -9,7 +9,7 @@
 #include "lib/bim/tvainit.h"
 #include "lib/bim/xsd/xsd.h"
 
-int bim_sdnsbim_root(void *ctx, unsigned code, bim_tvaroot_t *out) {
+int bim_sdnsbim_root(const void *ctx, unsigned code, bim_tvaroot_t *out) {
   const bim_sdnsroots_t *r = ctx;
   const bim_elem_t *e = code == BIM_SDNS_CONTEXT_PATH ? xsd_compiled_elem(r->c, r->ns, "ServiceDiscovery") : NULL;
   if (!e) return -1;

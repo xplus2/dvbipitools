@@ -39,8 +39,9 @@ int bim_index_parse_names(const char *list, unsigned *mask);
 typedef struct {
   uint8_t type;
   uint8_t id;
-  unsigned char *body; /* heap */
+  const unsigned char *body;
   size_t len;
+  unsigned char *heap_body; /* freed with container list */
 } bim_struct_t;
 
 typedef struct {
@@ -72,9 +73,9 @@ int bim_index_build(unsigned mask, bim_index_input_t in[BIM_INDEX_KINDS], uint16
 void bim_index_conts_free(bim_index_cont_t *conts, int n);
 
 /* structure of a received container. 0 found, -1 absent */
-typedef int (*bim_index_find_fn)(void *ctx, unsigned container, unsigned type, unsigned id, const unsigned char **body, size_t *len);
+typedef int (*bim_index_find_fn)(const void *ctx, unsigned container, unsigned type, unsigned id, const unsigned char **body, size_t *len);
 /* 1 fragment present in data container */
-typedef int (*bim_index_has_fn)(void *ctx, unsigned container, uint32_t fragment);
+typedef int (*bim_index_has_fn)(const void *ctx, unsigned container, uint32_t fragment);
 
 typedef struct {
   int indexes;     /* profiled entries in index list */
@@ -87,7 +88,7 @@ typedef struct {
 } bim_index_report_t;
 
 /* walks index list of container 0x0000. 0 checked, -1 no index list */
-int bim_index_check(bim_index_find_fn find, bim_index_has_fn has, void *ctx, bim_index_report_t *rep);
+int bim_index_check(bim_index_find_fn find, bim_index_has_fn has, const void *ctx, bim_index_report_t *rep);
 
 /* TS 102 323 9.5.2.2 type list structure entry. xpath only for fragment_type 0xFFFF */
 typedef struct {
@@ -95,6 +96,7 @@ typedef struct {
   const char *xpath;
   const uint16_t *containers;
   int ncontainers;
+  uint16_t *heap_containers; /* freed by bim_typelist_free */
 } bim_typelist_entry_t;
 
 /* type list body (BIM_STRUCT_TYPE_LIST, id 0), container 0. xpath strings in sw, 16 bit offsets.

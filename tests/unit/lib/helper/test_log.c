@@ -141,7 +141,7 @@ START_TEST(log_ansi_strip_handles_every_escape_shape) {
   };
   char out[OUT_MAX];
   log_set_color(LOG_COLOR_NEVER);
-  for (size_t i = 0; i < sizeof cases / sizeof *cases; i++) {
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
     log_capture_begin();
     log_line_ansi("%s", cases[i].in);
     log_capture_end(out, sizeof out);

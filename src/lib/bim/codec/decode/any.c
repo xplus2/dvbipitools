@@ -49,7 +49,9 @@ int dec_fragment_reference(dec_t *d, const bim_type_t *t, bim_node_t *k, int *de
   if (bitreader_get_vluimsbf8(d->br, &bits) || bits > bitreader_bits_left(d->br)) return -1;
   if (format == 1) {
     size_t n = (size_t)(bits / 8);
-    if (bits % 8 || !(href = malloc(n + 1))) return -1;
+    if (bits % 8) return -1;
+    href = malloc(n + 1);
+    if (!href) return -1;
     if (bitreader_get_bytes(d->br, (unsigned char *)href, n) || memchr(href, '\0', n)) {
       free(href);
       return -1;
@@ -117,6 +119,21 @@ int dec_any_element(dec_t *d, bim_node_t *node) {
 }
 
 /* 7.5.3.2, 7.5.3.3 (Amd 2) */
+static char *take_text(bitreader_t *br) {
+  uint64_t n;
+  char *s;
+  if (bitreader_get_vluimsbf5(br, &n)) return NULL;
+  if (n > bitreader_bits_left(br) / 8) return NULL;
+  s = malloc((size_t)n + 1);
+  if (!s) return NULL;
+  if (bitreader_get_bytes(br, (unsigned char *)s, (size_t)n)) {
+    free(s);
+    return NULL;
+  }
+  s[n] = '\0';
+  return s;
+}
+
 int dec_any_attributes(dec_t *d, bim_node_t *node) {
   uint64_t v;
   if (bitreader_get(d->br, 1, &v)) return -1;
@@ -137,19 +154,11 @@ int dec_any_attributes(dec_t *d, bim_node_t *node) {
         char *q = NULL;
         char *val = NULL;
         const char *qn;
-        uint64_t ql;
-        uint64_t vl;
-        if (bitreader_get_vluimsbf5(d->br, &ql) || ql > bitreader_bits_left(d->br) / 8 || !(q = malloc((size_t)ql + 1)) || bitreader_get_bytes(d->br, (unsigned char *)q, (size_t)ql)) {
+        if (!(q = take_text(d->br))) return -1;
+        if (!(val = take_text(d->br))) {
           free(q);
           return -1;
         }
-        q[ql] = '\0';
-        if (bitreader_get_vluimsbf5(d->br, &vl) || vl > bitreader_bits_left(d->br) / 8 || !(val = malloc((size_t)vl + 1)) || bitreader_get_bytes(d->br, (unsigned char *)val, (size_t)vl)) {
-          free(q);
-          free(val);
-          return -1;
-        }
-        val[vl] = '\0';
         qn = bim_node_keep(node, q);
         free(q);
         if (!qn) {

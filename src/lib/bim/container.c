@@ -78,10 +78,10 @@ int bim_container_build(unsigned format, const unsigned char *access_unit, size_
       q[0] = refs[i].version;
       be24_put(q + 1, refs[i].frag_id);
     }
-    st[n++] = (bim_struct_t){BIM_STRUCT_ENCAPSULATION, BIM_STRUCT_ID_UNUSED, enc, enc_len};
+    st[n++] = (bim_struct_t){BIM_STRUCT_ENCAPSULATION, BIM_STRUCT_ID_UNUSED, enc, enc_len, NULL};
   }
-  if (string_repo) st[n++] = (bim_struct_t){BIM_STRUCT_DATA_REPOSITORY, BIM_DATAREPO_STRINGS, (unsigned char *)string_repo, sr_len};
-  st[n++] = (bim_struct_t){BIM_STRUCT_DATA_REPOSITORY, BIM_DATAREPO_BINARY, (unsigned char *)access_unit, au_len};
+  if (string_repo) st[n++] = (bim_struct_t){BIM_STRUCT_DATA_REPOSITORY, BIM_DATAREPO_STRINGS, string_repo, sr_len, NULL};
+  st[n++] = (bim_struct_t){BIM_STRUCT_DATA_REPOSITORY, BIM_DATAREPO_BINARY, access_unit, au_len, NULL};
   rc = bim_container_build_structs(st, n, out, out_len);
   free(enc);
   return rc;
@@ -100,8 +100,10 @@ int bim_container_find(const unsigned char *buf, size_t len, unsigned want_type,
 
   p = buf + 1;
   for (unsigned i = 0; i < num_structures; i++, p += STRUCT_ENTRY_LEN) {
-    unsigned type = p[0], id = p[1];
-    size_t ptr = be24_get(p + 2), length = be24_get(p + 5);
+    unsigned type = p[0];
+    unsigned id = p[1];
+    size_t ptr = be24_get(p + 2);
+    size_t length = be24_get(p + 5);
     if (ptr > len || length > len - ptr)
       return -1;
     if (type == want_type && id == want_id) {

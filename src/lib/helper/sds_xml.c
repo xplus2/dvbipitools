@@ -30,7 +30,7 @@ static void doc_open(FILE *f, const char *record, const char *domain, unsigned v
   fprintf(f, "\" Version=\"%u\">\n", version);
 }
 
-static size_t mem_finish(FILE *f, char **ptr, size_t *len, unsigned char **out) {
+static size_t mem_finish(FILE *f, char **ptr, const size_t *len, unsigned char **out) {
   int err = ferror(f);
   if (fclose(f) || err) {
     free(*ptr);

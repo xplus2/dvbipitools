@@ -141,15 +141,15 @@ static void job_done(job_t *j) {
   }
 }
 
-static int wr(fx_t *f, bim_fuu_t *u, bitwriter_t *bw, bim_err_t *err) {
+static int wr(fx_t *f, const bim_fuu_t *u, bitwriter_t *bw, bim_err_t *err) {
   bitwriter_init(bw);
   return bim_fuu_write(&f->st, u, NULL, &f->sw, bw, err);
 }
 
 static int parse_bw(fx_t *f, bitwriter_t *bw, bim_fuu_t *g, bim_err_t *err) {
   size_t n;
-  bim_bits_t b;
-  b.bits = (unsigned char *)bitwriter_data(bw, &n);
+  bim_bits_t b = {NULL, 0, NULL};
+  b.bits = bitwriter_data(bw, &n);
   b.nbits = (uint64_t)n * 8;
   return bim_fuu_parse(&f->st, &b, g, err);
 }
@@ -264,14 +264,14 @@ static const bim_simple_t *attr_simple(const bim_type_t *p, const char *name) {
 
 static uint64_t rat(uint64_t i) {
   int j = 1;
-  while (j < 63 && (1ull << j) <= i + 1) j++;
-  return (2 * (i + 1) + 1 - (1ull << j)) << (64 - j);
+  while (j < 63 && (1ULL << j) <= i + 1) j++;
+  return (2 * (i + 1) + 1 - (1ULL << j)) << (64 - j);
 }
 
 static void op_attr(fx_t *f, unsigned cmd, const bim_tbc_t *path, size_t n, const char *name, const bim_simple_t *s, char *value) {
   job_t j;
   bim_tbc_t p[8];
-  memcpy(p, path, n * sizeof *p);
+  memcpy(p, path, n * sizeof p[0]);
   p[n] = ta(name, s);
   job_init(&j, cmd, 1);
   job_path(&j, n + 1, p);
@@ -449,15 +449,15 @@ static void sweep(fx_t *f, job_t *j) {
   bim_err_t err;
   bitwriter_t bw;
   bim_fuu_t g;
-  bim_bits_t b;
+  bim_bits_t b = {NULL, 0, NULL};
   size_t n;
   unsigned char *copy;
   if (wr(f, &j->u, &bw, &err)) ck_abort_msg("write %s %s", err.code, err.msg);
-  b.bits = (unsigned char *)bitwriter_data(&bw, &n);
+  b.bits = bitwriter_data(&bw, &n);
   copy = malloc(n);
   ck_assert_ptr_nonnull(copy);
   for (uint64_t cut = 0; cut <= (uint64_t)n * 8; cut++) {
-    b.bits = (unsigned char *)bitwriter_data(&bw, &n);
+    b.bits = bitwriter_data(&bw, &n);
     b.nbits = cut;
     if (!bim_fuu_parse(&f->st, &b, &g, &err)) bim_fuu_free(&g);
     else ck_assert_msg(!strncmp(err.code, "LE4003", 6) || !strncmp(err.code, "LE4", 3), "code %s", err.code);
@@ -664,11 +664,11 @@ START_TEST(fuu_implicit_positions) {
 }
 END_TEST
 
-static void bits_after(const bitwriter_t *bw, unsigned skip, bim_di_cpath_t *cp, uint64_t code) {
+static void bits_after(bitwriter_t *bw, unsigned skip, bim_di_cpath_t *cp, uint64_t code) {
   size_t n;
   bitreader_t br;
   bitwriter_t out;
-  const unsigned char *d = bitwriter_data((bitwriter_t *)bw, &n);
+  const unsigned char *d = bitwriter_data(bw, &n);
   uint64_t v;
   uint64_t total = (uint64_t)bw->len * 8 + (uint64_t)bw->cur_bits;
   size_t on;
@@ -681,9 +681,10 @@ static void bits_after(const bitwriter_t *bw, unsigned skip, bim_di_cpath_t *cp,
   cp->nbits = total - skip;
   cp->code = code;
   d = bitwriter_data(&out, &on);
-  cp->bits = malloc(on ? on : 1);
-  ck_assert_ptr_nonnull(cp->bits);
-  memcpy(cp->bits, d, on);
+  cp->heap_bits = malloc(on ? on : 1);
+  ck_assert_ptr_nonnull(cp->heap_bits);
+  memcpy(cp->heap_bits, d, on);
+  cp->bits = cp->heap_bits;
   bitwriter_free(&out);
 }
 
@@ -722,20 +723,20 @@ START_TEST(fuu_context_path_table) {
   ck_assert_str_eq(err.code, "LE400304");
   bitwriter_free(&bw);
 
-  cp.bits[0] ^= 0x80;
+  cp.heap_bits[0] ^= 0x80;
   j.u.path_code = 2;
   ck_assert_int_eq(wr(&f, &j.u, &bw, &err), 0);
   ck_assert_int_eq(parse_bw(&f, &bw, &g, &err), -1);
   ck_assert_str_eq(err.code, "LE400304");
   bitwriter_free(&bw);
-  cp.bits[0] ^= 0x80;
+  cp.heap_bits[0] ^= 0x80;
   sweep(&f, &j);
 
   f.di.cpt = 0;
   wr_fail(&f, &j, "LE400304");
   f.di.cpaths = NULL;
   f.di.ncpaths = 0;
-  free(cp.bits);
+  free(cp.heap_bits);
   fx_free(&f);
 }
 END_TEST
@@ -851,9 +852,10 @@ START_TEST(fuu_additional_schema_internal) {
 }
 END_TEST
 
-typedef void (*mk_fn)(fx_t *f, job_t *j);
+typedef void (*mk_fn)(const fx_t *f, job_t *j);
+typedef void (*mk_rw_fn)(fx_t *f, job_t *j);
 
-static void mk_multi(fx_t *f, job_t *j) {
+static void mk_multi(const fx_t *f, job_t *j) {
   bim_tbc_t p[3];
   p[0] = te("Box", gty(f, "Box"));
   p[1] = tb(BIM_TBC_END, NULL, NULL);
@@ -869,7 +871,7 @@ static void mk_multi(fx_t *f, job_t *j) {
   j->payloads[2] = entry("Many", "m5", NULL);
 }
 
-static void mk_typed(fx_t *f, job_t *j) {
+static void mk_typed(const fx_t *f, job_t *j) {
   bim_tbc_t p[3];
   p[0] = te("Box", gty(f, "Box"));
   p[1] = tb(BIM_TBC_END, NULL, NULL);
@@ -880,7 +882,7 @@ static void mk_typed(fx_t *f, job_t *j) {
   ck_assert_ptr_nonnull(bim_node_add_new(j->payloads[0], "Extra", "e"));
 }
 
-static void mk_attr(fx_t *f, job_t *j) {
+static void mk_attr(const fx_t *f, job_t *j) {
   bim_tbc_t p[4];
   p[0] = te("Box", gty(f, "Box"));
   p[1] = te("Base", ty(f, "BaseT"));
@@ -891,7 +893,7 @@ static void mk_attr(fx_t *f, job_t *j) {
   j->values[0] = "id1";
 }
 
-static void oom_stages(int insert, mk_fn mk) {
+static void oom_stages(int insert, mk_fn mk, mk_rw_fn mk_rw) {
   for (int stage = 0; stage < 3; stage++) {
     for (long n = 0;; n++) {
       fx_t f;
@@ -904,7 +906,8 @@ static void oom_stages(int insert, mk_fn mk) {
       fx_init(&f, insert, 0);
       add_box(&f);
       add_child(&f, BIM_CMD_ADD, "Base", ty(&f, "BaseT"), 0, bim_node_new("Base"));
-      mk(&f, &j);
+      if (mk) mk(&f, &j);
+      else if (mk_rw) mk_rw(&f, &j);
       bitwriter_init(&bw);
       if (stage == 0) alloc_fail_at(n);
       if (bim_fuu_write(&f.st, &j.u, NULL, &f.sw, &bw, &err) && stage) ck_abort_msg("write %s", err.msg);
@@ -930,10 +933,10 @@ static void oom_stages(int insert, mk_fn mk) {
 }
 
 START_TEST(fuu_allocation_failures) {
-  oom_stages(0, mk_multi);
-  oom_stages(1, mk_multi);
-  oom_stages(0, mk_typed);
-  oom_stages(0, mk_attr);
+  oom_stages(0, mk_multi, NULL);
+  oom_stages(1, mk_multi, NULL);
+  oom_stages(0, mk_typed, NULL);
+  oom_stages(0, mk_attr, NULL);
 }
 END_TEST
 
@@ -1150,12 +1153,12 @@ START_TEST(fuu_position_code_selection) {
 }
 END_TEST
 
-static int splice(const bitwriter_t *in, uint64_t nbits, unsigned drop, const char *tail, int pad, bitwriter_t *out) {
+static int splice(bitwriter_t *in, uint64_t nbits, unsigned drop, const char *tail, int pad, bitwriter_t *out) {
   size_t n;
   bitreader_t br;
   uint64_t v;
   uint64_t total = nbits - drop;
-  const unsigned char *d = bitwriter_data((bitwriter_t *)in, &n);
+  const unsigned char *d = bitwriter_data(in, &n);
   bitwriter_init(out);
   bitreader_init(&br, d, n);
   for (uint64_t i = 0; i < total; i++) ck_assert_int_eq(bitreader_get(&br, 1, &v) || bitwriter_put(out, v, 1), 0);
@@ -1175,8 +1178,8 @@ static void parse_expect_at(int line, fx_t *f, bitwriter_t *bw, int bits, const 
   bim_fuu_t g;
   bim_err_t err;
   size_t n;
-  bim_bits_t b;
-  b.bits = (unsigned char *)bitwriter_data(bw, &n);
+  bim_bits_t b = {NULL, 0, NULL};
+  b.bits = bitwriter_data(bw, &n);
   b.nbits = bits ? (uint64_t)bits : (uint64_t)n * 8;
   if (code) {
     ck_assert_msg(bim_fuu_parse(&f->st, &b, &g, &err) == -1, "line %d parsed", line);
@@ -1190,7 +1193,7 @@ static void parse_expect_at(int line, fx_t *f, bitwriter_t *bw, int bits, const 
 
 #define parse_expect(f, bw, bits, code) parse_expect_at(__LINE__, f, bw, bits, code)
 
-static void del_many(fx_t *f, job_t *j, uint64_t pos) {
+static void del_many(const fx_t *f, job_t *j, uint64_t pos) {
   bim_tbc_t p[3];
   p[0] = te("Box", gty(f, "Box"));
   p[1] = tb(BIM_TBC_END, NULL, NULL);
@@ -1264,7 +1267,7 @@ START_TEST(fuu_rational_off_table) {
   uint64_t nb;
   fx_init(&f, 1, 0);
   add_box(&f);
-  del_many(&f, &j, 0x5555ull << 40);
+  del_many(&f, &j, 0x5555ULL << 40);
   ck_assert_int_eq(wr(&f, &j.u, &bw, &err), 0);
   nb = (uint64_t)bw.len * 8 + (uint64_t)bw.cur_bits;
   splice(&bw, nb, 2, "0111", 0, &s);
@@ -1285,11 +1288,11 @@ START_TEST(fuu_rational_off_table) {
   parse_expect(&f, &bw, 0, "LE400304");
   bitwriter_free(&bw);
   fx_free(&f);
-  ck_assert_uint_eq(fuu_rat_order(1ull << 62), fuu_rat_order(1ull << 62));
+  ck_assert_uint_eq(fuu_rat_order(1ULL << 62), fuu_rat_order(1ULL << 62));
 }
 END_TEST
 
-static void mix_em(fx_t *f, job_t *j, unsigned cmd, unsigned mode, int n, const uint64_t *mix, const uint64_t *em) {
+static void mix_em(const fx_t *f, job_t *j, unsigned cmd, unsigned mode, int n, const uint64_t *mix, const uint64_t *em) {
   bim_tbc_t p[4];
   p[0] = te("Box", gty(f, "Box"));
   p[1] = te("Mix", ty(f, "MixT"));
@@ -1608,7 +1611,7 @@ START_TEST(fuu_lax_attribute_operand) {
 }
 END_TEST
 
-static void mk_any(fx_t *f, job_t *j) {
+static void mk_any(const fx_t *f, job_t *j) {
   bim_tbc_t p[3];
   p[0] = te("Box", gty(f, "Box"));
   p[1] = tb(BIM_TBC_END, NULL, NULL);
@@ -1618,7 +1621,7 @@ static void mk_any(fx_t *f, job_t *j) {
   j->payloads[0] = entry("Other", "o", NULL);
 }
 
-static void mk_anyattr(fx_t *f, job_t *j) {
+static void mk_anyattr(const fx_t *f, job_t *j) {
   bim_tbc_t p[3];
   p[0] = te("Box", gty(f, "Box"));
   p[1] = tb(BIM_TBC_END, NULL, NULL);
@@ -1628,7 +1631,7 @@ static void mk_anyattr(fx_t *f, job_t *j) {
   j->values[0] = "g";
 }
 
-static void mk_derived(fx_t *f, job_t *j) {
+static void mk_derived(const fx_t *f, job_t *j) {
   bim_tbc_t p[3];
   p[0] = te("Box", gty(f, "Box"));
   p[1] = tb(BIM_TBC_END, NULL, NULL);
@@ -1638,7 +1641,7 @@ static void mk_derived(fx_t *f, job_t *j) {
   j->payloads[0] = bim_node_new("Base");
 }
 
-static void mk_chardata(fx_t *f, job_t *j) {
+static void mk_chardata(const fx_t *f, job_t *j) {
   bim_tbc_t p[4];
   p[0] = te("Box", gty(f, "Box"));
   p[1] = te("Mix", ty(f, "MixT"));
@@ -1657,12 +1660,12 @@ static void mk_mix_multi(fx_t *f, job_t *j) {
 }
 
 START_TEST(fuu_allocation_failures_more_jobs) {
-  oom_stages(0, mk_any);
-  oom_stages(0, mk_anyattr);
-  oom_stages(0, mk_derived);
-  oom_stages(0, mk_chardata);
-  oom_stages(0, mk_mix_multi);
-  oom_stages(1, mk_mix_multi);
+  oom_stages(0, mk_any, NULL);
+  oom_stages(0, mk_anyattr, NULL);
+  oom_stages(0, mk_derived, NULL);
+  oom_stages(0, mk_chardata, NULL);
+  oom_stages(0, NULL, mk_mix_multi);
+  oom_stages(1, NULL, mk_mix_multi);
 }
 END_TEST
 
@@ -1670,11 +1673,11 @@ static void sweep2(fx_t *f, job_t *j) {
   bim_err_t err;
   bitwriter_t bw;
   bim_fuu_t g;
-  bim_bits_t b;
+  bim_bits_t b = {NULL, 0, NULL};
   size_t n;
   unsigned char *copy;
   if (wr(f, &j->u, &bw, &err)) ck_abort_msg("write %s %s", err.code, err.msg);
-  b.bits = (unsigned char *)bitwriter_data(&bw, &n);
+  b.bits = bitwriter_data(&bw, &n);
   copy = malloc(n);
   ck_assert_ptr_nonnull(copy);
   for (uint64_t x = 0; x < (uint64_t)n * 8 && n <= 8; x++)
@@ -1956,7 +1959,7 @@ START_TEST(fuu_reparameterization_stream) {
 }
 END_TEST
 
-static void mk_create_context(fx_t *f, job_t *j) {
+static void mk_create_context(const fx_t *f, job_t *j) {
   bim_tbc_t p[4];
   p[0] = te("Box", gty(f, "Box"));
   p[1] = te("Mix", ty(f, "MixT"));
@@ -2008,7 +2011,7 @@ static void mk_implicit_delete(fx_t *f, job_t *j) {
   p[2] = te("Many", ty(f, "EntryT"));
   job_init(j, BIM_CMD_DELETE, 1);
   job_path(j, 3, p);
-  j->pos[2] = f->di.insert ? 7ull << 60 : 4;
+  j->pos[2] = f->di.insert ? 7ULL << 60 : 4;
 }
 
 static void mk_chardata_new(fx_t *f, job_t *j) {
@@ -2027,13 +2030,13 @@ static void mk_chardata_new(fx_t *f, job_t *j) {
 }
 
 START_TEST(fuu_apply_allocation_failures) {
-  oom_stages(0, mk_create_context);
-  oom_stages(1, mk_create_context);
-  oom_stages(0, mk_create_document);
-  oom_stages(0, mk_topmost);
-  oom_stages(0, mk_implicit_delete);
-  oom_stages(1, mk_implicit_delete);
-  oom_stages(0, mk_chardata_new);
+  oom_stages(0, mk_create_context, NULL);
+  oom_stages(1, mk_create_context, NULL);
+  oom_stages(0, NULL, mk_create_document);
+  oom_stages(0, NULL, mk_topmost);
+  oom_stages(0, NULL, mk_implicit_delete);
+  oom_stages(1, NULL, mk_implicit_delete);
+  oom_stages(0, NULL, mk_chardata_new);
 }
 END_TEST
 

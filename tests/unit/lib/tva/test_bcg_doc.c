@@ -142,11 +142,11 @@ START_TEST(bcg_publisher_and_lang_validation) {
   char name[BCG_ID_LEN];
   char big[BCG_ID_LEN + 8];
   char small[4];
-  for (size_t i = 0; i < sizeof pub_ok / sizeof *pub_ok; i++) {
+  for (size_t i = 0; i < sizeof pub_ok / sizeof pub_ok[0]; i++) {
     ck_assert_msg(bcg_publisher_valid(pub_ok[i]), "valid %s", pub_ok[i]);
     ck_assert_int_eq(bcg_publisher_name(pub_ok[i], name, sizeof name), 0);
   }
-  for (size_t i = 0; i < sizeof pub_bad / sizeof *pub_bad; i++) ck_assert_msg(!bcg_publisher_valid(pub_bad[i]), "invalid %s", pub_bad[i]);
+  for (size_t i = 0; i < sizeof pub_bad / sizeof pub_bad[0]; i++) ck_assert_msg(!bcg_publisher_valid(pub_bad[i]), "invalid %s", pub_bad[i]);
   ck_assert_int_eq(bcg_publisher_name("example.com/My%20Guide", name, sizeof name), 0);
   ck_assert_str_eq(name, "My Guide");
   ck_assert_int_eq(bcg_publisher_name("example.com/Guide", small, sizeof small), -1);
@@ -154,8 +154,8 @@ START_TEST(bcg_publisher_and_lang_validation) {
   big[sizeof big - 1] = 0;
   big[5] = '/';
   ck_assert_int_eq(bcg_publisher_valid(big), 0);
-  for (size_t i = 0; i < sizeof lang_ok / sizeof *lang_ok; i++) ck_assert_msg(bcg_lang_valid(lang_ok[i]), "valid %s", lang_ok[i]);
-  for (size_t i = 0; i < sizeof lang_bad / sizeof *lang_bad; i++) ck_assert_msg(!bcg_lang_valid(lang_bad[i]), "invalid %s", lang_bad[i]);
+  for (size_t i = 0; i < sizeof lang_ok / sizeof lang_ok[0]; i++) ck_assert_msg(bcg_lang_valid(lang_ok[i]), "valid %s", lang_ok[i]);
+  for (size_t i = 0; i < sizeof lang_bad / sizeof lang_bad[0]; i++) ck_assert_msg(!bcg_lang_valid(lang_bad[i]), "invalid %s", lang_bad[i]);
   memset(big, 'a', 40);
   big[40] = 0;
   ck_assert_int_eq(bcg_lang_valid(big), 0);
@@ -179,7 +179,9 @@ START_TEST(bcg_index_groups_programmes_by_channel) {
   bcg_doc_index_free(&ix);
   for (int i = 0; i < 5; i++) {
     p = bcg_add_programme(&d);
-    snprintf(p->channel_id, sizeof p->channel_id, "%s", i == 3 ? "unknown" : i % 2 ? "alpha" : "zeta");
+    const char *chan = i % 2 ? "alpha" : "zeta";
+    if (i == 3) chan = "unknown";
+    snprintf(p->channel_id, sizeof p->channel_id, "%s", chan);
   }
   ck_assert_int_eq(bcg_doc_index_build(&ix, &d), 0);
   ck_assert_int_eq(ix.nprog[0], 3);

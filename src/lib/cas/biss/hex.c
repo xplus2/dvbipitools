@@ -14,7 +14,8 @@ int biss_parse_hex16(const char *hex, unsigned char out[BISS_KEY_LEN]) {
   if (strlen(hex) != BISS_KEY_LEN * 2)
     return -1;
   for (size_t i = 0; i < BISS_KEY_LEN; i++) {
-    int hi = hex_nibble(hex[2 * i]), lo = hex_nibble(hex[2 * i + 1]);
+    int hi = hex_nibble(hex[2 * i]);
+    int lo = hex_nibble(hex[2 * i + 1]);
     if (hi < 0 || lo < 0)
       return -1;
     out[i] = (unsigned char)((hi << 4) | lo);
@@ -30,7 +31,8 @@ int biss1_parse_sw(const char *hex, unsigned char cw_out[BISS1_KEY_LEN]) {
   if (strlen(hex) != BISS1_SW_HEX_LEN)
     return -1;
   for (size_t i = 0; i < 6; i++) {
-    int hi = hex_nibble(hex[2 * i]), lo = hex_nibble(hex[2 * i + 1]);
+    int hi = hex_nibble(hex[2 * i]);
+    int lo = hex_nibble(hex[2 * i + 1]);
     if (hi < 0 || lo < 0)
       return -1;
     cw_out[i < 3 ? i : i + 1] = (unsigned char)((hi << 4) | lo);

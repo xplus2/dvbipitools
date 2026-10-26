@@ -80,7 +80,7 @@ static size_t build_bim(sds_sender_t *sd, const char *dir) {
   FILE *f;
   snprintf(path, sizeof path, "%s/sdns.xsd", dir);
   f = fopen(path, "w");
-  ck_assert_ptr_nonnull(f);
+  if (!f) abort();
   ck_assert_uint_eq(fwrite(sdns_xsd, 1, sizeof sdns_xsd - 1, f), sizeof sdns_xsd - 1);
   fclose(f);
   ck_assert_int_eq(bim_sdnsdoc_open(&d, paths, 1, SDNS2008, &culprit), 0);
@@ -351,7 +351,7 @@ END_TEST
 
 static void *term_later(void *arg) {
   (void)arg;
-  usleep(300000);
+  sleep_ms(300);
   raise(SIGTERM);
   return NULL;
 }

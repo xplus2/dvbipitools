@@ -21,7 +21,7 @@ static void update_symbol(lax_syms_t *l, const uint32_t *ev, int n) {
     memcpy(s.ev, ev, (size_t)n * sizeof *ev);
     s.n = n;
   }
-  memmove(&l->tab[1], &l->tab[0], (size_t)at * sizeof *l->tab);
+  memmove(&l->tab[1], &l->tab[0], (size_t)at * sizeof l->tab[0]);
   l->tab[0] = s;
 }
 

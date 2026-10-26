@@ -57,7 +57,8 @@ START_TEST(psi_utf8_clamp_keeps_whole_sequences_only) {
 END_TEST
 
 START_TEST(psi_build_pat_round_trips_through_psi_feed) {
-  unsigned char section[32], pkt[188];
+  unsigned char section[32];
+  unsigned char pkt[188];
   size_t slen;
   psi_t *p;
   int count;

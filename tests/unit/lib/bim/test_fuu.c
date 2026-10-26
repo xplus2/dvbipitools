@@ -61,7 +61,7 @@ static bim_node_t *item(const char *n, const char *label) {
   return i;
 }
 
-static void put_payload(fx_t *f, bitwriter_t *bw, const char *type, const bim_node_t *n) {
+static void put_payload(const fx_t *f, bitwriter_t *bw, const char *type, const bim_node_t *n) {
   strrepo_writer_t sw;
   ck_assert_int_eq(strrepo_writer_init(&sw), 0);
   ck_assert_int_eq(bim_encode_payload(xsd_compiled_type(f->c, NULL, type), n, 1, bw, &sw), 0);
@@ -74,10 +74,10 @@ static void put_text(bitwriter_t *bw, const char *s) {
 
 static int run(fx_t *f, bitwriter_t *bw, bim_err_t *err) {
   size_t n;
-  bim_bits_t b;
+  bim_bits_t b = {NULL, 0, NULL};
   bim_fuu_t u;
   int rc;
-  b.bits = (unsigned char *)bitwriter_data(bw, &n);
+  b.bits = bitwriter_data(bw, &n);
   b.nbits = (uint64_t)n * 8;
   if (bim_fuu_parse(&f->st, &b, &u, err)) return -1;
   rc = bim_fuu_apply(&f->st, &u, err);
@@ -263,7 +263,7 @@ static uint64_t speed_code(const fx_t *f) {
   return 0;
 }
 
-static double decode_speed(fx_t *f, const unsigned char *bits, size_t n) {
+static double decode_speed(const fx_t *f, const unsigned char *bits, size_t n) {
   bitreader_t br;
   char *out = NULL;
   double v;
@@ -336,8 +336,10 @@ START_TEST(aod_rejects_invalid) {
   ck_assert_str_eq(err.code, "LE400307");
 
   f.di.aod_types = &uri;
-  tr[0].schema = tr[1].schema = 0;
-  tr[0].type = tr[1].type = speed_code(&f);
+  tr[1].schema = 0;
+  tr[0].schema = tr[1].schema;
+  tr[1].type = speed_code(&f);
+  tr[0].type = tr[1].type;
   memset(&map, 0, sizeof map);
   map.instances = &inst;
   map.ninstances = 1;
@@ -363,7 +365,7 @@ START_TEST(fuu_writer_reparameterizes) {
   bim_fuu_t g;
   bim_err_t err;
   bitwriter_t bw;
-  bim_bits_t b;
+  bim_bits_t b = {NULL, 0, NULL};
   size_t n;
   uint64_t inst = 0;
   char *uri = "urn:mpeg:mpegb:bim:SystemsAdvancedOptimisedDecodersCS:2007:2";
@@ -389,7 +391,7 @@ START_TEST(fuu_writer_reparameterizes) {
   u.config = &cfg;
   bitwriter_init(&bw);
   if (bim_fuu_write(&f.st, &u, NULL, &f.sw, &bw, &err)) ck_abort_msg("%s %s", err.code, err.msg);
-  b.bits = (unsigned char *)bitwriter_data(&bw, &n);
+  b.bits = bitwriter_data(&bw, &n);
   b.nbits = (uint64_t)n * 8;
   if (bim_fuu_parse(&f.st, &b, &g, &err)) ck_abort_msg("%s %s", err.code, err.msg);
   ck_assert_int_eq(g.reparam, 0);

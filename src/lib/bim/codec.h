@@ -11,6 +11,12 @@
 #include "bitwriter.h"
 #include "strrepo.h"
 
+#ifdef __clang__
+#define BIM_TAKES_ARG(n) __attribute__((ownership_takes(malloc, n)))
+#else
+#define BIM_TAKES_ARG(n)
+#endif
+
 #define XSI_NS "http://www.w3.org/2001/XMLSchema-instance"
 #define XML_NS "http://www.w3.org/XML/1998/namespace"
 
@@ -282,7 +288,7 @@ int bim_tree_has_cast(const bim_node_t *n);
 /* copies value, replaces an existing one. 0 ok, -1 oom */
 int bim_node_set_attr(bim_node_t *n, const char *name, const char *value);
 /* takes value, also on failure. 0 ok, -1 oom, -2 duplicate ns+name */
-int bim_node_add_attr_ns(bim_node_t *n, const char *ns, const char *name, char *value);
+int bim_node_add_attr_ns(bim_node_t *n, const char *ns, const char *name, char *value) BIM_TAKES_ARG(4);
 const char *bim_node_attr(const bim_node_t *n, const char *name);
 /* ns NULL: no namespace */
 const char *bim_node_attr_ns(const bim_node_t *n, const char *ns, const char *name);
@@ -334,6 +340,7 @@ typedef struct {
   int preserve;
   const int *inst;
   int ninst;
+  int *heap_inst;
 } bim_aod_map_t;
 
 typedef struct {

@@ -306,8 +306,8 @@ START_TEST(encode_advanced_decoders) {
   insts[0] = (bim_aod_inst_t){.kind = BIM_AOD_UQ, .vmin = 0, .vmax = 10, .nbits = 4};
   insts[1].kind = BIM_AOD_QNAME;
   insts[2].kind = BIM_AOD_ZLIB;
-  maps[0] = (bim_aod_map_t){xsd_compiled_elem(s.c, NULL, "Speed")->type->simple, 0, i0, 1};
-  maps[1] = (bim_aod_map_t){xsd_compiled_elem(s.c, NULL, "Str")->type->simple, 0, i1, 1};
+  maps[0] = (bim_aod_map_t){xsd_compiled_elem(s.c, NULL, "Speed")->type->simple, 0, i0, 1, NULL};
+  maps[1] = (bim_aod_map_t){xsd_compiled_elem(s.c, NULL, "Str")->type->simple, 0, i1, 1, NULL};
   aod = (bim_aod_t){insts, 3, maps, 2};
   eo = eopts(&s, 1);
   eo.aod = &aod;
@@ -350,7 +350,7 @@ static int resolve(void *ctx, const char *href, unsigned format, unsigned char *
   return 0;
 }
 
-static void frag_decode(const sc_t *s, const bim_encode_opts_t *eo, const bim_node_t *h, bim_decode_opts_t *o, bim_node_t **got) {
+static void frag_decode(const sc_t *s, const bim_encode_opts_t *eo, const bim_node_t *h, const bim_decode_opts_t *o, bim_node_t **got) {
   bitwriter_t bw;
   strrepo_writer_t sw;
   bitreader_t br;
@@ -473,7 +473,7 @@ static bim_tbc_t tbc(bim_tbc_kind_t kind, const char *name, const bim_type_t *ty
 }
 
 /* Root, context end, operand */
-static bim_tbc_t *path(fx_t *f, bim_tbc_kind_t kind, const char *name, const bim_type_t *type, const bim_simple_t *simple) {
+static bim_tbc_t *path(const fx_t *f, bim_tbc_kind_t kind, const char *name, const bim_type_t *type, const bim_simple_t *simple) {
   bim_tbc_t *t = calloc(3, sizeof *t);
   ck_assert_ptr_nonnull(t);
   t[0] = tbc(BIM_TBC_ELEM, "Root", ty(&f->sc, "RootType"));
@@ -489,10 +489,10 @@ static int fwrite_bits(fx_t *f, const bim_fuu_t *u, bitwriter_t *bw, bim_err_t *
 }
 
 static void fparse(fx_t *f, bitwriter_t *bw, bim_fuu_t *g) {
-  bim_bits_t b;
+  bim_bits_t b = {NULL, 0, NULL};
   size_t n;
   bim_err_t err;
-  b.bits = (unsigned char *)bitwriter_data(bw, &n);
+  b.bits = bitwriter_data(bw, &n);
   b.nbits = (uint64_t)bw->len * 8 + (uint64_t)bw->cur_bits;
   b.nbits = b.nbits ? b.nbits : (uint64_t)n * 8;
   if (bim_fuu_parse(&f->st, &b, g, &err)) ck_abort_msg("%s %s", err.code, err.msg);
@@ -599,14 +599,14 @@ START_TEST(fuu_writer_round_trips) {
     bim_fuu_t u;
     fx_init(&f, insert);
     u = fuu(BIM_CMD_ADD, 1, path(&f, BIM_TBC_ELEM, "Sub", ty(&f.sc, "Base"), NULL), 3, 1);
-    u.pos[2] = insert ? 1ull << 63 : 2;
+    u.pos[2] = insert ? 1ULL << 63 : 2;
     put_nodes(&u, 1, "Sub", NULL, "s");
     fuu_check(&f, &u);
     fuu_release(&u);
     u = fuu(BIM_CMD_ADD, 3, path(&f, BIM_TBC_ELEM, "Head", ty(&f.sc, "Derived"), NULL), 3, 3);
-    u.pos[2] = insert ? 1ull << 62 : 5;
-    u.pos[5] = insert ? 1ull << 63 : 1;
-    u.pos[8] = insert ? 3ull << 62 : 9;
+    u.pos[2] = insert ? 1ULL << 62 : 5;
+    u.pos[5] = insert ? 1ULL << 63 : 1;
+    u.pos[8] = insert ? 3ULL << 62 : 9;
     put_nodes(&u, 3, "Head", "k", "d");
     for (int i = 0; i < 3; i++) nn(u.payloads[i], "B", "b");
     fuu_check(&f, &u);
@@ -620,7 +620,7 @@ START_TEST(fuu_writer_round_trips) {
       t[3] = tbc(BIM_TBC_ATTR, "k", ty(&f.sc, "Base"));
       t[3].simple = ty(&f.sc, "Base")->attrs[0].simple;
       u = fuu(BIM_CMD_REPLACE, 1, t, 4, 1);
-      u.pos[1] = insert ? 1ull << 63 : 1;
+      u.pos[1] = insert ? 1ULL << 63 : 1;
       u.values = calloc(1, sizeof *u.values);
       ck_assert_ptr_nonnull(u.values);
       u.values[0] = strdup("v");
@@ -628,7 +628,7 @@ START_TEST(fuu_writer_round_trips) {
       fuu_release(&u);
     }
     u = fuu(BIM_CMD_DELETE, 1, path(&f, BIM_TBC_ELEM, "Head", ty(&f.sc, "Base"), NULL), 3, 1);
-    u.pos[2] = insert ? 1ull << 63 : 0;
+    u.pos[2] = insert ? 1ULL << 63 : 0;
     fuu_check(&f, &u);
     fuu_release(&u);
     {
@@ -758,7 +758,7 @@ START_TEST(fuu_writer_table_reparam_errors) {
   cp.nbits = 13;
   {
     size_t n;
-    cp.bits = (unsigned char *)bitwriter_data(&pb, &n);
+    cp.bits = bitwriter_data(&pb, &n);
   }
   f.di.cpt = 1;
   f.di.cpt_code_len = 1;

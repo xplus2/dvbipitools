@@ -191,19 +191,22 @@ START_TEST(schemagen_allocation_failures) {
 }
 END_TEST
 
-static const bim_node_t *find_node(const bim_node_t *n, const char *name, int *nth) {
-  if (n->name && !strcmp(n->name, name) && (*nth)-- == 0) return n;
+static bim_node_t *find_node(bim_node_t *n, const char *name, int *nth) {
+  if (n->name && !strcmp(n->name, name)) {
+    if (*nth == 0) return n;
+    (*nth)--;
+  }
   for (int i = 0; i < n->nkids; i++) {
-    const bim_node_t *r = find_node(n->kids[i], name, nth);
+    bim_node_t *r = find_node(n->kids[i], name, nth);
     if (r) return r;
   }
   return NULL;
 }
 
-static bim_node_t *node_at(gx_t *g, const char *name, int nth) {
-  const bim_node_t *n = find_node(g->tree, name, &nth);
+static bim_node_t *node_at(const gx_t *g, const char *name, int nth) {
+  bim_node_t *n = find_node(g->tree, name, &nth);
   ck_assert_msg(n != NULL, "no node %s", name);
-  return (bim_node_t *)n;
+  return n;
 }
 
 static void drop_child(bim_node_t *p, const char *name) {
@@ -298,7 +301,7 @@ START_TEST(schemaupdate_to_xsd_emits_a_loadable_schema) {
 }
 END_TEST
 
-static int au_with(gx_t *g, const bim_node_t *tree, unsigned reparam, const uint8_t *pre, size_t npre, int pre_bits, bitwriter_t *out) {
+static int au_with(const gx_t *g, const bim_node_t *tree, unsigned reparam, const uint8_t *pre, size_t npre, int pre_bits, bitwriter_t *out) {
   const bim_elem_t *root = xsd_compiled_elem(g->ec, XSD_ENCODING_NS, "schema");
   bim_encode_opts_t eo;
   bitwriter_t fuu;

@@ -173,7 +173,8 @@ START_TEST(argutil_prescan_reads_config_and_flags) {
   ck_assert_int_eq(ct, 1);
   ck_assert_int_eq(st, 1);
   cfg = NULL;
-  ct = st = 0;
+  st = 0;
+  ct = st;
   ck_assert_int_eq(argutil_prescan(4, a2, "c:hq", longopts, 1000, 1001, &cfg, &ct, &st), 1);
   ck_assert_ptr_null(cfg);
 }

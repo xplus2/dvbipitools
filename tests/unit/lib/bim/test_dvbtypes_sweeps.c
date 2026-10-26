@@ -111,7 +111,7 @@ START_TEST(dvbtypes_datetimes_round_trip_and_survive_damage) {
   for (int published = 0; published < 2; published++) {
     memset(&st, 0, sizeof st);
     bitwriter_init(&bw);
-    for (size_t i = 0; i < sizeof datetimes / sizeof *datetimes; i++) (void)dvb_datetime_encode_st(&bw, &st, datetimes[i], published);
+    for (size_t i = 0; i < sizeof datetimes / sizeof datetimes[0]; i++) (void)dvb_datetime_encode_st(&bw, &st, datetimes[i], published);
     (void)dvb_datetime_encode(&bw, datetimes[0]);
     p = bitwriter_data(&bw, &n);
     copy = malloc(n);
@@ -168,8 +168,8 @@ START_TEST(dvbtypes_durations_and_terms_round_trip_and_survive_damage) {
     if (variant == 2) cs.compact = 0;
     bitwriter_init(&bw);
     ck_assert_int_eq(strrepo_writer_init(&sw), 0);
-    for (size_t i = 0; i < sizeof terms / sizeof *terms; i++) ck_assert_int_eq(dvb_controlledterm_encode_cs(&bw, &sw, use, terms[i]), 0);
-    for (size_t i = 0; i < sizeof durations / sizeof *durations; i++) ck_assert_int_eq(dvb_duration_encode(&bw, &sw, durations[i], variant & 1), 0);
+    for (size_t i = 0; i < sizeof terms / sizeof terms[0]; i++) ck_assert_int_eq(dvb_controlledterm_encode_cs(&bw, &sw, use, terms[i]), 0);
+    for (size_t i = 0; i < sizeof durations / sizeof durations[0]; i++) ck_assert_int_eq(dvb_duration_encode(&bw, &sw, durations[i], variant & 1), 0);
     p = bitwriter_data(&bw, &n);
     q = strrepo_writer_data(&sw, &qn);
     copy = malloc(n);
@@ -182,7 +182,7 @@ START_TEST(dvbtypes_durations_and_terms_round_trip_and_survive_damage) {
       if (bit < n * 8) copy[bit / 8] ^= (unsigned char)(0x80u >> (bit % 8));
       bitreader_init(&br, copy, n);
       ck_assert_int_eq(strrepo_reader_init(&sr, q, qn), 0);
-      for (size_t i = 0; i < sizeof terms / sizeof *terms; i++)
+      for (size_t i = 0; i < sizeof terms / sizeof terms[0]; i++)
         if (dvb_controlledterm_decode_cs(&br, &sr, use, out, bit % 2 ? sizeof out : 10)) break;
       bitreader_init(&br, copy, n);
       (void)dvb_controlledterm_decode(&br, &sr, out, sizeof out);
@@ -194,7 +194,7 @@ START_TEST(dvbtypes_durations_and_terms_round_trip_and_survive_damage) {
       char out[300];
       bitreader_init(&br, copy, cut);
       ck_assert_int_eq(strrepo_reader_init(&sr, q, qn), 0);
-      for (size_t i = 0; i < sizeof terms / sizeof *terms; i++)
+      for (size_t i = 0; i < sizeof terms / sizeof terms[0]; i++)
         if (dvb_controlledterm_decode_cs(&br, &sr, use, out, sizeof out)) break;
     }
     free(copy);
@@ -214,9 +214,9 @@ START_TEST(dvbtypes_encoders_survive_allocation_failures) {
     bitwriter_init(&bw);
     ck_assert_int_eq(strrepo_writer_init(&sw), 0);
     alloc_fail_at(k);
-    for (size_t i = 0; i < sizeof locators / sizeof *locators; i++) (void)dvb_locator_encode_st(&bw, &sw, &st, locators[i], 1);
-    for (size_t i = 0; i < sizeof datetimes / sizeof *datetimes; i++) (void)dvb_datetime_encode_st(&bw, &st, datetimes[i], 1);
-    for (size_t i = 0; i < sizeof durations / sizeof *durations; i++) (void)dvb_duration_encode(&bw, &sw, durations[i], 1);
+    for (size_t i = 0; i < sizeof locators / sizeof locators[0]; i++) (void)dvb_locator_encode_st(&bw, &sw, &st, locators[i], 1);
+    for (size_t i = 0; i < sizeof datetimes / sizeof datetimes[0]; i++) (void)dvb_datetime_encode_st(&bw, &st, datetimes[i], 1);
+    for (size_t i = 0; i < sizeof durations / sizeof durations[0]; i++) (void)dvb_duration_encode(&bw, &sw, durations[i], 1);
     hit = alloc_fail_end();
     bitwriter_free(&bw);
     strrepo_writer_free(&sw);

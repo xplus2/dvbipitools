@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,20 +21,12 @@ typedef struct {
   int depth;
 } cv_t;
 
-static int fail(bim_err_t *err, const char *fmt, ...)
-#if defined(__GNUC__)
-    __attribute__((format(printf, 2, 3)))
-#endif
-    ;
-
-static int fail(bim_err_t *err, const char *fmt, ...) {
-  char what[120];
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(what, sizeof what, fmt, ap);
-  va_end(ap);
-  return bim_fail(err, E_SUU, "bim: binary encoded schema %s", what);
-}
+#define fail(err, ...) \
+  ({ \
+    char what_[120]; \
+    snprintf(what_, sizeof what_, __VA_ARGS__); \
+    bim_fail((err), E_SUU, "bim: binary encoded schema %s", what_); \
+  })
 
 int xsd_encoding_compile(xsd_set_t **s, const xsd_compiled_t **c) {
   xml_doc_t *doc = NULL;
@@ -98,7 +89,7 @@ static const char *cast_of(const bim_node_t *n) { return n->cast ? n->cast->name
 
 static int eq(const char *a, const char *b) { return a && b && !strcmp(a, b); }
 
-static int ns_index(cv_t *c, const char *ns) {
+static int ns_index(const cv_t *c, const char *ns) {
   for (int i = 0; i < c->in->nimported; i++)
     if (eq(c->in->imported[i], ns)) return i;
   return -1;
@@ -121,25 +112,31 @@ static int u64_attr(cv_t *c, const bim_node_t *n, const char *name, int opt, uin
 }
 
 /* name of k-th global component of ns: carried in this SUU, else compiled known schemas (earlier SUUs too) */
-static const char *global_name(cv_t *c, int elems, const char *ns, uint64_t k) {
+static const char *global_name(const cv_t *c, int elems, const char *ns, uint64_t k) {
   const bim_node_t *list = elems ? c->elems : c->types;
   const uint64_t *codes = elems ? c->in->elem_codes : c->in->type_codes;
   size_t ncodes = elems ? c->in->nelem_codes : c->in->ntype_codes;
   if (eq(ns, c->in->tns)) {
     for (int i = 0; list && i < list->nkids; i++)
-      if ((codes ? (size_t)i < ncodes && codes[i] == k : (uint64_t)i == k)) return bim_node_attr(list->kids[i], "name");
+      if (codes ? (size_t)i < ncodes && codes[i] == k : (uint64_t)i == k) return bim_node_attr(list->kids[i], "name");
   }
   if (!c->in->known) return NULL;
   if (elems) {
     for (int i = 0; i < c->in->known->nelems; i++) {
       const bim_elem_t *e = c->in->known->elems[i];
-      if (eq(e->ns, ns) && !k--) return e->name;
+      if (eq(e->ns, ns)) {
+        if (k == 0) return e->name;
+        k--;
+      }
     }
     return NULL;
   }
   for (int i = 0; i < c->in->known->ntypes; i++) {
     const bim_type_t *t = c->in->known->types[i];
-    if (t->name && eq(t->ns, ns) && !k--) return t->name;
+    if (t->name && eq(t->ns, ns)) {
+      if (k == 0) return t->name;
+      k--;
+    }
   }
   return NULL;
 }
@@ -161,13 +158,14 @@ static int named_ref(cv_t *c, const bim_node_t *r, int elems, const char **ns, c
   uint64_t k = 0;
   if (ref_ns(c, r, ns) || u64_attr(c, r, elems ? "ElementID" : "TypeID", 0, &k)) return -1;
   *name = global_name(c, elems, *ns, k);
-  return *name ? 0 : fail(c->err, "%s %llu unresolved", elems ? "ElementID" : "TypeID", (unsigned long long)k);
+  if (*name) return 0;
+  return fail(c->err, "%s %llu unresolved", elems ? "ElementID" : "TypeID", (unsigned long long)k);
 }
 
 static int emit_complex(cv_t *c, const bim_node_t *ct, const char *name);
 static int emit_simple(cv_t *c, const bim_node_t *st, const char *name);
 
-static const bim_node_t *anon_type(cv_t *c, const bim_node_t *r) {
+static const bim_node_t *anon_type(const cv_t *c, const bim_node_t *r) {
   const char *id = bim_node_attr(r, "idref");
   for (int i = 0; id && c->anon && i < c->anon->nkids; i++)
     if (eq(bim_node_attr(c->anon->kids[i], "id"), id)) return c->anon->kids[i];
@@ -178,8 +176,8 @@ static const bim_node_t *anon_type(cv_t *c, const bim_node_t *r) {
 static int emit_typeref(cv_t *c, const bim_node_t *tr, const char *attr, int *open) {
   const bim_node_t *r = tr ? bim_node_child(tr, "namedTypeReference") : NULL;
   const bim_node_t *a;
-  const char *ns;
-  const char *name;
+  const char *ns = NULL;
+  const char *name = NULL;
   if (r) {
     if (named_ref(c, r, 0, &ns, &name)) return -1;
     dstrbuf_appendf(&c->b, " %s=\"", attr);
@@ -202,8 +200,8 @@ static int emit_typeref(cv_t *c, const bim_node_t *tr, const char *attr, int *op
 /* QName only (base, itemType, memberTypes) */
 static int typeref_qname(cv_t *c, const bim_node_t *tr) {
   const bim_node_t *r = tr ? bim_node_child(tr, "namedTypeReference") : NULL;
-  const char *ns;
-  const char *name;
+  const char *ns = NULL;
+  const char *name = NULL;
   if (!r) return fail(c->err, "anonymous type where XML Schema needs a QName");
   if (named_ref(c, r, 0, &ns, &name)) return -1;
   add_qname(c, ns, name);
@@ -217,7 +215,7 @@ static void occurs(cv_t *c, const bim_node_t *p) {
 
 static int emit_particle(cv_t *c, const bim_node_t *p) {
   const char *k = cast_of(p);
-  int open;
+  int open = 0;
   if (!k) return fail(c->err, "particle without type cast");
   if (!strcmp(k, "sequence") || !strcmp(k, "choice") || !strcmp(k, "all")) {
     dstrbuf_appendf(&c->b, "<xs:%s", k);
@@ -237,8 +235,8 @@ static int emit_particle(cv_t *c, const bim_node_t *p) {
   if (!strcmp(k, "elementRef")) {
     const bim_node_t *ref = bim_node_child(p, "ref");
     const bim_node_t *r = ref ? bim_node_child(ref, "namedElementReference") : NULL;
-    const char *ns;
-    const char *name;
+    const char *ns = NULL;
+    const char *name = NULL;
     if (!r || named_ref(c, r, 1, &ns, &name)) return r ? -1 : fail(c->err, "element reference missing");
     dstrbuf_add(&c->b, "<xs:element ref=\"");
     add_qname(c, ns, name);
@@ -262,7 +260,7 @@ static int emit_attrs(cv_t *c, const bim_node_t *ct) {
   const bim_node_t *as = bim_node_child(ct, "attributes");
   for (int i = 0; as && i < as->nkids; i++) {
     const bim_node_t *a = as->kids[i];
-    int open;
+    int open = 0;
     if (bim_node_is(a, XSD_ENCODING_NS, "anyAttribute")) {
       dstrbuf_add(&c->b, "<xs:anyAttribute/>");
       continue;
@@ -289,7 +287,9 @@ static int emit_complex(cv_t *c, const bim_node_t *ct, const char *name) {
   const bim_node_t *der = bim_node_child(ct, "derivation");
   const char *how = der ? bim_node_attr(der, "type") : NULL;
   const char *model;
-  if (!content || !(model = cast_of(content))) return fail(c->err, "complex type content missing");
+  if (!content) return fail(c->err, "complex type content missing");
+  model = cast_of(content);
+  if (!model) return fail(c->err, "complex type content missing");
   dstrbuf_add(&c->b, "<xs:complexType");
   add_attr(c, "name", name);
   if (!strcmp(model, "complexContentModelType")) add_attr(c, "mixed", bim_node_attr(content, "mixed"));
@@ -337,7 +337,7 @@ static int emit_list_union(cv_t *c, const bim_node_t *lu) {
   int list = bim_node_is(lu, XSD_ENCODING_NS, "list");
   dstrbuf_appendf(&c->b, "<xs:%s>", list ? "list" : "union");
   for (int i = 0; i < lu->nkids; i++) {
-    int open;
+    int open = 0;
     dstrbuf_add(&c->b, "<xs:simpleType><xs:restriction");
     if (emit_typeref(c, lu->kids[i], "base", &open)) return -1;
     if (open) dstrbuf_add(&c->b, "</xs:restriction>");
@@ -402,7 +402,7 @@ static int emit_schema(cv_t *c) {
   }
   for (int i = 0; c->elems && i < c->elems->nkids; i++) {
     const bim_node_t *e = c->elems->kids[i];
-    int open;
+    int open = 0;
     dstrbuf_add(&c->b, "<xs:element");
     add_attr(c, "name", bim_node_attr(e, "name"));
     if (emit_typeref(c, bim_node_child(e, "elementTypeReference"), "type", &open)) return -1;
@@ -410,7 +410,7 @@ static int emit_schema(cv_t *c) {
   }
   for (int i = 0; ads && i < ads->nkids; i++) {
     const bim_node_t *a = ads->kids[i];
-    int open;
+    int open = 0;
     dstrbuf_add(&c->b, "<xs:attribute");
     add_attr(c, "name", bim_node_attr(a, "name"));
     add_attr(c, "default", bim_node_attr(a, "defaultValue"));

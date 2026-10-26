@@ -174,7 +174,7 @@ static bim_node_t *prefix_tree(void) {
   k->ns = "urn:pref2";
   k = bim_node_add_new(r, "D", "text");
   k->cast = &anon;
-  g = bim_node_add_new(k, NULL, "tail");
+  bim_node_add_new(k, NULL, "tail");
   g = bim_node_add_new(k, "E", NULL);
   g->cast = &named;
   g->ns = "";

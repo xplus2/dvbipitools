@@ -119,16 +119,21 @@ static int index_dir(loader_t *l, const char *dir, int id, int depth) {
   struct dirent *e;
   int rc = 0;
   if (!d) return xsd_set_fail(l->s, "LS000743", "bim: cannot open directory %s", dir);
-  while (!rc && (e = readdir(d))) {
+  while (!rc) {
+    e = readdir(d);
+    if (!e) break;
     char p[PATH_MAX];
     struct stat st;
     char *real;
     size_t n = strlen(e->d_name);
-    if (e->d_name[0] == '.' || snprintf(p, sizeof p, "%s/%s", dir, e->d_name) >= (int)sizeof p || stat(p, &st)) continue;
+    if (e->d_name[0] == '.') continue;
+    if (snprintf(p, sizeof p, "%s/%s", dir, e->d_name) >= (int)sizeof p) continue;
+    if (stat(p, &st)) continue;
     if (S_ISDIR(st.st_mode)) {
       if (depth < DIR_DEPTH_MAX) rc = index_dir(l, p, id, depth + 1);
-    } else if (S_ISREG(st.st_mode) && n > 4 && !strcmp(e->d_name + n - 4, ".xsd") && (real = realpath(p, NULL)) && file_add(l->x, real, id)) {
-      rc = oom(l);
+    } else if (S_ISREG(st.st_mode) && n > 4 && !strcmp(e->d_name + n - 4, ".xsd")) {
+      real = realpath(p, NULL);
+      if (real && file_add(l->x, real, id)) rc = oom(l);
     }
   }
   closedir(d);
@@ -180,7 +185,13 @@ static char *scan_tns(const char *path, int *oomf) {
   char v[1024];
   char *tns = NULL;
   if (!(fp = fopen(path, "rb"))) return NULL;
-  if (!read_all(fp, &buf, &len) && !xml_to_utf8(&buf, &len, NULL, 0) && !xml_attr(buf, buf + len, "targetNamespace", v, sizeof v) && !(tns = strdup(v))) *oomf = 1;
+  int rc = read_all(fp, &buf, &len);
+  if (!rc) rc = xml_to_utf8(&buf, &len, NULL, 0);
+  if (!rc) rc = xml_attr(buf, buf + len, "targetNamespace", v, sizeof v);
+  if (!rc) {
+    tns = strdup(v);
+    if (!tns) *oomf = 1;
+  }
   fclose(fp);
   free(buf);
   return tns;
@@ -228,7 +239,7 @@ static int find_indexed(loader_t *l, const char *loc, const char *ns, int by_ns,
       tns = file_tns(f, &oomf);
       if (oomf) return -2;
       if (!tns || strcmp(tns, ns ? ns : "")) continue;
-    } else if (strcmp(b, base)) {
+    } else if (!base || strcmp(b, base)) {
       continue;
     }
     if (hits && strcmp(*out, f->path)) return -1;
@@ -258,7 +269,10 @@ static int load_file(loader_t *l, const char *path, char kind, const char *tns);
 static int load_ref(loader_t *l, const char *from, const xsd_ref_t *r) {
   char p[PATH_MAX];
   int found = 0;
-  if (r->location && !is_url(r->location) && (found = locate(l, from, r->location, p, sizeof p)) < 0) return -1;
+  if (r->location && !is_url(r->location)) {
+    found = locate(l, from, r->location, p, sizeof p);
+    if (found < 0) return -1;
+  }
   if (r->kind == 'm') {
     const char *hit = NULL;
     int rc;
@@ -273,9 +287,8 @@ static int load_ref(loader_t *l, const char *from, const xsd_ref_t *r) {
     }
     if (load_file(l, p, 'm', NULL)) return -1;
     /* XML Schema Part 1 4.2.3, src-import 3.1 */
-    return slist_has(&l->namespaces, r->ns ? r->ns : "") ? 0
-                                                          : xsd_set_fail(l->s, "LS400276", "bim: %s: import of namespace %s, %s has another targetNamespace", from,
-                                                                         r->ns ? r->ns : "(none)", p);
+    if (slist_has(&l->namespaces, r->ns ? r->ns : "")) return 0;
+    return xsd_set_fail(l->s, "LS400276", "bim: %s: import of namespace %s, %s has another targetNamespace", from, r->ns ? r->ns : "(none)", p);
   }
   if (!r->location) return xsd_set_fail(l->s, "LS000748", "bim: %s: %s without schemaLocation", from, r->kind == 'i' ? "include" : "redefine");
   if (!found) return xsd_set_fail(l->s, "LS000744", "bim: %s: schemaLocation %s not found", from, r->location);
@@ -401,7 +414,11 @@ static int load_for_ns(xsd_set_t *s, xsd_index_t *x, const char *const *paths, i
   int no = 0;
   int rc = -2;
   *culprit = NULL;
-  if (!dirs || !files || !owned || !(x = x ? x : tmp)) goto out;
+  if (!dirs) goto out;
+  if (!files) goto out;
+  if (!owned) goto out;
+  x = x ? x : tmp;
+  if (!x) goto out;
   for (int i = 0; i < npaths; i++) {
     struct stat sb;
     if (stat(paths[i], &sb)) {

@@ -27,7 +27,7 @@ static int sbc_tree(cc_t *c, snode_t *n) {
   for (int i = 0; i < n->nkids; i++)
     if (sbc_tree(c, n->kids[i])) return -1;
   for (int i = 0; n->kind == XSD_P_CHOICE && i < n->nkids; i++) {
-    snode_t *k = n->kids[i];
+    const snode_t *k = n->kids[i];
     snode_t **v;
     if (k->kind != XSD_P_CHOICE) continue;
     if (!(v = xc_alloc(c, sizeof *v * (size_t)(n->nkids - 1 + k->nkids)))) return xc_oom(c);
@@ -79,7 +79,10 @@ static int sbc_attrs(cc_t *c, const xsd_type_t *t, sbclist_t *l) {
     e.kind = BIM_SBC_ATTR;
     e.name = own.v[i].attr->q.name;
     e.ns = own.v[i].attr->q.ns;
-    if (!(e.simple = xc_get_simple(c, own.v[i].attr->type)) || !(key = xc_ename(c, e.ns, e.name)) || sbc_add(c, l, &e, key)) rc = -1;
+    e.simple = xc_get_simple(c, own.v[i].attr->type);
+    key = e.simple ? xc_ename(c, e.ns, e.name) : NULL;
+    if (!e.simple || !key) rc = -1;
+    else if (sbc_add(c, l, &e, key)) rc = -1;
   }
   free(own.v);
   if (rc) return -1;
@@ -91,10 +94,14 @@ static int sbc_attrs(cc_t *c, const xsd_type_t *t, sbclist_t *l) {
     memset(&e, 0, sizeof e);
     e.kind = BIM_SBC_ANYATTR;
     e.wc = w;
-    x.kind = w->kind == BIM_WC_ANY ? XSD_WC_ANY : w->kind == BIM_WC_NOT ? XSD_WC_NOT : XSD_WC_LIST;
-    x.ns = (const char **)w->ns;
+    x.kind = XSD_WC_LIST;
+    if (w->kind == BIM_WC_ANY) x.kind = XSD_WC_ANY;
+    else if (w->kind == BIM_WC_NOT) x.kind = XSD_WC_NOT;
+    x.ns = w->ns;
     x.nns = w->nns;
-    x.process = w->process == BIM_PC_STRICT ? XSD_PC_STRICT : w->process == BIM_PC_LAX ? XSD_PC_LAX : XSD_PC_SKIP;
+    x.process = XSD_PC_SKIP;
+    if (w->process == BIM_PC_STRICT) x.process = XSD_PC_STRICT;
+    else if (w->process == BIM_PC_LAX) x.process = XSD_PC_LAX;
     if (!(key = xc_wc_sig(c, &x)) || sbc_add(c, l, &e, key)) return -1;
   }
   for (int i = start + 1; i < l->n; i++)
@@ -135,12 +142,19 @@ int xc_compile_sbc(cc_t *c, const xsd_type_t *t, int depth) {
       }
     } else if (!xc_content_empty(t->particle)) {
       snode_t *n = xc_build(c, t, t->particle, 0);
-      rc = !n || sbc_tree(c, n) || xc_sign(c, n) || sbc_leaves(c, n, &l) ? -1 : 0;
+      rc = n ? sbc_tree(c, n) : -1;
+      if (!rc) rc = xc_sign(c, n);
+      if (!rc) rc = sbc_leaves(c, n, &l);
+      if (rc) rc = -1;
     }
     if (!rc) rc = sbc_attrs(c, t, &l);
   }
-  if (!rc && l.n && !(b->sbc = xc_alloc(c, sizeof *b->sbc * (size_t)l.n))) rc = xc_oom(c);
-  if (!rc && l.n) memcpy((void *)b->sbc, l.v, sizeof *b->sbc * (size_t)l.n);
+  if (!rc && l.n) {
+    bim_sbc_t *dst = xc_alloc(c, sizeof *dst * (size_t)l.n);
+    if (dst) memcpy(dst, l.v, sizeof *dst * (size_t)l.n);
+    else rc = xc_oom(c);
+    b->sbc = dst;
+  }
   b->nsbc = rc ? 0 : l.n;
   free(l.v);
   free(l.keys);

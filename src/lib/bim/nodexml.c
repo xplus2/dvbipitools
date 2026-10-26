@@ -63,8 +63,9 @@ static void add_ns(w_t *w, const bim_node_t *root, const char *uri, int for_attr
   char gen[24];
   int idx;
   if (!uri || !*uri || w->oom || !strcmp(uri, XML_NS)) return;
-  if (find(w, uri) >= 0) {
-    ns_t *e = &w->ns[find(w, uri)];
+  idx = find(w, uri);
+  if (idx >= 0) {
+    ns_t *e = &w->ns[idx];
     if (for_attr && !*e->prefix) {
       /* default namespace does not apply to attributes */
       gen_prefix(w, gen, sizeof gen);
@@ -76,7 +77,10 @@ static void add_ns(w_t *w, const bim_node_t *root, const char *uri, int for_attr
   }
   for (int i = 0; i < w->o->nprefixes && !pref; i++)
     if (!strcmp(w->o->prefixes[i].uri, uri) && *w->o->prefixes[i].prefix && !used_prefix(w, w->o->prefixes[i].prefix)) pref = w->o->prefixes[i].prefix;
-  if (!pref && (pref = declared(root, uri)) && used_prefix(w, pref)) pref = NULL;
+  if (!pref) {
+    pref = declared(root, uri);
+    if (pref && used_prefix(w, pref)) pref = NULL;
+  }
   if (!pref && !strcmp(uri, XSI_NS) && !used_prefix(w, "xsi")) pref = "xsi";
   if (!pref && !for_attr && w->root_ns && !strcmp(w->root_ns, uri) && !used_prefix(w, "")) pref = "";
   if (!pref) {
@@ -91,6 +95,10 @@ static void add_ns(w_t *w, const bim_node_t *root, const char *uri, int for_attr
     }
     w->ns = n;
     w->cns = w->cns ? w->cns * 2 : 8;
+  }
+  if (!w->ns) {
+    w->oom = 1;
+    return;
   }
   idx = w->nns++;
   w->ns[idx].uri = uri;

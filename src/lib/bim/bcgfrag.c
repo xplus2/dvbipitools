@@ -18,7 +18,7 @@ static const bim_sbc_t *sbc_elem(const bim_type_t *t, const char *name) {
 }
 
 /* sets ns of descendants of n from SBC of t. -1 name not in schema */
-static int bind(bim_node_t *n, const bim_type_t *t) {
+static int bind(const bim_node_t *n, const bim_type_t *t) {
   for (int i = 0; i < n->nkids; i++) {
     bim_node_t *k = n->kids[i];
     const bim_sbc_t *s;
@@ -32,7 +32,9 @@ static int bind(bim_node_t *n, const bim_type_t *t) {
 
 static bim_node_t *root_of(const bcgau_t *a, unsigned code, bim_tvaroot_t *r) {
   bim_node_t *n;
-  if (bim_tvafrag_root(a->c, &a->ns, code, r) || !(n = bim_node_new(r->name))) return NULL;
+  if (bim_tvafrag_root(a->c, &a->ns, code, r)) return NULL;
+  n = bim_node_new(r->name);
+  if (!n) return NULL;
   n->ns = r->ns;
   return n;
 }
@@ -129,11 +131,13 @@ bim_node_t *bcgfrag_schedule(const bcgau_t *a, const char *channel_id, const bcg
   sched_ord_t *ord;
   bim_node_t *root;
   int n = 0;
+  int cap;
   for (int j = first; j != -1; j = next[j]) n++;
-  ord = malloc(sizeof *ord * (size_t)(n ? n : 1));
+  cap = n ? n : 1;
+  ord = malloc(sizeof *ord * (size_t)cap);
   if (!ord) return NULL;
   n = 0;
-  for (int j = first; j != -1; j = next[j]) {
+  for (int j = first; j != -1 && n < cap; j = next[j]) {
     ord[n].idx = j;
     if (iso8601_utc_secs(programmes[j].start, &ord[n].start)) ord[n].start = LLONG_MIN;
     n++;

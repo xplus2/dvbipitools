@@ -73,14 +73,22 @@ static int integer_codec(cc_t *c, const xsd_type_t *t, const facets_t *a, bim_si
   sint_t hi = {0};
   int have_lo = 0;
   int have_hi = 0;
-  if (a->f[XSD_F_MININCLUSIVE] && !(have_lo = !facet_sint(c, t, a->f[XSD_F_MININCLUSIVE], &lo))) return -1;
+  if (a->f[XSD_F_MININCLUSIVE]) {
+    have_lo = !facet_sint(c, t, a->f[XSD_F_MININCLUSIVE], &lo);
+    if (!have_lo) return -1;
+  }
   if (a->f[XSD_F_MINEXCLUSIVE]) {
-    if (facet_sint(c, t, a->f[XSD_F_MINEXCLUSIVE], &lo) || sint_step(&lo, 1)) return xsd_set_fail(c->s, "LS400283", "bim: %s: integer facet value %s outside 64 bit", xc_label(t), a->f[XSD_F_MINEXCLUSIVE]);
+    if (facet_sint(c, t, a->f[XSD_F_MINEXCLUSIVE], &lo)) return xsd_set_fail(c->s, "LS400283", "bim: %s: integer facet value %s outside 64 bit", xc_label(t), a->f[XSD_F_MINEXCLUSIVE]);
+    if (sint_step(&lo, 1)) return xsd_set_fail(c->s, "LS400283", "bim: %s: integer facet value %s outside 64 bit", xc_label(t), a->f[XSD_F_MINEXCLUSIVE]);
     have_lo = 1;
   }
-  if (a->f[XSD_F_MAXINCLUSIVE] && !(have_hi = !facet_sint(c, t, a->f[XSD_F_MAXINCLUSIVE], &hi))) return -1;
+  if (a->f[XSD_F_MAXINCLUSIVE]) {
+    have_hi = !facet_sint(c, t, a->f[XSD_F_MAXINCLUSIVE], &hi);
+    if (!have_hi) return -1;
+  }
   if (a->f[XSD_F_MAXEXCLUSIVE]) {
-    if (facet_sint(c, t, a->f[XSD_F_MAXEXCLUSIVE], &hi) || sint_step(&hi, -1)) return xsd_set_fail(c->s, "LS400283", "bim: %s: integer facet value %s outside 64 bit", xc_label(t), a->f[XSD_F_MAXEXCLUSIVE]);
+    if (facet_sint(c, t, a->f[XSD_F_MAXEXCLUSIVE], &hi)) return xsd_set_fail(c->s, "LS400283", "bim: %s: integer facet value %s outside 64 bit", xc_label(t), a->f[XSD_F_MAXEXCLUSIVE]);
+    if (sint_step(&hi, -1)) return xsd_set_fail(c->s, "LS400283", "bim: %s: integer facet value %s outside 64 bit", xc_label(t), a->f[XSD_F_MAXEXCLUSIVE]);
     have_hi = 1;
   }
   if (!have_lo || !have_hi) {
@@ -92,7 +100,9 @@ static int integer_codec(cc_t *c, const xsd_type_t *t, const facets_t *a, bim_si
   else if (lo.neg && !hi.neg && hi.mag <= UINT64_MAX - lo.mag) d->range.span = hi.mag + lo.mag;
   else if (lo.neg && hi.neg && lo.mag >= hi.mag) d->range.span = lo.mag - hi.mag;
   else return xsd_set_fail(c->s, "LS400284", "bim: %s: integer range empty or wider than 64 bit", xc_label(t));
-  d->range.min = lo.neg ? (lo.mag > (uint64_t)INT64_MAX ? INT64_MIN : -(int64_t)lo.mag) : (int64_t)lo.mag;
+  if (!lo.neg) d->range.min = (int64_t)lo.mag;
+  else if (lo.mag > (uint64_t)INT64_MAX) d->range.min = INT64_MIN;
+  else d->range.min = -(int64_t)lo.mag;
   d->codec = BIM_RANGE;
   return 0;
 }
@@ -252,7 +262,10 @@ const bim_simple_t *xc_get_simple(cc_t *c, const xsd_type_t *t) {
   }
   d->codec = BIM_UNSUPPORTED;
   memset(&a, 0, sizeof a);
-  if (t->kind == XSD_SIMPLE && t->base && t->base->kind == XSD_SIMPLE && !(d->base = xc_get_simple(c, t->base))) return NULL;
+  if (t->kind == XSD_SIMPLE && t->base && t->base->kind == XSD_SIMPLE) {
+    d->base = xc_get_simple(c, t->base);
+    if (!d->base) return NULL;
+  }
   return simple_from(c, t, 1, &a, d) ? NULL : d;
 }
 

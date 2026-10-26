@@ -229,7 +229,7 @@ int frag_assign_keys(bcg_announce_ctx_t *ctx, frag_key_fn key, const void *kctx,
 int frag_touch_keys(bcg_announce_ctx_t *ctx, frag_key_fn key, const void *kctx, bcgau_ref_t *refs, int n) {
   for (int i = 0; i < n; i++) {
     char base[TVA_CRID_BUF + 4];
-    frag_state_t *f = key(kctx, i, base, sizeof base) ? NULL : frag_get(ctx, base);
+    const frag_state_t *f = key(kctx, i, base, sizeof base) ? NULL : frag_get(ctx, base);
     if (!f) return -1;
     refs[i].frag_id = f->id;
     refs[i].version = (uint8_t)f->ver.version;
@@ -262,5 +262,7 @@ void frag_free(bcg_announce_ctx_t *ctx) {
   free(ctx->fbuf);
   ctx->frags = NULL;
   ctx->fbuf = NULL;
-  ctx->nfrags = ctx->frags_cap = ctx->fbuf_cap = 0;
+  ctx->fbuf_cap = 0;
+  ctx->frags_cap = ctx->fbuf_cap;
+  ctx->nfrags = ctx->frags_cap;
 }

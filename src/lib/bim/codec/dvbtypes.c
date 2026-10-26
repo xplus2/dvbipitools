@@ -79,7 +79,7 @@ static int hex_run(const char **p, unsigned *v) {
   unsigned long x;
   if (!isxdigit((unsigned char)**p)) return -1;
   x = strtoul(*p, &end, 16);
-  if (x > 0xFFFFFFFFul) return -1;
+  if (x > 0xFFFFFFFFUL) return -1;
   *p = end;
   *v = (unsigned)x;
   return 0;
@@ -91,9 +91,11 @@ static int loc_parse(const char *s, loc_t *l) {
   memset(l, 0, sizeof *l);
   if (strncmp(p, "dvb://", 6)) return -1;
   p += 6;
-  if (hex_run(&p, &l->onid) || *p++ != '.') return -1;
+  if (hex_run(&p, &l->onid)) return -1;
+  if (*p++ != '.') return -1;
   if (*p != '.' && hex_run(&p, &l->tsid)) return -1;
-  if (*p++ != '.' || hex_run(&p, &l->sid)) return -1;
+  if (*p++ != '.') return -1;
+  if (hex_run(&p, &l->sid)) return -1;
   if (*p == '.') {
     for (char sep = '.'; *p == sep && l->ntags < 32; sep = '&') {
       p++;
@@ -351,8 +353,8 @@ static int fmt_iso(long mjd, long minute_of_day, int sec, unsigned ms, char *out
   if (ms) {
     size_t k;
     snprintf(frac, sizeof frac, ".%03u", ms);
-    for (k = strlen(frac); frac[k - 1] == '0'; k--) {
-    }
+    k = strlen(frac);
+    while (frac[k - 1] == '0') k--;
     frac[k] = '\0';
   }
   m = snprintf(out + n, outcap - (size_t)n, "%sZ", frac);
@@ -423,8 +425,15 @@ int dvb_controlledterm_decode(bitreader_t *br, strrepo_reader_t *sr, char *out, 
 
 /* ClassificationSchemeURI of group and index, NULL unknown. group 0: codec parameter list */
 static const char *cs_uri(const dvb_cs_t *cs, uint64_t group, uint64_t idx) {
-  const char *const *tab = group == 2 ? cs_g2 : group == 3 ? cs_g3 : group == 4 ? cs_g4 : group == 5 ? cs_g5 : NULL;
-  size_t n = group == 2 ? NTAB(cs_g2) : group == 3 ? NTAB(cs_g3) : group == 4 ? NTAB(cs_g4) : NTAB(cs_g5);
+  const char *const *tab = NULL;
+  size_t n = 0;
+  switch (group) {
+    case 2: tab = cs_g2; n = NTAB(cs_g2); break;
+    case 3: tab = cs_g3; n = NTAB(cs_g3); break;
+    case 4: tab = cs_g4; n = NTAB(cs_g4); break;
+    case 5: tab = cs_g5; n = NTAB(cs_g5); break;
+    default: break;
+  }
   if (group == 0) return cs && cs->list && idx < cs->nlist ? cs->list[idx] : NULL;
   return tab && idx < n ? tab[idx] : NULL;
 }
@@ -445,7 +454,9 @@ int dvb_controlledterm_decode_buf(bitreader_t *br, strrepo_reader_t *sr, const d
     return -1;
   }
   if (bitreader_get_vluimsbf8(br, &term)) return -1;
-  uri = grouping ? cs_uri(cs, group, csid) : csid < NTAB(cs_id) ? cs_id[csid] : NULL;
+  uri = NULL;
+  if (grouping) uri = cs_uri(cs, group, csid);
+  else if (csid < NTAB(cs_id)) uri = cs_id[csid];
   if (uri && cs && cs->term) {
     char name[256];
     if (cs->term(cs->ctx, uri, term, name, sizeof name)) return -1;

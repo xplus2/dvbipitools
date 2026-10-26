@@ -42,7 +42,7 @@ START_TEST(bimio_reads_report_truncation) {
   size_t n;
   unsigned char *p = NULL;
   char *s = NULL;
-  bim_bits_t b = {NULL, 0};
+  bim_bits_t b = {NULL, 0, NULL};
   bim_ext_t x;
   rd_open(&r, &err, NULL, 0);
   ck_assert_int_eq(bim_rd_pos(&r), 0);
@@ -144,21 +144,21 @@ START_TEST(bimio_raw_bits_and_oom) {
   static const unsigned char data[] = {0xA5, 0xC0};
   bim_err_t err;
   bim_rd_t r;
-  bim_bits_t b = {NULL, 0};
+  bim_bits_t b = {NULL, 0, NULL};
   int rc;
   rd_open(&r, &err, data, sizeof data);
   ck_assert_int_eq(bim_rd_raw(&r, 10, &b), 0);
   ck_assert_uint_eq(b.nbits, 10);
   ck_assert_uint_eq(b.bits[0], 0xA5);
   ck_assert_uint_eq(b.bits[1], 0xC0);
-  free(b.bits);
+  free(b.heap_bits);
   rd_open(&r, &err, data, sizeof data);
-  b.bits = NULL;
+  b.heap_bits = NULL;
   ck_assert_int_eq(bim_rd_raw(&r, 0, &b), 0);
   ck_assert_uint_eq(b.nbits, 0);
-  free(b.bits);
+  free(b.heap_bits);
   rd_open(&r, &err, data, sizeof data);
-  b.bits = NULL;
+  b.heap_bits = NULL;
   alloc_fail_at(0);
   rc = bim_rd_raw(&r, 16, &b);
   alloc_fail_end();
@@ -314,7 +314,7 @@ END_TEST
 START_TEST(bimio_writers_round_trip) {
   static const unsigned char payload[] = {1, 2, 3, 4, 5};
   unsigned char bits_src[] = {0xDE, 0xA0};
-  bim_bits_t bits = {bits_src, 11};
+  bim_bits_t bits = {bits_src, 11, NULL};
   bim_err_t err;
   bim_wr_t w;
   bitwriter_t bw;
@@ -339,7 +339,10 @@ START_TEST(bimio_writers_round_trip) {
   bits.nbits = 0;
   ck_assert_int_eq(bim_wr_bits(&w, &bits), 0);
   for (int i = 0; i < 20; i++) {
-    uint64_t v = i == 0 ? 0 : i == 1 ? ~(uint64_t)0 : i == 2 ? (uint64_t)1 << 63 : ((uint64_t)0x9E3779B97F4A7C15ULL >> (i * 3)) << (i * 3);
+    uint64_t v = ((uint64_t)0x9E3779B97F4A7C15ULL >> (i * 3)) << (i * 3);
+    if (i == 0) v = 0;
+    else if (i == 1) v = ~(uint64_t)0;
+    else if (i == 2) v = (uint64_t)1 << 63;
     ck_assert_int_eq(bim_wr_rational(&w, v), 0);
   }
   bitwriter_init(&sub);
@@ -361,7 +364,7 @@ START_TEST(bimio_rational_round_trips) {
   bitwriter_t bw;
   w.err = &err;
   w.bw = &bw;
-  for (size_t i = 0; i < sizeof vals / sizeof *vals; i++) {
+  for (size_t i = 0; i < sizeof vals / sizeof vals[0]; i++) {
     const unsigned char *d;
     unsigned char *c;
     size_t n;
@@ -385,7 +388,7 @@ END_TEST
 START_TEST(bimio_writers_survive_allocation_failures) {
   static const unsigned char payload[] = {1, 2, 3, 4, 5, 6, 7, 8};
   unsigned char bits_src[] = {0xDE, 0xA0};
-  bim_bits_t bits = {bits_src, 11};
+  bim_bits_t bits = {bits_src, 11, NULL};
   uint64_t codes[] = {0, 1, 2};
   bim_ext_t ext = {1, 0, codes, 3};
   bim_ext_t all = {1, 1, NULL, 0};

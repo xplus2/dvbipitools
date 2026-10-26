@@ -785,7 +785,7 @@ static int on_segment(void *ctx, const dvbstp_header_t *h, const unsigned char *
 static void send_segments(const char *group, unsigned port, int n) {
   struct sockaddr_in dst;
   int tx = socket(AF_INET, SOCK_DGRAM, 0);
-  ck_assert_int_ge(tx, 0);
+  if (tx < 0) abort();
   memset(&dst, 0, sizeof dst);
   dst.sin_family = AF_INET;
   dst.sin_port = htons((unsigned short)port);
@@ -806,7 +806,7 @@ static unsigned pick_port(void) {
   socklen_t len = sizeof a;
   int fd = socket(AF_INET, SOCK_DGRAM, 0);
   unsigned port;
-  ck_assert_int_ge(fd, 0);
+  if (fd < 0) abort();
   memset(&a, 0, sizeof a);
   a.sin_family = AF_INET;
   a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);

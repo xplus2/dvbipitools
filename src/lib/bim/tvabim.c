@@ -61,7 +61,7 @@ static int build_fuu(const xsd_compiled_t *c, const bim_tvans_t *ns, const bim_t
   u->mode = 1;
   u->npayloads = 1;
   u->pos[n - 1] = f->position;
-  u->payloads[0] = (bim_node_t *)f->root;
+  u->payloads[0] = f->root;
   return 0;
 }
 
@@ -91,7 +91,8 @@ int bim_tvabim_au_write(const xsd_compiled_t *c, const bim_tvans_t *ns, bim_fuu_
     bim_au_state_free(&as);
     return bim_oom(err);
   }
-  if (n && !(au.fuus = calloc(n, sizeof *au.fuus))) {
+  if (n) au.fuus = calloc(n, sizeof *au.fuus);
+  if (n && !au.fuus) {
     bim_oom(err);
     goto out;
   }
@@ -111,14 +112,15 @@ int bim_tvabim_au_write(const xsd_compiled_t *c, const bim_tvans_t *ns, bim_fuu_
       rc = -1;
       goto out;
     }
-    au.fuus[i].bits = malloc(len ? len : 1);
-    if (!au.fuus[i].bits) {
+    au.fuus[i].heap_bits = malloc(len ? len : 1);
+    if (!au.fuus[i].heap_bits) {
       bitwriter_free(&fb);
       bim_oom(err);
       rc = -1;
       goto out;
     }
-    memcpy(au.fuus[i].bits, p, len);
+    memcpy(au.fuus[i].heap_bits, p, len);
+    au.fuus[i].bits = au.fuus[i].heap_bits;
     au.fuus[i].nbits = (uint64_t)len * 8;
     au.nfuus = i + 1;
     if (refs) {

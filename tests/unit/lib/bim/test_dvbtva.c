@@ -45,12 +45,19 @@ START_TEST(tvainit_round_trips_all_fields) {
   const unsigned char *p;
   size_t n;
   size_t used;
+  memset(&g, 0, sizeof g);
   write_init(&i, &bw);
   p = bitwriter_data(&bw, &n);
   ck_assert_uint_eq(n, 9);
   ck_assert_int_eq(bim_tvainit_parse(p, n, &g, &used, &err), 0);
   ck_assert_uint_eq(used, 9);
-  ck_assert_mem_eq(&g, &i, sizeof i);
+  ck_assert_int_eq(g.encoding_version, i.encoding_version);
+  ck_assert_int_eq(g.indexing, i.indexing);
+  ck_assert_int_eq(g.indexing_version, i.indexing_version);
+  ck_assert_int_eq(g.has_buffer_size, i.has_buffer_size);
+  ck_assert_uint_eq(g.buffer_size, i.buffer_size);
+  ck_assert_int_eq(g.position_code, i.position_code);
+  ck_assert_int_eq(g.char_encoding, i.char_encoding);
   ck_assert_uint_eq(bim_tvainit_buffer_size(&g), 0xABCDEF);
   g.has_buffer_size = 0;
   ck_assert_uint_eq(bim_tvainit_buffer_size(&g), 1000);
@@ -329,7 +336,7 @@ static const char *const terms[] = {"3", "3.1", "3.1.1", "3.2"};
 static int cs_rank(void *ctx, const char *uri, const char *term, uint64_t *rank) {
   (void)ctx;
   if (strstr(uri, "ContentCS") == NULL) return -1;
-  for (uint64_t k = 0; k < sizeof terms / sizeof *terms; k++)
+  for (uint64_t k = 0; k < sizeof terms / sizeof terms[0]; k++)
     if (!strcmp(terms[k], term)) {
       *rank = k;
       return 0;
@@ -339,7 +346,7 @@ static int cs_rank(void *ctx, const char *uri, const char *term, uint64_t *rank)
 
 static int cs_term(void *ctx, const char *uri, uint64_t rank, char *out, size_t cap) {
   (void)ctx;
-  if (strstr(uri, "ContentCS") == NULL || rank >= sizeof terms / sizeof *terms || strlen(terms[rank]) >= cap) return -1;
+  if (strstr(uri, "ContentCS") == NULL || rank >= sizeof terms / sizeof terms[0] || strlen(terms[rank]) >= cap) return -1;
   strcpy(out, terms[rank]);
   return 0;
 }
@@ -615,7 +622,7 @@ START_TEST(dvbtva_rules_per_fragment) {
 }
 END_TEST
 
-static int set_rule(dvbtva_fuu_t *f, size_t n) {
+static int set_rule(const dvbtva_fuu_t *f, size_t n) {
   bim_tvans_t ns = {TVA, EXT, NULL};
   bim_err_t err;
   int rc = dvbtva_check_set(&ns, f, n, &err);
@@ -777,13 +784,7 @@ START_TEST(bcg_payloads_0xa1_and_0xa2) {
 }
 END_TEST
 
-static int bfail(const unsigned char *in, size_t n, unsigned char *out, size_t *outlen) {
-  (void)in;
-  (void)n;
-  (void)out;
-  (void)outlen;
-  return -1;
-}
+static int bfail(const unsigned char *, size_t, unsigned char *, size_t *) { return -1; }
 
 START_TEST(bcg_wrapper_edge_cases) {
   static const unsigned char cont[] = {1, 2, 3, 4, 5};
@@ -902,7 +903,7 @@ START_TEST(bcg_payloads_survive_damage_and_allocation_failure) {
   dopts.lax_schema = -1;
   dopts.inflate = bident;
   for (int zl = 0; zl < 2; zl++) {
-    ck_assert_int_eq(bim_bcg_tvamain_write(&roots, &eo, main, 7, zl ? bident : NULL, &pay, &pl, &err), 0);
+    ck_assert_int_eq(bim_bcg_tvamain_write(&roots, &eo, main, 7, zl ? &bident : NULL, &pay, &pl, &err), 0);
     for (size_t cut = 0; cut < pl; cut++)
       if (!bim_bcg_tvamain_parse(&roots, &dopts, pay, cut, &got, &err)) bim_node_free(got);
     for (size_t bit = 0; bit < pl * 8; bit++) {
@@ -925,7 +926,7 @@ START_TEST(bcg_payloads_survive_damage_and_allocation_failure) {
       int hit;
       int rc;
       alloc_fail_at(k);
-      rc = bim_bcg_tvamain_write(&roots, &eo, main, 7, zl ? bident : NULL, &pay, &pl, &err);
+      rc = bim_bcg_tvamain_write(&roots, &eo, main, 7, zl ? &bident : NULL, &pay, &pl, &err);
       hit = alloc_fail_end();
       if (!rc) free(pay);
       if (!hit) break;
@@ -937,10 +938,7 @@ START_TEST(bcg_payloads_survive_damage_and_allocation_failure) {
 }
 END_TEST
 
-static int post_fail(void *ctx, size_t k, const dvbtva_fuu_t *f, strrepo_reader_t *sr) {
-  (void)ctx;
-  (void)f;
-  (void)sr;
+static int post_fail(void *, size_t k, const dvbtva_fuu_t *, strrepo_reader_t *) {
   return k == 1 ? -1 : 0;
 }
 
@@ -1042,12 +1040,7 @@ START_TEST(dvbtva_parse_reports_string_offsets_post_failures_and_oom) {
 }
 END_TEST
 
-static int fail_compile(xsd_set_t *set, const xsd_compiled_t **out, void *arg) {
-  (void)set;
-  (void)out;
-  (void)arg;
-  return -1;
-}
+static int fail_compile(xsd_set_t *, const xsd_compiled_t **, void *) { return -1; }
 
 static int ok_compile(xsd_set_t *set, const xsd_compiled_t **out, void *arg) { return dvbtva_compile(set, arg, out); }
 
@@ -1172,7 +1165,7 @@ START_TEST(container_build_and_parse_cover_every_limit) {
   free(out);
 
   memset(many, 0, sizeof many);
-  for (int i = 0; i < 256; i++) many[i] = (bim_struct_t){BIM_STRUCT_DATA_REPOSITORY, (unsigned char)i, (unsigned char *)au, sizeof au};
+  for (int i = 0; i < 256; i++) many[i] = (bim_struct_t){BIM_STRUCT_DATA_REPOSITORY, (unsigned char)i, au, sizeof au, NULL};
   ck_assert_int_eq(bim_container_build_structs(many, 256, &out, &ol), -1);
   ck_assert_int_eq(bim_container_build_structs(many, 0, &out, &ol), -1);
   many[0].len = 0x1000000;
@@ -1205,7 +1198,7 @@ END_TEST
 
 static void enc_container(const unsigned char *body, size_t n, unsigned char **out, size_t *ol) {
   bim_struct_t st[1];
-  st[0] = (bim_struct_t){BIM_STRUCT_ENCAPSULATION, BIM_STRUCT_ID_UNUSED, (unsigned char *)body, n};
+  st[0] = (bim_struct_t){BIM_STRUCT_ENCAPSULATION, BIM_STRUCT_ID_UNUSED, body, n, NULL};
   ck_assert_int_eq(bim_container_build_structs(st, 1, out, ol), 0);
 }
 
@@ -1268,13 +1261,13 @@ START_TEST(tvainit_checks_every_field_and_survives_damage) {
   };
   bim_err_t err;
   bitwriter_t bw;
-  for (size_t k = 0; k < sizeof bad / sizeof *bad; k++) {
+  for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) {
     bitwriter_init(&bw);
     ck_assert_int_eq(bim_tvainit_write(&bad[k], &bw, &err), -1);
     ck_assert_str_eq(err.code, BIM_TVAINIT_RANGE);
     bitwriter_free(&bw);
   }
-  for (size_t k = 0; k < sizeof good / sizeof *good; k++) {
+  for (size_t k = 0; k < sizeof good / sizeof good[0]; k++) {
     const unsigned char *p;
     unsigned char *copy;
     size_t n;

@@ -8,14 +8,17 @@
 #include "lib/bim/codec/laxsym.h"
 
 typedef struct {
+  int ns;
+  const char *name;
+} lw_name_t;
+
+typedef struct {
   bitwriter_t bw;
   lax_syms_t sy;
   char **ns;
   int nns;
-  struct {
-    int ns;
-    const char *name;
-  } *el, *at;
+  lw_name_t *el;
+  lw_name_t *at;
   int nel;
   int nat;
 } lw_t;
@@ -40,7 +43,9 @@ static int ns_id(lw_t *l, const char *ns, int *id) {
       *id = i;
       return 0;
     }
-  if (l->nns >= 256 || !(n = realloc(l->ns, sizeof *n * (size_t)(l->nns + 1)))) return -1;
+  if (l->nns >= 256) return -1;
+  n = realloc(l->ns, sizeof *n * (size_t)(l->nns + 1));
+  if (!n) return -1;
   l->ns = n;
   if (!(l->ns[l->nns] = strdup(ns))) return -1;
   *id = l->nns++;

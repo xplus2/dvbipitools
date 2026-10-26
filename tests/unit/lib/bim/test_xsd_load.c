@@ -21,7 +21,7 @@ static void put_file(const char *dir, const char *name, const char *body) {
   int w = snprintf(p, sizeof p, "%s/%s", dir, name);
   ck_assert(w > 0 && (size_t)w < sizeof p);
   f = fopen(p, "w");
-  ck_assert_ptr_nonnull(f);
+  if (!f) abort();
   fputs(body, f);
   fclose(f);
 }

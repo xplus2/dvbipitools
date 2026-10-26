@@ -66,7 +66,9 @@ static inline size_t build_pat(unsigned char *out, unsigned pmt_pid) {
 
 static inline size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = (unsigned char)(prog_num >> 8);

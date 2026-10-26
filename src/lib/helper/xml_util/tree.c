@@ -86,8 +86,8 @@ static char *pool_alloc(xml_doc_t *d, size_t n) {
 }
 
 static size_t str_hash(const char *s, size_t n) {
-  uint64_t h = 1469598103934665603ull;
-  for (size_t i = 0; i < n; i++) h = (h ^ (unsigned char)s[i]) * 1099511628211ull;
+  uint64_t h = 1469598103934665603ULL;
+  for (size_t i = 0; i < n; i++) h = (h ^ (unsigned char)s[i]) * 1099511628211ULL;
   return (size_t)h;
 }
 
@@ -376,7 +376,11 @@ static int skip_markup(parser_t *ps, const char *lt, const char **next) {
   const char *q = skip_misc(lt, ps->end);
   size_t n = (size_t)(q - lt);
   int comment = ps->end - lt >= 4 && !memcmp(lt, "<!--", 4);
-  if (comment ? n < 7 || memcmp(q - 3, "-->", 3) : lt[1] == '?' ? n < 4 || memcmp(q - 2, "?>", 2) : q[-1] != '>') return fail(ps, lt);
+  int bad;
+  if (comment) bad = n < 7 || memcmp(q - 3, "-->", 3);
+  else if (lt[1] == '?') bad = n < 4 || memcmp(q - 2, "?>", 2);
+  else bad = !n || q[-1] != '>';
+  if (bad) return fail(ps, lt);
   if (!comment && lt[1] == '!' && (ps->cur || ps->doc->root)) return fail(ps, lt);
   *next = q;
   return 0;

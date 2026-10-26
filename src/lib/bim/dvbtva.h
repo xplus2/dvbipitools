@@ -17,26 +17,26 @@
 /* DVB profile of TVA BiM, TS 102 323 9.4 */
 
 /* root element of a DVBContextPath value, 0 found, -1 unknown */
-typedef int (*dvbtva_root_fn)(void *ctx, unsigned code, bim_tvaroot_t *out);
+typedef int (*dvbtva_root_fn)(const void *ctx, unsigned code, bim_tvaroot_t *out);
 
 /* TVA fragment types of table 58 in c */
 typedef struct {
   const xsd_compiled_t *c;
   const bim_tvans_t *ns;
 } dvbtva_roots_t;
-int dvbtva_tva_root(void *ctx, unsigned code, bim_tvaroot_t *out);
+int dvbtva_tva_root(const void *ctx, unsigned code, bim_tvaroot_t *out);
 
 /* fragment of context path code, owns root */
 typedef bim_tvapart_t dvbtva_fuu_t;
 
 /* table 57 DVBBiMAccessUnit of n fragments. eo: payload options (mpegb 0), sw initialized. refs[n] or NULL.
    0 ok, -1 error (err) */
-int dvbtva_au_write(dvbtva_root_fn root, void *rctx, const bim_encode_opts_t *eo, const dvbtva_fuu_t *f, size_t n, bitwriter_t *bw, strrepo_writer_t *sw,
+int dvbtva_au_write(dvbtva_root_fn root, const void *rctx, const bim_encode_opts_t *eo, const dvbtva_fuu_t *f, size_t n, bitwriter_t *bw, strrepo_writer_t *sw,
                     bim_fragref_t *refs, bim_err_t *err);
 /* refs: from a container, NULL: strings read in order. fragments of reserved or user defined paths are skipped,
    later fragment reading strings without ref after skip fails.
    *out mallocd, dvbtva_au_free. 0 ok, -1 error (err) */
-int dvbtva_au_parse(dvbtva_root_fn root, void *rctx, const bim_decode_opts_t *o, bitreader_t *br, strrepo_reader_t *sr, const bim_fragref_t *refs, size_t nrefs,
+int dvbtva_au_parse(dvbtva_root_fn root, const void *rctx, const bim_decode_opts_t *o, bitreader_t *br, strrepo_reader_t *sr, const bim_fragref_t *refs, size_t nrefs,
                     dvbtva_fuu_t **out, size_t *n, bim_err_t *err);
 void dvbtva_au_free(dvbtva_fuu_t *f, size_t n);
 
@@ -44,9 +44,9 @@ void dvbtva_au_free(dvbtva_fuu_t *f, size_t n);
    Non-zero fails unit */
 typedef int (*dvbtva_wpost_fn)(void *ctx, size_t i, strrepo_writer_t *sw);
 typedef int (*dvbtva_rpost_fn)(void *ctx, size_t k, const dvbtva_fuu_t *f, strrepo_reader_t *sr);
-int dvbtva_au_write_ex(dvbtva_root_fn root, void *rctx, const bim_encode_opts_t *eo, const dvbtva_fuu_t *f, size_t n, bitwriter_t *bw, strrepo_writer_t *sw,
+int dvbtva_au_write_ex(dvbtva_root_fn root, const void *rctx, const bim_encode_opts_t *eo, const dvbtva_fuu_t *f, size_t n, bitwriter_t *bw, strrepo_writer_t *sw,
                        bim_fragref_t *refs, dvbtva_wpost_fn post, void *pctx, bim_err_t *err);
-int dvbtva_au_parse_ex(dvbtva_root_fn root, void *rctx, const bim_decode_opts_t *o, bitreader_t *br, strrepo_reader_t *sr, const bim_fragref_t *refs, size_t nrefs,
+int dvbtva_au_parse_ex(dvbtva_root_fn root, const void *rctx, const bim_decode_opts_t *o, bitreader_t *br, strrepo_reader_t *sr, const bim_fragref_t *refs, size_t nrefs,
                        dvbtva_rpost_fn post, void *pctx, dvbtva_fuu_t **out, size_t *n, bim_err_t *err);
 
 /* schemas of a DecoderInit, SchemaID order */

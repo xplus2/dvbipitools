@@ -156,11 +156,13 @@ END_TEST
 
 START_TEST(segment_send_failure_is_reported) {
   mcast_t *m = mcast_open_send(AF_INET, "239.1.2.3", 5000, NULL, 1);
-  seg_cache_t seg = {(unsigned char *)"data", 4};
+  unsigned char data[] = "data";
+  unsigned char init[] = "init";
+  seg_cache_t seg = {data, 4};
   bcg_schema_t s;
   int nul;
   memset(&s, 0, sizeof s);
-  s.init = (unsigned char *)"init";
+  s.init = init;
   s.init_len = 4;
   ck_assert_ptr_nonnull(m);
   ck_assert_int_eq(send_segment(m, 0, &seg, 1, 1, 0), 0);

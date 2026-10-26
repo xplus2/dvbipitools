@@ -58,7 +58,8 @@ static int parse_occurs(ctx_t *c, const bim_node_t *n, uint64_t *min, uint64_t *
   const char *ma = xm_xattr(n, "maxOccurs");
   char *end;
   unsigned long long v;
-  *min = *max = 1;
+  *max = 1;
+  *min = *max;
   if (mi) {
     mi = trim(c->s, mi);
     if (!mi) return -2;
@@ -86,8 +87,14 @@ static xsd_wildcard_t *parse_wildcard(ctx_t *c, const bim_node_t *n) {
   xsd_wildcard_t *w = xm_arena_alloc(c->s, sizeof *w);
   const char *v = xm_xattr(n, "namespace");
   const char *pc = xm_xattr(n, "processContents");
-  if (!w || (v && !(v = trim(c->s, v)))) return NULL;
-  w->process = !pc || !strcmp(pc, "strict") ? XSD_PC_STRICT : !strcmp(pc, "lax") ? XSD_PC_LAX : XSD_PC_SKIP;
+  if (!w) return NULL;
+  if (v) {
+    v = trim(c->s, v);
+    if (!v) return NULL;
+  }
+  w->process = XSD_PC_SKIP;
+  if (!pc || !strcmp(pc, "strict")) w->process = XSD_PC_STRICT;
+  else if (!strcmp(pc, "lax")) w->process = XSD_PC_LAX;
   if (pc && w->process == XSD_PC_SKIP && strcmp(pc, "skip")) {
     xsd_set_fail(c->s, "LS400256", "bim: %s: bad processContents \"%s\"", c->path, pc);
     return NULL;
@@ -97,10 +104,12 @@ static xsd_wildcard_t *parse_wildcard(ctx_t *c, const bim_node_t *n) {
     return w;
   }
   if (!strcmp(v, "##other")) {
+    const char **one;
     w->kind = XSD_WC_NOT;
-    w->ns = xm_arena_alloc(c->s, sizeof *w->ns);
-    if (!w->ns) return NULL;
-    w->ns[0] = c->tns;
+    one = xm_arena_alloc(c->s, sizeof *one);
+    if (!one) return NULL;
+    one[0] = c->tns;
+    w->ns = one;
     w->nns = 1;
     return w;
   }
@@ -167,7 +176,10 @@ xsd_type_t *xm_parse_simple_type(ctx_t *c, const bim_node_t *n) {
     const bim_node_t *inl = xs_kid(d, "simpleType");
     t->deriv = XSD_D_RESTRICTION;
     if (qname_attr(c, d, "base", &t->base_ref)) return NULL;
-    if (inl && !(t->base = xm_parse_simple_type(c, inl))) return NULL;
+    if (inl) {
+      t->base = xm_parse_simple_type(c, inl);
+      if (!t->base) return NULL;
+    }
     if (!t->base_ref.name && !t->base) {
       xsd_set_fail(c->s, "LS400259", "bim: %s: restriction without base", c->path);
       return NULL;
@@ -178,7 +190,10 @@ xsd_type_t *xm_parse_simple_type(ctx_t *c, const bim_node_t *n) {
     const bim_node_t *inl = xs_kid(d, "simpleType");
     t->deriv = XSD_D_LIST;
     if (qname_attr(c, d, "itemType", &t->item_ref)) return NULL;
-    if (inl && !(t->item = xm_parse_simple_type(c, inl))) return NULL;
+    if (inl) {
+      t->item = xm_parse_simple_type(c, inl);
+      if (!t->item) return NULL;
+    }
     if (!t->item_ref.name && !t->item) {
       xsd_set_fail(c->s, "LS400260", "bim: %s: list without itemType", c->path);
       return NULL;
@@ -191,7 +206,7 @@ xsd_type_t *xm_parse_simple_type(ctx_t *c, const bim_node_t *n) {
     t->deriv = XSD_D_UNION;
     for (const char *p = mt ? mt : ""; *p;) {
       size_t len;
-      char *tok;
+      const char *tok;
       xsd_qname_t *nr;
       while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
       len = strcspn(p, " \t\n\r");
@@ -214,7 +229,10 @@ xsd_type_t *xm_parse_simple_type(ctx_t *c, const bim_node_t *n) {
     if (!t->members) return NULL;
     t->nmembers = t->nmember_refs; /* refs bound in order first */
     for (int i = 0; i < d->nkids; i++)
-      if (xm_is_xs(d->kids[i], "simpleType") && !(t->members[t->nmembers++] = xm_parse_simple_type(c, d->kids[i]))) return NULL;
+      if (xm_is_xs(d->kids[i], "simpleType")) {
+        t->members[t->nmembers] = xm_parse_simple_type(c, d->kids[i]);
+        if (!t->members[t->nmembers++]) return NULL;
+      }
     return t;
   }
   xsd_set_fail(c->s, "LS400262", "bim: %s: simpleType without restriction, list or union", c->path);
@@ -226,15 +244,20 @@ static int parse_attr_decl(ctx_t *c, const bim_node_t *n, int global, xsd_attr_t
   const char *name = xm_xattr(n, "name");
   const char *form = xm_xattr(n, "form");
   const bim_node_t *inl = xs_kid(n, "simpleType");
+  int qualified;
   if (!a) return -2;
   if (!name) return xsd_set_fail(c->s, "LS400263", "bim: %s: attribute without name", c->path);
   a->q.name = trim(c->s, name);
-  a->q.ns = global || (form ? !strcmp(form, "qualified") : c->attr_qualified) ? c->tns : NULL;
+  qualified = form ? !strcmp(form, "qualified") : c->attr_qualified;
+  a->q.ns = global || qualified ? c->tns : NULL;
   a->global = global;
   a->dflt = xm_xattr(n, "default");
   a->fixed = xm_xattr(n, "fixed");
   if (qname_attr(c, n, "type", &a->type_ref)) return -1;
-  if (inl && !(a->type = xm_parse_simple_type(c, inl))) return -1;
+  if (inl) {
+    a->type = xm_parse_simple_type(c, inl);
+    if (!a->type) return -1;
+  }
   if (xm_plist_add(c->s, &c->s->all_attrs, a)) return -2;
   *out = a;
   return 0;
@@ -247,15 +270,24 @@ static int parse_attrs(ctx_t *c, const bim_node_t *n, xsd_attrs_t *as) {
     nu += xm_is_xs(n->kids[i], "attribute");
     ng += xm_is_xs(n->kids[i], "attributeGroup");
   }
-  if (nu && !(as->uses = xm_arena_alloc(c->s, sizeof *as->uses * (size_t)nu))) return -2;
-  if (ng && (!(as->groups = xm_arena_alloc(c->s, sizeof *as->groups * (size_t)ng)) || !(as->group_refs = xm_arena_alloc(c->s, sizeof *as->group_refs * (size_t)ng))))
-    return -2;
+  if (nu) {
+    as->uses = xm_arena_alloc(c->s, sizeof *as->uses * (size_t)nu);
+    if (!as->uses) return -2;
+  }
+  if (ng) {
+    as->groups = xm_arena_alloc(c->s, sizeof *as->groups * (size_t)ng);
+    if (!as->groups) return -2;
+    as->group_refs = xm_arena_alloc(c->s, sizeof *as->group_refs * (size_t)ng);
+    if (!as->group_refs) return -2;
+  }
   for (int i = 0; i < n->nkids; i++) {
     const bim_node_t *k = n->kids[i];
     if (xm_is_xs(k, "attribute")) {
       xsd_attr_use_t *u = &as->uses[as->nuses++];
       const char *use = xm_xattr(k, "use");
-      u->use = !use || !strcmp(use, "optional") ? XSD_USE_OPTIONAL : !strcmp(use, "required") ? XSD_USE_REQUIRED : XSD_USE_PROHIBITED;
+      u->use = XSD_USE_PROHIBITED;
+      if (!use || !strcmp(use, "optional")) u->use = XSD_USE_OPTIONAL;
+      else if (!strcmp(use, "required")) u->use = XSD_USE_REQUIRED;
       if (use && u->use == XSD_USE_PROHIBITED && strcmp(use, "prohibited")) return xsd_set_fail(c->s, "LS400257", "bim: %s: bad use \"%s\"", c->path, use);
       if (xm_xattr(k, "ref")) {
         if (qname_attr(c, k, "ref", &u->ref)) return -1;
@@ -267,8 +299,8 @@ static int parse_attrs(ctx_t *c, const bim_node_t *n, xsd_attrs_t *as) {
     } else if (xm_is_xs(k, "attributeGroup")) {
       if (!xm_xattr(k, "ref")) return xsd_set_fail(c->s, "LS400265", "bim: %s: local attributeGroup without ref", c->path);
       if (qname_attr(c, k, "ref", &as->group_refs[as->ngroups++])) return -1;
-    } else if (xm_is_xs(k, "anyAttribute")) {
-      if (!(as->wc = parse_wildcard(c, k))) return -1;
+    } else if (xm_is_xs(k, "anyAttribute") && !(as->wc = parse_wildcard(c, k))) {
+      return -1;
     }
   }
   return xm_plist_add(c->s, &c->s->all_attrsets, as) ? -2 : 0;
@@ -280,18 +312,27 @@ static int parse_elem_decl(ctx_t *c, const bim_node_t *n, int global, xsd_elem_t
   const char *form = xm_xattr(n, "form");
   const bim_node_t *st = xs_kid(n, "simpleType");
   const bim_node_t *ct = xs_kid(n, "complexType");
+  int qualified;
   if (!e) return -2;
   if (!name) return xsd_set_fail(c->s, "LS400264", "bim: %s: element without name", c->path);
   e->q.name = trim(c->s, name);
-  e->q.ns = global || (form ? !strcmp(form, "qualified") : c->elem_qualified) ? c->tns : NULL;
+  qualified = form ? !strcmp(form, "qualified") : c->elem_qualified;
+  e->q.ns = global || qualified ? c->tns : NULL;
   e->global = global;
   e->nillable = bool_attr(n, "nillable");
   e->abstract = bool_attr(n, "abstract");
   e->dflt = xm_xattr(n, "default");
   e->fixed = xm_xattr(n, "fixed");
-  if (qname_attr(c, n, "type", &e->type_ref) || qname_attr(c, n, "substitutionGroup", &e->subst_ref)) return -1;
-  if (st && !(e->type = xm_parse_simple_type(c, st))) return -1;
-  if (ct && !(e->type = xm_parse_complex_type(c, ct))) return -1;
+  if (qname_attr(c, n, "type", &e->type_ref)) return -1;
+  if (qname_attr(c, n, "substitutionGroup", &e->subst_ref)) return -1;
+  if (st) {
+    e->type = xm_parse_simple_type(c, st);
+    if (!e->type) return -1;
+  }
+  if (ct) {
+    e->type = xm_parse_complex_type(c, ct);
+    if (!e->type) return -1;
+  }
   if (xm_plist_add(c->s, &c->s->all_elems, e)) return -2;
   *out = e;
   return 0;
@@ -316,12 +357,18 @@ static int parse_particle(ctx_t *c, const bim_node_t *n, xsd_particle_t *p) {
     p->kind = XSD_P_ANY;
     return (p->wc = parse_wildcard(c, n)) ? 0 : -1;
   }
-  p->kind = xm_is_xs(n, "sequence") ? XSD_P_SEQ : xm_is_xs(n, "choice") ? XSD_P_CHOICE : XSD_P_ALL;
+  p->kind = XSD_P_ALL;
+  if (xm_is_xs(n, "sequence")) p->kind = XSD_P_SEQ;
+  else if (xm_is_xs(n, "choice")) p->kind = XSD_P_CHOICE;
   for (int i = 0; i < n->nkids; i++) p->nkids += is_particle(n->kids[i]);
-  if (p->nkids && !(p->kids = xm_arena_alloc(c->s, sizeof *p->kids * (size_t)p->nkids))) return -2;
+  if (p->nkids) p->kids = xm_arena_alloc(c->s, sizeof *p->kids * (size_t)p->nkids);
+  if (p->nkids && !p->kids) return -2;
   p->nkids = 0;
   for (int i = 0; i < n->nkids; i++)
-    if (is_particle(n->kids[i]) && (rc = parse_particle(c, n->kids[i], &p->kids[p->nkids++]))) return rc;
+    if (is_particle(n->kids[i])) {
+      rc = parse_particle(c, n->kids[i], &p->kids[p->nkids++]);
+      if (rc) return rc;
+    }
   return 0;
 }
 
@@ -370,7 +417,10 @@ xsd_type_t *xm_parse_complex_type(ctx_t *c, const bim_node_t *n) {
     if (sc) {
       const bim_node_t *inl = xs_kid(body, "simpleType");
       t->content = XSD_C_SIMPLE;
-      if (inl && !(t->simple = xm_parse_simple_type(c, inl))) return NULL;
+      if (inl) {
+        t->simple = xm_parse_simple_type(c, inl);
+        if (!t->simple) return NULL;
+      }
       if (!ext && parse_facets(c, body, t)) return NULL;
     } else if (xm_xattr(cc, "mixed")) {
       t->mixed = bool_attr(cc, "mixed");
@@ -401,8 +451,10 @@ static int add_ref(ctx_t *c, char kind, const bim_node_t *n) {
   return 0;
 }
 
-static int put_global(ctx_t *c, cmap_t *m, const xsd_qname_t *q, const char *what) {
-  int rc = xm_cmap_put(c->s, m, q);
+static int put_global(ctx_t *c, cmap_t *m, xsd_qname_t *q, const char *what) {
+  int rc;
+  if (!q) return -2;
+  rc = xm_cmap_put(c->s, m, q);
   if (rc == -2) return xsd_set_fail(c->s, "LS400274", "bim: %s: duplicate %s {%s}%s", c->path, what, q->ns ? q->ns : "", q->name);
   return rc ? -2 : 0;
 }
@@ -443,24 +495,24 @@ int xm_add_component(ctx_t *c, const bim_node_t *k) {
     return put_global(c, &s->types, &t->q, "type");
   }
   if (xm_is_xs(k, "element")) {
-    xsd_elem_t *e;
+    xsd_elem_t *e = NULL;
     int rc;
     if (xm_xattr(k, "minOccurs") || xm_xattr(k, "maxOccurs") || xm_xattr(k, "ref") || xm_xattr(k, "form")) return xsd_set_fail(s, "LS400270", "bim: %s: global element with local attribute", c->path);
     rc = parse_elem_decl(c, k, 1, &e);
     return rc ? rc : put_global(c, &s->elems, &e->q, "element");
   }
   if (xm_is_xs(k, "attribute")) {
-    xsd_attr_t *a;
+    xsd_attr_t *a = NULL;
     int rc = parse_attr_decl(c, k, 1, &a);
     return rc ? rc : put_global(c, &s->attrs, &a->q, "attribute");
   }
   if (xm_is_xs(k, "group")) {
-    xsd_group_t *g;
+    xsd_group_t *g = NULL;
     int rc = xm_parse_group(c, k, &g);
     return rc ? rc : put_global(c, &s->groups, &g->q, "group");
   }
   if (xm_is_xs(k, "attributeGroup")) {
-    xsd_agroup_t *g;
+    xsd_agroup_t *g = NULL;
     int rc = xm_parse_agroup(c, k, &g);
     return rc ? rc : put_global(c, &s->agroups, &g->q, "attributeGroup");
   }

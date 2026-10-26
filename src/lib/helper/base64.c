@@ -39,7 +39,9 @@ static int b64_value(char c) {
   if (c >= 'A' && c <= 'Z') return c - 'A';
   if (c >= 'a' && c <= 'z') return c - 'a' + 26;
   if (c >= '0' && c <= '9') return c - '0' + 52;
-  return c == '+' ? 62 : c == '/' ? 63 : -1;
+  if (c == '+') return 62;
+  if (c == '/') return 63;
+  return -1;
 }
 
 int base64_decode(const char *s, unsigned char *out, size_t cap, size_t *len) {
@@ -54,7 +56,8 @@ int base64_decode(const char *s, unsigned char *out, size_t cap, size_t *len) {
       pad++;
       continue;
     }
-    if (pad || (d = b64_value(*s)) < 0) return -1;
+    if (pad) return -1;
+    if ((d = b64_value(*s)) < 0) return -1;
     v = (v << 6) | (uint_least32_t)d;
     bits += 6;
     if (bits >= 8) {

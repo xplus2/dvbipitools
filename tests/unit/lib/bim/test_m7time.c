@@ -33,7 +33,7 @@ static const char *const du_bad[] = {
 };
 
 START_TEST(m7time_timepoint_parse_and_render) {
-  for (size_t i = 0; i < sizeof tp_ok / sizeof *tp_ok; i++) {
+  for (size_t i = 0; i < sizeof tp_ok / sizeof tp_ok[0]; i++) {
     m7_timepoint_t t;
     char out[96];
     ck_assert_msg(!m7_timepoint_parse(tp_ok[i], &t), "parse %s", tp_ok[i]);
@@ -52,14 +52,14 @@ START_TEST(m7time_timepoint_parse_and_render) {
 END_TEST
 
 START_TEST(m7time_duration_parse_and_render) {
-  for (size_t i = 0; i < sizeof du_ok / sizeof *du_ok; i++) {
+  for (size_t i = 0; i < sizeof du_ok / sizeof du_ok[0]; i++) {
     m7_duration_t d;
     char out[96];
     ck_assert_msg(!m7_duration_parse(du_ok[i], &d), "parse %s", du_ok[i]);
     ck_assert_int_eq(m7_duration_render(&d, out, sizeof out), 0);
     (void)m7_duration_render(&d, out, 2);
   }
-  for (size_t i = 0; i < sizeof du_bad / sizeof *du_bad; i++) {
+  for (size_t i = 0; i < sizeof du_bad / sizeof du_bad[0]; i++) {
     bitwriter_t bw;
     bitwriter_init(&bw);
     ck_assert_msg(m7_duration_encode(du_bad[i], NULL, 0, &bw) == -1, "encode %s", du_bad[i]);
@@ -77,7 +77,7 @@ static int only_listed(const void *pattern, const char *v) {
 
 static void encode_all(int duration, const bim_simple_t *sp, unsigned compat) {
   const char *const *ok = duration ? du_ok : tp_ok;
-  size_t n = duration ? sizeof du_ok / sizeof *du_ok : sizeof tp_ok / sizeof *tp_ok;
+  size_t n = duration ? sizeof du_ok / sizeof du_ok[0] : sizeof tp_ok / sizeof tp_ok[0];
   for (size_t i = 0; i < n; i++) {
     bitwriter_t bw;
     bitwriter_init(&bw);
@@ -135,7 +135,7 @@ END_TEST
 START_TEST(m7time_encode_writer_failures) {
   for (int duration = 0; duration < 2; duration++) {
     const char *const *ok = duration ? du_ok : tp_ok;
-    size_t n = duration ? sizeof du_ok / sizeof *du_ok : sizeof tp_ok / sizeof *tp_ok;
+    size_t n = duration ? sizeof du_ok / sizeof du_ok[0] : sizeof tp_ok / sizeof tp_ok[0];
     for (size_t i = 0; i < n; i++)
       for (unsigned compat = 0; compat < 2; compat++)
         for (int pre = 0; pre < 70; pre++) {
@@ -143,7 +143,8 @@ START_TEST(m7time_encode_writer_failures) {
           bitwriter_init(&bw);
           for (int k = 0; k < pre; k++) ck_assert_int_eq(bitwriter_put(&bw, 0xA5, 8), 0);
           alloc_fail_at(0);
-          (void)(duration ? m7_duration_encode(ok[i], NULL, compat ? BIM_COMPAT_M7_FLAGS : 0, &bw) : m7_timepoint_encode(ok[i], NULL, compat ? BIM_COMPAT_M7_FLAGS : 0, &bw));
+          if (duration) (void)m7_duration_encode(ok[i], NULL, compat ? BIM_COMPAT_M7_FLAGS : 0, &bw);
+          else (void)m7_timepoint_encode(ok[i], NULL, compat ? BIM_COMPAT_M7_FLAGS : 0, &bw);
           alloc_fail_end();
           bitwriter_free(&bw);
         }

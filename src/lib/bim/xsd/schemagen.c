@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,28 +22,23 @@ typedef struct {
   bim_err_t *err;
 } gn_t;
 
-static int fail(gn_t *c, const char *fmt, ...)
-#if defined(__GNUC__)
-    __attribute__((format(printf, 2, 3)))
-#endif
-    ;
-
-static int fail(gn_t *c, const char *fmt, ...) {
-  char what[120];
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(what, sizeof what, fmt, ap);
-  va_end(ap);
-  return bim_fail(c->err, E_SUU, "bim: binary encoded schema %s", what);
-}
+#define fail(c, ...) \
+  ({ \
+    char what_[120]; \
+    snprintf(what_, sizeof what_, __VA_ARGS__); \
+    bim_fail((c)->err, E_SUU, "bim: binary encoded schema %s", what_); \
+  })
 
 static int eq(const char *a, const char *b) { return (!a && !b) || (a && b && !strcmp(a, b)); }
 
-static bim_node_t *node(gn_t *c, bim_node_t *parent, const char *name, const char *cast) {
+static bim_node_t *node(const gn_t *c, bim_node_t *parent, const char *name, const char *cast) {
   bim_node_t *n = parent ? bim_node_add_new(parent, name, NULL) : bim_node_new(name);
   if (!n) return NULL;
   n->ns = XSD_ENCODING_NS;
-  if (cast && !(n->cast = xsd_compiled_type(c->enc, XSD_ENCODING_NS, cast))) return NULL;
+  if (cast) {
+    n->cast = xsd_compiled_type(c->enc, XSD_ENCODING_NS, cast);
+    if (!n->cast) return NULL;
+  }
   return n;
 }
 
@@ -90,6 +84,7 @@ static int anon_id(gn_t *c, const xsd_type_t *t) {
     c->anon = n;
     c->canon = nc;
   }
+  if (!c->anon) return fail(c, "out of memory");
   c->anon[c->nanon] = t;
   return c->nanon++;
 }
@@ -103,7 +98,10 @@ static int typeref(gn_t *c, bim_node_t *parent, const char *elname, const xsd_ty
   if (!tr || !t) return t ? fail(c, "out of memory") : fail(c, "type missing");
   if (!t->q.name) {
     int a = anon_id(c, t);
-    return a < 0 || !(r = node(c, tr, "anonymousTypeReference", NULL)) || attru(r, "idref", (uint64_t)a) ? -1 : 0;
+    if (a < 0) return -1;
+    r = node(c, tr, "anonymousTypeReference", NULL);
+    if (!r) return -1;
+    return attru(r, "idref", (uint64_t)a) ? -1 : 0;
   }
   if (eq(t->q.ns, c->in->tns)) {
     int found = 0;
@@ -117,9 +115,7 @@ static int typeref(gn_t *c, bim_node_t *parent, const char *elname, const xsd_ty
     return -1;
   }
   if (!(r = node(c, tr, "namedTypeReference", NULL))) return fail(c, "out of memory");
-  if (!eq(t->q.ns, c->in->tns)) {
-    if ((id_ns = ns_id(c, t->q.ns)) < 0 || attru(r, "NamespaceID", (uint64_t)id_ns)) return -1;
-  }
+  if (!eq(t->q.ns, c->in->tns) && ((id_ns = ns_id(c, t->q.ns)) < 0 || attru(r, "NamespaceID", (uint64_t)id_ns))) return -1;
   return attru(r, "TypeID", id);
 }
 
@@ -150,6 +146,12 @@ static int occurs(bim_node_t *n, uint64_t min, uint64_t max) {
 
 static const char *form(const xsd_qname_t *q) { return q->ns ? "qualified" : "unqualified"; }
 
+static const char *compositor_name(int kind) {
+  if (kind == XSD_P_SEQ) return "sequence";
+  if (kind == XSD_P_CHOICE) return "choice";
+  return "all";
+}
+
 static int particle(gn_t *c, bim_node_t *parent, const xsd_particle_t *p, uint64_t min, uint64_t max) {
   bim_node_t *n;
   switch (p->kind) {
@@ -159,7 +161,7 @@ static int particle(gn_t *c, bim_node_t *parent, const xsd_particle_t *p, uint64
     case XSD_P_SEQ:
     case XSD_P_CHOICE:
     case XSD_P_ALL:
-      if (!(n = node(c, parent, "particle", p->kind == XSD_P_SEQ ? "sequence" : p->kind == XSD_P_CHOICE ? "choice" : "all")) || occurs(n, min, max)) return -1;
+      if (!(n = node(c, parent, "particle", compositor_name(p->kind))) || occurs(n, min, max)) return -1;
       for (int i = 0; i < p->nkids; i++)
         if (particle(c, n, &p->kids[i], p->kids[i].min, p->kids[i].max)) return -1;
       return 0;
@@ -168,7 +170,11 @@ static int particle(gn_t *c, bim_node_t *parent, const xsd_particle_t *p, uint64
   }
   if (p->elem->global) {
     bim_node_t *ref;
-    if (!(n = node(c, parent, "particle", "elementRef")) || occurs(n, min, max) || !(ref = node(c, n, "ref", NULL))) return fail(c, "out of memory");
+    n = node(c, parent, "particle", "elementRef");
+    if (!n) return fail(c, "out of memory");
+    if (occurs(n, min, max)) return fail(c, "out of memory");
+    ref = node(c, n, "ref", NULL);
+    if (!ref) return fail(c, "out of memory");
     return elemref(c, ref, p->elem);
   }
   if (!(n = node(c, parent, "particle", "element")) || occurs(n, min, max) || attr(n, "name", p->elem->q.name) || attr(n, "form", form(&p->elem->q)) ||
@@ -325,17 +331,25 @@ int xsd_suu_from_set(const xsd_compiled_t *enc, const xsd_suu_src_t *in, bim_nod
   }
   for (int i = 0, first = 1; i < na; i++) {
     bim_node_t *a;
-    if (!as[i]->global || !eq(as[i]->q.ns, in->tns)) continue;
+    if (!as[i]->global) continue;
+    if (!eq(as[i]->q.ns, in->tns)) continue;
     if (as[i]->fixed) {
       fail(&c, "fixed attribute %s not representable", as[i]->q.name);
       goto bad;
     }
-    if (first && !(list = node(&c, root, "attributeDeclarations", NULL))) goto oom;
+    if (first) {
+      list = node(&c, root, "attributeDeclarations", NULL);
+      if (!list) goto oom;
+    }
     first = 0;
-    if (!(a = node(&c, list, "attribute", NULL)) || attr(a, "name", as[i]->q.name) || attr(a, "defaultValue", as[i]->dflt) || typeref(&c, a, "typeReference", as[i]->type)) goto bad;
+    if (!(a = node(&c, list, "attribute", NULL))) goto bad;
+    if (attr(a, "name", as[i]->q.name)) goto bad;
+    if (attr(a, "defaultValue", as[i]->dflt)) goto bad;
+    if (typeref(&c, a, "typeReference", as[i]->type)) goto bad;
   }
   for (int i = 0; i < c.nanon; i++) {
-    if (!an && !(an = node(&c, NULL, "anonymousTypeDefinitions", NULL))) goto oom;
+    if (!an) an = node(&c, NULL, "anonymousTypeDefinitions", NULL);
+    if (!an) goto oom;
     if (type_node(&c, an, c.anon[i], 1, i)) goto bad;
   }
   if (an) {

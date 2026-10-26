@@ -27,7 +27,11 @@ int dec_zstring(dec_t *d, dstrbuf_t *b) {
       uint64_t clen;
       size_t zl = zcap;
       int rc;
-      if (!d->inflate || bitreader_get_vluimsbf8(d->br, &clen) || !clen || clen > ZLIB_CHUNK_MAX(zcap) || (!d->zbuf && !(d->zbuf = malloc(zcap)))) return -1;
+      if (!d->inflate) return -1;
+      if (bitreader_get_vluimsbf8(d->br, &clen)) return -1;
+      if (!clen) return -1;
+      if (clen > ZLIB_CHUNK_MAX(zcap)) return -1;
+      if ((!d->zbuf && !(d->zbuf = malloc(zcap)))) return -1;
       if (!(in = malloc((size_t)clen))) return -1;
       rc = bitreader_get_bytes(d->br, in, (size_t)clen) || d->inflate(in, (size_t)clen, d->zbuf, &zl) || !zl;
       free(in);
@@ -81,7 +85,10 @@ static int utf8_render(dec_t *d, dstrbuf_t *b) {
   uint64_t n;
   char *s;
   int rc;
-  if (bitreader_get_vluimsbf5(d->br, &n) || n > bitreader_bits_left(d->br) / 8 || !(s = malloc((size_t)n + 1))) return -1;
+  if (bitreader_get_vluimsbf5(d->br, &n)) return -1;
+  if (n > bitreader_bits_left(d->br) / 8) return -1;
+  s = malloc((size_t)n + 1);
+  if (!s) return -1;
   rc = bitreader_get_bytes(d->br, (unsigned char *)s, (size_t)n) || memchr(s, '\0', (size_t)n) || dec_add_n(b, s, (size_t)n);
   free(s);
   return rc ? -1 : 0;
@@ -152,7 +159,8 @@ static int duration_render(dec_t *d, const bim_simple_t *s, char *out, size_t ca
   if (m.has_d && bitreader_get_vluimsbf5(d->br, &m.d)) return -1;
   for (int u = 0; m.t && u < 3; u++) {
     int fixed = u ? m.has[u - 1] : m.has_d;
-    if (m.has[u] && (fixed ? bitreader_get(d->br, u ? 6 : 5, &m.v[u]) : bitreader_get_vluimsbf5(d->br, &m.v[u]))) return -1;
+    int width = u ? 6 : 5;
+    if (m.has[u] && (fixed ? bitreader_get(d->br, width, &m.v[u]) : bitreader_get_vluimsbf5(d->br, &m.v[u]))) return -1;
   }
   if (m.has_frac && bitreader_get_vluimsbf5(d->br, &m.frac)) return -1;
   if (m.has[3]) {
@@ -279,7 +287,10 @@ int dec_value(dec_t *d, const bim_simple_t *s, char **out) {
   if (!d->vb.buf) return -1;
   d->vb.len = 0;
   d->vb.buf[0] = '\0';
-  if (dec_text(d, s, &d->vb) || !d->vb.buf || !(*out = malloc(d->vb.len + 1))) return -1;
+  if (dec_text(d, s, &d->vb)) return -1;
+  if (!d->vb.buf) return -1;
+  *out = malloc(d->vb.len + 1);
+  if (!*out) return -1;
   memcpy(*out, d->vb.buf, d->vb.len + 1);
   return 0;
 }

@@ -32,8 +32,9 @@ static void init_di(bim_decoderinit_t *di, bim_di_schema_t *sch) {
 }
 
 static void set_encoded(bim_bits_t *b) {
-  b->bits = malloc(sizeof schema_au);
-  memcpy(b->bits, schema_au, sizeof schema_au);
+  b->heap_bits = malloc(sizeof schema_au);
+  memcpy(b->heap_bits, schema_au, sizeof schema_au);
+  b->bits = b->heap_bits;
   b->nbits = sizeof schema_au * 8;
 }
 
@@ -56,7 +57,8 @@ static void build_au(bim_au_t *au) {
   s->imported = calloc(1, sizeof *s->imported);
   s->imported[0] = dup_checked("urn:a");
   s->types.nglobal = 3;
-  s->types.ext.present = s->types.ext.all = 1;
+  s->types.ext.all = 1;
+  s->types.ext.present = s->types.ext.all;
   s->types.n = 3;
   s->types.counts = u64s(3, c3);
   s->elems.nglobal = 2;
@@ -80,9 +82,10 @@ static void build_au(bim_au_t *au) {
   set_encoded(&s->encoded);
   au->nfuus = 1;
   au->fuus = calloc(1, sizeof *au->fuus);
-  au->fuus[0].bits = malloc(2);
-  au->fuus[0].bits[0] = 0x12;
-  au->fuus[0].bits[1] = 0x34;
+  au->fuus[0].heap_bits = malloc(2);
+  au->fuus[0].heap_bits[0] = 0x12;
+  au->fuus[0].heap_bits[1] = 0x34;
+  au->fuus[0].bits = au->fuus[0].heap_bits;
   au->fuus[0].nbits = 16;
 }
 
@@ -179,7 +182,7 @@ START_TEST(refuses_invalid_suus) {
   ck_assert_str_eq(err.code, "LE400300");
   in.suus[0].schema = 1;
   keep = in.suus[0].encoded;
-  in.suus[0].encoded.bits[0] = 0x02;
+  in.suus[0].encoded.heap_bits[0] = 0x02;
   bitwriter_reset(&bw);
   ck_assert_int_eq(bim_au_write(&st, &in, &bw, &err), 0);
   in.suus[0].encoded = keep;
@@ -195,7 +198,7 @@ START_TEST(refuses_invalid_suus) {
 }
 END_TEST
 
-static void write_au(bim_decoderinit_t *di, const bim_au_t *au, bitwriter_t *bw, int expect) {
+static void write_au(const bim_decoderinit_t *di, const bim_au_t *au, bitwriter_t *bw, int expect) {
   bim_au_state_t st;
   bim_err_t err;
   ck_assert_int_eq(bim_au_state_init(&st, di), 0);
@@ -204,18 +207,18 @@ static void write_au(bim_decoderinit_t *di, const bim_au_t *au, bitwriter_t *bw,
   bim_au_state_free(&st);
 }
 
-typedef void (*au_mut)(bim_au_t *au);
+typedef void (*au_mut)(const bim_au_t *au);
 
-static void a_count_mismatch(bim_au_t *au) { au->suus[0].types.n = 2; }
-static void a_code_range(bim_au_t *au) { au->suus[0].elems.codes[0] = 9; }
-static void a_attr_range(bim_au_t *au) { au->suus[0].attrs.codes[0] = 9; }
-static void a_empty_ns(bim_au_t *au) { au->suus[0].ns[0] = 0; }
-static void a_empty_import(bim_au_t *au) { au->suus[0].imported[0][0] = 0; }
-static void a_fuu_bits(bim_au_t *au) { au->fuus[0].nbits = 13; }
-static void a_update_count(bim_au_t *au) { au->suus[1].types.partial = 0; au->suus[1].types.n = 5; }
-static void a_nonpartial_elems_range(bim_au_t *au) { au->suus[1].elems.n = 1; }
-static void a_partial_types_range(bim_au_t *au) { au->suus[1].types.codes[0] = 99; }
-static void a_ns_taken(bim_au_t *au) {
+static void a_count_mismatch(const bim_au_t *au) { au->suus[0].types.n = 2; }
+static void a_code_range(const bim_au_t *au) { au->suus[0].elems.codes[0] = 9; }
+static void a_attr_range(const bim_au_t *au) { au->suus[0].attrs.codes[0] = 9; }
+static void a_empty_ns(const bim_au_t *au) { au->suus[0].ns[0] = 0; }
+static void a_empty_import(const bim_au_t *au) { au->suus[0].imported[0][0] = 0; }
+static void a_fuu_bits(const bim_au_t *au) { au->fuus[0].nbits = 13; }
+static void a_update_count(const bim_au_t *au) { au->suus[1].types.partial = 0; au->suus[1].types.n = 5; }
+static void a_nonpartial_elems_range(const bim_au_t *au) { au->suus[1].elems.n = 1; }
+static void a_partial_types_range(const bim_au_t *au) { au->suus[1].types.codes[0] = 99; }
+static void a_ns_taken(const bim_au_t *au) {
   free(au->suus[0].ns);
   au->suus[0].ns = dup_checked("urn:a");
 }

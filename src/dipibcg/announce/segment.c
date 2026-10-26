@@ -31,7 +31,8 @@ int build_segment(bitwriter_t *bw, const strrepo_writer_t *sw, const bcgau_ref_t
   size_t wrapped_len;
   int rc = SEG_FAILED;
 
-  if (nrefs > 0 && !(fr = malloc(sizeof *fr * (size_t)nrefs))) {
+  if (nrefs > 0) fr = malloc(sizeof *fr * (size_t)nrefs);
+  if (nrefs > 0 && !fr) {
     build_log("GE100141", "container build failed");
     return SEG_NO_DOC;
   }
@@ -99,7 +100,9 @@ static int plan_unit(plan_t *p, int c, size_t au_body, size_t str_body, size_t n
       return -1;
     }
     p->b[++p->ng] = c;
-    p->au = p->str = p->nfuu = 0;
+    p->nfuu = 0;
+    p->str = p->nfuu;
+    p->au = p->str;
   }
   p->au += au_body;
   p->str += str_body;
@@ -108,7 +111,7 @@ static int plan_unit(plan_t *p, int c, size_t au_body, size_t str_body, size_t n
 }
 
 /* au_body: access unit bytes less fuu count. str_body: repository less encoding byte. -1 over BIM_REPO_MAX */
-static int body_sizes(bitwriter_t *bw, strrepo_writer_t *sw, size_t nf, size_t *au_body, size_t *str_body) {
+static int body_sizes(bitwriter_t *bw, const strrepo_writer_t *sw, size_t nf, size_t *au_body, size_t *str_body) {
   size_t au_len;
   size_t str_len;
   bitwriter_data(bw, &au_len);
@@ -126,12 +129,16 @@ int segment_fits(bitwriter_t *bw, strrepo_writer_t *sw, size_t nfuu) {
 
 /* container groups: channels, or fragments if f given. bounds[g]..bounds[g+1] */
 static int plan_bounds(bcgau_scratch_t *sc, const bcgau_t *a, const bcg_doc_t *doc, const bcg_doc_index_t *ix, unsigned au_flags, const dvbtva_fuu_t *f, int n, int **bounds, int *ngroups) {
-  plan_t p = {.b = malloc(sizeof *p.b * ((size_t)n + 2))};
+  plan_t p = {.b = n < 0 ? NULL : malloc(sizeof *p.b * ((size_t)n + 2))};
   bitwriter_t bw;
   strrepo_writer_t sw;
   int rc = -1;
 
   if (!p.b) return -1;
+  if (!f && !doc) {
+    free(p.b);
+    return -1;
+  }
   p.b[0] = 0;
   if (!f && n <= (int)BCG_MAX_SEGMENTS) {
     /* container per channel, size checked when built */
@@ -178,7 +185,7 @@ int plan_groups_frags(bcgau_scratch_t *sc, const bcgau_t *a, const dvbtva_fuu_t 
   return plan_bounds(sc, a, NULL, NULL, 0, f, n, bounds, ngroups);
 }
 
-static int main_plain(bcg_announce_ctx_t *ctx, bcg_out_t *st, const bcg_doc_t *d) {
+static int main_plain(const bcg_announce_ctx_t *ctx, bcg_out_t *st, const bcg_doc_t *d) {
   bcgau_frags_t fr;
   char *xml = NULL;
   size_t xl = 0;

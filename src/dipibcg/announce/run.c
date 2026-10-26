@@ -96,7 +96,7 @@ static void bcg_announce_ready(void *ctx_, const mcast_t *m) {
             ctx->cfg->window_hours, mcast_txt, ctx->cfg->interval_s);
 }
 
-static int group_xmltv_plain(bcg_announce_ctx_t *ctx, bcg_out_t *st, const bcg_doc_t *win, int g, const bcg_doc_index_t *ix, int from, int to, int *nfuu, int *ncp) {
+static int group_xmltv_plain(const bcg_announce_ctx_t *ctx, bcg_out_t *st, const bcg_doc_t *win, int g, const bcg_doc_index_t *ix, int from, int to, int *nfuu, int *ncp) {
   bcgau_frags_t fr;
   char *xml = NULL;
   size_t xl = 0;
@@ -199,8 +199,9 @@ static int group_reuse(bcg_announce_ctx_t *ctx, bcg_out_t *st, const bcg_doc_t *
 }
 
 /* gsel/goff of st from view: doc programme indices per channel container. 0 ok, -1 oom */
-static int group_sels(bcg_announce_ctx_t *ctx, bcg_out_t *st, const bcg_doc_index_t *ix, int nchan) {
+static int group_sels(const bcg_announce_ctx_t *ctx, bcg_out_t *st, const bcg_doc_index_t *ix, int nchan) {
   int pos = 0;
+  if (nchan < 0) return -1;
   st->goff = malloc(sizeof *st->goff * ((size_t)nchan + 1));
   st->gsel = malloc(sizeof *st->gsel * ((size_t)ctx->src.nsel + 1));
   if (!st->goff || !st->gsel) return -1;
@@ -225,6 +226,7 @@ int announce_build(bcg_announce_ctx_t *ctx, long sched_start, long sched_end, in
   int *bounds = NULL;
   int ngroups = 0;
   int per_channel;
+  int planned;
   int rc = -1;
   bcg_doc_index_t ix = {0};
   bcg_doc_t win;
@@ -233,10 +235,14 @@ int announce_build(bcg_announce_ctx_t *ctx, long sched_start, long sched_end, in
   memset(&win, 0, sizeof win);
   if (out_stage(&st, &ctx->out)) return -1;
   st.src_gen = ctx->src_gen;
-  if (!tva && (window_view(&ctx->src.doc, ctx->src.times, ctx->src.sel, ctx->src.nsel, &win) || bcg_doc_index_build(&ix, &win))) goto done;
-  if ((tva ? plan_groups_frags(&ctx->sc, &ctx->sch->au, ctx->tfrag, ctx->ntfrag, &bounds, &ngroups) : plan_groups(&ctx->sc, &ctx->sch->au, &win, &ix, ctx->au_flags, &bounds, &ngroups)) ||
-      grow_zeroed((void **)&st.vers, &st.vers_n, ngroups, sizeof *st.vers) || !(st.seg = calloc((size_t)ngroups + 1, sizeof *st.seg)))
-    goto done;
+  if (!tva && window_view(&ctx->src.doc, ctx->src.times, ctx->src.sel, ctx->src.nsel, &win)) goto done;
+  if (!tva && bcg_doc_index_build(&ix, &win)) goto done;
+  if (tva) planned = plan_groups_frags(&ctx->sc, &ctx->sch->au, ctx->tfrag, ctx->ntfrag, &bounds, &ngroups);
+  else planned = plan_groups(&ctx->sc, &ctx->sch->au, &win, &ix, ctx->au_flags, &bounds, &ngroups);
+  if (planned) goto done;
+  if (grow_zeroed((void **)&st.vers, &st.vers_n, ngroups, sizeof *st.vers)) goto done;
+  st.seg = calloc((size_t)ngroups + 1, sizeof *st.seg);
+  if (!st.seg) goto done;
   st.nseg = ngroups;
   per_channel = !tva && win.channel_count && ngroups == win.channel_count;
   if (per_channel && group_sels(ctx, &st, &ix, ngroups)) goto done;

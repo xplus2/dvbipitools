@@ -119,13 +119,13 @@ static const cont_slot_t *cont_get(const cont_set_t *s, unsigned id, int is_data
   return NULL;
 }
 
-static int ix_find(void *ctx, unsigned container, unsigned type, unsigned id, const unsigned char **body, size_t *len) {
+static int ix_find(const void *ctx, unsigned container, unsigned type, unsigned id, const unsigned char **body, size_t *len) {
   const cont_slot_t *c = cont_get(ctx, container, 0);
   if (!c) c = cont_get(ctx, container, 1);
   return c && !bim_container_find(c->buf, c->len, type, id, body, len) ? 0 : -1;
 }
 
-static int ix_has(void *ctx, unsigned container, uint32_t fragment) {
+static int ix_has(const void *ctx, unsigned container, uint32_t fragment) {
   const cont_slot_t *c = cont_get(ctx, container, 1);
   bim_fragref_t *refs;
   unsigned fmt;
@@ -143,7 +143,7 @@ static void index_report(const cont_set_t *s, int verbose) {
   int have_index = 0;
   for (int i = 0; i < s->n; i++) have_index |= !s->c[i].is_data;
   if (!have_index) return;
-  if (bim_index_check(ix_find, ix_has, (void *)s, &r)) {
+  if (bim_index_check(ix_find, ix_has, s, &r)) {
     log_code("GW400246", "index containers without index list (container 0x0000)");
     return;
   }
@@ -171,7 +171,7 @@ typedef struct {
   cont_set_t conts;
 } listen_ctx_t;
 
-static int decode_container(listen_ctx_t *c, const unsigned char *data, size_t len, unsigned char **unwrapped, size_t *unwrapped_len, bcgau_parsed_t *out) {
+static int decode_container(const listen_ctx_t *c, const unsigned char *data, size_t len, unsigned char **unwrapped, size_t *unwrapped_len, bcgau_parsed_t *out) {
   const unsigned char *au;
   const unsigned char *sr_bytes;
   size_t au_len;
@@ -185,7 +185,9 @@ static int decode_container(listen_ctx_t *c, const unsigned char *data, size_t l
   if (bim_bcg_unwrap(data, len, BCG_INFLATE, unwrapped, unwrapped_len)) return -1;
   if (!bim_container_parse(*unwrapped, *unwrapped_len, &au, &au_len, &sr_bytes, &sr_len) && sr_bytes && !bim_container_parse_refs(*unwrapped, *unwrapped_len, &fmt, &refs, &nrefs)) {
     bitreader_init(&br, au, au_len);
-    rc = strrepo_reader_init(&sr, sr_bytes, sr_len) || bcgau_parse(&c->sch.au, &br, &sr, fmt == BIM_FRAGREF_DVB_BIM ? refs : NULL, nrefs, out) ? -1 : 0;
+    bim_fragref_t *use_refs = NULL;
+    if (fmt == BIM_FRAGREF_DVB_BIM) use_refs = refs;
+    rc = strrepo_reader_init(&sr, sr_bytes, sr_len) || bcgau_parse(&c->sch.au, &br, &sr, use_refs, nrefs, out) ? -1 : 0;
   }
   free(refs);
   if (rc) {
@@ -201,7 +203,10 @@ static int plain_schema(listen_ctx_t *c, const unsigned char *data, size_t len) 
   const bim_node_t *root;
   int rc = -1;
   if (c->have_schema) return 0;
-  if (c->schema_tried || xml_doc_parse((const char *)data, len, &x, NULL) || !(root = xml_doc_root(x)) || !root->ns) goto out;
+  if (c->schema_tried) goto out;
+  if (xml_doc_parse((const char *)data, len, &x, NULL)) goto out;
+  if (!(root = xml_doc_root(x))) goto out;
+  if (!root->ns) goto out;
   c->schema_tried = 1;
   rc = bcg_schema_open(&c->sch, c->cfg, root->ns, 0) ? -1 : (c->have_schema = 1, 0);
 out:
@@ -235,14 +240,16 @@ static int on_main(listen_ctx_t *c, const dvbstp_header_t *hdr, const unsigned c
   c->main_version = hdr->segment_version;
   ok = !parse_segment(c, hdr, data, len, &unwrapped, &unwrapped_len, &p);
   free(unwrapped);
-  if (ok && (ok = has_publisher(c, &p))) {
+  if (ok) ok = has_publisher(c, &p);
+  if (ok) {
     bcgau_parsed_free(&c->main);
     c->main = p;
-  } else if (ok) {
-    bcgau_parsed_free(&p);
   }
   /* TS 102 323 9.4.2.2: default TVAMain then */
-  if (!ok && !c->bad_main_logged++) log_code("GW400245", "TVAMain fragment not decodable (%zu bytes), default used", len);
+  if (!ok) {
+    if (!c->bad_main_logged) log_code("GW400245", "TVAMain fragment not decodable (%zu bytes), default used", len);
+    c->bad_main_logged++;
+  }
   return 0;
 }
 
@@ -263,15 +270,22 @@ static int on_segment(void *ctx, const dvbstp_header_t *hdr, const unsigned char
       } else if (uri && !c->schema_tried) {
         c->schema_tried = 1;
         if (!bcg_schema_open(&c->sch, c->cfg, uri, 0)) {
-          const char *uris[DVBTVA_SCHEMAS];
+          const char *uris[DVBTVA_SCHEMAS] = {0};
           for (size_t k = 0; k < di.nschemas && k < DVBTVA_SCHEMAS; k++) uris[k] = di.schemas[k].uri ? di.schemas[k].uri : "";
           if (strcmp(c->sch.ns, uri) || bcg_schema_extras(&c->sch, c->cfg, uris, di.nschemas, 0) || bcg_schema_wire(&c->sch, uris, di.nschemas)) bcg_schema_close(&c->sch);
-          else ok = c->have_schema = c->bim_init = 1;
+          else {
+            c->have_schema = 1;
+            c->bim_init = 1;
+            ok = 1;
+          }
         }
       }
       bim_decoderinit_free(&di);
     }
-    if (!ok && !c->bad_init_logged++) log_code("GW400240", "unsupported DVB-TVA-init (%zu bytes), containers ignored", len);
+    if (!ok) {
+      if (!c->bad_init_logged) log_code("GW400240", "unsupported DVB-TVA-init (%zu bytes), containers ignored", len);
+      c->bad_init_logged++;
+    }
     return 0;
   }
   /* TS 102 539 7.3, table 3: init first for BiM, plain XML needs none */

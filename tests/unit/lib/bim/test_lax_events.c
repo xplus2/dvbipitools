@@ -31,13 +31,7 @@ static void sb_str(sb_t *s, const char *v) {
   sb_byte(s, 0);
 }
 
-static int never(const unsigned char *in, size_t n, unsigned char *out, size_t *outlen) {
-  (void)in;
-  (void)n;
-  (void)out;
-  (void)outlen;
-  return -1;
-}
+static int never(const unsigned char *, size_t, unsigned char *, size_t *) { return -1; }
 
 static int run(const unsigned char *bits, size_t n, bim_inflate_fn inflate, bim_node_t **out) {
   bitreader_t br;
@@ -101,7 +95,12 @@ static void vocabulary(sb_t *s, int agg, int zlib) {
   sb_str(s, "a");
   sb_str(s, "b");
   for (unsigned e = 9; e <= 22; e++) {
-    int n = (e == 9 || e == 21 || e == 22 || e == 16) ? 1 : (e == 10 || e == 14 || e == 19) ? 3 : e == 11 ? 4 : e == 12 ? 5 : (e == 13 || e == 15) ? 2 : 0;
+    int n = 0;
+    if (e == 9 || e == 21 || e == 22 || e == 16) n = 1;
+    else if (e == 10 || e == 14 || e == 19) n = 3;
+    else if (e == 11) n = 4;
+    else if (e == 12) n = 5;
+    else if (e == 13 || e == 15) n = 2;
     sb_ev(s, e);
     for (int i = 0; i < n; i++) sb_str(s, "s");
   }
@@ -178,7 +177,7 @@ static void b_long_string(sb_t *s) {
   for (int i = 0; i < 70000; i++) sb_byte(s, 'a');
   sb_byte(s, 0);
 }
-static void b_nothing(sb_t *s) { (void)s; }
+static void b_nothing(sb_t *) {}
 static void b_unterminated(sb_t *s) {
   sb_ev(s, 6);
   sb_byte(s, 'a');

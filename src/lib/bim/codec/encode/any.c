@@ -39,7 +39,7 @@ typedef struct {
 } any_t;
 
 static int known_inner(enc_t *e, void *arg) {
-  any_t *a = arg;
+  const any_t *a = arg;
   int schema = e->schema;
   int rc;
   if (bitwriter_put_vluimsbf5(e->bw, a->code)) return -1;
@@ -49,14 +49,17 @@ static int known_inner(enc_t *e, void *arg) {
   return rc;
 }
 
-static int lax_inner(enc_t *e, void *arg) { return enc_lax(e, arg); }
+static int lax_inner(enc_t *e, void *arg) {
+  const any_t *a = arg;
+  return enc_lax(e, a->k);
+}
 
 int enc_any_element(enc_t *e, const bim_node_t *k) {
   any_t a = {k, NULL, 0, 0};
   int w = bim_width((uint64_t)e->nschemas);
   if (!enc_global_name(e, k, &a.x, &a.sid, &a.code)) return bitwriter_put(e->bw, (uint64_t)a.sid, w) || enc_counted(e, known_inner, &a);
   if (e->o->lax_schema < 0) return -1;
-  return bitwriter_put(e->bw, (uint64_t)e->o->lax_schema, w) || enc_counted(e, lax_inner, (void *)k);
+  return bitwriter_put(e->bw, (uint64_t)e->o->lax_schema, w) || enc_counted(e, lax_inner, &a);
 }
 
 typedef struct {
@@ -80,7 +83,7 @@ static int put_str(bitwriter_t *bw, const char *s) {
 }
 
 static int group_inner(enc_t *e, void *arg) {
-  grp_t *g = arg;
+  const grp_t *g = arg;
   if (g->lax) {
     if (bitwriter_put_vluimsbf5(e->bw, (uint64_t)g->n)) return -1;
     for (int i = 0; i < g->n; i++)
@@ -132,7 +135,8 @@ int enc_any_attributes(enc_t *e, const bim_type_t *t, const bim_node_t *node) {
     grp_t grp;
     int ng = 0;
     int first = 0;
-    while (ex[first].sid < 0 || ex[first].used) first++;
+    while (first < node->nattrs && (ex[first].sid < 0 || ex[first].used)) first++;
+    if (first >= node->nattrs) goto out;
     for (int i = first; i < node->nattrs; i++)
       if (ex[i].sid == ex[first].sid && !ex[i].used) {
         ex[i].used = 1;

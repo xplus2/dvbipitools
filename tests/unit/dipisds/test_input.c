@@ -195,7 +195,7 @@ START_TEST(empty_inputs_are_rejected) {
   sds_cell_t cells[2];
   int n = -1;
   static const char *const sfx[] = {".csv", ".m3u", ".xspf"};
-  for (size_t k = 0; k < sizeof sfx / sizeof *sfx; k++) {
+  for (size_t k = 0; k < sizeof sfx / sizeof sfx[0]; k++) {
     write_temp_file(path, sfx[k], "\n");
     ck_assert_int_eq(input_load(path, &in), -1);
     unlink(path);
@@ -907,7 +907,7 @@ START_TEST(xml_and_xspf_read_failures_and_version_attribute) {
   ck_assert_int_eq(input_load("/nonexistent/in.xml", &in), -1);
   ck_assert_int_eq(input_load("/nonexistent/in.xspf", &in), -1);
   ck_assert_int_eq(input_load("/nonexistent/in.csv", &in), -1);
-  for (size_t k = 0; k < sizeof versions / sizeof *versions; k++) {
+  for (size_t k = 0; k < sizeof versions / sizeof versions[0]; k++) {
     char doc[200];
     snprintf(doc, sizeof doc, "<ServiceDiscovery><BroadcastDiscovery %s DomainName=\"d\"><SingleService/></BroadcastDiscovery></ServiceDiscovery>", versions[k]);
     write_temp_file(path, ".xml", doc);
@@ -988,7 +988,7 @@ START_TEST(m3u_rejects_bad_ids_long_lines_overflow_and_uris) {
     "#EXTINF:-1 sid=\"-1\",A\nrtp://@239.1.1.1:5000\n",
     "#EXTINF:-1,A\nhttp://example/x\n",
   };
-  for (size_t k = 0; k < sizeof bad / sizeof *bad; k++) {
+  for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) {
     write_temp_file(path, ".m3u", bad[k]);
     ck_assert_int_eq(input_load(path, &in), -1);
     unlink(path);

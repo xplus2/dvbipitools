@@ -36,13 +36,16 @@ int xc_pmap_put(cc_t *c, pmap_t *m, const void *k, void *v) {
   size_t i;
   if ((m->n + 1) * 2 > m->cap) {
     pmap_t g = {NULL, NULL, m->cap ? m->cap * 2 : 256, 0};
-    if (!(g.k = xc_alloc(c, sizeof *g.k * g.cap)) || !(g.v = xc_alloc(c, sizeof *g.v * g.cap))) return xc_oom(c);
+    g.k = xc_alloc(c, sizeof *g.k * g.cap);
+    if (!g.k) return xc_oom(c);
+    g.v = xc_alloc(c, sizeof *g.v * g.cap);
+    if (!g.v) return xc_oom(c);
     for (size_t j = 0; j < m->cap; j++)
       if (m->k[j]) xc_pmap_put(c, &g, m->k[j], m->v[j]);
     *m = g;
   }
-  for (i = phash(k) & (m->cap - 1); m->k[i] && m->k[i] != k; i = (i + 1) & (m->cap - 1)) {
-  }
+  i = phash(k) & (m->cap - 1);
+  while (m->k[i] && m->k[i] != k) i = (i + 1) & (m->cap - 1);
   if (!m->k[i]) m->n++;
   m->k[i] = k;
   m->v[i] = v;

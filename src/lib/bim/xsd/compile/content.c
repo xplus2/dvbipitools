@@ -8,7 +8,8 @@
 
 static snode_t *snode_new(cc_t *c, xsd_pkind_t kind, uint64_t min, uint64_t max, int nkids) {
   snode_t *n = xc_alloc(c, sizeof *n);
-  if (!n || (nkids && !(n->kids = xc_alloc(c, sizeof *n->kids * (size_t)nkids)))) {
+  if (n && nkids) n->kids = xc_alloc(c, sizeof *n->kids * (size_t)nkids);
+  if (!n || (nkids && !n->kids)) {
     xc_oom(c);
     return NULL;
   }
@@ -58,7 +59,10 @@ static int effective(cc_t *c, const xsd_type_t *t, int depth, snode_t **out) {
   snode_t *base = NULL;
   *out = NULL;
   if (depth > DEPTH_MAX) return xsd_set_fail(c->s, "LS400129", "nesting too deep");
-  if (!xc_content_empty(t->particle) && !(own = xc_build(c, t, t->particle, 0))) return -1;
+  if (!xc_content_empty(t->particle)) {
+    own = xc_build(c, t, t->particle, 0);
+    if (!own) return -1;
+  }
   if (t->deriv == XSD_D_EXTENSION && t->base && t->base->kind == XSD_COMPLEX && !xc_has_simple_content(t->base) &&
       effective(c, t->base, depth + 1, &base))
     return -1;
@@ -84,7 +88,7 @@ static int occ_mul(uint64_t a, uint64_t b, uint64_t *out) {
 
 /* ISO 23001-1 7.5.2.2.3.2 on n itself. 1 changed */
 static int group_simplify(cc_t *c, const xsd_type_t *t, snode_t **slot) {
-  snode_t *g = *slot;
+  const snode_t *g = *slot;
   snode_t *k;
   uint64_t min;
   uint64_t max;
@@ -105,7 +109,7 @@ static int simplify(cc_t *c, const xsd_type_t *t, snode_t *n) {
   while (changed) {
     changed = 0;
     for (int i = 0; i < n->nkids && !changed; i++) {
-      snode_t *k = n->kids[i];
+      const snode_t *k = n->kids[i];
       int rc = group_simplify(c, t, &n->kids[i]);
       if (rc < 0) return -1;
       if (rc) {
@@ -133,7 +137,17 @@ static int simplify(cc_t *c, const xsd_type_t *t, snode_t *n) {
   return 0;
 }
 
-static const char *process_kw(xsd_process_t p) { return p == XSD_PC_STRICT ? ":strict" : p == XSD_PC_LAX ? ":lax" : ":skip"; }
+static const char *process_kw(xsd_process_t p) {
+  if (p == XSD_PC_STRICT) return ":strict";
+  if (p == XSD_PC_LAX) return ":lax";
+  return ":skip";
+}
+
+static const char *group_kw(int kind) {
+  if (kind == XSD_P_SEQ) return ":sequence";
+  if (kind == XSD_P_CHOICE) return ":choice";
+  return ":all";
+}
 
 char *xc_wc_sig(cc_t *c, const xsd_wildcard_t *w) {
   const char **v = xc_alloc(c, sizeof *v * (size_t)(w->nns * 2 + 6));
@@ -168,7 +182,7 @@ int xc_sign(cc_t *c, snode_t *n) {
     if (xc_sign(c, n->kids[i])) return -2;
   if (n->kind != XSD_P_SEQ) qsort(n->kids, (size_t)n->nkids, sizeof *n->kids, snode_cmp);
   if (!(v = xc_alloc(c, sizeof *v * (size_t)(n->nkids * 2 + 1)))) return xc_oom(c);
-  v[k++] = n->kind == XSD_P_SEQ ? ":sequence" : n->kind == XSD_P_CHOICE ? ":choice" : ":all";
+  v[k++] = group_kw(n->kind);
   for (int i = 0; i < n->nkids; i++) {
     v[k++] = " ";
     v[k++] = n->kids[i]->sig;
@@ -179,6 +193,7 @@ int xc_sign(cc_t *c, snode_t *n) {
 static int emit(cc_t *c, const snode_t *n, bim_part_t *p) {
   static const bim_part_kind_t kinds[] = {BIM_PART_ELEM, BIM_PART_ELEM, BIM_PART_SEQ, BIM_PART_CHOICE, BIM_PART_ALL, BIM_PART_ANY};
   bim_part_t *kids = NULL;
+  if ((size_t)n->kind >= sizeof kinds / sizeof kinds[0]) return -1;
   p->kind = kinds[n->kind];
   p->min = n->min;
   p->max = n->max;
@@ -190,7 +205,10 @@ static int emit(cc_t *c, const snode_t *n, bim_part_t *p) {
     return (p->type = xc_get_type(c, n->elem->type)) ? 0 : -2;
   }
   if (n->kind == XSD_P_ANY) return (p->wc = xc_wc_from(c, n->wc)) ? 0 : -2;
-  if (n->nkids && !(kids = xc_alloc(c, sizeof *kids * (size_t)n->nkids))) return xc_oom(c);
+  if (n->nkids) {
+    kids = xc_alloc(c, sizeof *kids * (size_t)n->nkids);
+    if (!kids) return xc_oom(c);
+  }
   for (int i = 0; i < n->nkids; i++)
     if (emit(c, n->kids[i], &kids[i])) return -2;
   p->kids = kids;
@@ -202,7 +220,9 @@ static int emit(cc_t *c, const snode_t *n, bim_part_t *p) {
 static int eff_mixed(const xsd_type_t *t) {
   for (int i = 0; t && i < DEPTH_MAX; i++, t = t->base) {
     if (t->kind != XSD_COMPLEX) return 0;
-    if (t->mixed || t->deriv != XSD_D_EXTENSION || !xc_content_empty(t->particle)) return t->mixed;
+    if (t->mixed) return t->mixed;
+    if (t->deriv != XSD_D_EXTENSION) return 0;
+    if (!xc_content_empty(t->particle)) return 0;
   }
   return 0;
 }
@@ -215,10 +235,12 @@ static int finish_content(cc_t *c, const xsd_type_t *t, snode_t *root, bim_type_
     b->content = BIM_CONTENT_NONE;
     return 0;
   }
-  if (!root && !(root = snode_new(c, XSD_P_SEQ, 1, 1, 0))) return -2;
+  if (!root) root = snode_new(c, XSD_P_SEQ, 1, 1, 0);
+  if (!root) return -2;
   if (simplify(c, t, root)) return -1;
-  while ((rc = group_simplify(c, t, &root)) > 0) {
-  }
+  do {
+    rc = group_simplify(c, t, &root);
+  } while (rc > 0);
   if (rc < 0 || xc_sign(c, root)) return -1;
   if (!(top = xc_alloc(c, sizeof *top))) return xc_oom(c);
   if (emit(c, root, top)) return -1;
@@ -272,7 +294,10 @@ int xc_fill_type(cc_t *c, const xsd_type_t *t, bim_type_t *b) {
   b->name = t->q.name;
   b->ns = t->q.ns;
   b->abstract = t->abstract;
-  if (t->base && !(b->base = xc_get_type(c, t->base))) return -2;
+  if (t->base) {
+    b->base = xc_get_type(c, t->base);
+    if (!b->base) return -2;
+  }
   if (t->kind == XSD_SIMPLE) {
     b->content = BIM_CONTENT_SIMPLE;
     return (b->simple = xc_get_simple(c, t)) ? 0 : -1;

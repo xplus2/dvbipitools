@@ -23,10 +23,10 @@ static void isort(int *v, int *tmp, int n, const ename_t *e) {
 
 static int forest_build(cc_t *c, forest_t *f, const int *parent, int n, const ename_t *e) {
   int *cnt = calloc((size_t)n + 1, sizeof *cnt);
-  int *tmp = malloc(sizeof *tmp * ((size_t)n + 1));
+  int *tmp = calloc((size_t)n + 1, sizeof *tmp);
   f->n = n;
   f->first = calloc((size_t)n + 2, sizeof *f->first);
-  f->kids = malloc(sizeof *f->kids * ((size_t)n + 1));
+  f->kids = calloc((size_t)n + 1, sizeof *f->kids);
   if (!cnt || !tmp || !f->first || !f->kids) {
     free(cnt);
     free(tmp);
@@ -53,6 +53,7 @@ static void forest_free(forest_t *f) {
 /* depth-first preorder below node (n: all roots), pos + size per node */
 static int forest_walk(cc_t *c, const forest_t *f, int node, int depth, int *order, int *k, int *pos, int *size) {
   if (depth > DEPTH_MAX) return xsd_set_fail(c->s, "LS400129", "nesting too deep");
+  if (node < 0) return -1;
   for (int i = f->first[node]; i < f->first[node + 1]; i++) {
     int ch = f->kids[i];
     pos[ch] = *k;
@@ -66,11 +67,11 @@ static int forest_walk(cc_t *c, const forest_t *f, int node, int depth, int *ord
 int xc_type_codes(cc_t *c, xsd_compiled_t *out) {
   const xsd_type_t *const *xt;
   int n = xsd_types(c->s, &xt);
-  int *parent = malloc(sizeof *parent * ((size_t)n + 1));
-  int *order = malloc(sizeof *order * ((size_t)n + 1));
+  int *parent = calloc((size_t)n + 1, sizeof *parent);
+  int *order = calloc((size_t)n + 1, sizeof *order);
   int *pos = calloc((size_t)n + 1, sizeof *pos);
   int *size = calloc((size_t)n + 1, sizeof *size);
-  ename_t *e = malloc(sizeof *e * ((size_t)n + 1));
+  ename_t *e = calloc((size_t)n + 1, sizeof *e);
   const bim_type_t **types = xc_alloc(c, sizeof *types * ((size_t)n + 1));
   bim_subtypes_t *subs = xc_alloc(c, sizeof *subs * ((size_t)n + 1));
   forest_t f = {NULL, NULL, 0};
@@ -89,10 +90,17 @@ int xc_type_codes(cc_t *c, xsd_compiled_t *out) {
     e[i].ns = xt[i]->q.ns;
     e[i].name = xt[i]->q.name;
     /* named types only (7.4.5), anonymous bases skipped */
-    while (b && !xc_pmap_get(&index, b) && depth++ < DEPTH_MAX) b = b->base;
+    for (;;) {
+      if (!b || depth >= DEPTH_MAX) break;
+      if (xc_pmap_get(&index, b)) break;
+      depth++;
+      b = b->base;
+    }
     parent[i] = b ? (int)(intptr_t)xc_pmap_get(&index, b) - 1 : -1;
   }
-  if (rc || (rc = forest_build(c, &f, parent, n, e)) || (rc = forest_walk(c, &f, n, 0, order, &k, pos, size))) goto done;
+  if (rc) goto done;
+  if (((rc = forest_build(c, &f, parent, n, e)))) goto done;
+  if (((rc = forest_walk(c, &f, n, 0, order, &k, pos, size)))) goto done;
   for (int i = 0; i < n; i++) {
     int at = order[i];
     if (!(types[i] = xc_pmap_get(&c->types, xt[at]))) {
@@ -107,8 +115,8 @@ int xc_type_codes(cc_t *c, xsd_compiled_t *out) {
         rc = xc_oom(c);
         goto done;
       }
-      for (int k = 0; k < size[order[i]] - 1; k++)
-        if (!(dl[k] = xc_delta_type(c, xt[order[i]], xt[order[i + 1 + k]]))) {
+      for (int d = 0; d < size[order[i]] - 1; d++)
+        if (!(dl[d] = xc_delta_type(c, xt[order[i]], xt[order[i + 1 + d]]))) {
           rc = -1;
           goto done;
         }
@@ -151,13 +159,13 @@ int xc_global_attrs(cc_t *c, xsd_compiled_t *res) {
 int xc_elem_codes(cc_t *c, xsd_compiled_t *out) {
   const xsd_elem_t *const *xe;
   int n = xsd_elems(c->s, &xe);
-  int *parent = malloc(sizeof *parent * ((size_t)n + 1));
-  int *pre = malloc(sizeof *pre * ((size_t)n + 1));
+  int *parent = calloc((size_t)n + 1, sizeof *parent);
+  int *pre = calloc((size_t)n + 1, sizeof *pre);
   int *pos = calloc((size_t)n + 1, sizeof *pos);
   int *size = calloc((size_t)n + 1, sizeof *size);
-  int *v = malloc(sizeof *v * ((size_t)n + 1));
-  int *tmp = malloc(sizeof *tmp * ((size_t)n + 1));
-  ename_t *e = malloc(sizeof *e * ((size_t)n + 1));
+  int *v = calloc((size_t)n + 1, sizeof *v);
+  int *tmp = calloc((size_t)n + 1, sizeof *tmp);
+  ename_t *e = calloc((size_t)n + 1, sizeof *e);
   const bim_elem_t **sel = xc_alloc(c, sizeof *sel * ((size_t)n + 1));
   forest_t f = {NULL, NULL, 0};
   pmap_t index = {NULL, NULL, 0, 0};
@@ -173,7 +181,9 @@ int xc_elem_codes(cc_t *c, xsd_compiled_t *out) {
     e[i].name = xe[i]->q.name;
     parent[i] = xe[i]->subst_head ? (int)(intptr_t)xc_pmap_get(&index, xe[i]->subst_head) - 1 : -1;
   }
-  if (rc || (rc = forest_build(c, &f, parent, n, e)) || (rc = forest_walk(c, &f, n, 0, pre, &k, pos, size))) goto done;
+  if (rc) goto done;
+  if (((rc = forest_build(c, &f, parent, n, e)))) goto done;
+  if (((rc = forest_walk(c, &f, n, 0, pre, &k, pos, size)))) goto done;
   memcpy(v, pre, sizeof *v * (size_t)n);
   if (!c->o->hier) isort(v, tmp, n, e);
   for (int i = 0; i < n; i++) sel[i] = xc_pmap_get(&c->elems, xe[v[i]]);

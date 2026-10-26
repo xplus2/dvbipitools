@@ -39,7 +39,11 @@ int enc_zchunks(enc_t *e, const char *v) {
   return rc;
 }
 
-size_t enc_zprogress(const enc_t *e) { return e->zmode == 1 ? e->zp->ns : e->zmode == 2 ? e->zi : 0; }
+size_t enc_zprogress(const enc_t *e) {
+  if (e->zmode == 1) return e->zp->ns;
+  if (e->zmode == 2) return e->zi;
+  return 0;
+}
 
 int enc_zstring(enc_t *e, const char *v) {
   struct enc_zplan *p = e->zp;
@@ -69,7 +73,7 @@ static void plan_free(struct enc_zplan *p) {
 }
 
 /* pieces of BufferSize over all strings + their terminators, owner: string holding 1st byte */
-static int plan_build(enc_t *e, struct enc_zplan *p) {
+static int plan_build(const enc_t *e, struct enc_zplan *p) {
   size_t total = 0;
   size_t cap = ZLIB_CHUNK_MAX(e->zsize);
   unsigned char *b;
@@ -78,7 +82,7 @@ static int plan_build(enc_t *e, struct enc_zplan *p) {
   size_t owner_end;
   int rc = -1;
   for (size_t i = 0; i < p->ns; i++) total += strlen(p->s[i]) + 1;
-  b = malloc(total);
+  b = malloc(total ? total : 1);
   out = e->o->deflate ? malloc(cap) : NULL;
   p->c = calloc(total / e->zsize + 1, sizeof *p->c);
   if (!b || !out || !p->c) goto done;
@@ -92,7 +96,10 @@ static int plan_build(enc_t *e, struct enc_zplan *p) {
     size_t take = total - start < e->zsize ? total - start : e->zsize;
     size_t ol = cap;
     while (start >= owner_end) owner_end += strlen(p->s[++owner]) + 1;
-    if (e->o->deflate(b + start, take, out, &ol) || !ol || !(p->c[p->nc].data = malloc(ol))) goto done;
+    if (e->o->deflate(b + start, take, out, &ol)) goto done;
+    if (!ol) goto done;
+    p->c[p->nc].data = malloc(ol);
+    if (!p->c[p->nc].data) goto done;
     memcpy(p->c[p->nc].data, out, ol);
     p->c[p->nc].len = ol;
     p->c[p->nc++].owner = owner;
@@ -112,7 +119,10 @@ int enc_gathered(enc_t *e, const bim_type_t *t, const bim_node_t *root) {
   int *counters = NULL;
   int rc;
   memset(&plan, 0, sizeof plan);
-  if (e->o->aod && e->o->aod->ninsts && !(counters = malloc((size_t)e->o->aod->ninsts * sizeof *counters))) return -1;
+  if (e->o->aod && e->o->aod->ninsts) {
+    counters = malloc((size_t)e->o->aod->ninsts * sizeof *counters);
+    if (!counters) return -1;
+  }
   for (int i = 0; counters && i < e->o->aod->ninsts; i++) counters[i] = e->o->aod->insts[i].counter;
   bitwriter_init(&scratch);
   if (strrepo_writer_init(&ss)) {

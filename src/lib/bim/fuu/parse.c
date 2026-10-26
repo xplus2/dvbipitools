@@ -90,7 +90,9 @@ static bim_tbc_t *push(fr_t *r, bim_tbc_kind_t kind, const bim_type_t *parent, u
 static int push_elem(fr_t *r, const bim_type_t *parent, uint64_t max, int sel, const char *name, const char *ns, const bim_type_t *t, const bim_type_t **cur) {
   const bim_type_t *eff;
   bim_tbc_t *tbc;
-  if (rd_type_code(r, t, &eff) || !(tbc = push(r, BIM_TBC_ELEM, parent, max, sel))) return -1;
+  if (rd_type_code(r, t, &eff)) return -1;
+  tbc = push(r, BIM_TBC_ELEM, parent, max, sel);
+  if (!tbc) return -1;
   tbc->name = name;
   tbc->ns = ns;
   tbc->type = eff;
@@ -126,7 +128,8 @@ static int rd_any_attr(fr_t *r, bim_tbc_t *t) {
     if (bim_rd_v5(&r->r, &n) || bim_rd_v5(&r->r, &len)) return -1;
     if (n != 1) return range(r, "NumberOfLaxAnyAttributes");
     if (bim_rd_bytes(&r->r, len, &q)) return -1;
-    t->name = (char *)q;
+    t->heap_name = (char *)q;
+    t->name = t->heap_name;
     t->owned = 1;
     t->simple = &bim_xs_string;
     if (bim_rd_v5(&r->r, &len) || bitreader_skip(&r->r.br, (size_t)len * 8)) return bim_rd_trunc(&r->r);
@@ -155,7 +158,7 @@ static int rd_selector(fr_t *r, int operand, const bim_type_t **cur, int *end) {
   }
   w = bim_width((uint64_t)r->st->schemas[sid].nelems + (operand ? 0 : 1));
   if (bim_rd_bits(&r->r, w, &v)) return -1;
-  *end = !operand && v == (1ull << w) - 1;
+  *end = !operand && v == (1ULL << w) - 1;
   if (*end) return push(r, BIM_TBC_END, NULL, 1, 1) ? 0 : -1;
   if (v >= (uint64_t)r->st->schemas[sid].nelems) return range(r, "SBC_Selector");
   {
@@ -166,7 +169,10 @@ static int rd_selector(fr_t *r, int operand, const bim_type_t **cur, int *end) {
 
 /* 6.6.5.2.2 ContextTBC: parent 0, complex-typed children, all ones end */
 static int rd_context_tbc(fr_t *r, const bim_type_t **stack, int *depth, int relative, int *end) {
-  const bim_type_t *cur = stack[*depth - 1];
+  const bim_type_t *cur;
+  if (*depth < 1) return range(r, "ContextTBC");
+  cur = stack[*depth - 1];
+  if (!cur) return range(r, "ContextTBC");
   int idx[TBC_MAX];
   int n = 0;
   int w;
@@ -178,7 +184,7 @@ static int rd_context_tbc(fr_t *r, const bim_type_t **stack, int *depth, int rel
     if ((cur->sbc[i].kind == BIM_SBC_ELEM && fuu_is_complex(cur->sbc[i].type)) || cur->sbc[i].kind == BIM_SBC_ANY) idx[n++] = i;
   w = bim_width((uint64_t)n + 2);
   if (bim_rd_bits(&r->r, w, &v)) return -1;
-  *end = v == (1ull << w) - 1;
+  *end = v == (1ULL << w) - 1;
   if (*end) return push(r, BIM_TBC_END, cur, 1, 0) ? 0 : -1;
   if (!v) {
     if (!relative || *depth < 2) return range(r, "Reference to Parent");
@@ -237,7 +243,7 @@ static int rd_operand_tbc(fr_t *r, const bim_type_t *cur) {
 }
 
 static int rd_path_tbcs(fr_t *r, unsigned mode) {
-  const bim_type_t *stack[TBC_MAX];
+  const bim_type_t *stack[TBC_MAX] = {NULL};
   int depth = 0;
   int end = 0;
   int relative = mode == 2 || mode == 4;
@@ -369,7 +375,7 @@ int bim_fuu_parse(bim_fuu_state_t *st, const bim_bits_t *fuu, bim_fuu_t *f, bim_
 
 void bim_fuu_free(bim_fuu_t *f) {
   for (size_t i = 0; i < f->ntbcs; i++)
-    if (f->tbcs[i].owned) free((char *)f->tbcs[i].name);
+    free(f->tbcs[i].heap_name);
   for (size_t i = 0; f->payloads && i < f->npayloads; i++) bim_node_free(f->payloads[i]);
   for (size_t i = 0; f->values && i < f->npayloads; i++) free(f->values[i]);
   free(f->payloads);

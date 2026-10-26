@@ -9,17 +9,17 @@
 
 static int fail(bim_err_t *err, const char *what) { return bim_fail(err, BIM_DVBTVA_ERR, "bim: DVB-TVA %s", what); }
 
-int dvbtva_tva_root(void *ctx, unsigned code, bim_tvaroot_t *out) {
+int dvbtva_tva_root(const void *ctx, unsigned code, bim_tvaroot_t *out) {
   const dvbtva_roots_t *r = ctx;
   return bim_tvafrag_root(r->c, r->ns, code, out);
 }
 
-int dvbtva_au_write(dvbtva_root_fn root, void *rctx, const bim_encode_opts_t *eo, const dvbtva_fuu_t *f, size_t n,
+int dvbtva_au_write(dvbtva_root_fn root, const void *rctx, const bim_encode_opts_t *eo, const dvbtva_fuu_t *f, size_t n,
   bitwriter_t *bw, strrepo_writer_t *sw, bim_fragref_t *refs, bim_err_t *err) {
   return dvbtva_au_write_ex(root, rctx, eo, f, n, bw, sw, refs, NULL, NULL, err);
 }
 
-int dvbtva_au_write_ex(dvbtva_root_fn root, void *rctx, const bim_encode_opts_t *eo, const dvbtva_fuu_t *f, size_t n,
+int dvbtva_au_write_ex(dvbtva_root_fn root, const void *rctx, const bim_encode_opts_t *eo, const dvbtva_fuu_t *f, size_t n,
   bitwriter_t *bw, strrepo_writer_t *sw, bim_fragref_t *refs, dvbtva_wpost_fn post, void *pctx, bim_err_t *err) {
   bim_wr_t w = {bw, err};
   memset(err, 0, sizeof *err);
@@ -54,7 +54,7 @@ void dvbtva_au_free(dvbtva_fuu_t *f, size_t n) {
   free(f);
 }
 
-int dvbtva_au_parse(dvbtva_root_fn root, void *rctx, const bim_decode_opts_t *o, bitreader_t *br, strrepo_reader_t *sr, const bim_fragref_t *refs, size_t nrefs,
+int dvbtva_au_parse(dvbtva_root_fn root, const void *rctx, const bim_decode_opts_t *o, bitreader_t *br, strrepo_reader_t *sr, const bim_fragref_t *refs, size_t nrefs,
                     dvbtva_fuu_t **out, size_t *n, bim_err_t *err) {
   return dvbtva_au_parse_ex(root, rctx, o, br, sr, refs, nrefs, NULL, NULL, out, n, err);
 }
@@ -77,7 +77,7 @@ static size_t ref_at(const bim_fragref_t *refs, size_t n, size_t at) {
   return lo < n && refs[lo].au_off == at ? lo : n;
 }
 
-int dvbtva_au_parse_ex(dvbtva_root_fn root, void *rctx, const bim_decode_opts_t *o, bitreader_t *br, strrepo_reader_t *sr, const bim_fragref_t *refs_in, size_t nrefs,
+int dvbtva_au_parse_ex(dvbtva_root_fn root, const void *rctx, const bim_decode_opts_t *o, bitreader_t *br, strrepo_reader_t *sr, const bim_fragref_t *refs_in, size_t nrefs,
                        dvbtva_rpost_fn post, void *pctx, dvbtva_fuu_t **out, size_t *n, bim_err_t *err) {
   const unsigned char *base = br->buf;
   dvbtva_fuu_t *f;
@@ -131,7 +131,8 @@ int dvbtva_au_parse_ex(dvbtva_root_fn root, void *rctx, const bim_decode_opts_t 
       fail(err, "fragment malformed");
       goto out;
     }
-    if (r.ns && !(f[k].root->ns = bim_node_keep(f[k].root, r.ns))) {
+    if (r.ns) f[k].root->ns = bim_node_keep(f[k].root, r.ns);
+    if (r.ns && !f[k].root->ns) {
       bim_node_free(f[k].root);
       f[k].root = NULL;
       bim_oom(err);
@@ -192,7 +193,8 @@ int dvbtva_extras_load(xsd_set_t **sets, const xsd_compiled_t **known, const cha
       if (!enc && !xsd_helper_ns(uris[k])) log_code(codes->warn, "schema %s of the DecoderInit not found, its chunks are skipped", uris[k]);
       continue;
     }
-    if (rc || (rc = fn(sets[k], &known[k], arg))) {
+    if (!rc) rc = fn(sets[k], &known[k], arg);
+    if (rc) {
       xsd_load_report(codes->start, codes->run, rc, culprit, uris[k], sets[k]);
       return -1;
     }

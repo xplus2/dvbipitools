@@ -30,7 +30,10 @@ static int qname_text(dec_t *d, dstrbuf_t *b) {
   char *raw;
   uint64_t n;
   int rc = 0;
-  if (bitreader_get_vluimsbf5(d->br, &n) || n > bitreader_bits_left(d->br) / 8 || !(raw = malloc((size_t)n + 1))) return -1;
+  if (bitreader_get_vluimsbf5(d->br, &n)) return -1;
+  if (n > bitreader_bits_left(d->br) / 8) return -1;
+  raw = malloc((size_t)n + 1);
+  if (!raw) return -1;
   if (bitreader_get_bytes(d->br, (unsigned char *)raw, (size_t)n)) {
     free(raw);
     return -1;

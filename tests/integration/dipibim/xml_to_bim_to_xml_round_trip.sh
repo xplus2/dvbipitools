@@ -3,6 +3,7 @@
 # See NOTICE and LICENSE for details and authorship information.
 
 BIN=$1
+UNSUPPORTED_CODE=BE400317
 . "$(dirname "$0")/../common.sh"
 . "$(dirname "$0")/fixture.inc"
 make_fixtures
@@ -10,7 +11,7 @@ make_fixtures
 for p in dvb-tva tva generic; do
     "$BIN" -f xml -s "$WORK/sch" --profile "$p" -i "$WORK/in.xml" -o "$WORK/out.$p.bim" 2>"$WORK/enc.err"
     rc=$?
-    if [ "$rc" != 0 ] && log_has "$WORK/enc.err" "BE400317"; then
+    if [ "$rc" != 0 ] && log_has "$WORK/enc.err" "$UNSUPPORTED_CODE"; then
         continue
     fi
     [ "$rc" = 0 ] || fail "encode $p: exit $rc"
@@ -34,7 +35,7 @@ cmp -s "$WORK/file.bim" "$WORK/out.dvb-tva.bim" || fail "schema file: different 
 # SD&S segment
 "$BIN" -f xml -s "$WORK/sd" --profile sdns -i "$WORK/sd.xml" -o "$WORK/sd.bim" 2>"$WORK/sd.err"
 rc=$?
-if [ "$rc" != 0 ] && log_has "$WORK/sd.err" "BE400317"; then
+if [ "$rc" != 0 ] && log_has "$WORK/sd.err" "$UNSUPPORTED_CODE"; then
     echo "sdns skipped: no zlib"
 else
     [ "$rc" = 0 ] || fail "encode sdns: exit $rc"
@@ -63,7 +64,7 @@ XML
 for p in dvb-tva tva generic; do
     "$BIN" -f xml -s "$WORK/ext/main" -s "$WORK/ext/more" --profile "$p" -i "$WORK/ext/in.xml" -o "$WORK/ext/o.$p.bim" 2>"$WORK/enc.err"
     rc=$?
-    if [ "$rc" != 0 ] && log_has "$WORK/enc.err" "BE400317"; then
+    if [ "$rc" != 0 ] && log_has "$WORK/enc.err" "$UNSUPPORTED_CODE"; then
         continue
     fi
     [ "$rc" = 0 ] || fail "extension encode $p: exit $rc"
@@ -83,7 +84,7 @@ sed "s|<Title>Beta</Title>|<Title>$long</Title>|" "$WORK/in.xml" > "$WORK/long.x
 for p in dvb-tva tva generic; do
     "$BIN" -f xml -s "$WORK/sch" --profile "$p" -i "$WORK/long.xml" -o "$WORK/long.$p.bim" 2>"$WORK/enc.err"
     rc=$?
-    if [ "$rc" != 0 ] && log_has "$WORK/enc.err" "BE400317"; then
+    if [ "$rc" != 0 ] && log_has "$WORK/enc.err" "$UNSUPPORTED_CODE"; then
         continue
     fi
     [ "$rc" = 0 ] || fail "long text encode $p: exit $rc"
@@ -122,7 +123,7 @@ real_round_trip() {
     "${kind}_doc" "$ns" > "$WORK/real.xml"
     "$BIN" -f xml -s "$dir" --profile "$profile" -i "$WORK/real.xml" -o "$WORK/real.bim" 2>"$WORK/real.err"
     rc=$?
-    if [ "$rc" != 0 ] && log_has "$WORK/real.err" "BE400317"; then
+    if [ "$rc" != 0 ] && log_has "$WORK/real.err" "$UNSUPPORTED_CODE"; then
         return 0
     fi
     [ "$rc" = 0 ] || fail "$ns in $dir: encode exit $rc"
@@ -149,7 +150,8 @@ fi
 # MPEG-7 Systems conformance streams: DVBIPITOOLS_MPEG7_CONFORMANCE is the BiM directory of the suite (singleAU, singleAUDecoded),
 # DVBIPITOOLS_MPEG7_XSD the MPEG-7 2001 schema. Same element names as the reference decoder's XML
 element_names() {
-    grep -o '<[A-Za-z][A-Za-z0-9_.:-]*' "$1" | sed 's/^<//; s/^[A-Za-z0-9_.-]*://'
+    xml_file=$1
+    grep -o '<[A-Za-z][A-Za-z0-9_.:-]*' "$xml_file" | sed 's/^<//; s/^[A-Za-z0-9_.-]*://'
 }
 
 if [ -n "$DVBIPITOOLS_MPEG7_CONFORMANCE" ] && [ -n "$DVBIPITOOLS_MPEG7_XSD" ]; then

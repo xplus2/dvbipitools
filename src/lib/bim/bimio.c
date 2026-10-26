@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,16 +9,13 @@
 
 int bim_width(uint64_t n) {
   int b = 0;
-  while (b < 64 && (1ull << b) < n) b++;
+  while (b < 64 && (1ULL << b) < n) b++;
   return b;
 }
 
-int bim_fail(bim_err_t *err, const char *code, const char *fmt, ...) {
-  va_list ap;
+int bim_fail_str(bim_err_t *err, const char *code, const char *msg) {
   err->code = code;
-  va_start(ap, fmt);
-  vsnprintf(err->msg, sizeof err->msg, fmt, ap);
-  va_end(ap);
+  snprintf(err->msg, sizeof err->msg, "%s", msg);
   return -1;
 }
 
@@ -79,13 +75,15 @@ int bim_rd_zero(bim_rd_t *r, uint64_t nbits, const char *code) {
 int bim_rd_raw(bim_rd_t *r, uint64_t nbits, bim_bits_t *b) {
   size_t nb = (size_t)((nbits + 7) / 8);
   if (nbits > bitreader_bits_left(&r->br)) return bim_rd_trunc(r);
-  if (!(b->bits = calloc(nb ? nb : 1, 1))) return bim_oom(r->err);
+  b->heap_bits = calloc(nb ? nb : 1, 1);
+  if (!b->heap_bits) return bim_oom(r->err);
+  b->bits = b->heap_bits;
   b->nbits = nbits;
   for (uint64_t k = 0; k < nbits; k += 8) {
     uint64_t v;
     int n = nbits - k < 8 ? (int)(nbits - k) : 8;
     if (bim_rd_bits(r, n, &v)) return -1;
-    b->bits[k / 8] = (unsigned char)(v << (8 - n));
+    b->heap_bits[k / 8] = (unsigned char)(v << (8 - n));
   }
   return 0;
 }
@@ -114,7 +112,10 @@ int bim_rd_ext(bim_rd_t *r, uint64_t count, const char *range, bim_ext_t *x) {
   if (n > count || (w && n > bitreader_bits_left(&r->br) / (uint64_t)w))
     return bim_fail(r->err, range, "bim: %s externally castable/substitutable code out of range", r->what);
   x->ncodes = (size_t)n;
-  if (n && !(x->codes = calloc((size_t)n, sizeof *x->codes))) return bim_oom(r->err);
+  if (n) {
+    x->codes = calloc((size_t)n, sizeof *x->codes);
+    if (!x->codes) return bim_oom(r->err);
+  }
   for (size_t i = 0; i < x->ncodes; i++) {
     if (bim_rd_bits(r, w, &x->codes[i])) return -1;
     if (x->codes[i] >= count) return bim_fail(r->err, range, "bim: %s externally castable/substitutable code out of range", r->what);

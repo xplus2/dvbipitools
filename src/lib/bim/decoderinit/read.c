@@ -25,15 +25,18 @@ static void *alloc_n(size_t n, size_t sz) { return n ? calloc(n, sz) : NULL; }
 
 static int rd_codecs(rd_t *r, bim_di_schema_t *s) {
   if (bim_rd_count(&r->r, 16, &s->ncodecs)) return -1;
-  if (s->ncodecs && !(s->codecs = alloc_n(s->ncodecs, sizeof *s->codecs))) {
+  if (s->ncodecs) s->codecs = alloc_n(s->ncodecs, sizeof *s->codecs);
+  if (s->ncodecs && !s->codecs) {
     s->ncodecs = 0;
     return bim_oom(r->r.err);
   }
   for (size_t i = 0; i < s->ncodecs; i++) {
     bim_di_codec_t *c = &s->codecs[i];
     /* ISO 15938-1:2002 Cor 1 7.2.3 */
-    if (bim_rd_str(&r->r, r->di->mpegb ? NULL : BIM_DI_ZERO, "TypeCodecURI_Length", &c->uri) || bim_rd_count(&r->r, 8, &c->ntypes)) return -1;
-    if (c->ntypes && !(c->types = alloc_n(c->ntypes, sizeof *c->types))) {
+    if (bim_rd_str(&r->r, r->di->mpegb ? NULL : BIM_DI_ZERO, "TypeCodecURI_Length", &c->uri)) return -1;
+    if (bim_rd_count(&r->r, 8, &c->ntypes)) return -1;
+    if (c->ntypes) c->types = alloc_n(c->ntypes, sizeof *c->types);
+    if (c->ntypes && !c->types) {
       c->ntypes = 0;
       return bim_oom(r->r.err);
     }
@@ -71,8 +74,10 @@ static int rd_features(rd_t *r) {
     if (bim_rd_flag(&r->r, flags[i])) return -1;
   if (di->prefix_table) {
     if (avail < FLAG_BITS) return bim_fail(r->r.err, BIM_DI_LENGTH, "bim: DecoderInit %s mismatch", "AdvancedFeatureFlags_Length");
-    if (bim_rd_zero(&r->r, FLAG_BITS - 9, BIM_DI_RESERVED) || bim_rd_count(&r->r, 16, &di->nprefixes)) return -1;
-    if (di->nprefixes && !(di->prefixes = alloc_n(di->nprefixes, sizeof *di->prefixes))) {
+    if (bim_rd_zero(&r->r, FLAG_BITS - 9, BIM_DI_RESERVED)) return -1;
+    if (bim_rd_count(&r->r, 16, &di->nprefixes)) return -1;
+    if (di->nprefixes) di->prefixes = alloc_n(di->nprefixes, sizeof *di->prefixes);
+    if (di->nprefixes && !di->prefixes) {
       di->nprefixes = 0;
       return bim_oom(r->r.err);
     }
@@ -96,12 +101,15 @@ static int rd_cpt(rd_t *r) {
   if (bim_rd_v8(&r->r, &len)) return -1;
   if (len > bitreader_bits_left(&r->r.br) / 8) return bim_rd_trunc(&r->r);
   start = bim_rd_pos(&r->r);
-  if (bim_rd_v8(&r->r, &di->cpt_code_len) || bim_rd_count(&r->r, 6, &di->ncpaths) || bim_rd_flag(&r->r, &di->cpt_complete)) return -1;
+  if (bim_rd_v8(&r->r, &di->cpt_code_len)) return -1;
+  if (bim_rd_count(&r->r, 6, &di->ncpaths)) return -1;
+  if (bim_rd_flag(&r->r, &di->cpt_complete)) return -1;
   if (di->cpt_code_len > 64) {
     di->ncpaths = 0;
     return range(r, "ContextPathCode_Length");
   }
-  if (di->ncpaths && !(di->cpaths = alloc_n(di->ncpaths, sizeof *di->cpaths))) {
+  if (di->ncpaths) di->cpaths = alloc_n(di->ncpaths, sizeof *di->cpaths);
+  if (di->ncpaths && !di->cpaths) {
     di->ncpaths = 0;
     return bim_oom(r->r.err);
   }
@@ -109,6 +117,7 @@ static int rd_cpt(rd_t *r) {
     bim_di_cpath_t *p = &di->cpaths[i];
     bim_bits_t b;
     if (bim_rd_v5(&r->r, &p->nbits) || bim_rd_raw(&r->r, p->nbits, &b)) return -1;
+    p->heap_bits = b.heap_bits;
     p->bits = b.bits;
     p->code = i + 1;
     if (!di->cpt_complete) {
@@ -126,7 +135,8 @@ static int rd_known(rd_t *r) {
   bim_decoderinit_t *di = r->di;
   uint64_t end = bim_di_nall(di);
   if (bim_rd_count(&r->r, 24, &di->nknown)) return -1;
-  if (di->nknown && !(di->known = alloc_n(di->nknown, sizeof *di->known))) {
+  if (di->nknown) di->known = alloc_n(di->nknown, sizeof *di->known);
+  if (di->nknown && !di->known) {
     di->nknown = 0;
     return bim_oom(r->r.err);
   }
@@ -135,9 +145,12 @@ static int rd_known(rd_t *r) {
     if (bim_rd_v8(&r->r, &s->id)) return -1;
     /* 6.2.3: NumberOfSchemas no-namespace attributes, last ISO reserved */
     if (s->id <= di->nschemas || s->id + 1 >= end) return range(r, "KnownAdditionalSchemaID");
-    if (bim_rd_str(&r->r, BIM_DI_ZERO, "AdditionalSchemaURI_Length", &s->uri) || bim_rd_str(&r->r, NULL, NULL, &s->hint) || rd_codecs(r, s) ||
-        rd_ext(r, s->uri, 0, &s->castable) || rd_ext(r, s->uri, 1, &s->substitutable))
-      return -1;
+    if (bim_rd_str(&r->r, BIM_DI_ZERO, "AdditionalSchemaURI_Length", &s->heap_uri)) return -1;
+    s->uri = s->heap_uri;
+    if (bim_rd_str(&r->r, NULL, NULL, &s->hint)) return -1;
+    if (rd_codecs(r, s)) return -1;
+    if (rd_ext(r, s->uri, 0, &s->castable)) return -1;
+    if (rd_ext(r, s->uri, 1, &s->substitutable)) return -1;
   }
   return 0;
 }
@@ -147,7 +160,8 @@ static int rd_additional(rd_t *r) {
   uint64_t v;
   if (bim_rd_v8(&r->r, &di->nadditional) || rd_known(r) || bim_rd_bits(&r->r, 8, &v)) return -1;
   di->schema_encoding = (unsigned)v;
-  if (rd_ext(r, NULL, 0, &di->castable) || rd_ext(r, NULL, 1, &di->substitutable)) return -1;
+  if (rd_ext(r, NULL, 0, &di->castable)) return -1;
+  if (rd_ext(r, NULL, 1, &di->substitutable)) return -1;
   return bim_rd_zero(&r->r, 7, BIM_DI_RESERVED);
 }
 
@@ -155,7 +169,8 @@ static int rd_instances(rd_t *r) {
   bim_decoderinit_t *di = r->di;
   int tw = bim_width(di->naod_types);
   if (bim_rd_count(&r->r, 8, &di->ninstances)) return -1;
-  if (di->ninstances && !(di->instances = alloc_n(di->ninstances, sizeof *di->instances))) {
+  if (di->ninstances) di->instances = alloc_n(di->ninstances, sizeof *di->instances);
+  if (di->ninstances && !di->instances) {
     di->ninstances = 0;
     return bim_oom(r->r.err);
   }
@@ -177,16 +192,20 @@ static int rd_mappings(rd_t *r, int sw) {
   bim_decoderinit_t *di = r->di;
   int iw = bim_width(di->ninstances);
   if (bim_rd_count(&r->r, 16, &di->nmappings)) return -1;
-  if (di->nmappings && !(di->mappings = alloc_n(di->nmappings, sizeof *di->mappings))) {
+  if (di->nmappings) di->mappings = alloc_n(di->nmappings, sizeof *di->mappings);
+  if (di->nmappings && !di->mappings) {
     di->nmappings = 0;
     return bim_oom(r->r.err);
   }
   for (size_t k = 0; k < di->nmappings; k++) {
     bim_di_mapping_t *m = &di->mappings[k];
     uint64_t v;
-    if (bim_rd_flag(&r->r, &m->preserve_default) || bim_rd_bits(&r->r, 7, &v) || bim_rd_count(&r->r, (uint64_t)iw, &m->ninstances)) return -1;
+    if (bim_rd_flag(&r->r, &m->preserve_default)) return -1;
+    if (bim_rd_bits(&r->r, 7, &v)) return -1;
+    if (bim_rd_count(&r->r, (uint64_t)iw, &m->ninstances)) return -1;
     m->reserved = (unsigned)v;
-    if (m->ninstances && !(m->instances = alloc_n(m->ninstances, sizeof *m->instances))) {
+    if (m->ninstances) m->instances = alloc_n(m->ninstances, sizeof *m->instances);
+    if (m->ninstances && !m->instances) {
       m->ninstances = 0;
       return bim_oom(r->r.err);
     }
@@ -195,12 +214,15 @@ static int rd_mappings(rd_t *r, int sw) {
       if (m->instances[i] >= di->ninstances) return range(r, "AdvancedOptimisedDecoderInstanceID");
     }
     if (bim_rd_count(&r->r, (uint64_t)sw + 8, &m->ntypes)) return -1;
-    if (m->ntypes && !(m->types = alloc_n(m->ntypes, sizeof *m->types))) {
+    if (m->ntypes) m->types = alloc_n(m->ntypes, sizeof *m->types);
+    if (m->ntypes && !m->types) {
       m->ntypes = 0;
       return bim_oom(r->r.err);
     }
-    for (size_t i = 0; i < m->ntypes; i++)
-      if (bim_rd_bits(&r->r, sw, &m->types[i].schema) || bim_rd_v8(&r->r, &m->types[i].type)) return -1;
+    for (size_t i = 0; i < m->ntypes; i++) {
+      if (bim_rd_bits(&r->r, sw, &m->types[i].schema)) return -1;
+      if (bim_rd_v8(&r->r, &m->types[i].type)) return -1;
+    }
   }
   return 0;
 }
@@ -213,7 +235,7 @@ static int check_mappings(rd_t *r) {
 }
 
 static void free_schema(bim_di_schema_t *s) {
-  free(s->uri);
+  free(s->heap_uri);
   free(s->hint);
   for (size_t i = 0; i < s->ncodecs; i++) {
     free(s->codecs[i].uri);
@@ -244,7 +266,11 @@ static void free_tail(bim_decoderinit_t *di) {
   di->frag_formats = NULL;
   di->known = NULL;
   di->initial = NULL;
-  di->ninstances = di->nmappings = di->nfrag_formats = di->nknown = di->ninitial = 0;
+  di->ninitial = 0;
+  di->nknown = di->ninitial;
+  di->nfrag_formats = di->nknown;
+  di->nmappings = di->nfrag_formats;
+  di->ninstances = di->nmappings;
   di->nadditional = 0;
   di->schema_encoding = 0;
 }
@@ -335,14 +361,16 @@ static int rd_all(rd_t *r) {
     }
     for (size_t k = 0; k < di->nschemas; k++) {
       di->schemas[k].id = k;
-      if (bim_rd_str(&r->r, BIM_DI_ZERO, "SchemaURI_Length", &di->schemas[k].uri) || bim_rd_str(&r->r, NULL, NULL, &di->schemas[k].hint) ||
-          rd_codecs(r, &di->schemas[k]))
-        return -1;
+      if (bim_rd_str(&r->r, BIM_DI_ZERO, "SchemaURI_Length", &di->schemas[k].heap_uri)) return -1;
+      di->schemas[k].uri = di->schemas[k].heap_uri;
+      if (bim_rd_str(&r->r, NULL, NULL, &di->schemas[k].hint)) return -1;
+      if (rd_codecs(r, &di->schemas[k])) return -1;
     }
     if (di->cpt && rd_cpt(r)) return -1;
     if (di->aod) {
       if (bim_rd_count(&r->r, 8, &di->naod_types)) return -1;
-      if (di->naod_types && !(di->aod_types = alloc_n(di->naod_types, sizeof *di->aod_types))) {
+      if (di->naod_types) di->aod_types = alloc_n(di->naod_types, sizeof *di->aod_types);
+      if (di->naod_types && !di->aod_types) {
         di->naod_types = 0;
         return bim_oom(r->r.err);
       }
@@ -390,11 +418,13 @@ int bim_di_aod_config_parse(bitreader_t *br, const bim_decoderinit_t *di, bim_de
   init_rd(&r, out, err);
   r.r.br = *br;
   if (rd_instances(&r) || rd_mappings(&r, bim_width(bim_di_nall(out))) || check_mappings(&r)) {
-    out->naod_types = out->nschemas = 0;
+    out->nschemas = 0;
+    out->naod_types = out->nschemas;
     bim_decoderinit_free(out);
     return -1;
   }
-  out->naod_types = out->nschemas = 0;
+  out->nschemas = 0;
+  out->naod_types = out->nschemas;
   *br = r.r.br;
   return 0;
 }
@@ -402,7 +432,7 @@ int bim_di_aod_config_parse(bitreader_t *br, const bim_decoderinit_t *di, bim_de
 void bim_decoderinit_free(bim_decoderinit_t *di) {
   free_tail(di);
   for (size_t i = 0; i < di->nschemas; i++) free_schema(&di->schemas[i]);
-  for (size_t i = 0; i < di->ncpaths; i++) free(di->cpaths[i].bits);
+  for (size_t i = 0; i < di->ncpaths; i++) free(di->cpaths[i].heap_bits);
   for (size_t i = 0; i < di->naod_types; i++) free(di->aod_types[i]);
   for (size_t i = 0; i < di->nprefixes; i++) {
     free(di->prefixes[i].uri);

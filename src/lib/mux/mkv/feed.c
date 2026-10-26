@@ -153,7 +153,8 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
    one PES = one picture, same as handle_video */
 static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
   sc_iter_t it;
-  size_t ns, q;
+  size_t ns;
+  size_t q;
   int key = 0;
 
   if (m->flushing) return;

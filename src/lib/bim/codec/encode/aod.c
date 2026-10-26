@@ -16,12 +16,12 @@ static int quant(enc_t *e, bim_aod_inst_t *in, const char *v) {
   if (in->kind == BIM_AOD_UQ) {
     double span = in->vmax - in->vmin;
     if (x < in->vmin || x > in->vmax || !(span > 0)) return -1;
-    return bitwriter_put(e->bw, (uint64_t)((x - in->vmin) / span * (double)((1ull << in->nbits) - 1) + 0.5), in->nbits);
+    return bitwriter_put(e->bw, (uint64_t)((x - in->vmin) / span * (double)((1ULL << in->nbits) - 1) + 0.5), in->nbits);
   }
   {
     uint64_t best = 0;
     double dist = INFINITY;
-    for (uint64_t q = 0; q < (1ull << in->nbits_data); q++) {
+    for (uint64_t q = 0; q < (1ULL << in->nbits_data); q++) {
       double d = fabs(bim_aod_dequant(in, in->matrix[((size_t)in->counter << in->nbits_data) + q], in->nbits) - x);
       if (d < dist) {
         dist = d;

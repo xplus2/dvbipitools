@@ -51,7 +51,7 @@ static inline void bcg_fixture_put(const char *dir, const char *name, const char
   FILE *f;
   snprintf(path, sizeof path, "%s/%s", dir, name);
   f = fopen(path, "w");
-  ck_assert_ptr_nonnull(f);
+  if (!f) abort();
   ck_assert_uint_eq(fwrite(body, 1, strlen(body), f), strlen(body));
   fclose(f);
 }

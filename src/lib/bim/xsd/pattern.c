@@ -58,7 +58,10 @@ static int64_t utf8_next(const char **p, const char *end) {
     (*p)++;
     return s[0];
   }
-  n = s[0] >= 0xF0 ? 3 : s[0] >= 0xE0 ? 2 : s[0] >= 0xC0 ? 1 : -1;
+  if (s[0] >= 0xF0) n = 3;
+  else if (s[0] >= 0xE0) n = 2;
+  else if (s[0] >= 0xC0) n = 1;
+  else n = -1;
   if (n < 0 || end - *p <= n) return -1;
   c = s[0] & (0x3F >> n);
   for (int i = 1; i <= n; i++) {
@@ -159,7 +162,8 @@ static int cls_add(rd_t *r, cls_t *k, item_t it) {
 /* after '[' up to and incl. ']' */
 static cls_t *parse_class(rd_t *r) {
   cls_t *k = ralloc(r, sizeof *k);
-  if (!k || ++r->depth > DEPTH_MAX) return NULL;
+  if (!k) return NULL;
+  if (++r->depth > DEPTH_MAX) return NULL;
   if (r->p < r->end && *r->p == '^') {
     k->neg = 1;
     r->p++;
@@ -179,7 +183,8 @@ static cls_t *parse_class(rd_t *r) {
     } else if ((lo = utf8_next(&r->p, r->end)) < 0) {
       return NULL;
     }
-    it.lo = it.hi = (uint32_t)lo;
+    it.hi = (uint32_t)lo;
+    it.lo = it.hi;
     if (!it.multi && r->p + 1 < r->end && *r->p == '-' && r->p[1] != '[' && r->p[1] != ']') {
       int64_t hi;
       char m;
@@ -213,7 +218,8 @@ static int cls_has(const cls_t *k, uint32_t c) {
 static int parse_alts(rd_t *r, seq_t **alts, int *nalts, int nested);
 
 static int parse_quant(rd_t *r, node_t *n) {
-  n->min = n->max = 1;
+  n->max = 1;
+  n->min = n->max;
   if (r->p >= r->end) return 0;
   if (*r->p == '?' || *r->p == '*' || *r->p == '+') {
     n->min = *r->p == '+';
@@ -268,11 +274,19 @@ static int parse_seq(rd_t *r, seq_t *q, int nested) {
       n.c = (uint32_t)e;
     } else {
       int64_t c;
-      if (*r->p == '?' || *r->p == '*' || *r->p == '+' || *r->p == '{' || *r->p == ')' || *r->p == ']' || (c = utf8_next(&r->p, r->end)) < 0) return -1;
+      if (*r->p == '?') return -1;
+      if (*r->p == '*') return -1;
+      if (*r->p == '+') return -1;
+      if (*r->p == '{') return -1;
+      if (*r->p == ')') return -1;
+      if (*r->p == ']') return -1;
+      if ((c = utf8_next(&r->p, r->end)) < 0) return -1;
       n.kind = N_CHAR;
       n.c = (uint32_t)c;
     }
-    if (parse_quant(r, &n) || !(nv = ralloc(r, sizeof *nv * (size_t)(q->n + 1)))) return -1;
+    if (parse_quant(r, &n)) return -1;
+    nv = ralloc(r, sizeof *nv * (size_t)(q->n + 1));
+    if (!nv) return -1;
     if (q->n) memcpy(nv, q->v, sizeof *nv * (size_t)q->n);
     nv[q->n++] = n;
     q->v = nv;
@@ -345,9 +359,12 @@ static int m_rep(mt_t *m, const node_t *n, unsigned cnt, const char *s, const se
     while (cnt < n->max && atom_take(n, &p, m->end)) cnt++;
     for (;;) {
       if (cnt >= n->min && m_seq(m, q, i + 1, p, k, depth + 1)) return 1;
-      if (m->bad || cnt <= n->min || ++m->steps > STEPS_MAX) return 0;
-      while (--p > s && ((unsigned char)*p & 0xC0) == 0x80) {
-      }
+      if (m->bad) return 0;
+      if (cnt <= n->min) return 0;
+      if (++m->steps > STEPS_MAX) return 0;
+      do {
+        p--;
+      } while (p > s && ((unsigned char)*p & 0xC0) == 0x80);
       cnt--;
     }
   }

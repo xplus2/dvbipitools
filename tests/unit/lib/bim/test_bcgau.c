@@ -20,7 +20,7 @@ typedef struct {
 } fx_t;
 
 static void fx_open(fx_t *f) {
-  const xsd_compiled_t *c;
+  const xsd_compiled_t *c = NULL;
   const char *culprit;
   const char *paths[1] = {f->dir};
   bcg_fixture_make(f->dir);
@@ -472,19 +472,9 @@ START_TEST(bcgfrag_read_program_validates_the_tree) {
 }
 END_TEST
 
-static int lookup_oom(void *ctx, const char *crid, bcg_programme_t *pr) {
-  (void)ctx;
-  (void)crid;
-  (void)pr;
-  return -2;
-}
+static int lookup_oom(void *, const char *, bcg_programme_t *) { return -2; }
 
-static int lookup_miss(void *ctx, const char *crid, bcg_programme_t *pr) {
-  (void)ctx;
-  (void)crid;
-  (void)pr;
-  return -1;
-}
+static int lookup_miss(void *, const char *, bcg_programme_t *) { return -1; }
 
 static bim_node_t *event(bim_node_t *root, const char *crid, const char *start, const char *stop, const char *dur) {
   bim_node_t *ev = tn(root, "ScheduleEvent", NULL);
