@@ -2,9 +2,6 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #define _GNU_SOURCE
-#include <ctype.h>
-#include <errno.h>
-#include <iconv.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -59,30 +56,43 @@ static size_t utf8_xml_len(const unsigned char *s) {
   return n;
 }
 
-void xml_escape(FILE *f, const char *s) {
+/* plain text passed on in runs */
+void xml_escape_to(const char *s, xml_put_fn put, void *ctx) {
+  const char *run = s;
   while (*s) {
     unsigned char c = (unsigned char)*s;
+    const char *rep = NULL;
+    size_t n = 1;
     switch (c) {
-    case '&': fputs("&amp;", f); break;
-    case '<': fputs("&lt;", f); break;
-    case '>': fputs("&gt;", f); break;
-    case '"': fputs("&quot;", f); break;
-    case '\'': fputs("&apos;", f); break;
+    case '&': rep = "&amp;"; break;
+    case '<': rep = "&lt;"; break;
+    case '>': rep = "&gt;"; break;
+    case '"': rep = "&quot;"; break;
+    case '\'': rep = "&apos;"; break;
     default:
       if (c >= 0x80) {
-        size_t n = utf8_xml_len((const unsigned char *)s);
+        n = utf8_xml_len((const unsigned char *)s);
         if (!n) {
-          fputs("\xEF\xBF\xBD", f);
-          s++;
-          continue;
+          rep = "\xEF\xBF\xBD";
+          n = 1;
+        } else if (n == 3 && c == 0xEF && (unsigned char)s[1] == 0xBF && ((unsigned char)s[2] == 0xBE || (unsigned char)s[2] == 0xBF)) {
+          rep = "";
         }
-        if (!(n == 3 && (unsigned char)s[0] == 0xEF && (unsigned char)s[1] == 0xBF && ((unsigned char)s[2] == 0xBE || (unsigned char)s[2] == 0xBF))) fwrite(s, 1, n, f);
-        s += n;
-        continue;
+      } else if (c < 0x20 && c != '\t' && c != '\n' && c != '\r') {
+        rep = "";
       }
-      if (c >= 0x20 || c == '\t' || c == '\n' || c == '\r') fputc(c, f);
       break;
     }
-    s++;
+    if (rep) {
+      if (s > run) put(ctx, run, (size_t)(s - run));
+      if (*rep) put(ctx, rep, strlen(rep));
+      run = s + n;
+    }
+    s += n;
   }
+  if (s > run) put(ctx, run, (size_t)(s - run));
 }
+
+static void file_put(void *ctx, const char *s, size_t n) { fwrite(s, 1, n, ctx); }
+
+void xml_escape(FILE *f, const char *s) { xml_escape_to(s, file_put, f); }

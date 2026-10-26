@@ -11,7 +11,26 @@ PREFIX ?= /usr/local
 BINDIR := $(PREFIX)/bin
 MANDIR := $(PREFIX)/share/man/man1
 
-TOOLS := dipirec dipiscan dipiradiohead dipisds dipixmltv dipibim dipibcg dipitvhead dipimetrics
+TOOLS := dipibim dipibcg dipirec dipiscan dipiradiohead dipisds dipixmltv dipitvhead dipimetrics
+
+# schema loader and compiler
+BIM_XSD_SRCS := \
+	src/lib/bim/xsd/model/core.c \
+	src/lib/bim/xsd/model/parse.c \
+	src/lib/bim/xsd/model/doc.c \
+	src/lib/bim/xsd/model/resolve.c \
+	src/lib/bim/xsd/load.c \
+	src/lib/bim/xsd/compile/util.c \
+	src/lib/bim/xsd/compile/simple.c \
+	src/lib/bim/xsd/compile/attrs.c \
+	src/lib/bim/xsd/compile/content.c \
+	src/lib/bim/xsd/compile/sbc.c \
+	src/lib/bim/xsd/compile/codes.c \
+	src/lib/bim/xsd/compile/compile.c \
+	src/lib/bim/xsd/pattern.c \
+	src/lib/bim/xsd/encschema.c \
+	src/lib/bim/xsd/schemaupdate.c \
+	src/lib/bim/xsd/schemagen.c
 
 HAVE_OPENSSL := $(shell pkg-config --exists openssl && echo yes)
 
@@ -157,10 +176,44 @@ dipisds_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/dvbstp.c \
-	src/lib/demux/crc32.c
+	src/lib/demux/crc32.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c
+
 
 dipixmltv_SRCS := \
 	src/dipixmltv/main.c \
@@ -179,6 +232,8 @@ dipixmltv_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/uriparse.c \
 	src/lib/tva/bcg_doc.c \
 	src/lib/tva/tva_xml/crid.c \
 	src/lib/tva/tva_xml/time.c \
@@ -191,37 +246,71 @@ dipixmltv_SRCS := \
 
 dipibim_SRCS := \
 	src/dipibim/main.c \
+	src/dipibim/schema.c \
+	src/dipibim/encode.c \
+	src/dipibim/decode.c \
 	src/dipibim/cli/args.c \
 	src/dipibim/cli/help.c \
-	src/lib/helper/fileutil.c \
-	src/lib/helper/log.c \
-	src/lib/helper/toolmain.c \
-	src/lib/helper/argutil.c \
+	src/dipibim/config.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/bimau.c \
+	src/lib/bim/tvabim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/dvbstream.c \
+	src/lib/bim/dvbtva_rules.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/container.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
 	src/lib/helper/xml_util/entity.c \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
 	src/lib/sys/ioutil.c \
-	src/lib/tva/bcg_doc.c \
-	src/lib/tva/tva_xml/crid.c \
-	src/lib/tva/tva_xml/time.c \
-	src/lib/tva/tva_xml/write.c \
-	src/lib/tva/tva_xml/read_info.c \
-	src/lib/tva/tva_xml/read_schedule.c \
-	src/lib/bim/bitwriter.c \
-	src/lib/bim/bimreader.c \
-	src/lib/bim/strrepo.c \
-	src/lib/bim/codec/dvbtypes.c \
-	src/lib/bim/codec/node.c \
-	src/lib/bim/codec/encode.c \
-	src/lib/bim/codec/decode.c \
-	src/lib/bim/fragment/types_media.c \
-	src/lib/bim/fragment/types_text.c \
-	src/lib/bim/fragment/types_desc.c \
-	src/lib/bim/fragment/types_prog.c \
-	src/lib/bim/fragment/coding.c \
-	src/lib/bim/accessunit.c
+	src/lib/bim/nodexml.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/fileutil.c \
+	src/lib/helper/log.c \
+	src/lib/helper/toolmain.c \
+	src/lib/helper/argutil.c
 
 LDFLAGS += -latomic
 
@@ -233,16 +322,33 @@ else
 HAVE_ZLIB := $(HAVE_LIBZ)
 endif
 
+# define on shared object, every binary linking it needs zlib
 ifeq ($(HAVE_ZLIB),yes)
-dipibcg_ZLIB_SRC := src/dipibcg/wrapper.c
-dipibcg_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib)
+src/lib/bim/sdns/decode.o: CFLAGS += $(shell pkg-config --cflags zlib) -DDVBIPITOOLS_SDNS_ZLIB
+src/dipisds/listen.o: CFLAGS += $(shell pkg-config --cflags zlib) -DDVBIPITOOLS_SDNS_ZLIB
+tests/unit/dipisds/test_listen.o: CFLAGS += -DDVBIPITOOLS_SDNS_ZLIB
+ifneq (,$(findstring -static,$(LDFLAGS)))
+SDNS_ZLIB_LDFLAGS := $(shell pkg-config --static --libs zlib)
+else
+SDNS_ZLIB_LDFLAGS := $(shell pkg-config --libs zlib)
+endif
+endif
+dipisds_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+
+ifeq ($(HAVE_ZLIB),yes)
+dipibim_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib) -DDIPIBIM_ZLIB
+ifneq (,$(findstring -static,$(LDFLAGS)))
+dipibim_EXTRA_LDFLAGS := $(shell pkg-config --static --libs zlib)
+else
+dipibim_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib)
+endif
+dipibcg_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib) -DDIPIBCG_ZLIB
 ifneq (,$(findstring -static,$(LDFLAGS)))
 dipibcg_EXTRA_LDFLAGS := $(shell pkg-config --static --libs zlib)
 else
 dipibcg_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib)
 endif
 else
-dipibcg_ZLIB_SRC := src/dipibcg/wrapper_stub.c
 ifneq ($(ZLIB),no)
 $(warning dipibcg: zlib not found via pkg-config, building without BCG container compression support)
 endif
@@ -261,13 +367,14 @@ dipibcg_SRCS := \
 	src/dipibcg/announce/time.c \
 	src/dipibcg/announce/programmes.c \
 	src/dipibcg/announce/doc.c \
+	src/dipibcg/announce/tvadoc.c \
+	src/lib/bim/dvbstream.c \
+	src/lib/bim/dvbtva_rules.c \
 	src/dipibcg/announce/segment.c \
 	src/dipibcg/announce/run.c \
 	src/lib/net/announce_driver.c \
 	src/dipibcg/listen.c \
 	src/lib/helper/fileutil.c \
-	src/dipibcg/container.c \
-	$(dipibcg_ZLIB_SRC) \
 	src/lib/helper/log.c \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
@@ -281,6 +388,7 @@ dipibcg_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/dvbstp.c \
@@ -288,9 +396,6 @@ dipibcg_SRCS := \
 	src/lib/tva/bcg_doc.c \
 	src/lib/tva/tva_xml/crid.c \
 	src/lib/tva/tva_xml/time.c \
-	src/lib/tva/tva_xml/write.c \
-	src/lib/tva/tva_xml/read_info.c \
-	src/lib/tva/tva_xml/read_schedule.c \
 	src/lib/tva/mapping.c \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
@@ -298,15 +403,39 @@ dipibcg_SRCS := \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
 	src/lib/bim/codec/node.c \
-	src/lib/bim/codec/encode.c \
-	src/lib/bim/codec/decode.c \
-	src/lib/bim/fragment/types_media.c \
-	src/lib/bim/fragment/types_text.c \
-	src/lib/bim/fragment/types_desc.c \
-	src/lib/bim/fragment/types_prog.c \
-	src/lib/bim/fragment/coding.c \
-	src/lib/bim/accessunit.c
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/index.c \
+	src/dipibcg/schema.c \
+	src/lib/bim/bcgau.c \
+	src/lib/bim/nodexml.c \
+	src/lib/bim/bcgfrag.c \
+	src/lib/bim/bcgip.c \
+	src/lib/bim/container.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS)
 
 ifeq ($(CSA),no)
 HAVE_CSA := no
@@ -496,6 +625,7 @@ dipirec_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/rtx.c \
 	src/lib/demux/crc32.c \
@@ -676,6 +806,7 @@ dipiradiohead_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/tspack.c \
@@ -937,6 +1068,7 @@ dipitvhead_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
@@ -1203,9 +1335,8 @@ dipidescramble_SRCS := \
 	src/lib/net/httpclient/read.c \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
-	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
-	src/lib/demux/crc32.c \
+	src/lib/helper/dateutil.c \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
 	src/lib/demux/psi/descriptors.c \
@@ -1233,7 +1364,6 @@ dipidescramble_SRCS := \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
 	src/lib/mux/teletext.c \
-	src/lib/mux/psi_build.c \
 	src/lib/mux/amf.c \
 	src/lib/mux/flv/flv.c \
 	src/lib/mux/flv/feed.c \
@@ -1332,6 +1462,7 @@ dipirist_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/signal.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -1368,7 +1499,6 @@ dipirist_SRCS := \
 	src/lib/helper/xml_util/query.c \
 	src/lib/mux/tspacket_write.c \
 	src/lib/mux/psi_build.c \
-	src/lib/demux/crc32.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/net/ts/sink.c \
 	src/lib/mux/fec2022.c \
@@ -1470,6 +1600,7 @@ dipisrt_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/signal.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -1541,6 +1672,7 @@ TOOLS += dipixy
 
 dipixy_EXTRA_CFLAGS := -pthread
 dipixy_EXTRA_LDFLAGS := -pthread -lm
+dipixy_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
 
 ifeq ($(HAVE_OPENSSL),yes)
 dipixy_EXTRA_CFLAGS += $(shell pkg-config --cflags openssl)
@@ -1805,6 +1937,7 @@ dipixy_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/sys/cpuaffinity.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/byte_ring.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/jsonbuf.c \
@@ -1853,7 +1986,38 @@ dipixy_SRCS := \
 	$(dipixy_SRT_SRC) \
 	$(dipixy_HTTP2_SRC) \
 	$(dipixy_HTTP3_SRC) \
-	$(dipixy_HTTPNG_SRC)
+	$(dipixy_HTTPNG_SRC) \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c
 
 ALL_OBJS :=
 
@@ -1960,17 +2124,16 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 dvbipitools: $(DVBIPITOOLS_OBJS)
 	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) -o $@
 
-UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_net_tls_stub_lib lib_cas_biss_ca_stub lib_cas_cw_encryption_stub lib_net_rist_stubs lib_net_srt_stubs lib_sys_ioutil lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_ac4 lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
+UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_net_tls_stub_lib lib_cas_biss_ca_stub lib_cas_cw_encryption_stub lib_net_rist_stubs lib_net_srt_stubs lib_sys_ioutil lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_fileutil lib_helper_playlist_out lib_helper_argutil lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_ac4 lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mkv_feed lib_mux_mp4 lib_mux_mp4_feed lib_mux_flv lib_mux_flv_feed lib_mux_fmp4 lib_mux_cadescbuild lib_demux_fmp4_box lib_demux_fmp4_track lib_demux_fmp4_sample lib_mux_esbuild lib_mux_esbuild_pes lib_mux_esbuild_pmtbuild lib_mux_esbuild_remux \
-	lib_net_netconnect lib_net_tssink lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_httpclient_fetch lib_net_httpclient lib_net_httpclient_headers lib_net_httpclient_redirect lib_net_tssource_async lib_net_tssource_http_dispatch lib_net_tssource_dash_fmp4 lib_net_open_async lib_net_tssource_file lib_net_source lib_net_retryset lib_net_tls_server_stub lib_scrambler_stubs dipitvhead_mpts dipitvhead_retryset_adapter dipitvhead_single lib_net_dvbstp \
+	lib_net_plain_endpoint lib_net_netconnect lib_net_announce_driver lib_net_tssink lib_net_rtmp lib_net_rtmpout lib_net_httpclient_async lib_net_httpclient_fetch lib_net_httpclient lib_net_httpclient_headers lib_net_httpclient_redirect lib_net_tssource_async lib_net_tssource_http_dispatch lib_net_tssource_dash_fmp4 lib_net_open_async lib_net_tssource_file lib_net_source lib_net_retryset lib_net_tls_server_stub lib_scrambler_stubs dipitvhead_mpts dipitvhead_retryset_adapter dipitvhead_single lib_net_dvbstp \
 	lib_mux_mpts \
 	lib_cas_cas_group \
-	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec lib_bim_dvbtypes \
+	lib_bim_bitwriter lib_bim_bitreader lib_bim_strrepo lib_bim_codec lib_bim_aod_kinds lib_bim_dvbtypes_sweeps lib_bim_decode_simple lib_bim_m7time lib_bim_bimio lib_bim_lax_events lib_bim_dvbtypes \
 	lib_xml_util lib_yamlcfg lib_tva_timefmt lib_tva_bcg_doc lib_tva_mapping lib_tva_xmltv lib_tva_tva_xml \
-	lib_bim_fragment lib_bim_accessunit \
-	lib_sds_xml lib_fccret_fcc_client dipibim_args dipiscan_format dipiscan_scan dipixmltv_args dipixmltv_revmap dipixmltv_suggest \
+	lib_sds_xml lib_fccret_fcc_client dipibim_args dipibim_config dipibim_schema dipiscan_format dipiscan_scan dipixmltv_args dipixmltv_revmap dipixmltv_suggest \
 	dipiradiohead_mpegaudio dipiradiohead_aac_adts dipiradiohead_aac_latm \
 	dipiradiohead_psi dipiradiohead_id3 dipiradiohead_icy dipiradiohead_pes dipiradiohead_tspacketizer dipiradiohead_radiohead dipiradiohead_mpts dipiradiohead_cas dipiradiohead_args dipiradiohead_config dipiradiohead_args_cas dipiradiohead_args_general dipiradiohead_args_net \
 	dipiradiohead_framequeue dipiradiohead_source_async dipiradiohead_source_frame dipiradiohead_source_hls dipiradiohead_inputset dipiradiohead_playlist lib_hls_playlist lib_hls_live lib_hls_tspassthrough lib_dash_mpd lib_dash_live \
@@ -1980,10 +2143,17 @@ UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_net_tls_stub_l
 	dipifccret_args dipifccret_listen dipifccret_channel dipifccret_ret_mcsend dipifccret_burst dipifccret_burst_table dipifccret_pacer dipifccret_ret dipifccret_rtx_session_table dipifccret_capture \
 	lib_metrics_protocol lib_metrics_export \
 	dipimetrics_args dipimetrics_store dipimetrics_render dipimetrics_httpserver \
-	dipibcg_container dipibcg_args dipibcg_announce dipibcg_listen \
+	dipibcg_args \
 	dipicam378_args \
 	dipisds_args dipisds_input dipisds_format_out dipisds_announce dipisds_listen \
 	dipirist_args dipisrt_args
+
+UNIT_TESTS += lib_bim_index lib_bim_xsd lib_bim_xsd_load lib_bim_xsd_pattern lib_bim_xsd_content lib_bim_xsd_simple lib_bim_xsd_parse lib_bim_xsd_attrs lib_bim_xsd_schemagen lib_bim_fuu lib_bim_fuu_paths lib_bim_encode lib_bim_encode_element lib_bim_decoderinit lib_bim_bimau lib_bim_dvbtva lib_bim_dvbtva_rules lib_bim_tvabim lib_bim_nodexml lib_bim_bcgau
+UNIT_TESTS += dipibcg_announce dipibcg_announce_segment dipibcg_listen
+
+ifeq ($(HAVE_ZLIB),yes)
+UNIT_TESTS += lib_bim_sdns
+endif
 
 ifeq ($(HAVE_OPENSSL),yes)
 UNIT_TESTS += lib_scrambler_cissa
@@ -2043,7 +2213,8 @@ lib_cas_biss_ca_engine_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
 	src/lib/helper/secure_zero.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
 lib_cas_biss_ca_engine_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_cas_biss_ca_engine_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -2083,6 +2254,8 @@ lib_net_rtmp_auth_SRCS := \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/log.c
 lib_net_rtmp_auth_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_net_rtmp_auth_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2117,18 +2290,6 @@ lib_cas_biss_ca_sections_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c
 
-ifeq ($(HAVE_ZLIB),yes)
-UNIT_TESTS += dipibcg_wrapper
-dipibcg_wrapper_BIN := tests/unit/dipibcg/test_wrapper
-dipibcg_wrapper_SRCS := \
-	tests/unit/dipibcg/test_wrapper.c \
-	src/dipibcg/wrapper.c
-dipibcg_wrapper_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib)
-dipibcg_wrapper_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib)
-else
-$(warning tests: zlib not found via pkg-config, skipping dipibcg_wrapper unit test)
-endif
-
 UNIT_TESTS += lib_net_sockaddr_index
 lib_net_sockaddr_index_BIN := tests/unit/lib/net/test_sockaddr_index
 lib_net_sockaddr_index_SRCS := \
@@ -2146,6 +2307,7 @@ lib_net_multicast_SRCS := \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c
+lib_net_multicast_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=setsockopt -Wl,--wrap=getsockopt -Wl,--wrap=socket
 
 UNIT_TESTS += dipifccret_dispatch
 dipifccret_dispatch_BIN := tests/unit/dipifccret/test_dispatch
@@ -2189,6 +2351,7 @@ dipifccret_dispatch_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 UNIT_TESTS += dipifccret_metrics
@@ -2235,6 +2398,7 @@ dipifccret_metrics_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 UNIT_TESTS += dipifccret_rsi
@@ -2280,6 +2444,7 @@ dipifccret_rsi_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 UNIT_TESTS += dipifccret_config
@@ -2304,11 +2469,8 @@ dipifccret_config_SRCS := \
 	src/lib/sys/cpuaffinity.c \
 	src/lib/helper/log.c \
 	src/dipifccret/listen.c \
-	src/lib/sys/ioutil.c \
 	src/lib/net/netconnect.c \
-	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
-	src/lib/helper/log.c
 
 UNIT_TESTS += dipidescramble_pmt_select
 dipidescramble_pmt_select_BIN := tests/unit/dipidescramble/test_pmt_select
@@ -2372,6 +2534,7 @@ dipidescramble_pmt_select_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -2399,6 +2562,7 @@ dipidescramble_outputs_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/uriparse.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c \
 	src/dipidescramble/outputs.c \
@@ -2463,15 +2627,6 @@ dipicam378_config_SRCS := \
 	src/lib/helper/log.c
 
 ifeq ($(HAVE_OPENSSL),yes)
-UNIT_TESTS += dipicam378_crypto
-dipicam378_crypto_BIN := tests/unit/dipicam378/test_crypto
-dipicam378_crypto_SRCS := \
-	tests/unit/dipicam378/test_crypto.c \
-	src/lib/cas/device_crypto.c \
-	src/lib/helper/secure_zero.c
-dipicam378_crypto_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
-dipicam378_crypto_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
-
 UNIT_TESTS += dipicam378_device
 dipicam378_device_BIN := tests/unit/dipicam378/test_device
 dipicam378_device_SRCS := \
@@ -2626,6 +2781,8 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/uriparse.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/net/srt/srtsink_stub.c \
@@ -2784,7 +2941,7 @@ dipidescramble_config_SRCS := \
 dipidescramble_config_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_config_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 else
-$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_crypto/dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_ecm_profile/dipidescramble_biss_ca_state/dipidescramble_pipeline/dipidescramble_ipiclient/dipidescramble_args unit tests)
+$(warning tests: OpenSSL not found via pkg-config, skipping dipicam378_device/dipicam378_cs378x/dipidescramble_crypto/dipidescramble_device/dipidescramble_ecm_profile/dipidescramble_biss_ca_state/dipidescramble_pipeline/dipidescramble_ipiclient/dipidescramble_args unit tests)
 endif
 
 lib_metrics_protocol_BIN := tests/unit/lib/metrics/test_protocol
@@ -2862,7 +3019,45 @@ dipisds_args_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
-	src/lib/helper/log.c
+	src/lib/helper/dateutil.c \
+	src/lib/helper/log.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c
 
 UNIT_TESTS += dipisds_config
 dipisds_config_BIN := tests/unit/dipisds/test_config
@@ -2886,7 +3081,45 @@ dipisds_config_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
-	src/lib/helper/log.c
+	src/lib/helper/dateutil.c \
+	src/lib/helper/log.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c
 
 dipirist_args_BIN := tests/unit/dipirist/test_args
 dipirist_args_SRCS := \
@@ -2978,6 +3211,7 @@ dipirist_bridge_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
 	src/lib/net/multicast.c \
@@ -3164,6 +3398,7 @@ dipisrt_bridge_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
 	src/lib/net/multicast.c \
@@ -3290,6 +3525,8 @@ dipisds_input_BIN := tests/unit/dipisds/test_input
 dipisds_input_SRCS := \
 	tests/unit/dipisds/test_input.c \
 	src/dipisds/input/util.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/argutil.c \
 	src/dipisds/input/csv.c \
 	src/dipisds/input/m3u.c \
 	src/dipisds/input/xspf.c \
@@ -3320,7 +3557,6 @@ dipisds_format_out_SRCS := \
 dipisds_listen_BIN := tests/unit/dipisds/test_listen
 dipisds_listen_SRCS := \
 	tests/unit/dipisds/test_listen.c \
-	src/dipisds/listen.c \
 	src/lib/helper/fileutil.c \
 	src/dipisds/cli/args.c \
 	src/dipisds/cli/check.c \
@@ -3349,11 +3585,44 @@ dipisds_listen_SRCS := \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/signal.c \
-	src/lib/helper/log.c
-dipisds_listen_EXTRA_LDFLAGS := -pthread
+	src/lib/helper/log.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c
+dipisds_listen_EXTRA_LDFLAGS := -pthread -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 dipisds_announce_BIN := tests/unit/dipisds/test_announce
 dipisds_announce_SRCS := \
@@ -3361,6 +3630,7 @@ dipisds_announce_SRCS := \
 	src/dipisds/announce.c \
 	src/lib/net/announce_driver.c \
 	src/dipisds/input/util.c \
+	src/lib/helper/uriparse.c \
 	src/dipisds/input/csv.c \
 	src/dipisds/input/m3u.c \
 	src/dipisds/input/xspf.c \
@@ -3382,7 +3652,7 @@ dipisds_announce_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
-dipisds_announce_EXTRA_LDFLAGS := -pthread
+dipisds_announce_EXTRA_LDFLAGS := -pthread -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=sendto -Wl,--wrap=sendmsg
 
 dipimetrics_httpserver_BIN := tests/unit/dipimetrics/test_httpserver
 dipimetrics_httpserver_SRCS := \
@@ -3404,11 +3674,6 @@ dipimetrics_httpserver_SRCS := \
 dipimetrics_httpserver_EXTRA_CFLAGS := $(dipimetrics_EXTRA_CFLAGS)
 dipimetrics_httpserver_EXTRA_LDFLAGS := $(dipimetrics_EXTRA_LDFLAGS)
 
-dipibcg_container_BIN := tests/unit/dipibcg/test_container
-dipibcg_container_SRCS := \
-	tests/unit/dipibcg/test_container.c \
-	src/dipibcg/container.c
-
 dipibcg_args_BIN := tests/unit/dipibcg/test_args
 dipibcg_args_SRCS := \
 	tests/unit/dipibcg/test_args.c \
@@ -3425,7 +3690,19 @@ dipibcg_args_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
-	src/lib/helper/log.c
+	src/lib/helper/dateutil.c \
+	src/lib/helper/log.c \
+	src/lib/tva/bcg_doc.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/bim/index.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/tva/tva_xml/time.c
 
 UNIT_TESTS += dipibcg_config
 dipibcg_config_BIN := tests/unit/dipibcg/test_config
@@ -3444,7 +3721,19 @@ dipibcg_config_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
-	src/lib/helper/log.c
+	src/lib/helper/dateutil.c \
+	src/lib/helper/log.c \
+	src/lib/tva/bcg_doc.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/bim/index.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/tva/tva_xml/time.c
 
 dipibcg_announce_BIN := tests/unit/dipibcg/test_announce
 dipibcg_announce_SRCS := \
@@ -3452,6 +3741,10 @@ dipibcg_announce_SRCS := \
 	src/dipibcg/announce/time.c \
 	src/dipibcg/announce/programmes.c \
 	src/dipibcg/announce/doc.c \
+	src/dipibcg/announce/tvadoc.c \
+	src/lib/bim/dvbstream.c \
+	src/lib/bim/dvbtva_rules.c \
+	src/lib/helper/fileutil.c \
 	src/dipibcg/announce/segment.c \
 	src/dipibcg/announce/run.c \
 	src/lib/net/announce_driver.c \
@@ -3480,35 +3773,155 @@ dipibcg_announce_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
-	src/lib/bim/accessunit.c \
+	src/lib/helper/dateutil.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
-	src/lib/bim/fragment/types_media.c \
-	src/lib/bim/fragment/types_text.c \
-	src/lib/bim/fragment/types_desc.c \
-	src/lib/bim/fragment/types_prog.c \
-	src/lib/bim/fragment/coding.c \
 	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
 	src/lib/bim/codec/node.c \
-	src/lib/bim/codec/encode.c \
-	src/lib/bim/codec/decode.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
 	src/lib/demux/crc32.c \
-	src/dipibcg/container.c \
-	src/dipibcg/wrapper_stub.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
-	src/lib/helper/log.c
-dipibcg_announce_EXTRA_LDFLAGS := -pthread
+	src/lib/helper/log.c \
+	src/lib/bim/index.c \
+	src/dipibcg/schema.c \
+	src/lib/bim/bcgau.c \
+	src/lib/bim/nodexml.c \
+	src/lib/bim/bcgfrag.c \
+	src/lib/bim/bcgip.c \
+	src/lib/bim/container.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS)
+ifeq ($(HAVE_ZLIB),yes)
+dipibcg_announce_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib) -pthread -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+else
+dipibcg_announce_EXTRA_LDFLAGS := -pthread -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+endif
+
+dipibcg_announce_segment_BIN := tests/unit/dipibcg/test_announce_segment
+dipibcg_announce_segment_SRCS := \
+	tests/unit/dipibcg/test_announce_segment.c \
+	src/dipibcg/announce/time.c \
+	src/dipibcg/announce/programmes.c \
+	src/dipibcg/announce/doc.c \
+	src/dipibcg/announce/tvadoc.c \
+	src/lib/bim/dvbstream.c \
+	src/lib/bim/dvbtva_rules.c \
+	src/lib/helper/fileutil.c \
+	src/dipibcg/announce/segment.c \
+	src/dipibcg/announce/run.c \
+	src/lib/net/announce_driver.c \
+	src/dipibcg/cli/args.c \
+	src/dipibcg/cli/help.c \
+	src/dipibcg/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/tva/bcg_doc.c \
+	src/lib/tva/xmltv.c \
+	src/lib/tva/timefmt.c \
+	src/lib/tva/mapping.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
+	src/lib/demux/crc32.c \
+	src/lib/metrics/export.c \
+	src/lib/metrics/protocol.c \
+	src/lib/net/dvbstp.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/log.c \
+	src/lib/bim/index.c \
+	src/dipibcg/schema.c \
+	src/lib/bim/bcgau.c \
+	src/lib/bim/nodexml.c \
+	src/lib/bim/bcgfrag.c \
+	src/lib/bim/bcgip.c \
+	src/lib/bim/container.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS)
+ifeq ($(HAVE_ZLIB),yes)
+dipibcg_announce_segment_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib) -pthread -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+else
+dipibcg_announce_segment_EXTRA_LDFLAGS := -pthread -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+endif
 
 dipibcg_listen_BIN := tests/unit/dipibcg/test_listen
 dipibcg_listen_SRCS := \
 	tests/unit/dipibcg/test_listen.c \
 	src/dipibcg/listen.c \
+	src/lib/bim/dvbstream.c \
+	src/lib/bim/dvbtva_rules.c \
+	src/lib/tva/mapping.c \
 	src/lib/helper/fileutil.c \
 	src/dipibcg/cli/args.c \
 	src/dipibcg/cli/help.c \
@@ -3520,8 +3933,6 @@ dipibcg_listen_SRCS := \
 	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
-	src/dipibcg/container.c \
-	$(dipibcg_ZLIB_SRC) \
 	src/lib/tva/bcg_doc.c \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
@@ -3531,19 +3942,30 @@ dipibcg_listen_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
-	src/lib/bim/accessunit.c \
+	src/lib/helper/dateutil.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
-	src/lib/bim/fragment/types_media.c \
-	src/lib/bim/fragment/types_text.c \
-	src/lib/bim/fragment/types_desc.c \
-	src/lib/bim/fragment/types_prog.c \
-	src/lib/bim/fragment/coding.c \
 	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
 	src/lib/bim/codec/node.c \
-	src/lib/bim/codec/encode.c \
-	src/lib/bim/codec/decode.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
 	src/lib/tva/tva_xml/crid.c \
 	src/lib/tva/tva_xml/time.c \
 	src/lib/tva/tva_xml/write.c \
@@ -3554,9 +3976,23 @@ dipibcg_listen_SRCS := \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
-	src/lib/helper/log.c
+	src/lib/helper/log.c \
+	src/lib/bim/index.c \
+	src/dipibcg/schema.c \
+	src/lib/bim/bcgau.c \
+	src/lib/bim/nodexml.c \
+	src/lib/bim/bcgfrag.c \
+	src/lib/bim/bcgip.c \
+	src/lib/bim/container.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS)
 ifeq ($(HAVE_ZLIB),yes)
-dipibcg_listen_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib) -DDIPIBCG_TEST_ZLIB
+dipibcg_listen_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib) -DDIPIBCG_TEST_ZLIB -DDIPIBCG_ZLIB
 dipibcg_listen_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib) -pthread
 else
 dipibcg_listen_EXTRA_LDFLAGS := -pthread
@@ -3617,7 +4053,9 @@ lib_net_srt_stubs_SRCS := \
 lib_sys_ioutil_BIN := tests/unit/lib/sys/test_ioutil
 lib_sys_ioutil_SRCS := \
 	tests/unit/lib/sys/test_ioutil.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
+lib_sys_ioutil_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=getrandom
 
 lib_sys_signal_BIN := tests/unit/lib/sys/test_signal
 lib_sys_signal_SRCS := \
@@ -3646,6 +4084,7 @@ lib_helper_uriparse_SRCS := \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c
+lib_helper_uriparse_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_helper_jsonbuf_BIN := tests/unit/lib/helper/test_jsonbuf
 lib_helper_jsonbuf_SRCS := \
@@ -3663,6 +4102,29 @@ lib_helper_toolmain_SRCS := \
 	tests/unit/lib/helper/test_toolmain.c \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/log.c
+lib_helper_toolmain_EXTRA_LDFLAGS := -Wl,--wrap=daemon
+
+lib_helper_fileutil_BIN := tests/unit/lib/helper/test_fileutil
+lib_helper_fileutil_SRCS := \
+	tests/unit/lib/helper/test_fileutil.c \
+	src/lib/helper/fileutil.c
+
+lib_helper_playlist_out_BIN := tests/unit/lib/helper/test_playlist_out
+lib_helper_playlist_out_SRCS := \
+	tests/unit/lib/helper/test_playlist_out.c \
+	src/lib/helper/playlist_out.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c
+
+lib_helper_argutil_BIN := tests/unit/lib/helper/test_argutil
+lib_helper_argutil_SRCS := \
+	tests/unit/lib/helper/test_argutil.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/log.c \
+	src/lib/sys/ioutil.c
 
 lib_helper_log_BIN := tests/unit/lib/helper/test_log
 lib_helper_log_SRCS := \
@@ -3696,7 +4158,8 @@ lib_demux_descriptors_SRCS := \
 	src/lib/demux/psi/descriptors.c \
 	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
-	src/lib/bim/bitwriter.c
+	src/lib/bim/bitwriter.c \
+	src/lib/sys/ioutil.c
 
 lib_demux_psi_section_asm_BIN := tests/unit/lib/demux/test_psi_section_asm
 lib_demux_psi_section_asm_SRCS := \
@@ -3762,6 +4225,7 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -3795,7 +4259,8 @@ lib_demux_escodec_audio_SRCS := \
 	src/lib/demux/escodec/audio/ac4.c \
 	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/bitreader.c \
-	src/lib/bim/bitwriter.c
+	src/lib/bim/bitwriter.c \
+	src/lib/sys/ioutil.c
 
 lib_demux_escodec_ac4_BIN := tests/unit/lib/demux/escodec/test_ac4
 lib_demux_escodec_ac4_SRCS := \
@@ -3809,14 +4274,16 @@ lib_demux_escodec_ac4_SRCS := \
 	src/lib/demux/escodec/audio/ac4.c \
 	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/bitreader.c \
-	src/lib/bim/bitwriter.c
+	src/lib/bim/bitwriter.c \
+	src/lib/sys/ioutil.c
 
 lib_demux_escodec_video_BIN := tests/unit/lib/demux/escodec/test_video
 lib_demux_escodec_video_SRCS := \
 	tests/unit/lib/demux/escodec/test_video.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/demux/bitreader.c \
-	src/lib/bim/bitwriter.c
+	src/lib/bim/bitwriter.c \
+	src/lib/sys/ioutil.c
 
 lib_demux_rtp_BIN := tests/unit/lib/demux/test_rtp
 lib_demux_rtp_SRCS := \
@@ -3960,6 +4427,7 @@ lib_mux_mkv_SRCS := \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
 	src/lib/mux/teletext.c \
@@ -3993,6 +4461,7 @@ lib_mux_mkv_feed_SRCS := \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
 	src/lib/mux/teletext.c \
@@ -4031,6 +4500,7 @@ lib_mux_mp4_SRCS := \
 	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/pes.c \
@@ -4067,6 +4537,7 @@ lib_mux_mp4_feed_SRCS := \
 	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/pes.c \
@@ -4160,7 +4631,8 @@ lib_mux_esbuild_remux_SRCS := \
 	src/lib/mux/fmp4/fmp4_moov.c \
 	src/lib/mux/fmp4/fmp4_frag.c \
 	src/lib/mux/growbuf.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
 
 lib_mux_flv_BIN := tests/unit/lib/mux/test_flv
 lib_mux_flv_SRCS := \
@@ -4192,7 +4664,8 @@ lib_mux_flv_SRCS := \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
 
 lib_mux_flv_feed_BIN := tests/unit/lib/mux/test_flv_feed
 lib_mux_flv_feed_SRCS := \
@@ -4224,13 +4697,16 @@ lib_mux_flv_feed_SRCS := \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
 
 lib_bim_bitwriter_BIN := tests/unit/lib/bim/test_bitwriter
 lib_bim_bitwriter_SRCS := \
 	tests/unit/lib/bim/test_bitwriter.c \
 	src/lib/bim/bitwriter.c \
+	src/lib/sys/ioutil.c \
 	src/lib/bim/bimreader.c
+lib_bim_bitwriter_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_bim_bitreader_BIN := tests/unit/lib/bim/test_bitreader
 lib_bim_bitreader_SRCS := \
@@ -4240,28 +4716,1070 @@ lib_bim_bitreader_SRCS := \
 lib_bim_strrepo_BIN := tests/unit/lib/bim/test_strrepo
 lib_bim_strrepo_SRCS := \
 	tests/unit/lib/bim/test_strrepo.c \
-	src/lib/bim/strrepo.c
+	src/lib/bim/strrepo.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/sys/ioutil.c \
+	src/lib/bim/bimreader.c
+lib_bim_strrepo_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_bim_codec_BIN := tests/unit/lib/bim/test_codec
 lib_bim_codec_SRCS := \
 	tests/unit/lib/bim/test_codec.c \
 	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
 	src/lib/bim/codec/node.c \
-	src/lib/bim/codec/encode.c \
-	src/lib/bim/codec/decode.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
+
+lib_bim_aod_kinds_BIN := tests/unit/lib/bim/test_aod_kinds
+lib_bim_aod_kinds_SRCS := \
+	tests/unit/lib/bim/test_aod_kinds.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
+
+lib_bim_aod_kinds_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_dvbtypes_sweeps_BIN := tests/unit/lib/bim/test_dvbtypes_sweeps
+lib_bim_dvbtypes_sweeps_SRCS := \
+	tests/unit/lib/bim/test_dvbtypes_sweeps.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
+
+lib_bim_dvbtypes_sweeps_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_decode_simple_BIN := tests/unit/lib/bim/test_decode_simple
+lib_bim_decode_simple_SRCS := \
+	tests/unit/lib/bim/test_decode_simple.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
+
+lib_bim_decode_simple_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_lax_events_BIN := tests/unit/lib/bim/test_lax_events
+lib_bim_lax_events_SRCS := \
+	tests/unit/lib/bim/test_lax_events.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
+
+lib_bim_lax_events_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_m7time_BIN := tests/unit/lib/bim/test_m7time
+lib_bim_m7time_SRCS := \
+	tests/unit/lib/bim/test_m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
+
+lib_bim_m7time_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_bimio_BIN := tests/unit/lib/bim/test_bimio
+lib_bim_bimio_SRCS := \
+	tests/unit/lib/bim/test_bimio.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
 	src/lib/sys/ioutil.c
+
+lib_bim_bimio_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_index_BIN := tests/unit/lib/bim/test_index
+lib_bim_index_SRCS := \
+	tests/unit/lib/bim/test_index.c \
+	src/lib/bim/index.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/log.c
+
+lib_bim_index_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_xsd_BIN := tests/unit/lib/bim/test_xsd
+lib_bim_xsd_SRCS := \
+	tests/unit/lib/bim/test_xsd.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_xsd_load_BIN := tests/unit/lib/bim/test_xsd_load
+lib_bim_xsd_load_SRCS := \
+	tests/unit/lib/bim/test_xsd_load.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_xsd_load_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_xsd_pattern_BIN := tests/unit/lib/bim/test_xsd_pattern
+lib_bim_xsd_pattern_SRCS := \
+	tests/unit/lib/bim/test_xsd_pattern.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_xsd_pattern_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_xsd_content_BIN := tests/unit/lib/bim/test_xsd_content
+lib_bim_xsd_content_SRCS := \
+	tests/unit/lib/bim/test_xsd_content.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_xsd_content_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_xsd_simple_BIN := tests/unit/lib/bim/test_xsd_simple
+lib_bim_xsd_simple_SRCS := \
+	tests/unit/lib/bim/test_xsd_simple.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_xsd_simple_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_xsd_parse_BIN := tests/unit/lib/bim/test_xsd_parse
+lib_bim_xsd_parse_SRCS := \
+	tests/unit/lib/bim/test_xsd_parse.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_xsd_parse_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_xsd_attrs_BIN := tests/unit/lib/bim/test_xsd_attrs
+lib_bim_xsd_attrs_SRCS := \
+	tests/unit/lib/bim/test_xsd_attrs.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_xsd_attrs_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_xsd_schemagen_BIN := tests/unit/lib/bim/test_xsd_schemagen
+lib_bim_xsd_schemagen_SRCS := \
+	tests/unit/lib/bim/test_xsd_schemagen.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_xsd_schemagen_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_fuu_BIN := tests/unit/lib/bim/test_fuu
+lib_bim_fuu_SRCS := \
+	tests/unit/lib/bim/test_fuu.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_fuu_paths_BIN := tests/unit/lib/bim/test_fuu_paths
+lib_bim_fuu_paths_SRCS := \
+	tests/unit/lib/bim/test_fuu_paths.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_fuu_paths_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_encode_BIN := tests/unit/lib/bim/test_encode
+lib_bim_encode_SRCS := \
+	tests/unit/lib/bim/test_encode.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_encode_element_BIN := tests/unit/lib/bim/test_encode_element
+lib_bim_encode_element_SRCS := \
+	tests/unit/lib/bim/test_encode_element.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_encode_element_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_tvabim_BIN := tests/unit/lib/bim/test_tvabim
+lib_bim_tvabim_SRCS := \
+	tests/unit/lib/bim/test_tvabim.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/bimau.c \
+	src/lib/bim/tvabim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/dvbstream.c \
+	src/lib/bim/dvbtva_rules.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/nodexml.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/container.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_tvabim_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_bcgau_BIN := tests/unit/lib/bim/test_bcgau
+lib_bim_bcgau_SRCS := \
+	tests/unit/lib/bim/test_bcgau.c \
+	src/lib/bim/bcgau.c \
+	src/lib/bim/nodexml.c \
+	src/lib/bim/bcgfrag.c \
+	src/lib/bim/bcgip.c \
+	src/lib/bim/container.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/log.c \
+	src/lib/tva/bcg_doc.c \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/argutil.c
+
+lib_bim_bcgau_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_dvbtva_BIN := tests/unit/lib/bim/test_dvbtva
+lib_bim_dvbtva_SRCS := \
+	tests/unit/lib/bim/test_dvbtva.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/dvbtva_rules.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/bim/container.c \
+	src/lib/bim/bcgip.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+lib_bim_dvbtva_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_dvbtva_rules_BIN := tests/unit/lib/bim/test_dvbtva_rules
+lib_bim_dvbtva_rules_SRCS := \
+	tests/unit/lib/bim/test_dvbtva_rules.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/dvbtva_rules.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/bim/container.c \
+	src/lib/bim/bcgip.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_dvbtva_rules_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_decoderinit_BIN := tests/unit/lib/bim/test_decoderinit
+lib_bim_decoderinit_SRCS := \
+	tests/unit/lib/bim/test_decoderinit.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_decoderinit_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_bimau_BIN := tests/unit/lib/bim/test_bimau
+lib_bim_bimau_SRCS := \
+	tests/unit/lib/bim/test_bimau.c \
+	src/lib/bim/bimau.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_bimau_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_nodexml_BIN := tests/unit/lib/bim/test_nodexml
+lib_bim_nodexml_SRCS := \
+	tests/unit/lib/bim/test_nodexml.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/helper/log.c \
+	src/lib/bim/codec/node.c \
+	src/lib/sys/ioutil.c
+
+lib_bim_nodexml_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_bim_sdns_BIN := tests/unit/lib/bim/test_sdns
+lib_bim_sdns_SRCS := \
+	tests/unit/lib/bim/test_sdns.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+	src/lib/bim/sdns/decode.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/sds_xml.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
+lib_bim_sdns_EXTRA_LDFLAGS := $(SDNS_ZLIB_LDFLAGS)
 
 lib_bim_dvbtypes_BIN := tests/unit/lib/bim/test_dvbtypes
 lib_bim_dvbtypes_SRCS := \
 	tests/unit/lib/bim/test_dvbtypes.c \
 	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
 
 lib_xml_util_BIN := tests/unit/lib/test_xml_util
 lib_xml_util_SRCS := \
@@ -4270,7 +5788,13 @@ lib_xml_util_SRCS := \
 	src/lib/helper/xml_util/encoding.c \
 	src/lib/helper/xml_util/entity.c \
 	src/lib/helper/xml_util/scan.c \
-	src/lib/helper/xml_util/query.c
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/helper/log.c \
+	src/lib/bim/codec/node.c \
+	src/lib/sys/ioutil.c
+
+lib_xml_util_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_yamlcfg_BIN := tests/unit/lib/test_yamlcfg
 lib_yamlcfg_SRCS := \
@@ -4283,6 +5807,7 @@ lib_yamlcfg_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
+lib_yamlcfg_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_sds_xml_BIN := tests/unit/lib/test_sds_xml
 lib_sds_xml_SRCS := \
@@ -4294,17 +5819,21 @@ lib_sds_xml_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c
+lib_sds_xml_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_tva_timefmt_BIN := tests/unit/lib/tva/test_timefmt
 lib_tva_timefmt_SRCS := \
 	tests/unit/lib/tva/test_timefmt.c \
 	src/lib/tva/timefmt.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
 
 lib_tva_bcg_doc_BIN := tests/unit/lib/tva/test_bcg_doc
 lib_tva_bcg_doc_SRCS := \
 	tests/unit/lib/tva/test_bcg_doc.c \
 	src/lib/tva/bcg_doc.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
 	src/lib/helper/xml_util/entity.c \
@@ -4312,6 +5841,7 @@ lib_tva_bcg_doc_SRCS := \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
+lib_tva_bcg_doc_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_tva_mapping_BIN := tests/unit/lib/tva/test_mapping
 lib_tva_mapping_SRCS := \
@@ -4320,6 +5850,7 @@ lib_tva_mapping_SRCS := \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c
+lib_tva_mapping_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_tva_xmltv_BIN := tests/unit/lib/tva/test_xmltv
 lib_tva_xmltv_SRCS := \
@@ -4327,13 +5858,17 @@ lib_tva_xmltv_SRCS := \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
 	src/lib/tva/bcg_doc.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
 	src/lib/helper/xml_util/entity.c \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
+lib_tva_xmltv_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_tva_tva_xml_BIN := tests/unit/lib/tva/test_tva_xml
 lib_tva_tva_xml_SRCS := \
@@ -4350,59 +5885,98 @@ lib_tva_tva_xml_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/log.c
-
-BIM_FRAGMENT_DEPS := \
-	src/lib/bim/fragment/types_media.c \
-	src/lib/bim/fragment/types_text.c \
-	src/lib/bim/fragment/types_desc.c \
-	src/lib/bim/fragment/types_prog.c \
-	src/lib/bim/fragment/coding.c \
-	src/lib/bim/codec/dvbtypes.c \
-	src/lib/bim/codec/node.c \
-	src/lib/bim/codec/encode.c \
-	src/lib/bim/codec/decode.c \
-	src/lib/bim/bitwriter.c \
-	src/lib/bim/bimreader.c \
-	src/lib/bim/strrepo.c \
-	src/lib/tva/tva_xml/crid.c \
-	src/lib/tva/tva_xml/time.c \
-	src/lib/tva/tva_xml/write.c \
-	src/lib/tva/tva_xml/read_info.c \
-	src/lib/tva/tva_xml/read_schedule.c \
-	src/lib/tva/bcg_doc.c \
-	src/lib/helper/xml_util/escape.c \
-	src/lib/helper/xml_util/encoding.c \
-	src/lib/helper/xml_util/entity.c \
-	src/lib/helper/xml_util/scan.c \
-	src/lib/helper/xml_util/query.c \
-	src/lib/sys/ioutil.c \
-	src/lib/helper/log.c
-
-lib_bim_fragment_BIN := tests/unit/lib/bim/test_fragment
-lib_bim_fragment_SRCS := \
-	tests/unit/lib/bim/test_fragment.c \
-	$(BIM_FRAGMENT_DEPS)
-
-lib_bim_coding_BIN := tests/unit/lib/bim/test_coding
-lib_bim_coding_SRCS := \
-	tests/unit/lib/bim/test_coding.c \
-	$(BIM_FRAGMENT_DEPS)
-
-lib_bim_accessunit_BIN := tests/unit/lib/bim/test_accessunit
-lib_bim_accessunit_SRCS := \
-	tests/unit/lib/bim/test_accessunit.c \
-	src/lib/bim/accessunit.c \
-	$(BIM_FRAGMENT_DEPS)
+lib_tva_tva_xml_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 dipibim_args_BIN := tests/unit/dipibim/test_args
 dipibim_args_SRCS := \
 	tests/unit/dipibim/test_args.c \
 	src/dipibim/cli/args.c \
 	src/dipibim/cli/help.c \
+	src/dipibim/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/log.c
+
+dipibim_config_BIN := tests/unit/dipibim/test_config
+dipibim_config_SRCS := \
+	tests/unit/dipibim/test_config.c \
+	src/dipibim/cli/args.c \
+	src/dipibim/cli/help.c \
+	src/dipibim/config.c \
+	src/lib/vendor/libyaml/api.c \
+	src/lib/vendor/libyaml/reader.c \
+	src/lib/vendor/libyaml/scanner.c \
+	src/lib/vendor/libyaml/parser.c \
+	src/lib/config/yamlcfg.c \
+	src/lib/helper/argutil.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
+dipibim_schema_BIN := tests/unit/dipibim/test_schema
+dipibim_schema_SRCS := \
+	tests/unit/dipibim/test_schema.c \
+	src/dipibim/schema.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/fuu/parse.c \
+	src/lib/bim/fuu/apply.c \
+	src/lib/bim/fuu/util.c \
+	src/lib/bim/fuu/write.c \
+	src/lib/bim/fuu/position.c \
+	src/lib/bim/bimio.c \
+	src/lib/bim/bimau.c \
+	src/lib/bim/tvabim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/dvbstream.c \
+	src/lib/bim/dvbtva_rules.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/container.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/dateutil.c \
+	src/lib/bim/codec/node.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/sys/ioutil.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/log.c
+dipibim_schema_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 dipiscan_format_BIN := tests/unit/dipiscan/test_format
 dipiscan_format_SRCS := \
@@ -4496,6 +6070,7 @@ dipiscan_scan_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
 
@@ -4523,12 +6098,15 @@ dipixmltv_suggest_SRCS := \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/timefmt.c \
 	src/lib/tva/bcg_doc.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
 	src/lib/helper/xml_util/entity.c \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 dipiradiohead_mpegaudio_BIN := tests/unit/dipiradiohead/test_mpegaudio
@@ -4546,12 +6124,15 @@ dipiradiohead_aac_latm_SRCS := \
 	tests/unit/dipiradiohead/test_aac_latm.c \
 	src/dipiradiohead/framer/aac_latm.c \
 	src/lib/demux/bitreader.c \
-	src/lib/bim/bitwriter.c
+	src/lib/bim/bitwriter.c \
+	src/lib/sys/ioutil.c
 
 dipiradiohead_psi_BIN := tests/unit/dipiradiohead/test_psi
 dipiradiohead_psi_SRCS := \
 	tests/unit/dipiradiohead/test_psi.c \
 	src/dipiradiohead/mux/psi.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
@@ -4599,6 +6180,7 @@ dipiradiohead_tspacketizer_SRCS := \
 	tests/unit/dipiradiohead/test_tspacketizer.c \
 	src/dipiradiohead/mux/tspacketizer.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/dipiradiohead/mux/psi.c \
 	src/dipiradiohead/mux/pes.c \
 	src/lib/mux/psi_build.c \
@@ -4691,6 +6273,7 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
 	src/lib/helper/log.c \
@@ -4713,6 +6296,7 @@ dipiradiohead_cas_SRCS := \
 	src/dipiradiohead/cas/cas.c \
 	src/lib/mux/cadescbuild.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
@@ -4994,6 +6578,7 @@ dipiradiohead_source_async_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -5049,6 +6634,7 @@ dipiradiohead_source_frame_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -5139,6 +6725,7 @@ lib_hls_tspassthrough_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
@@ -5155,7 +6742,8 @@ lib_dash_mpd_SRCS := \
 	src/lib/helper/xml_util/entity.c \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
 
 lib_dash_live_BIN := tests/unit/lib/dash/test_live
 lib_dash_live_SRCS := \
@@ -5195,6 +6783,7 @@ lib_dash_live_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
@@ -5249,6 +6838,7 @@ dipiradiohead_source_hls_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -5307,6 +6897,7 @@ dipiradiohead_inputset_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -5395,6 +6986,7 @@ dipitvhead_source_SRCS := \
 	src/lib/net/tls_stub.c \
 	src/lib/demux/rtp.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
 
@@ -5701,6 +7293,7 @@ dipitvhead_discover_SRCS := \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
 
@@ -5718,6 +7311,7 @@ dipitvhead_pmtbuild_SRCS := \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 dipitvhead_aitbuild_BIN := tests/unit/dipitvhead/test_aitbuild
@@ -5774,6 +7368,7 @@ dipitvhead_remux_SRCS := \
 	src/dipitvhead/mux/releaseq.c \
 	src/dipitvhead/mux/scte35stamp.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
 	src/dipitvhead/cas/cas.c \
@@ -5922,6 +7517,7 @@ dipitvhead_output_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
@@ -6042,6 +7638,7 @@ dipitvhead_mpts_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
@@ -6157,6 +7754,7 @@ dipitvhead_single_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
@@ -6167,6 +7765,7 @@ dipitvhead_ecmg_client_BIN := tests/unit/dipitvhead/test_ecmg_client
 dipitvhead_ecmg_client_SRCS := \
 	tests/unit/dipitvhead/test_ecmg_client.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
@@ -6213,7 +7812,8 @@ dipitvhead_emmg_server_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
 
 dipitvhead_simulcrypt_msg_BIN := tests/unit/dipitvhead/test_simulcrypt_msg
 dipitvhead_simulcrypt_msg_SRCS := \
@@ -6238,6 +7838,7 @@ dipitvhead_cas_SRCS := \
 	src/dipitvhead/mux/pcrclock.c \
 	src/dipitvhead/mux/timemap.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
@@ -6282,6 +7883,16 @@ lib_mux_cadescbuild_SRCS := \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c
 
+lib_net_plain_endpoint_BIN := tests/unit/lib/net/test_plain_endpoint
+lib_net_plain_endpoint_SRCS := \
+	tests/unit/lib/net/test_plain_endpoint.c \
+	src/lib/net/plain_endpoint.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/argutil.c \
+	src/lib/net/httpclient/url.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/log.c
+
 lib_net_netconnect_BIN := tests/unit/lib/net/test_netconnect
 lib_net_netconnect_SRCS := \
 	tests/unit/lib/net/test_netconnect.c \
@@ -6290,6 +7901,19 @@ lib_net_netconnect_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c
+
+lib_net_netconnect_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=fcntl -Wl,--wrap=connect -Wl,--wrap=getsockopt -Wl,--wrap=pthread_create
+
+lib_net_announce_driver_BIN := tests/unit/lib/net/test_announce_driver
+lib_net_announce_driver_SRCS := \
+	tests/unit/lib/net/test_announce_driver.c \
+	src/lib/net/announce_driver.c \
+	src/lib/net/multicast.c \
+	src/lib/net/netconnect.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/log.c \
+	src/lib/sys/ioutil.c \
+	src/lib/sys/signal.c
 
 lib_net_tssink_BIN := tests/unit/lib/net/test_tssink
 lib_net_tssink_SRCS := \
@@ -6317,6 +7941,8 @@ lib_net_rtmp_SRCS := \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/log.c
 
 lib_net_rtmpout_BIN := tests/unit/lib/net/rtmp/test_rtmpout
@@ -6336,6 +7962,7 @@ lib_net_rtmpout_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/uriparse.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
 
@@ -6437,6 +8064,7 @@ lib_net_tssource_async_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -6505,6 +8133,7 @@ lib_net_tssource_http_dispatch_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -6573,6 +8202,7 @@ lib_net_tssource_dash_fmp4_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -6646,6 +8276,7 @@ lib_net_open_async_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -6719,6 +8350,7 @@ lib_net_tssource_file_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -6787,6 +8419,7 @@ lib_net_source_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
@@ -6873,12 +8506,14 @@ lib_net_dvbstp_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
+lib_net_dvbstp_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_cas_cas_group_BIN := tests/unit/lib/cas/test_cas_group
 lib_cas_cas_group_SRCS := \
 	tests/unit/lib/cas/test_cas_group.c \
 	src/lib/cas/cas_group.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
@@ -7028,6 +8663,7 @@ dipirec_record_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/rtx.c \
 	src/lib/demux/rtcp.c \
@@ -7070,7 +8706,6 @@ dipirec_record_SRCS := \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
 	src/lib/net/rtmp/rtmpout.c \
-	src/lib/mux/psi_build.c \
 	src/lib/mux/pmt_filter.c \
 	src/dipirec/filter/ts.c \
 	src/lib/net/ts/pace.c
@@ -7186,6 +8821,7 @@ dipirec_record_net_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/rtx.c \
 	src/lib/demux/rtcp.c \
@@ -7228,7 +8864,6 @@ dipirec_record_net_SRCS := \
 	src/lib/net/rtmp/command.c \
 	src/lib/net/rtmp/rtmp.c \
 	src/lib/net/rtmp/rtmpout.c \
-	src/lib/mux/psi_build.c \
 	src/lib/mux/pmt_filter.c \
 	src/dipirec/filter/ts.c \
 	src/lib/net/ts/pace.c
@@ -7382,6 +9017,7 @@ dipifccret_channel_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 dipifccret_ret_mcsend_BIN := tests/unit/dipifccret/ret/test_mcsend
@@ -7424,6 +9060,7 @@ dipifccret_burst_table_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 dipifccret_pacer_BIN := tests/unit/dipifccret/test_pacer
@@ -7468,6 +9105,7 @@ dipifccret_pacer_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 dipifccret_burst_BIN := tests/unit/dipifccret/test_burst
@@ -7497,6 +9135,7 @@ dipifccret_burst_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 dipifccret_ret_BIN := tests/unit/dipifccret/test_ret
@@ -7531,6 +9170,7 @@ dipifccret_ret_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 dipifccret_rtx_session_table_BIN := tests/unit/dipifccret/test_rtx_session_table
@@ -7595,9 +9235,46 @@ dipixy_args_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/base64.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/cpuaffinity.c \
 	src/lib/helper/log.c \
-	src/lib/helper/uriparse.c
+	src/lib/helper/uriparse.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c
 
 dipixy_config_BIN := tests/unit/dipixy/test_config
 dipixy_config_SRCS := \
@@ -7624,9 +9301,46 @@ dipixy_config_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/base64.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/cpuaffinity.c \
 	src/lib/helper/log.c \
-	src/lib/helper/uriparse.c
+	src/lib/helper/uriparse.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c
 
 dipixy_route_BIN := tests/unit/dipixy/test_route
 dipixy_route_SRCS := \
@@ -7684,6 +9398,7 @@ dipixy_playlist_SRCS := \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
@@ -7743,7 +9458,39 @@ dipixy_playlist_SRCS := \
 	src/lib/mux/rtx.c \
 	src/lib/mux/rtcp_build.c \
 	src/lib/fccret/ret_client.c \
-	src/lib/fccret/fcc_client.c
+	src/lib/fccret/fcc_client.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c
 
 dipixy_capture_BIN := tests/unit/dipixy/test_capture
 dipixy_capture_SRCS := \
@@ -7772,6 +9519,7 @@ dipixy_capture_SRCS := \
 	src/dipixy/ts/capture/source.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
 	src/lib/net/multicast.c \
@@ -7873,6 +9621,7 @@ dipixy_channels_SRCS := \
 	src/lib/helper/playlist_in.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
@@ -7932,7 +9681,39 @@ dipixy_channels_SRCS := \
 	src/lib/mux/rtx.c \
 	src/lib/mux/rtcp_build.c \
 	src/lib/fccret/ret_client.c \
-	src/lib/fccret/fcc_client.c
+	src/lib/fccret/fcc_client.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c
 
 dipixy_pidfilter_BIN := tests/unit/dipixy/test_pidfilter
 dipixy_pidfilter_SRCS := \
@@ -8064,7 +9845,9 @@ dipixy_dispatch_SRCS := \
 	src/dipixy/core/route.c \
 	src/dipixy/core/time_ep.c \
 	src/lib/helper/secure_zero.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/argutil.c
 dipixy_dispatch_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
 dipixy_dispatch_EXTRA_LDFLAGS := -Wl,--gc-sections
 
@@ -8338,6 +10121,7 @@ dipixy_ws_sources_SRCS := \
 	src/lib/helper/playlist_in.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
@@ -8397,7 +10181,39 @@ dipixy_ws_sources_SRCS := \
 	src/lib/mux/rtx.c \
 	src/lib/mux/rtcp_build.c \
 	src/lib/fccret/ret_client.c \
-	src/lib/fccret/fcc_client.c
+	src/lib/fccret/fcc_client.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c
 
 dipixy_gena_BIN := tests/unit/dipixy/test_gena
 dipixy_gena_SRCS := \
@@ -8443,6 +10259,7 @@ dipixy_gena_SRCS := \
 	src/lib/helper/playlist_in.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
@@ -8502,7 +10319,39 @@ dipixy_gena_SRCS := \
 	src/lib/mux/rtx.c \
 	src/lib/mux/rtcp_build.c \
 	src/lib/fccret/ret_client.c \
-	src/lib/fccret/fcc_client.c
+	src/lib/fccret/fcc_client.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c
 
 dipixy_ssdp_BIN := tests/unit/dipixy/test_ssdp
 dipixy_ssdp_SRCS := \
@@ -8559,6 +10408,7 @@ dipixy_dlna_SRCS := \
 	src/lib/helper/playlist_in.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
@@ -8618,7 +10468,39 @@ dipixy_dlna_SRCS := \
 	src/lib/mux/rtx.c \
 	src/lib/mux/rtcp_build.c \
 	src/lib/fccret/ret_client.c \
-	src/lib/fccret/fcc_client.c
+	src/lib/fccret/fcc_client.c \
+	src/lib/bim/sdns/types.c \
+	src/lib/bim/sdnsbim.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/nodexml.c \
+	src/lib/helper/xml_util/tree.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/bim/sdns/decode.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c
 
 lib_playlist_in_BIN := tests/unit/lib/test_playlist_in
 lib_playlist_in_SRCS := \
@@ -8642,6 +10524,18 @@ $$($(1)_BIN): $$($(1)_OBJS)
 endef
 
 $(foreach t,$(UNIT_TESTS),$(eval $(call UNIT_TEST_template,$(t))))
+
+dipisds_args_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+dipisds_config_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+dipisds_listen_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+dipibim_schema_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+dipixy_args_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+dipixy_config_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+dipixy_playlist_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+dipixy_channels_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+dipixy_ws_sources_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+dipixy_gena_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
+dipixy_dlna_EXTRA_LDFLAGS += $(SDNS_ZLIB_LDFLAGS)
 
 TEST_BINS := $(foreach t,$(UNIT_TESTS),$($(t)_BIN))
 
@@ -8680,7 +10574,7 @@ ALL_OBJS += $(ITEST_HELPER_OBJS)
 $(ITEST_HELPER_BIN): $(ITEST_HELPER_OBJS)
 	$(CC) $^ $(LDFLAGS) -o $@
 
-INTEGRATION_TEST_DEPS := dipibim dipiscan dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipibcg dipimetrics dipifccret dipixy dvbipitools
+INTEGRATION_TEST_DEPS := dipibim dipibcg dipiscan dipixmltv dipitvhead dipiradiohead dipirec dipidescramble dipisds dipimetrics dipifccret dipixy dvbipitools
 ifeq ($(HAVE_OPENSSL),yes)
 INTEGRATION_TEST_DEPS += dipicam378
 endif
@@ -8723,36 +10617,59 @@ else
 	@echo "integration-test: libsrt not found, skipped dipisrt integration tests" >&2
 endif
 
-FUZZ_BIM_DEPS := \
-	src/lib/bim/accessunit.c \
-	src/lib/bim/fragment/types_media.c \
-	src/lib/bim/fragment/types_text.c \
-	src/lib/bim/fragment/types_desc.c \
-	src/lib/bim/fragment/types_prog.c \
-	src/lib/bim/fragment/coding.c \
-	src/lib/bim/codec/dvbtypes.c \
-	src/lib/bim/codec/node.c \
-	src/lib/bim/codec/encode.c \
-	src/lib/bim/codec/decode.c \
-	src/lib/bim/bitwriter.c \
-	src/lib/bim/bimreader.c \
-	src/lib/bim/strrepo.c \
-	src/lib/tva/tva_xml/crid.c \
-	src/lib/tva/tva_xml/time.c \
-	src/lib/tva/tva_xml/write.c \
-	src/lib/tva/tva_xml/read_info.c \
-	src/lib/tva/tva_xml/read_schedule.c \
-	src/lib/tva/bcg_doc.c \
+FUZZ_BCG_NEW := \
+	src/lib/bim/container.c \
+	src/lib/bim/bcgip.c \
+	src/lib/bim/dvbtva.c \
+	src/lib/bim/tvafrag.c \
+	src/lib/bim/tvainit.c \
+	src/lib/bim/decoderinit/read.c \
+	src/lib/bim/decoderinit/write.c \
+	src/lib/helper/xml_util/tree.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
 	src/lib/helper/xml_util/entity.c \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	$(BIM_XSD_SRCS) \
+	src/lib/helper/log.c \
+
+FUZZ_BCG_ENGINE := $(FUZZ_BCG_NEW) \
+	src/lib/bim/codec/dvbtypes.c \
+	src/lib/bim/codec/tvatypes.c \
+	src/lib/bim/codec/node.c \
+	src/lib/bim/codec/encode/simple.c \
+	src/lib/bim/codec/encode/element.c \
+	src/lib/bim/codec/encode/any.c \
+	src/lib/bim/codec/encode/lax.c \
+	src/lib/bim/codec/encode/aod.c \
+	src/lib/bim/codec/encode/zlib.c \
+	src/lib/bim/codec/coding.c \
+	src/lib/bim/codec/m7time.c \
+	src/lib/bim/codec/decode/simple.c \
+	src/lib/bim/codec/decode/element.c \
+	src/lib/bim/codec/decode/any.c \
+	src/lib/bim/codec/decode/lax.c \
+	src/lib/bim/codec/laxsym.c \
+	src/lib/bim/codec/decode/aod.c \
+	src/lib/bim/aod.c \
+	src/lib/bim/bimio.c \
+	src/lib/helper/base64.c \
+	src/lib/bim/bitwriter.c \
+	src/lib/bim/bimreader.c \
+	src/lib/bim/strrepo.c \
+	src/lib/helper/xml_util/escape.c \
+	src/lib/helper/xml_util/encoding.c \
+	src/lib/helper/xml_util/entity.c \
+	src/lib/helper/xml_util/scan.c \
+	src/lib/helper/xml_util/query.c \
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 # _BIN/_SRCS and FUZZ_BINS stay unconditional.
-FUZZ_HARNESSES := fuzz_psi fuzz_bim_accessunit fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_dvbstp fuzz_ws_frame fuzz_route fuzz_ssdp fuzz_yamlcfg fuzz_pesstamp fuzz_scte35stamp fuzz_tva_xml fuzz_xmltv fuzz_bcg_container fuzz_metrics_store fuzz_rtmp
+FUZZ_HARNESSES := fuzz_psi fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_dvbstp fuzz_ws_frame fuzz_route fuzz_ssdp fuzz_yamlcfg fuzz_pesstamp fuzz_scte35stamp fuzz_tva_xml fuzz_xmltv fuzz_bcg_container fuzz_metrics_store fuzz_rtmp
 
 fuzz_psi_BIN := tests/fuzz/fuzz_psi
 fuzz_psi_SRCS := \
@@ -8766,11 +10683,6 @@ fuzz_psi_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c
-
-fuzz_bim_accessunit_BIN := tests/fuzz/fuzz_bim_accessunit
-fuzz_bim_accessunit_SRCS := \
-	tests/fuzz/fuzz_bim_accessunit.c \
-	$(FUZZ_BIM_DEPS)
 
 fuzz_sds_xml_BIN := tests/fuzz/fuzz_sds_xml
 fuzz_sds_xml_SRCS := \
@@ -8800,6 +10712,7 @@ fuzz_ecmg_channel_status_BIN := tests/fuzz/fuzz_ecmg_channel_status
 fuzz_ecmg_channel_status_SRCS := \
 	tests/fuzz/fuzz_ecmg_channel_status.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
 	src/lib/cas/ecmg_client/connect.c \
@@ -8831,7 +10744,8 @@ fuzz_emmg_datagrams_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c
 fuzz_emmg_datagrams_EXTRA_LDFLAGS := -pthread
 
 fuzz_dvbstp_BIN := tests/fuzz/fuzz_dvbstp
@@ -8909,6 +10823,9 @@ fuzz_tva_xml_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/log.c
 
 fuzz_xmltv_BIN := tests/fuzz/fuzz_xmltv
@@ -8917,6 +10834,7 @@ fuzz_xmltv_SRCS := \
 	src/lib/tva/xmltv.c \
 	src/lib/tva/mapping.c \
 	src/lib/tva/bcg_doc.c \
+	src/lib/helper/uriparse.c \
 	src/lib/tva/timefmt.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/xml_util/escape.c \
@@ -8925,16 +10843,15 @@ fuzz_xmltv_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 fuzz_bcg_container_BIN := tests/fuzz/fuzz_bcg_container
 fuzz_bcg_container_SRCS := \
 	tests/fuzz/fuzz_bcg_container.c \
-	src/dipibcg/container.c \
-	$(dipibcg_ZLIB_SRC) \
-	src/lib/helper/log.c
+	$(FUZZ_BCG_ENGINE)
 ifeq ($(HAVE_ZLIB),yes)
-fuzz_bcg_container_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib)
+fuzz_bcg_container_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib) -DFUZZ_BCG_ZLIB
 fuzz_bcg_container_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib)
 endif
 
@@ -8959,12 +10876,20 @@ fuzz_rtmp_SRCS := \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/uriparse.c \
+	src/lib/helper/argutil.c \
 	src/lib/helper/log.c
 
 fuzz_gen_seeds_BIN := tests/fuzz/gen_seeds
 fuzz_gen_seeds_SRCS := \
 	tests/fuzz/gen_seeds.c \
-	$(FUZZ_BIM_DEPS) \
+	src/lib/tva/tva_xml/crid.c \
+	src/lib/tva/tva_xml/time.c \
+	src/lib/tva/tva_xml/write.c \
+	src/lib/tva/tva_xml/read_info.c \
+	src/lib/tva/tva_xml/read_schedule.c \
+	src/lib/tva/bcg_doc.c \
+	src/lib/helper/uriparse.c \
 	src/lib/mux/psi_build.c \
 	src/lib/mux/rtcp_build.c \
 	src/lib/demux/rtcp.c \
@@ -8974,12 +10899,12 @@ fuzz_gen_seeds_SRCS := \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
 	src/lib/metrics/protocol.c \
-	src/dipibcg/container.c \
-	src/dipibcg/wrapper_stub.c
+	$(FUZZ_BCG_ENGINE)
 
 define FUZZ_TARGET_template
 $(1)_OBJS := $$($(1)_SRCS:.c=.o)

@@ -109,7 +109,8 @@ void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, c
 void sds_broadcast_close(FILE *f);
 
 /* same document, single-shot into a malloc'd NUL-terminated buffer, caller frees. 0 = failed */
-size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned char **out);
+/* bcg_id non-NULL: ServicesDescriptionLocation of that BCG */
+size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, const char *bcg_id, unsigned char **out);
 
 /* payload 0x01. push_addr/push_port: this announcer's own delivery point. lang: ISO 639-2 for display_name.
    extra_payload_ids: other PayloadIds sharing this push socket. 0 = failed. out as for broadcast */
@@ -117,6 +118,7 @@ size_t sds_build_sp(const char *domain, const char *display_name, const char *la
 
 /* streaming PackageDiscovery (payload 0x05), one <Package> per item call. svcs/svc_count for DVBTriplet lookup */
 void sds_package_open(FILE *f, const char *domain, unsigned version);
+const sds_service_t *sds_find_service(const char *name, const sds_service_t *svcs, int svc_count);
 void sds_package_item(FILE *f, const sds_package_t *pkg, const sds_service_t *svcs, int svc_count);
 void sds_package_close(FILE *f);
 size_t sds_build_package(const char *domain, unsigned version, const sds_package_t *pkgs, int pkg_count, const sds_service_t *svcs, int svc_count, unsigned char **out);
@@ -129,6 +131,20 @@ size_t sds_build_regionalisation(const char *domain, unsigned version, const sds
 
 /* single-shot RMSFUSDiscovery (payload 0x08). exactly one of rms_count/fus_count nonzero: XSD choice,
    FUSProvider+ or RMSProvider+, never both. 0 = failed. out as for broadcast */
+/* TS 102 034 5.2.13.1. description, provider_name NULL ok */
+typedef struct {
+  const char *id;
+  const char *name;
+  const char *lang;
+  const char *description;
+  const char *provider_name;
+  const char *mcast_addr;
+  unsigned mcast_port;
+} sds_bcg_t;
+
+/* DVBSTP: payload ids 0xA1, 0xA3, TS 102 539 7.3 */
+size_t sds_build_bcg(const char *domain, unsigned version, const sds_bcg_t *bcg, unsigned char **out);
+
 size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *rms, int rms_count, const sds_fus_t *fus, int fus_count, unsigned char **out);
 
 /* xml null-terminated. out[0..return) filled. tsid/onid default 1, sid defaults to 1-based index if absent.

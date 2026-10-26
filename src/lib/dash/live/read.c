@@ -5,8 +5,6 @@
 #include <string.h>
 
 #include "lib/dash/live.h"
-#include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
 #include "lib/sys/signal.h"
 #include "lib/dash/mpd.h"
 #include "lib/dash/live/live_int.h"

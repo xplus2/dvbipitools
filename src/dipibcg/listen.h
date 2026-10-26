@@ -4,7 +4,6 @@
 #ifndef DIPIBCG_LISTEN_H
 #define DIPIBCG_LISTEN_H
 
-#include "lib/net/dvbstp_seen.h"
 #include "lib/tva/bcg_doc.h"
 
 #include "cli/args.h"

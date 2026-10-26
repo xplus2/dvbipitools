@@ -12,10 +12,22 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <unistd.h>
 
+#include "../../alloc_fail.h"
+#include "lib/helper/dateutil.h"
 #include "lib/sys/ioutil.h"
+
+ssize_t __real_getrandom(void *buf, size_t len, unsigned flags);
+static int g_getrandom_fail;
+
+ssize_t __wrap_getrandom(void *buf, size_t len, unsigned flags) {
+  if (g_getrandom_fail) {
+    errno = ENOSYS;
+    return -1;
+  }
+  return __real_getrandom(buf, len, flags);
+}
 
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -84,6 +96,72 @@ START_TEST(read_all_from_pipe_grows) {
   free(out);
   fclose(f);
   free(src);
+}
+END_TEST
+
+START_TEST(rand_seed_falls_back_without_getrandom) {
+  uint32_t a;
+  uint32_t b;
+  g_getrandom_fail = 1;
+  a = rand_seed32();
+  b = rand_seed32();
+  g_getrandom_fail = 0;
+  ck_assert_uint_eq(a, b);
+}
+END_TEST
+
+START_TEST(read_all_survives_allocation_failures) {
+  size_t size = 300000;
+  char *src = malloc(size);
+  ck_assert_ptr_nonnull(src);
+  memset(src, 'x', size);
+  for (long n = 0;; n++) {
+    FILE *f = fmemopen(src, size, "r");
+    char *out = NULL;
+    size_t len = 0;
+    int hit;
+    int rc;
+    ck_assert_ptr_nonnull(f);
+    alloc_fail_at(n);
+    rc = read_all(f, &out, &len);
+    hit = alloc_fail_end();
+    if (!rc) free(out);
+    fclose(f);
+    if (!hit) break;
+  }
+  free(src);
+}
+END_TEST
+
+START_TEST(dstrbuf_survives_allocation_failures) {
+  dstrbuf_t sb;
+  char big[20000];
+  memset(big, 'y', sizeof big - 1);
+  big[sizeof big - 1] = 0;
+  alloc_fail_at(0);
+  dstrbuf_init(&sb);
+  alloc_fail_end();
+  ck_assert_ptr_null(sb.buf);
+  ck_assert_uint_eq(sb.cap, 0);
+  dstrbuf_add_n(&sb, "x", 1);
+  dstrbuf_appendf(&sb, "%d", 1);
+
+  dstrbuf_init(&sb);
+  ck_assert_ptr_nonnull(sb.buf);
+  alloc_fail_at(0);
+  dstrbuf_add(&sb, big);
+  alloc_fail_end();
+  ck_assert_ptr_null(sb.buf);
+  ck_assert_uint_eq(sb.len, 0);
+  dstrbuf_add(&sb, "z");
+
+  dstrbuf_init(&sb);
+  alloc_fail_at(0);
+  dstrbuf_appendf(&sb, "%s", big);
+  alloc_fail_end();
+  ck_assert_ptr_null(sb.buf);
+  ck_assert_uint_eq(sb.cap, 0);
+  dstrbuf_appendf(&sb, "%d", 5);
 }
 END_TEST
 
@@ -235,6 +313,27 @@ START_TEST(chomp_and_csv) {
 }
 END_TEST
 
+START_TEST(csv_split_quoting_and_trim) {
+  char a[] = " Name, With , \"Quoted, \"\"x\"\"\" ,\"\",  ";
+  char b[] = "\"unterminated, still one";
+  char c[] = "a,b,c,d";
+  char d[] = "mid\"quote,x";
+  char *f[5];
+  ck_assert_uint_eq(csv_split(a, f, 5), 5u);
+  ck_assert_str_eq(f[0], "Name");
+  ck_assert_str_eq(f[1], "With");
+  ck_assert_str_eq(f[2], "Quoted, \"x\"");
+  ck_assert_str_eq(f[3], "");
+  ck_assert_str_eq(f[4], "");
+  ck_assert_uint_eq(csv_split(b, f, 5), 1u);
+  ck_assert_str_eq(f[0], "unterminated, still one");
+  ck_assert_uint_eq(csv_split(c, f, 2), 2u);
+  ck_assert_str_eq(f[1], "b");
+  ck_assert_uint_eq(csv_split(d, f, 5), 2u);
+  ck_assert_str_eq(f[0], "mid\"quote");
+}
+END_TEST
+
 START_TEST(read_line_forms) {
   static const char data[] = "short\nexactly7\nthis line is much too long\nlast";
   FILE *f = tmpfile_with(data, sizeof data - 1);
@@ -324,6 +423,45 @@ START_TEST(iso8601_forms) {
     ck_assert_int_eq(o.offset_kind, t[_i].kind);
     ck_assert_int_eq(o.off_min, t[_i].off);
   }
+}
+END_TEST
+
+START_TEST(iso8601_edge_cases_and_formatting) {
+  static const char *const bad[] = {
+    "2024-05-01T10:20:30.", "2024-05-01T10:20:30.Z", "2024-05-01T10:20:30+24:00", "2024-05-01T10:20:30+01:60", "2024-05-01T10:20:30+0100", "2024-05-01T10:20:30+01:0x",
+    "2024-05-01T10:20:30Zx", "2024-05-01T10:20:30z", "2024-13-01T10:20:30Z", "2024-00-01T10:20:30Z", "2024-02-30T10:20:30Z", "2023-02-29T10:20:30Z", "1900-02-29T10:20:30Z",
+    "2024-05-32T10:20:30Z", "2024-05-00T10:20:30Z", "2024-05-01T24:20:30Z", "2024-05-01T10:60:30Z", "2024-05-01T10:20:60Z", "2024-05-01X10:20:30Z", "2024/05/01T10:20:30Z",
+    "20a4-05-01T10:20:30Z", "2024-05-01T10:20", "", "2024-05-01T10-20-30Z",
+  };
+  static const char *const good[] = {"2024-02-29T10:20:30Z", "2000-02-29T00:00:00", "2024-05-01T10:20:30.123456Z", "2024-05-01T10:20:30.5+05:30", "2024-05-01T10:20:30-23:59", "2024-12-31T23:59:59Z"};
+  iso8601_t t;
+  char out[32];
+  char small[8];
+  int y;
+  int mo;
+  int d;
+  for (size_t i = 0; i < sizeof bad / sizeof *bad; i++) ck_assert_msg(iso8601_split(bad[i], &t) == -1, "accepted %s", bad[i]);
+  for (size_t i = 0; i < sizeof good / sizeof *good; i++) ck_assert_msg(iso8601_split(good[i], &t) == 0, "rejected %s", good[i]);
+  ck_assert_int_eq(iso8601_split("2024-05-01T10:20:30-23:59", &t), 0);
+  ck_assert_int_eq(t.off_min, -(23 * 60 + 59));
+  ck_assert_int_eq(t.offset_kind, ISO8601_OFF_NUMERIC);
+  ck_assert_int_eq(iso8601_split("2024-05-01T10:20:30Z", &t), 0);
+  ck_assert_int_eq(t.offset_kind, ISO8601_OFF_Z);
+  ck_assert_int_eq(iso8601_split("2024-05-01T10:20:30", &t), 0);
+  ck_assert_int_eq(t.offset_kind, ISO8601_OFF_NONE);
+  ck_assert_int_eq(iso8601_split("2024-05-01T10:20:30+01:30", &t), 0);
+  ck_assert_int_eq(iso8601_mjd_minutes(&t), date_to_mjd(2024, 5, 1) * 1440L + 10 * 60 + 20 - 90);
+  ck_assert_int_eq(iso8601_format(out, sizeof out, 0, 3725), 19);
+  ck_assert_str_eq(out, "1970-01-01T01:02:05");
+  ck_assert_int_eq(iso8601_format(small, sizeof small, 0, 0), -1);
+  ck_assert_int_eq(iso8601_format(out, sizeof out, -1, 86399), 19);
+  ck_assert_str_eq(out, "1969-12-31T23:59:59");
+  mjd_to_date(date_to_mjd(1600, 2, 29), &y, &mo, &d);
+  ck_assert_int_eq(y * 10000 + mo * 100 + d, 16000229);
+  mjd_to_date(date_to_mjd(1, 1, 1), &y, &mo, &d);
+  ck_assert_int_eq(y * 10000 + mo * 100 + d, 10101);
+  mjd_to_date(date_to_mjd(-5, 12, 31), &y, &mo, &d);
+  ck_assert_int_eq(y, -5);
 }
 END_TEST
 
@@ -430,30 +568,6 @@ START_TEST(dstrbuf_null_buffer_is_inert) {
   dstrbuf_appendf(&sb, "%d", 1);
   ck_assert_ptr_null(sb.buf);
   ck_assert_uint_eq(sb.len, 0u);
-}
-END_TEST
-
-START_TEST(pct_encode_forms) {
-  static const struct {
-    const char *in;
-    size_t cap;
-    const char *want;
-  } t[] = {
-      {"abc-._~XYZ09", 64, "abc-._~XYZ09"},
-      {"a b/c", 64, "a%20b%2Fc"},
-      {"\xC3\xA9", 64, "%C3%A9"},
-      {"a b", 4, "a"},
-      {"a b", 5, "a%20"},
-      {"abcdef", 4, "abc"},
-      {"", 4, ""},
-  };
-  char out[64];
-  memset(out, 'X', sizeof out);
-  pct_encode_seg(t[_i].in, out, t[_i].cap);
-  ck_assert_str_eq(out, t[_i].want);
-  memset(out, 'X', sizeof out);
-  pct_encode_seg("abc", out, 0);
-  ck_assert_int_eq(out[0], 'X');
 }
 END_TEST
 
@@ -639,6 +753,7 @@ static Suite *ioutil_suite(void) {
   tcase_add_test(tc, digit_and_number_parsing);
   tcase_add_test(tc, chomp_and_csv);
   tcase_add_test(tc, read_line_forms);
+  tcase_add_test(tc, csv_split_quoting_and_trim);
   tcase_add_test(tc, read_line_exact_fit_at_eof_and_newline);
   tcase_add_loop_test(tc, iso8601_forms, 0, 43);
   tcase_add_test(tc, mjd_known_dates);
@@ -647,13 +762,16 @@ static Suite *ioutil_suite(void) {
   tcase_add_test(tc, dstrbuf_growth_and_numbers);
   tcase_add_test(tc, dstrbuf_appendf_growth);
   tcase_add_test(tc, dstrbuf_null_buffer_is_inert);
-  tcase_add_loop_test(tc, pct_encode_forms, 0, 7);
   tcase_add_test(tc, misc_inline_helpers);
   tcase_add_test(tc, pipe_write_all_plain);
   tcase_add_test(tc, pipe_write_all_stops_on_flag_when_full);
   tcase_add_test(tc, pipe_write_all_waits_for_reader_after_eagain);
   tcase_add_test(tc, pipe_write_all_reports_broken_pipe);
   tcase_add_test(tc, pipe_write_all_retries_after_eintr);
+  tcase_add_test(tc, rand_seed_falls_back_without_getrandom);
+  tcase_add_test(tc, read_all_survives_allocation_failures);
+  tcase_add_test(tc, dstrbuf_survives_allocation_failures);
+  tcase_add_test(tc, iso8601_edge_cases_and_formatting);
   suite_add_tcase(s, tc);
   return s;
 }

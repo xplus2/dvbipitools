@@ -7,8 +7,6 @@
 #include <unistd.h>
 
 #include "lib/helper/log.h"
-#include "lib/metrics/export.h"
-
 #include "outputs.h"
 #include "version.h"
 

@@ -279,13 +279,11 @@ void esc_handle_av1_obu(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, 
 }
 
 void esc_split_obus(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *d, size_t len, int *key, unsigned char **rb, size_t *rbcap) {
-  size_t p;
-  size_t scl = 0;
-  p = find_startcode(d, len, 0, &scl);
-  while (p < len) {
-    size_t ns = p + scl;
-    size_t scl2 = 0;
-    size_t q = find_startcode(d, len, ns, &scl2);
+  sc_iter_t it;
+  size_t ns;
+  size_t q;
+  sc_iter_init(&it, d, len);
+  while (sc_iter_next(&it, &ns, &q)) {
     size_t n = q - ns;
     if (n) {
       size_t rblen;
@@ -299,19 +297,15 @@ void esc_split_obus(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size
         }
       }
     }
-    p = q;
-    scl = scl2;
   }
 }
 
 void esc_split_nals(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *d, size_t len, int *key, const lcevc_strip_t *strip) {
-  size_t p;
-  size_t scl = 0;
-  p = find_startcode(d, len, 0, &scl);
-  while (p < len) {
-    size_t ns = p + scl;
-    size_t scl2 = 0;
-    size_t q = find_startcode(d, len, ns, &scl2);
+  sc_iter_t it;
+  size_t ns;
+  size_t q;
+  sc_iter_init(&it, d, len);
+  while (sc_iter_next(&it, &ns, &q)) {
     size_t n = q - ns;
     unsigned type;
     if (n) {
@@ -330,7 +324,5 @@ void esc_split_nals(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, size
           break;
       }
     }
-    p = q;
-    scl = scl2;
   }
 }

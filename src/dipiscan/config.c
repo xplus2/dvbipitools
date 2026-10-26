@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -131,10 +130,6 @@ int scan_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
-  if (cond) yamlcfg_warn(y, code, "%s", msg);
-}
-
 int scan_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   int rc;
@@ -145,8 +140,8 @@ int scan_cfg_test(const char *path, int strict) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }
-  warn_if(&y, cfg.format == OUT_XML && !cfg.provider, "SA000173", "format xml requires provider (unless given on the command line)");
-  warn_if(&y, cfg.http_path_tmpl && !cfg.http_proxy, "SA000174", "http-path needs http-proxy");
+  yamlcfg_warn_if(&y, cfg.format == OUT_XML && !cfg.provider, "SA000173", "format xml requires provider (unless given on the command line)");
+  yamlcfg_warn_if(&y, cfg.http_path_tmpl && !cfg.http_proxy, "SA000174", "http-path needs http-proxy");
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);
   return rc;

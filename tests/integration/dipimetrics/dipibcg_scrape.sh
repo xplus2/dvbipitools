@@ -41,11 +41,13 @@ cat >"$WORK/map.csv" <<EOF
 ch1,udp://239.1.9.3:5000,1,1,101
 EOF
 
+make_bcg_schema "$WORK/sch"
+
 timeout 8 "$BIN" -S "$SOCK" -l "127.0.0.1:$HTTPPORT" -v >"$WORK/dipimetrics.log" 2>&1 &
 MPID=$!
 sleep 0.3
 
-timeout 6 "$DIPIBCG" -a -i "$WORK/guide.xml" -M "$WORK/map.csv" -w 24 \
+timeout 6 "$DIPIBCG" -a -s "$WORK/sch" -i "$WORK/guide.xml" -M "$WORK/map.csv" -w 24 \
     -m $MCAST:$PORT --metrics-id bcg-it --metrics "$SOCK" --metrics-interval 1 \
     >"$WORK/dipibcg.log" 2>&1 &
 BPID=$!

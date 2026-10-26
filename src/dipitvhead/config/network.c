@@ -35,11 +35,7 @@ int tvh_apply_ttl(void *c, const char *v, char *e, size_t n) {
 }
 
 int tvh_apply_dscp(void *c, const char *v, char *e, size_t n) {
-  if (net_dscp_parse(v, &((config_t *)c)->dscp)) {
-    snprintf(e, n, "invalid '%s' (video-high|video-low|voice|signalling|best-effort|0..63)", v);
-    return -1;
-  }
-  return 0;
+  return yamlcfg_set_int_by(&((config_t *)c)->dscp, v, net_dscp_parse, NET_DSCP_NAMES, e, n);
 }
 
 int tvh_apply_al_fec(void *c, const char *v, char *e, size_t n) {

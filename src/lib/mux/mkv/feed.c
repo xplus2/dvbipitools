@@ -152,15 +152,14 @@ static void handle_video(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
 /* V_MPEG2: raw ES, start codes intact, no length-prefix/CodecPrivate.
    one PES = one picture, same as handle_video */
 static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const unsigned char *d, size_t len) {
-  size_t p, scl = 0;
+  sc_iter_t it;
+  size_t ns, q;
   int key = 0;
 
   if (m->flushing) return;
   if (has_pts) video_ts(m, t, pts);
-  p = find_startcode(d, len, 0, &scl);
-  while (p < len) {
-    size_t ns = p + scl, scl2 = 0;
-    size_t q = find_startcode(d, len, ns, &scl2);
+  sc_iter_init(&it, d, len);
+  while (sc_iter_next(&it, &ns, &q)) {
     unsigned code = (ns < len) ? d[ns] : 0xFF;
     if (code == 0xB3 && !t->hdr_parsed && q >= ns + 4) {
       unsigned w = ((unsigned)d[ns + 1] << 4) | (d[ns + 2] >> 4);
@@ -175,8 +174,6 @@ static void handle_mpeg2(mkv_t *m, track_t *t, int has_pts, uint64_t pts, const 
     } else if (code == 0x00 && q >= ns + 3 && ((d[ns + 2] >> 3) & 0x07) == 1) { /* picture_coding_type: 1 = I */
       key = 1;
     }
-    p = q;
-    scl = scl2;
   }
   if (key) t->got_key = 1;
   if (t->hdr_parsed && t->got_key) emit(m, t, d, len, key);

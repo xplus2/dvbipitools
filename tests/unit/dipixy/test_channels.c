@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -296,7 +295,7 @@ START_TEST(list_for_each_passes_fcc_through) {
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   {
@@ -367,7 +366,7 @@ START_TEST(channels_resolve_passes_ret_and_fcc_through) {
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, &fcc, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, &fcc, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   {
@@ -664,7 +663,7 @@ START_TEST(sds_xml_file_builds_one_item_per_service) {
   bufcpy(svcs[1].name, sizeof svcs[1].name, "Two");
   bufcpy(svcs[1].address, sizeof svcs[1].address, "239.1.1.2");
   svcs[1].port = 5001;
-  len = sds_build_broadcast("example.invalid", 1, svcs, 2, NULL, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, svcs, 2, NULL, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   write_temp_file(path, "");
   f = fopen(path, "wb");
@@ -773,7 +772,7 @@ static void write_sds_xml(const char *path, const char *const *names, size_t n) 
     svcs[i].port = (unsigned)(5000 + i);
     svcs[i].rtp = 1;
   }
-  len = sds_build_broadcast("example.invalid", 1, svcs, (int)n, NULL, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, svcs, (int)n, NULL, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   f = fopen(path, "wb");
   ck_assert_ptr_nonnull(f);

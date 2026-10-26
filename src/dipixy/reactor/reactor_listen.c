@@ -3,9 +3,7 @@
 
 #define _GNU_SOURCE
 #include "internal.h"
-#include "reactor.h"
 #include "reactor_tls.h"
-
 #include "../dash/lldash.h"
 #include "../segment/mp4push.h"
 #include "../ts/ts_push.h"

@@ -8,13 +8,10 @@
 
 #include "lib/mux/fmp4/box.h"
 #include "lib/mux/fmp4/fmp4.h"
+#include "../../fx_mux.h"
 
 static unsigned rd16(const unsigned char *p) {
   return ((unsigned)p[0] << 8) | p[1];
-}
-
-static uint32_t rd32(const unsigned char *p) {
-  return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
 }
 
 static uint64_t rd64(const unsigned char *p) {

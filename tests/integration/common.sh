@@ -338,4 +338,41 @@ free_port_block() {
     return 0
 }
 
+# schema dir for dipibcg -s: $1/xml.xsd, $1/tva.xsd (subset of the fragments dipibcg builds)
+make_bcg_schema() {
+    mkdir -p "$1"
+    cat > "$1/xml.xsd" <<'XSD'
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://www.w3.org/XML/1998/namespace">
+<xs:attribute name="lang" type="xs:language"/></xs:schema>
+XSD
+    cat > "$1/tva.xsd" <<'XSD'
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="urn:tva:metadata:2004" targetNamespace="urn:tva:metadata:2004" elementFormDefault="qualified">
+<xs:import namespace="http://www.w3.org/XML/1998/namespace" schemaLocation="xml.xsd"/>
+<xs:complexType name="GenreType"><xs:sequence><xs:element name="Name" type="xs:string" minOccurs="0"/></xs:sequence><xs:attribute name="href" type="xs:string"/></xs:complexType>
+<xs:complexType name="BasicDescriptionType"><xs:sequence><xs:element name="Title" type="xs:string" minOccurs="0"/>
+<xs:element name="Synopsis" type="xs:string" minOccurs="0"/><xs:element name="Genre" type="GenreType" minOccurs="0" maxOccurs="unbounded"/></xs:sequence></xs:complexType>
+<xs:complexType name="ProgramInformationType"><xs:sequence><xs:element name="BasicDescription" type="BasicDescriptionType"/></xs:sequence>
+<xs:attribute name="programId" type="xs:string" use="required"/></xs:complexType>
+<xs:complexType name="ProgramInformationTableType"><xs:sequence><xs:element name="ProgramInformation" type="ProgramInformationType" minOccurs="0" maxOccurs="unbounded"/></xs:sequence></xs:complexType>
+<xs:complexType name="ProgramRefType"><xs:attribute name="crid" type="xs:string" use="required"/></xs:complexType>
+<xs:complexType name="InstanceDescriptionType"><xs:sequence><xs:element name="Title" type="xs:string" minOccurs="0"/></xs:sequence></xs:complexType>
+<xs:complexType name="ScheduleEventType"><xs:sequence><xs:element name="Program" type="ProgramRefType"/>
+<xs:element name="InstanceDescription" type="InstanceDescriptionType" minOccurs="0"/>
+<xs:element name="PublishedStartTime" type="xs:dateTime"/><xs:element name="PublishedEndTime" type="xs:dateTime" minOccurs="0"/>
+<xs:element name="PublishedDuration" type="xs:duration" minOccurs="0"/></xs:sequence></xs:complexType>
+<xs:complexType name="ScheduleType"><xs:sequence><xs:element name="ScheduleEvent" type="ScheduleEventType" minOccurs="0" maxOccurs="unbounded"/></xs:sequence>
+<xs:attribute name="serviceIDRef" type="xs:string" use="required"/><xs:attribute name="start" type="xs:dateTime"/><xs:attribute name="end" type="xs:dateTime"/></xs:complexType>
+<xs:complexType name="ProgramLocationTableType"><xs:sequence><xs:element name="Schedule" type="ScheduleType" minOccurs="0" maxOccurs="unbounded"/></xs:sequence></xs:complexType>
+<xs:complexType name="ServiceInformationType"><xs:sequence><xs:element name="Name" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+<xs:element name="ServiceURL" type="xs:anyURI" minOccurs="0"/></xs:sequence><xs:attribute name="serviceId" type="xs:string" use="required"/></xs:complexType>
+<xs:complexType name="ServiceInformationTableType"><xs:sequence><xs:element name="ServiceInformation" type="ServiceInformationType" minOccurs="0" maxOccurs="unbounded"/></xs:sequence></xs:complexType>
+<xs:complexType name="ProgramDescriptionType"><xs:sequence><xs:element name="ProgramInformationTable" type="ProgramInformationTableType" minOccurs="0"/>
+<xs:element name="ProgramLocationTable" type="ProgramLocationTableType" minOccurs="0"/>
+<xs:element name="ServiceInformationTable" type="ServiceInformationTableType" minOccurs="0"/></xs:sequence></xs:complexType>
+<xs:complexType name="TVAMainType"><xs:sequence><xs:element name="ProgramDescription" type="ProgramDescriptionType" minOccurs="0"/></xs:sequence>
+<xs:attribute name="publisher" type="xs:string"/><xs:attribute ref="xml:lang"/></xs:complexType>
+<xs:element name="TVAMain" type="TVAMainType"/></xs:schema>
+XSD
+}
+
 #EOF

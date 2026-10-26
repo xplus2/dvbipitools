@@ -5,7 +5,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 
 #include "../cfg_fixture.h"
 #include "dipiradiohead/config.h"

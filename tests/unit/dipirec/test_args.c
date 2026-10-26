@@ -427,13 +427,6 @@ START_TEST(srt_pbkeylen_requires_passphrase) {
 }
 END_TEST
 
-static void write_cfg(char *path, const char *text) {
-  int fd = mkstemp(path);
-  ck_assert_int_ge(fd, 0);
-  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
-  close(fd);
-}
-
 START_TEST(inspect_ts_pids_parsed) {
   char *argv[] = {"dipirec", "-i", "rtp://@239.1.1.1:5000", "-o", "show.ts", "--metrics-id", "inst1", "--metrics-inspect-ts", "full", "--metrics-inspect-ts-pids", "0x100,300", NULL};
   config_t cfg = {0};

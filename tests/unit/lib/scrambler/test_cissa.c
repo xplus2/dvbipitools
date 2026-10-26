@@ -8,6 +8,7 @@
 
 #include "lib/scrambler/cissa.h"
 #include "lib/scrambler/scrambler.h"
+#include "../../fx_ts.h"
 
 /* control word used by all four ETSI TS 103 127 Annex B test vectors */
 static const unsigned char cw[CISSA_CW_LEN] = {
@@ -303,15 +304,6 @@ START_TEST(cissa_decrypt_packet_queued_emits_immediately) {
   scrambler_free(s);
 }
 END_TEST
-
-static void make_pkt(unsigned char pkt[188], unsigned ctrl, unsigned afc, unsigned af_len) {
-  memset(pkt, 0xAA, 188);
-  pkt[0] = 0x47;
-  pkt[1] = 0x01;
-  pkt[2] = 0x00;
-  pkt[3] = (unsigned char)((ctrl << 6) | (afc << 4));
-  pkt[4] = (unsigned char)af_len;
-}
 
 static scrambler_t *keyed_cissa(void) {
   scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CISSA);

@@ -3,7 +3,6 @@
 
 #include <arpa/inet.h>
 #include <check.h>
-#include <fcntl.h>
 #include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>

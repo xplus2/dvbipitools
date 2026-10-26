@@ -65,16 +65,16 @@ static int dts_ext_total_channels(const unsigned char *d, size_t len, unsigned *
     br_u(&b, 2);
     out_bits = (br_u(&b, 2) + 1) << 2;
     n_cfg = br_u(&b, 2) + 1;
-    for (unsigned i = 0; i < n_cfg; i++) br_u(&b, out_bits);
+    br_skip(&b, (size_t)n_cfg * out_bits);
   }
-  for (unsigned i = 0; i < n_assets; i++) br_u(&b, fsize_bits);
+  br_skip(&b, (size_t)n_assets * fsize_bits);
   br_u(&b, 9);
   br_u(&b, 3);
   if (br_u(&b, 1)) br_u(&b, 4);
   if (br_u(&b, 1)) br_u(&b, 24);
   if (br_u(&b, 1)) {
     unsigned n_text = br_u(&b, 10) + 1;
-    for (unsigned i = 0; i < n_text && !b.err; i++) br_u(&b, 8);
+    br_skip(&b, (size_t)n_text * 8);
   }
   br_u(&b, 5);
   br_u(&b, 4);

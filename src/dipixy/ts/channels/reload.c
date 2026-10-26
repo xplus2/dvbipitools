@@ -66,7 +66,7 @@ static void reload_one_list(channels_t *ch, int idx, const source_def_t *src, co
   memset(&fresh, 0, sizeof fresh);
   switch (src->kind) {
     case SRC_SDS:
-      build_from_sds(&fresh, src->value, cfg->iface, cfg->sds_timeout_s);
+      build_from_sds(&fresh, src->value, cfg);
       break;
     case SRC_M3U:
       build_from_m3u(&fresh, src->value, cfg->insecure_tls);

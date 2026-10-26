@@ -2,13 +2,20 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 /* AFL++ harness: first byte of file argv[1] picks the target, the rest is the input.
-   even: container_parse(). odd: wrapper_parse() */
+   even: bim_container_parse(). odd: bim_bcg_unwrap() */
 
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "dipibcg/container.h"
-#include "dipibcg/wrapper.h"
+#include "lib/bim/bcgip.h"
+#include "lib/bim/container.h"
+
+#ifdef FUZZ_BCG_ZLIB
+#include "lib/helper/zutil.h"
+#define FUZZ_INFLATE zinflate
+#else
+#define FUZZ_INFLATE NULL
+#endif
 
 static unsigned char *read_input(const char *path, size_t *len_out) {
   FILE *f = fopen(path, "rb");
@@ -47,14 +54,14 @@ int main(int argc, char **argv) {
     unsigned char *out = NULL;
     size_t out_len = 0;
 
-    if (wrapper_parse(buf + 1, len - 1, &out, &out_len) == 0) free(out);
+    if (bim_bcg_unwrap(buf + 1, len - 1, FUZZ_INFLATE, &out, &out_len) == 0) free(out);
   } else if (len > 0) {
     const unsigned char *au;
     const unsigned char *sr;
     size_t au_len;
     size_t sr_len;
 
-    container_parse(buf + 1, len - 1, &au, &au_len, &sr, &sr_len);
+    bim_container_parse(buf + 1, len - 1, &au, &au_len, &sr, &sr_len);
   }
   free(buf);
   return 0;

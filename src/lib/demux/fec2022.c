@@ -50,6 +50,8 @@ struct fec2022_dec {
   size_t ring_n;
   slot_t *ring;
   fec2022_rep_t *rep; /* [l][2] */
+  size_t early_len;
+  unsigned char early[FEC2022_MAX_REPAIR];
 };
 
 fec2022_dec_t *fec2022_dec_new(unsigned l, unsigned d) {
@@ -258,6 +260,11 @@ int fec2022_dec_source(fec2022_dec_t *dec, const unsigned char *pkt, size_t len)
   memcpy(s->pkt, pkt, len);
   rep_note_source(dec, ext);
   skip_lost(dec);
+  if (dec->early_len) {
+    size_t n = dec->early_len;
+    dec->early_len = 0;
+    fec2022_dec_repair(dec, dec->early, n);
+  }
   return 0;
 }
 
@@ -267,7 +274,12 @@ void fec2022_dec_repair(fec2022_dec_t *dec, const unsigned char *pkt, size_t len
   int64_t snb;
   size_t payload_len;
 
-  if (!dec->have_hi || len > FEC2022_MAX_REPAIR || len < 12 + 16 || (pkt[0] >> 6) != 2) return;
+  if (len > FEC2022_MAX_REPAIR || len < 12 + 16 || (pkt[0] >> 6) != 2) return;
+  if (!dec->have_hi) {
+    memcpy(dec->early, pkt, len);
+    dec->early_len = len;
+    return;
+  }
   fh = pkt + 12; /* repair RTP header never has CSRC: low bits of byte 0 carry recovery */
   if (fh[13] != dec->l || fh[14] != dec->d) return; /* RFC6015 Offset, NA */
   snb = ext_seq(dec, be16_get(fh), 0); /* RFC6015 SN base low */

@@ -3,7 +3,6 @@
 
 #ifdef HAVE_HTTP3
 
-#include "../http3.h"
 #include "../http3_int.h"
 
 #include <openssl/rand.h>

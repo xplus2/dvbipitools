@@ -39,11 +39,7 @@ static int apply_ttl(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_dscp(void *c, const char *v, char *e, size_t n) {
-  if (net_dscp_parse(v, &((config_t *)c)->out_tos)) {
-    bufcpy(e, n, "must be video-high|video-low|voice|signalling|best-effort|0..63");
-    return -1;
-  }
-  return 0;
+  return yamlcfg_set_int_by(&((config_t *)c)->out_tos, v, net_dscp_parse, NET_DSCP_NAMES, e, n);
 }
 
 static int apply_al_fec(void *c, const char *v, char *e, size_t n) {
@@ -182,10 +178,6 @@ int dipirist_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
-  if (cond) yamlcfg_warn(y, code, "%s", msg);
-}
-
 int dipirist_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   int rc;
@@ -196,18 +188,18 @@ int dipirist_cfg_test(const char *path, int strict) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }
-  warn_if(&y, !cfg.n_in, "VA000156", "in not set (required unless given on the command line)");
-  warn_if(&y, !cfg.n_out, "VA000157", "out not set (required unless given on the command line)");
-  warn_if(&y, cfg.n_in && cfg.n_out && cfg.in.is_rist == cfg.out.is_rist, "VA000158", "exactly one of in/out must be rist://, the other a plain endpoint");
-  warn_if(&y, cfg.secret[0] && cfg.profile != RIST_PROF_MAIN, "VA000159", "secret requires profile main");
-  warn_if(&y, cfg.key_size && cfg.profile != RIST_PROF_MAIN, "VA000160", "encryption-type requires profile main");
-  warn_if(&y, cfg.key_size && !cfg.secret[0], "VA000720", "encryption-type requires secret");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "VA000120", "metrics.sock and metrics.interval require metrics.id");
-  warn_if(&y, cfg.pace && cfg.n_in && (cfg.in.is_rist || cfg.in.nonrist.kind != PLAIN_EP_FILE), "VA000566", "pace requires in - or a file path");
-  warn_if(&y, (cfg.out_ttl || cfg.out_tos) && cfg.n_out && (cfg.out.is_rist || cfg.out.nonrist.kind == PLAIN_EP_FILE), "VA000535", "ttl/dscp need out rtp:// or udp://");
-  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "VA000161", "metrics.inspect-ts requires metrics.id");
-  warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "VA000162", "al-fec requires al-fec-port");
-  warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "VA000163", "al-fec-port has no effect without al-fec");
+  yamlcfg_warn_if(&y, !cfg.n_in, "VA000156", "in not set (required unless given on the command line)");
+  yamlcfg_warn_if(&y, !cfg.n_out, "VA000157", "out not set (required unless given on the command line)");
+  yamlcfg_warn_if(&y, cfg.n_in && cfg.n_out && cfg.in.is_rist == cfg.out.is_rist, "VA000158", "exactly one of in/out must be rist://, the other a plain endpoint");
+  yamlcfg_warn_if(&y, cfg.secret[0] && cfg.profile != RIST_PROF_MAIN, "VA000159", "secret requires profile main");
+  yamlcfg_warn_if(&y, cfg.key_size && cfg.profile != RIST_PROF_MAIN, "VA000160", "encryption-type requires profile main");
+  yamlcfg_warn_if(&y, cfg.key_size && !cfg.secret[0], "VA000720", "encryption-type requires secret");
+  yamlcfg_warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "VA000120", "metrics.sock and metrics.interval require metrics.id");
+  yamlcfg_warn_if(&y, cfg.pace && cfg.n_in && (cfg.in.is_rist || cfg.in.nonrist.kind != PLAIN_EP_FILE), "VA000566", "pace requires in - or a file path");
+  yamlcfg_warn_if(&y, (cfg.out_ttl || cfg.out_tos) && cfg.n_out && (cfg.out.is_rist || cfg.out.nonrist.kind == PLAIN_EP_FILE), "VA000535", "ttl/dscp need out rtp:// or udp://");
+  yamlcfg_warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "VA000161", "metrics.inspect-ts requires metrics.id");
+  yamlcfg_warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "VA000162", "al-fec requires al-fec-port");
+  yamlcfg_warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "VA000163", "al-fec-port has no effect without al-fec");
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);
   return rc;

@@ -34,3 +34,36 @@ void base64_encode(const void *data, size_t len, char *out) {
   }
   out[o] = '\0';
 }
+
+static int b64_value(char c) {
+  if (c >= 'A' && c <= 'Z') return c - 'A';
+  if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+  if (c >= '0' && c <= '9') return c - '0' + 52;
+  return c == '+' ? 62 : c == '/' ? 63 : -1;
+}
+
+int base64_decode(const char *s, unsigned char *out, size_t cap, size_t *len) {
+  uint_least32_t v = 0;
+  size_t o = 0;
+  int bits = 0;
+  int pad = 0;
+  for (; *s; s++) {
+    int d;
+    if (*s == ' ' || *s == '\t' || *s == '\n' || *s == '\r') continue;
+    if (*s == '=') {
+      pad++;
+      continue;
+    }
+    if (pad || (d = b64_value(*s)) < 0) return -1;
+    v = (v << 6) | (uint_least32_t)d;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      if (o >= cap) return -1;
+      out[o++] = (unsigned char)(v >> bits);
+    }
+  }
+  if (pad > 2 || (v & ((1u << bits) - 1))) return -1;
+  *len = o;
+  return 0;
+}

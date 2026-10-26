@@ -1,12 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdlib.h>
 #include <string.h>
 
 #include "lib/dash/live.h"
 #include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
 #include "lib/sys/signal.h"
 #include "lib/dash/mpd.h"
 #include "lib/dash/live/live_int.h"

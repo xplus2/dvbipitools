@@ -5,10 +5,8 @@
 
 #define _GNU_SOURCE
 #include "../reactor/internal.h"
-#include "../reactor/reactor_tls.h"
 #include "../reactor/ws_dispatch.h"
 #include "../ws/ws_broadcast.h"
-#include "../ws/ws_sources.h"
 #include "../httpng/httpng.h"
 #include "http2_int.h"
 #include "lib/sys/ioutil.h"
@@ -16,7 +14,6 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/epoll.h>
 
 static ssize_t ws_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *buf, size_t length, uint32_t *data_flags, nghttp2_data_source *source, void *ud) {
   (void)ng;

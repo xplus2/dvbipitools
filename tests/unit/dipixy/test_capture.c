@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -15,7 +14,6 @@
 
 #include "../run_helper.h"
 #include "lib/net/multicast.h"
-
 #include "dipixy/ts/capture/capture.h"
 #include "lib/helper/sds_xml.h"
 

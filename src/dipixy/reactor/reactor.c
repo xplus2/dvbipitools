@@ -7,7 +7,6 @@
 #include "internal.h"
 #include "reactor.h"
 
-#include "../hls/hls.h"
 #include "../segment/segment.h"
 #include "../segment/mp4push.h"
 #include "../dash/dash.h"
@@ -25,9 +24,7 @@
 
 #include <pthread.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <sys/epoll.h>
-#include <sys/resource.h>
 #include <unistd.h>
 
 long g_connections_total = 0;

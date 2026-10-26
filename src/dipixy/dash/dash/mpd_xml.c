@@ -1,15 +1,12 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-#include "dipixy/dash/dash.h"
 #include "dipixy/dash/dash_int.h"
-#include "lib/sys/ioutil.h"
 
 void iso8601_utc(time_t t, char *out, size_t outsz) {
   struct tm tmv;

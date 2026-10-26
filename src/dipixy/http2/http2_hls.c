@@ -4,14 +4,12 @@
 #ifdef HAVE_HTTP2
 
 #include "../hls/hls.h"
-#include "../dash/dash.h"
 #include "../segment/mp4push.h"
 #include "../ts/ts_push.h"
 #include "../reactor/internal.h"
 #include "../httpng/httpng.h"
 #include "http2.h"
 #include "http2_int.h"
-#include "lib/sys/ioutil.h"
 
 #include <stdlib.h>
 #include <string.h>

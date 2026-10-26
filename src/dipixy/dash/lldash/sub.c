@@ -7,15 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "dipixy/dash/lldash.h"
-#include "dipixy/dash/dash_int.h"
-#include "dipixy/altsvc.h"
-#include "dipixy/reactor/internal.h"
-#include "dipixy/version.h"
 #include "dipixy/ws/ws_clients.h"
 #include "lib/helper/byte_ring.h"
-#include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
 #include "dipixy/dash/lldash/lldash_int.h"
 
 int sub_matches(const dashchunk_sub_t *s, const hls_store_t *store, uint32_t seq) {

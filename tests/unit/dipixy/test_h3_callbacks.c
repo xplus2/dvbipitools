@@ -7,11 +7,6 @@
 #define BIDI_SID 400
 #define UNI_SID 402
 
-static h3_conn_t *server_conn(void) {
-  ck_assert_int_eq(t_h3_active_cnt, 1);
-  return t_h3_active[0];
-}
-
 static h3_conn_t *lookup_cid(const ngtcp2_cid *cid) {
   uint8_t pkt[48] = {0x40};
 
@@ -28,6 +23,11 @@ START_TEST(rand_callback_fills_the_buffer) {
   ck_assert_int_eq(nonzero, 1);
 }
 END_TEST
+
+static h3_conn_t *server_conn(void) {
+  ck_assert_int_eq(t_h3_active_cnt, 1);
+  return t_h3_active[0];
+}
 
 START_TEST(new_connection_ids_are_registered_until_the_limit) {
   h3rig_t h;

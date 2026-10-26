@@ -4,3 +4,8 @@
 dipisds_resolve_sources()
 
 add_executable(dipisds ${DIPISDS_SRCS})
+
+if (DIPISDS_HAVE_ZLIB)
+    target_link_libraries(dipisds PRIVATE ZLIB::ZLIB)
+    target_compile_definitions(dipisds PRIVATE DVBIPITOOLS_SDNS_ZLIB)
+endif ()

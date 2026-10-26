@@ -4,12 +4,10 @@
 
 #include <getopt.h>
 #include <limits.h>
-#include <stdlib.h>
 
 #include "lib/helper/argutil.h"
 #include "lib/mux/fec2022.h"
 #include "lib/net/netconnect.h"
-
 #include "priv.h"
 
 args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
@@ -39,10 +37,7 @@ args_status_t tvh_opt_net(tvh_opt_t *p, int c) {
       break;
     }
     case OPT_DSCP:
-      if (net_dscp_parse(optarg, &cfg->dscp)) {
-        argerr("TS000106", "invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
-        return ARGS_ERR;
-      }
+      if (argutil_int_opt(TOOL_NAME, "TS000106", "dscp", optarg, net_dscp_parse, NET_DSCP_NAMES, &cfg->dscp)) return ARGS_ERR;
       break;
     case OPT_AL_FEC:
       if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {

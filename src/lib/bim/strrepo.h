@@ -5,11 +5,15 @@
 #define DVBIPITOOLS_LIB_BIM_STRREPO_H
 
 #include <stddef.h>
+#include "bimreader.h"
+#include "bitwriter.h"
 
 typedef struct {
   unsigned char *buf;
   size_t cap;
   size_t len;
+  size_t base; /* string_offset origin, 1st fragment str */
+  bitwriter_t *resync; /* non-NULL: next put 1st carries 16 bit string_offset, TS 102 323 table 58 */
 } strrepo_writer_t;
 
 /* returns 0 ok, -1 oom (writer stays empty, puts fail) */
@@ -24,6 +28,8 @@ typedef struct {
   const unsigned char *buf;
   size_t len;
   size_t pos; /* next unread byte */
+  size_t base; /* 1st fragment str */
+  bitreader_t *resync; /* non-NULL: next read 1st takes 16 bit string_offset, TS 102 323 table 58 */
 } strrepo_reader_t;
 
 /* checks/skips encoding_type byte. returns 0 ok, -1 empty or unsupported encoding */
@@ -35,5 +41,6 @@ int strrepo_reader_seek(strrepo_reader_t *sr, size_t off);
 int strrepo_reader_next(strrepo_reader_t *sr, char *out, size_t outcap);
 /* as next into a malloc'd string, never truncated. -1 also on OOM. *out untouched on failure */
 int strrepo_reader_next_dup(strrepo_reader_t *sr, char **out);
+const char *strrepo_at(const unsigned char *buf, size_t len, size_t off);
 
 #endif

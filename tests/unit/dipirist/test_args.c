@@ -9,9 +9,7 @@
 #include "../cfg_fixture.h"
 #include "../log_capture.h"
 #include "lib/config/yamlcfg.h"
-
 #include "dipirist/cli/args.h"
-#include "dipirist/cli/priv.h"
 #include "lib/helper/log.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
@@ -267,13 +265,6 @@ START_TEST(unexpected_positional_argument_is_rejected) {
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
-
-static void write_cfg(char *path, const char *text) {
-  int fd = mkstemp(path);
-  ck_assert_int_ge(fd, 0);
-  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
-  close(fd);
-}
 
 START_TEST(config_file_provides_encryption_type) {
   char path[] = "/tmp/dipirist_cfg_XXXXXX";

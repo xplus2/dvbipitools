@@ -1,48 +1,60 @@
-.TH DIPIBIM 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
+.TH DIPIBIM 1 "2026-10-19" "dvbipitools" "dvbipitools Manual"
 .SH NAME
-dipibim \- convert between the plain TVA XML shape and its BiM binary encoding
+dipibim \- convert between XML and its BiM binary encoding through an XML Schema
 .SH SYNOPSIS
 .B dipibim
 .B \-f
 .I xml
+.B \-s
+.I <schema>
 [\fB\-i\fR \fI<path>\fR] [\fB\-o\fR \fI<path>\fR] [\fIoptions\fR]
 .br
 .B dipibim
 .B \-f
 .I bim
+.B \-s
+.I <schema>
 [\fB\-i\fR \fI<path>\fR] [\fB\-o\fR \fI<path>\fR] [\fIoptions\fR]
 .SH DESCRIPTION
-
 .B dipibim
-converts between plain DVB-IPI EPG (TVA) XML, as produced by
-.BR dipixmltv (1),
-and its BiM binary encoding (ETSI TS 102 323, subclause 9.4). \fB\-f\fR
-names the input format.
-The output is the other one. No mapping table:
-.B dipibim
-does not touch xmltv ids or URIs.
+converts between XML and its BiM binary encoding (ISO/IEC 15938-1:2002,
+ISO/IEC 23001-1:2006 with Cor 1, Cor 2, Amd 1 and Amd 2). Schemas are loaded
+from XSD files at runtime. \fB\-f\fR names the input format, the output is the
+other one.
 .PP
-Each ProgramInformation, Schedule (with its own ScheduleEvents) and
-ServiceInformation element is its own separately BiM-encoded fragment
-(ETSI TS 102 822-3-2, subclause 4.3.1.1). On the BiM side,
+A schema is one file or any number of directories (\fB\-s\fR). A directory is
+searched recursively for the schema declaring the namespace of the input root
+element (\fB\-f xml\fR) or of SchemaURI[0] in the stream (\fB\-f bim\fR).
+Imports and includes resolve in the directories and next to the schema file.
+.PP
+The profile selects the stream layout:
+.TP
+.B dvb-tva
+DVB-TVA-init (ETSI TS 102 323 table 53), then [4-byte big-endian length][DVBBiMAccessUnit]
+[string repository], the access unit as TS 102 323 tables 56/57 with the DVB codecs of
+subclause 9.4.3. A TVAMain document is split into fragments (TS 102 822-3-2 table 7).
+Documents that break the content rules of TS 102 323 clause 8 are refused.
+.TP
+.B tva
+TVA-init and BiMAccessUnit of TS 102 822-3-2 subclause 4.4, Zlib strings, tvadateTime and tvadate codecs.
+Needs zlib.
+.TP
+.B sdns
+DVB-TVA-init and one ServiceDiscovery segment with DVBContextPath 0x0030 (TS 102 034 subclause 5.5), Zlib strings.
+Needs zlib.
+.TP
+.B generic
+DecoderInit and one access unit with one topmost element (ISO/IEC 23001-1).
+.PP
+No mapping table:
 .B dipibim
-reads and writes TS 102 323 tables 56/57's DVBBiMAccessUnit shape: a
-fragment count, then per fragment a length, a 16-bit DVBContextPath type
-tag, and the fragment's own BiM bytes, wrapped as [4-byte big-endian
-length][access unit][string repository]. No DVBSTP container, index
-structures or versioning (TS 102 822-3-2, subclauses 4.5/4.6) are
+does not touch xmltv ids or URIs, it is a wire-format conversion only.
+No DVBSTP container, index structures or versioning (ETSI TS 102 822-3-2, subclauses 4.5/4.6) are
 produced or expected; see
 .BR dipibcg (1)
-for that layer.
-.PP
-Payloads are BiM against urn:tva:metadata:2004. Codecs (TS 102 323,
-subclause 9.4.3.3ff): dvbStringCodec; dvbLocatorCodec (written as string,
-optimized branch read); dvbDateTimeCodec (written full-precision, always UTC,
-PublishedTime read); dvbDurationCodec (read only); dvbControlledTermCodec
-(written as string, compact form read).
-CRIDs are derived from start time at write time rather than stored.
-A non-UTC source time round-trips to a different-looking CRID for the same
-instant.
+for that layer. The plain TVA XML of
+.BR dipixmltv (1)
+converts directly.
 .SH OPTIONS
 .TP
 .BR \-i ", " \-\-input\ \fI<path>\fR
@@ -55,9 +67,69 @@ Output path, \fB\-\fR for stdout. Default: stdout.
 .IR xml | bim .
 Names the input format; required.
 .TP
+.BR \-s ", " \-\-schema\ \fI<path>\fR
+Schema file, or directory searched for schemas by namespace. Repeatable. Required. One file is used as is,
+of several the one declaring the namespace. The schemas listed after SchemaURI[0] in the DecoderInit of a
+stream are found the same way, the chunks of those not found are skipped.
+The encoders list the namespaces of the document that the main schema does not define as further schemas,
+when a schema file for them is found.
+.TP
+.B \-\-profile \fI<name>\fR
+.IR dvb\-tva | tva | sdns | generic .
+Default: \fBdvb\-tva\fR.
+.TP
+.B \-\-syntax \fI<name>\fR
+.IR 23001\-1 | 15938\-1 .
+Payload syntax of the generic profile. Default: \fB23001\-1\fR.
+.TP
+.B \-\-compat \fI<name>\fR[,\fI<name>\fR...]
+Deviations of the MPEG-7 Systems conformance streams from the standard text, off by default:
+.BR no\-schema\-mode " (no SchemaModeUpdate with several schemas),"
+.BR time\-flags " (time points and durations as the reference software codes them),"
+.BR attr\-local " (attributes ordered by local name),"
+.BR fixed\-attr " (optional fixed attributes coded),"
+.BR list\-string " (IDREFS, NMTOKENS and ENTITIES as strings),"
+.B conformance
+(all of these). The 169 single access unit streams of the suite decode with
+.BR "\-\-profile generic \-\-syntax 15938\-1 \-\-compat conformance" .
+.TP
+.B \-\-len\-mode \fI<n>\fR
+lengthCodingMode 0, 1 or 2. generic, default 0.
+.TP
+.B \-\-deferred
+hasDeferredNodes. generic.
+.TP
+.B \-\-cast
+hasTypeCasting. generic.
+.TP
+.B \-\-dvb\-locator
+Optimized locator coding where the decoder renders the same text. dvb-tva.
+.TP
+.B \-\-dvb\-duration
+Minute coding of durations where exact. dvb-tva.
+.TP
+.B \-\-dvb\-pubtime
+PublishedTime coding of dateTime where representable. dvb-tva.
+.TP
+.B \-\-zbuf\-size \fI<bytes>\fR
+Zlib BufferSize, 0 for 1000. tva and sdns.
+.TP
+.B \-\-zgather
+Gather strings up to BufferSize per Zlib chunk. tva and sdns.
+.TP
+.BR \-c ", " \-\-config\ \fI<path>\fR
+YAML configuration file. Keys are the long option names. Without this option,
+.I /etc/dvbipitools/dipibim.yaml
+is read if it exists. Command line options override the file.
+.TP
+.B \-\-config\-strict
+Configuration file issues are errors.
+.TP
+.B \-\-configtest
+Check the configuration file, then exit.
+.TP
 .BR \-v ", " \-\-verbose
-One line on stderr: channel/programme/fragment counts, plus output byte
-size when encoding to BiM.
+One line on stderr: fragment count and output size.
 .TP
 .B \-\-color \fI<when>\fR
 .IR auto | always | never .
@@ -65,17 +137,28 @@ Default: \fBauto\fR.
 .TP
 .BR \-h ", " \-\-help
 Show usage and exit.
+.SH FILES
+.TP
+.I /etc/dvbipitools/dipibim.yaml
+Default configuration file.
+.TP
+.I /usr/share/dvbipitools/etc/dipibim.yaml
+Example configuration file (Debian).
 .SH EXAMPLES
 .TP
-.B dipibim \-f xml \-i guide.tva.xml \-o guide.bim
-Encode a plain TVA XML guide to its BiM binary form.
+.B dipibim \-f xml \-s schemas/ \-i guide.tva.xml \-o guide.bim
+Encode a TVAMain document to its BiM binary form.
 .TP
-.B dipibim \-f bim \-i guide.bim \-o guide.tva.xml
-Decode a BiM-encoded guide back to plain TVA XML.
+.B dipibim \-f bim \-s schemas/ \-i guide.bim \-o guide.tva.xml
+Decode it back.
+.TP
+.B dipibim \-f xml \-s schemas/ \-\-profile sdns \-i sds.xml \-o sds.bim
+Encode an SD&S segment.
 .SH SEE ALSO
 .BR dipixmltv (1),
 .BR dipibcg (1)
 .PP
-Project homepage: https://github.com/xplus2/dvbipitools
-.SH COPYRIGHT
+Project homepage:
+.URL "https://github.com/xplus2/dvbipitools" "" "."
+.SH LICENSE
 Licensed under the GNU General Public License, version 3 or later.

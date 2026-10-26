@@ -20,6 +20,11 @@ int sds_ret_addr_parse(const char *s, char *addr_out, size_t addr_cap, unsigned 
   return argutil_addrport_parse(s, &family, addr_out, addr_cap, port_out);
 }
 
+int sds_mcast_addr_parse(const char *s, char *addr_out, size_t addr_cap, unsigned *port_out) {
+  int family;
+  return uriparse_mcast_addrport(s, &family, addr_out, addr_cap, port_out);
+}
+
 void mcast_describe(const config_t *cfg, char *buf, size_t n) {
   uriparse_mcast_describe(cfg->family, cfg->mcast_group, cfg->mcast_port, buf, n);
 }

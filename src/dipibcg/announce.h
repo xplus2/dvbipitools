@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "lib/helper/dateutil.h"
 #include "lib/metrics/export.h"
 #include "lib/tva/bcg_doc.h"
 
@@ -24,27 +25,34 @@ typedef struct {
   long start; /* minutes since MJD epoch, UTC */
   long end;   /* valid if has_end, else start */
   int has_end;
+  int end_from; /* programme whose start is end of stopless one, -1 none */
   int valid;  /* 0 = unparsable start, never windowed */
 } prog_time_t;
 
 /* per-programme times of doc, stopless ends resolved to next start on channel. *out calloc'd, NULL if no programmes. 0 ok, -1 oom */
 int prog_times_build(const bcg_doc_t *doc, prog_time_t **out);
 
+/* programmes without end (last stopless of channel) never selected, TS 102 323 8.5 */
 void window_select(const bcg_doc_t *src, const prog_time_t *times, long now, int64_t window_min, int *sel, int *nsel, long *out_sched_start, long *out_sched_end, int *out_have_sched);
 
-int window_view(bcg_doc_t *src, const int *sel, int nsel, bcg_doc_t *dst);
+/* stopless programmes of view get stop from end_from */
+int window_view(bcg_doc_t *src, const prog_time_t *times, const int *sel, int nsel, bcg_doc_t *dst);
 void window_view_free(bcg_doc_t *view);
 
-/* reads cfg->input_path (xmltv) and cfg->map_path (csv), applies mapping. 0 ok, -1 error on stderr */
-int load_doc(const config_t *cfg, bcg_doc_t *out);
+/* reads cfg->input_path (xmltv) and cfg->map_path (csv), applies mapping. duplicate channel ids: first wins (warned).
+   0 ok, -1 error on stderr */
+int load_doc(const config_t *cfg, int startup, bcg_doc_t *out);
 
 typedef struct {
-  unsigned char *last;
+  unsigned char *last; /* NULL = never versioned */
   size_t last_len;
   unsigned version;
   int unsent; /* current version not yet sent */
 } bcg_version_t;
 
+/* DVBSTP segment_version: bump mod 256 on content change */
 void version_track(bcg_version_t *v, const unsigned char *cont, size_t cont_len);
+/* as version_track, old last kept: v is a shallow copy, owner frees on commit or discard. once per build */
+void version_stage(bcg_version_t *v, const unsigned char *cont, size_t cont_len);
 
 #endif

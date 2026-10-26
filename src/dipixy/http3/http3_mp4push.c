@@ -3,7 +3,6 @@
 
 #ifdef HAVE_HTTP3
 
-#include "http3.h"
 #include "http3_int.h"
 
 nghttp3_ssize h3_mp4push_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec, size_t veccnt, uint32_t *pflags, void *conn_ud, void *stream_ud) {

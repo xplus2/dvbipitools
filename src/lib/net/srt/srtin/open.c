@@ -6,12 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <sys/socket.h>
-#include <unistd.h>
 #include <srt/srt.h>
 
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 #include "lib/net/srt/srtcommon.h"
 #include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtin/srtin_int.h"

@@ -4,13 +4,11 @@
 
 #include <getopt.h>
 #include <limits.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "lib/helper/argutil.h"
 #include "lib/mux/fec2022.h"
 #include "lib/net/jitbuf.h"
-
 #include "priv.h"
 
 args_status_t tvh_opt_input(tvh_opt_t *p, int c) {

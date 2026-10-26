@@ -40,6 +40,8 @@ dipixy [-l addr:port] [-i source ...] [options]
 | `-k` | `--insecure`             |                             | off, skip TLS input verification                  |       |
 |      | `--sds-timeout`          | `<seconds>`                 | `3`, sds:// discovery wait                        |       |
 |      | `--sds-refresh-interval` | `<seconds>`                 | `30`, sds:// retry                                |       |
+|      | `--sds-bim-namespace`    | `<ns>`                      | newest that decodes, sds:// BiM                   |       |
+|      | `--sds-schema`           | `<path>`                    | compiled-in schemas, sds:// BiM, repeatable       |       |
 |      | `--segment-size`         | `<seconds>`                 | `3` (hls, hls-fmp4, llhls, dash, lldash)          |       |
 |      | `--segment-count`        | `<n>`                       | `4` (3-10)                                        |       |
 |      | `--hls-part-size`        | `<seconds>`                 | `0.35` (llhls, must be `<` segment-size)          |       |
@@ -121,7 +123,7 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 |------------------------------|---------------------------------------------------|
 | `-`                          | stdin, served at `/stdin/<fmt>`. At most one.     |
 | `rist://@host:port`          | RIST input, served at `/rist/<fmt>`. At most one. |
-| `sds://addr:port`            | live SD&S/DVBSTP discovery                        |
+| `sds://addr:port`            | live SD&S/DVBSTP discovery, XML or BiM            |
 | `rtp://addr:port`            | multicast, RTP-wrapped                            |
 | `udp://addr:port`            | multicast, plain TS                               |
 | `http://url`, `https://url`  | TS, HLS, LL-HLS, DASH or LL-DASH                  |
@@ -129,6 +131,13 @@ With `--config-strict` they are errors instead: all of them are listed and the t
 | `*.xspf`                     | XSPF playlist                                     |
 | `*.csv`                      | CSV playlist                                      |
 | `*.xml`                      | SD&S BroadcastDiscovery TVA XML                   |
+
+`sds://` decodes BiM-encoded SD&S segments (compression 001, TS 102 034 5.5.2) of the namespaces
+`urn:dvb:metadata:iptv:sdns:2014-1`, `2012-1`, `2008-1` and `urn:dvb:ipi:sdns:2006`. `--sds-bim-namespace` (config `sds.bim-namespace`)
+fixes the namespace, without it the newest one decoding the segment exactly wins.
+`--sds-schema` (config `sds.schema`, a list) decodes through an XSD instead: one schema file, or directories searched 
+for the schema of `--sds-bim-namespace`, without which the namespace of the schema file is used. Download links and
+SHA-256 of the TS 102 034 XSDs: [dipibim](../dipibim/README.md#required-xsds).
 
 M3U, XSPF, and CSV are not strictly limited to the output of `dipiscan`.
 

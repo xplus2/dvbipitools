@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "lib/helper/dateutil.h"
 #include "lib/mux/psi_build.h"
 #include "psi.h"
 
@@ -52,11 +53,7 @@ size_t psi_build_pmt(unsigned version, unsigned program_number, unsigned pcr_pid
   return psi_finish_section(out, n, cap, 0xB0);
 }
 
-unsigned mjd_from_tm(const struct tm *t) {
-  int year = t->tm_year, month = t->tm_mon + 1, day = t->tm_mday;
-  int l = (month <= 2) ? 1 : 0;
-  return (unsigned)(14956 + day + (int)((year - l) * 365.25) + (int)((month + 1 + l * 12) * 30.6001));
-}
+unsigned mjd_from_tm(const struct tm *t) { return (unsigned)date_to_mjd(t->tm_year + 1900, t->tm_mon + 1, t->tm_mday); }
 
 unsigned char bcd(unsigned v) { return (unsigned char)((((v / 10) % 10) << 4) | (v % 10)); }
 

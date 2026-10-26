@@ -4,14 +4,11 @@
 #include <check.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "lib/cas/cas_args.h"
 #include "lib/config/yamlcfg.h"
 #include "lib/scrambler/cissa.h"
-
 #include "dipitvhead/cli/priv.h"
-
 #include "args_fixture.h"
 
 static const char *const VENDOR[] = {"--cas-algo", "csa2", "--cas-ecmg", "ecmg.example:1234", "--cas-super-id", "0x1234", "--cas-ecm-id", "7", NULL};

@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include "lib/helper/beutil.h"
 #include "pidfilter.h"
 
 #include <stdlib.h>
@@ -90,13 +91,6 @@ void pid_filter_format(const pid_filter_t *f, char *buf, size_t bufsz) {
     flen += uint_to_str(frag + flen, f->pids[i]);
     off += bufcpy(buf + off, bufsz - off, frag);
   }
-}
-
-static int hex_nibble(int c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
 }
 
 int query_param_extract(const char *query, const char *key, char *buf, size_t bufsz) {

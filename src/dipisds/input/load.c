@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,21 +14,42 @@
 #include "dipisds/input.h"
 #include "dipisds/input/input_int.h"
 
+/* spec: at least one SingleService. triplet identifies service */
+static int check_services(const char *path, const input_t *in) {
+  if (!in->service_count) {
+    log_code("AE000771", "%s: no %s", path, "services");
+    return -1;
+  }
+  for (int i = 1; i < in->service_count; i++) {
+    const sds_service_t *a = &in->services[i];
+    for (int j = 0; j < i; j++) {
+      const sds_service_t *b = &in->services[j];
+      if (a->onid == b->onid && a->tsid == b->tsid && a->sid == b->sid) {
+        log_code("AE400320", "%s: duplicate DVB triplet %u.%u.%u: %s, %s", path, a->onid, a->tsid, a->sid, b->name, a->name);
+        return -1;
+      }
+    }
+  }
+  return 0;
+}
+
 int input_load(const char *path, input_t *in) {
   const char *sfx = suffix(path);
   memset(in, 0, sizeof *in);
   if (!strcasecmp(sfx, ".xml")) {
-    unsigned char *buf;
+    char *buf;
     size_t len;
     static const struct { const char *tag; unsigned payload_id; } root_tags[] = {
       {"BroadcastDiscovery", DVBSTP_PAYLOAD_BROADCAST_DISCOVERY},
       {"ServiceProviderDiscovery", DVBSTP_PAYLOAD_SP_DISCOVERY},
       {"PackageDiscovery", DVBSTP_PAYLOAD_PACKAGE_DISCOVERY},
       {"RegionalisationDiscovery", DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY},
+      {"RegionalizationDiscovery", DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY}, /* XSD spelling */
       {"RMSFUSDiscovery", DVBSTP_PAYLOAD_RMSFUS_DISCOVERY},
+      {"BCGDiscovery", DVBSTP_PAYLOAD_BCG_DISCOVERY},
     };
     size_t i;
-    if (read_whole_file(path, &buf, &len)) {
+    if (read_path(path, &buf, &len)) {
       log_code("AE000227", "cannot read %s", path);
       return -1;
     }
@@ -40,13 +60,17 @@ int input_load(const char *path, input_t *in) {
     }
     in->raw_version = -1;
     for (i = 0; i < sizeof root_tags / sizeof root_tags[0]; i++) {
-      const char *root = xml_find_start((char *)buf, (char *)buf + len, root_tags[i].tag);
+      const char *root = xml_find_start(buf, buf + len, root_tags[i].tag);
       if (root) {
+        /* DomainName, Version: on ServiceProvider for SP discovery, on record element otherwise */
+        const char *rec_tag = root_tags[i].payload_id == DVBSTP_PAYLOAD_SP_DISCOVERY ? "ServiceProvider" : root_tags[i].tag;
+        const char *rec = xml_find_start(root, buf + len, rec_tag);
         char ver[8];
         char *e;
         unsigned long v;
         in->raw_payload_id = root_tags[i].payload_id;
-        if (xml_tag_attr(root, (char *)buf + len, "Version", ver, sizeof ver) == 0 && ver[0]) {
+        in->raw_provider_count = count_xml_elems(buf, len, rec_tag);
+        if (rec && xml_tag_attr(rec, buf + len, "Version", ver, sizeof ver) == 0 && ver[0]) {
           v = strtoul(ver, &e, 10);
           if (!*e && v <= 255) in->raw_version = (int)v;
         }
@@ -59,25 +83,24 @@ int input_load(const char *path, input_t *in) {
       return -1;
     }
     in->kind = INPUT_RAW_XML;
-    in->raw_xml = buf;
+    in->raw_xml = (unsigned char *)buf;
     in->raw_xml_len = len;
-    in->service_count = count_xml_elems((char *)buf, len, "SingleService");
-    in->raw_provider_count = count_xml_elems((char *)buf, len, "ServiceProvider");
+    in->service_count = count_xml_elems(buf, len, "SingleService");
     return 0;
   }
 
   in->kind = INPUT_SERVICES;
   if (!strcasecmp(sfx, ".xspf")) {
-    unsigned char *buf;
+    char *buf;
     size_t len;
     int rc;
-    if (read_whole_file(path, &buf, &len)) {
+    if (read_path(path, &buf, &len)) {
       log_code("AE000227", "cannot read %s", path);
       return -1;
     }
-    rc = load_xspf(in, buf);
+    rc = load_xspf(in, (const unsigned char *)buf);
     free(buf);
-    return rc;
+    return rc ? rc : check_services(path, in);
   }
 
   {
@@ -94,7 +117,7 @@ int input_load(const char *path, input_t *in) {
       rc = -1;
     }
     fclose(f);
-    return rc;
+    return rc ? rc : check_services(path, in);
   }
 }
 

@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "lib/helper/uriparse.h"
 #include "lib/sys/ioutil.h"
 #include "priv.h"
 
@@ -23,7 +24,7 @@ rtmp_t *rtmp_new(const rtmp_cfg_t *cfg) {
       r->auth_tried = 1;
     } else {
       char user_enc[3 * sizeof r->user];
-      pct_encode_seg(r->user, user_enc, sizeof user_enc);
+      uriparse_pct_encode_seg(r->user, user_enc, sizeof user_enc);
       snprintf(r->auth_query, sizeof r->auth_query, "?authmod=adobe&user=%s", user_enc);
     }
   }

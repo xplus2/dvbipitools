@@ -15,17 +15,12 @@
 #include "dipifccret/run/run.h"
 #include "lib/sys/signal.h"
 #include "../run_helper.h"
+#include "../fx_proto.h"
 
 #define TEST_PORT run_helper_port(7)
 #define RTX_HDR_LEN 14
 
 static channel_table_t *g_table;
-
-static channel_t *lookup_ip(channel_table_t *t, const char *ip, unsigned port) {
-  unsigned char addr[4];
-  inet_pton(AF_INET, ip, addr);
-  return channel_lookup(t, AF_INET, addr, sizeof addr, port);
-}
 
 static channel_t *make_channel_ready_to_burst(void) {
   channel_t *c;

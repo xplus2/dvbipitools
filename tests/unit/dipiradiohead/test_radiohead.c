@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <poll.h>
 #include <signal.h>
@@ -16,18 +15,10 @@
 #include "lib/cas/cas_core.h"
 #include "lib/sys/ioutil.h"
 #include "lib/sys/signal.h"
-
 #include "dipiradiohead/radiohead/priv.h"
 #include "input/http_fixture.h"
 #include "../run_helper.h"
-
-static void make_packet(unsigned char pkt[188], unsigned char marker) {
-  memset(pkt, 0xAB, 188);
-  pkt[0] = 0x47;
-  pkt[1] = 0x00;
-  pkt[2] = marker;
-  pkt[3] = 0x10;
-}
+#include "../fx_ts.h"
 
 START_TEST(meta_cb_copies_artist_and_title_and_marks_dirty) {
   meta_state_t m;

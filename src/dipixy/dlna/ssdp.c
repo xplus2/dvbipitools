@@ -4,7 +4,6 @@
 #include "ssdp.h"
 
 #include <errno.h>
-#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
@@ -16,13 +15,11 @@
 #include <strings.h>
 #include <sys/random.h>
 #include <sys/socket.h>
-#include <sys/uio.h>
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/sys/signal.h"
 #include "lib/net/multicast.h"
-
 #include "../version.h"
 
 #define SSDP_ADDR "239.255.255.250"

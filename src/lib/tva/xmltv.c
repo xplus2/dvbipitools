@@ -115,8 +115,25 @@ int xmltv_read(FILE *f, bcg_doc_t *doc) {
   return rc;
 }
 
+static void put_open(FILE *f, const char *tag, const char *lang) {
+  fprintf(f, "    <%s", tag);
+  if (lang[0]) {
+    fputs(" lang=\"", f);
+    xml_escape(f, lang);
+    fputs("\"", f);
+  }
+  fputs(">", f);
+}
+
 void xmltv_write(FILE *f, const bcg_doc_t *doc, const char *generator_name) {
-  fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE tv SYSTEM \"xmltv.dtd\">\n<tv generator-info-name=\"", f);
+  char name[BCG_ID_LEN];
+  fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE tv SYSTEM \"xmltv.dtd\">\n<tv", f);
+  if (doc->publisher[0] && !bcg_publisher_name(doc->publisher, name, sizeof name)) {
+    fputs(" source-info-name=\"", f);
+    xml_escape(f, name);
+    fputs("\"", f);
+  }
+  fputs(" generator-info-name=\"", f);
   xml_escape(f, generator_name);
   fputs("\">\n", f);
   for (int i = 0; i < doc->channel_count; i++) {
@@ -149,16 +166,16 @@ void xmltv_write(FILE *f, const bcg_doc_t *doc, const char *generator_name) {
     fputs(" channel=\"", f);
     xml_escape(f, pr->channel_id);
     fputs("\">\n", f);
-    fputs("    <title>", f);
+    put_open(f, "title", doc->lang);
     xml_escape(f, pr->title ? pr->title : "(untitled)");
     fputs("</title>\n", f);
     if (pr->desc) {
-      fputs("    <desc>", f);
+      put_open(f, "desc", doc->lang);
       xml_escape(f, pr->desc);
       fputs("</desc>\n", f);
     }
     if (pr->category) {
-      fputs("    <category>", f);
+      put_open(f, "category", doc->lang);
       xml_escape(f, pr->category);
       fputs("</category>\n", f);
     }

@@ -85,6 +85,42 @@ START_TEST(sleep_interruptible_on_another_thread_wakes_on_stop_from_this_one) {
 }
 END_TEST
 
+START_TEST(sleep_longer_than_an_hour_is_clamped_and_still_wakes) {
+  pthread_t th;
+  double secs = 7200.0;
+  struct timespec t0;
+  double elapsed_s;
+
+  signals_install();
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  ck_assert_int_eq(pthread_create(&th, NULL, sleeper_thread, &secs), 0);
+  usleep(20000);
+  raise(SIGTERM);
+  pthread_join(th, NULL);
+  elapsed_s = elapsed_since(&t0);
+  ck_assert_double_lt(elapsed_s, 1.0);
+}
+END_TEST
+
+START_TEST(reload_flags_are_edge_triggered_and_oneshot_stops_on_hup) {
+  signals_install();
+  ck_assert_int_eq(signal_reload_requested(), 0);
+  raise(SIGHUP);
+  ck_assert_int_eq(signal_template_reload_requested(), 1);
+  ck_assert_int_eq(signal_template_reload_requested(), 0);
+  ck_assert_int_eq(signal_reload_requested(), 1);
+  ck_assert_int_eq(signal_reload_requested(), 0);
+  raise(SIGUSR1);
+  ck_assert_int_eq(signal_tls_reload_requested(), 1);
+  ck_assert_int_eq(signal_tls_reload_requested(), 0);
+  ck_assert_int_eq(signal_stop_requested(), 0);
+  signals_install_oneshot();
+  raise(SIGHUP);
+  ck_assert_int_ne(signal_stop_requested(), 0);
+  ck_assert_double_gt(mono_seconds(), 0.0);
+}
+END_TEST
+
 START_TEST(wake_fd_is_negative_before_signals_install) {
   ck_assert_int_lt(signal_wake_fd(), 0);
 }
@@ -115,6 +151,8 @@ static Suite *signal_suite(void) {
   tcase_add_test(tc, sleep_interruptible_wakes_promptly_on_stop);
   tcase_add_test(tc, sleep_interruptible_on_another_thread_wakes_on_stop_from_this_one);
   tcase_add_test(tc, second_install_keeps_wake_fd);
+  tcase_add_test(tc, sleep_longer_than_an_hour_is_clamped_and_still_wakes);
+  tcase_add_test(tc, reload_flags_are_edge_triggered_and_oneshot_stops_on_hup);
   suite_add_tcase(s, tc);
   return s;
 }

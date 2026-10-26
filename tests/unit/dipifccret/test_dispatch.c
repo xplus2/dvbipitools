@@ -16,6 +16,7 @@
 #include "dipifccret/run/run.h"
 #include "lib/demux/rtx.h"
 #include "lib/mux/rtcp_build.h"
+#include "../fx_net.h"
 
 #define RTX_PT 99
 #define MEDIA_SSRC 0xABCD0001u
@@ -58,19 +59,6 @@ static void mc_record(const channel_t *c, const unsigned char *pkt, size_t len, 
     g_mc_len[g_mc_calls] = len;
   }
   g_mc_calls++;
-}
-
-static int udp_bound(struct sockaddr_in *addr_out) {
-  socklen_t len = sizeof *addr_out;
-  int fd = socket(AF_INET, SOCK_DGRAM, 0);
-
-  memset(addr_out, 0, sizeof *addr_out);
-  addr_out->sin_family = AF_INET;
-  inet_pton(AF_INET, "127.0.0.1", &addr_out->sin_addr);
-  ck_assert_int_ge(fd, 0);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)addr_out, sizeof *addr_out), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)addr_out, &len), 0);
-  return fd;
 }
 
 static channel_t *chan_at(channel_table_t *t, const char *ip, unsigned port) {

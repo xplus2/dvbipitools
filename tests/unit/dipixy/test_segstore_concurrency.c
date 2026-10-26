@@ -11,6 +11,7 @@
 #include "dipixy/segstore_int.h"
 #include "dipixy/reactor/qsbr.h"
 #include "dipixy/ts/pidfilter.h"
+#include "../fx_mux.h"
 
 #define NREADERS 6
 #define SEG_LEN 4096
@@ -27,12 +28,6 @@ static _Atomic uint32_t g_fill_counter;
 static qsbr_domain_t *g_test_qsbr;
 
 static void fill(uint8_t *buf, size_t len, uint8_t v) { memset(buf, v, len); }
-
-/* 1: every byte equals buf[0], catches a torn or freed read */
-static int uniform(const uint8_t *buf, size_t len) {
-  for (size_t i = 1; i < len; i++) if (buf[i] != buf[0]) return 0;
-  return 1;
-}
 
 static void *writer_thread(void *arg) {
   pid_filter_t f;

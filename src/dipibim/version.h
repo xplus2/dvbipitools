@@ -5,6 +5,6 @@
 #define DIPIBIM_VERSION_H
 
 #define TOOL_NAME    "dipibim"
-#define TOOL_VERSION "1.1.3"
+#define TOOL_VERSION "2.0.0"
 
 #endif

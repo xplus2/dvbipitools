@@ -1,9 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <stdint.h>
 #include <pthread.h>
@@ -11,11 +9,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "lib/hls/tspassthrough.h"
+#include "../../fx_net.h"
 
 typedef struct {
   int listen_fd;
@@ -23,42 +21,6 @@ typedef struct {
   const size_t *response_lens;
   int n_responses;
 } scripted_server_t;
-
-static void *serve_scripted(void *arg) {
-  const scripted_server_t *a = arg;
-  for (int i = 0; i < a->n_responses; i++) {
-    int cfd = accept(a->listen_fd, NULL, NULL);
-    struct timeval tv = {2, 0};
-    char buf[4096];
-    size_t got = 0;
-    if (cfd < 0) return NULL;
-    setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-    for (;;) {
-      ssize_t n = recv(cfd, buf + got, sizeof buf - got, 0);
-      if (n <= 0) break;
-      got += (size_t)n;
-      if (got >= 4 && memcmp(buf + got - 4, "\r\n\r\n", 4) == 0) break;
-    }
-    send(cfd, a->responses[i], a->response_lens[i], 0);
-    close(cfd);
-  }
-  return NULL;
-}
-
-static int make_listener(unsigned *port_out) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 4), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
-}
 
 static void build_ts_packet(unsigned char pkt[188], unsigned pid, unsigned char fill) {
   pkt[0] = 0x47;
@@ -91,6 +53,27 @@ static int drive_until_len(hls_live_t *h, unsigned char *acc, size_t acc_cap, si
     *acc_len += (size_t)n;
   }
   return *acc_len >= want ? 1 : 0;
+}
+
+static void *serve_scripted(void *arg) {
+  const scripted_server_t *a = arg;
+  for (int i = 0; i < a->n_responses; i++) {
+    int cfd = accept(a->listen_fd, NULL, NULL);
+    struct timeval tv = {2, 0};
+    char buf[4096];
+    size_t got = 0;
+    if (cfd < 0) return NULL;
+    setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+    for (;;) {
+      ssize_t n = recv(cfd, buf + got, sizeof buf - got, 0);
+      if (n <= 0) break;
+      got += (size_t)n;
+      if (got >= 4 && memcmp(buf + got - 4, "\r\n\r\n", 4) == 0) break;
+    }
+    send(cfd, a->responses[i], a->response_lens[i], 0);
+    close(cfd);
+  }
+  return NULL;
 }
 
 START_TEST(hls_ts_passthrough_forwards_segment_bytes_unchanged) {

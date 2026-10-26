@@ -5,29 +5,15 @@
 
 #include "http2.h"
 #include "http2_int.h"
-
 #include "../ts/capture/capture.h"
-#include "../ts/channels/channels.h"
-#include "../hls/hls.h"
-#include "../dash/dash.h"
-#include "../dash/lldash.h"
-#include "../segment/segment.h"
-#include "../segment/mp4push.h"
-#include "../ts/lcevcselect.h"
-#include "../ts/pidfilter.h"
-#include "../ts/pmtselect.h"
 #include "../reactor/internal.h"
 #include "../reactor/reactor_tls.h"
-#include "../reactor/dispatch/route_common.h"
-#include "../core/route.h"
-#include "../ts/ts_push.h"
 #include "../core/metrics.h"
 #include "../httpng/httpng.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/epoll.h>
 #include <unistd.h>
 
 #define H2_READ_BUF 65536

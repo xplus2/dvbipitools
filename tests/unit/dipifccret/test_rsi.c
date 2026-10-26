@@ -10,6 +10,7 @@
 #include <time.h>
 
 #include "dipifccret/run/run.h"
+#include "../fx_mux.h"
 
 #define SSRC 0xABCD0001u
 #define NTP_SEC 0x01020304u
@@ -21,10 +22,6 @@ typedef struct {
   channel_t *c;
   rsi_pacer_ctx_t pc;
 } fx_t;
-
-static uint32_t rd32(const unsigned char *p) {
-  return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
-}
 
 static uint16_t rd16(const unsigned char *p) {
   return (uint16_t)((p[0] << 8) | p[1]);

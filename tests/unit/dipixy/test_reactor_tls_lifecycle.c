@@ -5,15 +5,13 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
 #include <openssl/ssl.h>
 
 #include "../tls_fixture.h"
 #include "dipixy/reactor/conn.h"
-#include "dipixy/reactor/reactor_tls_int.h"
+#include "dipixy/reactor/reactor_tls.h"
 
 #define FD_TABLE 256
 #define HANDSHAKE_ROUNDS 50

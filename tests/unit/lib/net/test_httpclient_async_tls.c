@@ -1,10 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <fcntl.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
@@ -18,6 +16,7 @@
 #include "../../tls_fixture.h"
 #include "lib/net/httpclient/httpclient.h"
 #include "lib/net/tls_server.h"
+#include "../../fx_net.h"
 
 #define SERVER_ROUNDS 300
 #define POLL_MS 20
@@ -44,21 +43,6 @@ static void teardown(void) {
   unlink(g_cert);
   unlink(g_key);
   rmdir(g_dir);
-}
-
-static int make_listener(unsigned *port_out) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 1), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
 }
 
 static int server_handshake(const tls_t *t, int fd) {

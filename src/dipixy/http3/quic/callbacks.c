@@ -3,10 +3,8 @@
 
 #ifdef HAVE_HTTP3
 
-#include "../http3.h"
 #include "../http3_int.h"
 #include "../http3_steer.h"
-
 #include "lib/helper/log.h"
 
 #include <openssl/rand.h>

@@ -1,21 +1,19 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "lib/dash/live.h"
 #include "lib/dash/live/live_int.h"
+#include "../../fx_net.h"
 
 typedef struct {
   int listen_fd;
@@ -52,21 +50,6 @@ static void *serve_scripted(void *arg) {
     close(cfd);
   }
   return NULL;
-}
-
-static int make_listener(unsigned *port_out) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 4), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
 }
 
 static void passthrough_cb(void *ctx, dash_live_t *h, const unsigned char *data, size_t len) {
@@ -329,11 +312,6 @@ typedef struct {
   dash_live_t *h;
 } rig_t;
 
-static void rig_init(rig_t *r) {
-  memset(r, 0, sizeof *r);
-  r->fd = make_listener(&r->port);
-}
-
 static void rig_add_with(rig_t *r, const char *conn, const void *body, size_t len) {
   size_t hl;
 
@@ -350,25 +328,7 @@ static void rig_add(rig_t *r, const void *body, size_t len) { rig_add_with(r, "C
 
 static void rig_add_text(rig_t *r, const char *text) { rig_add(r, text, strlen(text)); }
 
-static void rig_add_raw(rig_t *r, const char *text) {
-  ck_assert_int_lt(r->n, RIG_MAX);
-  r->resp[r->n] = text;
-  r->lens[r->n] = strlen(text);
-  r->n++;
-}
-
 #define BIG_BODY_LEN (2 * 1024 * 1024 + 4096)
-
-static void rig_add_big(rig_t *r) {
-  static char big[BIG_BODY_LEN + 128];
-  size_t hl = (size_t)snprintf(big, sizeof big, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", BIG_BODY_LEN);
-
-  ck_assert_int_lt(r->n, RIG_MAX);
-  memset(big + hl, 'A', BIG_BODY_LEN);
-  r->resp[r->n] = big;
-  r->lens[r->n] = hl + BIG_BODY_LEN;
-  r->n++;
-}
 
 static void rig_add_mpd_with(rig_t *r, const char *conn, const char *attrs, const char *tmpl) {
   char mpd[1024];
@@ -478,6 +438,18 @@ static void run_idle_case(rig_t *r) {
   ck_assert_int_eq(dash_live_poll_fd(r->h), -1);
   ck_assert_int_eq(dash_live_has_buffered(r->h), 0);
   rig_close(r);
+}
+
+static void rig_init(rig_t *r) {
+  memset(r, 0, sizeof *r);
+  r->fd = make_listener(&r->port);
+}
+
+static void rig_add_raw(rig_t *r, const char *text) {
+  ck_assert_int_lt(r->n, RIG_MAX);
+  r->resp[r->n] = text;
+  r->lens[r->n] = strlen(text);
+  r->n++;
 }
 
 START_TEST(dash_live_stays_idle_on_not_modified) {
@@ -644,6 +616,17 @@ START_TEST(dash_live_fails_on_unparsable_segment_url) {
   run_bad_url_case("initialization=\"init.mp4\" media=\"http://127.0.0.1:99999/seg$Number$.m4s\"", 1);
 }
 END_TEST
+
+static void rig_add_big(rig_t *r) {
+  static char big[BIG_BODY_LEN + 128];
+  size_t hl = (size_t)snprintf(big, sizeof big, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", BIG_BODY_LEN);
+
+  ck_assert_int_lt(r->n, RIG_MAX);
+  memset(big + hl, 'A', BIG_BODY_LEN);
+  r->resp[r->n] = big;
+  r->lens[r->n] = hl + BIG_BODY_LEN;
+  r->n++;
+}
 
 START_TEST(dash_live_rejects_oversize_init_segment) {
   rig_t r;

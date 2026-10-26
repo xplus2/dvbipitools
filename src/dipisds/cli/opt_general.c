@@ -3,15 +3,11 @@
 
 #include <getopt.h>
 #include <limits.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
-#include "lib/helper/uriparse.h"
+#include "lib/helper/playlist_out.h"
 #include "lib/net/netconnect.h"
-
 #include "priv.h"
 
 args_status_t sds_opt_general(sds_opt_t *p, int c) {
@@ -57,10 +53,15 @@ args_status_t sds_opt_general(sds_opt_t *p, int c) {
       cfg->iface = optarg;
       break;
     case OPT_DSCP:
-      if (net_dscp_parse(optarg, &cfg->dscp)) {
-        argerr("AS000106", "invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
+      if (argutil_int_opt(TOOL_NAME, "AS000106", "dscp", optarg, net_dscp_parse, NET_DSCP_NAMES, &cfg->dscp)) return ARGS_ERR;
+      cfg->fl.have_dscp = 1;
+      break;
+    case 'T':
+      if (argutil_uint_range(optarg, 1, 255, &cfg->ttl)) {
+        argerr("AS000495", "invalid -T ttl: %s (1..255)", optarg);
         return ARGS_ERR;
       }
+      cfg->fl.have_ttl = 1;
       break;
     case 't': {
       unsigned v;
@@ -76,9 +77,8 @@ args_status_t sds_opt_general(sds_opt_t *p, int c) {
       cfg->output_path = optarg;
       break;
     case 'f': {
-      static const enum_map_t map[] = {{"m3u", OUT_M3U}, {"csv", OUT_CSV}, {"xspf", OUT_XSPF}, {"xml", OUT_XML}, {"null", OUT_NULL}};
       int v;
-      if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
+      if (playlist_out_fmt_parse(optarg, &v)) {
         argerr("AS000195", "invalid --format: %s (m3u|csv|xspf|xml|null)", optarg);
         return ARGS_ERR;
       }
@@ -93,12 +93,7 @@ args_status_t sds_opt_general(sds_opt_t *p, int c) {
       cfg->daemonize = 1;
       break;
     case OPT_COLOR: {
-      log_color_t v;
-      if (log_color_from_string(optarg, &v)) {
-        argerr("AS000105", "invalid --color: %s (auto|always|never)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->color_mode = v;
+      if (argutil_color_opt(TOOL_NAME, "AS000105", optarg, &cfg->color_mode)) return ARGS_ERR;
       break;
     }
     default:

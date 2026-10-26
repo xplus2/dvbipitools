@@ -132,7 +132,7 @@ static void ac4_skip_emdf_info(br_t *b) {
   n_skip = 0;
   if (lp) n_skip += 1u << (2 * (lp - 1));
   if (ls) n_skip += 1u << (2 * (ls - 1));
-  while (n_skip-- && !b->err) br_u(b, 8);
+  br_skip(b, (size_t)n_skip * 8);
 }
 
 static unsigned ac4_frame_rate_multiply(br_t *b, unsigned frame_rate_index) {
@@ -267,7 +267,7 @@ static int ac4_parse_presentation_v1(br_t *b, unsigned frame_rate_index, int fir
           unsigned n_skip = br_u(b, 5);
           if (br_u(b, 1)) n_skip += br_variable_bits(b, 2) << 5;
           if (first) return -1;
-          while (n_skip-- && !b->err) br_u(b, 8);
+          br_skip(b, (size_t)n_skip * 8);
           break;
         }
       }
@@ -309,7 +309,7 @@ static int ac4_parse_info_chan(br_t *b, unsigned fs_index, unsigned factor, unsi
   if (fs_index == 1 && br_u(b, 1)) br_u(b, 1);
   if (br_u(b, 1) && (br_u(b, 3) & 1)) br_u(b, 2);
   if (c->mode >= 7 && c->mode <= 10) br_u(b, 1);
-  for (unsigned i = 0; i < factor; i++) br_u(b, 1);
+  br_skip(b, factor);
   if (substreams_present && br_u(b, 2) == 3) br_variable_bits(b, 2);
   return b->err ? -1 : 0;
 }
@@ -339,7 +339,7 @@ static int ac4_parse_group_chan(br_t *b, unsigned fs_index, unsigned factor, uns
         br_u(b, 16);
       } else {
         unsigned n = br_u(b, 6);
-        while (n-- && !b->err) br_u(b, 8);
+        br_skip(b, (size_t)n * 8);
       }
     }
   }
@@ -357,7 +357,7 @@ static int ac4_parse_v1_channels(br_t *b, unsigned fs_index, unsigned frame_rate
   if (!n_presentations) return -1;
   if (br_u(b, 1)) {
     br_u(b, 16);
-    if (br_u(b, 1)) for (int i = 0; i < 16; i++) br_u(b, 8);
+    if (br_u(b, 1)) br_skip(b, 128);
   }
   for (unsigned p = 0; p < n_presentations; p++)
     if (ac4_parse_presentation_v1(b, frame_rate_index, p == 0, &factor, groups, &ngroups, &max_group) < 0) return -1;

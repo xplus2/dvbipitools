@@ -8,6 +8,7 @@
 #include "lib/demux/crc32.h"
 #include "lib/demux/psi/psi.h"
 #include "lib/mux/psi_build.h"
+#include "../../fx_ts.h"
 
 START_TEST(psi_put16_writes_big_endian) {
   unsigned char b[2];
@@ -55,18 +56,6 @@ START_TEST(psi_utf8_clamp_keeps_whole_sequences_only) {
 }
 END_TEST
 
-/* wraps one PSI section into a single 188-byte TS packet, pusi=1, pointer=0 */
-static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
-}
-
 START_TEST(psi_build_pat_round_trips_through_psi_feed) {
   unsigned char section[32], pkt[188];
   size_t slen;
@@ -79,7 +68,7 @@ START_TEST(psi_build_pat_round_trips_through_psi_feed) {
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u); /* self-verifying CRC */
 
   p = psi_new();
-  wrap_ts_packet(pkt, 0x0000, section, slen);
+  wrap_section_packet(pkt, 0x0000, section, slen);
   psi_feed(p, pkt);
 
   ck_assert_int_eq(psi_have_pat(p), 1);
@@ -116,7 +105,7 @@ START_TEST(psi_build_pat_multi_round_trips_through_psi_feed) {
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
 
   p = psi_new();
-  wrap_ts_packet(pkt, 0x0000, section, slen);
+  wrap_section_packet(pkt, 0x0000, section, slen);
   psi_feed(p, pkt);
 
   ck_assert_int_eq(psi_have_pat(p), 1);
@@ -150,7 +139,7 @@ START_TEST(psi_build_pat_multi_with_zero_programs_is_still_a_valid_empty_pat) {
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
 
   p = psi_new();
-  wrap_ts_packet(pkt, 0x0000, section, slen);
+  wrap_section_packet(pkt, 0x0000, section, slen);
   psi_feed(p, pkt);
 
   ck_assert_int_eq(psi_have_pat(p), 1);
@@ -171,7 +160,7 @@ START_TEST(psi_build_nit_round_trips_through_psi_feed) {
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
 
   p = psi_new();
-  wrap_ts_packet(pkt, 0x0010, section, slen); /* NIT PID */
+  wrap_section_packet(pkt, 0x0010, section, slen); /* NIT PID */
   psi_feed(p, pkt);
 
   ck_assert_str_eq(psi_network_name(p), "Test Network");
@@ -228,7 +217,7 @@ START_TEST(psi_build_sdt_round_trips_through_psi_feed) {
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
 
   p = psi_new();
-  wrap_ts_packet(pkt, 0x0011, section, slen); /* SDT PID */
+  wrap_section_packet(pkt, 0x0011, section, slen); /* SDT PID */
   psi_feed(p, pkt);
 
   ck_assert_str_eq(psi_provider_name(p), "MyProvider");
@@ -257,11 +246,11 @@ START_TEST(psi_build_sdt_multi_round_trips_through_psi_feed) {
   p = psi_new();
   psi_enable_multi_program(p);
   slen = psi_build_pat_multi(0x1111, 0, entries, 2, patsec, sizeof patsec);
-  wrap_ts_packet(patpkt, 0x0000, patsec, slen);
+  wrap_section_packet(patpkt, 0x0000, patsec, slen);
   psi_feed(p, patpkt);
 
   slen = psi_build_sdt_multi(1, 0x1111, 0x2222, services, 2, sdtsec, sizeof sdtsec);
-  wrap_ts_packet(sdtpkt, 0x0011, sdtsec, slen);
+  wrap_section_packet(sdtpkt, 0x0011, sdtsec, slen);
   psi_feed(p, sdtpkt);
 
   ck_assert_int_eq(psi_have_sdt(p), 1);

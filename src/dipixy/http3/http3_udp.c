@@ -13,7 +13,6 @@
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/uio.h>
 
 #ifndef UDP_SEGMENT
 #define UDP_SEGMENT 103

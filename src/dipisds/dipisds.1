@@ -1,126 +1,75 @@
-.TH DIPISDS 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
+.TH DIPISDS 1 "2026-10-19" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipisds \- announce or discover DVB-IPI services via DVBSTP/SD&S
+
 .SH SYNOPSIS
-.B dipisds
-.B \-a
-.B \-i
-.I path
-.B \-m
-.IR mcast : port
-.RI [ options ]
-.PP
-.B dipisds
-.B \-l
-.B \-m
-.IR mcast : port
-.RI [ options ]
+\fBdipisds\f1 \-a \-i \fIpath\f1 \-m \fImcast:port\f1 [\fIoptions\f1]
+.br
+\fBdipisds\f1 \-l \-m \fImcast:port\f1 [\fIoptions\f1]
+
 .SH DESCRIPTION
-.B dipisds
-implements DVBSTP-carried SD&S service discovery per ETSI TS 102 034
-clause 5. It runs in one of two mutually exclusive modes, selected by
-.B \-a
-(announce, headend/injector role) or
-.B \-l
-(listen, client/receiver role). Eexactly one of the two is required.
+\fBdipisds\f1 implements DVBSTP-carried SD&S service discovery per ETSI TS 102 034 clause 5.
+It runs in one of two mutually exclusive modes, selected by \fB\-a\f1 (announce, headend/injector role) or
+\fB\-l\f1 (listen, client/receiver role).
+
 .PP
-In announce mode
-.B dipisds
-reads a service list from
-.B \-i
-and repeatedly transmits it as SD&S records over DVBSTP on the multicast
-group:port given by
-.BR \-m ,
-at the interval set by
-.B \-t
-(default 5 seconds; ETSI TS 102 034 caps the full announce cycle at 30
-seconds).
+\fB\-I\f1 selects the network interface used for the multicast join or send.
+.br
+\fB\-v\f1 prints periodic statistics to stderr: one line per announce cycle in \fB\-a\f1, one line per segment
+received in \fB\-l\f1.
+.br
+\fB\-d\f1 daemonizes.
+
+.SS Announce mode
 .PP
-The input format is inferred from the
-.B \-i
-suffix (matched case-insensitively):
-.B .csv
-and
-.BR .m3u / .m3u8
-use the same shapes as
-.BR dipiscan (1)'s
-own output,
-.B .xspf
-is XSPF with the DVB triplet carried in a dvbipitools extension element,
-and
-.B .xml
-is a hand-authored or dipiscan-generated raw SD&S document that is sent
-through unparsed. For the structured formats, each entry's URI is
-.BR rtp:// [ @ ] addr : port
-or
-.BR udp:// [ @ ] addr : port.
-A missing TSId/OrigNetId
-defaults to 1, a missing ServiceId auto-increments from 1. For the
-structured (non-.xml) inputs,
-.B \-p
-and
-.B \-O
-set the announced DomainName and provider display name, and
-.B dipisds
-additionally synthesizes a Service Provider Discovery record pointing back
-at the same multicast socket. A set of
-.BR \-\-ret\- ,
-.BR \-\-fcc\- ,
-.BR \-\-packages ,
-.BR \-\-cells ,
-.BR \-\-rms\- ,
-and
-.B \-\-fus\-
-options extend the announced Broadcast Discovery and RMS-FUS records for
-dipifccret RET/FCC retransmission servers, Package Discovery, Regionalisation
-Discovery, and RMS-FUS Discovery. These options are announce-only and, with
-the exception of the metrics options, have no effect on raw
-.B .xml
-input, which bypasses this processing entirely.
+In announce mode \fBdipisds\f1 reads a service list from \fB\-i\f1 and repeatedly transmits it as SD&S records
+over DVBSTP on the multicast \fIgroup:port\f1 given by \fB\-m\f1, at the interval set by \fB\-t\f1.
+Default: 5 seconds, ETSI TS 102 034 caps the full announce cycle at 30 seconds.
 .PP
-SIGHUP re-reads
-.B \-i
-without restarting the process. On a parse error the previous input keeps
-being announced and the error is logged. No effect in listen mode.
-For raw
-.B .xml
-input the segment version is the root element's Version attribute, so it
-stays unchanged when the document does. Without the attribute it is bumped
-when the content changed.
-A reload that yields identical documents keeps the version and is logged as
-unchanged, so receivers see no new version.
+The input format is inferred from the \fB\-i\f1 suffix:
+
+\fB.csv\f1 and \fB.m3u\f1 / \fB.m3u8\f1 use the same shapes as \fIdipiscan (1)\f1's output,
+\fB.xspf\f1 is XSPF with the DVB triplet carried in a dvbipitools extension element,
+and \fB.xml\f1 is a hand-authored or dipiscan-generated raw SD&S document that is sent
+through unparsed.
+
+For the structured formats, each entry's URI is \fBrtp:// [ @ ] addr : port\f1 or \fBudp:// [ @ ] addr : port\f1.
+A missing TSId/OrigNetId defaults to 1, a missing ServiceId auto-increments from 1.
+Duplicate OrigNetId/TSId/ServiceId triplets and inputs without services are errors.
+CSV files (\fB\-i\f1, \fB\-\-packages\f1, \fB\-\-cells\f1) take RFC 4180 quoting, blanks around
+fields are trimmed, a UTF-8 BOM is skipped, and lines starting with # are comments.
+For the structured (non-.xml) inputs, \fB\-p\f1 and \fB\-O\f1 set the announced DomainName and provider display name,
+and \fBdipisds\f1 additionally synthesizes a Service Provider Discovery record pointing back
+at the same multicast socket.
+
+A set of \fB\-\-ret\-\f1, \fB\-\-fcc\-\f1, \fB\-\-packages\f1, \fB\-\-cells\f1, \fB\-\-rms\-\f1, \fB\-\-fus\-\f1, and \fB\-\-bcg\-\f1
+options extend the announced Broadcast Discovery and RMS-FUS records for dipifccret RET/FCC retransmission servers,
+Package Discovery, Regionalisation Discovery, RMS-FUS Discovery, and BCG Discovery. These options are announce-only and, with
+the exception of the metrics options, have no effect on raw \fB.xml\f1 input.
 .PP
-In listen mode
-.B dipisds
-joins the multicast group given by
-.BR \-m ,
-reassembles DVBSTP segments, and after
-.B \-t
-seconds (default 35, just over the spec's 30-second max cycle time so one
-full announce cycle is always captured) writes whatever Broadcast Discovery
-records it saw as a playlist to
-.B \-o
-(default stdout). The output format is selected by
-.B \-f
-or inferred from the
-.B \-o
-suffix.
-.B xml
-dumps the reassembled SD&S document as received, for debugging; and
-.B null
-discards the output.
+\fISIGHUP\f1 re-reads \fB\-i\f1. On a parse error the previous input keeps being announced.
+Each generated document has its own segment version, bumped (modulo 256) only when that
+document changed.
+For raw \fB.xml\f1 input the segment version is the Version attribute of the record element
+(ServiceProvider for Service Provider Discovery), so it stays unchanged when the document does.
+Without the attribute it is bumped when the content changed.
+
+.SS Listen mode
 .PP
-.B \-I
-selects the network interface used for the multicast join or send,
-overriding the kernel's default multicast route.
-.B \-v
-prints periodic statistics to stderr: one line per announce cycle in
-.BR \-a ,
-one line per segment received in
-.BR \-l .
-.B \-d
-forks to the background and detaches from the controlling terminal after
-startup.
+In listen mode \fBdipisds\f1 joins the multicast group at \fB\-m\f1, reassembles DVBSTP segments, and after
+\fB\-t\f1 seconds (default: 35) writes whatever Broadcast Discovery records it saw as a playlist to
+\fB\-o\f1 (default stdout). The output format is selected by \fB\-f\f1 or inferred from the \fB\-o\f1 suffix.
+\fBxml\f1 dumps each reassembled SD&S document as received, one after another with its own XML declaration,
+so output from more than one segment is not a single well-formed XML file. \fBnull\f1 discards the output.
+.PP
+Segments with compression 001 are BiM-encoded SD&S (TS 102 034 5.5.2) and are decoded to XML first.
+Supported namespaces: urn:dvb:metadata:iptv:sdns:2014-1, 2012-1, 2008-1 and urn:dvb:ipi:sdns:2006.
+\fB\-\-bim\-namespace\f1 (config \fBbim-namespace\f1) fixes the namespace, otherwise the newest one decoding the segment
+exactly wins. Without zlib such segments are dropped.
+.PP
+\fB\-s\f1 (config \fBschema\f1, a list) decodes them through an XSD instead of the compiled-in schemas: one schema file, or directories
+searched for the schema of \fB\-\-bim\-namespace\f1. Without it the namespace of the schema file is used.
+
 .SH OPTIONS
 .SS Mode selection
 .TP
@@ -153,12 +102,18 @@ Announce: output DSCP marking (ETSI TS 102 034 Table 29):
 or a raw DSCP value 0..63, default
 .BR signalling ).
 .TP
+.BI \-T " n"
+.RB ( \-\-ttl )
+Announce: multicast TTL (IPv4) or hop limit (IPv6), 1..255, default 16.
+.TP
 .BI \-t " seconds"
 Announce mode
 .RB ( \-\-interval ):
 repeat interval, default 5. Listen mode
 .RB ( \-\-timeout ):
-stop after N seconds, default 35.
+stop after N seconds, default 35;
+.B 0
+listens until SIGINT or SIGTERM.
 .TP
 .BR \-v ", " \-\-verbose
 Periodic stats on stderr.
@@ -325,10 +280,9 @@ is the numeric Id;
 .I lang
 set PackageName and its ISO 639-2 language;
 .I visible
-is 0 or 1 (default 1). Service names are matched against
+is 0 or 1 (default 1). Each service name must match exactly one
 .B \-i
-entries by ServiceName: matches get a DVBTriplet, unmatched names are
-emitted without one.
+entry by ServiceName, whose DVBTriplet is added.
 .TP
 .BI \-\-cells " path"
 Regionalisation Discovery (payload 0x07) from
@@ -342,6 +296,14 @@ is the 2-letter ISO 3166 CountryCode. The
 .I type:value
 pairs are RFC 4676 civic address types, nested outer to inner in the given
 order: a single chain per cell, not a branching CA tree.
+.TP
+.BI \-\-bim\-namespace " ns"
+Listen: BiM SD&S namespace (urn:dvb:metadata:iptv:sdns:2014-1, 2012-1, 2008-1,
+urn:dvb:ipi:sdns:2006). Default: the newest that decodes the segment exactly.
+.TP
+.BR \-s ", " \-\-schema " \fIpath\fR"
+Listen: SD&S schema file, or directory searched for the schema of \fB\-\-bim\-namespace\fR, decoding BiM segments
+through it. Repeatable, one schema file at most. Default: the compiled-in schemas.
 .TP
 .BI \-\-rms\-name " name"
 RMS Discovery display name. Requires
@@ -361,6 +323,27 @@ RMSType RMSLocation.
 .TP
 .BI \-\-rms\-logo " uri"
 RMSType LogoURI.
+.TP
+.BI \-\-bcg\-name " name"
+BCG Discovery record (payload 6, TS 102 034 5.2.13.1) with this name. Requires
+.BR \-\-bcg\-mcast .
+.TP
+.BI \-\-bcg\-id " id"
+BCG id, referenced from the Broadcast Discovery records. Requires
+.BR \-\-bcg\-name .
+.TP
+.BI \-\-bcg\-description " text"
+BCG description. Requires
+.BR \-\-bcg\-name .
+.TP
+.BI \-\-bcg\-provider\-name " name"
+BCG provider name. Requires
+.BR \-\-bcg\-name .
+.TP
+.BI \-\-bcg\-mcast " addr" : port
+Multicast location of the BCG (e.g. the
+.B dipibcg \-m
+group).
 .TP
 .BI \-\-fus\-name " name"
 FUS Discovery display name. Requires
@@ -396,21 +379,17 @@ for stdout (default).
 default taken from the
 .B \-o
 suffix (.csv, .xspf, .xml), else m3u).
+
 .SH SCOPE
-DVBSTP framing is generic; on announce, the structured (non-.xml) side
-understands Service Provider Discovery, Broadcast Discovery, Package
+DVBSTP framing is generic
+on announce, the structured (non-.xml) side understands Service Provider Discovery, Broadcast Discovery, Package
 Discovery, Regionalisation Discovery, and RMS-FUS Discovery (payloads
-0x01/0x02/0x05/0x07/0x08), each a minimal producer subset of its ETSI TS
-102 034 clause 5.2.13 type. Anything wider goes through
-.B .xml
-passthrough. Listen
-.RB ( \-l )
-remains Broadcast Discovery only.
+0x01/0x02/0x05/0x07/0x08), each a minimal producer subset of its ETSI TS 102 034 clause 5.2.13 type.
+Anything wider goes through \fB.xml\f1 passthrough. Listen (\fB\-l\f1) is Broadcast Discovery only.
 .PP
-Not a general SD&S client: CoD and BCG-carriage records
-.RB ( dipibcg (1)
-covers BCG) are out of scope. Compression is always none: gzip is
-spec-restricted to other payload ids, BiM is not implemented.
+Not a general SD&S client: CoD and BCG-carriage records (\fBdipibcg\f1 (1) covers BCG) are not supported here.
+Compression is always none: gzip is spec-restricted to other payload ids, BiM is not implemented.
+
 .SH EXAMPLES
 .TP
 .B dipisds \-a \-i channels.csv \-p example.org \-O "My Headend" \-m 239.255.0.1:3937
@@ -418,17 +397,20 @@ Announce a CSV playlist as an SD&S service list.
 .TP
 .B dipisds \-l \-m 239.255.0.1:3937 \-o discovered.m3u
 Listen for the announcement and write the discovered services as an m3u playlist.
+
 .SH FILES
 .TP
 .I /etc/dvbipitools/dipisds.yaml
-Default configuration file, read if present. A commented template with all
-defaults ships as
+Default configuration file, read if present. An example with all defaults ships as
 .IR /usr/share/dvbipitools/etc/dipisds.yaml .
+
 .SH SEE ALSO
 .BR dipiscan (1),
 .BR dipibcg (1),
 .BR dipifccret (1)
 .PP
-Project homepage: https://github.com/xplus2/dvbipitools
-.SH COPYRIGHT
+Project homepage:
+.URL "https://github.com/xplus2/dvbipitools" "" "."
+
+.SH LICENSE
 Licensed under the GNU General Public License, version 3 or later.

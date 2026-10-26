@@ -6,13 +6,10 @@
 
 #include "lib/cas/cas_core.h"
 #include "lib/cas/cas_group.h"
-#include "lib/cas/ecmg_client/ecmg_client.h"
 #include "lib/helper/log.h"
-
 #include "../mux/pcrclock.h"
 #include "../mux/timemap.h"
 #include "../version.h"
-
 #include "cas.h"
 
 #define CAS_PCR_DETECT_TIMEOUT_S CAS_CORE_CLOCK_DETECT_TIMEOUT_S /* startup grace period to observe a real PCR */

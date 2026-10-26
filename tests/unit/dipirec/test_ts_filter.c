@@ -8,21 +8,11 @@
 
 #include "dipirec/filter/ts.h"
 #include "lib/demux/crc32.h"
+#include "../fx_ts.h"
 
 static const unsigned char *fpkt(ts_filter_t *f, const unsigned char *in, unsigned char *out) {
   size_t n;
   return ts_filter_packet(f, in, out, &n);
-}
-
-static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
 }
 
 static void finish(unsigned char *sec, size_t n, unsigned char flags) {
@@ -225,11 +215,11 @@ static void feed_pat_pmt(ts_filter_t *f) {
   size_t slen;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   fpkt(f, pkt, out);
 
   slen = build_pmt_2audio_1sub(sec, 101);
-  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
   fpkt(f, pkt, out);
 }
 
@@ -281,7 +271,7 @@ START_TEST(ts_filter_pat_rewrite_drops_nit_only_program) {
   const psi_program_t *progs;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
 
   {
     const unsigned char *r = fpkt(f, pkt, out);
@@ -345,7 +335,7 @@ START_TEST(ts_filter_tolerates_transient_audio_drop) {
   slen = build_pmt_1audio(sec, 101, 0x0102); /* PMT update, track 2 gone */
   sec[5] = 0xC3; /* new version */
   finish(sec, slen - 4, 0xB0);
-  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
   fpkt(f, pkt, out);
   ck_assert_int_eq(ts_filter_bad_track(f), 0);
   ts_filter_free(f);
@@ -368,15 +358,15 @@ START_TEST(ts_filter_preferred_pmt_pid_pins_non_first_candidate) {
   size_t slen;
 
   slen = build_pat_2programs(sec, 0x1234, 101, 0x0100, 102, 0x0200);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   fpkt(f, pkt, out);
 
   slen = build_pmt_1audio(sec, 101, 0x0102);
-  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
   fpkt(f, pkt, out);
 
   slen = build_pmt_1audio(sec, 102, 0x0202);
-  wrap_ts_packet(pkt, 0x0200, sec, slen);
+  wrap_section_packet(pkt, 0x0200, sec, slen);
   fpkt(f, pkt, out);
 
   ck_assert_uint_eq(psi_pmt_pid(ts_filter_psi(f)), 0x0200u);
@@ -396,7 +386,7 @@ START_TEST(ts_filter_strip_none_keeps_nit_and_null) {
   psi_t *check;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   {
     const unsigned char *r = fpkt(f, pkt, out);
     ck_assert_ptr_eq(r, pkt); /* not stripping NIT: passthrough, no copy */
@@ -419,15 +409,15 @@ START_TEST(ts_filter_strip_cat_ecm_emm_drops_ca_pids) {
   size_t slen;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   fpkt(f, pkt, out);
 
   slen = build_cat_with_emm(sec, 0x0121);
-  wrap_ts_packet(pkt, 0x0001, sec, slen);
+  wrap_section_packet(pkt, 0x0001, sec, slen);
   fpkt(f, pkt, out);
 
   slen = build_pmt_1audio_with_ecm(sec, 101, 0x0102, 0x0122);
-  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
   fpkt(f, pkt, out);
 
   ck_assert_int_eq(filter_pid(f, 0x0001), 0); /* CAT dropped */
@@ -447,11 +437,11 @@ START_TEST(ts_filter_strip_lcevc_drops_standalone_es) {
   size_t slen;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   fpkt(f, pkt, out);
 
   slen = build_pmt_with_lcevc(sec, 101, 0x0101, 0x0102);
-  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
   fpkt(f, pkt, out);
 
   ck_assert_int_eq(filter_pid(f, 0x0102), 0); /* lcevc dropped */
@@ -469,11 +459,11 @@ START_TEST(ts_filter_strip_none_keeps_lcevc_pid) {
   size_t slen;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   fpkt(f, pkt, out);
 
   slen = build_pmt_with_lcevc(sec, 101, 0x0101, 0x0102);
-  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
   fpkt(f, pkt, out);
 
   ck_assert_int_eq(filter_pid(f, 0x0102), 1); /* lcevc kept */
@@ -490,15 +480,15 @@ START_TEST(ts_filter_strip_none_keeps_ca_pids) {
   size_t slen;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   fpkt(f, pkt, out);
 
   slen = build_cat_with_emm(sec, 0x0121);
-  wrap_ts_packet(pkt, 0x0001, sec, slen);
+  wrap_section_packet(pkt, 0x0001, sec, slen);
   fpkt(f, pkt, out);
 
   slen = build_pmt_1audio_with_ecm(sec, 101, 0x0102, 0x0122);
-  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
   fpkt(f, pkt, out);
 
   ck_assert_int_eq(filter_pid(f, 0x0001), 1); /* CAT kept */
@@ -542,7 +532,7 @@ START_TEST(ts_filter_strip_int_drops_by_table_id_and_latches) {
 
   memset(sec, 0, sizeof sec);
   sec[0] = 0x4C; /* INT table_id */
-  wrap_ts_packet(pkt, 0x0150, sec, 12);
+  wrap_section_packet(pkt, 0x0150, sec, 12);
   ck_assert_ptr_null(fpkt(f, pkt, out));
 
   pkt[1] &= (unsigned char)~0x40; /* continuation packet, no PUSI: still caught by latch */
@@ -597,7 +587,7 @@ START_TEST(ts_filter_multi_packet_pmt_emitted_whole) {
   int count;
 
   slen = build_pat_with_nit(sec, 0x1234, 0x0010, 101, 0x0100);
-  wrap_ts_packet(pat, 0x0000, sec, slen);
+  wrap_section_packet(pat, 0x0000, sec, slen);
   fpkt(f, pat, out);
 
   slen = build_pmt_big(sec, 101, 12);

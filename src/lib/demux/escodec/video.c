@@ -120,7 +120,7 @@ static int hevc_parse_sps(const unsigned char *nal, size_t len, unsigned char *p
       sp[i] = br_u(&b, 1);
       sl[i] = br_u(&b, 1);
     }
-    for (unsigned i = maxsub; i < 8; i++) br_u(&b, 2);
+    if (maxsub < 8) br_skip(&b, (size_t)(8 - maxsub) * 2);
     for (unsigned i = 0; i < maxsub; i++) {
       if (sp[i]) {
         br_u(&b, 32);
@@ -179,9 +179,9 @@ void skip_vvc_gci(br_t *b) {
   unsigned gci_present = br_u(b, 1);
   if (gci_present) {
     unsigned num_additional_bits;
-    for (int i = 0; i < 69; i++) br_u(b, 1);
+    br_skip(b, 69);
     num_additional_bits = br_u(b, 8);
-    for (unsigned i = 0; i < num_additional_bits; i++) br_u(b, 1);
+    br_skip(b, num_additional_bits);
   }
   br_align(b);
 }
@@ -199,7 +199,7 @@ void skip_vvc_ptl(br_t *b, unsigned max_sublayers_minus1) {
     if (sublayer_level_present[i]) br_u(b, 8);
   }
   num_sub_profiles = br_u(b, 8);
-  for (i = 0; i < num_sub_profiles; i++) br_u(b, 32);
+  br_skip(b, (size_t)num_sub_profiles * 32);
 }
 
 int vvc_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {

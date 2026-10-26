@@ -6,10 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/demux/crc32.h"
 #include "lib/demux/psi/psi.h"
-
 #include "lib/mux/mpts.h"
+#include "../../fx_ts.h"
 
 #define MAX_SEEN 256
 
@@ -17,6 +16,13 @@ static unsigned g_pids[MAX_SEEN];
 static unsigned char g_ccs[MAX_SEEN];
 static unsigned char g_pkts[MAX_SEEN][188];
 static int g_count;
+
+static int saw_pid(unsigned pid) {
+  for (int i = 0; i < g_count && i < MAX_SEEN; i++)
+    if (g_pids[i] == pid)
+      return 1;
+  return 0;
+}
 
 static void capture_cb(void *ctx, const unsigned char *pkt) {
   (void)ctx;
@@ -26,13 +32,6 @@ static void capture_cb(void *ctx, const unsigned char *pkt) {
     memcpy(g_pkts[g_count], pkt, 188);
   }
   g_count++;
-}
-
-static int saw_pid(unsigned pid) {
-  for (int i = 0; i < g_count && i < MAX_SEEN; i++)
-    if (g_pids[i] == pid)
-      return 1;
-  return 0;
 }
 
 static int count_pid(unsigned pid) {
@@ -60,18 +59,6 @@ static unsigned sdt_version(const unsigned char *pkt) {
   size_t off = (afc == 3) ? 5 + (size_t)pkt[4] : 4;
   const unsigned char *section = pkt + off + 1; /* +1 skips pointer_field */
   return (section[5] >> 1) & 0x1F;
-}
-
-/* wraps one PSI section into a single 188-byte TS packet, pusi=1, pointer=0 */
-static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
 }
 
 /* mock per-program ops: no dependency on any tool's real packetizer type */
@@ -163,7 +150,7 @@ START_TEST(mpts_tick_emits_multi_program_pat) {
   slen = psi_build_pat_multi(0x1234, 0, entries, 2, sec, sizeof sec);
   ck_assert_uint_ne(slen, 0u);
   p = psi_new();
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   psi_feed(p, pkt);
   ck_assert_int_eq(psi_have_pat(p), 1);
   progs = psi_pat_programs(p, &count);
@@ -300,7 +287,7 @@ START_TEST(mpts_tick_emits_one_composite_sdt_section_for_all_active_programs) {
   p = psi_new();
   psi_enable_multi_program(p);
   slen = psi_build_pat_multi(1, 0, entries, 2, sec, sizeof sec);
-  wrap_ts_packet(patpkt, 0x0000, sec, slen);
+  wrap_section_packet(patpkt, 0x0000, sec, slen);
   psi_feed(p, patpkt);
   psi_feed(p, pkt); /* real mpts_tick output, not a re-derived expectation */
 

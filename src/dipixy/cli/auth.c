@@ -3,10 +3,8 @@
 
 #include <string.h>
 
-#include "lib/helper/argutil.h"
 #include "lib/helper/base64.h"
 #include "lib/sys/ioutil.h"
-
 #include "priv.h"
 
 #define ARGS_AUTH_CREDS_MAX 128 /* max "user:password" length for --auth */

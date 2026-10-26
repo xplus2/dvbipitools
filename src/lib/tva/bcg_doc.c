@@ -7,6 +7,7 @@
 
 #include "../sys/ioutil.h"
 #include "../helper/log.h"
+#include "../helper/uriparse.h"
 
 #include "bcg_doc.h"
 
@@ -105,5 +106,114 @@ int bcg_channel_add_name(bcg_channel_t *c, const char *name) {
   }
   bufcpy(c->names[c->name_count], sizeof c->names[0], name);
   c->name_count++;
+  return 0;
+}
+
+static int is_alnum(int c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); }
+
+int bcg_publisher_name(const char *pub, char *out, size_t cap) {
+  const char *slash = strchr(pub, '/');
+  const char *p;
+  if (!slash || slash == pub || !slash[1] || strlen(slash + 1) >= cap) return -1;
+  for (p = pub; p < slash; p++)
+    if (!is_alnum((unsigned char)*p) && *p != '-' && *p != '.') return -1;
+  if (*pub == '.' || slash[-1] == '.') return -1;
+  for (p = slash + 1; *p; p++)
+    if (!is_alnum((unsigned char)*p) && !strchr("-._~!$&'()*+,;=:@%", *p)) return -1;
+  memcpy(out, slash + 1, strlen(slash + 1) + 1);
+  return uriparse_pct_decode(out);
+}
+
+int bcg_publisher_valid(const char *pub) {
+  char name[BCG_ID_LEN];
+  return strlen(pub) < BCG_ID_LEN && !bcg_publisher_name(pub, name, sizeof name);
+}
+
+int bcg_lang_valid(const char *lang) {
+  size_t run = 0;
+  int first = 1;
+  if (strlen(lang) >= BCG_LANG_LEN) return 0;
+  for (const char *p = lang;; p++) {
+    if (!*p || *p == '-') {
+      if (!run) return 0;
+      if (!*p) return 1;
+      run = 0;
+      first = 0;
+      continue;
+    }
+    if (++run > 8 || !(first ? ((*p | 0x20) >= 'a' && (*p | 0x20) <= 'z') : is_alnum((unsigned char)*p))) return 0;
+  }
+}
+
+void bcg_doc_index_free(bcg_doc_index_t *ix) {
+  free(ix->chan);
+  free(ix->nprog);
+  free(ix->first);
+  free(ix->next);
+  memset(ix, 0, sizeof *ix);
+}
+
+int bcg_doc_index_build(bcg_doc_index_t *ix, const bcg_doc_t *doc) {
+  int *last = NULL;
+  int rc = -1;
+  memset(ix, 0, sizeof *ix);
+  if (doc->channel_count) {
+    ix->chan = malloc(sizeof *ix->chan * (size_t)doc->channel_count);
+    last = malloc(sizeof *last * (size_t)doc->channel_count);
+    ix->nprog = calloc((size_t)doc->channel_count, sizeof *ix->nprog);
+    ix->first = malloc(sizeof *ix->first * (size_t)doc->channel_count);
+    if (!ix->chan || !last || !ix->nprog || !ix->first) goto done;
+    for (int i = 0; i < doc->channel_count; i++) {
+      ix->chan[i].key = doc->channels[i].id;
+      ix->chan[i].idx = i;
+      ix->first[i] = -1;
+      last[i] = -1;
+    }
+    bcg_key_index_sort(ix->chan, doc->channel_count);
+  }
+  if (doc->programme_count) {
+    ix->next = malloc(sizeof *ix->next * (size_t)doc->programme_count);
+    if (!ix->next) goto done;
+    for (int i = 0; i < doc->programme_count; i++) {
+      int ch = bcg_key_index_find(ix->chan, doc->channel_count, doc->programmes[i].channel_id);
+      ix->next[i] = -1;
+      if (ch < 0) continue;
+      ix->nprog[ch]++;
+      if (last[ch] < 0) ix->first[ch] = i;
+      else ix->next[last[ch]] = i;
+      last[ch] = i;
+    }
+  }
+  rc = 0;
+done:
+  free(last);
+  if (rc) bcg_doc_index_free(ix);
+  return rc;
+}
+
+int bcg_progtext_apply(bcg_programme_t *pr, const bcg_progtext_t *pt) {
+  return bcg_set_text(&pr->title, pt->title) || bcg_set_text(&pr->desc, pt->desc) || bcg_set_text(&pr->category, pt->category) ? -1 : 0;
+}
+
+void bcg_channel_dtt_format(const bcg_channel_t *c, char *out, size_t cap) {
+  sbuf_t b;
+  sbuf_init(&b, out, cap);
+  if (!c->onid && !c->tsid && !c->sid) return;
+  sbuf_add(&b, "dvb://");
+  sbuf_add_hex(&b, c->onid);
+  sbuf_add(&b, ".");
+  sbuf_add_hex(&b, c->tsid);
+  sbuf_add(&b, ".");
+  sbuf_add_hex(&b, c->sid);
+}
+
+int bcg_channel_dtt_parse(bcg_channel_t *c, const char *s) {
+  unsigned onid;
+  unsigned tsid;
+  unsigned sid;
+  if (sscanf(s, "dvb://%x.%x.%x", &onid, &tsid, &sid) != 3) return -1;
+  c->onid = onid;
+  c->tsid = tsid;
+  c->sid = sid;
   return 0;
 }

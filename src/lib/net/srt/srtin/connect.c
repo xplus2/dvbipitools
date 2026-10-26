@@ -3,11 +3,8 @@
 
 #include <poll.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 #include <time.h>
 #include <sys/socket.h>
-#include <unistd.h>
 #include <srt/srt.h>
 
 #include "lib/helper/log.h"

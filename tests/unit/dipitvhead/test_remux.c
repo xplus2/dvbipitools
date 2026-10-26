@@ -18,6 +18,7 @@
 #include "lib/helper/beutil.h"
 #include "lib/mux/psi_build.h"
 #include "lib/sys/ioutil.h"
+#include "../fx_ts.h"
 
 #define MAX_SEEN 64
 
@@ -25,6 +26,13 @@ static unsigned g_pids[MAX_SEEN];
 static unsigned char g_cc[MAX_SEEN];
 static unsigned char g_last_pkt[188];
 static int g_count;
+
+static int saw_pid(unsigned pid) {
+  for (int i = 0; i < g_count && i < MAX_SEEN; i++)
+    if (g_pids[i] == pid)
+      return 1;
+  return 0;
+}
 
 static void capture_cb(void *ctx, const unsigned char *pkt) {
   (void)ctx;
@@ -34,24 +42,6 @@ static void capture_cb(void *ctx, const unsigned char *pkt) {
     g_cc[g_count] = pkt[3] & 0x0F;
   }
   g_count++;
-}
-
-static int saw_pid(unsigned pid) {
-  for (int i = 0; i < g_count && i < MAX_SEEN; i++)
-    if (g_pids[i] == pid)
-      return 1;
-  return 0;
-}
-
-static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
 }
 
 /* discovery psi_t with one video (0x0101, H264) and one audio (0x0102, AAC/eng) ES,
@@ -64,7 +54,7 @@ static psi_t *build_discovery_psi_with(const unsigned char *prog_info, size_t pr
   psi_t *psi = psi_new();
 
   slen = psi_build_pat(0x1234, 0, 101, 0x0100, section, sizeof section);
-  wrap_ts_packet(pkt, 0x0000, section, slen);
+  wrap_section_packet(pkt, 0x0000, section, slen);
   psi_feed(psi, pkt);
 
   {
@@ -118,12 +108,12 @@ static psi_t *build_discovery_psi_with(const unsigned char *prog_info, size_t pr
     section[crc_at + 3] = (unsigned char)crc;
     slen = crc_at + 4;
   }
-  wrap_ts_packet(pkt, 0x0100, section, slen);
+  wrap_section_packet(pkt, 0x0100, section, slen);
   psi_feed(psi, pkt);
 
   if (cat_desc_len) {
     slen = psi_build_cat(0, cat_desc, cat_desc_len, section, sizeof section);
-    wrap_ts_packet(pkt, 0x0001, section, slen);
+    wrap_section_packet(pkt, 0x0001, section, slen);
     psi_feed(psi, pkt);
   }
 
@@ -1684,14 +1674,14 @@ static void src_pmt_packet(unsigned char pkt[188], unsigned version, unsigned pc
   crc_at = 3 + n;
   crc = crc32_mpeg(section, crc_at);
   be32_put(section + crc_at, crc);
-  wrap_ts_packet(pkt, 0x0100, section, crc_at + 4);
+  wrap_section_packet(pkt, 0x0100, section, crc_at + 4);
 }
 
 static void feed_src_pat(remux_t *r, double now, remux_packet_cb cb) {
   unsigned char section[64];
   unsigned char pkt[188];
   size_t slen = psi_build_pat(0x1234, 0, 101, 0x0100, section, sizeof section);
-  wrap_ts_packet(pkt, 0x0000, section, slen);
+  wrap_section_packet(pkt, 0x0000, section, slen);
   remux_feed(r, now, pkt, cb, NULL, NULL);
 }
 
@@ -1768,7 +1758,7 @@ START_TEST(remux_follows_a_source_pmt_pid_move) {
 
   feed_src_pat(r, 0.0, version_cb);
   slen = psi_build_pat(0x1234, 0, 101, 0x0200, section, sizeof section);
-  wrap_ts_packet(pkt, 0x0000, section, slen);
+  wrap_section_packet(pkt, 0x0000, section, slen);
   remux_feed(r, 0.1, pkt, version_cb, NULL, NULL);
   remux_feed(r, 0.2, pkt, version_cb, NULL, NULL);
   src_pmt_packet(pkt, 1, 0x0101, 3);
@@ -1808,7 +1798,7 @@ START_TEST(remux_keeps_es_sources_valid_across_repeated_pmt_pid_moves) {
 
   for (size_t m = 0; m < sizeof moves / sizeof moves[0]; m++) {
     slen = psi_build_pat(0x1234, 0, 101, moves[m], section, sizeof section);
-    wrap_ts_packet(pkt, 0x0000, section, slen);
+    wrap_section_packet(pkt, 0x0000, section, slen);
     now += 0.1;
     remux_feed(r, now, pkt, version_cb, NULL, NULL);
     now += 0.1;

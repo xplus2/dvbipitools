@@ -3,8 +3,11 @@
 
 #include "argutil.h"
 #include "../sys/ioutil.h"
+#include "log.h"
 
+#include <getopt.h>
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,7 +31,7 @@ void argutil_err(const char *tool, const char *code, const char *fmt, ...) {
 int argutil_port_parse(const char *p, unsigned *out) {
   char *end;
   unsigned long v;
-  if (*p == '\0') return -1;
+  if (!isdigit((unsigned char)*p)) return -1; /* strtoul takes space, sign */
   errno = 0;
   v = strtoul(p, &end, 10);
   if (errno || *end != '\0' || v == 0 || v > 65535) return -1;
@@ -137,7 +140,7 @@ int argutil_metrics_inspect_ts_validate(const char *tool, const char *id, metric
 int argutil_uint_range(const char *s, unsigned min, unsigned max, unsigned *out) {
   char *end;
   unsigned long v;
-  if (*s == '\0') return -1;
+  if (!isdigit((unsigned char)*s)) return -1;
   errno = 0;
   v = strtoul(s, &end, 10);
   if (errno || *end != '\0' || v < min || v > max) return -1;
@@ -217,5 +220,36 @@ int argutil_hostport_parse(const char *s, int *family, char *host_out, size_t ho
   memcpy(host_out, s, len);
   host_out[len] = '\0';
   *family = AF_UNSPEC;
+  return 0;
+}
+
+int argutil_prescan(int argc, char **argv, const char *shortopts, const struct option *longopts, int opt_configtest, int opt_strict, const char **cfg_path, int *configtest, int *strict) {
+  int c;
+  int help = 0;
+  optind = 1;
+  opterr = 0;
+  while (!help && (c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    if (c == 'c') *cfg_path = optarg;
+    if (c == opt_configtest) *configtest = 1;
+    if (c == opt_strict) *strict = 1;
+    if (c == 'h') help = 1;
+  }
+  opterr = 1;
+  return help;
+}
+
+int argutil_int_opt(const char *tool, const char *code, const char *opt, const char *val, int (*parse)(const char *s, int *out), const char *hint, int *out) {
+  if (!parse(val, out)) return 0;
+  argutil_err(tool, code, "invalid --%s: %s (%s)", opt, val, hint);
+  return -1;
+}
+
+int argutil_color_opt(const char *tool, const char *code, const char *val, int *out) {
+  log_color_t v;
+  if (log_color_from_string(val, &v)) {
+    argutil_err(tool, code, "invalid --color: %s (auto|always|never)", val);
+    return -1;
+  }
+  *out = v;
   return 0;
 }

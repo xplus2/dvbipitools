@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -15,22 +14,7 @@
 
 #include "lib/cas/ecmg_client/ecmg_client.h"
 #include "lib/cas/simulcrypt_msg.h"
-
-static int find_tlv(const unsigned char *payload, size_t payload_len, unsigned short want_tag, const unsigned char **val_out, unsigned short *len_out) {
-  simulcrypt_tlv_reader_t r;
-  unsigned short tag;
-  unsigned short vlen;
-  const unsigned char *val;
-  simulcrypt_tlv_reader_init(&r, payload, payload_len);
-  while (simulcrypt_tlv_reader_next(&r, &tag, &val, &vlen) == 1) {
-    if (tag == want_tag) {
-      *val_out = val;
-      *len_out = vlen;
-      return 1;
-    }
-  }
-  return 0;
-}
+#include "../fx_proto.h"
 
 START_TEST(channel_setup_builds_expected_fields) {
   unsigned char buf[64];

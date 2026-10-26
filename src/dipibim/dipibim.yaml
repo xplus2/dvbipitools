@@ -1,0 +1,41 @@
+# -f|--format [not set] # xml|bim
+#format: xml
+# -i|--input -
+#input: <path>
+# -o|--output -
+#output: <path>
+# -s|--schema [not set]
+#schema:
+#  - <path>
+# --profile dvb-tva
+profile: dvb-tva
+# -v|--verbose off
+verbose: off
+# --color auto
+color: auto
+
+## generic
+# --syntax 23001-1
+syntax: 23001-1
+# --compat [not set]
+#compat: conformance
+# --len-mode 0 # 0|1|2
+len-mode: 0
+# --deferred off
+deferred: off
+# --cast off
+cast: off
+
+## dvb-tva
+# --dvb-locator off
+dvb-locator: off
+# --dvb-duration off
+dvb-duration: off
+# --dvb-pubtime off
+dvb-pubtime: off
+
+## tva, sdns
+# --zbuf-size 0 # bytes
+zbuf-size: 0
+# --zgather off
+zgather: off

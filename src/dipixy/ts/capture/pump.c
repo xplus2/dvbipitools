@@ -139,7 +139,7 @@ static int tssrc_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsign
       }
       if (poll(pfd, nfds, 0) <= 0) return 0;
       if (nfds == 2 && pfd[1].revents) tssrc_fec_poll(ctx->ts);
-      if (!pfd[0].revents) continue;
+      else if (!pfd[0].revents) continue;
     }
     n = tssrc_read(ctx->ts, buf, sizeof buf, NULL);
     if (n < 0) {

@@ -6,9 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
-
 #include "priv.h"
 
 /* comma-separated CIDR list (IPv4 or IPv6), light validation here, capture.c re-validates at BPF-build time */

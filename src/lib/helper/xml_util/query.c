@@ -2,9 +2,6 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #define _GNU_SOURCE
-#include <ctype.h>
-#include <errno.h>
-#include <iconv.h>
 #include <stdlib.h>
 #include <string.h>
 

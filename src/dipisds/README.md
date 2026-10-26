@@ -11,52 +11,74 @@ dipisds -l -m <mcast>:<port> [options]
 
 ## Options
 
-| flag | long form         | argument                    | default                                      |
-|------|-------------------|-----------------------------|----------------------------------------------|
-| `-a` | `--announce`      |                             | headend mode: read `-i`, transmit on `-m`    |
-| `-l` | `--listen`        |                             | client mode: receive on `-m`, write `-o`     |
-| `-i` | `--input`         | `<path>`                    | announce: required                           |
-| `-p` | `--provider`      | `<name>`                    | announce: required unless `-i` is `.xml`     |
-| `-O` | `--offering`      | `<name>`                    | announce: required unless `-i` is `.xml`     |
-| `-L` | `--lang`          | `<code>`                    | announce: `deu`                              |
-| `-m` | `--mcast`         | `<g>:<p>`                   | required                                     |
-| `-I` | `--iface`         | `<iface>`                   | kernel default                               |
-|      | `--dscp`          | `<v>`                       | announce: `signalling`                       |
-| `-t` | `--interval`      | `<s>`                       | announce: `5`                                |
-| `-t` | `--timeout`       | `<s>`                       | listen: `35`                                 |
-| `-o` | `--output`        | `<path>` / `-`              | listen: `-` (stdout)                         |
-| `-f` | `--format`        | `m3u\|csv\|xspf\|xml\|null` | listen: from `-o` suffix, else `m3u`         |
-| `-v` | `--verbose`       |                             | off                                          |
-|      | `--color`         | `auto\|always\|never`       | `auto`                                       |
-|      | `--ret-addr`      | `<addr>:<port>`             | announce: off (no RET advertised)            |
-|      | `--ret-rtx-time`  | `<ms>`                      | announce: `2000`                             |
-|      | `--ret-rtx-pt`    | `<n>`                       | announce: `99`                               |
-|      | `--ret-mc`        |                             | announce: off (unicast RET only)             |
-|      | `--ret-mc-port`   | `<port>`                    | announce: each service's own port            |
-|      | `--fcc-addr`      | `<addr>:<port>`             | announce: off (no FCC advertised)            |
-|      | `--fcc-rtx-time`  | `<ms>`                      | announce: `2000`                             |
-|      | `--fcc-rtx-pt`    | `<n>`                       | announce: `99`                               |
-|      | `--al-fec-addr`   | `<addr>:<port>`             | announce: off (no Annex E FEC advertised)    |
-|      | `--al-fec-pt`     | `<n>`                       | announce: `96`, requires `--al-fec-addr`     |
-|      | `--metrics`       | `<path>`                    | announce: `/run/dvbipitools/metrics.sock`    |
-|      | `--metrics-id`    | `<name>`                    | announce: none (metrics disabled unless set) |
-|      | `--metrics-interval` | `<s>`                    | announce: `5`                                |
-|      | `--packages`      | `<path>`                    | announce: off (no Package Discovery)         |
-|      | `--cells`         | `<path>`                    | announce: off (no Regionalisation Discovery) |
-|      | `--rms-name`      | `<name>`                    | announce: off (no RMS-FUS Discovery)         |
-|      | `--rms-lang`      | `<code>`                    | announce: `deu`                              |
-|      | `--rms-location`  | `<uri>`                     | announce: required with `--rms-name`         |
-|      | `--rms-logo`      | `<uri>`                     | announce: off                                |
-|      | `--fus-name`      | `<name>`                    | announce: off (no RMS-FUS Discovery)         |
-|      | `--fus-lang`      | `<code>`                    | announce: `deu`                              |
-|      | `--fus-id`        | `<n>`                       | announce: required with `--fus-name`         |
-|      | `--fus-announce`  | `<addr>:<port>`             | announce: off                                |
-|      | `--fus-logo`      | `<uri>`                     | announce: off                                |
-| `-d` | `--daemonize`     |                             | off (foreground)                             |
-| `-c` | `--config`        | `<path>`                    | `/etc/dvbipitools/dipisds.yaml`              |
-|      | `--config-strict` |                             | config file issues are errors                |
-|      | `--configtest`    |                             | check the config file, then exit             |
-| `-h` | `--help`          |                             | show help                                    |
+| flag | long form         | argument              | default                                   |
+|------|-------------------|-----------------------|-------------------------------------------|
+| `-a` | `--announce`      |                       | headend mode: read `-i`, transmit on `-m` |
+| `-l` | `--listen`        |                       | client mode: receive on `-m`, write `-o`  |
+| `-m` | `--mcast`         | `<g>:<p>`             | required                                  |
+| `-I` | `--iface`         | `<iface>`             | kernel default                            |
+| `-v` | `--verbose`       |                       | off                                       |
+|      | `--color`         | `auto\|always\|never` | `auto`                                    |
+| `-d` | `--daemonize`     |                       | off (foreground)                          |
+| `-c` | `--config`        | `<path>`              | `/etc/dvbipitools/dipisds.yaml`           |
+|      | `--config-strict` |                       | config file issues are errors             |
+|      | `--configtest`    |                       | check the config file, then exit          |
+| `-h` | `--help`          |                       | show help                                 |
+
+### Announce mode options
+
+| flag | long form                    | argument        | default                            |
+|------|------------------------------|-----------------|------------------------------------|
+| `-i` | `--input`                    | `<path>`        | required                           |
+| `-p` | `--provider`                 | `<name>`        | required unless `-i` is `.xml`     |
+| `-O` | `--offering`                 | `<name>`        | required unless `-i` is `.xml`     |
+| `-L` | `--lang`                     | `<code>`        | `deu`                              |
+|      | `--dscp`                     | `<v>`           | `signalling`                       |
+| `-T` | `--ttl`                      | `<n>`           | `16`                               |
+| `-t` | `--interval`                 | `<s>`           | `5`                                |
+|      | `--ret-addr`                 | `<addr>:<port>` | off (no RET advertised)            |
+|      | `--ret-rtx-time`             | `<ms>`          | `2000`                             |
+|      | `--ret-rtx-pt`               | `<n>`           | `99`                               |
+|      | `--ret-mc`                   |                 | off (unicast RET only)             |
+|      | `--ret-mc-port`              | `<port>`        | each service's own port            |
+|      | `--ret-rsi-mc-ret`           |                 | off, requires `--ret-mc`           |
+|      | `--fcc-addr`                 | `<addr>:<port>` | off (no FCC advertised)            |
+|      | `--fcc-rtx-time`             | `<ms>`          | `2000`                             |
+|      | `--fcc-rtx-pt`               | `<n>`           | `99`                               |
+|      | `--fcc-resolve-by-port`      |                 | off (`--fcc-addr`'s port)          |
+|      | `--fcc-resolve-base-port`    | `<port>`        | `--fcc-addr`'s port + 1            |
+|      | `--fcc-resolve-max-channels` | `<n>`           | `300`                              |
+|      | `--al-fec-addr`              | `<addr>:<port>` | off (no Annex E FEC advertised)    |
+|      | `--al-fec-pt`                | `<n>`           | `96`, requires `--al-fec-addr`     |
+|      | `--metrics`                  | `<path>`        | `/run/dvbipitools/metrics.sock`    |
+|      | `--metrics-id`               | `<name>`        | none (metrics disabled unless set) |
+|      | `--metrics-interval`         | `<s>`           | `5`                                |
+|      | `--packages`                 | `<path>`        | off (no Package Discovery)         |
+|      | `--cells`                    | `<path>`        | off (no Regionalisation Discovery) |
+|      | `--rms-name`                 | `<name>`        | off (no RMS-FUS Discovery)         |
+|      | `--rms-lang`                 | `<code>`        | `deu`                              |
+|      | `--rms-location`             | `<uri>`         | required with `--rms-name`         |
+|      | `--rms-logo`                 | `<uri>`         | off                                |
+|      | `--bcg-name`                 | `<name>`        | off (no BCG Discovery)             |
+|      | `--bcg-id`                   | `<id>`          | off, requires `--bcg-name`         |
+|      | `--bcg-description`          | `<text>`        | off, requires `--bcg-name`         |
+|      | `--bcg-provider-name`        | `<name>`        | off, requires `--bcg-name`         |
+|      | `--bcg-mcast`                | `<addr>:<port>` | required with `--bcg-name`         |
+|      | `--fus-name`                 | `<name>`        | off (no RMS-FUS Discovery)         |
+|      | `--fus-lang`                 | `<code>`        | `deu`                              |
+|      | `--fus-id`                   | `<n>`           | required with `--fus-name`         |
+|      | `--fus-announce`             | `<addr>:<port>` | off                                |
+|      | `--fus-logo`                 | `<uri>`         | off                                |
+
+### Listen mode options
+
+| flag | long form         | argument                    | default                         |
+|------|-------------------|-----------------------------|---------------------------------|
+| `-t` | `--timeout`       | `<s>`                       | `35`                            |
+| `-o` | `--output`        | `<path>` / `-`              | `-` (stdout)                    |
+| `-f` | `--format`        | `m3u\|csv\|xspf\|xml\|null` | from `-o` suffix, else `m3u`    |
+|      | `--bim-namespace` | `<ns>`                      | newest that decodes             |
+| `-s` | `--schema`        | `<path>`                    | compiled-in schemas, repeatable |
 
 ## Configuration file
 
@@ -87,7 +109,12 @@ keep `-t` comfortably under that. SIGHUP re-reads `-i` (see [Signals](#signals))
 | `.xml`          | a hand-authored SD&S document, or dipiscan's own `-f xml` output                    |
 
 `uri` is `rtp://[@]<addr>:<port>` or `udp://[@]<addr>:<port>`, matching dipirec/dipiscan's own
-convention. Missing `tsid`/`onid` default to 1, missing `sid` auto-increments from 1.
+convention. Missing `tsid`/`onid` default to 1, missing `sid` auto-increments from 1. Two services
+with the same `onid`/`tsid`/`sid` triplet are an error, as is an input without services.
+
+CSV files (`-i`, `--packages`, `--cells`) take RFC 4180 quoting (`"News, Weather"`, `""` for a
+quote), blanks around fields are trimmed, a UTF-8 BOM is skipped, and lines starting with `#` are
+comments.
 
 For `.csv`/`.m3u`/`.xspf`, `-p` (`--provider`, the `DomainName`) and `-O` (`--offering`, the
 provider's display `Name`) are required. `-L` (`--lang`, a 3-letter ISO 639-2 code for that
@@ -154,10 +181,13 @@ the Broadcast Discovery.
 
 ### Parameters
 
-- `--ret-rtx-time <ms>` / `--ret-rtx-pt <n>` should be the same as dipifccret's `-B`/`-R` values (or defaults). requires `--ret-addr`.
+- `--ret-rtx-time <ms>` / `--ret-rtx-pt <n>` should be the same as dipifccret's `-B`/`-R` values (or defaults).
+  requires `--ret-addr`.
 - `--ret-mc` adds `MulticastRET`, like running dipifccret _without_ `--no-mc-ret`;
   its group:port always match this service's own `IPMulticastAddress`, per Annex F.6.2.2's
   same-group:port reuse. `--ret-mc-port` overrides the port, see `dipifccret -F`.
+- `--ret-rsi-mc-ret` (requires `--ret-mc`) adds `dvb-rsi-mc-ret="true"`: the RSI of Annex F.5.3 rides the multicast
+  RET session instead of the default one, like dipifccret's `--rsi-mc-ret`.
 - Left out on purpose, each because the schema's own "if absent" meaning already matches
   dipifccret's actual behaviour: 
   + RET `ssrc` is unknown until dipifccret sees live packets
@@ -194,6 +224,10 @@ per the spec an HNED using both services is meant to use only this element, igno
   schema's own `Retransmission_session` session-depth attribute, independent of dipifccret's own
   burst-rate/duration tuning.
 - `--fcc-rtx-pt <n>` requires `--fcc-addr`, should match dipifccret's `-R` value (or default).
+- `--fcc-resolve-by-port` gives each service its own destination port, `--fcc-resolve-base-port`
+  (default: the port of `--fcc-addr` + 1) plus the FNV hash of the service's address and port modulo
+  `--fcc-resolve-max-channels` (default 300), as dipifccret's options of the same names.
+  All three require `--fcc-addr`.
 - `EnhancementService` is always `"FCC"`, never a combined value - the XSD only defines two
   enumerated values (`"FCC"`, `"RET"`) and the element occurs at most once; per Annex I.2.3 the
   FCC and RET server coincide, so `"FCC"` already implies combined capability when both are
@@ -234,7 +268,8 @@ id,name,lang,visible,svc1|svc2|svc3
 ```
 `id` is the numeric `Id`. `name` and `lang` set the `PackageName` text and its language (ISO 639-2).
 `visible` is `0` or `1` (default=1). 
-Service names are matched against `-i` entries by `ServiceName`. Each match gets a `DVBTriplet`. A name without a match is a load error.
+Service names are matched against `-i` entries by `ServiceName`. Each match gets a `DVBTriplet`. A name without a match, or
+with more than one, is a load error.
 
 Known gaps: 
 `PackageDescription` (BCG linkage), `LogicalChannelNumber`, `PackageReference`, `PackageAvailability`, `URILinkage`,
@@ -283,12 +318,30 @@ Known gaps:
 `DSMProvider`, `RMSID`, `Description`, and `FUSAnnouncement`'s `FUSUnicastAnnouncement`/`QRCLocation`.
 
 
+## BCG Discovery (`--bcg-name`)
+
+`--bcg-name <name>` with `--bcg-mcast <addr>:<port>` announces a BCG Discovery record (payload 6, TS 102 034
+5.2.13.1) pointing at a dipibcg multicast (`-m` there). `--bcg-id`, `--bcg-description` and `--bcg-provider-name`
+fill the optional fields, the Broadcast Discovery records then reference the BCG by id. Config: `bcg.name`,
+`bcg.id`, `bcg.description`, `bcg.provider-name`, `bcg.mcast`.
+
 ## Listen (`-l`)
 
 Joins `-m`, reassembles DVBSTP segments, and after `-t` (`--timeout`) seconds (default 35, just
-over the spec's 30s max cycle time so one full cycle is always captured) writes whatever
-Broadcast Discovery records it saw as a playlist. A segment is keyed by payload and segment id:
+over the spec's 30s max cycle time so one full cycle is always captured; `0` listens until
+SIGINT/SIGTERM) writes whatever Broadcast Discovery records it saw as a playlist. A segment is keyed by payload and segment id:
 when its version changes (announcer reload), the newer version replaces the earlier one.
+
+Segments with compression `001` are BiM-encoded SD&S (TS 102 034 5.5.2, one fragment update unit, context path
+0x0030, zlib string codec) and are decoded to XML first. Supported namespaces: `urn:dvb:metadata:iptv:sdns:2014-1`,
+`2012-1`, `2008-1` and `urn:dvb:ipi:sdns:2006`. `--bim-namespace` (config `bim-namespace`) fixes the namespace, without it the
+newest one that decodes the segment exactly wins. Without zlib such segments are dropped.
+
+`-s` (`--schema`, config `schema`, a list) decodes the segments through an XSD instead: one schema file, 
+or directories searched for the schema of `--bim-namespace`.
+Without `--bim-namespace` the namespace of the schema file is used. Imports resolve in the
+directories and next to the file. The ETSI TS 102 034 XSD archives, their download links and SHA-256 are listed in the
+[dipibim README](../dipibim/README.md#required-xsds).
 
 `-f` (`--format`) is `m3u`/`csv`/`xspf` (same shapes as dipiscan, including the triplet), `xml`
 (dumps the reassembled documents as received, for debugging), or `null`.
@@ -312,9 +365,12 @@ Announce: one line per cycle. Listen: one line per segment received.
 * `^C`, SIGINT or SIGTERM: stop the process
 * SIGHUP: re-read `-i` from disk. On error, the previous input keeps being announced and the error
   is logged. (No effect in `-l` mode).
-  With a raw `.xml` input, the segment version is the root element's `Version` attribute, so it
-  stays put when the document does. Without that attribute it is bumped when the content changed.
-  A reload that yields identical documents keeps the version and is logged as unchanged.
+  Each generated document has its own segment version, bumped (modulo 256) only when that
+  document changed.
+  With a raw `.xml` input, the segment version is the `Version` attribute of the record element
+  (`ServiceProvider` for Service Provider Discovery), so it stays put when the document does.
+  Without that attribute it is bumped when the content changed.
+  A reload that yields identical documents keeps the versions and is logged as unchanged.
 
 ## Scope
 
@@ -325,8 +381,8 @@ ETSI TS 102 034 clause 5.2.13 type. Anything wider goes through `.xml` passthrou
 Announce, above). Listen (`-l`) remains Broadcast Discovery only.
 
 It is not a general SD&S client: CoD and BCG-carriage records (BCG has its own tool, `dipibcg`)
-remain out of scope. Compression is always "none": gzip is spec-restricted to other payload ids,
-and BiM is not implemented.
+remain out of scope. Announce always sends compression "none": gzip is spec-restricted to other payload ids,
+and BiM is not produced (listen decodes it).
 
 ## Running under systemd
 

@@ -3,13 +3,9 @@
 
 #include <getopt.h>
 #include <limits.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/helper/log.h"
 #include "lib/mux/fec2022.h"
-
 #include "priv.h"
 
 args_status_t rec_opt_stream(rec_opt_t *p, int c) {

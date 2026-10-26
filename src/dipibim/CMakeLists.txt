@@ -4,3 +4,8 @@
 dipibim_resolve_sources()
 
 add_executable(dipibim ${DIPIBIM_SRCS})
+
+if (DIPIBIM_HAVE_ZLIB)
+    target_link_libraries(dipibim PRIVATE ZLIB::ZLIB)
+    target_compile_definitions(dipibim PRIVATE DIPIBIM_ZLIB)
+endif ()

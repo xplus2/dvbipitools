@@ -2,14 +2,12 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <arpa/inet.h>
-#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-
 #include "priv.h"
 
 /* full multicast address, family from ':' presence */

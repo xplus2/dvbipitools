@@ -305,7 +305,7 @@ START_TEST(ipv6_specific_listener_serves_requests) {
 END_TEST
 
 START_TEST(dual_stack_listener_serves_both_families) {
-  unsigned port = free_tcp_port();
+  unsigned port = free_tcp_port_dual();
   char spec[32];
   const char *args[] = {"-l", spec, NULL};
   run_t r;

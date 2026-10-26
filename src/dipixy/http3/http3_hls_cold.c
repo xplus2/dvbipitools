@@ -3,14 +3,11 @@
 
 #ifdef HAVE_HTTP3
 
-#include "../dash/dash.h"
 #include "../ts/ts_push.h"
 #include "../reactor/internal.h"
 #include "../httpng/httpng.h"
 #include "http3.h"
 #include "http3_int.h"
-
-#include "lib/sys/ioutil.h"
 
 #define H3_HLS_COLD_WAITERS_MAX 64
 

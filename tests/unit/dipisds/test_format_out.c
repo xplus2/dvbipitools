@@ -1,11 +1,11 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 
 #include "dipisds/format_out.h"
 #include "lib/sys/ioutil.h"
@@ -68,12 +68,12 @@ START_TEST(m3u_item_brackets_ipv6_address) {
 }
 END_TEST
 
-START_TEST(csv_item_strips_commas_from_name) {
+START_TEST(csv_item_quotes_name_with_comma) {
   FILE *f = tmpfile();
   sds_service_t s = make_service("Chan, One", "239.1.1.1", AF_INET, 5000, 1);
   ck_assert_ptr_nonnull(f);
   format_out_item(f, OUT_CSV, &s);
-  ck_assert_str_eq(read_all_and_close(f), "Chan One,rtp://@239.1.1.1:5000,1,2,101\n");
+  ck_assert_str_eq(read_all_and_close(f), "\"Chan, One\",rtp://@239.1.1.1:5000,1,2,101\n");
 }
 END_TEST
 
@@ -142,7 +142,7 @@ static Suite *format_out_suite(void) {
   tcase_add_test(tc, m3u_item_writes_extinf_and_uri_line);
   tcase_add_test(tc, m3u_item_prefixes_ssm_source);
   tcase_add_test(tc, m3u_item_brackets_ipv6_address);
-  tcase_add_test(tc, csv_item_strips_commas_from_name);
+  tcase_add_test(tc, csv_item_quotes_name_with_comma);
   tcase_add_test(tc, xspf_item_escapes_title_and_writes_extension);
   tcase_add_test(tc, xml_and_null_item_write_nothing);
   tcase_add_test(tc, raw_passthrough_only_for_xml_format);

@@ -8,10 +8,6 @@
 
 #include "lib/helper/argutil.h"
 #include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
-#include "lib/helper/uriparse.h"
-#include "lib/net/netconnect.h"
-
 #include "priv.h"
 
 args_status_t fccret_opt_fcc(fccret_opt_t *p, int c) {

@@ -3,12 +3,9 @@
 
 #define _GNU_SOURCE
 #include <ctype.h>
-#include <errno.h>
-#include <iconv.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/xml_util.h"
 #include "lib/helper/xml_util/xml_util_int.h"
 
 static const char *xml_find(const char *p, const char *end, const char *needle) {
@@ -33,7 +30,7 @@ static const char *skip_decl(const char *p, const char *end) {
 }
 
 /* past comment, PI or declaration at lt. NULL if lt starts a tag or CDATA */
-static const char *skip_misc(const char *lt, const char *end) {
+const char *skip_misc(const char *lt, const char *end) {
   size_t n = (size_t)(end - lt);
   const char *q;
   if (n >= 4 && !memcmp(lt, "<!--", 4)) {

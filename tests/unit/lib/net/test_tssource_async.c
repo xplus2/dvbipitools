@@ -17,6 +17,7 @@
 #include "lib/mux/fec2022.h"
 #include "lib/net/multicast.h"
 #include "lib/net/ts/source.h"
+#include "../../fx_net.h"
 
 static tssrc_open_state_t drive(tssrc_open_t *o, int max_iters) {
   tssrc_open_state_t st = TSSRC_OPEN_PENDING;
@@ -37,30 +38,13 @@ static tssrc_open_state_t drive(tssrc_open_t *o, int max_iters) {
   return st;
 }
 
-static unsigned free_udp_port(void) {
-  struct sockaddr_in a;
-  socklen_t len = sizeof a;
-  int fd = socket(AF_INET, SOCK_DGRAM, 0);
-  unsigned port;
-
-  ck_assert_int_ge(fd, 0);
-  memset(&a, 0, sizeof a);
-  a.sin_family = AF_INET;
-  a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&a, sizeof a), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&a, &len), 0);
-  port = ntohs(a.sin_port);
-  close(fd);
-  return port;
-}
-
 static void unique_group(char *out, size_t cap) {
   pid_t pid = getpid();
 
   snprintf(out, cap, "239.77.%u.%u", ((unsigned)pid >> 8) & 0xFF, 1 + ((unsigned)pid & 0xFF) % 250);
 }
 
-static int open_sender(const char *group, unsigned port, struct sockaddr_in *dst) {
+static int open_plain_sender(const char *group, unsigned port, struct sockaddr_in *dst) {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
 
   ck_assert_int_ge(sock, 0);
@@ -267,21 +251,6 @@ static void *serve_once(void *arg) {
   return NULL;
 }
 
-static int make_listener(unsigned *port_out) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 1), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
-}
-
 START_TEST(tssrc_open_async_completes_for_http_and_reads_body) {
   unsigned port;
   int listen_fd = make_listener(&port);
@@ -420,8 +389,8 @@ START_TEST(tssrc_fec_poll_feeds_repair_and_recovers_lost_packet) {
   s = tssrc_open(&cfg, NULL);
   ck_assert_ptr_nonnull(s);
   ck_assert_int_ge(tssrc_fec_fd(s), 0);
-  src_sock = open_sender(group, port, &src_dst);
-  fec_sock = open_sender(group, fec_port, &fec_dst);
+  src_sock = open_plain_sender(group, port, &src_dst);
+  fec_sock = open_plain_sender(group, fec_port, &fec_dst);
 
   for (unsigned i = 0; i < SRC_PKTS; i++) {
     build_rtp_ts(pkt[i], (uint16_t)(0x2000 + i), (unsigned char)i);
@@ -504,8 +473,8 @@ START_TEST(tssrc_fec_rx_ns_follows_released_packet) {
   s = tssrc_open(&cfg, NULL);
   ck_assert_ptr_nonnull(s);
   ck_assert_int_eq(tssrc_enable_rx_timestamps(s), 0);
-  src_sock = open_sender(group, port, &src_dst);
-  fec_sock = open_sender(group, fec_port, &fec_dst);
+  src_sock = open_plain_sender(group, port, &src_dst);
+  fec_sock = open_plain_sender(group, fec_port, &fec_dst);
 
   for (unsigned i = 0; i < PKTS; i++) {
     build_rtp_ts(pkt, (uint16_t)(0x3000 + i), (unsigned char)i);
@@ -563,8 +532,8 @@ START_TEST(tssrc_read_consumes_repair_without_explicit_fec_poll) {
   s = tssrc_open(&cfg, NULL);
   ck_assert_ptr_nonnull(s);
   ck_assert_int_ge(tssrc_fec_fd(s), 0);
-  src_sock = open_sender(group, port, &src_dst);
-  fec_sock = open_sender(group, fec_port, &fec_dst);
+  src_sock = open_plain_sender(group, port, &src_dst);
+  fec_sock = open_plain_sender(group, fec_port, &fec_dst);
 
   for (unsigned i = 0; i < SRC_PKTS; i++) {
     build_rtp_ts(pkt[i], (uint16_t)(0x2000 + i), (unsigned char)i);
@@ -683,7 +652,7 @@ START_TEST(tssrc_buffer_ms_reports_depth_with_jitter_buffer) {
   s = tssrc_open(&cfg, NULL);
   ck_assert_ptr_nonnull(s);
   ck_assert_int_ge((int)tssrc_buffer_ms(s), 0);
-  sock = open_sender(group, port, &dst);
+  sock = open_plain_sender(group, port, &dst);
   build_rtp_ts(pkt, 1, 1);
   ck_assert_int_eq((int)sendto(sock, pkt, sizeof pkt, 0, (struct sockaddr *)&dst, sizeof dst), (int)sizeof pkt);
   for (int i = 0; i < 20; i++) {

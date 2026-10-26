@@ -11,6 +11,8 @@
 
 typedef enum { LISTEN_ANY, LISTEN_V4, LISTEN_V6 } listen_scope_t;
 
+#define SCHEMA_MAX 16
+
 typedef struct {
   listen_scope_t scope; /* LISTEN_ANY: "all", bind both families */
   char addr[64];        /* numeric literal, empty if scope == LISTEN_ANY */
@@ -48,6 +50,9 @@ typedef struct {
   double ts_startup_timeout_s;
   unsigned capture_ring_kib;
   double sds_timeout_s;
+  const char *sdns_ns; /* --sds-bim-namespace. NULL: newest, with --sds-schema: ns of schema file */
+  const char *schemas[SCHEMA_MAX]; /* --sds-schema: schema file or dirs. empty: compiled-in SD&S schemas */
+  int nschemas;
   double sds_refresh_interval_s;
   int join_all;
   source_def_t *sources;    /* -i sources: sds://, playlist path, http(s)://, rtp/udp:// */

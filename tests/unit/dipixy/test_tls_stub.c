@@ -1,9 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <errno.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdint.h>

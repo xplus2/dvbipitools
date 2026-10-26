@@ -3,18 +3,9 @@
 
 #include <getopt.h>
 #include <limits.h>
-#include <stdlib.h>
 #include <string.h>
 
-#include "lib/cas/biss/biss.h"
-#include "lib/cas/cas_args.h"
-#include "lib/cas/emmg_server/emmg_server.h"
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
-#include "lib/mux/fec2022.h"
-#include "lib/net/netconnect.h"
-
 #include "priv.h"
 
 args_status_t rdh_opt_general(rdh_opt_t *p, int c) {
@@ -125,12 +116,7 @@ args_status_t rdh_opt_general(rdh_opt_t *p, int c) {
       }
       break;
     case OPT_COLOR: {
-      log_color_t v;
-      if (log_color_from_string(optarg, &v)) {
-        argerr("RS000105", "invalid --color: %s (auto|always|never)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->color_mode = v;
+      if (argutil_color_opt(TOOL_NAME, "RS000105", optarg, &cfg->color_mode)) return ARGS_ERR;
       break;
     }
     case OPT_METRICS:

@@ -8,7 +8,6 @@
 #include "reactor_tls.h"
 #include "../ts/ts_push.h"
 
-#include <sys/epoll.h>
 #include <sys/socket.h>
 
 /* CONN_WRITING (headers flushed) -> CONN_TSPUSH, called from reactor_finish().

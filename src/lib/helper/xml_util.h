@@ -9,6 +9,8 @@
 
 /* &<>"' -> entities. chars not allowed in XML 1.0 (controls but tab/LF/CR, U+FFFE/FFFF) dropped */
 void xml_escape(FILE *f, const char *s);
+typedef void (*xml_put_fn)(void *ctx, const char *s, size_t n);
+void xml_escape_to(const char *s, xml_put_fn put, void *ctx);
 
 /* *buf (malloc'd, NUL-terminated, *len bytes) from encoding declared in XML declaration to UTF-8, replaced in place.
    enc (if enccap) gets declared name, empty if none. no declaration or UTF-8/ASCII: untouched.
@@ -67,5 +69,14 @@ int for_each_xml_elem(const char *buf, const char *end, const char *name, xml_bl
 
 /* same; *unclosed (if non-NULL, set only then) = start of the element without end tag, scan stops there */
 int for_each_xml_elem_chk(const char *buf, const char *end, const char *name, xml_block_cb cb, void *ctx, const char **unclosed);
+
+struct bim_node;
+typedef struct xml_doc xml_doc_t;
+
+/* namespace-aware tree of UTF-8 [buf,buf+len), names interned in *doc.
+   0 ok, -1 not well-formed (*err_off: byte offset), -2 out of memory */
+int xml_doc_parse(const char *buf, size_t len, xml_doc_t **doc, size_t *err_off);
+struct bim_node *xml_doc_root(const xml_doc_t *doc);
+void xml_doc_free(xml_doc_t *doc);
 
 #endif

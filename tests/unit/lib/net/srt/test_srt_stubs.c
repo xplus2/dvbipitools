@@ -12,13 +12,16 @@ START_TEST(sink_stub_fails_cleanly) {
   srtsink_cfg_t cfg;
   srtsink_status_t st;
   unsigned char buf[188] = {0};
+  int dummy = 0;
+  srtsink_t *r = (srtsink_t *)&dummy;
+  metrics_writer_t w;
   memset(&cfg, 0, sizeof cfg);
   memset(&st, 0xFF, sizeof st);
   ck_assert_ptr_null(srtsink_open(&cfg));
-  srtsink_service(NULL, &st);
+  srtsink_service(r, &st);
   ck_assert_int_eq(st.connected, 0);
-  ck_assert_int_eq(srtsink_write(NULL, buf, sizeof buf), -1);
-  srtsink_put_queue_metrics(NULL, NULL);
+  ck_assert_int_eq(srtsink_write(r, buf, sizeof buf), -1);
+  srtsink_put_queue_metrics(&w, &dummy);
   srtsink_close(NULL);
 }
 END_TEST

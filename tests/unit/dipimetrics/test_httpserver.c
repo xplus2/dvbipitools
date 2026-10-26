@@ -19,6 +19,7 @@
 
 #include "dipimetrics/httpserver.h"
 #include "lib/metrics/store.h"
+#include "../fx_net.h"
 
 static const char TEST_CERT_PEM[] =
     "-----BEGIN CERTIFICATE-----\n"
@@ -70,12 +71,6 @@ static const char TEST_KEY_PEM[] =
     "E9WKLkBei8sL9CILV6k5beKT7JscplWp09qHF1nUQBjmxuyRU/w9Q7XCLfQrskqu\n"
     "VswJnEEQ9l/eWRi4DxUU8bA=\n"
     "-----END PRIVATE KEY-----\n";
-
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
 
 static int connect_to(int listen_fd) {
   struct sockaddr_in sa;

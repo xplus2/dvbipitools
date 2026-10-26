@@ -1,17 +1,13 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/net/dvbstp.h"
-#include "lib/helper/xml_util.h"
 #include "dipisds/input.h"
 #include "dipisds/input/input_int.h"
 
@@ -28,8 +24,9 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
   }
   while ((rc = read_line(f, line, sizeof line)) != 0) {
     char *fields[5];
+    char *body;
     size_t nf;
-    const char *svc;
+    char *svc;
     char *svc_save;
     unsigned long pid;
     sds_package_t *pkg;
@@ -39,8 +36,8 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
       goto fail;
     }
     chomp(line);
-    if (!line[0]) continue;
-    nf = csv_split(line, fields, 5);
+    if (!(body = csv_line_body(line, lineno))) continue;
+    nf = csv_split(body, fields, 5);
     if (nf < 5) {
       log_code("AE400115", "%s: line %d: expected id,name,lang,visible,svc1|svc2|...", path, lineno);
       goto fail;
@@ -75,6 +72,13 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
     }
     svc = strtok_r(fields[4], "|", &svc_save);
     while (svc) {
+      char *e = svc + strlen(svc);
+      while (*svc == ' ' || *svc == '\t') svc++;
+      while (e > svc && (e[-1] == ' ' || e[-1] == '\t')) *--e = '\0';
+      if (!*svc) {
+        svc = strtok_r(NULL, "|", &svc_save);
+        continue;
+      }
       if (pkg->service_count >= SDS_MAX_PKG_SERVICES) {
         log_code("AE000229", "%s: line %d: too many services in package (max %d)", path, lineno, SDS_MAX_PKG_SERVICES);
         goto fail;
@@ -88,6 +92,10 @@ int input_load_packages(const char *path, sds_package_t *out, int max, int *coun
       goto fail;
     }
     idx++;
+  }
+  if (!idx) {
+    log_code("AE000771", "%s: no %s", path, "packages");
+    goto fail;
   }
   *count = idx;
   fclose(f);
@@ -111,6 +119,7 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
   }
   while ((rc = read_line(f, line, sizeof line)) != 0) {
     char *fields[3 + SDS_MAX_CA_DEPTH];
+    char *body;
     size_t nf;
     sds_cell_t *cell;
     lineno++;
@@ -119,14 +128,14 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
       goto fail;
     }
     chomp(line);
-    if (!line[0]) continue;
+    if (!(body = csv_line_body(line, lineno))) continue;
     if (idx >= max) {
       log_code("AE000230", "%s: too many cells (max %d)", path, max);
       goto fail;
     }
     cell = &out[idx];
     memset(cell, 0, sizeof *cell);
-    nf = csv_split(line, fields, sizeof fields / sizeof fields[0]);
+    nf = csv_split(body, fields, sizeof fields / sizeof fields[0]);
     if (nf < 2 || !fields[0][0]) {
       log_code("AE400119", "%s: line %d: expected id,country,type:value,...", path, lineno);
       goto fail;
@@ -162,6 +171,10 @@ int input_load_cells(const char *path, sds_cell_t *out, int max, int *count) {
       goto fail;
     }
     idx++;
+  }
+  if (!idx) {
+    log_code("AE000771", "%s: no %s", path, "cells");
+    goto fail;
   }
   *count = idx;
   fclose(f);

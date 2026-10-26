@@ -57,14 +57,6 @@ static int split_last4(char *line, char **id, char **uri, char **a, char **b, ch
   return 0;
 }
 
-static int mapping_idx_cmp(const void *a, const void *b) {
-  const mapping_idx_t *x = a;
-  const mapping_idx_t *y = b;
-  int c = strcmp(x->id, y->id);
-  if (c) return c;
-  return (x->idx > y->idx) - (x->idx < y->idx);
-}
-
 int mapping_load(const char *path, mapping_t *m) {
   FILE *f = fopen(path, "r");
   char line[1024];
@@ -131,13 +123,13 @@ int mapping_load(const char *path, mapping_t *m) {
     m->idx = malloc(sizeof *m->idx * (size_t)m->count);
     if (m->idx) {
       for (int i = 0; i < m->count; i++) {
-        m->idx[i].id = m->entries[i].id;
+        m->idx[i].key = m->entries[i].id;
         m->idx[i].idx = i;
       }
-      qsort(m->idx, (size_t)m->count, sizeof *m->idx, mapping_idx_cmp);
+      bcg_key_index_sort(m->idx, m->count);
       for (int i = 1; i < m->count; i++) {
-        if (!strcmp(m->idx[i].id, m->idx[i - 1].id))
-          log_code("LW700163", "mapping: duplicate id %s, first entry wins", m->idx[i].id);
+        if (!strcmp(m->idx[i].key, m->idx[i - 1].key))
+          log_code("LW700163", "mapping: duplicate id %s, first entry wins", m->idx[i].key);
       }
     }
   }
@@ -150,21 +142,10 @@ void mapping_free(mapping_t *m) {
   memset(m, 0, sizeof *m);
 }
 
-static int mapping_idx_find(const mapping_t *m, const char *id) {
-  int lo = 0;
-  int hi = m->count;
-  while (lo < hi) {
-    int mid = lo + (hi - lo) / 2;
-    if (strcmp(m->idx[mid].id, id) < 0) lo = mid + 1; else hi = mid;
-  }
-  if (lo < m->count && !strcmp(m->idx[lo].id, id)) return m->idx[lo].idx;
-  return -1;
-}
-
 int mapping_lookup(const mapping_t *m, const char *id, char *uri, size_t uri_cap, unsigned *tsid, unsigned *onid, unsigned *sid) {
   int i = -1;
   if (m->idx) {
-    i = mapping_idx_find(m, id);
+    i = bcg_key_index_find(m->idx, m->count, id);
   } else {
     for (int k = 0; k < m->count; k++) {
       if (!strcmp(m->entries[k].id, id)) {
@@ -179,4 +160,25 @@ int mapping_lookup(const mapping_t *m, const char *id, char *uri, size_t uri_cap
   *onid = m->entries[i].onid;
   *sid = m->entries[i].sid;
   return 0;
+}
+
+static void csv_put(FILE *f, const char *s, int quote) {
+  if (!quote) {
+    fputs(s, f);
+    return;
+  }
+  fputc('"', f);
+  for (; *s; s++) {
+    if (*s == '"') fputc('"', f);
+    fputc(*s, f);
+  }
+  fputc('"', f);
+}
+
+void mapping_write_row(FILE *f, const bcg_channel_t *c) {
+  int quote = strpbrk(c->id, ",\"") || strpbrk(c->uri, ",\"");
+  csv_put(f, c->id, quote);
+  fputc(',', f);
+  csv_put(f, c->uri, quote);
+  fprintf(f, ",%u,%u,%u\n", c->tsid, c->onid, c->sid);
 }

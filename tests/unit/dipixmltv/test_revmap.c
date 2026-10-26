@@ -9,15 +9,7 @@
 
 #include "dipixmltv/revmap.h"
 #include "../log_capture.h"
-
-static void write_temp_csv(char *path, const char *content) {
-  int fd = mkstemp(path);
-  FILE *f;
-  ck_assert_int_ge(fd, 0);
-  f = fdopen(fd, "w");
-  fputs(content, f);
-  fclose(f);
-}
+#include "../cfg_fixture.h"
 
 START_TEST(revmap_load_and_lookup_round_trips) {
   char path[] = "/tmp/dvbipitools_test_revmap_XXXXXX";

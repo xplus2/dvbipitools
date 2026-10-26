@@ -8,6 +8,7 @@
 
 /* rest: addr:port or [addr6]:port, multicast required (224.0.0.0/4, ff00::/8). caller strips leading '@' first. */
 int uriparse_mcast_addrport(const char *rest, int *family, char *group, size_t groupsz, unsigned *port);
+int uriparse_mcast_cfg(const char *v, int *family, char *group, size_t groupsz, unsigned *port, char *err, size_t errsz);
 
 /* like uriparse_mcast_addrport() with optional SSM source: [@]addr:port or src@addr:port.
    src: unicast literal of group's family, bare or [bracketed]. "" absent. */
@@ -25,5 +26,11 @@ int uriparse_rtmp_or_file(const char *uri, char *rtmp_buf, size_t rtmp_cap, char
 
 /* malloc'd copy of uri without userinfo, query, fragment. empty userinfo ("rtp://@host") kept. NULL on oom */
 char *uriparse_redact_dup(const char *uri);
+
+/* RFC3986 urlencode path segment. NUL-terminates */
+void uriparse_pct_encode_seg(const char *s, char *out, size_t outcap);
+
+/* %XX -> byte, decoded in place. 0 ok, -1 malformed escape */
+int uriparse_pct_decode(char *s);
 
 #endif

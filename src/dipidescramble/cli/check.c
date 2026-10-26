@@ -1,11 +1,8 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <string.h>
-
 #include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
-
 #include "priv.h"
 
 args_status_t dscr_cli_check(const config_t *cfg) {

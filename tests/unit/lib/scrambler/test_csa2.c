@@ -9,6 +9,7 @@
 
 #include "lib/scrambler/csa2.h"
 #include "lib/scrambler/scrambler.h"
+#include "../../fx_ts.h"
 
 /* round-trip CSA2 correctness against libdvbcsa = strongest check available */
 static const unsigned char cw[CSA2_CW_LEN] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef};
@@ -498,15 +499,6 @@ START_TEST(scrambler_passthrough_queued_preserves_order) {
   scrambler_free(s);
 }
 END_TEST
-
-static void make_pkt(unsigned char pkt[188], unsigned ctrl, unsigned afc, unsigned af_len) {
-  memset(pkt, 0xAA, 188);
-  pkt[0] = 0x47;
-  pkt[1] = 0x01;
-  pkt[2] = 0x00;
-  pkt[3] = (unsigned char)((ctrl << 6) | (afc << 4));
-  pkt[4] = (unsigned char)af_len;
-}
 
 static scrambler_t *keyed_csa2(void) {
   scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CSA2);

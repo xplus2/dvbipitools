@@ -7,8 +7,6 @@
 #include "../../segment/mp4push.h"
 #include "../../ts/ts_push.h"
 
-#include "lib/sys/ioutil.h"
-
 #define LLHLS_WAITERS_MAX 64
 
 static _Thread_local hls_waiter_t t_llhls_waiters[LLHLS_WAITERS_MAX];

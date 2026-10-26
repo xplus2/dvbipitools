@@ -8,12 +8,7 @@
 #include <time.h>
 
 #include "dipitvhead/mux/bitrate.h"
-
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
+#include "../fx_net.h"
 
 START_TEST(bitrate_pacer_lifecycle_does_not_crash) {
   bitrate_pacer_t *p = bitrate_pacer_new(1000000, 1, 1);

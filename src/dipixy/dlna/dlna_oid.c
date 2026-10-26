@@ -1,18 +1,17 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include "lib/helper/uriparse.h"
+#include "lib/sys/ioutil.h"
 #include "dlna_int.h"
 
-#include <ctype.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
 static int parse_uint(const char *s, unsigned *out) {
-  char *end;
   unsigned long v;
-  if (!*s || !isdigit((unsigned char)*s)) return -1;
-  v = strtoul(s, &end, 10);
-  if (*end != '\0') return -1;
+  if (parse_ulong(s, UINT_MAX, &v)) return -1;
   *out = (unsigned)v;
   return 0;
 }
@@ -88,7 +87,7 @@ const char *strip_scheme_at(const char *uri) {
 
 static void build_simple_path(sbuf_t *b, const char *name, const char *fallback, char *name_enc, size_t name_enc_sz, const char *fmt) {
   if (name) {
-    pct_encode_seg(name, name_enc, name_enc_sz);
+    uriparse_pct_encode_seg(name, name_enc, name_enc_sz);
     sbuf_add(b, "/");
     sbuf_add(b, name_enc);
   } else {
@@ -100,7 +99,7 @@ static void build_simple_path(sbuf_t *b, const char *name, const char *fallback,
 
 static void build_item_path(sbuf_t *b, const source_def_t *src, unsigned ord, unsigned item_num, char *name_enc, size_t name_enc_sz, const char *fmt) {
   if (src && src->name) {
-    pct_encode_seg(src->name, name_enc, name_enc_sz);
+    uriparse_pct_encode_seg(src->name, name_enc, name_enc_sz);
     sbuf_add(b, "/");
     sbuf_add(b, name_enc);
   } else {

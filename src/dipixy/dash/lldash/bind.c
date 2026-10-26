@@ -1,21 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <pthread.h>
 #include <stdatomic.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "dipixy/dash/lldash.h"
-#include "dipixy/dash/dash_int.h"
-#include "dipixy/altsvc.h"
-#include "dipixy/reactor/internal.h"
-#include "dipixy/version.h"
-#include "dipixy/ws/ws_clients.h"
-#include "lib/helper/byte_ring.h"
-#include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
 #include "dipixy/dash/lldash/lldash_int.h"
 
 void dash_lldash_h2_bind(int slot, void *h2c, void *h2_slot, int reactor_tid, int ws_handle) {

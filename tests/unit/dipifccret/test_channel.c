@@ -17,24 +17,8 @@
 #include "dipifccret/channel/priv.h"
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
-
-/* channel_lookup() takes raw address bytes, this converts IPv4 literals for tests */
-static channel_t *lookup_ip(channel_table_t *t, const char *ip, unsigned port) {
-  unsigned char addr[4];
-  inet_pton(AF_INET, ip, addr);
-  return channel_lookup(t, AF_INET, addr, sizeof addr, port);
-}
-
-static void wrap_section_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
-}
+#include "../fx_ts.h"
+#include "../fx_proto.h"
 
 /* video-pid packet with adaptation_field random_access_indicator set */
 static void build_rai_packet(unsigned char pkt[188], unsigned pid) {

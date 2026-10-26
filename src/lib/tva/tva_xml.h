@@ -25,6 +25,17 @@ const char *tva_programme_crid(const bcg_programme_t *pr, char *buf, size_t cap)
 /* channels with no uri are dropped, along with their programmes */
 void tva_xml_write(FILE *f, const bcg_doc_t *doc);
 
+/* seconds since 1970 UTC, no offset taken as UTC. 0 ok, -1 bad */
+int iso8601_utc_secs(const char *iso, long long *out);
+/* b - a. 0 ok, -1 bad input or beyond 100000000 s */
+int iso8601_diff_secs(const char *a, const char *b, long *out);
+/* xs:duration "[-]PnDTnHnMn[.f]S" to seconds. years/months/negative/empty rejected. 0 ok, -1 bad */
+int duration_to_secs(const char *s, long *out);
+/* start_iso + secs, same offset notation, fraction dropped. 0 ok, -1 bad start */
+int iso8601_add_secs(const char *start_iso, long secs, char *out, size_t outcap);
+/* "PTnHnMnS". 0 ok, -1 negative or cap */
+int secs_to_duration(long secs, char *out, size_t outcap);
+
 /* 0 ok, -1 error on stderr */
 int tva_xml_read(FILE *f, bcg_doc_t *doc);
 

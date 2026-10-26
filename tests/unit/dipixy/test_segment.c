@@ -6,8 +6,6 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "../dipitvhead/psi_fixture.h"
-#include "dipixy/segment/pidlock.h"
 #include "dipixy/segment/priv.h"
 #include "dipixy/segstore.h"
 

@@ -11,14 +11,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/uio.h>
 #include <unistd.h>
 
 #include "../helper/argutil.h"
 #include "../sys/ioutil.h"
 #include "../helper/log.h"
 #include "../sys/signal.h"
-
 #include "netconnect.h"
 
 #define NETCONNECT_POLL_INTERVAL_MS 150

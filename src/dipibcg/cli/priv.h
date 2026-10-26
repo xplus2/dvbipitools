@@ -20,6 +20,13 @@
 #define OPT_TIMEOUT 1008
 #define OPT_CONFIG_STRICT 1006
 #define OPT_CONFIGTEST 1005
+#define OPT_PUBLISHER 1010
+#define OPT_LANG 1011
+#define OPT_INDEX 1012
+#define OPT_DVB_LOCATOR 1013
+#define OPT_DVB_DURATION 1014
+#define OPT_DVB_PUBTIME 1015
+#define OPT_ENCODING 1016
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 

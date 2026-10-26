@@ -5,11 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/sys/signal.h"
 #include "../../version.h"
-#include "../playlist.h"
 #include "priv.h"
 
 source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigned char *sniff, size_t got, source_meta_cb cb, void *ctx) {

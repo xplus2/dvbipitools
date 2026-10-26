@@ -1,23 +1,18 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "dipiradiohead/cli/args.h"
 #include "dipiradiohead/input/inputset.h"
 #include "lib/sys/ioutil.h"
-
 #include "http_fixture.h"
 
 static void noop_meta_cb(void *ctx, const char *artist, const char *title) {

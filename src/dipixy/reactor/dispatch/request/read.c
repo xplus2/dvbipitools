@@ -7,17 +7,6 @@
 #include <string.h>
 
 #include "dipixy/reactor/dispatch/priv.h"
-#include "dipixy/reactor/dispatch/route_common.h"
-#include "dipixy/core/metrics.h"
-#include "dipixy/hls/hls.h"
-#include "dipixy/dash/dash.h"
-#include "dipixy/dash/lldash.h"
-#include "dipixy/segment/segment.h"
-#include "dipixy/segment/mp4push.h"
-#include "dipixy/ts/lcevcselect.h"
-#include "dipixy/ts/pmtselect.h"
-#include "dipixy/ts/ts_push.h"
-#include "lib/sys/ioutil.h"
 
 static void reactor_read_once(int epfd, conn_t *c) {
   const char *method;

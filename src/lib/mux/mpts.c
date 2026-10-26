@@ -7,9 +7,7 @@
 #include <time.h>
 
 #include "../demux/crc32.h"
-#include "../helper/beutil.h"
 #include "../helper/log.h"
-
 #include "mpts.h"
 
 #define MPTS_INTERVAL_PAT_CAT 0.1  /* 100ms, matches the old standalone-mode PAT/PMT/CAT rate */

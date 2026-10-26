@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <fcntl.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -322,6 +324,53 @@ START_TEST(failed_part_counts_dropped_and_skips_snapshot) {
 }
 END_TEST
 
+static void noop_extra(metrics_writer_t *w, void *ctx) {
+  (void)w;
+  (void)ctx;
+}
+
+START_TEST(exporter_edge_cases) {
+  metrics_exporter_t mx;
+  char longpath[200];
+  struct rlimit rl;
+  int held[64];
+  int n = 0;
+  int fd;
+  metrics_writer_t w;
+  memset(&w, 0, sizeof w);
+  memset(longpath, 'p', sizeof longpath - 1);
+  longpath[sizeof longpath - 1] = 0;
+  metrics_exporter_init(&mx, METRICS_COMPONENT_SDS, "inst1", longpath, 5.0);
+  ck_assert_int_eq(metrics_exporter_enabled(&mx), 0);
+  metrics_exporter_init(&mx, METRICS_COMPONENT_SDS, NULL, NULL, 5.0);
+  ck_assert_int_eq(metrics_exporter_enabled(&mx), 0);
+  metrics_exporter_init(&mx, METRICS_COMPONENT_SDS, "inst1", "", 0.0);
+  ck_assert_int_eq(metrics_exporter_enabled(&mx), 1);
+  ck_assert_double_eq(mx.interval_s, 5.0);
+  metrics_exporter_note_error(&mx, NET_ERR_COUNT);
+  for (int k = 1; k < METRICS_EXTRA_MAX; k++) ck_assert_int_eq(metrics_exporter_add_extra(&mx, noop_extra, NULL), 0);
+  ck_assert_int_eq(metrics_exporter_add_extra(&mx, noop_extra, NULL), -1);
+  metrics_exporter_set_extra(&mx, noop_extra, NULL);
+  metrics_exporter_clear_extras(&mx);
+  ck_assert_ptr_null(mx.extra[0]);
+  ck_assert_int_eq(metrics_exporter_due(&mx, 10.0), 1);
+  ck_assert_int_eq(metrics_exporter_due(&mx, 11.0), 0);
+  ck_assert_int_eq(metrics_exporter_due(&mx, 16.0), 1);
+  metrics_exporter_close(&mx);
+  metrics_exporter_close(&mx);
+  ck_assert_int_eq(metrics_exporter_due(&mx, 99.0), 0);
+  metrics_exporter_send(&mx, &w);
+
+  ck_assert_int_eq(getrlimit(RLIMIT_NOFILE, &rl), 0);
+  rl.rlim_cur = 64;
+  ck_assert_int_eq(setrlimit(RLIMIT_NOFILE, &rl), 0);
+  while (n < 64 && (fd = open("/dev/null", O_RDONLY)) >= 0) held[n++] = fd;
+  metrics_exporter_init(&mx, METRICS_COMPONENT_SDS, "inst1", NULL, 5.0);
+  while (n > 0) close(held[--n]);
+  ck_assert_int_eq(metrics_exporter_enabled(&mx), 0);
+}
+END_TEST
+
 static Suite *export_suite(void) {
   Suite *s = suite_create("metrics_export");
   TCase *tc = tcase_create("core");
@@ -338,6 +387,7 @@ static Suite *export_suite(void) {
   tcase_add_test(tc, put_inputs_labels_and_skips_zero_error_reasons);
   tcase_add_test(tc, large_snapshot_is_sent_as_ordered_parts);
   tcase_add_test(tc, extra_chain_runs_every_slot_and_clears);
+  tcase_add_test(tc, exporter_edge_cases);
   tcase_add_test(tc, failed_part_counts_dropped_and_skips_snapshot);
   suite_add_tcase(s, tc);
   return s;

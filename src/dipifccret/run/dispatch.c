@@ -6,14 +6,12 @@
 #include <stdatomic.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <unistd.h>
 
 #include "lib/demux/rtcp.h"
 #include "lib/helper/log.h"
 #include "lib/sys/ioutil.h"
 #include "lib/sys/signal.h"
 #include "lib/mux/rtcp_build.h"
-
 #include "../fcc/burst.h"
 #include "../version.h"
 #include "run.h"

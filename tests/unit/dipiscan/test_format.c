@@ -1,10 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 
 #include "dipiscan/format.h"
 #include "lib/helper/sds_xml.h"
@@ -44,7 +44,7 @@ START_TEST(format_m3u_drops_line_breaks_from_name) {
 }
 END_TEST
 
-START_TEST(format_csv_strips_commas_from_name) {
+START_TEST(format_csv_quotes_name_with_comma) {
   char *buf;
   size_t len;
   FILE *f = open_capture(&buf, &len);
@@ -54,7 +54,7 @@ START_TEST(format_csv_strips_commas_from_name) {
   format_close(f, OUT_CSV);
   fclose(f);
 
-  ck_assert_str_eq(buf, "News Weather,rtp://239.1.1.1:5000,1,2,101\n");
+  ck_assert_str_eq(buf, "\"News, Weather\",rtp://239.1.1.1:5000,1,2,101\n");
   free(buf);
 }
 END_TEST
@@ -123,7 +123,7 @@ static Suite *format_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, format_m3u_writes_header_and_item);
   tcase_add_test(tc, format_m3u_drops_line_breaks_from_name);
-  tcase_add_test(tc, format_csv_strips_commas_from_name);
+  tcase_add_test(tc, format_csv_quotes_name_with_comma);
   tcase_add_test(tc, format_xspf_escapes_and_wraps_playlist);
   tcase_add_test(tc, format_xml_produces_parseable_sds_broadcast_doc);
   tcase_add_test(tc, format_null_produces_no_output);

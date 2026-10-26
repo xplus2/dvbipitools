@@ -5,7 +5,6 @@
 
 #include <arpa/inet.h>
 #include <check.h>
-#include <fcntl.h>
 #include <net/if.h>
 #include <sched.h>
 #include <signal.h>

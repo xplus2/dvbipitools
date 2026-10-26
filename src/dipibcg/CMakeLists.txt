@@ -7,4 +7,5 @@ add_executable(dipibcg ${DIPIBCG_SRCS})
 
 if (DIPIBCG_HAVE_ZLIB)
     target_link_libraries(dipibcg PRIVATE ZLIB::ZLIB)
+    target_compile_definitions(dipibcg PRIVATE DIPIBCG_ZLIB)
 endif ()

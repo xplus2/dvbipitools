@@ -12,21 +12,23 @@
 int announce_run(const config_t *cfg, metrics_exporter_t *mx);
 
 typedef struct {
-  input_t in;
+  unsigned char *data; /* NULL = not announced */
+  size_t len;
   unsigned version;
-  unsigned char *broadcast_doc;
-  unsigned char *sp_doc;
-  size_t broadcast_len;
-  size_t sp_len;
-  unsigned char *package_doc; /* NULL = --packages not given */
-  size_t package_len;
-  unsigned char *cell_doc; /* NULL = --cells not given */
-  size_t cell_len;
-  unsigned char *rmsfus_doc; /* NULL = --rms-name/--fus-name not given */
-  size_t rmsfus_len;
+} sds_doc_t;
+
+typedef struct {
+  input_t in;
+  unsigned version; /* raw .xml input */
+  sds_doc_t broadcast;
+  sds_doc_t sp;
+  sds_doc_t package; /* --packages */
+  sds_doc_t cell;    /* --cells */
+  sds_doc_t rmsfus;  /* --rms-name/--fus-name */
+  sds_doc_t bcg;     /* --bcg-name */
 } sds_state_t;
 
-/* loads cfg->input_path via input_load; INPUT_SERVICES also builds broadcast_doc/sp_doc. 0 ok, -1 error on stderr */
+/* loads cfg->input_path via input_load; INPUT_SERVICES also builds docs. 0 ok, -1 error on stderr */
 int state_load(const config_t *cfg, sds_state_t *st);
 int state_reload(const config_t *cfg, sds_state_t *st);
 void state_free(sds_state_t *st);

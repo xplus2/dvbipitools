@@ -27,31 +27,6 @@ int fmt_parse(const char *s, route_fmt_t *out) {
   return 0;
 }
 
-static int hexval(int c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
-
-/* %XX -> byte, decoded in place. 0 ok, -1 malformed escape */
-static int pct_decode(char *s) {
-  char *w = s;
-  while (*s) {
-    if (*s == '%') {
-      int hi = hexval((unsigned char)s[1]);
-      int lo = hi >= 0 ? hexval((unsigned char)s[2]) : -1;
-      if (lo < 0) return -1;
-      *w++ = (char)((hi << 4) | lo);
-      s += 3;
-    } else {
-      *w++ = *s++;
-    }
-  }
-  *w = '\0';
-  return 0;
-}
-
 static size_t digit_run(const char *s) {
   size_t i = 0;
   while (s[i] >= '0' && s[i] <= '9') i++;
@@ -172,7 +147,7 @@ static int parse_item_tail(const char *item_seg, const char *fmt_seg, route_t *o
 }
 
 static int parse_name_tail(char *name_seg, const char *fmt_seg, route_t *out) {
-  if (pct_decode(name_seg)) return -1;
+  if (uriparse_pct_decode(name_seg)) return -1;
   if (strlen(name_seg) >= sizeof out->item_name) return -1;
   bufcpy(out->item_name, sizeof out->item_name, name_seg);
   if (parse_trailing_fmt(fmt_seg, out)) return -1;
@@ -234,7 +209,7 @@ int route_parse(const char *path, route_t *out) {
   for (char *p = strtok_r(buf, "/", &save); p && nseg < MAX_SEGS; p = strtok_r(NULL, "/", &save))
     seg[nseg++] = p;
 
-  if (nseg > 0 && pct_decode(seg[0])) return -1;
+  if (nseg > 0 && uriparse_pct_decode(seg[0])) return -1;
   memset(out, 0, sizeof *out);
   if ((nseg == 3 || nseg == 2) && !map_lookup(kind_map, sizeof kind_map / sizeof kind_map[0], seg[0], &kind)) {
     int family;

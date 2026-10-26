@@ -1,15 +1,12 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
-#include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
-#include "lib/helper/xml_util.h"
+#include "lib/helper/uriparse.h"
 #include "lib/tva/tva_xml.h"
 #include "lib/tva/tva_xml/tva_xml_int.h"
 
@@ -75,7 +72,7 @@ const char *tva_genre_href(const char *category) {
 void tva_build_crid(const char *channel_id, const char *start_iso, char *out, size_t outcap) {
   char enc[BCG_ID_LEN * 3];
   char ts[BCG_TIME_LEN];
-  pct_encode_seg(channel_id, enc, sizeof enc);
+  uriparse_pct_encode_seg(channel_id, enc, sizeof enc);
   if (iso8601_utc_compact(start_iso, ts, sizeof ts) != 0) {
     iso8601_compact_prefix(start_iso, ts, sizeof ts);
     if (strlen(ts) >= 14) ts[14] = '\0';

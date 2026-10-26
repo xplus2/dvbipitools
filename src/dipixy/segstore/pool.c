@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include "priv.h"
 #include "lib/sys/ioutil.h"
 
 #include <stdatomic.h>

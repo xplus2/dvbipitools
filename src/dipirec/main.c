@@ -1,9 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "cli/args.h"
 #include "lib/sys/ioutil.h"

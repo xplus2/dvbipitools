@@ -14,6 +14,7 @@
 
 /* null-terminated, malloc'd. 0 ok, -1 error */
 int read_all(FILE *f, char **out, size_t *out_len);
+int read_path(const char *path, char **out, size_t *out_len);
 
 uint32_t rand_seed32(void);
 
@@ -34,6 +35,8 @@ size_t u64_to_dec(char *dst, uint64_t val);
 /* grow arr for need elems of elemsz B, doubling *cap (16 initial, or need if bigger).
    new arr on success, NULL on OOM (arr, *cap unchanged) */
 void *array_grow(void *arr, int *cap, int need, size_t elemsz);
+int array_reserve(void **arr, int *cap, int need, size_t elemsz);
+int grow_zeroed(void **arr, int *n, int need, size_t elemsz);
 
 /* doubles *cap (elem_size units, initial_elems if 0, 1 if both 0) until >= need_elems, realloc *buf.
    0 ok, -1 OOM or size overflow (*buf, *cap unchanged) */
@@ -55,22 +58,9 @@ void chomp(char *line);
 /* fgets that never splits a line. 1 line read, 0 EOF, -1 line >= cap bytes (rest of line discarded, buf unusable) */
 int read_line(FILE *f, char *buf, size_t cap);
 
-/* splits line in place on ',', writes up to max_fields pointers into fields[]. returns fill count */
+/* splits line in place on ',', writes up to max_fields pointers into fields[], extra fields dropped. returns fill count.
+   RFC 4180 quoted fields unquoted, blanks around fields trimmed */
 size_t csv_split(char *line, char **fields, size_t max_fields);
-
-typedef enum { ISO8601_OFF_NONE, ISO8601_OFF_Z, ISO8601_OFF_NUMERIC } iso8601_offset_kind_t;
-
-typedef struct {
-  int y, mo, d, h, mi, s;
-  int off_min; /* signed minutes east of UTC, meaningful only if offset_kind == ISO8601_OFF_NUMERIC */
-  iso8601_offset_kind_t offset_kind;
-} iso8601_t;
-
-/* "YYYY-MM-DDTHH:MM:SS[.f+][Z|+HH:MM|-HH:MM]", fraction dropped, trailing junk rejected. No offset gives ISO8601_OFF_NONE, caller picks zone. 0 ok, -1 malformed or field out of range (no leap second) */
-int iso8601_split(const char *in, iso8601_t *out);
-
-/* EN 300 468 annex C, proleptic Gregorian calendar date to modified Julian Day */
-long date_to_mjd(int y, int mo, int d);
 
 typedef struct {
   char *buf;
@@ -106,9 +96,6 @@ void sbuf_add_u64(sbuf_t *b, uint64_t v);
 void sbuf_add_uint(sbuf_t *b, unsigned v);
 void sbuf_add_hex2(sbuf_t *b, unsigned v);
 void sbuf_add_hex(sbuf_t *b, unsigned v);
-
-/* RFC3986 urlencode path segment. NUL-terminates */
-void pct_encode_seg(const char *s, char *out, size_t outcap);
 
 /* power of two >= n, 1 if n == 0 */
 static inline size_t next_pow2(size_t n) {

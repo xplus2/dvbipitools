@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "dipixy/ws/ws_broadcast.h"
 #include "dipixy/ws/ws_clients.h"

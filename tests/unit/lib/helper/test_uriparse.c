@@ -6,8 +6,8 @@
 #include <string.h>
 #include <sys/socket.h>
 
+#include "../../alloc_fail.h"
 #include "lib/helper/uriparse.h"
-#include "lib/sys/ioutil.h"
 #include "lib/sys/ioutil.h"
 
 typedef struct {
@@ -199,23 +199,48 @@ START_TEST(mcast_src_uri_formats) {
 }
 END_TEST
 
-START_TEST(pct_encode_seg_encodes_reserved_and_high_bytes) {
+START_TEST(pct_encode_seg_forms) {
+  static const struct {
+    const char *in;
+    size_t cap;
+    const char *want;
+  } t[] = {
+      {"abc-._~XYZ09", 64, "abc-._~XYZ09"},
+      {"Das Erste HD/ZDF-1._~", 64, "Das%20Erste%20HD%2FZDF-1._~"},
+      {"a b/c", 64, "a%20b%2Fc"},
+      {"\xC3\xA9", 64, "%C3%A9"},
+      {"a b", 4, "a"},
+      {"a b", 5, "a%20"},
+      {"abcdef", 4, "abc"},
+      {"", 4, ""},
+  };
   char out[64];
-  pct_encode_seg("Das Erste HD/ZDF-1._~", out, sizeof out);
-  ck_assert_str_eq(out, "Das%20Erste%20HD%2FZDF-1._~");
-  pct_encode_seg("\xc3\xa4", out, sizeof out);
-  ck_assert_str_eq(out, "%C3%A4");
+  memset(out, 'X', sizeof out);
+  uriparse_pct_encode_seg(t[_i].in, out, t[_i].cap);
+  ck_assert_str_eq(out, t[_i].want);
+  memset(out, 'X', sizeof out);
+  uriparse_pct_encode_seg("abc", out, 0);
+  ck_assert_int_eq(out[0], 'X');
 }
 END_TEST
 
-START_TEST(pct_encode_seg_truncates_on_triplet_boundary) {
-  char out[8];
-  memset(out, 'x', sizeof out);
-  pct_encode_seg("a b c", out, 5);
-  ck_assert_str_eq(out, "a%20");
-  memset(out, 'x', sizeof out);
-  pct_encode_seg("a", out, 0);
-  ck_assert_int_eq(out[0], 'x');
+START_TEST(pct_decode_forms) {
+  static const struct {
+    const char *in;
+    int rc;
+    const char *want;
+  } t[] = {
+      {"a%20b%2Fc", 0, "a b/c"},
+      {"%C3%a9", 0, "\xC3\xA9"},
+      {"plain", 0, "plain"},
+      {"", 0, ""},
+      {"a%2", -1, NULL},
+      {"a%zz", -1, NULL},
+  };
+  char buf[32];
+  bufcpy(buf, sizeof buf, t[_i].in);
+  ck_assert_int_eq(uriparse_pct_decode(buf), t[_i].rc);
+  if (!t[_i].rc) ck_assert_str_eq(buf, t[_i].want);
 }
 END_TEST
 
@@ -238,6 +263,45 @@ START_TEST(redact_drops_userinfo_up_to_last_at) {
 }
 END_TEST
 
+START_TEST(mcast_cfg_src_edge_cases_and_redact_oom) {
+  static const char *const bad_src[] = {
+    "[2001:db8::1@[ff3e::1]:5000", "@", "@232.1.2.3", "[::]@[ff3e::1]:5000", "[ff05::1]@[ff3e::1]:5000", "2001:db8::1@232.1.2.3:5000",
+    "10.0.0.1@[ff3e::1]:5000", "10.0.0.1@232.1.2.3", "10.0.0.1@10.0.0.2:5000",
+  };
+  static const char *const good_src[] = {"[2001:db8::1]@[ff3e::1]:5000", "@232.1.2.3:5000", "10.0.0.1@232.1.2.3:5000", "232.1.2.3:5000"};
+  int family = 0;
+  unsigned port = 0;
+  char group[64];
+  char src[64];
+  char err[96];
+  char small[4];
+  char *r;
+  int rc;
+  ck_assert_int_eq(uriparse_mcast_cfg("239.1.2.3:5000", &family, group, sizeof group, &port, err, sizeof err), 0);
+  ck_assert_int_eq(uriparse_mcast_cfg("10.0.0.1:5000", &family, group, sizeof group, &port, err, sizeof err), -1);
+  ck_assert_ptr_nonnull(strstr(err, "multicast"));
+  for (size_t k = 0; k < sizeof bad_src / sizeof *bad_src; k++)
+    ck_assert_msg(uriparse_mcast_src_addrport(bad_src[k], &family, group, sizeof group, &port, src, sizeof src) == -1, "accepted %s", bad_src[k]);
+  for (size_t k = 0; k < sizeof good_src / sizeof *good_src; k++)
+    ck_assert_msg(uriparse_mcast_src_addrport(good_src[k], &family, group, sizeof group, &port, src, sizeof src) == 0, "rejected %s", good_src[k]);
+  ck_assert_int_eq(uriparse_mcast_src_addrport("10.0.0.1@232.1.2.3:5000", &family, group, sizeof group, &port, small, sizeof small), -1);
+  alloc_fail_at(0);
+  r = uriparse_redact_dup("rtp://user:pw@host:80/x?q#f");
+  alloc_fail_end();
+  ck_assert_ptr_null(r);
+  r = uriparse_redact_dup("no-scheme?q");
+  ck_assert_str_eq(r, "no-scheme?q");
+  free(r);
+  rc = uriparse_pct_decode((char[]){"%4"});
+  ck_assert_int_eq(rc, -1);
+  rc = uriparse_pct_decode((char[]){"%zz"});
+  ck_assert_int_eq(rc, -1);
+  uriparse_pct_encode_seg("a b", small, sizeof small);
+  ck_assert_str_eq(small, "a");
+  uriparse_pct_encode_seg("abcdef", small, 0);
+}
+END_TEST
+
 static Suite *uriparse_suite(void) {
   Suite *s = suite_create("uriparse");
   TCase *tc = tcase_create("core");
@@ -248,9 +312,10 @@ static Suite *uriparse_suite(void) {
   tcase_add_loop_test(tc, mcast_describe_formats_and_truncates, 0, (int)(sizeof describe_cases / sizeof describe_cases[0]));
   tcase_add_test(tc, mcast_describe_leaves_zero_capacity_buffer_alone);
   tcase_add_loop_test(tc, rtmp_or_file_classifies_and_bounds_targets, 0, (int)(sizeof target_cases / sizeof target_cases[0]));
-  tcase_add_test(tc, pct_encode_seg_encodes_reserved_and_high_bytes);
-  tcase_add_test(tc, pct_encode_seg_truncates_on_triplet_boundary);
+  tcase_add_loop_test(tc, pct_encode_seg_forms, 0, 8);
+  tcase_add_loop_test(tc, pct_decode_forms, 0, 6);
   tcase_add_loop_test(tc, redact_drops_userinfo_up_to_last_at, 0, (int)(sizeof redact_cases / sizeof redact_cases[0]));
+  tcase_add_test(tc, mcast_cfg_src_edge_cases_and_redact_oom);
   suite_add_tcase(s, tc);
   return s;
 }

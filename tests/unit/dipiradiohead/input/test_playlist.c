@@ -8,6 +8,14 @@
 #include "dipiradiohead/input/playlist.h"
 #include "lib/sys/ioutil.h"
 
+START_TEST(playlist_extract_follows_absolute_m3u_url) {
+  const char *body = "#EXTM3U\nhttp://example.com/stream.aac\n";
+  char url[256];
+  ck_assert_int_eq(playlist_extract((const unsigned char *)body, strlen(body), NULL, url, sizeof url), 1);
+  ck_assert_str_eq(url, "http://example.com/stream.aac");
+}
+END_TEST
+
 static http_url_t make_base(const char *host, unsigned port, const char *path) {
   http_url_t u;
   memset(&u, 0, sizeof u);
@@ -16,14 +24,6 @@ static http_url_t make_base(const char *host, unsigned port, const char *path) {
   bufcpy(u.path, sizeof u.path, path);
   return u;
 }
-
-START_TEST(playlist_extract_follows_absolute_m3u_url) {
-  const char *body = "#EXTM3U\nhttp://example.com/stream.aac\n";
-  char url[256];
-  ck_assert_int_eq(playlist_extract((const unsigned char *)body, strlen(body), NULL, url, sizeof url), 1);
-  ck_assert_str_eq(url, "http://example.com/stream.aac");
-}
-END_TEST
 
 START_TEST(playlist_extract_ignores_plain_audio_body) {
   const char *body = "not-really-audio-but-thats-ok-here";

@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include "lib/bim/sdns.h"
 #include <string.h>
 
 #include "lib/helper/argutil.h"
@@ -9,6 +10,11 @@
 #include "priv.h"
 
 args_status_t dixy_cli_check(config_t *cfg) {
+  if (cfg->sdns_ns && !cfg->nschemas && !sdns_set_find(cfg->sdns_ns)) {
+    argerr("YS000742", "unsupported BiM SD&S namespace: %s", cfg->sdns_ns);
+    args_free(cfg);
+    return ARGS_ERR;
+  }
   if (cfg->tls_cert && !cfg->tls_key) {
     argerr("YS000620", "--tls-cert given without --tls-key");
     args_free(cfg);

@@ -6,7 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../../alloc_fail.h"
 #include "lib/tva/tva_xml.h"
+#include "lib/tva/tva_xml/tva_xml_int.h"
 #include "lib/sys/ioutil.h"
 #include "../../log_capture.h"
 
@@ -582,6 +584,197 @@ START_TEST(tva_xml_read_takes_names_from_the_right_elements) {
 }
 END_TEST
 
+START_TEST(tva_time_helpers_convert_and_reject) {
+  char out[64];
+  char small[8];
+  long long secs;
+  long diff;
+  long dur;
+  char ws[] = " \t\n x y \r\n";
+  char blank[] = "  \t ";
+  char empty[] = "";
+  iso8601_compact_prefix("2024-05-01T10:20:30Z", out, sizeof out);
+  ck_assert_str_eq(out, "20240501102030Z");
+  iso8601_compact_prefix("2024-05-01T10:20:30Z", small, sizeof small);
+  ck_assert_str_eq(small, "2024050");
+  iso8601_compact_prefix("", out, sizeof out);
+  ck_assert_str_eq(out, "");
+  ck_assert_int_eq(iso8601_utc_secs("1970-01-02T00:00:00Z", &secs), 0);
+  ck_assert_int_eq((int)secs, 86400);
+  ck_assert_int_eq(iso8601_utc_secs("1970-01-02T01:00:00+01:00", &secs), 0);
+  ck_assert_int_eq((int)secs, 86400);
+  ck_assert_int_eq(iso8601_utc_secs("1970-01-02T00:00:00", &secs), 0);
+  ck_assert_int_eq(iso8601_utc_secs("garbage", &secs), -1);
+  ck_assert_int_eq(iso8601_utc_compact("2024-05-01T10:20:30+02:00", out, sizeof out), 0);
+  ck_assert_str_eq(out, "20240501082030");
+  ck_assert_int_eq(iso8601_utc_compact("1969-12-31T23:00:00-02:00", out, sizeof out), 0);
+  ck_assert_str_eq(out, "19700101010000");
+  ck_assert_int_eq(iso8601_utc_compact("nope", out, sizeof out), -1);
+  trim_ws(ws);
+  ck_assert_str_eq(ws, "x y");
+  trim_ws(blank);
+  ck_assert_str_eq(blank, "");
+  trim_ws(empty);
+  ck_assert_str_eq(empty, "");
+  ck_assert_int_eq(duration_to_secs("P1DT2H3M4S", &dur), 0);
+  ck_assert_int_eq((int)dur, 86400 + 7200 + 180 + 4);
+  ck_assert_int_eq(duration_to_secs("PT1.5S", &dur), 0);
+  ck_assert_int_eq((int)dur, 1);
+  ck_assert_int_eq(duration_to_secs("PT0S", &dur), 0);
+  ck_assert_int_eq(duration_to_secs("PT5M", &dur), 0);
+  ck_assert_int_eq((int)dur, 300);
+  ck_assert_int_eq(duration_to_secs("P2D", &dur), 0);
+  ck_assert_int_eq(duration_to_secs("", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("X", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("P", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("PT", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("PTT1S", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("P1H", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("PT1D", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("P1S", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("PT1", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("PT1X", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("PTS", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("P-1D", &dur), -1);
+  ck_assert_int_eq(duration_to_secs("P999999999D", &dur), -1);
+  ck_assert_int_eq(iso8601_add_secs("2024-05-01T10:00:00Z", 3600, out, sizeof out), 0);
+  ck_assert_str_eq(out, "2024-05-01T11:00:00Z");
+  ck_assert_int_eq(iso8601_add_secs("2024-05-01T10:00:00+05:30", 90, out, sizeof out), 0);
+  ck_assert_ptr_nonnull(strstr(out, "+05:30"));
+  ck_assert_int_eq(iso8601_add_secs("2024-05-01T10:00:00-03:15", 86400, out, sizeof out), 0);
+  ck_assert_ptr_nonnull(strstr(out, "-03:15"));
+  ck_assert_int_eq(iso8601_add_secs("2024-05-01T10:00:00", -60, out, sizeof out), 0);
+  ck_assert_int_eq(iso8601_add_secs("bad", 1, out, sizeof out), -1);
+  ck_assert_int_eq(iso8601_add_secs("2024-05-01T10:00:00Z", 1, small, 2), -1);
+  ck_assert_int_eq(iso8601_diff_secs("2024-05-01T10:00:00Z", "2024-05-01T10:01:00Z", &diff), 0);
+  ck_assert_int_eq((int)diff, 60);
+  ck_assert_int_eq(iso8601_diff_secs("bad", "2024-05-01T10:01:00Z", &diff), -1);
+  ck_assert_int_eq(iso8601_diff_secs("2024-05-01T10:01:00Z", "bad", &diff), -1);
+  ck_assert_int_eq(iso8601_diff_secs("1990-01-01T00:00:00Z", "2024-05-01T10:01:00Z", &diff), -1);
+  ck_assert_int_eq(iso8601_diff_secs("2024-05-01T10:01:00Z", "1990-01-01T00:00:00Z", &diff), -1);
+  ck_assert_int_eq(secs_to_duration(3725, out, sizeof out), 0);
+  ck_assert_str_eq(out, "PT1H2M5S");
+  ck_assert_int_eq(secs_to_duration(-1, out, sizeof out), -1);
+  ck_assert_int_eq(secs_to_duration(3725, small, 4), -1);
+}
+END_TEST
+
+static void rich_doc(bcg_doc_t *d) {
+  bcg_channel_t *c;
+  bcg_programme_t *p;
+  bcg_doc_init(d);
+  c = bcg_add_channel(d);
+  bufcpy(c->id, sizeof c->id, "a");
+  bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
+  bcg_channel_add_name(c, "A One");
+  c->onid = 1;
+  c->tsid = 2;
+  c->sid = 3;
+  c = bcg_add_channel(d);
+  bufcpy(c->id, sizeof c->id, "nouri");
+  c = bcg_add_channel(d);
+  bufcpy(c->id, sizeof c->id, "idle");
+  bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.3:5000");
+  for (int i = 0; i < 5; i++) {
+    p = bcg_add_programme(d);
+    bufcpy(p->channel_id, sizeof p->channel_id, i == 3 ? "ghost" : i == 4 ? "nouri" : "a");
+    bufcpy(p->start, sizeof p->start, "2024-05-01T10:00:00Z");
+    if (i == 1) bufcpy(p->stop, sizeof p->stop, "2024-05-01T11:00:00Z");
+    if (i != 2) bcg_set_text(&p->title, "T & <t>");
+    if (i == 0) {
+      bcg_set_text(&p->desc, "D");
+      bcg_set_text(&p->category, "News");
+    }
+  }
+}
+
+START_TEST(tva_xml_write_covers_optional_parts_and_oom_fallback) {
+  bcg_doc_t d;
+  char *buf = NULL;
+  size_t sz = 0;
+  FILE *f;
+  rich_doc(&d);
+  f = open_memstream(&buf, &sz);
+  ck_assert_ptr_nonnull(f);
+  tva_xml_write(f, &d);
+  fclose(f);
+  ck_assert_ptr_nonnull(strstr(buf, "PublishedEndTime"));
+  ck_assert_ptr_nonnull(strstr(buf, "<Synopsis>D</Synopsis>"));
+  ck_assert_ptr_nonnull(strstr(buf, "name=\"DTT\""));
+  ck_assert_ptr_null(strstr(buf, "ghost"));
+  free(buf);
+  for (long n = 0;; n++) {
+    int hit;
+    f = tmpfile();
+    ck_assert_ptr_nonnull(f);
+    alloc_fail_at(n);
+    tva_xml_write(f, &d);
+    hit = alloc_fail_end();
+    fclose(f);
+    if (!hit) break;
+  }
+  bcg_doc_free(&d);
+}
+END_TEST
+
+START_TEST(tva_xml_read_survives_allocation_failures) {
+  bcg_doc_t d;
+  char *buf = NULL;
+  size_t sz = 0;
+  FILE *f;
+  rich_doc(&d);
+  f = open_memstream(&buf, &sz);
+  ck_assert_ptr_nonnull(f);
+  tva_xml_write(f, &d);
+  fclose(f);
+  bcg_doc_free(&d);
+  for (long n = 0;; n++) {
+    bcg_doc_t back;
+    int hit;
+    FILE *in = fmemopen(buf, sz, "r");
+    ck_assert_ptr_nonnull(in);
+    bcg_doc_init(&back);
+    alloc_fail_at(n);
+    (void)tva_xml_read(in, &back);
+    hit = alloc_fail_end();
+    fclose(in);
+    bcg_doc_free(&back);
+    if (!hit) break;
+  }
+  free(buf);
+}
+END_TEST
+
+START_TEST(tva_crid_caching_and_unparseable_starts) {
+  bcg_programme_t pr;
+  char crid[TVA_CRID_BUF];
+  int rc;
+  memset(&pr, 0, sizeof pr);
+  snprintf(pr.channel_id, sizeof pr.channel_id, "ch 1");
+  snprintf(pr.start, sizeof pr.start, "2024-05-01T10:20:30+02:00");
+  alloc_fail_at(0);
+  rc = tva_programme_cache_crid(&pr);
+  alloc_fail_end();
+  ck_assert_int_eq(rc, -1);
+  ck_assert_ptr_null(pr.crid);
+  ck_assert_int_eq(tva_programme_cache_crid(&pr), 0);
+  ck_assert_str_eq(pr.crid, "crid://dipixmltv.invalid/ch%201/20240501082030");
+  ck_assert_int_eq(tva_programme_cache_crid(&pr), 0);
+  free(pr.crid);
+  pr.crid = NULL;
+  snprintf(pr.start, sizeof pr.start, "20240501T10:20:30garbage!!");
+  tva_build_crid(pr.channel_id, pr.start, crid, sizeof crid);
+  ck_assert_ptr_nonnull(strstr(crid, "crid://dipixmltv.invalid/ch%201/"));
+  snprintf(pr.start, sizeof pr.start, "x");
+  tva_build_crid(pr.channel_id, pr.start, crid, sizeof crid);
+  ck_assert_ptr_nonnull(strstr(crid, "/x"));
+  snprintf(pr.start, sizeof pr.start, "12345678901234567890123456");
+  tva_build_crid(pr.channel_id, pr.start, crid, sizeof crid);
+  ck_assert_str_eq(tva_genre_href("NEWS"), "urn:tva:metadata:cs:ContentCS:2011:3.1.1");
+  ck_assert_str_eq(tva_genre_href("unknown thing"), "urn:tva:metadata:cs:ContentCS:2011:3.0");
+}
+END_TEST
+
 static Suite *tva_xml_suite(void) {
   Suite *s = suite_create("tva_xml");
   TCase *tc = tcase_create("core");
@@ -605,6 +798,10 @@ static Suite *tva_xml_suite(void) {
   tcase_add_test(tc, tva_genre_href_maps_known_and_falls_back);
   tcase_add_test(tc, tva_xml_write_emits_mapped_genre_href);
   tcase_add_test(tc, tva_xml_read_takes_names_from_the_right_elements);
+  tcase_add_test(tc, tva_time_helpers_convert_and_reject);
+  tcase_add_test(tc, tva_xml_write_covers_optional_parts_and_oom_fallback);
+  tcase_add_test(tc, tva_xml_read_survives_allocation_failures);
+  tcase_add_test(tc, tva_crid_caching_and_unparseable_starts);
   suite_add_tcase(s, tc);
   return s;
 }

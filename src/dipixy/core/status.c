@@ -6,17 +6,14 @@
 #include <stdarg.h>
 #include <stdatomic.h>
 #include <stdint.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 
-#include "lib/sys/ioutil.h"
 #include "lib/helper/jsonbuf.h"
 #include "lib/sys/signal.h"
-
 #include "../ts/capture/capture.h"
 #include "../ts/channels/channels.h"
 #include "../reactor/reactor.h"

@@ -7,7 +7,6 @@
 #include "../http3_int.h"
 
 #include <string.h>
-#include <sys/uio.h>
 
 _Thread_local int t_h3_udp4 = -1;
 _Thread_local int t_h3_udp6 = -1;

@@ -4,10 +4,8 @@
 #include <string.h>
 
 #include "lib/cas/device_state_core.h"
-#include "lib/helper/log.h"
 #include "lib/helper/secure_zero.h"
 
-#include "crypto.h"
 #include "device.h"
 #include "version.h"
 

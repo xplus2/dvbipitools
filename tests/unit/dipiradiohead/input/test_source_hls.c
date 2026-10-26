@@ -1,53 +1,20 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "dipiradiohead/input/source.h"
 #include "lib/demux/crc32.h"
-
 #include "http_fixture.h"
-
-static size_t build_pat(unsigned char *out, unsigned pmt_pid) {
-  unsigned char body[16];
-  size_t n = 0;
-  size_t hdr;
-  size_t crc_at;
-  uint32_t crc;
-  body[n++] = 0x00;
-  body[n++] = 0x01;
-  body[n++] = 0xC1;
-  body[n++] = 0x00;
-  body[n++] = 0x00;
-  body[n++] = 0x00;
-  body[n++] = 0x01;
-  body[n++] = (unsigned char)(0xE0 | ((pmt_pid >> 8) & 0x1F));
-  body[n++] = (unsigned char)pmt_pid;
-  hdr = n + 4;
-  out[0] = 0x00;
-  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
-  out[2] = (unsigned char)hdr;
-  memcpy(out + 3, body, n);
-  crc_at = 3 + n;
-  crc = crc32_mpeg(out, crc_at);
-  out[crc_at + 0] = (unsigned char)(crc >> 24);
-  out[crc_at + 1] = (unsigned char)(crc >> 16);
-  out[crc_at + 2] = (unsigned char)(crc >> 8);
-  out[crc_at + 3] = (unsigned char)crc;
-  return crc_at + 4;
-}
+#include "../../fx_ts.h"
 
 static size_t build_pmt_1mpegaudio(unsigned char *out, unsigned pid) {
   unsigned char body[16];
@@ -83,16 +50,6 @@ static size_t build_pmt_1mpegaudio(unsigned char *out, unsigned pid) {
   return crc_at + 4;
 }
 
-static void wrap_psi_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++) pkt[i] = 0xFF;
-}
-
 static size_t wrap_pes_multi(unsigned char *out, unsigned pid, const unsigned char *es, size_t es_len) {
   static const unsigned char pes_hdr[9] = {0x00, 0x00, 0x01, 0xC0, 0x00, 0x00, 0x80, 0x00, 0x00};
   size_t off = 0;
@@ -126,17 +83,6 @@ static size_t wrap_pes_multi(unsigned char *out, unsigned pid, const unsigned ch
   return off;
 }
 
-static void wrap_pes_packet(unsigned char pkt[188], unsigned pid, const unsigned char *payload, size_t plen) {
-  unsigned char hdr[9] = {0x00, 0x00, 0x01, 0xC0, 0x00, 0x00, 0x80, 0x00, 0x00};
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  memcpy(pkt + 4, hdr, sizeof hdr);
-  memcpy(pkt + 4 + sizeof hdr, payload, plen);
-  for (size_t i = 4 + sizeof hdr + plen; i < 188; i++) pkt[i] = 0xFF;
-}
-
 #define BUILT_SEG_CAP (188 * 10)
 
 static size_t build_hls_audio_segment(unsigned char *out) {
@@ -153,10 +99,10 @@ static size_t build_hls_audio_segment(unsigned char *out) {
   memcpy(es + 417, es, 4);
 
   slen = build_pat(section, 0x100);
-  wrap_psi_packet(out + off, 0x0000, section, slen);
+  wrap_section_packet(out + off, 0x0000, section, slen);
   off += 188;
   slen = build_pmt_1mpegaudio(section, 0x101);
-  wrap_psi_packet(out + off, 0x100, section, slen);
+  wrap_section_packet(out + off, 0x100, section, slen);
   off += 188;
   off += wrap_pes_multi(out + off, 0x101, es, sizeof es);
   wrap_pes_packet(out + off, 0x101, (const unsigned char *)"F", 1);

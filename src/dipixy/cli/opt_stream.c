@@ -8,9 +8,7 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/helper/log.h"
 #include "lib/mux/fec2022.h"
-
 #include "priv.h"
 #include "../segstore.h"
 

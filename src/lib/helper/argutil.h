@@ -75,4 +75,10 @@ int argutil_addrport_parse(const char *s, int *family, char *addr_out, size_t ad
 /* same, plus <hostname>:<port> (family AF_UNSPEC, name not resolved here) */
 int argutil_hostport_parse(const char *s, int *family, char *host_out, size_t host_out_sz, unsigned *port_out);
 
+struct option;
+int argutil_prescan(int argc, char **argv, const char *shortopts, const struct option *longopts, int opt_configtest, int opt_strict, const char **cfg_path, int *configtest, int *strict);
+
+int argutil_int_opt(const char *tool, const char *code, const char *opt, const char *val, int (*parse)(const char *s, int *out), const char *hint, int *out);
+int argutil_color_opt(const char *tool, const char *code, const char *val, int *out);
+
 #endif

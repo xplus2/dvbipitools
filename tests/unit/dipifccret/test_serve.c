@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -13,8 +12,8 @@
 
 #include "lib/config/yamlcfg.h"
 #include "lib/sys/signal.h"
-
 #include "dipifccret/run/run.h"
+#include "../fx_net.h"
 
 #define ARGV_MAX 16
 #define RING_BYTES 8192u
@@ -50,23 +49,6 @@ static capture_t *open_failing_capture(const config_t *cfg, char *errbuf, size_t
   (void)cfg;
   snprintf(errbuf, errbuf_len, "capture unavailable");
   return NULL;
-}
-
-static unsigned free_udp_port(void) {
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-  int fd = socket(AF_INET, SOCK_DGRAM, 0);
-  unsigned port;
-
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  port = ntohs(addr.sin_port);
-  close(fd);
-  return port;
 }
 
 static int serve_on(const char *host, char *const *extra, size_t n_extra, unsigned port, int stop_first, fccret_open_capture_fn open_capture) {

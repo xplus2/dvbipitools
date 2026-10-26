@@ -107,11 +107,35 @@ START_TEST(base64_round_trips_every_length_with_exact_buffers) {
 }
 END_TEST
 
+START_TEST(base64_decode_rejects_malformed_input) {
+  unsigned char out[16];
+  size_t n = 0;
+  ck_assert_int_eq(base64_decode("Zm9v", out, sizeof out, &n), 0);
+  ck_assert_uint_eq(n, 3u);
+  ck_assert_int_eq(base64_decode(" Zm 9v\t\r\n", out, sizeof out, &n), 0);
+  ck_assert_int_eq(base64_decode("Zg==", out, sizeof out, &n), 0);
+  ck_assert_uint_eq(n, 1u);
+  ck_assert_int_eq(base64_decode("Zm8=", out, sizeof out, &n), 0);
+  ck_assert_uint_eq(n, 2u);
+  ck_assert_int_eq(base64_decode("", out, sizeof out, &n), 0);
+  ck_assert_uint_eq(n, 0u);
+  ck_assert_int_eq(base64_decode("Zm9v", out, 2, &n), -1);
+  ck_assert_int_eq(base64_decode("Zg=a", out, sizeof out, &n), -1);
+  ck_assert_int_eq(base64_decode("Zm!v", out, sizeof out, &n), -1);
+  ck_assert_int_eq(base64_decode("Zh==", out, sizeof out, &n), -1);
+  ck_assert_int_eq(base64_decode("Zg===", out, sizeof out, &n), -1);
+  ck_assert_int_eq(base64_decode("-_-_", out, sizeof out, &n), -1);
+  ck_assert_int_eq(base64_decode("+/+/", out, sizeof out, &n), 0);
+  ck_assert_int_eq(base64_decode("09az", out, sizeof out, &n), 0);
+}
+END_TEST
+
 static Suite *base64_suite(void) {
   Suite *s = suite_create("base64");
   TCase *tc = tcase_create("core");
   tcase_add_loop_test(tc, base64_rfc4648_vectors, 0, (int)(sizeof b64_cases / sizeof b64_cases[0]));
   tcase_add_test(tc, base64_all_byte_values);
+  tcase_add_test(tc, base64_decode_rejects_malformed_input);
   tcase_add_loop_test(tc, base64_round_trips_every_length_with_exact_buffers, 0, 70);
   suite_add_tcase(s, tc);
   return s;

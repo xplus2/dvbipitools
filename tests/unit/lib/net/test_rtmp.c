@@ -15,6 +15,7 @@
 #include "lib/net/rtmp/handshake.h"
 #include "lib/net/rtmp/priv.h"
 #include "lib/net/rtmp/rtmp.h"
+#include "../../fx_proto.h"
 
 typedef struct {
   unsigned char buf[16384];
@@ -41,21 +42,6 @@ static void error_cb(void *ctx, const char *msg) {
   c->error[n] = '\0';
 }
 
-static size_t build_chunk(unsigned char *out, uint32_t cid, unsigned char type, uint32_t stream_id, const unsigned char *payload, size_t len) {
-  rtmp_chunk_header_t h;
-  size_t n;
-  h.fmt = RTMP_CHUNK_FMT_0;
-  h.cid = cid;
-  h.timestamp = 0;
-  h.length = (uint32_t)len;
-  h.type = type;
-  h.stream_id = stream_id;
-  n = rtmp_chunk_basic_header_write(out, h.fmt, h.cid);
-  n += rtmp_chunk_message_header_write(out + n, &h);
-  memcpy(out + n, payload, len);
-  return n + len;
-}
-
 static size_t build_result_connect(unsigned char *out) {
   ebuf_t b;
   size_t n;
@@ -74,19 +60,6 @@ static size_t build_result_connect(unsigned char *out) {
   amf_object_key(&b, "code");
   amf_string(&b, "NetConnection.Connect.Success");
   amf_object_end(&b);
-  n = build_chunk(out, 3, RTMP_TYPE_INVOKE, 0, b.p, b.len);
-  ebuf_free(&b);
-  return n;
-}
-
-static size_t build_result_create_stream(unsigned char *out, double stream_id) {
-  ebuf_t b;
-  size_t n;
-  memset(&b, 0, sizeof b);
-  amf_string(&b, "_result");
-  amf_number(&b, 2);
-  amf_null(&b);
-  amf_number(&b, stream_id);
   n = build_chunk(out, 3, RTMP_TYPE_INVOKE, 0, b.p, b.len);
   ebuf_free(&b);
   return n;

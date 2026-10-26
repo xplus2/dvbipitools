@@ -1,4 +1,4 @@
-.TH DIPIXY 1 "2026-08-28" "dvbipitools" "dvbipitools Manual"
+.TH DIPIXY 1 "2026-10-19" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dipixy \- serve IPTV/radio streams over HTTP(S)
 .SH SYNOPSIS
@@ -191,6 +191,17 @@ discovery wait at startup/reload. Default: 3.
 .B \-\-sds\-refresh\-interval \fIseconds\fR
 .B sds://
 re\-poll period. Default: 30.
+BiM-encoded SD&S segments (compression 001, TS 102 034 5.5.2) are decoded too,
+namespaces urn:dvb:metadata:iptv:sdns:2014-1, 2012-1, 2008-1 and urn:dvb:ipi:sdns:2006.
+.TP
+.B \-\-sds\-bim\-namespace \fIns\fR
+.B sds://
+BiM SD&S namespace (config sds.bim-namespace). Default: the newest that decodes the segment.
+.TP
+.B \-\-sds\-schema \fIpath\fR
+.B sds://
+SD&S schema file, or directory searched for the schema of \fB\-\-sds\-bim\-namespace\fR, decoding BiM segments through it
+(config sds.schema, a list). Repeatable, one schema file at most. Default: the compiled-in schemas.
 .TP
 .B \-\-segment\-size \fIseconds\fR
 Target segment duration
@@ -828,7 +839,9 @@ defaults ships as
 .BR dipisrt (1),
 .BR dipirec (1),
 .BR dipimetrics (1)
+.BR udpxy (1)
 .PP
-Project homepage: https://github.com/xplus2/dvbipitools
-.SH COPYRIGHT
+Project homepage:
+.URL "https://github.com/xplus2/dvbipitools" "" "."
+.SH LICENSE
 Licensed under the GNU General Public License, version 3 or later.

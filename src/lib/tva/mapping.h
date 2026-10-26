@@ -15,20 +15,16 @@ typedef struct {
 } mapping_entry_t;
 
 typedef struct {
-  const char *id;
-  int idx;
-} mapping_idx_t;
-
-typedef struct {
   mapping_entry_t *entries;
   int count;
   int cap;
-  mapping_idx_t *idx;
+  bcg_key_idx_t *idx;
 } mapping_t;
 
 /* csv: id,uri,tsid,onid,sid. dipiscan's own csv shape, col 1 = xmltv id */
 int mapping_load(const char *path, mapping_t *m);
 void mapping_free(mapping_t *m);
+void mapping_write_row(FILE *f, const bcg_channel_t *c);
 
 /* 0 found, -1 not found */
 int mapping_lookup(const mapping_t *m, const char *id, char *uri, size_t uri_cap, unsigned *tsid, unsigned *onid, unsigned *sid);

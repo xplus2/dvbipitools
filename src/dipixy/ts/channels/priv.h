@@ -18,7 +18,7 @@ void build_from_csv(channel_list_t *l, const char *path, int insecure_tls);
 void build_from_xml(channel_list_t *l, const char *path);
 void build_from_http(channel_list_t *l, const char *url, int insecure_tls);
 void build_from_mcast(channel_list_t *l, const char *uri);
-void build_from_sds(channel_list_t *l, const char *addrport, const char *iface, double timeout_s);
+void build_from_sds(channel_list_t *l, const char *addrport, const config_t *cfg);
 void channels_join_all(channel_list_t *l, const config_t *cfg);
 
 #endif

@@ -63,12 +63,6 @@ static void fake_ack(fake_sub_t *f, size_t n) {
   f->off += n;
 }
 
-static void fake_write(fake_sub_t *f, const uint8_t *data, size_t len) {
-  ck_assert_uint_le(f->len + len, sizeof f->data);
-  memcpy(f->data + f->len, data, len);
-  f->len += len;
-}
-
 const uint8_t *dash_lldash_ring_peek(int slot, size_t *len) { return fake_peek(&fake_dash[slot], len); }
 void dash_lldash_ring_hold(int slot, size_t n) { fake_hold(&fake_dash[slot], n); }
 void dash_lldash_ring_ack(int slot, size_t n) { fake_ack(&fake_dash[slot], n); }
@@ -120,6 +114,12 @@ static int mp4_dispatch(h3_conn_t *c, h3_req_t *r, int sub) { return h3_mp4push_
 
 static void ts_feed(int sub, const uint8_t *data, size_t len) {
   ck_assert_int_eq(byte_ring_write(&g_ts_subs[sub].h3_ring, data, len), 1);
+}
+
+static void fake_write(fake_sub_t *f, const uint8_t *data, size_t len) {
+  ck_assert_uint_le(f->len + len, sizeof f->data);
+  memcpy(f->data + f->len, data, len);
+  f->len += len;
 }
 
 static void dash_feed(int sub, const uint8_t *data, size_t len) { fake_write(&fake_dash[sub], data, len); }

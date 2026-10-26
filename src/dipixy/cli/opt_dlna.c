@@ -5,12 +5,8 @@
 #include <limits.h>
 #include <math.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/helper/log.h"
-#include "lib/mux/fec2022.h"
-
 #include "priv.h"
 
 args_status_t dixy_opt_dlna(dixy_opt_t *p, int c) {
@@ -39,6 +35,19 @@ args_status_t dixy_opt_dlna(dixy_opt_t *p, int c) {
       cfg->sds_refresh_interval_s = v;
       break;
     }
+    case OPT_SDS_BIM_NAMESPACE:
+      cfg->sdns_ns = optarg;
+      break;
+    case OPT_SDS_SCHEMA:
+      if (!p->schema_cli) cfg->nschemas = 0;
+      p->schema_cli = 1;
+      if (cfg->nschemas >= SCHEMA_MAX) {
+        argerr("YS000753", "too many --schema entries (max %d)", SCHEMA_MAX);
+        args_free(cfg);
+        return ARGS_ERR;
+      }
+      cfg->schemas[cfg->nschemas++] = optarg;
+      break;
     case OPT_SSDP_TTL: {
       unsigned v;
       if (argutil_uint_range(optarg, 1, 255, &v)) {

@@ -11,10 +11,6 @@
 #include "lib/cas/emmg_server/emmg_server.h"
 #include "lib/helper/argutil.h"
 #include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
-#include "lib/mux/fec2022.h"
-#include "lib/net/netconnect.h"
-
 #include "priv.h"
 
 args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {

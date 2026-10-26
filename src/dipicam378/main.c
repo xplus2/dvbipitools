@@ -1,18 +1,14 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 
 #include "lib/config/yamlcfg.h"
 #include "lib/sys/antidebug.h"
-#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
 #include "lib/metrics/export.h"
 #include "lib/sys/signal.h"
-
 #include "cli/args.h"
 #include "config.h"
 #include "cs378x/cs378x.h"

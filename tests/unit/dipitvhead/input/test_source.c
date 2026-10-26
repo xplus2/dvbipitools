@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "dipitvhead/input/source.h"
+#include "../../fx_net.h"
 
 static void wait_ms(int ms) {
   struct timespec ts = {0, (long)ms * 1000000L};
@@ -41,23 +42,6 @@ static ssize_t pump_datagram(tvsrc_t *s, const char *group, unsigned port, const
   }
   close(sock);
   return n;
-}
-
-static unsigned free_udp_port(void) {
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-  int fd = socket(AF_INET, SOCK_DGRAM, 0);
-  unsigned port;
-
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  port = ntohs(addr.sin_port);
-  close(fd);
-  return port;
 }
 
 static void fill_udp_input(dipitvhead_input_t *in, const char *group, unsigned port) {

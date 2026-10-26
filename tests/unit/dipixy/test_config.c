@@ -25,6 +25,8 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "insecure: yes\n", CFG_INT, insecure_tls, 1, NULL),
   CFG_FIELD(config_t, "sds:\n  timeout: 4.5\n", CFG_DOUBLE, sds_timeout_s, 4.5, NULL),
   CFG_FIELD(config_t, "sds:\n  refresh-interval: 20\n", CFG_DOUBLE, sds_refresh_interval_s, 20, NULL),
+  CFG_FIELD(config_t, "sds:\n  schema:\n    - /dev/null\n    - /tmp\n", CFG_INT, nschemas, 2, NULL),
+  CFG_FIELD(config_t, "sds:\n  schema:\n    - /dev/null\n    - /tmp\n", CFG_STRPTR, schemas[1], 0, "/tmp"),
   CFG_FIELD(config_t, "segment-size: 4\n", CFG_DOUBLE, segment_size, 4, NULL),
   CFG_FIELD(config_t, "segment-count: 6\n", CFG_INT, segment_count, 6, NULL),
   CFG_FIELD(config_t, "hls:\n  part-size: 0.5\n", CFG_DOUBLE, hls_part_size, 0.5, NULL),

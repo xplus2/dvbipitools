@@ -3,7 +3,6 @@
 
 #define _GNU_SOURCE
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -180,10 +179,79 @@ END_TEST
 START_TEST(m3u_uri_without_preceding_extinf_is_ignored) {
   char path[160];
   input_t in;
-  write_temp_file(path, ".m3u", "rtp://239.1.1.1:5000\n");
+  write_temp_file(path, ".m3u", "rtp://239.1.1.1:5000\n#EXTINF:-1,A\nrtp://239.1.1.2:5000\n");
   ck_assert_int_eq(input_load(path, &in), 0);
-  ck_assert_int_eq(in.service_count, 0);
+  ck_assert_int_eq(in.service_count, 1);
+  ck_assert_str_eq(in.services[0].address, "239.1.1.2");
   input_free(&in);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(empty_inputs_are_rejected) {
+  char path[160];
+  input_t in;
+  sds_package_t pkgs[2];
+  sds_cell_t cells[2];
+  int n = -1;
+  static const char *const sfx[] = {".csv", ".m3u", ".xspf"};
+  for (size_t k = 0; k < sizeof sfx / sizeof *sfx; k++) {
+    write_temp_file(path, sfx[k], "\n");
+    ck_assert_int_eq(input_load(path, &in), -1);
+    unlink(path);
+  }
+  write_temp_file(path, ".csv", "\n\n");
+  ck_assert_int_eq(input_load_packages(path, pkgs, 2, &n), -1);
+  ck_assert_int_eq(input_load_cells(path, cells, 2, &n), -1);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(duplicate_triplets_are_rejected) {
+  char path[160];
+  input_t in;
+  /* line 1 defaults to sid 1, line 2 sets it explicitly */
+  write_temp_file(path, ".csv", "A,rtp://239.1.1.1:5000\nB,rtp://239.1.1.2:5000,1,1,1\n");
+  ck_assert_int_eq(input_load(path, &in), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", "A,rtp://239.1.1.1:5000\nB,rtp://239.1.1.2:5000,1,1,7\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(csv_quoting_bom_comments_and_blanks) {
+  char path[160];
+  input_t in;
+  sds_package_t pkgs[2];
+  sds_cell_t cells[2];
+  int n = 0;
+  write_temp_file(path, ".csv", "\xEF\xBB\xBF\"News, Weather\", rtp://239.1.1.1:5000 , 1, 2, 3\n# comment\n  \nPlain,udp://239.1.1.2:5000\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.service_count, 2);
+  ck_assert_str_eq(in.services[0].name, "News, Weather");
+  ck_assert_uint_eq(in.services[0].sid, 3u);
+  ck_assert_str_eq(in.services[1].name, "Plain");
+  unlink(path);
+
+  write_temp_file(path, ".csv", "\xEF\xBB\xBF# packages\n1, \"Bundle, Big\" ,eng,1, News | Plain \n");
+  ck_assert_int_eq(input_load_packages(path, pkgs, 2, &n), 0);
+  ck_assert_int_eq(n, 1);
+  ck_assert_str_eq(pkgs[0].name, "Bundle, Big");
+  ck_assert_int_eq(pkgs[0].service_count, 2);
+  ck_assert_str_eq(pkgs[0].service_names[0], "News");
+  ck_assert_str_eq(pkgs[0].service_names[1], "Plain");
+  unlink(path);
+
+  write_temp_file(path, ".csv", "# cells\n\"Paris, East\",FR,1:IDF\n");
+  ck_assert_int_eq(input_load_cells(path, cells, 2, &n), 0);
+  ck_assert_str_eq(cells[0].id, "Paris, East");
+  unlink(path);
+
+  write_temp_file(path, ".m3u", "\xEF\xBB\xBF#EXTINF:-1,A\nrtp://239.1.1.1:5000\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_str_eq(in.services[0].name, "A");
   unlink(path);
 }
 END_TEST
@@ -275,10 +343,23 @@ END_TEST
 START_TEST(xml_counts_services_and_providers) {
   char path[160];
   input_t in;
-  write_temp_file(path, ".xml", "<ServiceDiscovery><ServiceProviderDiscovery><ServiceProvider/><ServiceProvider/></ServiceProviderDiscovery><BroadcastDiscovery><SingleService/><SingleService/><SingleService/></BroadcastDiscovery></ServiceDiscovery>\n");
+  write_temp_file(path, ".xml", "<ServiceDiscovery><BroadcastDiscovery DomainName=\"a\"><SingleService/><SingleService/></BroadcastDiscovery><BroadcastDiscovery DomainName=\"b\"><SingleService/></BroadcastDiscovery></ServiceDiscovery>\n");
   ck_assert_int_eq(input_load(path, &in), 0);
   ck_assert_int_eq(in.service_count, 3);
   ck_assert_int_eq(in.raw_provider_count, 2);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(xml_sp_discovery_version_and_providers_from_service_provider) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".xml", "<ServiceDiscovery><ServiceProviderDiscovery><ServiceProvider DomainName=\"a\" Version=\"9\"/><ServiceProvider DomainName=\"b\" Version=\"4\"/></ServiceProviderDiscovery></ServiceDiscovery>\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_uint_eq(in.raw_payload_id, DVBSTP_PAYLOAD_SP_DISCOVERY);
+  ck_assert_int_eq(in.raw_provider_count, 2);
+  ck_assert_int_eq(in.raw_version, 9);
   input_free(&in);
   unlink(path);
 }
@@ -303,6 +384,19 @@ START_TEST(xml_detects_regionalisation_discovery_root) {
   ck_assert_int_eq(input_load(path, &in), 0);
   ck_assert_int_eq(in.kind, INPUT_RAW_XML);
   ck_assert_uint_eq(in.raw_payload_id, DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(xml_detects_regionalization_discovery_root) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".xml", "<RegionalizationDiscovery DomainName=\"d\" Version=\"3\">content</RegionalizationDiscovery>\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.kind, INPUT_RAW_XML);
+  ck_assert_uint_eq(in.raw_payload_id, DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY);
+  ck_assert_int_eq(in.raw_version, 3);
   input_free(&in);
   unlink(path);
 }
@@ -581,9 +675,7 @@ START_TEST(xspf_handles_missing_titles_truncation_and_broken_tracks) {
   unlink(path);
 
   write_temp_file(path, ".xspf", "<track><location>udp://239.1.1.1:5000</location>");
-  ck_assert_int_eq(input_load(path, &in), 0);
-  ck_assert_int_eq(in.service_count, 0);
-  input_free(&in);
+  ck_assert_int_eq(input_load(path, &in), -1);
   unlink(path);
 
   write_temp_file(path, ".xspf", "<track><location>ftp://x</location></track>");
@@ -807,6 +899,123 @@ START_TEST(xspf_rejects_bad_ids) {
 }
 END_TEST
 
+START_TEST(xml_and_xspf_read_failures_and_version_attribute) {
+  char path[160];
+  input_t in;
+  static const char *const versions[] = {"Version=\"7\"", "Version=\"300\"", "Version=\"x\"", "Version=\"\"", ""};
+  static const int want[] = {7, -1, -1, -1, -1};
+  ck_assert_int_eq(input_load("/nonexistent/in.xml", &in), -1);
+  ck_assert_int_eq(input_load("/nonexistent/in.xspf", &in), -1);
+  ck_assert_int_eq(input_load("/nonexistent/in.csv", &in), -1);
+  for (size_t k = 0; k < sizeof versions / sizeof *versions; k++) {
+    char doc[200];
+    snprintf(doc, sizeof doc, "<ServiceDiscovery><BroadcastDiscovery %s DomainName=\"d\"><SingleService/></BroadcastDiscovery></ServiceDiscovery>", versions[k]);
+    write_temp_file(path, ".xml", doc);
+    ck_assert_int_eq(input_load(path, &in), 0);
+    ck_assert_int_eq(in.raw_version, want[k]);
+    input_free(&in);
+    ck_assert_ptr_null(in.raw_xml);
+    unlink(path);
+  }
+}
+END_TEST
+
+START_TEST(packages_and_cells_report_overlong_lines_and_missing_files) {
+  char path[160];
+  sds_package_t pkgs[4];
+  sds_cell_t cells[4];
+  int n = 0;
+  char *big = malloc(10000);
+  ck_assert_ptr_nonnull(big);
+  memset(big, 'a', 9999);
+  big[9999] = 0;
+  ck_assert_int_eq(input_load_packages("/nonexistent/pkgs.csv", pkgs, 4, &n), -1);
+  write_temp_file(path, ".csv", big);
+  ck_assert_int_eq(input_load_packages(path, pkgs, 4, &n), -1);
+  unlink(path);
+  big[600] = 0;
+  write_temp_file(path, ".csv", big);
+  ck_assert_int_eq(input_load_cells(path, cells, 4, &n), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", "c1,DE,1:A\nc2,FR,1:B\nc3,IT,1:C\nc4,ES,1:D\nc5,PT,1:E\n");
+  ck_assert_int_eq(input_load_cells(path, cells, 4, &n), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", "c1,DE,1:A,x\n");
+  ck_assert_int_eq(input_load_cells(path, cells, 4, &n), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", "c1,DE,999:A\n");
+  ck_assert_int_eq(input_load_cells(path, cells, 4, &n), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", ",DE,1:A\n");
+  ck_assert_int_eq(input_load_cells(path, cells, 4, &n), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", "c1,DE\n");
+  ck_assert_int_eq(input_load_cells(path, cells, 4, &n), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", "1,N,deu,1,a\n1,N2,deu,1,b\n");
+  ck_assert_int_eq(input_load_packages(path, pkgs, 4, &n), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", "x,N,deu,1,a\n");
+  ck_assert_int_eq(input_load_packages(path, pkgs, 4, &n), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", "1,N,de,1,a\n");
+  ck_assert_int_eq(input_load_packages(path, pkgs, 4, &n), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", "1,N,deu,2,a\n");
+  ck_assert_int_eq(input_load_packages(path, pkgs, 4, &n), -1);
+  unlink(path);
+  write_temp_file(path, ".csv", "1,N,deu,0,a|b\n2,M,deu,,c\n");
+  ck_assert_int_eq(input_load_packages(path, pkgs, 4, &n), 0);
+  ck_assert_int_eq(n, 2);
+  ck_assert_int_eq(pkgs[0].visible, 0);
+  ck_assert_int_eq(pkgs[1].visible, 1);
+  unlink(path);
+  free(big);
+}
+END_TEST
+
+START_TEST(m3u_rejects_bad_ids_long_lines_overflow_and_uris) {
+  char path[160];
+  input_t in;
+  char *big = malloc(2600);
+  char line[64];
+  char *many = malloc(300 * 80);
+  ck_assert_ptr_nonnull(big);
+  ck_assert_ptr_nonnull(many);
+  static const char *const bad[] = {
+    "#EXTINF:-1 tsid=\"x\",A\nrtp://@239.1.1.1:5000\n",
+    "#EXTINF:-1 onid=\"70000\",A\nrtp://@239.1.1.1:5000\n",
+    "#EXTINF:-1 sid=\"-1\",A\nrtp://@239.1.1.1:5000\n",
+    "#EXTINF:-1,A\nhttp://example/x\n",
+  };
+  for (size_t k = 0; k < sizeof bad / sizeof *bad; k++) {
+    write_temp_file(path, ".m3u", bad[k]);
+    ck_assert_int_eq(input_load(path, &in), -1);
+    unlink(path);
+  }
+  memset(big, 'z', 2599);
+  big[2599] = 0;
+  write_temp_file(path, ".m3u", big);
+  ck_assert_int_eq(input_load(path, &in), -1);
+  unlink(path);
+  many[0] = 0;
+  for (int k = 0; k < 258; k++) {
+    snprintf(line, sizeof line, "#EXTINF:-1,S%d\nrtp://@239.%d.%d.1:5000\n", k, k / 200, k % 200);
+    strcat(many, line);
+  }
+  write_temp_file(path, ".m3u", many);
+  ck_assert_int_eq(input_load(path, &in), -1);
+  unlink(path);
+  write_temp_file(path, ".m3u", "#EXTM3U\n# comment\n\nrtp://@239.1.1.1:5000\n#EXTINF:-1 tsid=\"3\" onid=\"4\" sid=\"5\",Named\nrtp://@239.1.1.2:5000\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.service_count, 1);
+  ck_assert_uint_eq(in.services[0].sid, 5u);
+  unlink(path);
+  free(big);
+  free(many);
+}
+END_TEST
+
 static Suite *input_suite(void) {
   Suite *s = suite_create("dipisds_input");
   TCase *tc = tcase_create("core");
@@ -824,16 +1033,24 @@ static Suite *input_suite(void) {
   tcase_add_test(tc, m3u8_and_uppercase_suffixes_are_recognized);
   tcase_add_test(tc, xspf_parses_track_location_title_and_ids);
   tcase_add_test(tc, xspf_rejects_track_without_location);
+  tcase_add_test(tc, empty_inputs_are_rejected);
+  tcase_add_test(tc, duplicate_triplets_are_rejected);
+  tcase_add_test(tc, csv_quoting_bom_comments_and_blanks);
   tcase_add_test(tc, xml_detects_broadcast_discovery_root);
   tcase_add_test(tc, xml_detects_service_provider_discovery_root);
   tcase_add_test(tc, xml_counts_services_and_providers);
+  tcase_add_test(tc, xml_sp_discovery_version_and_providers_from_service_provider);
   tcase_add_test(tc, xml_detects_package_discovery_root);
   tcase_add_test(tc, xml_detects_regionalisation_discovery_root);
+  tcase_add_test(tc, xml_detects_regionalization_discovery_root);
   tcase_add_test(tc, xml_detects_rms_fus_discovery_root);
   tcase_add_test(tc, xml_rejects_unknown_root_element);
   tcase_add_test(tc, xml_rejects_oversize_file);
   tcase_add_test(tc, xml_accepts_file_at_size_limit);
   tcase_add_test(tc, unrecognized_suffix_is_rejected);
+  tcase_add_test(tc, xml_and_xspf_read_failures_and_version_attribute);
+  tcase_add_test(tc, packages_and_cells_report_overlong_lines_and_missing_files);
+  tcase_add_test(tc, m3u_rejects_bad_ids_long_lines_overflow_and_uris);
   tcase_add_test(tc, missing_file_is_rejected);
   tcase_add_test(tc, packages_file_parses_id_name_lang_visible_and_services);
   tcase_add_test(tc, packages_file_rejects_missing_field);

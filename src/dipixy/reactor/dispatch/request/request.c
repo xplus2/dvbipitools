@@ -2,22 +2,13 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #define _DEFAULT_SOURCE
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "dipixy/reactor/dispatch/priv.h"
-#include "dipixy/reactor/dispatch/route_common.h"
 #include "dipixy/core/metrics.h"
-#include "dipixy/hls/hls.h"
-#include "dipixy/dash/dash.h"
-#include "dipixy/dash/lldash.h"
-#include "dipixy/segment/segment.h"
-#include "dipixy/segment/mp4push.h"
 #include "dipixy/ts/lcevcselect.h"
 #include "dipixy/ts/pmtselect.h"
-#include "dipixy/ts/ts_push.h"
-#include "lib/sys/ioutil.h"
 
 /* dispatche request from c->in: parse reqln */
 void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t method_len, const char *path_in, size_t path_len, int minor_version, const struct phr_header *headers, size_t num_headers, size_t header_bytes, size_t body_len) {

@@ -16,6 +16,7 @@
 #include "lib/mux/psi_build.h"
 
 #include "ts_test_util.h"
+#include "../../fx_ts.h"
 
 static mkv_opts_t base_cfg(void) {
   mkv_opts_t opts;
@@ -478,43 +479,6 @@ START_TEST(mkv_no_supported_tracks_writes_nothing_and_no_error) {
   unlink(path);
 }
 END_TEST
-
-/* one-AAC-ES PMT for prog_num, ES pid = pmt_pid+1 */
-static size_t build_pmt_aac(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
-  unsigned char body[16];
-  size_t n = 0;
-  size_t hdr;
-  size_t crc_at;
-  uint32_t crc;
-  unsigned es_pid = pmt_pid + 1;
-
-  body[n++] = (unsigned char)(prog_num >> 8);
-  body[n++] = (unsigned char)prog_num;
-  body[n++] = 0xC1;
-  body[n++] = 0x00;
-  body[n++] = 0x00;
-  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
-  body[n++] = (unsigned char)es_pid;
-  body[n++] = 0xF0;
-  body[n++] = 0x00;
-  body[n++] = 0x0F; /* AAC */
-  body[n++] = (unsigned char)(0xE0 | ((es_pid >> 8) & 0x1F));
-  body[n++] = (unsigned char)es_pid;
-  body[n++] = 0xF0;
-  body[n++] = 0x00;
-  hdr = n + 4;
-  out[0] = 0x02;
-  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
-  out[2] = (unsigned char)hdr;
-  memcpy(out + 3, body, n);
-  crc_at = 3 + n;
-  crc = crc32_mpeg(out, crc_at);
-  out[crc_at + 0] = (unsigned char)(crc >> 24);
-  out[crc_at + 1] = (unsigned char)(crc >> 16);
-  out[crc_at + 2] = (unsigned char)(crc >> 8);
-  out[crc_at + 3] = (unsigned char)crc;
-  return crc_at + 4;
-}
 
 START_TEST(mkv_multi_program_labels_tracks_with_program_names) {
   char path[] = "/tmp/dvbipitools_test_mkv_XXXXXX";

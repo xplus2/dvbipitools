@@ -63,12 +63,6 @@ static size_t fake_read(fake_sub_t *f, uint8_t *buf, size_t maxlen) {
   return n;
 }
 
-static void fake_write(fake_sub_t *f, const uint8_t *data, size_t len) {
-  ck_assert_uint_le(f->len + len, sizeof f->data);
-  memcpy(f->data + f->len, data, len);
-  f->len += len;
-}
-
 size_t dash_lldash_ring_read(int slot, uint8_t *buf, size_t maxlen) { return fake_read(&fake_dash[slot], buf, maxlen); }
 int dash_lldash_ring_errored(int slot) { return fake_dash[slot].errored; }
 int dash_lldash_sub_finalized(int slot) { return fake_dash[slot].finalized; }
@@ -209,6 +203,12 @@ static h2_push_slot_t *mp4_slots(h2_conn_t *conn) { return conn->mp4push; }
 
 static void ts_feed(int sub, const uint8_t *data, size_t len) {
   ck_assert_int_eq(byte_ring_write(&g_ts_subs[sub].h2_ring, data, len), 1);
+}
+
+static void fake_write(fake_sub_t *f, const uint8_t *data, size_t len) {
+  ck_assert_uint_le(f->len + len, sizeof f->data);
+  memcpy(f->data + f->len, data, len);
+  f->len += len;
 }
 
 static void dash_feed(int sub, const uint8_t *data, size_t len) { fake_write(&fake_dash[sub], data, len); }

@@ -10,6 +10,10 @@
 
 void bcg_cfg_defaults(config_t *cfg);
 
+/* --index names dipibcg collects. 0 ok, -1 unknown or not collected */
+#define BCG_INDEX_NAMES "pi-crid|pi-title|schedule-time|schedule-title"
+int bcg_index_names(const char *list, unsigned *mask);
+
 int bcg_cfg_load(config_t *cfg, const char *path, int strict);
 
 int bcg_cfg_test(const char *path, int strict);

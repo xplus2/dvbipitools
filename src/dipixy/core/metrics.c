@@ -6,7 +6,6 @@
 #include <stdatomic.h>
 
 #include "lib/metrics/render.h"
-#include "lib/sys/ioutil.h"
 #include "lib/sys/signal.h"
 #include "../ts/capture/capture.h"
 #include "../reactor/reactor.h"

@@ -1,16 +1,13 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/net/dvbstp.h"
 #include "lib/helper/xml_util.h"
 #include "dipisds/input.h"
 #include "dipisds/input/input_int.h"

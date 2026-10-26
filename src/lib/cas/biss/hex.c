@@ -3,17 +3,8 @@
 
 #include <string.h>
 
+#include "lib/helper/beutil.h"
 #include "biss.h"
-
-static int hexval(char c) {
-  if (c >= '0' && c <= '9')
-    return c - '0';
-  if (c >= 'a' && c <= 'f')
-    return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F')
-    return c - 'A' + 10;
-  return -1;
-}
 
 int biss_parse_hex16(const char *hex, unsigned char out[BISS_KEY_LEN]) {
   if (!hex || !out)
@@ -23,7 +14,7 @@ int biss_parse_hex16(const char *hex, unsigned char out[BISS_KEY_LEN]) {
   if (strlen(hex) != BISS_KEY_LEN * 2)
     return -1;
   for (size_t i = 0; i < BISS_KEY_LEN; i++) {
-    int hi = hexval(hex[2 * i]), lo = hexval(hex[2 * i + 1]);
+    int hi = hex_nibble(hex[2 * i]), lo = hex_nibble(hex[2 * i + 1]);
     if (hi < 0 || lo < 0)
       return -1;
     out[i] = (unsigned char)((hi << 4) | lo);
@@ -39,7 +30,7 @@ int biss1_parse_sw(const char *hex, unsigned char cw_out[BISS1_KEY_LEN]) {
   if (strlen(hex) != BISS1_SW_HEX_LEN)
     return -1;
   for (size_t i = 0; i < 6; i++) {
-    int hi = hexval(hex[2 * i]), lo = hexval(hex[2 * i + 1]);
+    int hi = hex_nibble(hex[2 * i]), lo = hex_nibble(hex[2 * i + 1]);
     if (hi < 0 || lo < 0)
       return -1;
     cw_out[i < 3 ? i : i + 1] = (unsigned char)((hi << 4) | lo);

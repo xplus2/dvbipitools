@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <errno.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,17 @@
 
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
+
+int __real_daemon(int nochdir, int noclose);
+static int g_daemon_fail;
+
+int __wrap_daemon(int nochdir, int noclose) {
+  if (g_daemon_fail) {
+    errno = EAGAIN;
+    return -1;
+  }
+  return __real_daemon(nochdir, noclose);
+}
 
 #define CAPTURE_MAX 512
 
@@ -95,6 +107,13 @@ START_TEST(daemonize_detaches_into_a_running_grandchild) {
 }
 END_TEST
 
+START_TEST(daemonize_reports_a_failing_daemon_call) {
+  g_daemon_fail = 1;
+  ck_assert_int_eq(toolmain_daemonize(1, "tool"), -1);
+  g_daemon_fail = 0;
+}
+END_TEST
+
 static Suite *toolmain_suite(void) {
   Suite *s = suite_create("toolmain");
   TCase *tc = tcase_create("core");
@@ -102,6 +121,7 @@ static Suite *toolmain_suite(void) {
   tcase_add_test(tc, banner_keeps_escape_sequences_when_colors_are_forced);
   tcase_add_test(tc, daemonize_not_requested_does_nothing);
   tcase_add_test(tc, daemonize_detaches_into_a_running_grandchild);
+  tcase_add_test(tc, daemonize_reports_a_failing_daemon_call);
   suite_add_tcase(s, tc);
   return s;
 }

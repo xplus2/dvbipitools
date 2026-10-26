@@ -7,7 +7,6 @@
 
 #include "lib/demux/fec2022.h"
 #include "lib/mux/fec2022.h"
-#include "lib/mux/rtpheader.h"
 
 #define L 4u
 #define D 3u
@@ -461,6 +460,31 @@ START_TEST(fec2022_dec_recovers_when_repair_precedes_sources) {
 }
 END_TEST
 
+START_TEST(fec2022_dec_recovers_when_repair_precedes_first_source) {
+  fec2022_enc_t *e = fec2022_enc_new(2, 2, 96);
+  fec2022_dec_t *dc = fec2022_dec_new(2, 2);
+  unsigned char src[4][PKT_LEN];
+  unsigned char rep[FEC2022_MAX_REPAIR];
+  unsigned char out[4 * PKT_LEN];
+  size_t rlen;
+
+  ck_assert_ptr_nonnull(e);
+  ck_assert_ptr_nonnull(dc);
+  for (unsigned i = 0; i < 4; i++) {
+    build_source(src[i], (uint16_t)(0x3000 + i), 1000 + i, (unsigned char)(i + 3));
+    fec2022_enc_feed(e, src[i], PKT_LEN, 5000 + i, rep, sizeof rep);
+  }
+  rlen = fec2022_enc_drain(e, rep, sizeof rep);
+  ck_assert_uint_gt(rlen, 0u);
+  fec2022_dec_repair(dc, rep, rlen);
+  for (unsigned i = 0; i < 3; i++) fec2022_dec_source(dc, src[i], PKT_LEN);
+  ck_assert_uint_eq(drain_all(dc, out, sizeof out), (size_t)4 * PKT_LEN);
+  ck_assert_mem_eq(out + 3 * PKT_LEN, src[3], PKT_LEN);
+  fec2022_enc_free(e);
+  fec2022_dec_free(dc);
+}
+END_TEST
+
 START_TEST(fec2022_dec_recovers_packets_with_csrc) {
   fec2022_enc_t *e = fec2022_enc_new(L, D, 96);
   fec2022_dec_t *dc = fec2022_dec_new(L, D);
@@ -539,6 +563,7 @@ static Suite *fec2022_suite(void) {
   tcase_add_test(tc, fec2022_dec_keeps_released_packets_until_drained);
   tcase_add_test(tc, fec2022_dec_recovers_with_late_repair);
   tcase_add_test(tc, fec2022_dec_recovers_when_repair_precedes_sources);
+  tcase_add_test(tc, fec2022_dec_recovers_when_repair_precedes_first_source);
   tcase_add_test(tc, fec2022_dec_recovers_packets_with_csrc);
   tcase_add_test(tc, fec2022_dec_drops_recovery_with_oversized_length);
   suite_add_tcase(s, tc);

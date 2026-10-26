@@ -6,6 +6,15 @@
 
 #include <stdio.h>
 
+static inline const char *extinf_comma(const char *body) {
+  int quoted = 0;
+  for (const char *p = body; *p; p++) {
+    if (*p == '"') quoted = !quoted;
+    else if (*p == ',' && !quoted) return p;
+  }
+  return NULL;
+}
+
 typedef struct {
   char *name; /* malloc'd, "" if absent */
   char *uri;  /* malloc'd */

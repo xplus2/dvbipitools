@@ -7,11 +7,6 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
-#include "lib/helper/uriparse.h"
-#include "lib/net/netconnect.h"
-
 #include "priv.h"
 
 args_status_t sds_opt_ret(sds_opt_t *p, int c) {

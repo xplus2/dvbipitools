@@ -1,17 +1,13 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/net/dvbstp.h"
-#include "lib/helper/xml_util.h"
 #include "dipisds/input.h"
 #include "dipisds/input/input_int.h"
 
@@ -23,6 +19,7 @@ int load_csv(FILE *f, input_t *in) {
 
   while ((rc = read_line(f, line, sizeof line)) != 0) {
     char *fields[5];
+    char *body;
     size_t nf;
     sds_service_t *s;
     lineno++;
@@ -31,8 +28,8 @@ int load_csv(FILE *f, input_t *in) {
       return -1;
     }
     chomp(line);
-    if (!line[0]) continue;
-    nf = csv_split(line, fields, 5);
+    if (!(body = csv_line_body(line, lineno))) continue;
+    nf = csv_split(body, fields, 5);
     if (nf < 2) {
       log_code("AE000224", "line %d: expected name,uri", lineno);
       return -1;

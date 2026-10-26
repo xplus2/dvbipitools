@@ -1,14 +1,12 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 
 #include "lib/helper/argutil.h"
-
+#include "lib/helper/playlist_out.h"
 #include "priv.h"
 
 
@@ -54,9 +52,8 @@ int scan_http_path_tmpl_valid(const char *t) {
 }
 
 int scan_fmt_from_name(const char *s, out_fmt_t *f) {
-  static const enum_map_t map[] = {{"m3u", OUT_M3U}, {"csv", OUT_CSV}, {"xspf", OUT_XSPF}, {"xml", OUT_XML}, {"null", OUT_NULL}};
   int v;
-  if (map_lookup(map, sizeof map / sizeof map[0], s, &v)) return -1;
+  if (playlist_out_fmt_parse(s, &v)) return -1;
   *f = (out_fmt_t)v;
   return 0;
 }

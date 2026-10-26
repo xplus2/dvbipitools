@@ -15,6 +15,7 @@
 #include "dipitvhead/cli/args.h"
 #include "dipitvhead/config.h"
 #include "dipitvhead/config/priv.h"
+#include "../cfg_fixture.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
@@ -555,13 +556,6 @@ START_TEST(rist_options_without_any_rist_peer_are_rejected_by_profile_check_only
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
-
-static void write_cfg(char *path, const char *text) {
-  int fd = mkstemp(path);
-  ck_assert_int_ge(fd, 0);
-  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
-  close(fd);
-}
 
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipitvhead_cfg_XXXXXX";

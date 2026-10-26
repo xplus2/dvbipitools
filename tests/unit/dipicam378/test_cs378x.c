@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "dipicam378/cs378x/cs378x.h"
+#include "../fx_net.h"
 
 START_TEST(crc32_matches_standard_check_value) {
   /* "123456789" -> 0xCBF43926 is the universal CRC-32/ISO-HDLC check value,
@@ -182,12 +183,6 @@ static int always_cw(const unsigned char *ecm, size_t ecm_len, unsigned srvid, u
   return 0;
 }
 
-static double monotonic_seconds(void) {
-  struct timespec ts;
-  ck_assert_int_eq(clock_gettime(CLOCK_MONOTONIC, &ts), 0);
-  return (double)ts.tv_sec + (double)ts.tv_nsec / 1000000000.0;
-}
-
 static int make_throttled_client(unsigned port) {
   struct timeval tv = {0, 100 * 1000};
   int fd = connect_loopback(port);
@@ -222,27 +217,6 @@ static void saturate_ecm_response_path(int fd, const unsigned char frame[36]) {
 
 /* slow-reader fds: 1 response may be buffered pre-saturation, unread request
    backlog earns RST not FIN on close (normal TCP). both count as closed */
-static void assert_closed_by_server(int fd) {
-  double deadline = monotonic_seconds() + 2.0;
-  for (;;) {
-    struct pollfd pfd = {fd, POLLIN, 0};
-    unsigned char buf[256];
-    ssize_t rn;
-    int remain_ms = (int)((deadline - monotonic_seconds()) * 1000.0);
-    int pr;
-    if (remain_ms <= 0)
-      ck_abort_msg("fd %d: server never closed the connection", fd);
-    pr = poll(&pfd, 1, remain_ms);
-    ck_assert_msg(pr > 0, "fd %d: expected server-side close to be observable, poll returned %d", fd, pr);
-    rn = read(fd, buf, sizeof buf);
-    if (rn == 0)
-      return;
-    if (rn < 0 && errno == ECONNRESET)
-      return;
-    ck_assert_msg(rn > 0, "fd %d: unexpected read error, rn=%zd errno=%d", fd, rn, errno);
-  }
-}
-
 START_TEST(server_stop_unblocks_slow_reader_worker) {
   static const char password[] = "secret";
   cs378x_cfg_t cfg;

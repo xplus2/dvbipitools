@@ -33,6 +33,8 @@ src/*.o
 /build*/
 /cmake-*/
 
+/vgcore*
+
 # dist
 /CMakeFiles
 /obj-x86_64-linux-gnu

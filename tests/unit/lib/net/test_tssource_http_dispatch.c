@@ -1,19 +1,17 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/time.h>
 #include <unistd.h>
 
 #include "lib/net/ts/source.h"
+#include "../../fx_net.h"
 
 typedef struct {
   int listen_fd;
@@ -21,6 +19,18 @@ typedef struct {
   const size_t *response_lens;
   int n_responses;
 } scripted_server_t;
+
+static size_t drive_read(tssrc_t *s, unsigned char *buf, size_t cap, int max_iters) {
+  size_t got = 0;
+  for (int i = 0; i < max_iters && got < cap; i++) {
+    ssize_t n;
+    ck_assert_int_ge(tssrc_wait(s, 50), 0);
+    n = tssrc_read(s, buf + got, cap - got, NULL);
+    if (n > 0) got += (size_t)n;
+    else if (n < 0) break;
+  }
+  return got;
+}
 
 static void *serve_scripted(void *arg) {
   const scripted_server_t *a = arg;
@@ -43,21 +53,6 @@ static void *serve_scripted(void *arg) {
   return NULL;
 }
 
-static int make_listener(unsigned *port_out) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 4), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
-}
-
 static tssrc_open_state_t drive_open(tssrc_open_t *o, int max_iters) {
   tssrc_open_state_t st = TSSRC_OPEN_PENDING;
   for (int i = 0; i < max_iters && st == TSSRC_OPEN_PENDING; i++) {
@@ -74,18 +69,6 @@ static tssrc_open_state_t drive_open(tssrc_open_t *o, int max_iters) {
     st = tssrc_open_async_step(o, NULL);
   }
   return st;
-}
-
-static size_t drive_read(tssrc_t *s, unsigned char *buf, size_t cap, int max_iters) {
-  size_t got = 0;
-  for (int i = 0; i < max_iters && got < cap; i++) {
-    ssize_t n;
-    ck_assert_int_ge(tssrc_wait(s, 50), 0);
-    n = tssrc_read(s, buf + got, cap - got, NULL);
-    if (n > 0) got += (size_t)n;
-    else if (n < 0) break;
-  }
-  return got;
 }
 
 START_TEST(tssrc_http_dispatches_hls_ts_segmented_media_playlist) {

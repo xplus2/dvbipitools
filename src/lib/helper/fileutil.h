@@ -7,5 +7,6 @@
 #include <stdio.h>
 
 FILE *fileutil_open_std(const char *path, const char *mode);
+int fileutil_copy_out(FILE *tmp, const char *path);
 
 #endif

@@ -1,12 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/argutil.h"
 #include "lib/helper/describe.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"

@@ -2,8 +2,10 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include "../../alloc_fail.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "lib/bim/bimreader.h"
 #include "lib/bim/bitwriter.h"
@@ -128,7 +130,7 @@ START_TEST(bitwriter_vluimsbf8_matches_known_encoding) {
 }
 END_TEST
 
-START_TEST(bitwriter_vluimsbf4_round_trips_across_group_boundaries) {
+START_TEST(bitwriter_vluimsbf5_round_trips_across_group_boundaries) {
   static const uint64_t values[] = {0, 5, 15, 16, 1000, 100000, UINT64_MAX};
   size_t i;
   for (i = 0; i < sizeof values / sizeof values[0]; i++) {
@@ -138,23 +140,23 @@ START_TEST(bitwriter_vluimsbf4_round_trips_across_group_boundaries) {
     size_t len;
     uint64_t got;
     bitwriter_init(&bw);
-    ck_assert_int_eq(bitwriter_put_vluimsbf4(&bw, values[i]), 0);
+    ck_assert_int_eq(bitwriter_put_vluimsbf5(&bw, values[i]), 0);
     data = bitwriter_data(&bw, &len);
     bitreader_init(&br, data, len);
-    ck_assert_int_eq(bitreader_get_vluimsbf4(&br, &got), 0);
+    ck_assert_int_eq(bitreader_get_vluimsbf5(&br, &got), 0);
     ck_assert(got == values[i]);
     bitwriter_free(&bw);
   }
 }
 END_TEST
 
-START_TEST(bitwriter_vluimsbf4_encodes_uint64_max_without_overflow) {
+START_TEST(bitwriter_vluimsbf5_encodes_uint64_max_without_overflow) {
   bitwriter_t bw;
   const unsigned char *data;
   size_t len;
   bitwriter_init(&bw);
 
-  ck_assert_int_eq(bitwriter_put_vluimsbf4(&bw, UINT64_MAX), 0);
+  ck_assert_int_eq(bitwriter_put_vluimsbf5(&bw, UINT64_MAX), 0);
   data = bitwriter_data(&bw, &len);
   ck_assert_ptr_nonnull(data);
   ck_assert_uint_eq(len, 10u);
@@ -177,6 +179,64 @@ START_TEST(bitwriter_put_failure_leaves_state_untouched) {
 }
 END_TEST
 
+START_TEST(bitwriter_reset_append_and_allocation_failures) {
+  bitwriter_t a;
+  bitwriter_t b;
+  const unsigned char *p;
+  size_t n;
+  int rc;
+  bitwriter_init(&a);
+  bitwriter_init(&b);
+  ck_assert_int_eq(bitwriter_put(&a, 0xAB, 8), 0);
+  ck_assert_int_eq(bitwriter_put(&a, 5, 3), 0);
+  bitwriter_reset(&a);
+  ck_assert_int_eq(bitwriter_put(&a, 1, 1), 0);
+  p = bitwriter_data(&a, &n);
+  ck_assert_uint_eq(n, 1u);
+  ck_assert_uint_eq(p[0], 0x80);
+  bitwriter_reset(&a);
+  ck_assert_int_eq(bitwriter_append(&b, &a), 0);
+  ck_assert_int_eq(bitwriter_put(&a, 0xFF, 8), 0);
+  ck_assert_int_eq(bitwriter_put(&a, 5, 3), 0);
+  ck_assert_int_eq(bitwriter_append(&b, &a), 0);
+  ck_assert_int_eq(bitwriter_put(&b, 1, 1), 0);
+  ck_assert_int_eq(bitwriter_append(&b, &a), 0);
+  p = bitwriter_data(&b, &n);
+  ck_assert_uint_eq(n, 3u);
+  bitwriter_free(&a);
+  bitwriter_free(&b);
+
+  for (int what = 0; what < 7; what++)
+    for (long k = 0;; k++) {
+      int hit;
+      bitwriter_t w;
+      bitwriter_t src;
+      unsigned char data[100];
+      memset(data, 7, sizeof data);
+      bitwriter_init(&w);
+      bitwriter_init(&src);
+      ck_assert_int_eq(bitwriter_put(&src, 0xAB, 8), 0);
+      ck_assert_int_eq(bitwriter_put(&src, 1, 2), 0);
+      ck_assert_int_eq(bitwriter_put(&w, 1, what == 2 || what == 3 ? 3 : 8), 0);
+      alloc_fail_at(k);
+      switch (what) {
+        case 0: rc = bitwriter_put_bytes(&w, data, sizeof data); break;
+        case 1: rc = bitwriter_put_bytes(&w, data, sizeof data) || bitwriter_put_vluimsbf8(&w, 0xFFFFFFFFFFULL); break;
+        case 2: rc = bitwriter_put_bytes(&w, data, sizeof data); break;
+        case 3: rc = bitwriter_put_vluimsbf5(&w, 0xFFFFFFFFFFULL) || bitwriter_flush(&w); break;
+        case 4: rc = bitwriter_append(&w, &src); break;
+        case 5: rc = bitwriter_put(&w, UINT64_MAX, 64) || bitwriter_put(&w, UINT64_MAX, 64); break;
+        default: p = bitwriter_data(&w, &n); rc = p == NULL; break;
+      }
+      hit = alloc_fail_end();
+      (void)rc;
+      bitwriter_free(&w);
+      bitwriter_free(&src);
+      if (!hit) break;
+    }
+}
+END_TEST
+
 static Suite *bitwriter_suite(void) {
   Suite *s = suite_create("bitwriter");
   TCase *tc = tcase_create("core");
@@ -186,9 +246,10 @@ static Suite *bitwriter_suite(void) {
   tcase_add_test(tc, bitwriter_vluimsbf8_round_trips_across_group_boundaries);
   tcase_add_test(tc, bitwriter_vluimsbf8_encodes_uint64_max_without_overflow);
   tcase_add_test(tc, bitwriter_vluimsbf8_matches_known_encoding);
-  tcase_add_test(tc, bitwriter_vluimsbf4_round_trips_across_group_boundaries);
-  tcase_add_test(tc, bitwriter_vluimsbf4_encodes_uint64_max_without_overflow);
+  tcase_add_test(tc, bitwriter_vluimsbf5_round_trips_across_group_boundaries);
+  tcase_add_test(tc, bitwriter_vluimsbf5_encodes_uint64_max_without_overflow);
   tcase_add_test(tc, bitwriter_put_failure_leaves_state_untouched);
+  tcase_add_test(tc, bitwriter_reset_append_and_allocation_failures);
   suite_add_tcase(s, tc);
   return s;
 }

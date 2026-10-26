@@ -7,24 +7,10 @@
 #ifdef HAVE_HTTP3
 
 #include "../ts/capture/capture.h"
-#include "../ts/channels/channels.h"
-#include "../hls/hls.h"
-#include "../dash/dash.h"
-#include "../segment/segment.h"
-#include "../ts/lcevcselect.h"
-#include "../ts/pidfilter.h"
-#include "../ts/pmtselect.h"
 #include "../reactor/internal.h"
-#include "../reactor/reactor_tls.h"
-#include "../reactor/dispatch/route_common.h"
-#include "../core/route.h"
-#include "../core/metrics.h"
 #include "../httpng/httpng.h"
-#include "http3.h"
 #include "http3_int.h"
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <stdatomic.h>
 #include <string.h>
 

@@ -308,6 +308,33 @@ START_TEST(cells_path_rejected_with_raw_xml_input) {
 }
 END_TEST
 
+START_TEST(bcg_options_need_name_and_transport) {
+  char *ok[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "My Headend", "-m", "239.1.2.3:5000",
+                "--bcg-name", "Guide", "--bcg-mcast", "239.1.2.9:3937", NULL};
+  char *no_name[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "My Headend", "-m", "239.1.2.3:5000",
+                     "--bcg-mcast", "239.1.2.9:3937", NULL};
+  char *no_transport[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "My Headend", "-m", "239.1.2.3:5000",
+                          "--bcg-name", "Guide", NULL};
+  char *bad_mcast[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "My Headend", "-m", "239.1.2.3:5000",
+                       "--bcg-name", "Guide", "--bcg-mcast", "nope", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(ok), ok, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.bcg_enabled, 1);
+  ck_assert_str_eq(cfg.bcg_mcast_addr, "239.1.2.9");
+  ck_assert_uint_eq(cfg.bcg_mcast_port, 3937);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(no_name), no_name, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(no_transport), no_transport, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(bad_mcast), bad_mcast, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(rms_name_enables_rms_with_lang_default) {
   char *argv[] = {"dipisds", "-a", "-i", "channels.csv", "-p", "example.org", "-O", "Name",
                   "-m", "239.1.2.3:5000", "--rms-name", "My RMS", "--rms-location", "https://rms.example/", NULL};
@@ -432,13 +459,6 @@ START_TEST(listen_format_follows_output_suffix) {
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
-
-static void write_cfg(char *path, const char *text) {
-  int fd = mkstemp(path);
-  ck_assert_int_ge(fd, 0);
-  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
-  close(fd);
-}
 
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipisds_cfg_XXXXXX";
@@ -587,8 +607,12 @@ static const option_case_t listen_option_cases[] = {
   OPT(output_path, CFG_STRPTR, 0, "-", "-l", "-m", "239.1.2.3:5000"),
   OPT(timeout_s, CFG_LONG, 35, NULL, "-l", "-m", "239.1.2.3:5000"),
   OPT(timeout_s, CFG_LONG, 12, NULL, "-l", "-m", "239.1.2.3:5000", "-t", "12"),
+  OPT(sdns_ns, CFG_STRPTR, 0, "urn:dvb:metadata:iptv:sdns:2008-1", "-l", "-m", "239.1.2.3:5000", "--bim-namespace", "urn:dvb:metadata:iptv:sdns:2008-1"),
   OPT(interval_s, CFG_LONG, 9, NULL, ANN_BASE, "--interval", "9"),
   OPT(dscp, CFG_INT, NET_DSCP_VIDEO_LOW, NULL, ANN_BASE, "--dscp", "video-low"),
+  OPT(ttl, CFG_UINT, 16, NULL, ANN_BASE),
+  OPT(ttl, CFG_UINT, 32, NULL, ANN_BASE, "-T", "32"),
+  OPT(ttl, CFG_UINT, 255, NULL, ANN_BASE, "--ttl", "255"),
   OPT(daemonize, CFG_INT, 1, NULL, ANN_BASE, "-d"),
   OPT(verbose, CFG_INT, 1, NULL, ANN_BASE, "-v"),
   OPT(iface, CFG_STRPTR, 0, "eth7", ANN_BASE, "-I", "eth7"),
@@ -635,6 +659,8 @@ static const message_case_t error_cases[] = {
   MSG(ARGS_ERR, "invalid -L lang: de (3-letter ISO 639-2 code)", ANN_BASE, "-L", "de"),
   MSG(ARGS_ERR, "invalid -m group:port: bogus", "-a", "-m", "bogus"),
   MSG(ARGS_ERR, "invalid --dscp: loud", ANN_BASE, "--dscp", "loud"),
+  MSG(ARGS_ERR, "invalid -T ttl: 0 (1..255)", ANN_BASE, "-T", "0"),
+  MSG(ARGS_ERR, "invalid -T ttl: 256 (1..255)", ANN_BASE, "--ttl", "256"),
   MSG(ARGS_ERR, "invalid -t seconds: soon", ANN_BASE, "-t", "soon"),
   MSG(ARGS_ERR, "invalid -t seconds: 0 (announce interval must be at least 1)", ANN_BASE, "-t", "0"),
   MSG(ARGS_ERR, "invalid --format: pdf", "-l", MC, "-f", "pdf"),
@@ -657,6 +683,8 @@ static const message_case_t error_cases[] = {
   MSG(ARGS_ERR, "invalid --fus-lang: fr (3-letter ISO 639-2 code)", ANN_BASE, "--fus-name", "F", "--fus-id", "1", "--fus-lang", "fr"),
   MSG(ARGS_ERR, "invalid --fus-id: 12ab", ANN_BASE, "--fus-name", "F", "--fus-id", "12ab"),
   MSG(ARGS_ERR, "invalid --fus-announce: bogus", ANN_BASE, "--fus-name", "F", "--fus-id", "1", "--fus-announce", "bogus"),
+  MSG(ARGS_ERR, "invalid --fus-announce: 10.0.0.1:5000", ANN_BASE, "--fus-name", "F", "--fus-id", "1", "--fus-announce", "10.0.0.1:5000"),
+  MSG(ARGS_ERR, "invalid --bcg-mcast: 10.0.0.1:5000", ANN_BASE, "--bcg-name", "G", "--bcg-mcast", "10.0.0.1:5000"),
   MSG(ARGS_ERR, "", ANN_BASE, "--no-such-option"),
 };
 
@@ -686,7 +714,14 @@ static const message_case_t check_cases[] = {
   MSG(ARGS_ERR, "--metrics-id is announce-only", "-l", MC, "--metrics-id", "m"),
   MSG(ARGS_ERR, "--al-fec-* options are announce-only", "-l", MC, "--al-fec-addr", "10.0.0.3:6002"),
   MSG(ARGS_ERR, "--al-fec-* options are announce-only", "-l", MC, "--al-fec-pt", "97"),
-  MSG(ARGS_ERR, "--packages/--cells/--rms-*/--fus-* options are announce-only", "-l", MC, "--cells", "c.xml"),
+  MSG(ARGS_ERR, "--packages/--cells/--rms-*/--fus-*/--bcg-* options are announce-only", "-l", MC, "--cells", "c.xml"),
+  MSG(ARGS_ERR, "-i/-p/-O/-L/--dscp/-T are announce-only", "-l", MC, "-p", "ex.org"),
+  MSG(ARGS_ERR, "-i/-p/-O/-L/--dscp/-T are announce-only", "-l", MC, "-T", "4"),
+  MSG(ARGS_ERR, "-i/-p/-O/-L/--dscp/-T are announce-only", "-l", MC, "--dscp", "voice"),
+  MSG(ARGS_ERR, "-o/-f/--bim-namespace are listen-only", ANN_BASE, "-o", "out.m3u"),
+  MSG(ARGS_ERR, "-o/-f/--bim-namespace are listen-only", ANN_BASE, "--bim-namespace", "urn:dvb:metadata:iptv:sdns:2008-1"),
+  MSG(ARGS_ERR, "--packages/--cells/--rms-name/--fus-name/--bcg-* have no effect with a raw .xml -i input", "-a", "-i", "x.xml", MC, "--bcg-name", "G", "--bcg-mcast", "239.9.9.9:5000"),
+  MSG(ARGS_ERR, "exactly one of -a/--announce or -l/--listen is required", MC, "-s", "x.xsd"),
 };
 
 static void run_message_case(const message_case_t *c) {
@@ -750,6 +785,160 @@ START_TEST(suffix_and_address_helpers) {
 }
 END_TEST
 
+START_TEST(schema_option_is_listen_only_and_repeatable) {
+  char *lis[] = {"dipisds", "-l", "-m", "239.1.2.3:5000", "-s", "a.xsd", "--schema", "dir", "--bim-namespace", "urn:example:sdns", NULL};
+  char *ann[] = {"dipisds", "-a", "-i", "s.xml", "-m", "239.1.2.3:5000", "-s", "a.xsd", NULL};
+  char *bad_ns[] = {"dipisds", "-l", "-m", "239.1.2.3:5000", "--bim-namespace", "urn:example:sdns", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(lis), lis, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.nschemas, 2);
+  ck_assert_str_eq(cfg.schemas[1], "dir");
+  ck_assert_str_eq(cfg.sdns_ns, "urn:example:sdns");
+  yamlcfg_strpool_free(cfg.str_pool);
+  ck_assert_int_eq(args_parse(ARGC(ann), ann, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(bad_ns), bad_ns, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(discovery_and_metrics_options_parse_and_reject) {
+  char *good[] = {"dipisds", "-a", "-i", "x.csv", "-p", "ex.org", "-O", "Off", "-m", "239.1.2.3:5000", "--metrics", "/tmp/m.sock", "--metrics-id", "sds1", "--metrics-interval", "30", "--packages", "p.csv",
+                  "--cells", "c.csv", "--rms-name", "R", "--rms-lang", "fra", "--rms-location", "L", "--rms-logo", "http://x/l.png", NULL};
+  char *good_fus[] = {"dipisds", "-a", "-i", "x.csv", "-p", "ex.org", "-O", "Off", "-m", "239.1.2.3:5000", "--fus-name", "F", "--fus-lang", "eng", "--fus-id", "7", "--fus-announce", "239.9.9.9:5000", "--fus-logo", "http://x/f.png", NULL};
+  char *bad_interval[] = {"dipisds", "-a", "-i", "x.csv", "-p", "ex.org", "-O", "Off", "-m", "239.1.2.3:5000", "--metrics-interval", "0", NULL};
+  char *bad_rms_lang[] = {"dipisds", "-a", "-i", "x.csv", "-p", "ex.org", "-O", "Off", "-m", "239.1.2.3:5000", "--rms-name", "R", "--rms-location", "L", "--rms-lang", "fr", NULL};
+  char *bad_fus_lang[] = {"dipisds", "-a", "-i", "x.csv", "-p", "ex.org", "-O", "Off", "-m", "239.1.2.3:5000", "--fus-name", "F", "--fus-id", "1", "--fus-lang", "e", NULL};
+  char *bad_fus_id[] = {"dipisds", "-a", "-i", "x.csv", "-p", "ex.org", "-O", "Off", "-m", "239.1.2.3:5000", "--fus-name", "F", "--fus-id", "x", NULL};
+  char *bad_fus_ann[] = {"dipisds", "-a", "-i", "x.csv", "-p", "ex.org", "-O", "Off", "-m", "239.1.2.3:5000", "--fus-name", "F", "--fus-id", "1", "--fus-announce", "nope", NULL};
+  char *bad_bcg[] = {"dipisds", "-a", "-i", "x.csv", "-p", "ex.org", "-O", "Off", "-m", "239.1.2.3:5000", "--bcg-name", "G", "--bcg-mcast", "nope", NULL};
+  char *too_many[] = {"dipisds", "-l", "-m", "239.1.2.3:5000", "-s", "a", "-s", "b", "-s", "c", "-s", "d", "-s", "e", "-s", "f", "-s", "g", "-s", "h", "-s", "i", "-s", "j", "-s", "k", "-s", "l",
+                      "-s", "m", "-s", "n", "-s", "o", "-s", "p", "-s", "q", NULL};
+  config_t cfg;
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(good), good, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(good_fus), good_fus, &cfg), ARGS_OK);
+  ck_assert_uint_eq(cfg.fus_id, 7u);
+  ck_assert_str_eq(cfg.fus_announce_addr, "239.9.9.9");
+  yamlcfg_strpool_free(cfg.str_pool);
+  {
+    char **bad[] = {bad_interval, bad_rms_lang, bad_fus_lang, bad_fus_id, bad_fus_ann, bad_bcg, too_many};
+    int bad_argc[] = {ARGC(bad_interval), ARGC(bad_rms_lang), ARGC(bad_fus_lang), ARGC(bad_fus_id), ARGC(bad_fus_ann), ARGC(bad_bcg), ARGC(too_many)};
+    for (size_t k = 0; k < sizeof bad / sizeof *bad; k++) {
+      memset(&cfg, 0, sizeof cfg);
+      ck_assert_msg(args_parse(bad_argc[k], bad[k], &cfg) == ARGS_ERR, "case %zu accepted", k);
+      yamlcfg_strpool_free(cfg.str_pool);
+    }
+  }
+}
+END_TEST
+
+static void base_cfg(config_t *c, int listen) {
+  memset(c, 0, sizeof *c);
+  c->fl.have_mcast = 1;
+  if (listen) {
+    c->fl.have_l = 1;
+  } else {
+    c->fl.have_a = 1;
+    c->input_path = "x.csv";
+    c->provider = "ex.org";
+    c->offering = "Off";
+  }
+}
+
+START_TEST(cli_check_rejects_each_inconsistent_combination) {
+  config_t c;
+  int k = 0;
+#define EXPECT(listen, stmt, want) \
+  do { \
+    base_cfg(&c, listen); \
+    stmt; \
+    k++; \
+    ck_assert_msg(sds_cli_check(&c) == (want), "case %d", k); \
+  } while (0)
+  EXPECT(0, , ARGS_OK);
+  EXPECT(0, c.fl.have_l = 1, ARGS_ERR);
+  EXPECT(0, c.fl.have_mcast = 0, ARGS_ERR);
+  EXPECT(0, c.metrics_sock = "s", ARGS_ERR);
+  EXPECT(0, c.input_path = NULL, ARGS_ERR);
+  EXPECT(0, c.provider = NULL, ARGS_ERR);
+  EXPECT(0, c.offering = NULL, ARGS_ERR);
+  EXPECT(0, (c.input_path = "x.xml", c.provider = NULL, c.offering = NULL), ARGS_OK);
+  EXPECT(0, (c.fl.have_t = 1, c.fl.t_value = 0), ARGS_ERR);
+  EXPECT(0, (c.fl.have_t = 1, c.fl.t_value = 9), ARGS_OK);
+  EXPECT(0, (c.input_path = "x.xml", c.ret_enabled = 1), ARGS_ERR);
+  EXPECT(0, c.fl.have_ret_rtx_time = 1, ARGS_ERR);
+  EXPECT(0, c.ret_mc = 1, ARGS_ERR);
+  EXPECT(0, (c.ret_enabled = 1, c.ret_rsi_mc_ret = 1), ARGS_ERR);
+  EXPECT(0, c.ret_enabled = 1, ARGS_OK);
+  EXPECT(0, (c.input_path = "x.xml", c.fcc_enabled = 1), ARGS_ERR);
+  EXPECT(0, c.fcc_resolve_by_port = 1, ARGS_ERR);
+  EXPECT(0, (c.fcc_enabled = 1, c.fcc_resolve_by_port = 1, c.fcc_port = 60000, c.fl.have_fcc_resolve_max_channels = 1, c.fcc_resolve_max_channels = 6000), ARGS_ERR);
+  EXPECT(0, (c.fcc_enabled = 1, c.fcc_resolve_by_port = 1, c.fcc_resolve_base_port = 100), ARGS_OK);
+  EXPECT(0, (c.input_path = "x.xml", c.al_fec_enabled = 1), ARGS_ERR);
+  EXPECT(0, c.fl.have_al_fec_pt = 1, ARGS_ERR);
+  EXPECT(0, c.al_fec_enabled = 1, ARGS_OK);
+  EXPECT(0, (c.input_path = "x.xml", c.packages_path = "p"), ARGS_ERR);
+  EXPECT(0, (c.rms_enabled = 1, c.fus_enabled = 1), ARGS_ERR);
+  EXPECT(0, c.rms_logo = "l", ARGS_ERR);
+  EXPECT(0, c.rms_enabled = 1, ARGS_ERR);
+  EXPECT(0, (c.rms_enabled = 1, c.rms_location = "L"), ARGS_OK);
+  EXPECT(0, c.bcg_id = "g", ARGS_ERR);
+  EXPECT(0, c.bcg_enabled = 1, ARGS_ERR);
+  EXPECT(0, (c.bcg_enabled = 1, c.bcg_mcast_addr[0] = 'a'), ARGS_OK);
+  EXPECT(0, c.fus_logo = "l", ARGS_ERR);
+  EXPECT(0, c.fus_enabled = 1, ARGS_ERR);
+  EXPECT(0, (c.fus_enabled = 1, c.fl.have_fus_id = 1), ARGS_OK);
+  EXPECT(0, (c.sdns_ns = "urn:nowhere"), ARGS_ERR);
+  EXPECT(0, (c.nschemas = 1), ARGS_ERR);
+  EXPECT(1, , ARGS_OK);
+  EXPECT(1, c.ret_mc = 1, ARGS_ERR);
+  EXPECT(1, c.fcc_enabled = 1, ARGS_ERR);
+  EXPECT(1, c.al_fec_enabled = 1, ARGS_ERR);
+  EXPECT(1, c.metrics_id = "m", ARGS_ERR);
+  EXPECT(1, c.packages_path = "p", ARGS_ERR);
+  EXPECT(1, (c.output_path = "o.csv"), ARGS_OK);
+  EXPECT(1, (c.output_path = "o.xspf"), ARGS_OK);
+  EXPECT(1, (c.output_path = "o.xml"), ARGS_OK);
+  EXPECT(1, (c.output_path = "o.m3u", c.fl.have_format = 1, c.fl.have_t = 1, c.fl.t_value = 7), ARGS_OK);
+#undef EXPECT
+}
+END_TEST
+
+START_TEST(args_parse_handles_help_configtest_and_unknown_options) {
+  char path[] = "/tmp/dvbipitools_test_sdsargs_XXXXXX";
+  char *help[] = {"dipisds", "-h", NULL};
+  char *unknown[] = {"dipisds", "--no-such-option", NULL};
+  char *stray[] = {"dipisds", "-l", "-m", "239.1.2.3:5000", "stray", NULL};
+  char *missing_ct[] = {"dipisds", "--configtest", "-c", "/nonexistent/dipisds.yaml", NULL};
+  char *cfg_ct[] = {"dipisds", "--configtest", "-c", path, NULL};
+  char *strict_ct[] = {"dipisds", "--configtest", "--config-strict", "-c", path, NULL};
+  char *with_cfg[] = {"dipisds", "-c", path, "-l", "-m", "239.1.2.3:5000", NULL};
+  config_t cfg;
+  int fd = mkstemp(path);
+  FILE *f;
+  ck_assert_int_ge(fd, 0);
+  f = fdopen(fd, "w");
+  fputs("listen: true\nmcast: 239.1.2.3:5000\n", f);
+  fclose(f);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(help), help, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(unknown), unknown, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(stray), stray, &cfg), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+  ck_assert_int_eq(args_parse(ARGC(missing_ct), missing_ct, &cfg), ARGS_ERR);
+  ck_assert_int_eq(args_parse(ARGC(cfg_ct), cfg_ct, &cfg), ARGS_HELP);
+  ck_assert_int_eq(args_parse(ARGC(strict_ct), strict_ct, &cfg), ARGS_HELP);
+  memset(&cfg, 0, sizeof cfg);
+  ck_assert_int_eq(args_parse(ARGC(with_cfg), with_cfg, &cfg), ARGS_OK);
+  yamlcfg_strpool_free(cfg.str_pool);
+  unlink(path);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipisds_args");
   TCase *tc = tcase_create("core");
@@ -809,6 +998,11 @@ static Suite *args_suite(void) {
   tcase_add_loop_test(tc, consistency_checks_report_their_message, 0, (int)(sizeof check_cases / sizeof check_cases[0]));
   tcase_add_loop_test(tc, mcast_describe_formats_group_and_port, 0, (int)(sizeof describe_cases / sizeof describe_cases[0]));
   tcase_add_test(tc, suffix_and_address_helpers);
+  tcase_add_test(tc, bcg_options_need_name_and_transport);
+  tcase_add_test(tc, schema_option_is_listen_only_and_repeatable);
+  tcase_add_test(tc, discovery_and_metrics_options_parse_and_reject);
+  tcase_add_test(tc, cli_check_rejects_each_inconsistent_combination);
+  tcase_add_test(tc, args_parse_handles_help_configtest_and_unknown_options);
   suite_add_tcase(s, tc);
   return s;
 }

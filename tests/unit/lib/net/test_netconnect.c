@@ -7,22 +7,64 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
-#include <sys/uio.h>
-#include <time.h>
 #include <unistd.h>
 
+#include "../../alloc_fail.h"
 #include "lib/net/netconnect.h"
 #include "lib/sys/signal.h"
+#include "../../fx_net.h"
 
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
+int __real_fcntl(int fd, int cmd, ...);
+int __real_connect(int fd, const struct sockaddr *addr, socklen_t len);
+int __real_getsockopt(int fd, int level, int name, void *val, socklen_t *len);
+int __real_pthread_create(pthread_t *t, const pthread_attr_t *a, void *(*fn)(void *), void *arg);
+
+static int g_fcntl_fail_cmd;
+static int g_connect_err;
+static int g_connect_ok;
+static int g_getsockopt_fail;
+static int g_pthread_fail;
+
+int __wrap_fcntl(int fd, int cmd, ...) {
+  va_list ap;
+  long arg;
+  va_start(ap, cmd);
+  arg = va_arg(ap, long);
+  va_end(ap);
+  if (g_fcntl_fail_cmd && cmd == g_fcntl_fail_cmd) {
+    g_fcntl_fail_cmd = 0;
+    errno = EBADF;
+    return -1;
+  }
+  return __real_fcntl(fd, cmd, arg);
+}
+
+int __wrap_connect(int fd, const struct sockaddr *addr, socklen_t len) {
+  if (g_connect_ok) return 0;
+  if (g_connect_err) {
+    errno = g_connect_err;
+    return -1;
+  }
+  return __real_connect(fd, addr, len);
+}
+
+int __wrap_getsockopt(int fd, int level, int name, void *val, socklen_t *len) {
+  if (g_getsockopt_fail) {
+    errno = EBADF;
+    return -1;
+  }
+  return __real_getsockopt(fd, level, name, val, len);
+}
+
+int __wrap_pthread_create(pthread_t *t, const pthread_attr_t *a, void *(*fn)(void *), void *arg) {
+  if (g_pthread_fail) return EAGAIN;
+  return __real_pthread_create(t, a, fn, arg);
 }
 
 START_TEST(netconnect_tcp_succeeds_against_local_listener) {
@@ -481,6 +523,135 @@ START_TEST(netaddr_fill_rejects_bad_text) {
 }
 END_TEST
 
+START_TEST(netconnect_tcp_resolve_failure_reports_dns) {
+  net_err_reason_t reason = NET_ERR_COUNT;
+  ck_assert_int_eq(netconnect_tcp("", 80, 200, &reason), -1);
+  ck_assert_int_eq(reason, NET_ERR_DNS);
+}
+END_TEST
+
+START_TEST(netconnect_tcp_fcntl_failures_skip_the_address) {
+  int cmds[2] = {F_GETFL, F_SETFL};
+  for (int i = 0; i < 2; i++) {
+    net_err_reason_t reason = NET_ERR_COUNT;
+    g_fcntl_fail_cmd = cmds[i];
+    ck_assert_int_eq(netconnect_tcp("127.0.0.1", (unsigned)free_loopback_tcp_port(), 200, &reason), -1);
+    ck_assert_int_eq(reason, NET_ERR_CONNECT);
+  }
+}
+END_TEST
+
+START_TEST(netconnect_tcp_immediate_connect_error_skips_the_address) {
+  net_err_reason_t reason = NET_ERR_COUNT;
+  g_connect_err = ENETUNREACH;
+  ck_assert_int_eq(netconnect_tcp("127.0.0.1", 9, 200, &reason), -1);
+  ck_assert_int_eq(reason, NET_ERR_CONNECT);
+}
+END_TEST
+
+START_TEST(netconnect_tcp_start_fcntl_failures_skip_the_address) {
+  int cmds[2] = {F_GETFL, F_SETFL};
+  for (int i = 0; i < 2; i++) {
+    netconnect_pending_t *pending = NULL;
+    net_err_reason_t reason = NET_ERR_COUNT;
+    g_fcntl_fail_cmd = cmds[i];
+    ck_assert_int_eq(netconnect_tcp_start("127.0.0.1", (unsigned)free_loopback_tcp_port(), &pending, &reason), -1);
+    ck_assert_ptr_null(pending);
+    ck_assert_int_eq(reason, NET_ERR_CONNECT);
+  }
+}
+END_TEST
+
+START_TEST(netconnect_tcp_start_immediate_connect_paths) {
+  netconnect_pending_t *pending = NULL;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  int fd;
+  g_connect_ok = 1;
+  fd = netconnect_tcp_start("127.0.0.1", 9, &pending, &reason);
+  ck_assert_int_ge(fd, 0);
+  netconnect_tcp_abort(pending);
+  close(fd);
+  g_connect_ok = 0;
+  g_connect_err = ECONNREFUSED;
+  ck_assert_int_eq(netconnect_tcp_start("127.0.0.1", 9, &pending, &reason), -1);
+  ck_assert_int_eq(reason, NET_ERR_CONNECT);
+}
+END_TEST
+
+START_TEST(netconnect_tcp_start_resolver_setup_failures) {
+  netconnect_pending_t *pending = NULL;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  g_fcntl_fail_cmd = F_SETFL;
+  ck_assert_int_eq(netconnect_tcp_start("localhost", 80, &pending, &reason), -1);
+  ck_assert_int_eq(reason, NET_ERR_DNS);
+  g_fcntl_fail_cmd = F_GETFL;
+  ck_assert_int_eq(netconnect_tcp_start("localhost", 80, &pending, &reason), -1);
+  g_pthread_fail = 1;
+  ck_assert_int_eq(netconnect_tcp_start("localhost", 80, &pending, &reason), -1);
+  ck_assert_int_eq(reason, NET_ERR_DNS);
+}
+END_TEST
+
+START_TEST(netconnect_tcp_start_allocation_failures) {
+  for (long n = 0;; n++) {
+    netconnect_pending_t *pending = NULL;
+    net_err_reason_t reason = NET_ERR_COUNT;
+    int hit;
+    int fd;
+    alloc_fail_at(n);
+    fd = netconnect_tcp_start("localhost", 80, &pending, &reason);
+    hit = alloc_fail_end();
+    if (fd >= 0) {
+      netconnect_tcp_abort(pending);
+      close(fd);
+    } else {
+      ck_assert_int_eq(reason == NET_ERR_OTHER || reason == NET_ERR_DNS, 1);
+    }
+    if (!hit) break;
+  }
+}
+END_TEST
+
+START_TEST(netconnect_tcp_finish_async_resolve_failure) {
+  netconnect_pending_t *pending = NULL;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  int fd = netconnect_tcp_start("", 80, &pending, &reason);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq(wait_pending(fd, pending), 1);
+  ck_assert_int_eq(netconnect_tcp_finish(&pending, &fd, &reason), -1);
+  ck_assert_ptr_null(pending);
+  ck_assert_int_eq(fd, -1);
+  ck_assert_int_eq(reason, NET_ERR_DNS);
+}
+END_TEST
+
+START_TEST(netconnect_tcp_finish_every_resolved_address_refuses) {
+  netconnect_pending_t *pending = NULL;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  int fd = netconnect_tcp_start("localhost", 80, &pending, &reason);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq(wait_pending(fd, pending), 1);
+  g_connect_err = ECONNREFUSED;
+  ck_assert_int_eq(netconnect_tcp_finish(&pending, &fd, &reason), -1);
+  ck_assert_ptr_null(pending);
+  ck_assert_int_eq(reason, NET_ERR_CONNECT);
+}
+END_TEST
+
+START_TEST(netconnect_tcp_finish_getsockopt_failure) {
+  netconnect_pending_t *pending = NULL;
+  net_err_reason_t reason = NET_ERR_COUNT;
+  int fd = netconnect_tcp_start("127.0.0.1", (unsigned)free_loopback_tcp_port(), &pending, &reason);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq(wait_writable(fd), 1);
+  g_getsockopt_fail = 1;
+  ck_assert_int_eq(netconnect_tcp_finish(&pending, &fd, &reason), -1);
+  ck_assert_ptr_null(pending);
+  ck_assert_int_eq(fd, -1);
+  ck_assert_int_eq(reason, NET_ERR_OTHER);
+}
+END_TEST
+
 static Suite *netconnect_suite(void) {
   Suite *s = suite_create("netconnect");
   TCase *tc = tcase_create("core");
@@ -508,6 +679,16 @@ static Suite *netconnect_suite(void) {
   tcase_add_test(tc, netaddr_fill_rejects_bad_text);
   tcase_add_test(tc, netconnect_tcp_fails_when_no_descriptor_is_left);
   tcase_add_test(tc, netconnect_tcp_start_fails_when_no_descriptor_is_left);
+  tcase_add_test(tc, netconnect_tcp_resolve_failure_reports_dns);
+  tcase_add_test(tc, netconnect_tcp_fcntl_failures_skip_the_address);
+  tcase_add_test(tc, netconnect_tcp_immediate_connect_error_skips_the_address);
+  tcase_add_test(tc, netconnect_tcp_start_fcntl_failures_skip_the_address);
+  tcase_add_test(tc, netconnect_tcp_start_immediate_connect_paths);
+  tcase_add_test(tc, netconnect_tcp_start_resolver_setup_failures);
+  tcase_add_test(tc, netconnect_tcp_start_allocation_failures);
+  tcase_add_test(tc, netconnect_tcp_finish_async_resolve_failure);
+  tcase_add_test(tc, netconnect_tcp_finish_every_resolved_address_refuses);
+  tcase_add_test(tc, netconnect_tcp_finish_getsockopt_failure);
   suite_add_tcase(s, tc);
   return s;
 }

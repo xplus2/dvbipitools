@@ -9,15 +9,11 @@
 #include "lib/helper/uriparse.h"
 #include "lib/mux/fec2022.h"
 #include "lib/net/netconnect.h"
-#include "../config.h"
 #include "priv.h"
 
 int rdh_apply_mcast(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (uriparse_mcast_addrport(v, &cfg->family, cfg->mcast_group, sizeof cfg->mcast_group, &cfg->mcast_port)) {
-    snprintf(e, n, "invalid '%s' (multicast addr:port)", v);
-    return -1;
-  }
+  if (uriparse_mcast_cfg(v, &cfg->family, cfg->mcast_group, sizeof cfg->mcast_group, &cfg->mcast_port, e, n)) return -1;
   return 0;
 }
 
@@ -35,11 +31,7 @@ int rdh_apply_ttl(void *c, const char *v, char *e, size_t n) {
 }
 
 int rdh_apply_dscp(void *c, const char *v, char *e, size_t n) {
-  if (net_dscp_parse(v, &((config_t *)c)->dscp)) {
-    snprintf(e, n, "invalid '%s' (video-high|video-low|voice|signalling|best-effort|0..63)", v);
-    return -1;
-  }
-  return 0;
+  return yamlcfg_set_int_by(&((config_t *)c)->dscp, v, net_dscp_parse, NET_DSCP_NAMES, e, n);
 }
 
 int rdh_apply_al_fec(void *c, const char *v, char *e, size_t n) {

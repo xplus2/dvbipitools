@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/socket.h>
 
+#include "../alloc_fail.h"
 #include "lib/helper/sds_xml.h"
 #include "lib/sys/ioutil.h"
 
@@ -32,7 +33,7 @@ START_TEST(sds_broadcast_round_trips_multiple_services) {
   svcs[1].onid = 2;
   svcs[1].sid = 102;
 
-  len = sds_build_broadcast("example.invalid", 1, svcs, 2, NULL, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, svcs, 2, NULL, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 8, NULL);
@@ -80,7 +81,7 @@ START_TEST(sds_broadcast_includes_ret_and_fcc_elements_when_present) {
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, &fcc, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, &fcc, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   ck_assert_ptr_nonnull(strstr((char *)buf, "<RTPRetransmission>"));
@@ -106,11 +107,45 @@ START_TEST(sds_broadcast_includes_fec_element_when_present) {
   fec.port = 6002;
   fec.pt = 96;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   ck_assert_ptr_nonnull(strstr((char *)buf, "<FECBaseLayer Address=\"10.0.0.3\" Port=\"6002\""));
   ck_assert_ptr_null(strstr((char *)buf, "PayloadTypeNumber"));
+  free(buf);
+}
+END_TEST
+
+/* TS 102 034 5.2.13.1 */
+START_TEST(sds_bcg_discovery_record) {
+  sds_bcg_t bcg = {"epg1", "Guide", "eng", "All channels", "Example EPG", "239.1.1.9", 3937};
+  unsigned char *buf = NULL;
+  size_t len = sds_build_bcg("example.invalid", 3, &bcg, &buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<BCGDiscovery DomainName=\"example.invalid\" Version=\"3\">"));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<BCG Id=\"epg1\" Version=\"3\"><Name Language=\"eng\">Guide</Name><Description Language=\"eng\">All channels</Description>"));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<DVBSTP Address=\"239.1.1.9\" Port=\"3937\"><PayloadId Id=\"A1\"/><PayloadId Id=\"A3\"/></DVBSTP>"));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "</DVBSTP></TransportMode><BCGProviderName Language=\"eng\">Example EPG</BCGProviderName></BCG>"));
+  free(buf);
+  bcg.description = bcg.provider_name = NULL;
+  len = sds_build_bcg("example.invalid", 1, &bcg, &buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_null(strstr((char *)buf, "Description"));
+  ck_assert_ptr_null(strstr((char *)buf, "BCGProviderName"));
+  free(buf);
+}
+END_TEST
+
+START_TEST(sds_broadcast_names_bcg_location) {
+  sds_service_t svc;
+  unsigned char *buf = NULL;
+  size_t len;
+  memset(&svc, 0, sizeof svc);
+  bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
+  svc.port = 5000;
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, "epg1", &buf);
+  ck_assert_uint_gt(len, 0u);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<ServiceList>\n<ServicesDescriptionLocation preferred=\"true\">epg1</ServicesDescriptionLocation>\n<SingleService"));
   free(buf);
 }
 END_TEST
@@ -130,7 +165,7 @@ START_TEST(sds_broadcast_includes_fec_pt_when_not_96) {
   fec.port = 6002;
   fec.pt = 100;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   ck_assert_ptr_nonnull(strstr((char *)buf, "PayloadTypeNumber=\"100\""));
@@ -155,7 +190,7 @@ START_TEST(sds_parse_broadcast_round_trips_fec) {
   fec.port = 6002;
   fec.pt = 100;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -185,7 +220,7 @@ START_TEST(sds_parse_broadcast_round_trips_fec_default_pt) {
   fec.port = 6002;
   fec.pt = 96;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, &fec, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -210,7 +245,7 @@ START_TEST(sds_broadcast_omits_dvb_rsi_mc_ret_by_default) {
   bufcpy(ret.addr, sizeof ret.addr, "10.0.0.1");
   ret.port = 6000;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_null(strstr((char *)buf, "dvb-rsi-mc-ret"));
   free(buf);
@@ -233,7 +268,7 @@ START_TEST(sds_broadcast_includes_dvb_rsi_mc_ret_when_set) {
   ret.mc = 1;
   ret.rsi_mc_ret = 1;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((char *)buf, "dvb-rsi-mc-ret=\"true\""));
   free(buf);
@@ -258,7 +293,7 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_stays_in_range) {
   fcc.resolve_base_port = 7000;
   fcc.resolve_max_channels = 16;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   for (size_t i = 0; i < fcc.resolve_max_channels; i++) {
@@ -293,8 +328,8 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_is_deterministic) {
   fcc.resolve_base_port = 7000;
   fcc.resolve_max_channels = 384;
 
-  len1 = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf1);
-  len2 = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf2);
+  len1 = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, NULL, &buf1);
+  len2 = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, NULL, &buf2);
   ck_assert_uint_eq(len1, len2);
   ck_assert_mem_eq(buf1, buf2, len1);
   free(buf1);
@@ -319,7 +354,7 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_ignores_literal_port) {
   fcc.resolve_base_port = 7000;
   fcc.resolve_max_channels = 16;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_null(strstr((char *)buf, "DestinationPort=\"6001\""));
   free(buf);
@@ -336,7 +371,7 @@ START_TEST(sds_broadcast_omits_ret_fcc_elements_when_absent) {
   bufcpy(svc.address, sizeof svc.address, "239.1.1.1");
   svc.port = 5000;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   ck_assert_ptr_null(strstr((char *)buf, "RTPRetransmission"));
@@ -359,7 +394,7 @@ START_TEST(sds_broadcast_escapes_addresses) {
   ret.mc = 1;
   svc.port = 5000;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((char *)buf, "Address=\"a&quot;&amp;b\""));
   ck_assert_ptr_nonnull(strstr((char *)buf, "GroupAddress=\"a&quot;&amp;b\""));
@@ -388,7 +423,7 @@ START_TEST(sds_build_broadcast_exceeds_64k) {
     svcs[i].onid = 2;
     svcs[i].sid = (unsigned)i + 1;
   }
-  len = sds_build_broadcast("example.invalid", 1, svcs, 256, &ret, &fcc, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, svcs, 256, &ret, &fcc, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 65536u);
   ck_assert_uint_eq(strlen((char *)buf), len);
   ck_assert_ptr_nonnull(strstr((char *)buf, "Channel number 255"));
@@ -410,10 +445,10 @@ END_TEST
 
 START_TEST(sds_build_sp_lists_extra_payload_ids) {
   unsigned char *buf = NULL;
-  unsigned extra[2] = {5, 7};
-  size_t len = sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, extra, 2, &buf);
+  unsigned extra[3] = {5, 7, 0xC1};
+  size_t len = sds_build_sp("example.invalid", "My Provider", "deu", 1, "239.9.9.9", 7000, extra, 3, &buf);
   ck_assert_uint_gt(len, 0u);
-  ck_assert_ptr_nonnull(strstr((char *)buf, "<PayloadId Id=\"2\"/><PayloadId Id=\"5\"/><PayloadId Id=\"7\"/>"));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<PayloadId Id=\"2\"/><PayloadId Id=\"5\"/><PayloadId Id=\"7\"/><PayloadId Id=\"C1\"/>"));
   free(buf);
 }
 END_TEST
@@ -519,7 +554,7 @@ START_TEST(sds_parse_broadcast_round_trips_fcc) {
   fcc.rtx_time_ms = 3000;
   fcc.rtx_pt = 98;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -553,7 +588,7 @@ START_TEST(sds_parse_broadcast_round_trips_fcc_resolve_by_port) {
   fcc.resolve_base_port = 7000;
   fcc.resolve_max_channels = 16;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, &fcc, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -584,7 +619,7 @@ START_TEST(sds_parse_broadcast_round_trips_unicast_ret) {
   ret.rtx_time_ms = 2000;
   ret.rtx_pt = 99;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -619,7 +654,7 @@ START_TEST(sds_parse_broadcast_round_trips_multicast_ret) {
   ret.mc = 1;
   ret.mc_port = 5000;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -649,7 +684,7 @@ START_TEST(sds_parse_broadcast_round_trips_multicast_ret_override_port) {
   ret.mc = 1;
   ret.mc_port = 5555;
 
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, &ret, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
 
   n = sds_parse_broadcast((const char *)buf, out, 2, NULL);
@@ -765,7 +800,7 @@ START_TEST(sds_broadcast_round_trips_ssm_source) {
   svc.tsid = 1;
   svc.onid = 1;
   svc.sid = 1;
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_nonnull(strstr((const char *)buf, "Source=\"10.9.8.7\""));
   ck_assert_int_eq(sds_parse_broadcast((const char *)buf, out, 2, NULL), 1);
@@ -785,12 +820,115 @@ START_TEST(sds_broadcast_omits_source_for_asm) {
   bufcpy(svc.name, sizeof svc.name, "Asm");
   bufcpy(svc.address, sizeof svc.address, "239.1.2.3");
   svc.port = 5000;
-  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, &buf);
+  len = sds_build_broadcast("example.invalid", 1, &svc, 1, NULL, NULL, NULL, NULL, &buf);
   ck_assert_uint_gt(len, 0u);
   ck_assert_ptr_null(strstr((const char *)buf, "Source="));
   ck_assert_int_eq(sds_parse_broadcast((const char *)buf, out, 2, NULL), 1);
   ck_assert_str_eq(out[0].source, "");
   free(buf);
+}
+END_TEST
+
+START_TEST(sds_build_rms_fus_writes_logos_and_announcements) {
+  sds_rms_t rms[2];
+  sds_fus_t fus[2];
+  unsigned char *buf = NULL;
+  size_t len;
+  memset(rms, 0, sizeof rms);
+  memset(fus, 0, sizeof fus);
+  snprintf(rms[0].name, sizeof rms[0].name, "Region");
+  snprintf(rms[0].lang, sizeof rms[0].lang, "deu");
+  rms[0].location = "Berlin";
+  rms[0].logo_uri = "http://example.invalid/r&l.png";
+  snprintf(rms[1].name, sizeof rms[1].name, "Other");
+  snprintf(rms[1].lang, sizeof rms[1].lang, "eng");
+  rms[1].location = "Paris";
+  snprintf(fus[0].name, sizeof fus[0].name, "Follow");
+  snprintf(fus[0].lang, sizeof fus[0].lang, "deu");
+  fus[0].fus_id = 4711;
+  fus[0].announce_addr = "239.9.9.9";
+  fus[0].announce_port = 5000;
+  fus[0].logo_uri = "http://example.invalid/f&l.png";
+  snprintf(fus[1].name, sizeof fus[1].name, "Plain");
+  snprintf(fus[1].lang, sizeof fus[1].lang, "eng");
+  fus[1].fus_id = 1;
+  len = sds_build_rms_fus("example.invalid", 2, rms, 2, NULL, 0, &buf);
+  ck_assert_uint_gt(len, 0);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "LogoURI=\"http://example.invalid/r&amp;l.png\""));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "RMSLocation=\"Paris\""));
+  free(buf);
+  len = sds_build_rms_fus("example.invalid", 2, NULL, 0, fus, 2, &buf);
+  ck_assert_uint_gt(len, 0);
+  ck_assert_ptr_nonnull(strstr((char *)buf, "LogoURI=\"http://example.invalid/f&amp;l.png\""));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "MulticastAnnouncementAddress Address=\"239.9.9.9\" Port=\"5000\""));
+  ck_assert_ptr_nonnull(strstr((char *)buf, "<FUSID>1</FUSID><FUSAnnouncement></FUSAnnouncement>"));
+  free(buf);
+}
+END_TEST
+
+START_TEST(sds_builders_survive_allocation_failures) {
+  sds_service_t svc[2];
+  sds_package_t pkg;
+  sds_cell_t cell;
+  sds_bcg_t bcg;
+  sds_rms_t rms;
+  sds_fus_t fus;
+  unsigned extra[2] = {5, 6};
+  memset(svc, 0, sizeof svc);
+  memset(&pkg, 0, sizeof pkg);
+  memset(&cell, 0, sizeof cell);
+  memset(&bcg, 0, sizeof bcg);
+  memset(&rms, 0, sizeof rms);
+  memset(&fus, 0, sizeof fus);
+  snprintf(svc[0].address, sizeof svc[0].address, "239.1.1.1");
+  svc[0].family = AF_INET;
+  svc[0].port = 5000;
+  snprintf(svc[0].name, sizeof svc[0].name, "One");
+  snprintf(svc[1].address, sizeof svc[1].address, "ff15::1");
+  svc[1].family = AF_INET6;
+  svc[1].port = 5002;
+  snprintf(svc[1].name, sizeof svc[1].name, "Two");
+  snprintf(pkg.name, sizeof pkg.name, "Pkg");
+  snprintf(pkg.lang, sizeof pkg.lang, "deu");
+  pkg.service_count = 1;
+  snprintf(pkg.service_names[0], sizeof pkg.service_names[0], "One");
+  snprintf(cell.id, sizeof cell.id, "c1");
+  snprintf(cell.country, sizeof cell.country, "DE");
+  cell.ca_depth = 1;
+  cell.ca[0].type = 1;
+  snprintf(cell.ca[0].value, sizeof cell.ca[0].value, "Berlin");
+  bcg.id = "g";
+  bcg.name = "Guide";
+  bcg.lang = "deu";
+  bcg.description = "d";
+  bcg.provider_name = "p";
+  bcg.mcast_addr = "239.2.2.2";
+  bcg.mcast_port = 6000;
+  snprintf(rms.name, sizeof rms.name, "R");
+  snprintf(rms.lang, sizeof rms.lang, "deu");
+  rms.location = "L";
+  snprintf(fus.name, sizeof fus.name, "F");
+  snprintf(fus.lang, sizeof fus.lang, "deu");
+  fus.fus_id = 2;
+  for (int what = 0; what < 7; what++)
+    for (long n = 0;; n++) {
+      unsigned char *buf = NULL;
+      size_t len;
+      int hit;
+      alloc_fail_at(n);
+      switch (what) {
+        case 0: len = sds_build_broadcast("d", 1, svc, 2, NULL, NULL, NULL, "bcg", &buf); break;
+        case 1: len = sds_build_sp("d", "N", "deu", 1, "239.9.9.9", 7000, extra, 2, &buf); break;
+        case 2: len = sds_build_package("d", 1, &pkg, 1, svc, 2, &buf); break;
+        case 3: len = sds_build_regionalisation("d", 1, &cell, 1, &buf); break;
+        case 4: len = sds_build_bcg("d", 1, &bcg, &buf); break;
+        case 5: len = sds_build_rms_fus("d", 1, &rms, 1, NULL, 0, &buf); break;
+        default: len = sds_build_rms_fus("d", 1, NULL, 0, &fus, 1, &buf); break;
+      }
+      hit = alloc_fail_end();
+      if (len) free(buf);
+      if (!hit) break;
+    }
 }
 END_TEST
 
@@ -830,6 +968,10 @@ static Suite *sds_xml_suite(void) {
   tcase_add_test(tc, sds_parse_broadcast_round_trips_fcc_resolve_by_port);
   tcase_add_test(tc, sds_broadcast_round_trips_ssm_source);
   tcase_add_test(tc, sds_broadcast_omits_source_for_asm);
+  tcase_add_test(tc, sds_build_rms_fus_writes_logos_and_announcements);
+  tcase_add_test(tc, sds_builders_survive_allocation_failures);
+  tcase_add_test(tc, sds_bcg_discovery_record);
+  tcase_add_test(tc, sds_broadcast_names_bcg_location);
   suite_add_tcase(s, tc);
   return s;
 }

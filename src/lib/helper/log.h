@@ -5,6 +5,7 @@
 #define DVBIPITOOLS_LIB_HELPER_LOG_H
 
 #include <stdatomic.h>
+#include <string.h>
 
 /* timestamped line (ISO UTC, no 'T') to stderr */
 void log_line(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -21,7 +22,17 @@ typedef enum { LOG_COLOR_AUTO, LOG_COLOR_ALWAYS, LOG_COLOR_NEVER } log_color_t;
 void log_set_color(log_color_t mode);
 
 /* "auto"/"always"/"never" -> log_color_t. 0 ok, -1 invalid */
-int log_color_from_string(const char *s, log_color_t *out);
+static inline int log_color_from_string(const char *s, log_color_t *out) {
+  static const struct { const char *name; log_color_t val; } map[] = {
+    {"auto", LOG_COLOR_AUTO}, {"always", LOG_COLOR_ALWAYS}, {"never", LOG_COLOR_NEVER},
+  };
+  for (size_t i = 0; i < sizeof map / sizeof map[0]; i++)
+    if (!strcmp(s, map[i].name)) {
+      *out = map[i].val;
+      return 0;
+    }
+  return -1;
+}
 
 /* scans argv for --color/--color=<val>, before full arg parsing (so early
    argerr()s color correctly too). LOG_COLOR_AUTO if absent or unrecognized */

@@ -46,6 +46,8 @@ void dixy_print_help(void) {
   "  -k, --insecure                 skip TLS verification on https:// input\n"
   "      --sds-timeout <s>          sds:// discovery wait at startup/reload [3]\n"
   "      --sds-refresh-interval <s> sds:// re-poll period               [30]\n"
+  "      --sds-bim-namespace <ns>   sds:// BiM namespace     [newest that decodes]\n"
+  "      --sds-schema <path>        sds:// SD&S schema file or directories, repeatable [compiled in]\n"
   "      --segment-size <s>         target segment duration, seconds        [3]\n"
   "                                 (hls, hls-fmp4, llhls, dash, lldash)\n"
   "      --segment-count <n>        playlist/manifest sliding-window size   [4]\n"

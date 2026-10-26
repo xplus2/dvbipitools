@@ -1,9 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <net/if.h>
 #include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -15,9 +13,11 @@
 #include "lib/mux/psi_build.h"
 #include "dipitvhead/tvhead/priv.h"
 #include "../run_helper.h"
+#include "../fx_net.h"
+#include "../fx_ts.h"
 
 /* PMT section (table_id 0x02), CRC included. with_es: one MPEG audio ES on pcr_pid */
-static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid, int with_es) {
+static size_t build_pmt_local(unsigned char *out, unsigned prog_num, unsigned pcr_pid, int with_es) {
   unsigned char body[24];
   size_t n = 0, hdr, crc_at;
   uint32_t crc;
@@ -52,31 +52,6 @@ static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid,
   out[crc_at + 2] = (unsigned char)(crc >> 8);
   out[crc_at + 3] = (unsigned char)crc;
   return crc_at + 4;
-}
-
-static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
-}
-
-static int open_sender(const char *group, unsigned port, struct sockaddr_in *dst) {
-  int sock = socket(AF_INET, SOCK_DGRAM, 0);
-  struct ip_mreqn mif;
-
-  memset(&mif, 0, sizeof mif);
-  mif.imr_ifindex = (int)if_nametoindex("lo");
-  setsockopt(sock, IPPROTO_IP, IP_MULTICAST_IF, &mif, sizeof mif);
-  memset(dst, 0, sizeof *dst);
-  dst->sin_family = AF_INET;
-  dst->sin_port = htons((unsigned short)port);
-  inet_pton(AF_INET, group, &dst->sin_addr);
-  return sock;
 }
 
 static tvsrc_t *open_recv(const char *group, unsigned port) {
@@ -128,11 +103,11 @@ START_TEST(discover_completes_once_pat_pmt_sdt_arrive) {
   ck_assert_ptr_nonnull(src);
 
   slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pat, 0x0000, sec, slen);
-  slen = build_pmt(sec, 7, 0x0101, 1);
-  wrap_ts_packet(pmt, 0x0100, sec, slen);
+  wrap_section_packet(pat, 0x0000, sec, slen);
+  slen = build_pmt_local(sec, 7, 0x0101, 1);
+  wrap_section_packet(pmt, 0x0100, sec, slen);
   slen = psi_build_sdt(0, 0x1234, 5, 7, 0x01, "Provider", "Channel One", sec, sizeof sec);
-  wrap_ts_packet(sdt, 0x0011, sec, slen);
+  wrap_section_packet(sdt, 0x0011, sec, slen);
 
   /* queued in the kernel's UDP recv buffer before discover() ever calls tvsrc_read();
      psi_ready() only needs PAT+PMT, so discover() returns as soon as the 2nd packet is read */
@@ -169,9 +144,9 @@ START_TEST(discover_stays_pending_on_pmt_without_es) {
   ck_assert_ptr_nonnull(src);
 
   slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pat, 0x0000, sec, slen);
-  slen = build_pmt(sec, 7, 0x0101, 0);
-  wrap_ts_packet(pmt, 0x0100, sec, slen);
+  wrap_section_packet(pat, 0x0000, sec, slen);
+  slen = build_pmt_local(sec, 7, 0x0101, 0);
+  wrap_section_packet(pmt, 0x0100, sec, slen);
 
   sendto(sock, pat, sizeof pat, 0, (const struct sockaddr *)&dst, sizeof dst);
   sendto(sock, pmt, sizeof pmt, 0, (const struct sockaddr *)&dst, sizeof dst);
@@ -201,7 +176,7 @@ START_TEST(discover_fails_when_requested_pmt_pid_absent_from_pat) {
   ck_assert_ptr_nonnull(src);
 
   slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pat, 0x0000, sec, slen);
+  wrap_section_packet(pat, 0x0000, sec, slen);
 
   sendto(sock, pat, sizeof pat, 0, (const struct sockaddr *)&dst, sizeof dst);
   rc = discover(src, &in, psi, &im);

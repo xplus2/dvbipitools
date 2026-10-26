@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../../alloc_fail.h"
 #include "lib/tva/xmltv.h"
 #include "lib/sys/ioutil.h"
 
@@ -216,6 +217,89 @@ START_TEST(xmltv_read_keeps_programmes_before_an_unclosed_one) {
 }
 END_TEST
 
+static int read_text(const char *text, bcg_doc_t *doc) {
+  FILE *f = tmpfile();
+  int rc;
+  ck_assert_ptr_nonnull(f);
+  fputs(text, f);
+  rewind(f);
+  bcg_doc_init(doc);
+  rc = xmltv_read(f, doc);
+  fclose(f);
+  return rc;
+}
+
+START_TEST(xmltv_read_skips_or_clears_bad_times_and_attributes) {
+  static const char text[] =
+    "<?xml version=\"1.0\"?><tv>"
+    "<channel id=\"c1\"><display-name>One</display-name></channel>"
+    "<programme start=\"20200101120000 +0000\" stop=\"garbage\" channel=\"c1\"><title>BadStop</title></programme>"
+    "<programme start=\"20200101130000 +0000\" stop=\"20200101140000 XYZ\" channel=\"c1\"><title>ZoneStop</title></programme>"
+    "<programme start=\"20200101150000 XYZ\" channel=\"c1\"><title>ZoneStart</title></programme>"
+    "<programme start=\"junk\" channel=\"c1\"><title>BadStart</title></programme>"
+    "<programme channel=\"c1\"><title>NoStart</title></programme>"
+    "<programme start=\"20200101160000 +0000\"><title>NoChannel</title></programme>"
+    "</tv>";
+  bcg_doc_t doc;
+  ck_assert_int_eq(read_text(text, &doc), 0);
+  ck_assert_int_eq(doc.programme_count, 3);
+  ck_assert_str_eq(doc.programmes[0].stop, "");
+  ck_assert_str_ne(doc.programmes[1].stop, "");
+  bcg_doc_free(&doc);
+}
+END_TEST
+
+START_TEST(xmltv_write_skips_programmes_with_bad_start) {
+  bcg_doc_t doc;
+  bcg_programme_t *pr;
+  char *buf = NULL;
+  size_t size = 0;
+  FILE *f;
+  bcg_doc_init(&doc);
+  pr = bcg_add_programme(&doc);
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "c");
+  bufcpy(pr->start, sizeof pr->start, "not-a-time");
+  pr = bcg_add_programme(&doc);
+  bufcpy(pr->channel_id, sizeof pr->channel_id, "c");
+  bufcpy(pr->start, sizeof pr->start, "2020-01-01T10:00:00Z");
+  bufcpy(pr->stop, sizeof pr->stop, "bad-stop");
+  bufcpy(doc.publisher, sizeof doc.publisher, "example.com/My%20Guide");
+  f = open_memstream(&buf, &size);
+  ck_assert_ptr_nonnull(f);
+  xmltv_write(f, &doc, "gen");
+  fclose(f);
+  ck_assert_ptr_nonnull(strstr(buf, "source-info-name=\"My Guide\""));
+  ck_assert_ptr_null(strstr(buf, "not-a-time"));
+  ck_assert_ptr_null(strstr(buf, "stop="));
+  free(buf);
+  bcg_doc_free(&doc);
+}
+END_TEST
+
+START_TEST(xmltv_read_survives_allocation_failures) {
+  static const char text[] =
+    "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><tv>"
+    "<channel id=\"c1\"><display-name>One</display-name><display-name>Zwei</display-name></channel>"
+    "<programme start=\"20200101120000 +0000\" stop=\"20200101130000 +0000\" channel=\"c1\"><title>T</title><desc>D</desc><category>C</category></programme>"
+    "</tv>";
+  for (long n = 0;; n++) {
+    bcg_doc_t doc;
+    FILE *f = tmpfile();
+    int hit;
+    ck_assert_ptr_nonnull(f);
+    fputs(text, f);
+    rewind(f);
+    bcg_doc_init(&doc);
+    alloc_fail_at(n);
+    (void)xmltv_read(f, &doc);
+    hit = alloc_fail_end();
+    fclose(f);
+    bcg_doc_free(&doc);
+    if (!hit) break;
+  }
+}
+END_TEST
+
 static Suite *xmltv_suite(void) {
   Suite *s = suite_create("xmltv");
   TCase *tc = tcase_create("core");
@@ -227,6 +311,9 @@ static Suite *xmltv_suite(void) {
   tcase_add_test(tc, xmltv_read_keeps_description_past_1k);
   tcase_add_test(tc, xmltv_read_accepts_single_quotes_cdata_short_times_and_zone_names);
   tcase_add_test(tc, xmltv_read_keeps_programmes_before_an_unclosed_one);
+  tcase_add_test(tc, xmltv_read_skips_or_clears_bad_times_and_attributes);
+  tcase_add_test(tc, xmltv_write_skips_programmes_with_bad_start);
+  tcase_add_test(tc, xmltv_read_survives_allocation_failures);
   suite_add_tcase(s, tc);
   return s;
 }

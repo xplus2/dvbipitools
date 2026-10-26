@@ -7,7 +7,6 @@
 #include "ws_dispatch.h"
 #include "../ws/ws_broadcast.h"
 #include "../ws/ws_frame.h"
-#include "../ws/ws_sources.h"
 #include "lib/helper/base64.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/sha1.h"
@@ -17,7 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <sys/epoll.h>
 
 #define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"  /* RFC6455 */
 

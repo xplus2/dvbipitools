@@ -1,11 +1,12 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/sys/ioutil.h"
+#include "bimreader.h"
 #include "bitwriter.h"
 
 void bitwriter_init(bitwriter_t *bw) {
@@ -32,18 +33,7 @@ void bitwriter_reset(bitwriter_t *bw) {
 static int reserve(bitwriter_t *bw, size_t more) {
   if (more > SIZE_MAX - bw->len)
     return -1;
-  if (bw->len + more > bw->cap) {
-    size_t newcap = bw->cap ? bw->cap * 2 : 64;
-    unsigned char *np;
-    while (newcap < bw->len + more)
-      newcap *= 2;
-    np = realloc(bw->buf, newcap);
-    if (!np)
-      return -1;
-    bw->buf = np;
-    bw->cap = newcap;
-  }
-  return 0;
+  return growbuf_reserve((void **)&bw->buf, &bw->cap, 1, bw->len + more, 64);
 }
 
 static int push_byte(bitwriter_t *bw, unsigned char b) {
@@ -111,12 +101,15 @@ const unsigned char *bitwriter_data(bitwriter_t *bw, size_t *out_len) {
   return bw->buf;
 }
 
+int bitwriter_vluimsbf8_len(uint64_t value) {
+  int n = 1;
+  while (n < VLUIMSBF8_MAX_GROUPS && (value >> (7 * n)) != 0)
+    n++;
+  return n;
+}
+
 int bitwriter_put_vluimsbf8(bitwriter_t *bw, uint64_t value) {
-  int maxgroups = (int)((sizeof(value) * CHAR_BIT + 6) / 7);
-  int ngroups = 1;
-  while (ngroups < maxgroups && (value >> (7 * ngroups)) != 0)
-    ngroups++;
-  for (int i = ngroups - 1; i >= 0; i--) {
+  for (int i = bitwriter_vluimsbf8_len(value) - 1; i >= 0; i--) {
     if (bitwriter_put(bw, i != 0, 1))
       return -1;
     if (bitwriter_put(bw, (value >> (7 * i)) & 0x7F, 7))
@@ -125,10 +118,9 @@ int bitwriter_put_vluimsbf8(bitwriter_t *bw, uint64_t value) {
   return 0;
 }
 
-int bitwriter_put_vluimsbf4(bitwriter_t *bw, uint64_t value) {
-  int maxgroups = (int)((sizeof(value) * CHAR_BIT + 3) / 4);
+int bitwriter_put_vluimsbf5(bitwriter_t *bw, uint64_t value) {
   int n = 1;
-  while (n < maxgroups && (value >> (4 * n)) != 0)
+  while (n < VLUIMSBF5_MAX_GROUPS && (value >> (4 * n)) != 0)
     n++;
   for (int i = 0; i < n - 1; i++)
     if (bitwriter_put(bw, 1, 1))
@@ -136,4 +128,9 @@ int bitwriter_put_vluimsbf4(bitwriter_t *bw, uint64_t value) {
   if (bitwriter_put(bw, 0, 1))
     return -1;
   return bitwriter_put(bw, value, n * 4);
+}
+
+int bitwriter_append(bitwriter_t *dst, const bitwriter_t *src) {
+  if (src->len && bitwriter_put_bytes(dst, src->buf, src->len)) return -1;
+  return src->cur_bits ? bitwriter_put(dst, src->cur >> (8 - src->cur_bits), src->cur_bits) : 0;
 }

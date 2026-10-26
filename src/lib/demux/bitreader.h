@@ -14,6 +14,7 @@ typedef struct {
 } br_t;
 
 unsigned br_u(br_t *b, int n);   /* n<=32 bits, MSB first */
+void br_skip(br_t *b, size_t n);
 unsigned br_ue(br_t *b);         /* exp-golomb unsigned */
 int      br_se(br_t *b);         /* exp-golomb signed */
 
@@ -28,5 +29,15 @@ size_t rbsp_escape(const unsigned char *s, size_t len, unsigned char *d, size_t 
 
 /* next Annex-B start code (00 00 01 or 00 00 00 01) at/after 'from'. *sclen = 3 or 4 */
 size_t find_startcode(const unsigned char *d, size_t len, size_t from, size_t *sclen);
+
+typedef struct {
+  const unsigned char *d;
+  size_t len;
+  size_t p;
+  size_t scl;
+} sc_iter_t;
+
+void sc_iter_init(sc_iter_t *it, const unsigned char *d, size_t len);
+int sc_iter_next(sc_iter_t *it, size_t *start, size_t *end);
 
 #endif

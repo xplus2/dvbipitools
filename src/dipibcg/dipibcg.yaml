@@ -9,6 +9,9 @@ announce: on
 mcast: 239.255.0.2:3938
 # -M|--map [not set]
 #map: <path>
+# -s|--schema [not set]
+#schema:
+#  - <path>
 # -w|--window 24 # hours
 window: 24
 # -I|--iface [not set]
@@ -28,20 +31,39 @@ color: auto
 # -d|--daemonize off
 daemonize: off
 
+# -f|--format xmltv
+format: xmltv
+
 ## announce-only
+# --encoding bim
+encoding: bim
 # -i|--input [not set]
 #input: <path>
 # --dscp signalling
 dscp: signalling
+# -T|--ttl 16
+ttl: 16
 # -t|--interval 5 # seconds
 interval: 5
 # --refresh 1
 refresh: 1
 # -Z|--compress off
 compress: off
+# --publisher [not set]
+#publisher: example.com/My%20Guide
+# --lang [not set] # requires publisher
+#lang: de
+# --index [not set]
+#index: pi-crid,schedule-time
+# --dvb-locator off
+dvb-locator: off
+# --dvb-duration off
+dvb-duration: off
+# --dvb-pubtime off
+dvb-pubtime: off
 
 ## listen-only
-# -t|--timeout 35 # seconds
+# -t|--timeout 35
 timeout: 35
 # -o|--output -
 #output: <path>

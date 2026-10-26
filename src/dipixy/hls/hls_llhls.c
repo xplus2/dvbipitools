@@ -3,7 +3,6 @@
 
 #include "hls_int.h"
 
-#include <pthread.h>
 #include <string.h>
 
 void snapshot_ll_playlist(const hls_snapshot_t *s, const lcevc_select_t *lcevc, ll_playlist_snap_t *snap) {

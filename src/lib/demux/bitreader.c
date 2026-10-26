@@ -19,6 +19,16 @@ unsigned br_u(br_t *b, int n) {
   return v;
 }
 
+void br_skip(br_t *b, size_t n) {
+  size_t end = b->len * 8;
+  if (n > end - b->bit) {
+    b->err = 1;
+    b->bit = end;
+    return;
+  }
+  b->bit += n;
+}
+
 unsigned br_ue(br_t *b) {
   int lz = 0;
   while (lz < 32 && !b->err && !br_u(b, 1)) lz++;
@@ -31,8 +41,11 @@ int br_se(br_t *b) {
 }
 
 size_t br_slice(const br_t *b, size_t from, size_t to, unsigned char *out, size_t cap) {
-  size_t nbits = to - from;
-  size_t nb = (nbits + 7) / 8;
+  size_t nbits;
+  size_t nb;
+  if (from > to || to > b->len * 8) return 0;
+  nbits = to - from;
+  nb = (nbits + 7) / 8;
   if (!nb || nb > cap) return 0;
   if (from % 8 == 0) {
     size_t full = nbits / 8;
@@ -98,4 +111,21 @@ size_t find_startcode(const unsigned char *d, size_t len, size_t from, size_t *s
     pos = q + 1;
   }
   return len;
+}
+
+void sc_iter_init(sc_iter_t *it, const unsigned char *d, size_t len) {
+  it->d = d;
+  it->len = len;
+  it->scl = 0;
+  it->p = find_startcode(d, len, 0, &it->scl);
+}
+
+int sc_iter_next(sc_iter_t *it, size_t *start, size_t *end) {
+  size_t scl = 0;
+  if (it->p >= it->len) return 0;
+  *start = it->p + it->scl;
+  *end = find_startcode(it->d, it->len, *start, &scl);
+  it->p = *end;
+  it->scl = scl;
+  return 1;
 }

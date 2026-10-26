@@ -9,12 +9,13 @@
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
+#include <stdatomic.h>
 
 #include "../metrics_sink.h"
-#include "dipicam378/crypto.h"
-#include "dipicam378/cs378x/priv.h"
 #include "dipicam378/device.h"
 #include "dipicam378/hooks.h"
+#include "dipicam378/crypto.h"
+#include "dipicam378/cs378x/priv.h"
 
 #define SC_SECTION_TID_EMM 0x82
 #define SC_SECTION_TID_ECM_EVEN 0x80

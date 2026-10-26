@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <string.h>
 
+#include "lib/helper/dateutil.h"
 #include "../sys/ioutil.h"
 #include "timefmt.h"
 

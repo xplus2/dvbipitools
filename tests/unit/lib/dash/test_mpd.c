@@ -8,7 +8,6 @@
 
 #include "lib/dash/mpd.h"
 #include "lib/sys/ioutil.h"
-
 static http_url_t make_base(const char *host, unsigned port, const char *path) {
   http_url_t u;
   memset(&u, 0, sizeof u);
@@ -17,6 +16,7 @@ static http_url_t make_base(const char *host, unsigned port, const char *path) {
   bufcpy(u.path, sizeof u.path, path);
   return u;
 }
+
 
 START_TEST(dash_mpd_parse_matches_dipixy_writer_shape) {
   char body[] =

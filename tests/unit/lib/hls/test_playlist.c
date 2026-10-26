@@ -8,7 +8,6 @@
 
 #include "lib/sys/ioutil.h"
 #include "lib/hls/playlist.h"
-
 static http_url_t make_base(const char *host, unsigned port, const char *path) {
   http_url_t u;
   memset(&u, 0, sizeof u);
@@ -17,6 +16,7 @@ static http_url_t make_base(const char *host, unsigned port, const char *path) {
   bufcpy(u.path, sizeof u.path, path);
   return u;
 }
+
 
 START_TEST(hls_playlist_parse_realistic_live_manifest) {
   char body[] =

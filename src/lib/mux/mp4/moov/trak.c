@@ -1,13 +1,11 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "lib/helper/log.h"
 #include "lib/mux/mp4/priv.h"
 
 static void build_mvhd(mp4buf_t *out, int ntrk, uint32_t duration_ms) {

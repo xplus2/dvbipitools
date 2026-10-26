@@ -8,8 +8,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "../alloc_fail.h"
 #include "lib/config/yamlcfg.h"
 #include "lib/sys/ioutil.h"
+#include "../cfg_fixture.h"
 
 #define TOOL "testtool"
 #define NKEYS(k) (sizeof(k) / sizeof((k)[0]))
@@ -76,13 +78,6 @@ static const yamlcfg_key_t KEYS[] = {
   {"items", ap_list, 0, YAMLCFG_LIST_KEYED},
   {"items.opt", ap_num, 0, 0},
 };
-
-static void write_cfg(char *path, const char *text) {
-  int fd = mkstemp(path);
-  ck_assert_int_ge(fd, 0);
-  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
-  close(fd);
-}
 
 static int load_text(yamlcfg_t *y, tcfg_t *t, int mode, const char *text, yamlcfg_item_fn item) {
   char path[] = "/tmp/yamlcfg_test_XXXXXX";
@@ -729,9 +724,49 @@ START_TEST(warn_counts_and_report_reflects_mode) {
 }
 END_TEST
 
+START_TEST(load_unknown_lists_are_walked_and_warned) {
+  yamlcfg_t y;
+  tcfg_t t = {0};
+  ck_assert_int_eq(load_text(&y, &t, 0, "nokey:\n  - a\n  - b\nother:\n  deep:\n    - c\n", item_cb), YAMLCFG_LOADED);
+  ck_assert_uint_ge(y.warnings, 2u);
+  yamlcfg_strpool_free(t.str_pool);
+}
+END_TEST
+
+START_TEST(load_and_set_str_survive_allocation_failures) {
+  static const char text[] = "name: n\non: true\ncount: 5\nnet:\n  port: 80\nlist:\n  - a\n  - b\nitems:\n  - first:\n      opt: 5\n  - second\n";
+  void *pool = NULL;
+  const char *dst = NULL;
+  char err[64];
+  int rc;
+  for (long n = 0;; n++) {
+    yamlcfg_t y;
+    tcfg_t t = {0};
+    char path[] = "/tmp/yamlcfg_test_XXXXXX";
+    int hit;
+    write_cfg(path, text);
+    alloc_fail_at(n);
+    rc = yamlcfg_load_items(&y, TOOL, 0, path, NULL, KEYS, NKEYS(KEYS), &t, item_cb);
+    hit = alloc_fail_end();
+    (void)rc;
+    unlink(path);
+    yamlcfg_strpool_free(t.str_pool);
+    if (!hit) break;
+  }
+  alloc_fail_at(0);
+  rc = yamlcfg_set_str(&pool, &dst, "value", err, sizeof err);
+  alloc_fail_end();
+  ck_assert_int_eq(rc, -1);
+  ck_assert_str_eq(err, "out of memory");
+  ck_assert_ptr_null(pool);
+}
+END_TEST
+
 static Suite *yamlcfg_suite(void) {
   Suite *s = suite_create("yamlcfg");
   TCase *tc = tcase_create("core");
+  tcase_add_test(tc, load_unknown_lists_are_walked_and_warned);
+  tcase_add_test(tc, load_and_set_str_survive_allocation_failures);
   tcase_add_test(tc, parse_bool_accepts_all_spellings);
   tcase_add_test(tc, parse_bool_rejects_garbage_and_keeps_output);
   tcase_add_test(tc, set_bool_reports_invalid_value);

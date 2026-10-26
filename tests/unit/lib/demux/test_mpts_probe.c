@@ -1,9 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <net/if.h>
 #include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -11,41 +9,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "lib/demux/crc32.h"
 #include "lib/demux/mpts_probe.h"
 #include "lib/mux/psi_build.h"
 #include "../../run_helper.h"
-
-/* zero-ES PMT section (table_id 0x02), CRC included */
-static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid) {
-  unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
-  uint32_t crc;
-
-  body[n++] = (unsigned char)(prog_num >> 8);
-  body[n++] = (unsigned char)prog_num;
-  body[n++] = 0xC1;
-  body[n++] = 0x00;
-  body[n++] = 0x00;
-  body[n++] = (unsigned char)(0xE0 | ((pcr_pid >> 8) & 0x1F));
-  body[n++] = (unsigned char)pcr_pid;
-  body[n++] = 0xF0;
-  body[n++] = 0x00;
-
-  hdr = n + 4;
-  out[0] = 0x02;
-  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
-  out[2] = (unsigned char)hdr;
-  memcpy(out + 3, body, n);
-
-  crc_at = 3 + n;
-  crc = crc32_mpeg(out, crc_at);
-  out[crc_at + 0] = (unsigned char)(crc >> 24);
-  out[crc_at + 1] = (unsigned char)(crc >> 16);
-  out[crc_at + 2] = (unsigned char)(crc >> 8);
-  out[crc_at + 3] = (unsigned char)crc;
-  return crc_at + 4;
-}
+#include "../../fx_net.h"
+#include "../../fx_ts.h"
 
 static void send_section(int sock, const struct sockaddr_in *dst, unsigned pid, const unsigned char *section, size_t slen) {
   unsigned char pkt[188];
@@ -68,20 +36,6 @@ static tssrc_t *open_recv(const char *group, unsigned port) {
   cfg.port = port;
   cfg.iface = "lo";
   return tssrc_open(&cfg, NULL);
-}
-
-static int open_sender(const char *group, unsigned port, struct sockaddr_in *dst) {
-  int sock = socket(AF_INET, SOCK_DGRAM, 0);
-  struct ip_mreqn mif;
-
-  memset(&mif, 0, sizeof mif);
-  mif.imr_ifindex = (int)if_nametoindex("lo");
-  setsockopt(sock, IPPROTO_IP, IP_MULTICAST_IF, &mif, sizeof mif);
-  memset(dst, 0, sizeof *dst);
-  dst->sin_family = AF_INET;
-  dst->sin_port = htons((unsigned short)port);
-  inet_pton(AF_INET, group, &dst->sin_addr);
-  return sock;
 }
 
 START_TEST(mpts_probe_classifies_spts) {

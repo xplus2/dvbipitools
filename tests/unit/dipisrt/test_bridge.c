@@ -15,132 +15,10 @@
 #include <unistd.h>
 
 #include "../log_capture.h"
-#include "../run_helper.h"
 #include "dipisrt/bridge.h"
 #include "lib/mux/fec2022.h"
+#include "lib/net/srt/srtcommon.h"
 #include "lib/sys/signal.h"
-#include "dipisrt/version.h"
-
-START_TEST(tssrc_cfg_file_with_path) {
-  plain_endpoint_t s;
-  tssrc_cfg_t tc;
-  memset(&s, 0, sizeof s);
-  s.kind = PLAIN_EP_FILE;
-  strcpy(s.file_path, "/tmp/fixture.ts");
-
-  plain_endpoint_to_tssrc_cfg(&s, NULL, TOOL_NAME "/" TOOL_VERSION, 0, &tc);
-  ck_assert_int_eq(tc.kind, TSSRC_FILE);
-  ck_assert_str_eq(tc.file_path, "/tmp/fixture.ts");
-  ck_assert_str_eq(tc.user_agent, TOOL_NAME "/" TOOL_VERSION);
-}
-END_TEST
-
-START_TEST(tssrc_cfg_file_empty_path_is_stdin) {
-  plain_endpoint_t s;
-  tssrc_cfg_t tc;
-  memset(&s, 0, sizeof s);
-  s.kind = PLAIN_EP_FILE;
-
-  plain_endpoint_to_tssrc_cfg(&s, NULL, TOOL_NAME "/" TOOL_VERSION, 0, &tc);
-  ck_assert_int_eq(tc.kind, TSSRC_STDIN);
-}
-END_TEST
-
-START_TEST(tssrc_cfg_http_carries_tls_and_insecure) {
-  plain_endpoint_t s;
-  tssrc_cfg_t tc;
-  memset(&s, 0, sizeof s);
-  s.kind = PLAIN_EP_HTTP;
-  s.http.tls = 1;
-
-  plain_endpoint_to_tssrc_cfg(&s, NULL, TOOL_NAME "/" TOOL_VERSION, 1, &tc);
-  ck_assert_int_eq(tc.kind, TSSRC_HTTP);
-  ck_assert_int_eq(tc.http.tls, 1);
-  ck_assert_int_eq(tc.insecure_tls, 1);
-}
-END_TEST
-
-START_TEST(tssrc_cfg_rtp_carries_family_group_port_iface) {
-  plain_endpoint_t s;
-  tssrc_cfg_t tc;
-  memset(&s, 0, sizeof s);
-  s.kind = PLAIN_EP_RTP;
-  s.family = AF_INET;
-  strcpy(s.group, "239.1.1.1");
-  s.port = 5000;
-
-  plain_endpoint_to_tssrc_cfg(&s, "eth0", TOOL_NAME "/" TOOL_VERSION, 0, &tc);
-  ck_assert_int_eq(tc.kind, TSSRC_RTP);
-  ck_assert_int_eq(tc.family, AF_INET);
-  ck_assert_str_eq(tc.group, "239.1.1.1");
-  ck_assert_uint_eq(tc.port, 5000u);
-  ck_assert_str_eq(tc.iface, "eth0");
-}
-END_TEST
-
-START_TEST(tssrc_cfg_udp_kind) {
-  plain_endpoint_t s;
-  tssrc_cfg_t tc;
-  memset(&s, 0, sizeof s);
-  s.kind = PLAIN_EP_UDP;
-
-  plain_endpoint_to_tssrc_cfg(&s, NULL, TOOL_NAME "/" TOOL_VERSION, 0, &tc);
-  ck_assert_int_eq(tc.kind, TSSRC_UDP);
-}
-END_TEST
-
-START_TEST(tssink_cfg_file_with_path) {
-  plain_endpoint_t s;
-  tssink_cfg_t tk;
-  memset(&s, 0, sizeof s);
-  s.kind = PLAIN_EP_FILE;
-  strcpy(s.file_path, "/tmp/out.ts");
-
-  plain_endpoint_to_tssink_cfg(&s, NULL, &tk);
-  ck_assert_int_eq(tk.kind, TSSINK_FILE);
-  ck_assert_str_eq(tk.file_path, "/tmp/out.ts");
-}
-END_TEST
-
-START_TEST(tssink_cfg_file_empty_path_is_stdout) {
-  plain_endpoint_t s;
-  tssink_cfg_t tk;
-  memset(&s, 0, sizeof s);
-  s.kind = PLAIN_EP_FILE;
-
-  plain_endpoint_to_tssink_cfg(&s, NULL, &tk);
-  ck_assert_int_eq(tk.kind, TSSINK_STDOUT);
-}
-END_TEST
-
-START_TEST(tssink_cfg_rtp_carries_family_group_port_iface) {
-  plain_endpoint_t s;
-  tssink_cfg_t tk;
-  memset(&s, 0, sizeof s);
-  s.kind = PLAIN_EP_RTP;
-  s.family = AF_INET6;
-  strcpy(s.group, "ff3e::1");
-  s.port = 8700;
-
-  plain_endpoint_to_tssink_cfg(&s, "eth1", &tk);
-  ck_assert_int_eq(tk.kind, TSSINK_RTP);
-  ck_assert_int_eq(tk.family, AF_INET6);
-  ck_assert_str_eq(tk.group, "ff3e::1");
-  ck_assert_uint_eq(tk.port, 8700u);
-  ck_assert_str_eq(tk.iface, "eth1");
-}
-END_TEST
-
-START_TEST(tssink_cfg_udp_kind) {
-  plain_endpoint_t s;
-  tssink_cfg_t tk;
-  memset(&s, 0, sizeof s);
-  s.kind = PLAIN_EP_UDP;
-
-  plain_endpoint_to_tssink_cfg(&s, NULL, &tk);
-  ck_assert_int_eq(tk.kind, TSSINK_UDP);
-}
-END_TEST
 
 static srtout_t *open_unconnected(int queue_metrics) {
   srtout_cfg_t cfg;
@@ -173,7 +51,7 @@ START_TEST(srtout_queue_stats_count_chunks_watermark_and_drops) {
   ck_assert_int_eq(st.high_watermark, st.capacity);
   ck_assert_uint_gt(st.dropped, 0u);
   ck_assert_uint_eq(st.dropped + (uint64_t)st.chunks, (uint64_t)written);
-  srtout_close(r);
+  srtout_close_now(r);
 }
 END_TEST
 
@@ -260,7 +138,7 @@ START_TEST(srtout_queue_watermark_stays_zero_below_level_two) {
   srtout_queue_stats(r, &st);
   ck_assert_int_eq(st.chunks, 10);
   ck_assert_int_eq(st.high_watermark, 0);
-  srtout_close(r);
+  srtout_close_now(r);
 }
 END_TEST
 
@@ -481,19 +359,42 @@ END_TEST
 
 typedef struct {
   unsigned ms;
+  int done;
+  pthread_mutex_t mu;
+  pthread_cond_t cv;
 } srt_stopper_t;
 
 static void *srt_stopper_main(void *arg) {
-  const srt_stopper_t *st = arg;
-  sleep_ms(st->ms);
+  srt_stopper_t *st = arg;
+  struct timespec until;
+  int rc = 0;
+
+  clock_gettime(CLOCK_REALTIME, &until);
+  until.tv_sec += st->ms / 1000;
+  until.tv_nsec += (long)(st->ms % 1000) * 1000000L;
+  if (until.tv_nsec >= 1000000000L) {
+    until.tv_sec++;
+    until.tv_nsec -= 1000000000L;
+  }
+  pthread_mutex_lock(&st->mu);
+  while (!st->done && rc == 0) rc = pthread_cond_timedwait(&st->cv, &st->mu, &until);
+  pthread_mutex_unlock(&st->mu);
   signal_request_stop();
   return NULL;
+}
+
+static void srt_stopper_finish(srt_stopper_t *st, pthread_t th) {
+  pthread_mutex_lock(&st->mu);
+  st->done = 1;
+  pthread_cond_signal(&st->cv);
+  pthread_mutex_unlock(&st->mu);
+  pthread_join(th, NULL);
 }
 
 START_TEST(listening_receiver_idles_until_stopped) {
   config_t cfg;
   metrics_exporter_t mx;
-  srt_stopper_t stop = {1500};
+  srt_stopper_t stop = {300, 0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
   pthread_t th;
   int rc;
   memset(&cfg, 0, sizeof cfg);
@@ -506,7 +407,7 @@ START_TEST(listening_receiver_idles_until_stopped) {
   cfg.verbose = _i;
   ck_assert_int_eq(pthread_create(&th, NULL, srt_stopper_main, &stop), 0);
   rc = bridge_run(&cfg, &mx);
-  pthread_join(th, NULL);
+  srt_stopper_finish(&stop, th);
   ck_assert_int_eq(rc, 0);
 }
 END_TEST
@@ -514,7 +415,7 @@ END_TEST
 START_TEST(sender_reads_a_file_to_the_end_without_a_listener) {
   config_t cfg;
   metrics_exporter_t mx;
-  srt_stopper_t stop = {6000};
+  srt_stopper_t stop = {6000, 0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
   pthread_t th;
   char path[] = "/tmp/dvbipitools_test_srtbridge_XXXXXX";
   int fd = mkstemp(path);
@@ -540,30 +441,22 @@ START_TEST(sender_reads_a_file_to_the_end_without_a_listener) {
   cfg.verbose = 1;
   ck_assert_int_eq(pthread_create(&th, NULL, srt_stopper_main, &stop), 0);
   rc = bridge_run(&cfg, &mx);
-  signal_request_stop();
-  pthread_join(th, NULL);
+  srt_stopper_finish(&stop, th);
   unlink(path);
   ck_assert_int_eq(rc, 0);
 }
 END_TEST
 
+static void srt_hold(void) { ck_assert_int_eq(srtcommon_startup(), 0); }
+
 static Suite *bridge_suite(void) {
   Suite *s = suite_create("dipisrt_bridge");
   TCase *tc = tcase_create("core");
   tcase_set_timeout(tc, 30);
-  tcase_add_test(tc, tssrc_cfg_file_with_path);
-  tcase_add_test(tc, tssrc_cfg_file_empty_path_is_stdin);
-  tcase_add_test(tc, tssrc_cfg_http_carries_tls_and_insecure);
-  tcase_add_test(tc, tssrc_cfg_rtp_carries_family_group_port_iface);
-  tcase_add_test(tc, tssrc_cfg_udp_kind);
-  tcase_add_test(tc, tssink_cfg_file_with_path);
-  tcase_add_test(tc, tssink_cfg_file_empty_path_is_stdout);
-  tcase_add_test(tc, tssink_cfg_rtp_carries_family_group_port_iface);
-  tcase_add_test(tc, tssink_cfg_udp_kind);
+  tcase_add_checked_fixture(tc, srt_hold, NULL);
   tcase_add_test(tc, srtout_queue_stats_count_chunks_watermark_and_drops);
   tcase_add_test(tc, srtout_queue_watermark_stays_zero_below_level_two);
   tcase_add_loop_test(tc, bridge_run_fails_cleanly_when_setup_cannot_complete, 0, (int)(sizeof srt_bridge_fail_cases / sizeof srt_bridge_fail_cases[0]));
-  tcase_add_test(tc, sender_recovers_lost_packet_from_repair_without_further_source);
   tcase_add_loop_test(tc, listening_receiver_idles_until_stopped, 0, 2);
   tcase_add_loop_test(tc, sender_reads_a_file_to_the_end_without_a_listener, 0, 2);
   tcase_add_test(tc, dedup_replay_no_match_on_empty_history);
@@ -572,6 +465,10 @@ static Suite *bridge_suite(void) {
   tcase_add_test(tc, dedup_replay_passes_out_of_order_chunk);
   tcase_add_test(tc, dedup_replay_requires_len_match_too);
   tcase_add_test(tc, dedup_replay_identical_chunks_do_not_swallow_stream);
+  suite_add_tcase(s, tc);
+  tc = tcase_create("forked");
+  tcase_set_timeout(tc, 30);
+  tcase_add_test(tc, sender_recovers_lost_packet_from_repair_without_further_source);
   suite_add_tcase(s, tc);
   return s;
 }

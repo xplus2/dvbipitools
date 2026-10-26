@@ -44,6 +44,8 @@ int yamlcfg_report(const yamlcfg_t *y);
 int yamlcfg_parse_bool(const char *val, int *out);
 
 int yamlcfg_set_str(void **pool, const char **dst, const char *val, char *err, size_t errsz);
+/* copy of val appended to list[*n], max entries. 0 ok, -1 error (err) */
+int yamlcfg_add_str(void **pool, const char **list, int *n, int max, const char *val, char *err, size_t errsz);
 void yamlcfg_strpool_free(void *pool);
 int yamlcfg_set_bool(int *dst, const char *val, char *err, size_t errsz);
 int yamlcfg_set_uint(unsigned *dst, const char *val, unsigned min, unsigned max, char *err, size_t errsz);
@@ -51,5 +53,9 @@ int yamlcfg_set_double(double *dst, const char *val, double min, double max, int
 int yamlcfg_set_lang(char *dst, const char *val, char *err, size_t errsz);
 int yamlcfg_set_addrport(int *family, char *addr, size_t addrsz, unsigned *port, const char *val, char *err, size_t errsz);
 int yamlcfg_set_color(int *dst, const char *val, char *err, size_t errsz);
+int yamlcfg_set_long(long *dst, const char *val, unsigned min, char *err, size_t errsz);
+int yamlcfg_set_u8(unsigned char *dst, const char *val, unsigned max, char *err, size_t errsz);
+int yamlcfg_set_int_by(int *dst, const char *val, int (*parse)(const char *s, int *out), const char *hint, char *err, size_t errsz);
+void yamlcfg_warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg);
 
 #endif

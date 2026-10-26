@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <getopt.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -11,7 +10,6 @@
 
 #include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
-#include "lib/metrics/protocol.h"
 #include "priv.h"
 
 static int basic_auth_parse(const char *val, char *out, size_t outsz) {
@@ -41,35 +39,18 @@ static const struct option longopts[] = {
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
-static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
-  int c;
-  optind = 1;
-  opterr = 0;
-  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
-    if (c == 'c') *cfg_path = optarg;
-    if (c == OPT_CONFIGTEST) *configtest = 1;
-    if (c == OPT_CONFIG_STRICT) *strict = 1;
-    if (c == 'h') {
-      metrics_print_help();
-      opterr = 1;
-      return ARGS_HELP;
-    }
-  }
-  opterr = 1;
-  return ARGS_OK;
-}
-
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   const char *conflict;
   const char *conflict_code;
   int configtest = 0;
   int strict = 0;
-  args_status_t st;
   int c;
 
-  st = prescan(argc, argv, &cfg_path, &configtest, &strict);
-  if (st != ARGS_OK) return st;
+  if (argutil_prescan(argc, argv, shortopts, longopts, OPT_CONFIGTEST, OPT_CONFIG_STRICT, &cfg_path, &configtest, &strict)) {
+    metrics_print_help();
+    return ARGS_HELP;
+  }
   if (configtest) return metrics_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
 
   metrics_cfg_defaults(cfg);
@@ -125,12 +106,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->daemonize = 1;
         break;
       case OPT_COLOR: {
-        log_color_t v;
-        if (log_color_from_string(optarg, &v)) {
-          argerr("MS000105", "invalid --color: %s (auto|always|never)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->color_mode = v;
+        if (argutil_color_opt(TOOL_NAME, "MS000105", optarg, &cfg->color_mode)) return ARGS_ERR;
         break;
       }
       case 'c':

@@ -3,7 +3,6 @@
 
 #define _GNU_SOURCE
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -12,7 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/time.h>
 #include <unistd.h>
 
 #include "../../run_helper.h"

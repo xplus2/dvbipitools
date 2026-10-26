@@ -12,17 +12,7 @@
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
 #include "lib/sys/ioutil.h"
-
-static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
-}
+#include "../fx_ts.h"
 
 START_TEST(pmtbuild_map_es_picks_video_first_and_drops_unsupported) {
   psi_es_t es[5];
@@ -275,9 +265,9 @@ START_TEST(pmtbuild_pmt_round_trips_video_audio_subtitle_teletext) {
 
   p = psi_new();
   pat_len = psi_build_pat(0x1234, 0, 55, pids.pmt_pid, pat_section, sizeof pat_section);
-  wrap_ts_packet(pkt, OUT_PID_PAT, pat_section, pat_len);
+  wrap_section_packet(pkt, OUT_PID_PAT, pat_section, pat_len);
   psi_feed(p, pkt);
-  wrap_ts_packet(pkt, pids.pmt_pid, section, slen);
+  wrap_section_packet(pkt, pids.pmt_pid, section, slen);
   psi_feed(p, pkt);
 
   ck_assert_int_eq(psi_have_pmt(p), 1);
@@ -419,9 +409,9 @@ START_TEST(pmtbuild_pmt_round_trips_av1_registration_descriptor) {
 
   p = psi_new();
   pat_len = psi_build_pat(0x1234, 0, 55, pids.pmt_pid, pat_section, sizeof pat_section);
-  wrap_ts_packet(pkt, OUT_PID_PAT, pat_section, pat_len);
+  wrap_section_packet(pkt, OUT_PID_PAT, pat_section, pat_len);
   psi_feed(p, pkt);
-  wrap_ts_packet(pkt, pids.pmt_pid, section, slen);
+  wrap_section_packet(pkt, pids.pmt_pid, section, slen);
   psi_feed(p, pkt);
 
   ck_assert_int_eq(psi_have_pmt(p), 1);

@@ -9,7 +9,6 @@
 #include <string.h>
 
 #include "lib/helper/xml_util.h"
-#include "lib/helper/xml_util/xml_util_int.h"
 
 static const char *find_bytes(const char *s, const char *end, const char *pat) {
   size_t n = strlen(pat);

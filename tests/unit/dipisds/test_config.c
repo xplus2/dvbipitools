@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -28,6 +27,7 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "iface: eth7\n", CFG_STRPTR, iface, 0, "eth7"),
   CFG_FIELD(config_t, "dscp: video-high\n", CFG_INT, dscp, NET_DSCP_VIDEO_HIGH, NULL),
   CFG_FIELD(config_t, "dscp: 10\n", CFG_INT, dscp, 40, NULL),
+  CFG_FIELD(config_t, "ttl: 64\n", CFG_UINT, ttl, 64, NULL),
   CFG_FIELD(config_t, "interval: 9\n", CFG_LONG, interval_s, 9, NULL),
   CFG_FIELD(config_t, "timeout: 77\n", CFG_LONG, timeout_s, 77, NULL),
   CFG_FIELD(config_t, "output: /tmp/out.m3u\n", CFG_STRPTR, output_path, 0, "/tmp/out.m3u"),
@@ -72,7 +72,17 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "fus:\n  id: 4711\n", CFG_SIZE, fus_id, 4711, NULL),
   CFG_FIELD(config_t, "fus:\n  announce: 239.9.9.9:5000\n", CFG_CHARARR, fus_announce_addr, 0, "239.9.9.9"),
   CFG_FIELD(config_t, "fus:\n  announce: 239.9.9.9:5000\n", CFG_UINT, fus_announce_port, 5000, NULL),
+  CFG_FIELD(config_t, "schema:\n  - /dev/null\n  - /tmp\n", CFG_INT, nschemas, 2, NULL),
+  CFG_FIELD(config_t, "schema:\n  - /dev/null\n  - /tmp\n", CFG_STRPTR, schemas[1], 0, "/tmp"),
   CFG_FIELD(config_t, "fus:\n  logo: http://example.org/f.png\n", CFG_STRPTR, fus_logo, 0, "http://example.org/f.png"),
+  CFG_FIELD(config_t, "bim-namespace: urn:x:y\n", CFG_STRPTR, sdns_ns, 0, "urn:x:y"),
+  CFG_FIELD(config_t, "bcg:\n  name: Guide\n", CFG_STRPTR, bcg_name, 0, "Guide"),
+  CFG_FIELD(config_t, "bcg:\n  name: Guide\n", CFG_INT, bcg_enabled, 1, NULL),
+  CFG_FIELD(config_t, "bcg:\n  id: g1\n", CFG_STRPTR, bcg_id, 0, "g1"),
+  CFG_FIELD(config_t, "bcg:\n  description: Some guide\n", CFG_STRPTR, bcg_description, 0, "Some guide"),
+  CFG_FIELD(config_t, "bcg:\n  provider-name: Prov\n", CFG_STRPTR, bcg_provider_name, 0, "Prov"),
+  CFG_FIELD(config_t, "bcg:\n  mcast: 239.9.9.8:5002\n", CFG_CHARARR, bcg_mcast_addr, 0, "239.9.9.8"),
+  CFG_FIELD(config_t, "bcg:\n  mcast: 239.9.9.8:5002\n", CFG_UINT, bcg_mcast_port, 5002, NULL),
 };
 
 static const char *const bad_cases[] = {
@@ -83,6 +93,10 @@ static const char *const bad_cases[] = {
   "mcast: 127.0.0.1:5000\n",
   "dscp: bogus\n",
   "dscp: 64\n",
+  "ttl: 0\n",
+  "fus:\n  announce: 10.0.0.1:5000\n",
+  "bcg:\n  mcast: 10.0.0.1:5000\n",
+  "ttl: 256\n",
   "interval: -1\n",
   "interval: soon\n",
   "interval: 0\n",
@@ -113,6 +127,8 @@ static const char *const bad_cases[] = {
   "fus:\n  id: \"\"\n",
   "fus:\n  id: -1\n",
   "fus:\n  announce: bogus\n",
+  "bcg:\n  mcast: bogus\n",
+  "schema:\n  - a\n  - b\n  - c\n  - d\n  - e\n  - f\n  - g\n  - h\n  - i\n  - j\n  - k\n  - l\n  - m\n  - n\n  - o\n  - p\n  - q\n  - r\n  - s\n  - t\n  - u\n  - v\n  - w\n  - x\n  - y\n  - z\n  - a1\n  - b1\n  - c1\n  - d1\n  - e1\n  - f1\n  - g1\n  - h1\n  - i1\n  - j1\n  - k1\n  - l1\n  - m1\n  - n1\n",
 };
 
 static cfg_fixture_t g_fx;
@@ -151,6 +167,7 @@ START_TEST(defaults_are_the_documented_values) {
   sds_cfg_defaults(&cfg);
   ck_assert_int_eq(cfg.format, OUT_M3U);
   ck_assert_int_eq(cfg.dscp, NET_DSCP_SIGNALLING);
+  ck_assert_uint_eq(cfg.ttl, 16);
   ck_assert_int_eq((int)cfg.interval_s, 5);
   ck_assert_int_eq((int)cfg.timeout_s, 35);
 }
@@ -209,6 +226,49 @@ static const cfgtest_case_t cfgtest_cases[] = {
   {ANN_XML "al-fec:\n  pt: 97\n", "a.xml", -1},
   {ANN_XML "metrics:\n  sock: /tmp/x.sock\n", "a.xml", -1},
   {ANN_XML "packages: @F@\n", "a.xml", -1},
+  {ANN_XML "cells: @F@\n", "a.xml", -1},
+  {ANN_XML "ret:\n  addr: 10.0.0.1:6000\n", "a.xml", -1},
+  {ANN_XML "fcc:\n  addr: 10.0.0.2:6001\n", "a.xml", -1},
+  {ANN_XML "al-fec:\n  addr: 10.0.0.3:6004\n", "a.xml", -1},
+  {ANN_XML "rms:\n  name: R\n  location: L\n", "a.xml", -1},
+  {ANN_XML "fus:\n  name: F\n  id: 1\n", "a.xml", -1},
+  {ANN_XML "ret:\n  mc: true\n", "a.xml", -1},
+  {ANN_XML "ret:\n  mc-port: 6002\n", "a.xml", -1},
+  {ANN_XML "ret:\n  rtx-pt: 100\n", "a.xml", -1},
+  {ANN_XML "ret:\n  addr: 10.0.0.1:6000\n  rsi-mc-ret: true\n  mc: true\n", "a.xml", -1},
+  {ANN_XML "fcc:\n  rtx-pt: 100\n", "a.xml", -1},
+  {ANN_XML "fcc:\n  resolve-by-port: true\n", "a.xml", -1},
+  {ANN_XML "fcc:\n  resolve-base-port: 30000\n", "a.xml", -1},
+  {ANN_XML "fcc:\n  resolve-max-channels: 5\n", "a.xml", -1},
+  {ANN_XML "rms:\n  location: L\n", "a.xml", -1},
+  {ANN_XML "rms:\n  logo: http://example.org/l.png\n", "a.xml", -1},
+  {ANN_XML "fus:\n  id: 3\n", "a.xml", -1},
+  {ANN_XML "fus:\n  announce: 239.9.9.9:5000\n", "a.xml", -1},
+  {ANN_XML "fus:\n  logo: http://example.org/f.png\n", "a.xml", -1},
+  {ANN_XML "metrics:\n  interval: 10\n", "a.xml", -1},
+  {ANN_XML "metrics:\n  id: m1\n  sock: /tmp/x.sock\n  interval: 10\n", "a.xml", 0},
+  {ANN_XML "bcg:\n  id: g\n", "a.xml", -1},
+  {ANN_XML "bcg:\n  description: d\n", "a.xml", -1},
+  {ANN_XML "bcg:\n  provider-name: p\n", "a.xml", -1},
+  {ANN_XML "bcg:\n  mcast: 239.9.9.8:5002\n", "a.xml", -1},
+  {ANN_XML "bcg:\n  name: Guide\n", "a.xml", -1},
+  {ANN_XML "bcg:\n  name: Guide\n  mcast: 239.9.9.8:5002\n", "a.xml", -1},
+  {ANN "input: @F@\nprovider: example.org\noffering: Offer\nbcg:\n  name: Guide\n  mcast: 239.9.9.8:5002\n", "a.csv", 0},
+  {LST "input: @F@\n", "a.xml", -1},
+  {LST "ttl: 8\n", "a.xml", -1},
+  {LST "bim-namespace: urn:dvb:metadata:iptv:sdns:2008-1\n", "a.xml", 0},
+  {LST "bim-namespace: urn:x\n", "a.xml", -1},
+  {ANN_XML "output: o.m3u\n", "a.xml", -1},
+  {ANN_XML "bim-namespace: urn:dvb:metadata:iptv:sdns:2008-1\n", "a.xml", -1},
+  {ANN_XML "schema: /nonexistent.xsd\n", "a.xml", -1},
+  {ANN "input: @F@\nprovider: example.org\noffering: Offer\nfcc:\n  addr: 10.0.0.1:6000\n  resolve-by-port: on\n  resolve-base-port: 65500\n", "a.csv", -1},
+  {LST "rms:\n  name: R\n  location: L\n", "a.xml", -1},
+  {LST "metrics:\n  id: m1\n", "a.xml", -1},
+  {LST "packages: @F@\n", "a.xml", -1},
+  {"announce: true\nmcast: 239.1.2.3:5000\ninput: @F@\nprovider: p\n", "a.csv", -1},
+  {"announce: true\nmcast: 239.1.2.3:5000\ninput: @F@\noffering: o\n", "a.csv", -1},
+  {"announce: true\nmcast: 239.1.2.3:5000\ninput: @F@\n", "a.XML", 0},
+  {"announce: true\nmcast: 239.1.2.3:5000\ninput: @F@\n", "noext", -1},
 };
 
 START_TEST(config_test_reports_warnings_and_fails_only_in_strict_mode) {
@@ -224,6 +284,58 @@ START_TEST(config_test_missing_file_fails) {
 }
 END_TEST
 
+START_TEST(announce_only_predicates_follow_each_setting) {
+  static const char *const text = "x";
+  config_t c;
+  memset(&c, 0, sizeof c);
+  ck_assert_int_eq(sds_announce_only_set(&c), 0);
+#define SETS(expr) \
+  do { \
+    memset(&c, 0, sizeof c); \
+    expr; \
+    ck_assert_msg(sds_announce_only_set(&c), "%s", #expr); \
+  } while (0)
+  SETS(c.ret_enabled = 1);
+  SETS(c.fl.have_ret_rtx_time = 1);
+  SETS(c.fl.have_ret_rtx_pt = 1);
+  SETS(c.ret_mc = 1);
+  SETS(c.fl.have_ret_mc_port = 1);
+  SETS(c.ret_rsi_mc_ret = 1);
+  SETS(c.fcc_enabled = 1);
+  SETS(c.fl.have_fcc_rtx_time = 1);
+  SETS(c.fl.have_fcc_rtx_pt = 1);
+  SETS(c.fcc_resolve_by_port = 1);
+  SETS(c.fcc_resolve_base_port = 1);
+  SETS(c.fl.have_fcc_resolve_max_channels = 1);
+  SETS(c.al_fec_enabled = 1);
+  SETS(c.fl.have_al_fec_pt = 1);
+  SETS(c.metrics_id = text);
+  SETS(c.packages_path = text);
+  SETS(c.cells_path = text);
+  SETS(c.rms_enabled = 1);
+  SETS(c.fl.have_rms_lang = 1);
+  SETS(c.rms_location = text);
+  SETS(c.rms_logo = text);
+  SETS(c.fus_enabled = 1);
+  SETS(c.fl.have_fus_lang = 1);
+  SETS(c.fl.have_fus_id = 1);
+  SETS(c.fus_announce_addr[0] = 'a');
+  SETS(c.fus_logo = text);
+  SETS(c.bcg_enabled = 1);
+  SETS(c.bcg_id = text);
+  SETS(c.bcg_description = text);
+  SETS(c.bcg_provider_name = text);
+  SETS(c.bcg_mcast_addr[0] = 'a');
+#undef SETS
+  memset(&c, 0, sizeof c);
+  ck_assert_int_eq(sds_ret_set(&c), 0);
+  ck_assert_int_eq(sds_fcc_set(&c), 0);
+  ck_assert_int_eq(sds_al_fec_set(&c), 0);
+  ck_assert_int_eq(sds_bcg_set(&c), 0);
+  ck_assert_int_eq(sds_disco_set(&c), 0);
+}
+END_TEST
+
 static Suite *config_suite(void) {
   Suite *s = suite_create("dipisds_config");
   TCase *tc = tcase_create("core");
@@ -235,6 +347,7 @@ static Suite *config_suite(void) {
   tcase_add_test(tc, missing_explicit_file_fails);
   tcase_add_loop_test(tc, config_test_reports_warnings_and_fails_only_in_strict_mode, 0, (int)(sizeof cfgtest_cases / sizeof cfgtest_cases[0]));
   tcase_add_test(tc, config_test_missing_file_fails);
+  tcase_add_test(tc, announce_only_predicates_follow_each_setting);
   suite_add_tcase(s, tc);
   return s;
 }

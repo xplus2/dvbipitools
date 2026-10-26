@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <unistd.h>
 
 #include "../cfg_fixture.h"
 #include "dipidescramble/config.h"

@@ -4,8 +4,6 @@
 #include <stdio.h>
 
 #include "lib/cas/cas_core.h"
-
-#include "../mux/tspacketizer.h"
 #include "../version.h"
 #include "priv.h"
 

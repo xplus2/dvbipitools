@@ -15,6 +15,8 @@
 #define OPT_MAX_CLIENTS 1057
 #define OPT_MAX_CHANNELS 1051
 #define OPT_MAX_VARIANTS 1072
+#define OPT_SDS_BIM_NAMESPACE 1073
+#define OPT_SDS_SCHEMA 1074
 #define OPT_IDLE_TIMEOUT 1052
 #define OPT_CAPTURE_RING_SIZE 1048
 #define OPT_SDS_TIMEOUT 1044
@@ -77,6 +79,7 @@
 typedef struct {
   config_t *cfg;
   int cli_input;
+  int schema_cli; /* --sds-schema seen on the command line */
 } dixy_opt_t;
 
 /* ARGS_OK: handled. OPT_UNHANDLED: not this group */

@@ -1,21 +1,18 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <unistd.h>
 
 #include "dipitvhead/cas/cas.h"
-
 #include "lib/scrambler/cissa.h"
 #include "lib/scrambler/csa2.h"
 #include "psi_fixture.h"
 #include "stderr_capture.h"
+#include "../fx_net.h"
 
 static void build_pcr_packet(unsigned char pkt[188], int with_pcr, uint64_t base, unsigned ext) {
   memset(pkt, 0xFF, 188);
@@ -358,22 +355,6 @@ START_TEST(start_single_requires_a_pcr_and_resolvable_pids) {
   psi_free(with_pcr);
 }
 END_TEST
-
-static int bind_listener(unsigned *port_out) {
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 1), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
-}
 
 START_TEST(cas_reports_failure_when_the_emmg_port_is_taken) {
   config_t cfg;

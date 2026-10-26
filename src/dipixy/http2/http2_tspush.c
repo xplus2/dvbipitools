@@ -12,7 +12,6 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 /* DATA read callback: pulls straight from subscriber's h2_ring
    (SPSC, producer same reactor thread via h2_tspush_wake -> resume_data) */

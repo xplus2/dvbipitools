@@ -4,7 +4,6 @@
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/socket.h>
 
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
@@ -31,13 +30,6 @@ static int set_buf(char *dst, size_t sz, const char *v, char *e, size_t n) {
     return -1;
   }
   bufcpy(dst, sz, v);
-  return 0;
-}
-
-static int set_byte(unsigned char *dst, const char *v, unsigned max, char *e, size_t n) {
-  unsigned u;
-  if (yamlcfg_set_uint(&u, v, 0, max, e, n)) return -1;
-  *dst = (unsigned char)u;
   return 0;
 }
 
@@ -280,7 +272,7 @@ static int apply_ret_mc_port(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_ret_pt(void *c, const char *v, char *e, size_t n) {
-  return set_byte(&((config_t *)c)->ret.rtx_pt, v, 127, e, n);
+  return yamlcfg_set_u8(&((config_t *)c)->ret.rtx_pt, v, 127, e, n);
 }
 
 static int apply_ret_wait(void *c, const char *v, char *e, size_t n) {
@@ -408,10 +400,6 @@ int rec_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
-  if (cond) yamlcfg_warn(y, code, "%s", msg);
-}
-
 static int count_kind(const config_t *cfg, out_kind_t k) {
   int n = 0;
   for (int i = 0; i < cfg->n_out; i++) {
@@ -442,28 +430,28 @@ int rec_cfg_test(const char *path, int strict) {
   has_srt = count_kind(&cfg, OUT_SRT);
   container = fl->have_format && (cfg.format == FMT_MKV || cfg.format == FMT_MKA || cfg.format == FMT_MP4 || cfg.format == FMT_M4A);
 
-  warn_if(&y, !fl->have_in, "CA000156", "in not set (required unless given on the command line)");
-  warn_if(&y, !cfg.n_out, "CA000157", "out not set (required unless given on the command line)");
-  warn_if(&y, n_rist > 1, "CA000562", "at most one rist:// out target");
-  warn_if(&y, fl->have_in && cfg.source.kind == URI_RIST && n_rist, "CA000563", "in rist:// and out rist:// cannot combine");
-  warn_if(&y, cfg.ret.enabled && fl->have_in && cfg.source.kind != URI_RTP, "CA000564", "ret.addr requires in rtp://");
-  warn_if(&y, cfg.ret.enabled && cfg.ret.mc_enabled && fl->have_in && cfg.ret.family != cfg.source.family, "CA000565", "ret.addr family must match in's, or set ret.no-mc");
-  warn_if(&y, cfg.pace && fl->have_in && cfg.source.kind != URI_FILE, "CA000566", "pace requires in - or a file path");
-  warn_if(&y, container && cfg.n_out && (n_file != 1 || cfg.n_out - n_rtmp != 1), "CA000567", "format mkv/mka/mp4/m4a requires exactly one file out target (plus optional rtmp(s) targets)");
-  warn_if(&y, fl->have_format && cfg.format == FMT_RAW && n_rtmp, "CA000568", "format raw is incompatible with rtmp(s) out targets");
-  warn_if(&y, cfg.subs == SUB_SRT && fl->have_format && !container, "CA000569", "subtitles srt requires format mkv, mka, mp4 or m4a");
-  warn_if(&y, fl->have_secret && n_rist && cfg.rist_profile != RIST_PROF_MAIN, "CA000570", "rist.secret requires rist.profile main");
-  warn_if(&y, cfg.rist_key_size && n_rist && cfg.rist_profile != RIST_PROF_MAIN, "CA000374", "rist.encryption-type requires rist.profile main");
-  warn_if(&y, cfg.rist_key_size_in && fl->have_in && cfg.source.kind == URI_RIST && cfg.rist_profile_in != RIST_PROF_MAIN, "CA000571", "rist.encryption-type-in requires rist.profile-in main");
-  warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "CA000162", "al-fec requires al-fec-port");
-  warn_if(&y, cfg.al_fec_out_l && !cfg.al_fec_out_port, "CA000707", "al-fec-out requires al-fec-port-out");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "CA000120", "metrics.sock and metrics.interval require metrics.id");
-  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "CA000161", "metrics.inspect-ts requires metrics.id");
-  warn_if(&y, cfg.srt_passphrase_in[0] && (strlen(cfg.srt_passphrase_in) < 10 || strlen(cfg.srt_passphrase_in) > 79), "CA000375", "srt.passphrase-in must be 10..79 characters");
-  warn_if(&y, cfg.srt_pbkeylen_in && !cfg.srt_passphrase_in[0], "CA000376", "srt.pbkeylen-in requires srt.passphrase-in");
-  warn_if(&y, cfg.srt_passphrase[0] && (strlen(cfg.srt_passphrase) < 10 || strlen(cfg.srt_passphrase) > 79), "CA000378", "srt.passphrase must be 10..79 characters");
-  warn_if(&y, cfg.srt_pbkeylen && !cfg.srt_passphrase[0], "CA000379", "srt.pbkeylen requires srt.passphrase");
-  warn_if(&y, !has_srt && (cfg.srt_passphrase[0] || cfg.srt_streamid[0] || cfg.srt_packetfilter[0] || cfg.srt_latency_ms) && cfg.n_out, "CA000572", "srt.* settings need an srt:// out target");
+  yamlcfg_warn_if(&y, !fl->have_in, "CA000156", "in not set (required unless given on the command line)");
+  yamlcfg_warn_if(&y, !cfg.n_out, "CA000157", "out not set (required unless given on the command line)");
+  yamlcfg_warn_if(&y, n_rist > 1, "CA000562", "at most one rist:// out target");
+  yamlcfg_warn_if(&y, fl->have_in && cfg.source.kind == URI_RIST && n_rist, "CA000563", "in rist:// and out rist:// cannot combine");
+  yamlcfg_warn_if(&y, cfg.ret.enabled && fl->have_in && cfg.source.kind != URI_RTP, "CA000564", "ret.addr requires in rtp://");
+  yamlcfg_warn_if(&y, cfg.ret.enabled && cfg.ret.mc_enabled && fl->have_in && cfg.ret.family != cfg.source.family, "CA000565", "ret.addr family must match in's, or set ret.no-mc");
+  yamlcfg_warn_if(&y, cfg.pace && fl->have_in && cfg.source.kind != URI_FILE, "CA000566", "pace requires in - or a file path");
+  yamlcfg_warn_if(&y, container && cfg.n_out && (n_file != 1 || cfg.n_out - n_rtmp != 1), "CA000567", "format mkv/mka/mp4/m4a requires exactly one file out target (plus optional rtmp(s) targets)");
+  yamlcfg_warn_if(&y, fl->have_format && cfg.format == FMT_RAW && n_rtmp, "CA000568", "format raw is incompatible with rtmp(s) out targets");
+  yamlcfg_warn_if(&y, cfg.subs == SUB_SRT && fl->have_format && !container, "CA000569", "subtitles srt requires format mkv, mka, mp4 or m4a");
+  yamlcfg_warn_if(&y, fl->have_secret && n_rist && cfg.rist_profile != RIST_PROF_MAIN, "CA000570", "rist.secret requires rist.profile main");
+  yamlcfg_warn_if(&y, cfg.rist_key_size && n_rist && cfg.rist_profile != RIST_PROF_MAIN, "CA000374", "rist.encryption-type requires rist.profile main");
+  yamlcfg_warn_if(&y, cfg.rist_key_size_in && fl->have_in && cfg.source.kind == URI_RIST && cfg.rist_profile_in != RIST_PROF_MAIN, "CA000571", "rist.encryption-type-in requires rist.profile-in main");
+  yamlcfg_warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "CA000162", "al-fec requires al-fec-port");
+  yamlcfg_warn_if(&y, cfg.al_fec_out_l && !cfg.al_fec_out_port, "CA000707", "al-fec-out requires al-fec-port-out");
+  yamlcfg_warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "CA000120", "metrics.sock and metrics.interval require metrics.id");
+  yamlcfg_warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "CA000161", "metrics.inspect-ts requires metrics.id");
+  yamlcfg_warn_if(&y, cfg.srt_passphrase_in[0] && (strlen(cfg.srt_passphrase_in) < 10 || strlen(cfg.srt_passphrase_in) > 79), "CA000375", "srt.passphrase-in must be 10..79 characters");
+  yamlcfg_warn_if(&y, cfg.srt_pbkeylen_in && !cfg.srt_passphrase_in[0], "CA000376", "srt.pbkeylen-in requires srt.passphrase-in");
+  yamlcfg_warn_if(&y, cfg.srt_passphrase[0] && (strlen(cfg.srt_passphrase) < 10 || strlen(cfg.srt_passphrase) > 79), "CA000378", "srt.passphrase must be 10..79 characters");
+  yamlcfg_warn_if(&y, cfg.srt_pbkeylen && !cfg.srt_passphrase[0], "CA000379", "srt.pbkeylen requires srt.passphrase");
+  yamlcfg_warn_if(&y, !has_srt && (cfg.srt_passphrase[0] || cfg.srt_streamid[0] || cfg.srt_packetfilter[0] || cfg.srt_latency_ms) && cfg.n_out, "CA000572", "srt.* settings need an srt:// out target");
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);
   return rc;

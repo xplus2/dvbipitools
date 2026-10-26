@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -15,6 +14,7 @@
 #include "lib/net/rist/ristin.h"
 #include "lib/net/rist/ristin_priv.h"
 #include "../../../metrics_sink.h"
+#include "../../../fx_net.h"
 
 #ifndef RIST_SEND_HELPER_PATH
 #error "RIST_SEND_HELPER_PATH must be defined to the built rist_send_helper binary's path"
@@ -124,46 +124,6 @@ START_TEST(receiver_stats_cb_ignores_other_stats_types) {
 END_TEST
 
 #ifndef DVBIPITOOLS_TSAN_BUILD
-/* excluded under TSAN: race is inside librist's receiver impl */
-
-static int bind_udp_loopback(unsigned port) {
-  struct sockaddr_in addr;
-  int fd = socket(AF_INET, SOCK_DGRAM, 0);
-
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons((unsigned short)port);
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  if (bind(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
-    close(fd);
-    return -1;
-  }
-  return fd;
-}
-
-static unsigned free_even_udp_port_pair(void) {
-  for (int tries = 0; tries < 100; tries++) {
-    struct sockaddr_in addr;
-    socklen_t alen = sizeof addr;
-    int a = bind_udp_loopback(0);
-    unsigned port;
-    int b;
-
-    ck_assert_int_ge(a, 0);
-    ck_assert_int_eq(getsockname(a, (struct sockaddr *)&addr, &alen), 0);
-    port = ntohs(addr.sin_port) & ~1u;
-    close(a);
-    a = bind_udp_loopback(port);
-    b = bind_udp_loopback(port + 1);
-    if (a >= 0) close(a);
-    if (b >= 0) close(b);
-    if (a >= 0 && b >= 0) return port;
-  }
-  ck_abort_msg("no free even/odd udp port pair");
-  return 0;
-}
-
 /* blocking pipe read end: bound wait so a delivery failure fails test instead of hanging */
 static ssize_t read_with_timeout(int fd, void *buf, size_t cap, int timeout_ms) {
   struct pollfd pfd = {.fd = fd, .events = POLLIN};

@@ -15,12 +15,9 @@
 #include "lib/mux/psi_build.h"
 
 #include "ts_test_util.h"
+#include "../../fx_mux.h"
 
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
-#define VPID 0x201
-#define APID 0x101
-#define TPID 0x301
-#define PMT_PID 0x100
 
 typedef struct {
   mkv_opts_t cfg;
@@ -54,31 +51,6 @@ static unsigned char *rig_finish(rig_t *r, size_t *len, int *close_rc) {
   unlink(r->path);
   ck_assert_ptr_nonnull(buf);
   return buf;
-}
-
-static int has_str(const unsigned char *buf, size_t len, const char *s) {
-  return memmem(buf, len, s, strlen(s)) != NULL;
-}
-
-static void pes_at(ts_script_t *s, unsigned pid, unsigned char sid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *es, size_t n) {
-  unsigned char *pes = malloc(n + 64);
-  size_t len;
-  ck_assert_ptr_nonnull(pes);
-  len = build_pes_any(pes, sid, has_pts, pts, has_dts, dts, es, n);
-  ts_script_pes(s, pid, pes, len);
-  free(pes);
-}
-
-static void video_pes(ts_script_t *s, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *es, size_t n) {
-  pes_at(s, VPID, 0xE0, has_pts, pts, has_dts, dts, es, n);
-}
-
-static void audio_pes(ts_script_t *s, unsigned pid, int has_pts, uint64_t pts, const unsigned char *es, size_t n) {
-  pes_at(s, pid, 0xC0, has_pts, pts, 0, 0, es, n);
-}
-
-static void discovery(ts_script_t *s, const ts_es_spec_t *es, size_t n, int sdt) {
-  ts_script_discovery(s, 101, PMT_PID, NULL, 0, es, n, sdt);
 }
 
 static const ts_es_spec_t ES_H264[] = {{0x1B, VPID, NULL, 0}};
@@ -277,6 +249,7 @@ START_TEST(mpeg2_picture_and_header_variants) {
     size_t n = 0;
     int rc;
     for (unsigned i = 0; i < t[c].n; i++) {
+      ck_assert_uint_le(t[c].len[i], sizeof au - n);
       memcpy(au + n, t[c].part[i], t[c].len[i]);
       n += t[c].len[i];
     }
@@ -432,18 +405,6 @@ END_TEST
 static const unsigned char TTX_DESC[] = {0x56, 0x05, 'e', 'n', 'g', (2 << 3) | 7, 0x77};
 static const ts_es_spec_t ES_VIDEO_TTX[] = {{0x1B, VPID, NULL, 0}, {0x06, TPID, TTX_DESC, sizeof TTX_DESC}};
 static const ts_es_spec_t ES_AUDIO_TTX[] = {{0x0F, APID, NULL, 0}, {0x06, TPID, TTX_DESC, sizeof TTX_DESC}};
-
-static void ttx_pes_at(ts_script_t *s, unsigned page, unsigned pkt, const char *text, uint64_t pts_ms) {
-  unsigned char es[64];
-  size_t n = build_ttx_pes(es, page, pkt, text);
-  pes_at(s, TPID, 0xBD, 1, pts_ms * 90, 0, 0, es, n);
-}
-
-static void ttx_cue(ts_script_t *s, const char *text, uint64_t start_ms, uint64_t end_ms) {
-  ttx_pes_at(s, 777, 0, "", start_ms);
-  ttx_pes_at(s, 777, 1, text, start_ms);
-  ttx_pes_at(s, 777, 0, "", end_ms);
-}
 
 typedef struct {
   int video;

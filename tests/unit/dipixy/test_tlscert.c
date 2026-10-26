@@ -4,7 +4,6 @@
 #include <check.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "dipixy/core/tlscert.h"

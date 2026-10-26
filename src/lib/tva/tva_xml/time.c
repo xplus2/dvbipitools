@@ -5,11 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 
-#include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
-#include "lib/helper/xml_util.h"
+#include "lib/helper/dateutil.h"
 #include "lib/tva/tva_xml.h"
 #include "lib/tva/tva_xml/tva_xml_int.h"
 
@@ -22,54 +19,27 @@ void iso8601_compact_prefix(const char *iso, char *out, size_t outcap) {
   out[oi] = '\0';
 }
 
-static long days_from_civil(long y, int m, int d) {
-  long era;
-  long yoe;
-  long doy;
-  long doe;
-  y -= m <= 2;
-  era = (y >= 0 ? y : y - 399) / 400;
-  yoe = y - era * 400;
-  doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
-  doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-  return era * 146097 + doe - 719468;
-}
-
-static void civil_from_days(long z, int *y, int *m, int *d) {
-  long era;
-  long doe;
-  long yoe;
-  long doy;
-  long mp;
-  long yy;
-  z += 719468;
-  era = (z >= 0 ? z : z - 146096) / 146097;
-  doe = z - era * 146097;
-  yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-  yy = yoe + era * 400;
-  doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-  mp = (5 * doy + 2) / 153;
-  *d = (int)(doy - (153 * mp + 2) / 5 + 1);
-  *m = (int)(mp < 10 ? mp + 3 : mp - 9);
-  *y = (int)(yy + (*m <= 2));
+int iso8601_utc_secs(const char *iso, long long *out) {
+  iso8601_t t;
+  if (iso8601_split(iso, &t) != 0) return -1;
+  *out = (long long)(date_to_mjd(t.y, t.mo, t.d) - MJD_UNIX_EPOCH) * 86400 + t.h * 3600L + t.mi * 60L + t.s;
+  if (t.offset_kind == ISO8601_OFF_NUMERIC) *out -= t.off_min * 60LL;
+  return 0;
 }
 
 /* "YYYYMMDDHHMMSS" in UTC: offset applied so equal instants give equal ids. 0 ok, -1 unparseable */
 int iso8601_utc_compact(const char *iso, char *out, size_t outcap) {
-  iso8601_t t;
-  long mins;
-  long days;
+  long long secs;
+  long long days;
   int y;
   int mo;
   int d;
-  int rem;
-  if (iso8601_split(iso, &t) != 0) return -1;
-  mins = days_from_civil(t.y, t.mo, t.d) * 1440L + t.h * 60 + t.mi;
-  if (t.offset_kind == ISO8601_OFF_NUMERIC) mins -= t.off_min;
-  days = mins >= 0 ? mins / 1440 : -((-mins + 1439) / 1440);
-  rem = (int)(mins - days * 1440);
-  civil_from_days(days, &y, &mo, &d);
-  snprintf(out, outcap, "%04d%02d%02d%02d%02d%02d", y, mo, d, rem / 60, rem % 60, t.s);
+  long rem;
+  if (iso8601_utc_secs(iso, &secs) != 0) return -1;
+  days = floor_div((long)secs, 86400);
+  rem = (long)(secs - days * 86400);
+  mjd_to_date((long)days + MJD_UNIX_EPOCH, &y, &mo, &d);
+  snprintf(out, outcap, "%04d%02d%02d%02ld%02ld%02ld", y, mo, d, rem / 3600, rem % 3600 / 60, rem % 60);
   return 0;
 }
 
@@ -83,7 +53,6 @@ void trim_ws(char *s) {
   s[n - a] = '\0';
 }
 
-/* xs:duration "[-]PnDTnHnMn[.f]S" to seconds. years/months/negative/empty rejected. 0 ok, -1 bad */
 int duration_to_secs(const char *s, long *out) {
   long total = 0;
   long n;
@@ -118,20 +87,16 @@ int duration_to_secs(const char *s, long *out) {
   return 0;
 }
 
-/* start_iso + secs, same offset notation, fraction dropped. 0 ok, -1 bad start */
 int iso8601_add_secs(const char *start_iso, long secs, char *out, size_t outcap) {
   iso8601_t t;
   long tot;
-  int y;
-  int mo;
-  int d;
+  long days;
   int n;
   if (iso8601_split(start_iso, &t) != 0) return -1;
-  tot = days_from_civil(t.y, t.mo, t.d) * 86400L + t.h * 3600L + t.mi * 60L + t.s + secs;
-  civil_from_days(tot / 86400, &y, &mo, &d);
-  tot %= 86400;
-  n = snprintf(out, outcap, "%04d-%02d-%02dT%02d:%02d:%02d", y, mo, d, (int)(tot / 3600), (int)(tot % 3600 / 60), (int)(tot % 60));
-  if (n < 0 || (size_t)n >= outcap) return -1;
+  tot = (date_to_mjd(t.y, t.mo, t.d) - MJD_UNIX_EPOCH) * 86400L + t.h * 3600L + t.mi * 60L + t.s + secs;
+  days = floor_div(tot, 86400);
+  n = iso8601_format(out, outcap, days, tot - days * 86400);
+  if (n < 0) return -1;
   if (t.offset_kind == ISO8601_OFF_Z) {
     snprintf(out + n, outcap - (size_t)n, "Z");
   } else if (t.offset_kind == ISO8601_OFF_NUMERIC) {
@@ -139,4 +104,19 @@ int iso8601_add_secs(const char *start_iso, long secs, char *out, size_t outcap)
     snprintf(out + n, outcap - (size_t)n, "%c%02d:%02d", t.off_min < 0 ? '-' : '+', a / 60, a % 60);
   }
   return 0;
+}
+
+int iso8601_diff_secs(const char *a, const char *b, long *out) {
+  long long x;
+  long long y;
+  if (iso8601_utc_secs(a, &x) || iso8601_utc_secs(b, &y) || y - x > 100000000LL || x - y > 100000000LL) return -1;
+  *out = (long)(y - x);
+  return 0;
+}
+
+int secs_to_duration(long secs, char *out, size_t outcap) {
+  int n;
+  if (secs < 0) return -1;
+  n = snprintf(out, outcap, "PT%ldH%ldM%ldS", secs / 3600, secs % 3600 / 60, secs % 60);
+  return n < 0 || (size_t)n >= outcap ? -1 : 0;
 }

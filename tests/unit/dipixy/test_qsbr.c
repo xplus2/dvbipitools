@@ -5,7 +5,6 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
 
 #include "dipixy/reactor/qsbr.h"

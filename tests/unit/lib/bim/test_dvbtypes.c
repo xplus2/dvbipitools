@@ -66,7 +66,7 @@ static size_t loc_fields(const locspec_t *s, fld_t *f) {
 
 static void put_fields(bitwriter_t *bw, const fld_t *f, size_t nf) {
   for (size_t i = 0; i < nf; i++) {
-    if (f[i].n == -4) ck_assert_int_eq(bitwriter_put_vluimsbf4(bw, f[i].v), 0);
+    if (f[i].n == -4) ck_assert_int_eq(bitwriter_put_vluimsbf5(bw, f[i].v), 0);
     else if (f[i].n == -8) ck_assert_int_eq(bitwriter_put_vluimsbf8(bw, f[i].v), 0);
     else ck_assert_int_eq(bitwriter_put(bw, f[i].v, f[i].n), 0);
   }
@@ -103,7 +103,8 @@ static int run_loc(const fld_t *f, size_t nf, const char *path, size_t drop, dvb
   return rc;
 }
 
-static const locspec_t FULL = {1, 0x1234, 0x233a, 0x5678, 2, 1, 0xdeadbeef, 1, 0xabcd, 1, 1, 0x4000, 0x10, 0x20, 1};
+/* day: 16 LSBs of MJD 62502 = 2030-01-01, time 45000 s = 12:30:00, duration 1800 s */
+static const locspec_t FULL = {1, 0x1234, 0x233a, 0x5678, 2, 1, 0xdeadbeef, 1, 0xabcd, 1, 1, 62502, 45000, 1800, 1};
 
 static int loc_spec(const locspec_t *s, const char *path, size_t drop, dvb_codec_state_t *st, char *out, size_t cap) {
   fld_t f[MAXF];
@@ -114,7 +115,7 @@ static int loc_spec(const locspec_t *s, const char *path, size_t drop, dvb_codec
 START_TEST(locator_optimized_full_form) {
   char out[256];
   ck_assert_int_eq(loc_spec(&FULL, "a/b", 0, NULL, out, sizeof out), 0);
-  ck_assert_str_eq(out, "dvb://233a.1234.5678.1.2;cid=deadbeef;abcd@4000:10--20/a/b");
+  ck_assert_str_eq(out, "dvb://233a.1234.5678.1&2$deadbeef;abcd~20300101T123000Z--PT00H30M00S/a/b");
 }
 END_TEST
 
@@ -126,11 +127,11 @@ START_TEST(locator_optimized_variants) {
   } t[] = {
       {{1, 0x1234, 0x233a, 0x5678, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, NULL, "dvb://233a.1234.5678"},
       {{1, 0, 0x233a, 0x5678, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, NULL, "dvb://233a..5678"},
-      {{1, 1, 2, 3, 0, 0, 0, 2, 0xff, 0, 0, 0, 0, 0, 0}, NULL, "dvb://2.1.3;tva=ff"},
+      {{1, 1, 2, 3, 0, 0, 0, 2, 0xff, 0, 0, 0, 0, 0, 0}, NULL, "dvb://2.1.3;;ff"},
       {{1, 1, 2, 3, 0, 0, 0, 1, 0xff, 0, 0, 0, 0, 0, 0}, NULL, "dvb://2.1.3;ff"},
       {{1, 1, 2, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, NULL, "dvb://2.1.3.1"},
-      {{1, 1, 2, 3, 0, 1, 0x10, 0, 0, 0, 0, 0, 0, 0, 0}, NULL, "dvb://2.1.3;cid=10"},
-      {{1, 1, 2, 3, 0, 0, 0, 0, 0, 1, 1, 7, 8, 9, 0}, NULL, "dvb://2.1.3@7:8--9"},
+      {{1, 1, 2, 3, 1, 1, 0x10, 0, 0, 0, 0, 0, 0, 0, 0}, NULL, "dvb://2.1.3.1$10"},
+      {{1, 1, 2, 3, 0, 0, 0, 0, 0, 1, 1, 62502, 8, 9, 0}, NULL, "dvb://2.1.3~20300101T000008Z--PT00H00M09S"},
       {{1, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, "x", "dvb://2.1.3/x"},
   };
   for (size_t i = 0; i < NELEM(t); i++) {
@@ -141,7 +142,7 @@ START_TEST(locator_optimized_variants) {
 }
 END_TEST
 
-START_TEST(locator_optimized_caps_content_tags_at_32) {
+START_TEST(locator_optimized_joins_all_content_tags) {
   locspec_t s = FULL;
   char out[512];
   s.nctag = 40;
@@ -150,9 +151,17 @@ START_TEST(locator_optimized_caps_content_tags_at_32) {
   s.time = 0;
   s.path = 0;
   ck_assert_int_eq(loc_spec(&s, NULL, 0, NULL, out, sizeof out), 0);
-  ck_assert_ptr_nonnull(strstr(out, ".20"));
-  ck_assert_ptr_null(strstr(out, ".21"));
-  ck_assert_ptr_null(strstr(out, ".28"));
+  ck_assert_ptr_nonnull(strstr(out, "5678.1&2&3&"));
+  ck_assert_ptr_nonnull(strstr(out, "&27&28"));
+  ck_assert_ptr_null(strstr(out, ".2"));
+}
+END_TEST
+
+START_TEST(locator_optimized_rejects_carousel_without_component_set) {
+  locspec_t s = FULL;
+  char out[256];
+  s.nctag = 0;
+  ck_assert_int_eq(loc_spec(&s, "a/b", 0, NULL, out, sizeof out), -1);
 }
 END_TEST
 
@@ -170,7 +179,7 @@ START_TEST(locator_optimized_reuses_prefix_and_day) {
   b.evt = 0;
   b.path = 0;
   ck_assert_int_eq(loc_spec(&b, NULL, 0, &st, out, sizeof out), 0);
-  ck_assert_str_eq(out, "dvb://233a.1234.5678@4000:10--20");
+  ck_assert_str_eq(out, "dvb://233a.1234.5678~20300101T123000Z--PT00H30M00S");
 }
 END_TEST
 
@@ -224,12 +233,15 @@ START_TEST(locator_optimized_rejects_every_truncation) {
 }
 END_TEST
 
-START_TEST(locator_optimized_rejects_oversized_path) {
+START_TEST(locator_optimized_keeps_long_path) {
   char big[400];
   char out[512];
+  char small[256];
   memset(big, 'p', sizeof big - 1);
   big[sizeof big - 1] = '\0';
-  ck_assert_int_eq(loc_spec(&FULL, big, 0, NULL, out, sizeof out), -1);
+  ck_assert_int_eq(loc_spec(&FULL, big, 0, NULL, out, sizeof out), 0);
+  ck_assert_str_eq(strrchr(out, '/') + 1, big);
+  ck_assert_int_eq(loc_spec(&FULL, big, 0, NULL, small, sizeof small), -1);
 }
 END_TEST
 
@@ -363,7 +375,32 @@ START_TEST(datetime_accepts_range_boundaries) {
   ck_assert_int_eq(run_dt(lo, NELEM(lo), 0, NULL, out, sizeof out), 0);
   ck_assert_str_eq(out, "1900-03-01T00:00:00Z");
   ck_assert_int_eq(run_dt(hi, NELEM(hi), 0, NULL, out, sizeof out), 0);
-  ck_assert_str_eq(out, "2100-02-28T23:59:59Z");
+  ck_assert_str_eq(out, "2100-02-28T23:59:59.999Z");
+}
+END_TEST
+
+START_TEST(datetime_keeps_milliseconds) {
+  static const char *const v[] = {"2024-05-01T10:20:30.25Z", "2024-05-01T10:20:00.001Z"};
+  bitwriter_t bw;
+  for (size_t i = 0; i < NELEM(v); i++)
+    for (int pub = 0; pub < 2; pub++) {
+      dvb_codec_state_t enc = {0};
+      dvb_codec_state_t dec = {0};
+      const unsigned char *b;
+      bitreader_t br;
+      size_t n;
+      char out[32];
+      bitwriter_init(&bw);
+      ck_assert_int_eq(dvb_datetime_encode_st(&bw, &enc, v[i], pub), 0);
+      b = bitwriter_data(&bw, &n);
+      bitreader_init(&br, b, n);
+      ck_assert_int_eq(dvb_datetime_decode_st(&br, &dec, out, sizeof out), 0);
+      ck_assert_str_eq(out, v[i]);
+      bitwriter_free(&bw);
+    }
+  bitwriter_init(&bw);
+  ck_assert_int_eq(dvb_datetime_encode(&bw, "2024-05-01T10:20:30.0001Z"), -1);
+  bitwriter_free(&bw);
 }
 END_TEST
 
@@ -477,19 +514,21 @@ static Suite *dvbtypes_suite(void) {
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, locator_optimized_full_form);
   tcase_add_test(tc, locator_optimized_variants);
-  tcase_add_test(tc, locator_optimized_caps_content_tags_at_32);
+  tcase_add_test(tc, locator_optimized_joins_all_content_tags);
+  tcase_add_test(tc, locator_optimized_rejects_carousel_without_component_set);
   tcase_add_test(tc, locator_optimized_reuses_prefix_and_day);
   tcase_add_test(tc, locator_optimized_needs_prefix_and_day_state);
   tcase_add_test(tc, locator_optimized_rejects_reserved_event_kind);
   tcase_add_test(tc, locator_optimized_rejects_every_short_output_buffer);
   tcase_add_test(tc, locator_optimized_rejects_every_truncation);
-  tcase_add_test(tc, locator_optimized_rejects_oversized_path);
+  tcase_add_test(tc, locator_optimized_keeps_long_path);
   tcase_add_test(tc, locator_decode_without_state_and_string_branch);
   tcase_add_test(tc, string_decode_dup_handles_empty_and_failure);
   tcase_add_test(tc, datetime_published_form);
   tcase_add_test(tc, datetime_published_reuses_date);
   tcase_add_test(tc, datetime_rejects_bad_streams);
   tcase_add_test(tc, datetime_accepts_range_boundaries);
+  tcase_add_test(tc, datetime_keeps_milliseconds);
   tcase_add_test(tc, datetime_rejects_every_truncation);
   tcase_add_test(tc, datetime_rejects_short_output_buffer);
   tcase_add_test(tc, datetime_round_trips_every_month);

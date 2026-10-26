@@ -455,6 +455,7 @@ void cas_scramble_packet(cas_t *c, unsigned out_pid, double now, unsigned char p
 }
 
 void cas_flush(cas_t *c, scrambler_emit_cb emit, void *ctx) {
+  if (!c) return;
   for (int i = 0; i < c->n_held; i++) emit(ctx, c->held[i]);
   c->n_held = 0;
 }

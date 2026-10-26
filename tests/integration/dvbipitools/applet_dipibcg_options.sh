@@ -10,6 +10,7 @@ ln -s "$BIN" "$WORK/applets/dipibcg/dipibcg" || skip "cannot create symlink"
 APPLET="$WORK/applets/dipibcg/dipibcg"
 : >"$WORK/empty.yaml"
 G=239.1.1.1:5000
+make_bcg_schema "$WORK/sch"
 
 bcg_rc() {
     want=$1
@@ -42,10 +43,10 @@ bcg_rc 2 -m $G
 bcg_rc 2 -l -a -m $G
 bcg_rc 2 -a -m $G -i x -M y --metrics "$WORK/m.sock"
 
-bcg_rc 1 -a -m $G -i "$WORK/missing.xml" -M "$WORK/missing.csv" -w 2 --interval 5 -o "$WORK/o" -C "$WORK/c.csv" --refresh 2 -Z -v --color never --dscp voice -I lo --metrics "$WORK/m.sock" --metrics-id x --metrics-interval 5 -c "$WORK/empty.yaml"
+bcg_rc 1 -a -s "$WORK/sch" -m $G -i "$WORK/missing.xml" -M "$WORK/missing.csv" -w 2 --interval 5 -o "$WORK/o" -C "$WORK/c.csv" --refresh 2 -Z -v --color never --dscp voice -I lo --metrics "$WORK/m.sock" --metrics-id x --metrics-interval 5 -c "$WORK/empty.yaml"
 grep -q "cannot open" "$WORK/out.log" || fail "dipibcg announce: missing input not reported"
 
-bcg_rc 1 -l -m $G --timeout 1 -o "$WORK/listen.out" -v --color never --dscp voice -I lo -c "$WORK/empty.yaml"
+bcg_rc 1 -l -s "$WORK/sch" -m $G --timeout 1 -o "$WORK/listen.out" -v --color never --dscp voice -I lo -c "$WORK/empty.yaml"
 grep -q "listening on" "$WORK/out.log" || fail "dipibcg listen: no listen banner"
 
 echo "OK"

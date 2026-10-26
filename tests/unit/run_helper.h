@@ -74,7 +74,7 @@ static inline void run_helper_group(char *out, size_t cap, unsigned octet2) {
   snprintf(out, cap, "239.%u.%u.%u", octet2, pid & 0xFF, (pid >> 8) & 0xFF);
 }
 
-#define DVBSTP_SENDER_MAX_DOCS 4
+#define DVBSTP_SENDER_MAX_DOCS 14
 #define DVBSTP_SENDER_PASSES 2
 #define DVBSTP_SENDER_GAP_MS 50
 #define DVBSTP_SENDER_START_MS 150
@@ -92,6 +92,7 @@ typedef struct {
   unsigned port;
   const send_step_t *steps;
   unsigned nsteps;
+  const unsigned *segment_ids; /* per step, NULL: all 1 */
   const unsigned char *docs[DVBSTP_SENDER_MAX_DOCS];
   size_t lens[DVBSTP_SENDER_MAX_DOCS];
 } dvbstp_sender_t;
@@ -99,15 +100,13 @@ typedef struct {
 static inline void *dvbstp_sender_thread(void *arg) {
   const dvbstp_sender_t *sd = arg;
   mcast_t *m;
-
   sleep_ms(DVBSTP_SENDER_START_MS);
   m = mcast_open_send(AF_INET, sd->group, sd->port, NULL, 0);
   if (m) {
     for (unsigned pass = 0; pass < DVBSTP_SENDER_PASSES; pass++)
       for (unsigned i = 0; i < sd->nsteps; i++) {
         const send_step_t *st = &sd->steps[i];
-        dvbstp_send_t seg = {.payload_id = st->payload_id, .segment_id = 1, .segment_version = st->version, .compr = st->compr, .want_crc = 1};
-
+        dvbstp_send_t seg = {.payload_id = st->payload_id, .segment_id = sd->segment_ids ? sd->segment_ids[i] : 1, .segment_version = st->version, .compr = st->compr, .want_crc = 1};
         dvbstp_send_segment(m, &seg, sd->docs[st->doc], sd->lens[st->doc]);
         sleep_ms(DVBSTP_SENDER_GAP_MS);
       }
@@ -125,7 +124,6 @@ static inline unsigned run_helper_port(unsigned idx) {
 static inline const char *run_helper_group_n(unsigned idx) {
   static char bufs[256][32];
   unsigned pid = (unsigned)getpid();
-
   idx &= 0xFFu;
   snprintf(bufs[idx], sizeof bufs[idx], "239.%u.%u.%u", 100u + idx % 100u, pid & 0xFF, (pid >> 8) & 0xFF);
   return bufs[idx];

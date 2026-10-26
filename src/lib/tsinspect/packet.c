@@ -3,8 +3,6 @@
 
 #include "lib/demux/crc32.h"
 #include "lib/demux/psi/section_asm.h"
-#include "lib/sys/signal.h"
-
 #include "priv.h"
 
 #define CC_SEEN 0x10

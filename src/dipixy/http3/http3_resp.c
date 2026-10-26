@@ -6,7 +6,6 @@
 #include "../reactor/internal.h"
 #include "../core/metrics.h"
 #include "../httpng/httpng.h"
-#include "http3.h"
 #include "http3_int.h"
 
 #include <string.h>

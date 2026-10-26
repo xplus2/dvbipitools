@@ -27,8 +27,11 @@ int bitwriter_put_bytes(bitwriter_t *bw, const unsigned char *data, size_t len);
 int bitwriter_flush(bitwriter_t *bw);
 /* TS 102 822-3-2 3.3: byte-continuation varint, 7 payload bits/byte */
 int bitwriter_put_vluimsbf8(bitwriter_t *bw, uint64_t value);
-/* TS 102 822-3-2 3.3 (vluimsbf5-style): unary continuation prefix, n*4 payload bits */
-int bitwriter_put_vluimsbf4(bitwriter_t *bw, uint64_t value);
+int bitwriter_vluimsbf8_len(uint64_t value);
+/* ISO 15938-1 clause 4: unary continuation prefix, n*4 payload bits */
+int bitwriter_put_vluimsbf5(bitwriter_t *bw, uint64_t value);
+/* all bits of src, byte aligned or not. src is not changed. returns 0 ok, -1 oom */
+int bitwriter_append(bitwriter_t *dst, const bitwriter_t *src);
 /* implies flush. NULL with *out_len 0 if flush fails */
 const unsigned char *bitwriter_data(bitwriter_t *bw, size_t *out_len);
 

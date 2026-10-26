@@ -1,18 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <getopt.h>
 #include <limits.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
 #include "lib/mux/fec2022.h"
-#include "lib/helper/uriparse.h"
-#include "lib/net/netconnect.h"
-
 #include "priv.h"
 
 args_status_t srt_opt_srt(srt_opt_t *p, int c) {

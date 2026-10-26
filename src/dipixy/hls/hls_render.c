@@ -3,10 +3,7 @@
 
 #include "hls_int.h"
 
-#include "lib/sys/ioutil.h"
-
 #include <errno.h>
-#include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>

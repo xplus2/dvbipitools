@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/helper/beutil.h"
 #include "lib/helper/argutil.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
@@ -26,13 +27,6 @@ static const enum_map_t integrity_order_names[] = {{"after-encrypt", ECM_INTEGRI
 static const enum_map_t truncate_from_names[] = {{"left", ECM_TRUNCATE_LEFT}, {"right", ECM_TRUNCATE_RIGHT}};
 static const enum_map_t crc32_variant_names[] = {{"ieee", ECM_CRC32_IEEE}, {"castagnoli", ECM_CRC32_CASTAGNOLI}};
 static const enum_map_t crc32_endian_names[] = {{"big", ECM_CRC32_BIG}, {"little", ECM_CRC32_LITTLE}};
-
-static int hex_nibble(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
 
 static int hex_decode(const char *hex, unsigned char *out, int out_max, int *out_len) {
   size_t hexlen = strlen(hex);

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "lib/helper/uriparse.h"
 #include "auth.h"
 #include "lib/sys/ioutil.h"
 #include "lib/mux/amf.h"
@@ -187,7 +188,7 @@ void rtmp_command_on_invoke(struct rtmp *r, const unsigned char *payload, size_t
       if (amf_object_find_string(info, end, "description", desc, sizeof desc) == 1 && desc_kv(desc, "salt=", salt, sizeof salt) &&
           (desc_kv(desc, "opaque=", opaque, sizeof opaque) || desc_kv(desc, "challenge=", challenge, sizeof challenge)) &&
           rtmp_auth_adobe_response(r->user, r->password, salt, opaque[0] ? opaque : NULL, challenge[0] ? challenge : NULL, challenge2, sizeof challenge2, response, sizeof response) == 0) {
-        pct_encode_seg(r->user, user_enc, sizeof user_enc);
+        uriparse_pct_encode_seg(r->user, user_enc, sizeof user_enc);
         snprintf(r->auth_query, sizeof r->auth_query, "?authmod=adobe&user=%s&challenge=%s&response=%s%s%s", user_enc, challenge2, response, opaque[0] ? "&opaque=" : "", opaque);
         r->auth_retry = 1;
         r->state = RTMP_ST_FAILED;

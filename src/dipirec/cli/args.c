@@ -3,6 +3,7 @@
 
 #include <getopt.h>
 
+#include "lib/helper/argutil.h"
 #include "priv.h"
 
 static const char *const shortopts = "o:i:a:f:p:s:t:I:O:c:vh";
@@ -61,24 +62,6 @@ static const struct option longopts[] = {
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
-static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
-  int c;
-  optind = 1;
-  opterr = 0;
-  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
-    if (c == 'c') *cfg_path = optarg;
-    if (c == OPT_CONFIGTEST) *configtest = 1;
-    if (c == OPT_CONFIG_STRICT) *strict = 1;
-    if (c == 'h') {
-      rec_print_help();
-      opterr = 1;
-      return ARGS_HELP;
-    }
-  }
-  opterr = 1;
-  return ARGS_OK;
-}
-
 static args_status_t dispatch(rec_opt_t *p, int c) {
   static args_status_t (*const groups[])(rec_opt_t *, int) = {rec_opt_general, rec_opt_stream, rec_opt_rist, rec_opt_srt};
 
@@ -94,11 +77,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int configtest = 0;
   int strict = 0;
   rec_opt_t p = {.cfg = cfg};
-  args_status_t pst;
   int c;
 
-  pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
-  if (pst != ARGS_OK) return pst;
+  if (argutil_prescan(argc, argv, shortopts, longopts, OPT_CONFIGTEST, OPT_CONFIG_STRICT, &cfg_path, &configtest, &strict)) {
+    rec_print_help();
+    return ARGS_HELP;
+  }
   if (configtest) return rec_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
   rec_cfg_defaults(cfg);
   if (rec_cfg_load(cfg, cfg_path, strict)) return ARGS_ERR;

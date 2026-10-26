@@ -4,7 +4,6 @@
 #include <unistd.h>
 
 #include "lib/cas/cas_dial.h"
-#include "lib/helper/log.h"
 #include "priv.h"
 
 static int emmg_stopping(const emmg_server_t *s) {

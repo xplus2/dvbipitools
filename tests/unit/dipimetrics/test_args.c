@@ -3,14 +3,13 @@
 
 #include <check.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
-
 #include "dipimetrics/cli/args.h"
+#include "../cfg_fixture.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
@@ -149,13 +148,6 @@ START_TEST(help_returns_help_status) {
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_HELP);
 }
 END_TEST
-
-static void write_cfg(char *path, const char *text) {
-  int fd = mkstemp(path);
-  ck_assert_int_ge(fd, 0);
-  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
-  close(fd);
-}
 
 START_TEST(config_file_sets_all_keys) {
   char path[] = "/tmp/dipimetrics_cfg_XXXXXX";

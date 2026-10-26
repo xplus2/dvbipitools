@@ -5,7 +5,6 @@
 #include "reactor_tls.h"
 #include "../segment/mp4push.h"
 
-#include <sys/epoll.h>
 #include <sys/socket.h>
 
 void reactor_mp4push_begin(int epfd, conn_t *c) {

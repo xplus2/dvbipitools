@@ -6,7 +6,6 @@
 
 #include "lib/helper/argutil.h"
 #include "lib/sys/ioutil.h"
-#include "lib/helper/uriparse.h"
 #include "lib/net/netconnect.h"
 #include "../config.h"
 #include "../input/inputset.h"

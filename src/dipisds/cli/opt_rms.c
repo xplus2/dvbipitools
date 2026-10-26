@@ -3,20 +3,14 @@
 
 #include <getopt.h>
 #include <limits.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "lib/helper/argutil.h"
 #include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
-#include "lib/helper/uriparse.h"
-#include "lib/net/netconnect.h"
-
 #include "priv.h"
 
 args_status_t sds_opt_rms(sds_opt_t *p, int c) {
   config_t *cfg = p->cfg;
-
   switch (c) {
     case OPT_METRICS:
       cfg->metrics_sock = optarg;
@@ -74,13 +68,44 @@ args_status_t sds_opt_rms(sds_opt_t *p, int c) {
       break;
     }
     case OPT_FUS_ANNOUNCE:
-      if (sds_ret_addr_parse(optarg, cfg->fus_announce_addr, sizeof cfg->fus_announce_addr, &cfg->fus_announce_port)) {
+      if (sds_mcast_addr_parse(optarg, cfg->fus_announce_addr, sizeof cfg->fus_announce_addr, &cfg->fus_announce_port)) {
         argerr("AS000210", "invalid --fus-announce: %s", optarg);
         return ARGS_ERR;
       }
       break;
     case OPT_FUS_LOGO:
       cfg->fus_logo = optarg;
+      break;
+    case OPT_BCG_NAME:
+      cfg->bcg_name = optarg;
+      cfg->bcg_enabled = 1;
+      break;
+    case OPT_BCG_ID:
+      cfg->bcg_id = optarg;
+      break;
+    case OPT_BCG_DESCRIPTION:
+      cfg->bcg_description = optarg;
+      break;
+    case OPT_BCG_PROVIDER_NAME:
+      cfg->bcg_provider_name = optarg;
+      break;
+    case OPT_BCG_MCAST:
+      if (sds_mcast_addr_parse(optarg, cfg->bcg_mcast_addr, sizeof cfg->bcg_mcast_addr, &cfg->bcg_mcast_port)) {
+        argerr("AS000734", "invalid --bcg-mcast: %s", optarg);
+        return ARGS_ERR;
+      }
+      break;
+    case OPT_BIM_NAMESPACE:
+      cfg->sdns_ns = optarg;
+      break;
+    case 's':
+      if (!cfg->fl.schema_cli) cfg->nschemas = 0;
+      cfg->fl.schema_cli = 1;
+      if (cfg->nschemas >= SCHEMA_MAX) {
+        argerr("AS000753", "too many --schema entries (max %d)", SCHEMA_MAX);
+        return ARGS_ERR;
+      }
+      cfg->schemas[cfg->nschemas++] = optarg;
       break;
     default:
       return OPT_UNHANDLED;

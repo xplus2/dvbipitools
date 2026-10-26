@@ -3,10 +3,8 @@
 
 #include <string.h>
 
-#include "lib/helper/log.h"
 #include "lib/helper/secure_zero.h"
 #include "lib/mux/psi_build.h"
-
 #include "../cw_gen.h"
 #include "priv.h"
 

@@ -11,9 +11,6 @@
 #include "ts_test_util.h"
 
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
-#define VPID 0x201
-#define APID 0x101
-#define PMT_PID 0x100
 
 typedef struct {
   unsigned video_tags;
@@ -51,24 +48,7 @@ static void rig_feed(rig_t *r, const ts_script_t *s) {
   for (size_t i = 0; i < s->n; i++) flv_feed(r->f, s->pkt + i * 188);
 }
 
-static void pes_at(ts_script_t *s, unsigned pid, unsigned char sid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *es, size_t n) {
-  unsigned char *pes = malloc(n + 64);
-  size_t len;
-  ck_assert_ptr_nonnull(pes);
-  len = build_pes_any(pes, sid, has_pts, pts, has_dts, dts, es, n);
-  ts_script_pes(s, pid, pes, len);
-  free(pes);
-}
-
-static void video_pes(ts_script_t *s, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *es, size_t n) {
-  pes_at(s, VPID, 0xE0, has_pts, pts, has_dts, dts, es, n);
-}
-
-static void audio_pes(ts_script_t *s, unsigned pid, int has_pts, uint64_t pts, const unsigned char *es, size_t n) {
-  pes_at(s, pid, 0xC0, has_pts, pts, 0, 0, es, n);
-}
-
-static void discovery(ts_script_t *s, const ts_es_spec_t *es, size_t n) {
+static void discovery_local(ts_script_t *s, const ts_es_spec_t *es, size_t n) {
   ts_script_discovery(s, 101, PMT_PID, NULL, 0, es, n, 1);
 }
 
@@ -100,7 +80,7 @@ START_TEST(h264_timestamp_forms) {
     unsigned char au[256] = {0};
     memset(&s, 0, sizeof s);
     rig_open(&r);
-    discovery(&s, ES_H264, 1);
+    discovery_local(&s, ES_H264, 1);
     for (size_t i = 0; i < 6; i++) video_pes(&s, t[c].has_pts, t[c].pts[i], t[c].has_dts, t[c].dts[i], au, build_h264_au(au, i == 0));
     rig_feed(&r, &s);
     ck_assert_int_eq(flv_close(r.f), 0);
@@ -122,7 +102,7 @@ START_TEST(other_video_codecs_mux) {
     ts_script_t s;
     memset(&s, 0, sizeof s);
     rig_open(&r);
-    discovery(&s, t[c].es, 1);
+    discovery_local(&s, t[c].es, 1);
     for (unsigned i = 0; i < 4; i++) video_pes(&s, 1, 90000 + i * 3600, 1, 90000 + i * 3600, au, t[c].build(au));
     rig_feed(&r, &s);
     ck_assert_int_eq(flv_close(r.f), 0);
@@ -139,7 +119,7 @@ START_TEST(hevc_with_lcevc_strip_mux) {
   memset(&s, 0, sizeof s);
   rig_open(&r);
   r.opts.strip_lcevc = 1;
-  discovery(&s, ES_HEVC, 1);
+  discovery_local(&s, ES_HEVC, 1);
   video_pes(&s, 1, 90000, 1, 90000, au, build_hevc_au(au, 1));
   video_pes(&s, 1, 93600, 1, 93600, au, build_hevc_au(au, 0));
   video_pes(&s, 1, 97200, 1, 97200, au, build_hevc_au(au, 0));
@@ -197,7 +177,7 @@ START_TEST(unparsable_or_incomplete_parameter_sets_emit_nothing) {
     unsigned char au[256] = {0};
     memset(&s, 0, sizeof s);
     rig_open(&r);
-    discovery(&s, t[c].es, 1);
+    discovery_local(&s, t[c].es, 1);
     for (unsigned i = 0; i < 3; i++) video_pes(&s, 1, 90000 + i * 3600, 1, 90000 + i * 3600, au, build_annexb_au(au, t[c].nals, t[c].lens, t[c].n));
     rig_feed(&r, &s);
     ck_assert_int_eq(flv_close(r.f), 0);
@@ -216,7 +196,7 @@ START_TEST(header_without_keyframe_waits) {
   size_t lens[3] = {sizeof h264_sps_1080p, sizeof h264_pps, sizeof slice};
   memset(&s, 0, sizeof s);
   rig_open(&r);
-  discovery(&s, ES_H264, 1);
+  discovery_local(&s, ES_H264, 1);
   for (unsigned i = 0; i < 3; i++) video_pes(&s, 1, 90000 + i * 3600, 1, 90000 + i * 3600, au, build_annexb_au(au, nals, lens, 3));
   rig_feed(&r, &s);
   ck_assert_int_eq(flv_close(r.f), 0);
@@ -236,7 +216,7 @@ START_TEST(unsupported_streams_are_skipped) {
     ts_script_t s;
     memset(&s, 0, sizeof s);
     rig_open(&r);
-    discovery(&s, sets[c], 1);
+    discovery_local(&s, sets[c], 1);
     rig_feed(&r, &s);
     ck_assert_int_eq(flv_close(r.f), 0);
     ck_assert_uint_eq(r.sink.script_tags, 0u);
@@ -263,7 +243,7 @@ START_TEST(audio_codecs_and_track_selection) {
     memset(&s, 0, sizeof s);
     rig_open(&r);
     r.opts.audio_track = t[c].track;
-    discovery(&s, t[c].es, t[c].n);
+    discovery_local(&s, t[c].es, t[c].n);
     for (unsigned i = 0; i < 4; i++) {
       audio_pes(&s, 0x110, 1, 90000 + i * 1920, adts, alen);
       audio_pes(&s, 0x111, 1, 90000 + i * 1920, adts, alen);
@@ -284,7 +264,7 @@ START_TEST(audio_only_carry_over_and_resync) {
   memset(&s, 0, sizeof s);
   memset(junk, 0x5A, sizeof junk);
   rig_open(&r);
-  discovery(&s, ES_AAC, 1);
+  discovery_local(&s, ES_AAC, 1);
   alen = build_adts_frame(adts, 100);
   audio_pes(&s, APID, 1, 90000, junk, sizeof junk);
   audio_pes(&s, APID, 1, 90000, adts, alen);
@@ -308,7 +288,7 @@ START_TEST(audio_waits_for_video_header) {
   size_t alen = build_adts_frame(adts, 100);
   memset(&s, 0, sizeof s);
   rig_open(&r);
-  discovery(&s, ES_VIDEO_AAC, 2);
+  discovery_local(&s, ES_VIDEO_AAC, 2);
   for (unsigned i = 0; i < 3; i++) audio_pes(&s, APID, 1, 90000 + i * 1920, adts, alen);
   rig_feed(&r, &s);
   ck_assert_uint_eq(r.sink.script_tags, 0u);
@@ -332,7 +312,7 @@ START_TEST(unrelated_pids_are_ignored) {
   size_t alen = build_adts_frame(adts, 100);
   memset(&s, 0, sizeof s);
   rig_open(&r);
-  discovery(&s, ES_AAC, 1);
+  discovery_local(&s, ES_AAC, 1);
   for (unsigned i = 0; i < 3; i++) {
     audio_pes(&s, APID, 1, 90000 + i * 1920, adts, alen);
     pes_at(&s, 0x555, 0xC0, 1, 90000, 0, 0, au, sizeof au);

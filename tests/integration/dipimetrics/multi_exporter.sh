@@ -44,6 +44,8 @@ cat >"$WORK/map.csv" <<EOF
 ch1,udp://239.1.9.5:5000,1,1,101
 EOF
 
+make_bcg_schema "$WORK/sch"
+
 timeout 60 "$BIN" -S "$SOCK" -l "127.0.0.1:$HTTPPORT" -v >"$WORK/dipimetrics.log" 2>&1 &
 MPID=$!
 trap 'kill $MPID $SPID $BPID 2>/dev/null; rm -rf "$WORK"' EXIT
@@ -56,7 +58,7 @@ timeout 60 "$DIPISDS" -a -i "$WORK/channels.csv" -p example.org -O "Test Headend
     >"$WORK/dipisds.log" 2>&1 &
 SPID=$!
 
-timeout 60 "$DIPIBCG" -a -i "$WORK/guide.xml" -M "$WORK/map.csv" -w 24 \
+timeout 60 "$DIPIBCG" -a -s "$WORK/sch" -i "$WORK/guide.xml" -M "$WORK/map.csv" -w 24 \
     -m $BCG_MCAST:$BCG_PORT --metrics-id bcg-multi --metrics "$SOCK" --metrics-interval 1 \
     >"$WORK/dipibcg.log" 2>&1 &
 BPID=$!

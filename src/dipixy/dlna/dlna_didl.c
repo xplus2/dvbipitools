@@ -4,15 +4,12 @@
 #define _GNU_SOURCE /* fopencookie */
 
 #include "dlna_int.h"
-
 #include "lib/sys/ioutil.h"
 #include "lib/helper/uriparse.h"
 #include "lib/helper/xml_util.h"
-
 #include "../core/input_walk.h"
 #include "../core/route.h"
 #include "../version.h"
-#include "gena.h"
 
 #include <stdint.h>
 #include <string.h>

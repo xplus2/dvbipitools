@@ -3,14 +3,11 @@
 
 #include <getopt.h>
 #include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "lib/cas/device_state_core.h"
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
-#include "lib/helper/log.h"
 #include "priv.h"
 
 static const char *const shortopts = "k:s:b:p:a:c:vdh";
@@ -35,33 +32,16 @@ static const struct option longopts[] = {
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
-static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
-  int c;
-  optind = 1;
-  opterr = 0;
-  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
-    if (c == 'c') *cfg_path = optarg;
-    if (c == OPT_CONFIGTEST) *configtest = 1;
-    if (c == OPT_CONFIG_STRICT) *strict = 1;
-    if (c == 'h') {
-      cam378_print_help();
-      opterr = 1;
-      return ARGS_HELP;
-    }
-  }
-  opterr = 1;
-  return ARGS_OK;
-}
-
 static args_status_t parse_inner(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
   int strict = 0;
-  args_status_t pst;
   int c;
 
-  pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
-  if (pst != ARGS_OK) return pst;
+  if (argutil_prescan(argc, argv, shortopts, longopts, OPT_CONFIGTEST, OPT_CONFIG_STRICT, &cfg_path, &configtest, &strict)) {
+    cam378_print_help();
+    return ARGS_HELP;
+  }
   if (configtest) return cam378_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
 
   cam378_cfg_defaults(cfg);
@@ -120,12 +100,7 @@ static args_status_t parse_inner(int argc, char **argv, config_t *cfg) {
         break;
       case OPT_COLOR:
         {
-          log_color_t v;
-          if (log_color_from_string(optarg, &v)) {
-            argerr("3S000105", "invalid --color: %s (auto|always|never)", optarg);
-            return ARGS_ERR;
-          }
-          cfg->color_mode = v;
+          if (argutil_color_opt(TOOL_NAME, "3S000105", optarg, &cfg->color_mode)) return ARGS_ERR;
         }
         break;
       case OPT_METRICS:

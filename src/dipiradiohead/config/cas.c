@@ -2,8 +2,6 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "lib/config/yamlcfg.h"
-#include "lib/sys/ioutil.h"
-#include "../config.h"
 #include "priv.h"
 
 int rdh_apply_cas_algo(void *c, const char *v, char *e, size_t n) {

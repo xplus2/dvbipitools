@@ -3,9 +3,8 @@
 
 #include <string.h>
 
+#include "lib/bim/sdns.h"
 #include "lib/helper/argutil.h"
-#include "lib/helper/log.h"
-
 #include "priv.h"
 
 static args_status_t validate_mode_mcast(const config_t *cfg, const args_flags_t *fl) {
@@ -22,6 +21,14 @@ static args_status_t validate_mode_mcast(const config_t *cfg, const args_flags_t
 }
 
 static args_status_t validate_announce_input(config_t *cfg, const args_flags_t *fl) {
+  if (cfg->nschemas) {
+    argerr("AS000762", "--schema is listen-only");
+    return ARGS_ERR;
+  }
+  if (sds_listen_only_set(cfg)) {
+    argerr("AS000772", "-o/-f/--bim-namespace are listen-only");
+    return ARGS_ERR;
+  }
   if (!cfg->input_path) {
     argerr("AS000110", "missing -i input");
     return ARGS_ERR;
@@ -79,14 +86,11 @@ static args_status_t validate_announce_fcc(config_t *cfg, const args_flags_t *fl
   if (cfg->fcc_enabled) {
     if (!fl->have_fcc_rtx_time) cfg->fcc_rtx_time = 2000;
     if (!fl->have_fcc_rtx_pt) cfg->fcc_rtx_pt = 99;
-    if (!fl->have_fcc_resolve_max_channels) cfg->fcc_resolve_max_channels = 300;
-    if (cfg->fcc_resolve_by_port) {
-      unsigned long base = cfg->fcc_resolve_base_port ? cfg->fcc_resolve_base_port : (unsigned long)cfg->fcc_port + 1;
-      if (base + cfg->fcc_resolve_max_channels - 1 > 65535UL) {
-        argerr("AS000698", "--fcc-resolve-by-port port range %lu..%lu exceeds 65535 (lower --fcc-resolve-base-port or --fcc-resolve-max-channels)", base, base + cfg->fcc_resolve_max_channels - 1);
-        return ARGS_ERR;
-      }
+    if (cfg->fcc_resolve_by_port && sds_fcc_resolve_last_port(cfg) > 65535UL) {
+      argerr("AS000698", "--fcc-resolve-by-port port range %lu..%lu exceeds 65535 (lower --fcc-resolve-base-port or --fcc-resolve-max-channels)", sds_fcc_resolve_base_port(cfg), sds_fcc_resolve_last_port(cfg));
+      return ARGS_ERR;
     }
+    if (!fl->have_fcc_resolve_max_channels) cfg->fcc_resolve_max_channels = SDS_FCC_MAX_CHANNELS_DEFAULT;
   }
   return ARGS_OK;
 }
@@ -105,8 +109,8 @@ static args_status_t validate_announce_al_fec(config_t *cfg, const args_flags_t 
 }
 
 static args_status_t validate_announce_rms_fus(config_t *cfg, const args_flags_t *fl) {
-  if ((cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled) && sds_has_suffix(cfg->input_path, ".xml")) {
-    argerr("AS000185", "--packages/--cells/--rms-name/--fus-name have no effect with a raw .xml -i input (that path is sent through unparsed)");
+  if ((cfg->packages_path || cfg->cells_path || cfg->rms_enabled || cfg->fus_enabled || sds_bcg_set(cfg)) && sds_has_suffix(cfg->input_path, ".xml")) {
+    argerr("AS000185", "--packages/--cells/--rms-name/--fus-name/--bcg-* have no effect with a raw .xml -i input (that path is sent through unparsed)");
     return ARGS_ERR;
   }
   if (cfg->rms_enabled && cfg->fus_enabled) {
@@ -123,6 +127,14 @@ static args_status_t validate_announce_rms_fus(config_t *cfg, const args_flags_t
       return ARGS_ERR;
     }
     if (!fl->have_rms_lang) memcpy(cfg->rms_lang, "deu", 3);
+  }
+  if (!cfg->bcg_enabled && sds_bcg_opts_set(cfg)) {
+    argerr("AS000732", "--bcg-id/--bcg-description/--bcg-provider-name/--bcg-mcast require --bcg-name");
+    return ARGS_ERR;
+  }
+  if (cfg->bcg_enabled && !cfg->bcg_mcast_addr[0]) {
+    argerr("AS000733", "--bcg-name requires --bcg-mcast");
+    return ARGS_ERR;
   }
   if (!cfg->fus_enabled && (fl->have_fus_lang || fl->have_fus_id || cfg->fus_announce_addr[0] || cfg->fus_logo)) {
     argerr("AS000189", "--fus-lang/--fus-id/--fus-announce/--fus-logo require --fus-name");
@@ -156,7 +168,15 @@ static args_status_t validate_listen(config_t *cfg, const args_flags_t *fl) {
     return ARGS_ERR;
   }
   if (sds_disco_set(cfg)) {
-    argerr("AS000193", "--packages/--cells/--rms-*/--fus-* options are announce-only");
+    argerr("AS000193", "--packages/--cells/--rms-*/--fus-*/--bcg-* options are announce-only");
+    return ARGS_ERR;
+  }
+  if (sds_announce_basics_set(cfg)) {
+    argerr("AS000773", "-i/-p/-O/-L/--dscp/-T are announce-only");
+    return ARGS_ERR;
+  }
+  if (cfg->sdns_ns && !cfg->nschemas && !sdns_set_find(cfg->sdns_ns)) {
+    argerr("AS000742", "unsupported BiM SD&S namespace: %s", cfg->sdns_ns);
     return ARGS_ERR;
   }
   if (!cfg->output_path) cfg->output_path = "-";

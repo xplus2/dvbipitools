@@ -3,12 +3,9 @@
 
 #include <getopt.h>
 #include <stdarg.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/helper/log.h"
-
 #include "priv.h"
 
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
@@ -60,12 +57,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->verbose = 1;
         break;
       case OPT_COLOR: {
-        log_color_t v;
-        if (log_color_from_string(optarg, &v)) {
-          argerr("XS000105", "invalid --color: %s (auto|always|never)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->color_mode = v;
+        if (argutil_color_opt(TOOL_NAME, "XS000105", optarg, &cfg->color_mode)) return ARGS_ERR;
         break;
       }
       case 'h':

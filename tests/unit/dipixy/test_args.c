@@ -11,6 +11,7 @@
 #include "lib/helper/log.h"
 
 #include "dipixy/cli/args.h"
+#include "../cfg_fixture.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
@@ -1281,13 +1282,6 @@ START_TEST(no_argv_at_all_returns_noargs) {
 }
 END_TEST
 
-static void write_cfg(char *path, const char *text) {
-  int fd = mkstemp(path);
-  ck_assert_int_ge(fd, 0);
-  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
-  close(fd);
-}
-
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipixy_cfg_XXXXXX";
   char *argv[] = {"dipixy", "-c", path, NULL};
@@ -1753,6 +1747,19 @@ START_TEST(enable_dlna_rejects_overlong_host) {
 }
 END_TEST
 
+START_TEST(sds_schema_option_is_repeatable_and_frees_the_namespace_check) {
+  char *argv[] = {"dipixy", "-I", "eth0", "--sds-schema", "a.xsd", "--sds-schema", "dir", "--sds-bim-namespace", "urn:example:sdns", NULL};
+  char *bad[] = {"dipixy", "-I", "eth0", "--sds-bim-namespace", "urn:example:sdns", NULL};
+  config_t cfg = {0};
+  ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
+  ck_assert_int_eq(cfg.nschemas, 2);
+  ck_assert_str_eq(cfg.schemas[1], "dir");
+  ck_assert_str_eq(cfg.sdns_ns, "urn:example:sdns");
+  args_free(&cfg);
+  ck_assert_int_eq(args_parse(ARGC(bad), bad, &cfg), ARGS_ERR);
+}
+END_TEST
+
 static Suite *args_suite(void) {
   Suite *s = suite_create("dipixy_args");
   TCase *tc = tcase_create("core");
@@ -1915,6 +1922,7 @@ static Suite *args_suite(void) {
   tcase_add_test(tc, ssdp_max_age_below_twice_interval_is_rejected);
   tcase_add_test(tc, enable_dlna_falls_back_to_concrete_v6_listen);
   tcase_add_test(tc, enable_dlna_rejects_overlong_host);
+  tcase_add_test(tc, sds_schema_option_is_repeatable_and_frees_the_namespace_check);
   suite_add_tcase(s, tc);
   return s;
 }

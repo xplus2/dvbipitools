@@ -10,17 +10,16 @@
 #include "lib/helper/argutil.h"
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
+#include "lib/bim/sdns.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/dvbstp_seen.h"
 #include "lib/net/multicast.h"
 #include "lib/helper/playlist_in.h"
-#include "lib/sys/signal.h"
 #include "lib/helper/uriparse.h"
 
 #include "../../core/route.h"
 #include "../../version.h"
 
-#define SDS_RECV_BUF 65536
 
 static channel_item_t *list_append(channel_list_t *l) {
   channel_item_t *it;
@@ -103,21 +102,19 @@ static void append_sds_entries(channel_list_t *l, const sds_service_t *entries, 
 
 /* SD&S BroadcastDiscovery XML file, e.g. dipiscan -f xml output */
 void build_from_xml(channel_list_t *l, const char *path) {
-  FILE *f = fopen(path, "r");
   char *xml;
   size_t len;
   sds_service_t entries[SDS_MAX_SERVICES];
   int count;
-  if (!f) {
+  int rc = read_path(path, &xml, &len);
+  if (rc == -1) {
     log_code("YW000680", TOOL_NAME ": --xml %s: cannot open, list left empty", path);
     return;
   }
-  if (read_all(f, &xml, &len)) {
-    fclose(f);
+  if (rc) {
     log_code("YW000681", TOOL_NAME ": --xml %s: cannot read, list left empty", path);
     return;
   }
-  fclose(f);
   count = sds_parse_broadcast(xml, entries, SDS_MAX_SERVICES, NULL);
   append_sds_entries(l, entries, count);
   free(xml);
@@ -158,48 +155,68 @@ void channels_join_all(channel_list_t *l, const config_t *cfg) {
 }
 
 /* blocks up to timeout_s. appends discovered services into l, no clear */
-void build_from_sds(channel_list_t *l, const char *addrport, const char *iface, double timeout_s) {
+typedef struct {
+  channel_list_t *l;
+  const char *addrport;
+  const char *ns;
+  const bim_sdnsdoc_t *sch; /* NULL: compiled-in schemas */
+  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
+  int seen_count;
+  int total;
+  sds_service_t entries[SDS_MAX_SERVICES];
+} sds_listen_t;
+
+static int sds_segment(void *ctx, const dvbstp_header_t *hdr, const unsigned char *data, size_t len) {
+  sds_listen_t *c = ctx;
+  const char *xml;
+  size_t xlen;
+  char *owned;
+  int count;
+  int rc;
+  if (hdr->payload_id != DVBSTP_PAYLOAD_BROADCAST_DISCOVERY || dvbstp_already_seen(c->seen, &c->seen_count, hdr)) return 0;
+  rc = sdns_doc_segment_xml(c->sch, hdr->compr, data, len, c->ns, &xml, &xlen, &owned);
+  if (rc == -1) log_code("YW400243", TOOL_NAME ": --sds %s: segment %u: BiM-encoded SD&S not decodable, dropped", c->addrport, hdr->segment_id);
+  if (rc == -2) log_code("YW400244", TOOL_NAME ": --sds %s: segment %u: compression %u not supported, dropped", c->addrport, hdr->segment_id, hdr->compr);
+  if (rc) return 0;
+  count = sds_parse_broadcast(xml, c->entries, SDS_MAX_SERVICES, NULL);
+  free(owned);
+  append_sds_entries(c->l, c->entries, count);
+  c->total += count;
+  return 0;
+}
+
+void build_from_sds(channel_list_t *l, const char *addrport, const config_t *cfg) {
   int family;
   char group[64];
   unsigned port;
   mcast_t *m;
-  dvbstp_reasm_t *r;
-  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
-  int seen_count = 0;
-  double deadline;
-  int total = 0;
+  sds_listen_t *c;
+  bim_sdnsdoc_t sch;
   if (argutil_addrport_parse(addrport, &family, group, sizeof group, &port)) {
     log_code("YE000683", TOOL_NAME ": --sds %s: invalid address, list left empty", addrport);
     return;
   }
-  m = mcast_open(family, group, port, iface, 500);
+  if (cfg->nschemas && sdns_doc_open(&sch, "YS", cfg->schemas, cfg->nschemas, cfg->sdns_ns)) {
+    log_code("YW600160", TOOL_NAME ": --sds %s: schema not usable, list left empty", addrport);
+    return;
+  }
+  m = mcast_open(family, group, port, cfg->iface, 500);
   if (!m) {
     log_code("YW500223", TOOL_NAME ": --sds %s: cannot join, list left empty", addrport);
     return;
   }
-  r = dvbstp_reasm_new();
-  if (!r) {
+  c = calloc(1, sizeof *c);
+  if (!c) {
     mcast_close(m);
     return;
   }
-  deadline = mono_seconds() + timeout_s;
-  while (mono_seconds() < deadline && !signal_stop_requested()) {
-    unsigned char buf[SDS_RECV_BUF];
-    dvbstp_header_t hdr;
-    const unsigned char *data;
-    size_t len;
-    ssize_t n = mcast_recv(m, buf, sizeof buf, NULL);
-    sds_service_t entries[SDS_MAX_SERVICES];
-    int count;
-    if (n <= 0) continue;
-    if (!dvbstp_reasm_feed(r, buf, (size_t)n, &hdr, &data, &len)) continue;
-    if (hdr.payload_id != DVBSTP_PAYLOAD_BROADCAST_DISCOVERY) continue;
-    if (dvbstp_already_seen(seen, &seen_count, &hdr)) continue;
-    count = sds_parse_broadcast((const char *)data, entries, SDS_MAX_SERVICES, NULL);
-    append_sds_entries(l, entries, count);
-    total += count;
-  }
-  dvbstp_reasm_free(r);
+  c->l = l;
+  c->addrport = addrport;
+  c->ns = cfg->sdns_ns;
+  c->sch = cfg->nschemas ? &sch : NULL;
+  dvbstp_listen(m, cfg->sds_timeout_s, sds_segment, c);
   mcast_close(m);
-  if (total == 0) log_code("YW600159", TOOL_NAME ": --sds %s: no services discovered in %.0fs", addrport, timeout_s);
+  if (c->total == 0) log_code("YW600159", TOOL_NAME ": --sds %s: no services discovered in %.0fs", addrport, cfg->sds_timeout_s);
+  if (cfg->nschemas) bim_sdnsdoc_close(&sch);
+  free(c);
 }

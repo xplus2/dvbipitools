@@ -49,7 +49,7 @@ channels_t *channels_build(const config_t *cfg) {
     if (!l) continue;
     switch (cfg->sources[i].kind) {
       case SRC_SDS:
-        build_from_sds(l, cfg->sources[i].value, cfg->iface, cfg->sds_timeout_s);
+        build_from_sds(l, cfg->sources[i].value, cfg);
         break;
       case SRC_M3U:
         build_from_m3u(l, cfg->sources[i].value, cfg->insecure_tls);

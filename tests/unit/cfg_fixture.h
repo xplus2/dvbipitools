@@ -98,4 +98,26 @@ static inline void cfg_field_check(const void *cfg, const cfg_field_case_t *c) {
   }
 }
 
+static inline void write_cfg(char *path, const char *text) {
+  int fd = mkstemp(path);
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
+  close(fd);
+}
+
+static inline void write_temp_csv(char *path, const char *content) {
+  int fd = mkstemp(path);
+  FILE *f;
+  ck_assert_int_ge(fd, 0);
+  f = fdopen(fd, "w");
+  fputs(content, f);
+  fclose(f);
+}
+
+static inline char *dup_checked(const char *s) {
+  char *d = strdup(s);
+  ck_assert_ptr_nonnull(d);
+  return d;
+}
+
 #endif

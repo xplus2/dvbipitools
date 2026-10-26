@@ -31,6 +31,7 @@ void sink_put(sink_t *k, const char *src, size_t n);
 void sink_decode(sink_t *k, const char *src, size_t n);
 void sink_init(sink_t *k, char *out, size_t cap);
 int sink_finish(sink_t *k, int *truncated);
+const char *skip_misc(const char *lt, const char *end);
 int next_tok(const char *p, const char *end, xml_tok_t *t);
 const char *tok_after(const xml_tok_t *t, const char *end);
 int name_is(const char *n, size_t nl, const char *want);

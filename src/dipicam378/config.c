@@ -7,7 +7,6 @@
 
 #include "lib/cas/device_state_core.h"
 #include "lib/config/yamlcfg.h"
-#include "lib/helper/argutil.h"
 #include "lib/helper/secure_zero.h"
 #include "lib/sys/ioutil.h"
 #include "config.h"
@@ -145,10 +144,6 @@ int cam378_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
-  if (cond) yamlcfg_warn(y, code, "%s", msg);
-}
-
 int cam378_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   int rc;
@@ -158,10 +153,10 @@ int cam378_cfg_test(const char *path, int strict) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }
-  warn_if(&y, !cfg.key_path, "3A000129", "key not set (required unless given on the command line)");
-  warn_if(&y, !cfg.serial, "3A000137", "serial not set (required unless given on the command line)");
+  yamlcfg_warn_if(&y, !cfg.key_path, "3A000129", "key not set (required unless given on the command line)");
+  yamlcfg_warn_if(&y, !cfg.serial, "3A000137", "serial not set (required unless given on the command line)");
   if (cfg.serial && strlen(cfg.serial) >= DEVICE_SERIAL_MAX) yamlcfg_warn(&y, "3A000723", "invalid serial: longer than %d bytes", DEVICE_SERIAL_MAX - 1);
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "3A000120", "metrics.sock and metrics.interval require metrics.id");
+  yamlcfg_warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "3A000120", "metrics.sock and metrics.interval require metrics.id");
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);
   return rc;

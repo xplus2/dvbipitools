@@ -2,22 +2,11 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #define _DEFAULT_SOURCE
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "dipixy/reactor/dispatch/priv.h"
-#include "dipixy/reactor/dispatch/route_common.h"
-#include "dipixy/core/metrics.h"
-#include "dipixy/hls/hls.h"
-#include "dipixy/dash/dash.h"
-#include "dipixy/dash/lldash.h"
-#include "dipixy/segment/segment.h"
-#include "dipixy/segment/mp4push.h"
 #include "dipixy/ts/lcevcselect.h"
-#include "dipixy/ts/pmtselect.h"
-#include "dipixy/ts/ts_push.h"
-#include "lib/sys/ioutil.h"
 
 http_method_t parse_http_method(const char *method, size_t method_len) {
   if (method_len == 3 && !memcmp(method, "GET", 3)) return HTTP_METHOD_GET;

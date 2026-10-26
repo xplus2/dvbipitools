@@ -167,7 +167,7 @@ static void emit_singleton(FILE *f, playlist_type_t ptype, route_fmt_t fmt, cons
   const char *seg;
   size_t n;
   if (name) {
-    pct_encode_seg(name, name_enc, sizeof name_enc);
+    uriparse_pct_encode_seg(name, name_enc, sizeof name_enc);
     seg = name_enc;
   } else {
     seg = kind;
@@ -225,7 +225,7 @@ static void emit_item(void *vctx, const channel_item_t *item) {
     n = sb_add(target, sizeof target, n, "://");
     n = sb_add(target, sizeof target, n, rc->hostport);
     if (rc->src_name) {
-      pct_encode_seg(rc->src_name, name_enc, sizeof name_enc);
+      uriparse_pct_encode_seg(rc->src_name, name_enc, sizeof name_enc);
       n = sb_add(target, sizeof target, n, "/");
       n = sb_add(target, sizeof target, n, name_enc);
     } else {

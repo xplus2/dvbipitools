@@ -1,11 +1,9 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
@@ -46,9 +44,7 @@ static int parse_schedule_event(bcg_doc_t *doc, const progtext_list_t *pl, const
   read_stop(etag, eend, start, stop, sizeof stop);
   bufcpy(pr->stop, sizeof pr->stop, stop);
   pt = find_progtext(pl, crid);
-  if (pt && (bcg_set_text(&pr->title, pt->title) || bcg_set_text(&pr->desc, pt->desc) || bcg_set_text(&pr->category, pt->category)))
-    return -1;
-  return 0;
+  return pt ? bcg_progtext_apply(pr, pt) : 0;
 }
 
 typedef struct {
@@ -88,6 +84,24 @@ static int parse_schedule(const char *buf, const char *end, bcg_doc_t *doc, cons
   return for_each_xml_elem(buf, end, "Schedule", schedule_cb, &ctx);
 }
 
+/* TVAMain namespace, default or prefixed (xmlns:p for p:TVAMain) */
+static void read_ns(const char *buf, const char *end, bcg_doc_t *doc) {
+  const char *tag = xml_find_start(buf, end, "TVAMain");
+  const char *colon;
+  char pfx[BCG_NS_LEN];
+  size_t n;
+  if (!tag) return;
+  colon = memchr(tag, ':', (size_t)(end - tag));
+  n = colon ? (size_t)(colon - tag - 1) : 0;
+  if (colon && n < sizeof pfx && n == strcspn(tag + 1, " \t\r\n/>:")) {
+    memcpy(pfx, tag + 1, n);
+    pfx[n] = '\0';
+  } else {
+    bufcpy(pfx, sizeof pfx, "xmlns");
+  }
+  if (xml_tag_attr(tag, end, pfx, doc->ns, sizeof doc->ns)) doc->ns[0] = '\0';
+}
+
 int tva_xml_read(FILE *f, bcg_doc_t *doc) {
   char *buf;
   size_t len;
@@ -100,8 +114,9 @@ int tva_xml_read(FILE *f, bcg_doc_t *doc) {
     return -1;
   }
   end = buf + len;
+  read_ns(buf, end, doc);
   rc = parse_program_texts(buf, end, &pl) == 0 && progtext_list_build_index(&pl) == 0 && parse_service_information(buf, end, doc) == 0 &&
-               parse_schedule(buf, end, doc, &pl) == 0 ? 0 : -1;
+    parse_schedule(buf, end, doc, &pl) == 0 ? 0 : -1;
   if (rc) log_code("LE500231", "tva: out of memory parsing input");
 
   free(buf);

@@ -71,6 +71,24 @@ static inline unsigned free_tcp_port(void) {
   return port;
 }
 
+static inline unsigned free_tcp_port_dual(void) {
+  struct sockaddr_in6 a = {0};
+  socklen_t alen = sizeof a;
+  int off = 0;
+  int fd = socket(AF_INET6, SOCK_STREAM, 0);
+  unsigned port;
+
+  ck_assert_int_ge(fd, 0);
+  ck_assert_int_eq(setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof off), 0);
+  a.sin6_family = AF_INET6;
+  a.sin6_addr = in6addr_any;
+  ck_assert_int_eq(bind(fd, (struct sockaddr *)&a, sizeof a), 0);
+  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&a, &alen), 0);
+  port = ntohs(a.sin6_port);
+  close(fd);
+  return port;
+}
+
 static inline void *run_main(void *arg) {
   run_t *r = arg;
 

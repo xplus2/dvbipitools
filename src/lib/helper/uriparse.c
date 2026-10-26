@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include "beutil.h"
 #include "uriparse.h"
 
 #include <arpa/inet.h>
@@ -23,6 +24,12 @@ int uriparse_mcast_addrport(const char *rest, int *family, char *group, size_t g
     if (a6.s6_addr[0] != 0xFF) return -1; /* ff00::/8 */
   }
   return 0;
+}
+
+int uriparse_mcast_cfg(const char *v, int *family, char *group, size_t groupsz, unsigned *port, char *err, size_t errsz) {
+  if (!uriparse_mcast_addrport(v, family, group, groupsz, port)) return 0;
+  snprintf(err, errsz, "invalid '%s' (multicast addr:port)", v);
+  return -1;
 }
 
 int uriparse_mcast_src_addrport(const char *rest, int *family, char *group, size_t groupsz, unsigned *port, char *src, size_t srcsz) {
@@ -116,4 +123,41 @@ char *uriparse_redact_dup(const char *uri) {
   cut = out + strcspn(out, "?#");
   *cut = '\0';
   return out;
+}
+
+int uriparse_pct_decode(char *s) {
+  char *w = s;
+  while (*s) {
+    if (*s == '%') {
+      int hi = hex_nibble((unsigned char)s[1]);
+      int lo = hi >= 0 ? hex_nibble((unsigned char)s[2]) : -1;
+      if (lo < 0) return -1;
+      *w++ = (char)((hi << 4) | lo);
+      s += 3;
+    } else {
+      *w++ = *s++;
+    }
+  }
+  *w = '\0';
+  return 0;
+}
+
+void uriparse_pct_encode_seg(const char *s, char *out, size_t outcap) {
+  static const char unreserved[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+  static const char hex[] = "0123456789ABCDEF";
+  size_t oi = 0;
+  if (!outcap) return;
+  for (; *s && oi + 1 < outcap; s++) {
+    if (strchr(unreserved, *s)) {
+      out[oi++] = *s;
+    } else {
+      unsigned char c = (unsigned char)*s;
+      if (oi + 4 > outcap) break;
+      out[oi] = '%';
+      out[oi + 1] = hex[c >> 4];
+      out[oi + 2] = hex[c & 0xF];
+      oi += 3;
+    }
+  }
+  out[oi] = '\0';
 }

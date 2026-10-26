@@ -12,10 +12,12 @@
 START_TEST(output_stub_fails_cleanly) {
   ristout_cfg_t cfg;
   unsigned char buf[188] = {0};
+  int dummy = 0;
+  ristout_t *r = (ristout_t *)&dummy;
   memset(&cfg, 0, sizeof cfg);
   ck_assert_ptr_null(ristout_open(&cfg));
-  ck_assert_int_eq(ristout_write(NULL, buf, sizeof buf), -1);
-  ristout_idle_push(NULL, 1.0);
+  ck_assert_int_eq(ristout_write(r, buf, sizeof buf), -1);
+  ristout_idle_push(r, 1.0);
   ristout_close(NULL);
 }
 END_TEST

@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -16,7 +15,6 @@
 #include "lib/helper/log.h"
 #include "lib/net/netconnect.h"
 #include "lib/sys/signal.h"
-
 #include "listen.h"
 #include "version.h"
 

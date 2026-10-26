@@ -18,10 +18,11 @@
 
 #include "../log_capture.h"
 #include "dipiscan/config.h"
-#include "lib/demux/crc32.h"
 #include "lib/sys/signal.h"
 #include "lib/mux/psi_build.h"
 #include "dipiscan/scan.h"
+#include "../fx_ts.h"
+#include "../cfg_fixture.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1)
 
@@ -133,49 +134,6 @@ START_TEST(mcast_parse_explicit_range_rejects_reversed) {
 }
 END_TEST
 
-/* zero-ES PMT section (table_id 0x02), CRC included */
-static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid) {
-  unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
-  uint32_t crc;
-
-  body[n++] = (unsigned char)(prog_num >> 8);
-  body[n++] = (unsigned char)prog_num;
-  body[n++] = 0xC1;
-  body[n++] = 0x00;
-  body[n++] = 0x00;
-  body[n++] = (unsigned char)(0xE0 | ((pcr_pid >> 8) & 0x1F));
-  body[n++] = (unsigned char)pcr_pid;
-  body[n++] = 0xF0;
-  body[n++] = 0x00;
-
-  hdr = n + 4;
-  out[0] = 0x02;
-  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
-  out[2] = (unsigned char)hdr;
-  memcpy(out + 3, body, n);
-
-  crc_at = 3 + n;
-  crc = crc32_mpeg(out, crc_at);
-  out[crc_at + 0] = (unsigned char)(crc >> 24);
-  out[crc_at + 1] = (unsigned char)(crc >> 16);
-  out[crc_at + 2] = (unsigned char)(crc >> 8);
-  out[crc_at + 3] = (unsigned char)crc;
-  return crc_at + 4;
-}
-
-/* wraps one PSI section (pusi=1, pointer_field=0) into a single 188-byte TS packet */
-static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
-}
-
 START_TEST(multi_all_named_false_without_pat) {
   psi_t *p = psi_new();
   psi_enable_multi_program(p);
@@ -190,7 +148,7 @@ START_TEST(multi_all_named_false_when_multi_program_not_enabled) {
   psi_t *p = psi_new(); /* psi_enable_multi_program() not called */
 
   slen = psi_build_pat(1, 0, 1, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   psi_feed(p, pkt);
 
   ck_assert_int_eq(psi_have_pat(p), 1);
@@ -206,17 +164,17 @@ START_TEST(multi_all_named_false_until_every_program_resolved_and_named) {
   psi_enable_multi_program(p);
 
   slen = psi_build_pat(1, 0, 1, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   psi_feed(p, pkt);
   ck_assert_int_eq(multi_all_named(p), 0); /* PMT not seen yet */
 
   slen = build_pmt(sec, 1, 0x0101);
-  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
   psi_feed(p, pkt);
   ck_assert_int_eq(multi_all_named(p), 0); /* resolved, but no SDT name yet */
 
   slen = psi_build_sdt(0, 1, 2, 1, 0x01, "Provider", "Channel One", sec, sizeof sec);
-  wrap_ts_packet(pkt, 0x0011, sec, slen);
+  wrap_section_packet(pkt, 0x0011, sec, slen);
   psi_feed(p, pkt);
   ck_assert_int_eq(multi_all_named(p), 1);
 
@@ -236,23 +194,23 @@ START_TEST(multi_all_named_false_when_only_some_programs_named) {
   progs[1].program_number = 2;
   progs[1].pmt_pid = 0x0200;
   slen = psi_build_pat_multi(1, 0, progs, 2, sec, sizeof sec);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   psi_feed(p, pkt);
 
   slen = build_pmt(sec, 1, 0x0101);
-  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
   psi_feed(p, pkt);
   slen = build_pmt(sec, 2, 0x0201);
-  wrap_ts_packet(pkt, 0x0200, sec, slen);
+  wrap_section_packet(pkt, 0x0200, sec, slen);
   psi_feed(p, pkt);
 
   slen = psi_build_sdt(0, 1, 2, 1, 0x01, "Provider", "Channel One", sec, sizeof sec);
-  wrap_ts_packet(pkt, 0x0011, sec, slen);
+  wrap_section_packet(pkt, 0x0011, sec, slen);
   psi_feed(p, pkt);
   ck_assert_int_eq(multi_all_named(p), 0); /* program 2 still unnamed */
 
   slen = psi_build_sdt(0, 1, 2, 2, 0x01, "Provider", "Channel Two", sec, sizeof sec);
-  wrap_ts_packet(pkt, 0x0011, sec, slen);
+  wrap_section_packet(pkt, 0x0011, sec, slen);
   psi_feed(p, pkt);
   ck_assert_int_eq(multi_all_named(p), 1);
 
@@ -269,15 +227,15 @@ START_TEST(probe_cb_single_mode_stops_once_named) {
   pc.multi = 0;
 
   slen = psi_build_pat(1, 0, 1, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pkt, 0x0000, sec, slen);
+  wrap_section_packet(pkt, 0x0000, sec, slen);
   ck_assert_int_eq(probe_cb(&pc, pkt), 0);
 
   slen = build_pmt(sec, 1, 0x0101);
-  wrap_ts_packet(pkt, 0x0100, sec, slen);
+  wrap_section_packet(pkt, 0x0100, sec, slen);
   ck_assert_int_eq(probe_cb(&pc, pkt), 0);
 
   slen = psi_build_sdt(0, 1, 2, 1, 0x01, "Provider", "Channel One", sec, sizeof sec);
-  wrap_ts_packet(pkt, 0x0011, sec, slen);
+  wrap_section_packet(pkt, 0x0011, sec, slen);
   ck_assert_int_eq(probe_cb(&pc, pkt), 1);
   ck_assert_uint_eq(pc.pkts, 3u);
 
@@ -320,11 +278,11 @@ START_TEST(probe_common_resolves_named_single_program) {
   probe_result_t r;
 
   slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pat, 0x0000, sec, slen);
+  wrap_section_packet(pat, 0x0000, sec, slen);
   slen = build_pmt(sec, 7, 0x0101);
-  wrap_ts_packet(pmt, 0x0100, sec, slen);
+  wrap_section_packet(pmt, 0x0100, sec, slen);
   slen = psi_build_sdt(0, 0x1234, 5, 7, 0x01, "Provider", "Channel One", sec, sizeof sec);
-  wrap_ts_packet(sdt, 0x0011, sec, slen);
+  wrap_section_packet(sdt, 0x0011, sec, slen);
 
   pkts[0] = pat; lens[0] = 188;
   pkts[1] = pmt; lens[1] = 188;
@@ -363,11 +321,11 @@ START_TEST(probe_common_reused_psi_carries_no_state_between_probes) {
 
   ck_assert_ptr_nonnull(psi);
   slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pat, 0x0000, sec, slen);
+  wrap_section_packet(pat, 0x0000, sec, slen);
   slen = build_pmt(sec, 7, 0x0101);
-  wrap_ts_packet(pmt, 0x0100, sec, slen);
+  wrap_section_packet(pmt, 0x0100, sec, slen);
   slen = psi_build_sdt(0, 0x1234, 5, 7, 0x01, "Provider", "Channel One", sec, sizeof sec);
-  wrap_ts_packet(sdt, 0x0011, sec, slen);
+  wrap_section_packet(sdt, 0x0011, sec, slen);
   pkts[0] = pat; lens[0] = 188;
   pkts[1] = pmt; lens[1] = 188;
   pkts[2] = sdt; lens[2] = 188;
@@ -409,17 +367,17 @@ START_TEST(probe_common_detects_rtp_wrapping_and_strips_header) {
   memset(pat, 0, 12);
   pat[0] = 0x80; /* RTP v2, no cc/extension */
   slen = psi_build_pat(1, 0, 1, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pat + 12, 0x0000, sec, slen);
+  wrap_section_packet(pat + 12, 0x0000, sec, slen);
 
   memset(pmt, 0, 12);
   pmt[0] = 0x80;
   slen = build_pmt(sec, 1, 0x0101);
-  wrap_ts_packet(pmt + 12, 0x0100, sec, slen);
+  wrap_section_packet(pmt + 12, 0x0100, sec, slen);
 
   memset(sdt, 0, 12);
   sdt[0] = 0x80;
   slen = psi_build_sdt(0, 1, 2, 1, 0x01, "Provider", "Channel One", sec, sizeof sec);
-  wrap_ts_packet(sdt + 12, 0x0011, sec, slen);
+  wrap_section_packet(sdt + 12, 0x0011, sec, slen);
 
   pkts[0] = pat; lens[0] = sizeof pat;
   pkts[1] = pmt; lens[1] = sizeof pmt;
@@ -449,7 +407,7 @@ START_TEST(probe_common_no_rtp_detection_leaves_stream_data_untouched) {
   memset(pat, 0, 12);
   pat[0] = 0x80;
   slen = psi_build_pat(1, 0, 1, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pat + 12, 0x0000, sec, slen);
+  wrap_section_packet(pat + 12, 0x0000, sec, slen);
   pkts[0] = pat; lens[0] = sizeof pat;
   sr.pkts = pkts;
   sr.lens = lens;
@@ -508,11 +466,11 @@ START_TEST(probe_common_first_packet_wait_scales_with_timeout) {
   probe_result_t r;
 
   slen = psi_build_pat(0x1234, 0, 7, 0x0100, sec, sizeof sec);
-  wrap_ts_packet(pat, 0x0000, sec, slen);
+  wrap_section_packet(pat, 0x0000, sec, slen);
   slen = build_pmt(sec, 7, 0x0101);
-  wrap_ts_packet(pmt, 0x0100, sec, slen);
+  wrap_section_packet(pmt, 0x0100, sec, slen);
   slen = psi_build_sdt(0, 0x1234, 5, 7, 0x01, "Provider", "Channel One", sec, sizeof sec);
-  wrap_ts_packet(sdt, 0x0011, sec, slen);
+  wrap_section_packet(sdt, 0x0011, sec, slen);
   pkts[0] = pat; lens[0] = 188;
   pkts[1] = pmt; lens[1] = 188;
   pkts[2] = sdt; lens[2] = 188;
@@ -545,17 +503,17 @@ START_TEST(probe_common_multi_mode_resolves_every_program) {
   progs[1].program_number = 2;
   progs[1].pmt_pid = 0x0200;
   slen = psi_build_pat_multi(1, 0, progs, 2, sec, sizeof sec);
-  wrap_ts_packet(pat, 0x0000, sec, slen);
+  wrap_section_packet(pat, 0x0000, sec, slen);
 
   slen = build_pmt(sec, 1, 0x0101);
-  wrap_ts_packet(pmt1, 0x0100, sec, slen);
+  wrap_section_packet(pmt1, 0x0100, sec, slen);
   slen = build_pmt(sec, 2, 0x0201);
-  wrap_ts_packet(pmt2, 0x0200, sec, slen);
+  wrap_section_packet(pmt2, 0x0200, sec, slen);
 
   slen = psi_build_sdt(0, 1, 2, 1, 0x01, "Provider", "Channel One", sec, sizeof sec);
-  wrap_ts_packet(sdt1, 0x0011, sec, slen);
+  wrap_section_packet(sdt1, 0x0011, sec, slen);
   slen = psi_build_sdt(0, 1, 2, 2, 0x01, "Provider", "Channel Two", sec, sizeof sec);
-  wrap_ts_packet(sdt2, 0x0011, sec, slen);
+  wrap_section_packet(sdt2, 0x0011, sec, slen);
 
   pkts[0] = pat; lens[0] = 188;
   pkts[1] = pmt1; lens[1] = 188;
@@ -577,13 +535,6 @@ START_TEST(probe_common_multi_mode_resolves_every_program) {
   ck_assert_str_eq(r.programs[1].name, "Channel Two");
 }
 END_TEST
-
-static void write_cfg(char *path, const char *text) {
-  int fd = mkstemp(path);
-  ck_assert_int_ge(fd, 0);
-  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
-  close(fd);
-}
 
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipiscan_cfg_XXXXXX";
@@ -671,15 +622,15 @@ static size_t build_named_ts(unsigned char *out, const scan_service_t *svc, unsi
     sdt[i].service_name = svc[i].name;
   }
   slen = psi_build_pat_multi(1, 0, pat, n, sec, sizeof sec);
-  wrap_ts_packet(out + off, 0x0000, sec, slen);
+  wrap_section_packet(out + off, 0x0000, sec, slen);
   off += 188;
   for (unsigned i = 0; i < n; i++) {
     slen = build_pmt(sec, svc[i].sid, pat[i].pmt_pid + 1);
-    wrap_ts_packet(out + off, pat[i].pmt_pid, sec, slen);
+    wrap_section_packet(out + off, pat[i].pmt_pid, sec, slen);
     off += 188;
   }
   slen = psi_build_sdt_multi(0, 1, 2, sdt, n, sec, sizeof sec);
-  wrap_ts_packet(out + off, 0x0011, sec, slen);
+  wrap_section_packet(out + off, 0x0011, sec, slen);
   off += 188;
   return off;
 }

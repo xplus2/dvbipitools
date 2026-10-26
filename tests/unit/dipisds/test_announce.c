@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <check.h>
+#include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,11 +10,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../alloc_fail.h"
 #include "../log_capture.h"
 #include "../metrics_sink.h"
 #include "../run_helper.h"
 #include "dipisds/announce.h"
 #include "lib/sys/signal.h"
+#include "../fx_net.h"
 
 static void write_temp_file(char *path, const char *suffix, const char *content) {
   char tmpl[128];
@@ -46,12 +49,13 @@ START_TEST(state_load_builds_broadcast_and_sp_docs_for_service_input) {
   ck_assert_int_eq(state_load(&cfg, &st), 0);
   ck_assert_int_eq(st.in.kind, INPUT_SERVICES);
   ck_assert_int_eq(st.in.service_count, 1);
-  ck_assert_uint_eq(st.version, 1u);
-  ck_assert_ptr_nonnull(memmem(st.broadcast_doc, st.broadcast_len, "Version=\"1\"", 11));
-  ck_assert_uint_gt(st.broadcast_len, 0u);
-  ck_assert_uint_gt(st.sp_len, 0u);
-  ck_assert_ptr_nonnull(memmem(st.broadcast_doc, st.broadcast_len, "example.org", strlen("example.org")));
-  ck_assert_ptr_nonnull(memmem(st.sp_doc, st.sp_len, "My Headend", strlen("My Headend")));
+  ck_assert_uint_eq(st.broadcast.version, 1u);
+  ck_assert_uint_eq(st.sp.version, 1u);
+  ck_assert_ptr_nonnull(memmem(st.broadcast.data, st.broadcast.len, "Version=\"1\"", 11));
+  ck_assert_uint_gt(st.broadcast.len, 0u);
+  ck_assert_uint_gt(st.sp.len, 0u);
+  ck_assert_ptr_nonnull(memmem(st.broadcast.data, st.broadcast.len, "example.org", strlen("example.org")));
+  ck_assert_ptr_nonnull(memmem(st.sp.data, st.sp.len, "My Headend", strlen("My Headend")));
 
   state_free(&st);
   unlink(path);
@@ -78,24 +82,31 @@ START_TEST(state_reload_bumps_version_in_docs_and_keeps_state_on_failure) {
   write_temp_file(path, ".csv", "Alpha,rtp://239.1.1.1:5000\nGamma,rtp://239.1.1.2:5000\n");
   cfg.input_path = path;
   ck_assert_int_eq(state_reload(&cfg, &st), 0);
-  ck_assert_uint_eq(st.version, 2u);
+  ck_assert_uint_eq(st.broadcast.version, 2u);
   ck_assert_int_eq(st.in.service_count, 2);
-  ck_assert_ptr_nonnull(memmem(st.broadcast_doc, st.broadcast_len, "Version=\"2\"", 11));
-  ck_assert_ptr_nonnull(memmem(st.sp_doc, st.sp_len, "Version=\"2\"", 11));
+  ck_assert_ptr_nonnull(memmem(st.broadcast.data, st.broadcast.len, "Version=\"2\"", 11));
+  /* SP discovery content unchanged: version kept */
+  ck_assert_uint_eq(st.sp.version, 1u);
+  ck_assert_ptr_nonnull(memmem(st.sp.data, st.sp.len, "Version=\"1\"", 11));
 
   cfg.input_path = "/nonexistent/services.csv";
   ck_assert_int_eq(state_reload(&cfg, &st), -1);
-  ck_assert_uint_eq(st.version, 2u);
+  ck_assert_uint_eq(st.broadcast.version, 2u);
   ck_assert_int_eq(st.in.service_count, 2);
 
   cfg.input_path = path;
   ck_assert_int_eq(state_reload(&cfg, &st), 1);
-  ck_assert_uint_eq(st.version, 2u);
-  ck_assert_ptr_nonnull(memmem(st.broadcast_doc, st.broadcast_len, "Version=\"2\"", 11));
+  ck_assert_uint_eq(st.broadcast.version, 2u);
+  ck_assert_ptr_nonnull(memmem(st.broadcast.data, st.broadcast.len, "Version=\"2\"", 11));
 
-  st.version = 255;
+  /* wraps modulo 256 */
+  st.broadcast.version = 255;
+  unlink(path);
+  write_temp_file(path, ".csv", "Alpha,rtp://239.1.1.1:5000\n");
+  cfg.input_path = path;
   ck_assert_int_eq(state_reload(&cfg, &st), 0);
-  ck_assert_uint_eq(st.version, 1u);
+  ck_assert_uint_eq(st.broadcast.version, 0u);
+  ck_assert_ptr_nonnull(memmem(st.broadcast.data, st.broadcast.len, "Version=\"0\"", 11));
   for (i = 0; i < 3; i++) {
     char body[64];
     snprintf(body, sizeof body, "Alpha,rtp://239.1.1.1:%u\n", 5001 + i);
@@ -104,7 +115,8 @@ START_TEST(state_reload_bumps_version_in_docs_and_keeps_state_on_failure) {
     cfg.input_path = path;
     ck_assert_int_eq(state_reload(&cfg, &st), 0);
   }
-  ck_assert_uint_eq(st.version, 4u);
+  ck_assert_uint_eq(st.broadcast.version, 3u);
+  ck_assert_uint_eq(st.sp.version, 1u);
 
   state_free(&st);
   unlink(path);
@@ -156,10 +168,10 @@ START_TEST(state_load_leaves_docs_unset_for_raw_xml_input) {
 
   ck_assert_int_eq(state_load(&cfg, &st), 0);
   ck_assert_int_eq(st.in.kind, INPUT_RAW_XML);
-  ck_assert_ptr_null(st.broadcast_doc);
-  ck_assert_ptr_null(st.sp_doc);
-  ck_assert_uint_eq(st.broadcast_len, 0u);
-  ck_assert_uint_eq(st.sp_len, 0u);
+  ck_assert_ptr_null(st.broadcast.data);
+  ck_assert_ptr_null(st.sp.data);
+  ck_assert_uint_eq(st.broadcast.len, 0u);
+  ck_assert_uint_eq(st.sp.len, 0u);
 
   state_free(&st);
   unlink(path);
@@ -187,7 +199,7 @@ START_TEST(state_load_applies_ret_and_fcc_to_broadcast_doc) {
   cfg.ret_rtx_pt = 99;
 
   ck_assert_int_eq(state_load(&cfg, &st), 0);
-  ck_assert_ptr_nonnull(memmem(st.broadcast_doc, st.broadcast_len, "RTPRetransmission", strlen("RTPRetransmission")));
+  ck_assert_ptr_nonnull(memmem(st.broadcast.data, st.broadcast.len, "RTPRetransmission", strlen("RTPRetransmission")));
 
   state_free(&st);
   unlink(path);
@@ -212,11 +224,20 @@ START_TEST(state_load_builds_package_doc_and_lists_it_in_sp_doc) {
   cfg.packages_path = pkg_path;
 
   ck_assert_int_eq(state_load(&cfg, &st), 0);
-  ck_assert_uint_gt(st.package_len, 0u);
-  ck_assert_ptr_nonnull(memmem(st.package_doc, st.package_len, "<Package Id=\"1\"", strlen("<Package Id=\"1\"")));
-  ck_assert_ptr_nonnull(memmem(st.package_doc, st.package_len, "<DVBTriplet OrigNetId=\"2\" TSId=\"1\" ServiceId=\"101\"/>",
+  ck_assert_uint_gt(st.package.len, 0u);
+  ck_assert_ptr_nonnull(memmem(st.package.data, st.package.len, "<Package Id=\"1\"", strlen("<Package Id=\"1\"")));
+  ck_assert_ptr_nonnull(memmem(st.package.data, st.package.len, "<DVBTriplet OrigNetId=\"2\" TSId=\"1\" ServiceId=\"101\"/>",
                                 strlen("<DVBTriplet OrigNetId=\"2\" TSId=\"1\" ServiceId=\"101\"/>")));
-  ck_assert_ptr_nonnull(memmem(st.sp_doc, st.sp_len, "<PayloadId Id=\"5\"/>", strlen("<PayloadId Id=\"5\"/>")));
+  ck_assert_ptr_nonnull(memmem(st.sp.data, st.sp.len, "<PayloadId Id=\"5\"/>", strlen("<PayloadId Id=\"5\"/>")));
+
+  /* only changed doc gets new version */
+  unlink(pkg_path);
+  write_temp_file(pkg_path, ".csv", "1,Bundle Two,eng,1,Channel One\n");
+  cfg.packages_path = pkg_path;
+  ck_assert_int_eq(state_reload(&cfg, &st), 0);
+  ck_assert_uint_eq(st.package.version, 2u);
+  ck_assert_uint_eq(st.broadcast.version, 1u);
+  ck_assert_uint_eq(st.sp.version, 1u);
 
   state_free(&st);
   unlink(csv_path);
@@ -242,9 +263,9 @@ START_TEST(state_load_builds_cell_doc) {
   cfg.cells_path = cells_path;
 
   ck_assert_int_eq(state_load(&cfg, &st), 0);
-  ck_assert_uint_gt(st.cell_len, 0u);
-  ck_assert_ptr_nonnull(memmem(st.cell_doc, st.cell_len, "<Cell Id=\"Paris East\">", strlen("<Cell Id=\"Paris East\">")));
-  ck_assert_ptr_nonnull(memmem(st.sp_doc, st.sp_len, "<PayloadId Id=\"7\"/>", strlen("<PayloadId Id=\"7\"/>")));
+  ck_assert_uint_gt(st.cell.len, 0u);
+  ck_assert_ptr_nonnull(memmem(st.cell.data, st.cell.len, "<Cell Id=\"Paris East\">", strlen("<Cell Id=\"Paris East\">")));
+  ck_assert_ptr_nonnull(memmem(st.sp.data, st.sp.len, "<PayloadId Id=\"7\"/>", strlen("<PayloadId Id=\"7\"/>")));
 
   state_free(&st);
   unlink(csv_path);
@@ -272,10 +293,10 @@ START_TEST(state_load_builds_rmsfus_doc_for_rms) {
   cfg.rms_location = "https://rms.example/";
 
   ck_assert_int_eq(state_load(&cfg, &st), 0);
-  ck_assert_uint_gt(st.rmsfus_len, 0u);
-  ck_assert_ptr_nonnull(memmem(st.rmsfus_doc, st.rmsfus_len, "<RMSProvider RMSLocation=\"https://rms.example/\">",
+  ck_assert_uint_gt(st.rmsfus.len, 0u);
+  ck_assert_ptr_nonnull(memmem(st.rmsfus.data, st.rmsfus.len, "<RMSProvider RMSLocation=\"https://rms.example/\">",
                                 strlen("<RMSProvider RMSLocation=\"https://rms.example/\">")));
-  ck_assert_ptr_nonnull(memmem(st.sp_doc, st.sp_len, "<PayloadId Id=\"8\"/>", strlen("<PayloadId Id=\"8\"/>")));
+  ck_assert_ptr_nonnull(memmem(st.sp.data, st.sp.len, "<PayloadId Id=\"8\"/>", strlen("<PayloadId Id=\"8\"/>")));
 
   state_free(&st);
   unlink(csv_path);
@@ -302,8 +323,8 @@ START_TEST(state_load_builds_rmsfus_doc_for_fus) {
   cfg.fus_id = 42;
 
   ck_assert_int_eq(state_load(&cfg, &st), 0);
-  ck_assert_uint_gt(st.rmsfus_len, 0u);
-  ck_assert_ptr_nonnull(memmem(st.rmsfus_doc, st.rmsfus_len, "<FUSID>42</FUSID>", strlen("<FUSID>42</FUSID>")));
+  ck_assert_uint_gt(st.rmsfus.len, 0u);
+  ck_assert_ptr_nonnull(memmem(st.rmsfus.data, st.rmsfus.len, "<FUSID>42</FUSID>", strlen("<FUSID>42</FUSID>")));
 
   state_free(&st);
   unlink(csv_path);
@@ -387,6 +408,32 @@ static const side_case_t side_cases[] = {
   {SIDE_CELLS, "Paris East,FR\n", "no CA entries"},
   {SIDE_CELLS, "Paris East,FR,IDF\n", "bad CA entry"},
 };
+
+START_TEST(state_load_rejects_ambiguous_package_service) {
+  char csv_path[160];
+  char pkg_path[160];
+  config_t cfg;
+  sds_state_t st;
+
+  write_temp_file(csv_path, ".csv", "Channel One,rtp://239.1.1.1:5000,1,2,101\nChannel One,rtp://239.1.1.2:5000,1,2,102\n");
+  write_temp_file(pkg_path, ".csv", "1,Bundle,eng,1,Channel One\n");
+  memset(&cfg, 0, sizeof cfg);
+  cfg.input_path = csv_path;
+  cfg.provider = "example.org";
+  cfg.offering = "My Headend";
+  memcpy(cfg.lang, "deu", 3);
+  cfg.family = AF_INET;
+  strcpy(cfg.mcast_group, "239.255.0.1");
+  cfg.mcast_port = 3937;
+
+  ck_assert_int_eq(state_load(&cfg, &st), 0);
+  state_free(&st);
+  cfg.packages_path = pkg_path;
+  ck_assert_int_eq(state_load(&cfg, &st), -1);
+  unlink(csv_path);
+  unlink(pkg_path);
+}
+END_TEST
 
 START_TEST(state_load_fails_on_unreadable_or_bad_side_files) {
   const side_case_t *c = &side_cases[_i];
@@ -485,7 +532,7 @@ START_TEST(state_load_builds_documents_over_64k) {
   }
   rc = state_load(&cfg, &st);
   ck_assert_int_eq(rc, 0);
-  ck_assert_uint_gt(kind == BIG_BROADCAST ? st.broadcast_len : kind == BIG_PACKAGE ? st.package_len : kind == BIG_CELL ? st.cell_len : st.rmsfus_len, 65536u);
+  ck_assert_uint_gt(kind == BIG_BROADCAST ? st.broadcast.len : kind == BIG_PACKAGE ? st.package.len : kind == BIG_CELL ? st.cell.len : st.rmsfus.len, 65536u);
   state_free(&st);
   unlink(csv_path);
   if (side_path[0]) unlink(side_path);
@@ -580,7 +627,7 @@ typedef struct {
 
 static const emit_case_t emit_cases[] = {
   {EMIT_SERVICES, 1, 1, 1, 0},
-  {EMIT_RAW_XML, 0, 0, 1, 0},
+  {EMIT_RAW_XML, 1, 0, 1, 0},
 };
 
 START_TEST(announce_run_exports_provider_service_and_announcement_metrics) {
@@ -658,6 +705,186 @@ START_TEST(announce_run_rejects_oversize_raw_xml_with_log) {
 }
 END_TEST
 
+ssize_t __real_sendto(int fd, const void *buf, size_t len, int flags, const struct sockaddr *to, socklen_t tolen);
+ssize_t __real_sendmsg(int fd, const struct msghdr *msg, int flags);
+static int g_send_fail;
+
+ssize_t __wrap_sendto(int fd, const void *buf, size_t len, int flags, const struct sockaddr *to, socklen_t tolen) {
+  if (g_send_fail && is_group(to)) {
+    errno = ENETUNREACH;
+    return -1;
+  }
+  return __real_sendto(fd, buf, len, flags, to, tolen);
+}
+
+ssize_t __wrap_sendmsg(int fd, const struct msghdr *msg, int flags) {
+  if (g_send_fail && is_group((const struct sockaddr *)msg->msg_name)) {
+    errno = ENETUNREACH;
+    return -1;
+  }
+  return __real_sendmsg(fd, msg, flags);
+}
+
+static void rich_cfg(config_t *cfg, const char *input) {
+  base_cfg(cfg, input);
+  cfg->ret_enabled = 1;
+  strcpy(cfg->ret_addr, "10.0.0.1");
+  cfg->ret_port = 6000;
+  cfg->ret_rtx_time = 2000;
+  cfg->ret_rtx_pt = 99;
+  cfg->fcc_enabled = 1;
+  strcpy(cfg->fcc_addr, "10.0.0.2");
+  cfg->fcc_port = 7000;
+  cfg->fcc_rtx_time = 1000;
+  cfg->fcc_rtx_pt = 98;
+  cfg->fcc_resolve_by_port = 1;
+  cfg->fcc_resolve_max_channels = 40;
+  cfg->al_fec_enabled = 1;
+  strcpy(cfg->al_fec_addr, "10.0.0.3");
+  cfg->al_fec_port = 8000;
+  cfg->al_fec_pt = 97;
+  cfg->bcg_enabled = 1;
+  cfg->bcg_name = "Guide";
+  cfg->bcg_description = "Programme guide";
+  cfg->bcg_provider_name = "Provider";
+  strcpy(cfg->bcg_mcast_addr, "239.9.9.9");
+  cfg->bcg_mcast_port = 4000;
+  cfg->bcg_id = "bcg1";
+}
+
+START_TEST(state_load_carries_fcc_fec_and_bcg_options) {
+  char path[160];
+  config_t cfg;
+  sds_state_t st;
+  write_temp_file(path, ".csv", "Channel One,rtp://239.1.1.1:5000,1,2,101\n");
+  rich_cfg(&cfg, path);
+  ck_assert_int_eq(state_load(&cfg, &st), 0);
+  ck_assert_ptr_nonnull(st.bcg.data);
+  ck_assert_ptr_nonnull(memmem(st.broadcast.data, st.broadcast.len, "RTPRetransmission", 17));
+  state_free(&st);
+  cfg.fcc_resolve_base_port = 7100;
+  cfg.fcc_resolve_by_port = 0;
+  cfg.bcg_id = NULL;
+  ck_assert_int_eq(state_load(&cfg, &st), 0);
+  state_free(&st);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(state_load_and_reload_survive_allocation_failures) {
+  char path[160];
+  char pkg[160];
+  char cells[160];
+  config_t cfg;
+  sds_state_t st;
+  write_temp_file(path, ".csv", "Channel One,rtp://239.1.1.1:5000,1,2,101\n");
+  write_temp_file(pkg, ".csv", "1,Bundle,eng,1,Channel One\n");
+  write_temp_file(cells, ".csv", "Paris East,FR,1:IDF\n");
+  for (int variant = 0; variant < 3; variant++) {
+    rich_cfg(&cfg, path);
+    cfg.packages_path = pkg;
+    cfg.cells_path = cells;
+    cfg.rms_enabled = variant != 1;
+    cfg.rms_name = "My RMS";
+    memcpy(cfg.rms_lang, "deu", 3);
+    cfg.rms_location = "https://rms.example/";
+    cfg.fus_enabled = variant == 1;
+    cfg.fus_name = "My FUS";
+    memcpy(cfg.fus_lang, "deu", 3);
+    cfg.fus_id = 7;
+    for (long n = 0;; n++) {
+      int hit;
+      int rc;
+      alloc_fail_at(n);
+      rc = state_load(&cfg, &st);
+      hit = alloc_fail_end();
+      if (!rc) state_free(&st);
+      if (!hit) break;
+    }
+    ck_assert_int_eq(state_load(&cfg, &st), 0);
+    ck_assert_int_eq(state_reload(&cfg, &st), 1);
+    for (long n = 0;; n++) {
+      int hit;
+      alloc_fail_at(n);
+      (void)state_reload(&cfg, &st);
+      hit = alloc_fail_end();
+      if (!hit) break;
+    }
+    state_free(&st);
+  }
+  unlink(path);
+  unlink(pkg);
+  unlink(cells);
+}
+END_TEST
+
+START_TEST(announce_run_logs_an_unchanged_reload) {
+  char path[160];
+  char msg[8192];
+  run_helper_t h;
+  pthread_t th;
+  config_t cfg;
+  sink_t ms;
+  int rc;
+  static const char csv[] = "Channel One,rtp://239.1.1.1:5000\n";
+  write_temp_file(path, ".csv", csv);
+  base_cfg(&cfg, path);
+  run_helper_group(cfg.mcast_group, sizeof cfg.mcast_group, 79);
+  cfg.interval_s = 1;
+  h.path = path;
+  h.rewrite = csv;
+  h.rewrite_ms = 300;
+  h.stop_ms = 1700;
+  signals_install();
+  log_capture_begin();
+  ck_assert_int_eq(pthread_create(&th, NULL, run_helper_thread, &h), 0);
+  sink_open(&ms, METRICS_COMPONENT_SDS, "sds1", 0.1);
+  rc = announce_run(&cfg, &ms.mx);
+  pthread_join(th, NULL);
+  log_capture_end(msg, sizeof msg);
+  ck_assert_int_eq(rc, 0);
+  ck_assert_ptr_nonnull(strstr(msg, "unchanged"));
+  sink_close(&ms);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(announce_run_counts_failed_sends) {
+  char path[160];
+  char msg[8192];
+  run_helper_t h;
+  pthread_t th;
+  config_t cfg;
+  sink_t ms;
+  seen_t seen;
+  uint64_t v = 0;
+  int rc;
+  write_temp_file(path, ".csv", "Channel One,rtp://239.1.1.1:5000\n");
+  rich_cfg(&cfg, path);
+  run_helper_group(cfg.mcast_group, sizeof cfg.mcast_group, 80);
+  cfg.interval_s = 1;
+  h.path = path;
+  h.rewrite = NULL;
+  h.rewrite_ms = 0;
+  h.stop_ms = 300;
+  sink_open(&ms, METRICS_COMPONENT_SDS, "sds1", 0.1);
+  signals_install();
+  g_send_fail = 1;
+  log_capture_begin();
+  ck_assert_int_eq(pthread_create(&th, NULL, run_helper_thread, &h), 0);
+  rc = announce_run(&cfg, &ms.mx);
+  pthread_join(th, NULL);
+  log_capture_end(msg, sizeof msg);
+  g_send_fail = 0;
+  (void)rc;
+  ck_assert_int_eq(sink_read(&ms, &seen), 1);
+  ck_assert_int_eq(seen_last(&seen, METRICS_ID_SDS_ANNOUNCEMENT_ERRORS_TOTAL, &v), 1);
+  ck_assert_uint_ge(v, 1u);
+  sink_close(&ms);
+  unlink(path);
+}
+END_TEST
+
 static Suite *announce_suite(void) {
   Suite *s = suite_create("dipisds_announce");
   TCase *tc = tcase_create("core");
@@ -672,11 +899,16 @@ static Suite *announce_suite(void) {
   tcase_add_test(tc, state_load_builds_rmsfus_doc_for_fus);
   tcase_add_test(tc, state_load_rejects_bad_packages_file);
   tcase_add_test(tc, state_load_rejects_unknown_package_service);
+  tcase_add_test(tc, state_load_rejects_ambiguous_package_service);
   tcase_add_loop_test(tc, state_load_fails_on_unreadable_or_bad_side_files, 0, (int)(sizeof side_cases / sizeof side_cases[0]));
   tcase_add_loop_test(tc, state_load_builds_documents_over_64k, 0, BIG_RMSFUS + 1);
   tcase_add_test(tc, state_load_rejects_missing_input);
   tcase_add_loop_test(tc, announce_run_exports_provider_service_and_announcement_metrics, 0, (int)(sizeof emit_cases / sizeof emit_cases[0]));
   tcase_add_test(tc, announce_run_rejects_oversize_raw_xml_with_log);
+  tcase_add_test(tc, state_load_carries_fcc_fec_and_bcg_options);
+  tcase_add_test(tc, state_load_and_reload_survive_allocation_failures);
+  tcase_add_test(tc, announce_run_logs_an_unchanged_reload);
+  tcase_add_test(tc, announce_run_counts_failed_sends);
   tcase_add_loop_test(tc, announce_run_reloads_on_sighup_and_keeps_the_old_input_on_failure, 0, (int)(sizeof announce_cases / sizeof announce_cases[0]));
   suite_add_tcase(s, tc);
   return s;

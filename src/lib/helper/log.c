@@ -28,18 +28,6 @@ static log_color_t color_mode = LOG_COLOR_AUTO;
 
 void log_set_color(log_color_t mode) { color_mode = mode; }
 
-int log_color_from_string(const char *s, log_color_t *out) {
-  static const struct { const char *name; log_color_t val; } map[] = {
-    {"auto", LOG_COLOR_AUTO}, {"always", LOG_COLOR_ALWAYS}, {"never", LOG_COLOR_NEVER},
-  };
-  for (size_t i = 0; i < sizeof map / sizeof map[0]; i++)
-    if (!strcmp(s, map[i].name)) {
-      *out = map[i].val;
-      return 0;
-    }
-  return -1;
-}
-
 log_color_t log_color_prescan(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     const char *v = NULL;

@@ -1,11 +1,9 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
 
 #include "../cfg_fixture.h"
@@ -25,18 +23,36 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "mcast: \"[ff15::1]:5000\"\n", CFG_INT, family, AF_INET6, NULL),
   CFG_FIELD(config_t, "iface: eth7\n", CFG_STRPTR, iface, 0, "eth7"),
   CFG_FIELD(config_t, "dscp: video-high\n", CFG_INT, dscp, NET_DSCP_VIDEO_HIGH, NULL),
+  CFG_FIELD(config_t, "ttl: 64\n", CFG_UINT, ttl, 64, NULL),
+  CFG_FIELD(config_t, "timeout: 0\n", CFG_LONG, timeout_s, 0, NULL),
   CFG_FIELD(config_t, "interval: 9\n", CFG_LONG, interval_s, 9, NULL),
   CFG_FIELD(config_t, "refresh: 6\n", CFG_LONG, refresh_cycles, 6, NULL),
   CFG_FIELD(config_t, "timeout: 77\n", CFG_LONG, timeout_s, 77, NULL),
   CFG_FIELD(config_t, "output: /tmp/out.xml\n", CFG_STRPTR, output_path, 0, "/tmp/out.xml"),
   CFG_FIELD(config_t, "csv-map: /tmp/map.csv\n", CFG_STRPTR, csvmap_path, 0, "/tmp/map.csv"),
   CFG_FIELD(config_t, "compress: true\n", CFG_INT, compress, 1, NULL),
+  CFG_FIELD(config_t, "schema:\n  - /dev/null\n  - /tmp\n", CFG_INT, nschemas, 2, NULL),
+  CFG_FIELD(config_t, "schema:\n  - /dev/null\n  - /tmp\n", CFG_STRPTR, schemas[1], 0, "/tmp"),
+  CFG_FIELD(config_t, "format: tva\n", CFG_INT, format, FMT_TVA, NULL),
+  CFG_FIELD(config_t, "format: bim\n", CFG_INT, format, FMT_BIM, NULL),
+  CFG_FIELD(config_t, "encoding: plain\n", CFG_INT, encoding, ENC_PLAIN, NULL),
+  CFG_FIELD(config_t, "dvb-locator: on\n", CFG_INT, dvb_locator, 1, NULL),
+  CFG_FIELD(config_t, "dvb-duration: on\n", CFG_INT, dvb_duration, 1, NULL),
+  CFG_FIELD(config_t, "dvb-pubtime: on\n", CFG_INT, dvb_pubtime, 1, NULL),
   CFG_FIELD(config_t, "verbose: on\n", CFG_INT, verbose, 1, NULL),
   CFG_FIELD(config_t, "color: never\n", CFG_INT, color_mode, LOG_COLOR_NEVER, NULL),
   CFG_FIELD(config_t, "daemonize: 1\n", CFG_INT, daemonize, 1, NULL),
   CFG_FIELD(config_t, "metrics:\n  sock: /tmp/m.sock\n", CFG_STRPTR, metrics_sock, 0, "/tmp/m.sock"),
   CFG_FIELD(config_t, "metrics:\n  id: bcg1\n", CFG_STRPTR, metrics_id, 0, "bcg1"),
   CFG_FIELD(config_t, "metrics:\n  interval: 42\n", CFG_UINT, metrics_interval_s, 42, NULL),
+  CFG_FIELD(config_t, "format: xmltv\n", CFG_INT, format, FMT_XMLTV, NULL),
+  CFG_FIELD(config_t, "format: xmltv\n", CFG_INT, fl.have_format, 1, NULL),
+  CFG_FIELD(config_t, "encoding: bim\n", CFG_INT, encoding, ENC_BIM, NULL),
+  CFG_FIELD(config_t, "encoding: plain\n", CFG_INT, fl.have_encoding, 1, NULL),
+  CFG_FIELD(config_t, "publisher: example.com/My%20Guide\n", CFG_STRPTR, publisher, 0, "example.com/My%20Guide"),
+  CFG_FIELD(config_t, "lang: de-AT\n", CFG_STRPTR, lang, 0, "de-AT"),
+  CFG_FIELD(config_t, "index: pi-crid\n", CFG_UINT, index_mask, 1, NULL),
+  CFG_FIELD(config_t, "index: pi-crid,pi-title\n", CFG_UINT, index_mask, 3, NULL),
 };
 
 static const char *const bad_cases[] = {
@@ -47,16 +63,31 @@ static const char *const bad_cases[] = {
   "mcast: bogus\n",
   "mcast: 127.0.0.1:5000\n",
   "dscp: bogus\n",
+  "ttl: 0\n",
+  "ttl: 256\n",
+  "index: gi-crid\n",
   "interval: -1\n",
   "interval: 0\n",
   "refresh: 0\n",
   "timeout: soon\n",
   "compress: maybe\n",
+  "format: json\n",
+  "encoding: gzip\n",
+  "dvb-locator: maybe\n",
+  "dvb-duration: maybe\n",
+  "dvb-pubtime: maybe\n",
   "verbose: perhaps\n",
   "color: rainbow\n",
   "daemonize: maybe\n",
   "metrics:\n  interval: 0\n",
   "metrics:\n  interval: 86401\n",
+  "publisher: nodomain\n",
+  "publisher: \"\"\n",
+  "lang: 1x\n",
+  "lang: en--GB\n",
+  "index: bogus\n",
+  "index: pi-crid,\n",
+  "schema:\n  - a\n  - b\n  - c\n  - d\n  - e\n  - f\n  - g\n  - h\n  - i\n  - j\n  - k\n  - l\n  - m\n  - n\n  - o\n  - p\n  - q\n  - r\n  - s\n  - t\n  - u\n  - v\n  - w\n  - x\n  - y\n  - z\n  - a1\n  - b1\n  - c1\n  - d1\n  - e1\n  - f1\n  - g1\n  - h1\n  - i1\n  - j1\n  - k1\n  - l1\n  - m1\n  - n1\n",
 };
 
 static cfg_fixture_t g_fx;
@@ -97,6 +128,7 @@ START_TEST(defaults_are_the_documented_values) {
   ck_assert_int_eq((int)cfg.window_hours, 24);
   ck_assert_int_eq((int)cfg.interval_s, 5);
   ck_assert_int_eq((int)cfg.timeout_s, 35);
+  ck_assert_uint_eq(cfg.ttl, 16u);
 }
 END_TEST
 
@@ -121,7 +153,7 @@ START_TEST(missing_explicit_file_fails) {
 }
 END_TEST
 
-#define MC "mcast: 239.1.2.3:5000\n"
+#define MC "mcast: 239.1.2.3:5000\nschema:\n  - /dev/null\n"
 #define ANN "announce: true\n" MC "input: /dev/null\nmap: /dev/null\n"
 
 typedef struct {
@@ -141,6 +173,22 @@ static const cfgtest_case_t cfgtest_cases[] = {
   {"listen: true\n" MC "compress: true\n", -1},
   {ANN "metrics:\n  sock: /tmp/x.sock\n", -1},
   {ANN "metrics:\n  interval: 10\n", -1},
+  {"announce: true\nmcast: 239.1.2.3:5000\ninput: /dev/null\nmap: /dev/null\n", -1},
+  {"announce: true\nmcast: 239.1.2.3:5000\nschema:\n  - /dev/null\ninput: /dev/null\nformat: tva\n", 0},
+  {"announce: true\nmcast: 239.1.2.3:5000\nschema:\n  - /dev/null\ninput: /dev/null\nformat: xmltv\n", -1},
+  {ANN "lang: de\n", -1},
+  {ANN "lang: de\npublisher: example.com/G\n", 0},
+  {ANN "publisher: example.com/G\nindex: pi-crid\n", 0},
+  {"listen: true\n" MC "publisher: example.com/G\n", -1},
+  {"listen: true\n" MC "lang: de\n", -1},
+  {"listen: true\n" MC "index: pi-crid\n", -1},
+  {"listen: true\n" MC "refresh: 3\n", -1},
+  {"listen: true\n" MC "ttl: 3\n", -1},
+  {"listen: true\n" MC "dvb-locator: true\n", -1},
+  {"listen: true\n" MC "dvb-duration: true\n", -1},
+  {"listen: true\n" MC "dvb-pubtime: true\n", -1},
+  {ANN "metrics:\n  id: m1\n  sock: /tmp/x.sock\n  interval: 10\n", 0},
+  {"listen: true\nmcast: 239.1.2.3:5000\n", -1},
 };
 
 START_TEST(config_test_reports_warnings_and_fails_only_in_strict_mode) {

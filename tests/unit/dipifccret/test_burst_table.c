@@ -11,14 +11,9 @@
 #include <sys/socket.h>
 
 #include "dipifccret/fcc/burst_table.h"
+#include "../fx_proto.h"
 
 static channel_table_t *g_table;
-
-static channel_t *lookup_ip(channel_table_t *t, const char *ip, unsigned port) {
-  unsigned char addr[4];
-  inet_pton(AF_INET, ip, addr);
-  return channel_lookup(t, AF_INET, addr, sizeof addr, port);
-}
 
 static channel_t *make_channel_with_rap(void) {
   channel_t *c;

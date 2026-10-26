@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include "lib/helper/dateutil.h"
 #include "mpd.h"
 
 #include <stdlib.h>
@@ -64,7 +65,7 @@ static int iso_datetime_to_ms(const char *v, unsigned long long *out) {
   unsigned ms = 0;
   const char *dot;
   if (iso8601_split(v, &t)) return 0;
-  secs = (date_to_mjd(t.y, t.mo, t.d) - 40587L) * 86400LL + t.h * 3600 + t.mi * 60 + t.s;
+  secs = (date_to_mjd(t.y, t.mo, t.d) - MJD_UNIX_EPOCH) * 86400LL + t.h * 3600 + t.mi * 60 + t.s;
   if (t.offset_kind == ISO8601_OFF_NUMERIC) secs -= t.off_min * 60LL;
   if (secs < 0) return 0;
   dot = strchr(v, '.');

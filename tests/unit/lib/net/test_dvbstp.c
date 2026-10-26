@@ -4,14 +4,17 @@
 #include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 
+#include "../../alloc_fail.h"
 #include "lib/demux/crc32.h"
 #include "lib/net/dvbstp.h"
+#include "lib/net/dvbstp_seen.h"
 #include "lib/net/multicast.h"
 
 /* fills buf[0..hdrlen) per clause 5.4.1.3, returns hdrlen */
@@ -50,6 +53,81 @@ static void set_total(unsigned char *buf, unsigned total) {
   buf[3] = (unsigned char)(total & 0xFF);
 }
 
+static dvbstp_header_t make_header(unsigned payload_id, unsigned segment_id, unsigned version) {
+  dvbstp_header_t h;
+  memset(&h, 0, sizeof h);
+  h.payload_id = payload_id;
+  h.segment_id = segment_id;
+  h.segment_version = version;
+  return h;
+}
+
+START_TEST(already_seen_is_false_on_first_sighting) {
+  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
+  int count = 0;
+  dvbstp_header_t h = make_header(1, 2, 3);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &h), 0);
+  ck_assert_int_eq(count, 1);
+}
+END_TEST
+
+START_TEST(already_seen_is_true_on_repeat) {
+  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
+  int count = 0;
+  dvbstp_header_t h = make_header(1, 2, 3);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &h), 0);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &h), 1);
+  ck_assert_int_eq(count, 1);
+}
+END_TEST
+
+START_TEST(already_seen_distinguishes_by_all_three_fields) {
+  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
+  int count = 0;
+  dvbstp_header_t a = make_header(1, 2, 3);
+  dvbstp_header_t b = make_header(1, 2, 4); /* different version: replaces a */
+  dvbstp_header_t c = make_header(1, 9, 3); /* different segment_id */
+  dvbstp_header_t d = make_header(9, 2, 3); /* different payload_id */
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &a), 0);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &b), 0);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &c), 0);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &d), 0);
+  ck_assert_int_eq(count, 3);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &b), 1);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &a), 0);
+  ck_assert_int_eq(count, 3);
+}
+END_TEST
+
+START_TEST(already_seen_stops_recording_past_the_cap) {
+  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
+  int count = 0;
+  int i;
+  for (i = 0; i < LISTEN_SEEN_MAX + 5; i++) {
+    dvbstp_header_t h = make_header((unsigned)i, 0, 0);
+    ck_assert_int_eq(dvbstp_already_seen(seen, &count, &h), 0);
+  }
+  ck_assert_int_eq(count, LISTEN_SEEN_MAX);
+}
+END_TEST
+
+START_TEST(already_seen_distinguishes_by_provider_id) {
+  dvbstp_seen_t seen[LISTEN_SEEN_MAX];
+  int count = 0;
+  dvbstp_header_t a = make_header(1, 2, 3);
+  dvbstp_header_t b = make_header(1, 2, 3);
+  b.has_provider_id = 1;
+  b.provider_id[0] = 7;
+  dvbstp_header_t c = b;
+  c.provider_id[0] = 8;
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &a), 0);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &b), 0);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &c), 0);
+  ck_assert_int_eq(dvbstp_already_seen(seen, &count, &b), 1);
+  ck_assert_int_eq(count, 3);
+}
+END_TEST
+
 START_TEST(parse_header_reads_minimal_fields) {
   unsigned char buf[12];
   dvbstp_header_t h;
@@ -73,7 +151,32 @@ START_TEST(parse_header_reads_provider_id) {
   ck_assert_uint_eq(hdrlen, 16u);
   ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), 16u);
   ck_assert_int_eq(h.has_provider_id, 1);
-  ck_assert_uint_eq(h.provider_id, 0xDEADBEEFu);
+  ck_assert_int_eq(h.ipv6, 0);
+  ck_assert_mem_eq(h.provider_id, "\xDE\xAD\xBE\xEF", 4);
+}
+END_TEST
+
+/* TS 102 034 V2.1.1 figure 8a: Ver 01, 128 bit ServiceProviderID */
+START_TEST(parse_header_reads_ipv6_provider_id) {
+  unsigned char buf[28];
+  dvbstp_header_t h;
+  build_header(buf, 1, 1, 1, 0, 0, 0, 1, 0, 0);
+  buf[0] |= 0x40;
+  for (int i = 0; i < 16; i++) buf[12 + i] = (unsigned char)(0xA0 + i);
+  ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), 28u);
+  ck_assert_uint_eq(dvbstp_parse_header(buf, 27, &h), 0u);
+  ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), 28u);
+  ck_assert_int_eq(h.ipv6, 1);
+  ck_assert_mem_eq(h.provider_id, buf + 12, 16);
+}
+END_TEST
+
+START_TEST(parse_header_rejects_nonzero_encryption) {
+  unsigned char buf[12];
+  dvbstp_header_t h;
+  build_header(buf, 1, 1, 1, 0, 0, 0, 0, 0, 0);
+  buf[0] |= 0x02; /* Enc 01 */
+  ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), 0u);
 }
 END_TEST
 
@@ -94,30 +197,32 @@ START_TEST(parse_header_rejects_short_buffer) {
 }
 END_TEST
 
-START_TEST(parse_header_rejects_nonzero_version) {
+START_TEST(parse_header_rejects_undefined_version) {
   unsigned char buf[12];
   dvbstp_header_t h;
   build_header(buf, 1, 1, 1, 0, 0, 0, 0, 0, 0);
-  buf[0] |= 0x40; /* version bits = 1 */
+  buf[0] |= 0x80; /* Ver 10, not defined (table 11cq) */
+  ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), 0u);
+  buf[0] |= 0x40; /* Ver 11 */
   ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), 0u);
 }
 END_TEST
 
-START_TEST(parse_header_rejects_nonzero_compression) {
-  unsigned char buf[12];
-  dvbstp_header_t h;
-  build_header(buf, 1, 1, 1, 0, 0, 0, 0, 0, 0);
-  buf[11] |= 0x20; /* compr = 1 */
-  ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), 0u);
-}
-END_TEST
-
-START_TEST(parse_header_rejects_nonzero_compression_broadcast_discovery) {
-  unsigned char buf[12];
-  dvbstp_header_t h;
-  build_header(buf, 2, 1, 1, 0, 0, 0, 0, 0, 0);
-  buf[11] |= 0x20; /* compr = 1 */
-  ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), 0u);
+/* TS 102 034 table 12: BiM any id, gzip 0x07/0x08 only, 011..101 reserved, 110/111 defined */
+START_TEST(parse_header_compression_follows_table_12) {
+  static const struct {
+    unsigned id;
+    unsigned compr;
+    int ok;
+  } cases[] = {{1, 1, 1}, {2, 1, 1}, {2, 2, 0}, {1, 2, 0}, {7, 2, 1}, {8, 2, 1}, {2, 3, 0}, {7, 4, 0}, {0xA3, 5, 0}, {2, 6, 1}, {2, 7, 1}};
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+    unsigned char buf[12];
+    dvbstp_header_t h;
+    build_header(buf, cases[i].id, 1, 1, 0, 0, 0, 0, 0, 0);
+    buf[11] |= (unsigned char)(cases[i].compr << 5);
+    ck_assert_uint_eq(dvbstp_parse_header(buf, sizeof buf, &h), cases[i].ok ? 12u : 0u);
+    if (cases[i].ok) ck_assert_uint_eq(h.compr, cases[i].compr);
+  }
 }
 END_TEST
 
@@ -516,13 +621,13 @@ START_TEST(reasm_feed_evicts_oldest_slot_once_all_slots_are_busy) {
 }
 END_TEST
 
-static int send_and_collect(int family, const char *dest, size_t seglen, size_t *max_dgram, int *count) {
+static int send_and_collect(int family, const char *dest, size_t seglen, size_t *max_dgram, int *count, dvbstp_header_t *first) {
   struct sockaddr_storage ss;
   struct timeval tv = {0, 200000};
   socklen_t sl = family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
   unsigned char *seg = calloc(1, seglen);
   unsigned char buf[2048];
-  dvbstp_send_t desc = {.payload_id = DVBSTP_PAYLOAD_SP_DISCOVERY, .segment_id = 1, .has_provider_id = 1, .provider_id = 7, .want_crc = 1};
+  dvbstp_send_t desc = {.payload_id = DVBSTP_PAYLOAD_SP_DISCOVERY, .segment_id = 1, .has_provider_id = 1, .provider_id = {7}, .want_crc = 1};
   int rx = socket(family, SOCK_DGRAM, 0);
   unsigned port;
   mcast_t *m;
@@ -552,7 +657,7 @@ static int send_and_collect(int family, const char *dest, size_t seglen, size_t 
   ck_assert_int_eq(rc, 0);
   while ((n = recv(rx, buf, sizeof buf, 0)) > 0) {
     if ((size_t)n > *max_dgram) *max_dgram = (size_t)n;
-    (*count)++;
+    if (!(*count)++) ck_assert_uint_gt(dvbstp_parse_header(buf, (size_t)n, first), 0);
   }
   mcast_close(m);
   close(rx);
@@ -563,18 +668,25 @@ static int send_and_collect(int family, const char *dest, size_t seglen, size_t 
 START_TEST(send_segment_v4_fills_sections_to_ipv4_limit) {
   size_t max;
   int count;
-  if (send_and_collect(AF_INET, "127.0.0.1", 3 * DVBSTP_MAX_SECTION, &max, &count) < 0) return;
+  dvbstp_header_t h;
+  if (send_and_collect(AF_INET, "127.0.0.1", 3 * DVBSTP_MAX_SECTION, &max, &count, &h) < 0) return;
   ck_assert_int_eq(count, 3);
   ck_assert_uint_eq(max, 16 + DVBSTP_MAX_SECTION + 4);
+  ck_assert_int_eq(h.ipv6, 0);
+  ck_assert_uint_eq(h.provider_id[0], 7);
 }
 END_TEST
 
 START_TEST(send_segment_v6_keeps_datagrams_within_1452) {
   size_t max;
   int count;
-  if (send_and_collect(AF_INET6, "::1", 3 * DVBSTP_MAX_SECTION, &max, &count) < 0) return;
+  dvbstp_header_t h;
+  if (send_and_collect(AF_INET6, "::1", 3 * DVBSTP_MAX_SECTION, &max, &count, &h) < 0) return;
   ck_assert_int_eq(count, 4);
   ck_assert_uint_le(max, 1452u);
+  ck_assert_uint_eq(max, 28 + DVBSTP_MAX_SECTION_V6); /* full non-final section, no crc */
+  ck_assert_int_eq(h.ipv6, 1);
+  ck_assert_uint_eq(h.provider_id[0], 7);
 }
 END_TEST
 
@@ -604,6 +716,159 @@ START_TEST(send_segment_pacing_budget_caps_total_delay) {
 }
 END_TEST
 
+START_TEST(reasm_new_and_feed_survive_allocation_failures) {
+  unsigned char pkts[3][12 + 6];
+  unsigned char crc_pkt[12 + 6 + 4];
+  const unsigned char *out_data;
+  size_t out_len;
+  dvbstp_reasm_t *r;
+  alloc_fail_at(0);
+  r = dvbstp_reasm_new();
+  alloc_fail_end();
+  ck_assert_ptr_null(r);
+  for (int i = 0; i < 3; i++) {
+    size_t h = build_header(pkts[i], 1, 5, 1, (unsigned)i, 2, 0, 0, 0, 0);
+    set_total(pkts[i], 18);
+    memcpy(pkts[i] + h, "abcdef", 6);
+  }
+  {
+    size_t h = build_header(crc_pkt, 1, 6, 1, 0, 0, 1, 0, 0, 0);
+    uint32_t crc;
+    set_total(crc_pkt, 6);
+    memcpy(crc_pkt + h, "abcdef", 6);
+    crc = crc32_mpeg(crc_pkt + h, 6);
+    crc_pkt[h + 6] = (unsigned char)(crc >> 24);
+    crc_pkt[h + 7] = (unsigned char)(crc >> 16);
+    crc_pkt[h + 8] = (unsigned char)(crc >> 8);
+    crc_pkt[h + 9] = (unsigned char)crc;
+  }
+  for (long n = 0;; n++) {
+    int hit;
+    r = dvbstp_reasm_new();
+    ck_assert_ptr_nonnull(r);
+    alloc_fail_at(n);
+    for (int i = 0; i < 3; i++) (void)dvbstp_reasm_feed(r, pkts[i], sizeof pkts[i], NULL, &out_data, &out_len);
+    (void)dvbstp_reasm_feed(r, crc_pkt, sizeof crc_pkt, NULL, &out_data, &out_len);
+    hit = alloc_fail_end();
+    dvbstp_reasm_free(r);
+    if (!hit) break;
+  }
+  for (long n = 0;; n++) {
+    int hit;
+    r = dvbstp_reasm_new();
+    ck_assert_ptr_nonnull(r);
+    for (int i = 0; i < 2; i++) ck_assert_int_eq(dvbstp_reasm_feed(r, pkts[i], sizeof pkts[i], NULL, &out_data, &out_len), 0);
+    alloc_fail_at(n);
+    (void)dvbstp_reasm_feed(r, pkts[2], sizeof pkts[2], NULL, &out_data, &out_len);
+    hit = alloc_fail_end();
+    dvbstp_reasm_free(r);
+    if (!hit) break;
+  }
+}
+END_TEST
+
+typedef struct {
+  int calls;
+  int stop_after;
+  size_t last_len;
+} listen_ctx_t;
+
+static int on_segment(void *ctx, const dvbstp_header_t *h, const unsigned char *data, size_t len) {
+  listen_ctx_t *c = ctx;
+  (void)h;
+  (void)data;
+  c->calls++;
+  c->last_len = len;
+  return c->stop_after && c->calls >= c->stop_after;
+}
+
+static void send_segments(const char *group, unsigned port, int n) {
+  struct sockaddr_in dst;
+  int tx = socket(AF_INET, SOCK_DGRAM, 0);
+  ck_assert_int_ge(tx, 0);
+  memset(&dst, 0, sizeof dst);
+  dst.sin_family = AF_INET;
+  dst.sin_port = htons((unsigned short)port);
+  ck_assert_int_eq(inet_pton(AF_INET, group, &dst.sin_addr), 1);
+  for (int i = 0; i < n; i++) {
+    unsigned char pkt[12 + 5];
+    size_t h = build_header(pkt, 1, (unsigned)i + 1, 1, 0, 0, 0, 0, 0, 0);
+    set_total(pkt, 5);
+    memcpy(pkt + h, "hello", 5);
+    ck_assert_int_eq((int)sendto(tx, pkt, sizeof pkt, 0, (struct sockaddr *)&dst, sizeof dst), (int)sizeof pkt);
+  }
+  ck_assert_int_eq((int)sendto(tx, "x", 1, 0, (struct sockaddr *)&dst, sizeof dst), 1);
+  close(tx);
+}
+
+static unsigned pick_port(void) {
+  struct sockaddr_in a;
+  socklen_t len = sizeof a;
+  int fd = socket(AF_INET, SOCK_DGRAM, 0);
+  unsigned port;
+  ck_assert_int_ge(fd, 0);
+  memset(&a, 0, sizeof a);
+  a.sin_family = AF_INET;
+  a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ck_assert_int_eq(bind(fd, (struct sockaddr *)&a, sizeof a), 0);
+  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&a, &len), 0);
+  port = ntohs(a.sin_port);
+  close(fd);
+  return port;
+}
+
+START_TEST(listen_delivers_segments_until_callback_stops_or_time_runs_out) {
+  char group[32];
+  unsigned port = pick_port();
+  listen_ctx_t c = {0, 0, 0};
+  mcast_t *m;
+  snprintf(group, sizeof group, "239.77.%u.%u", ((unsigned)getpid() >> 8) & 0xFF, 1 + ((unsigned)getpid() & 0xFF) % 250);
+  m = mcast_open(AF_INET, group, port, NULL, 100);
+  ck_assert_ptr_nonnull(m);
+  send_segments(group, port, 3);
+  c.stop_after = 2;
+  ck_assert_int_eq(dvbstp_listen(m, 5.0, on_segment, &c), 0);
+  ck_assert_int_eq(c.calls, 2);
+  ck_assert_uint_eq(c.last_len, 5u);
+  c.stop_after = 0;
+  ck_assert_int_eq(dvbstp_listen(m, 0.3, on_segment, &c), 0);
+  ck_assert_int_eq(c.calls, 3);
+  mcast_close(m);
+}
+END_TEST
+
+START_TEST(listen_gives_up_after_repeated_receive_errors) {
+  char group[32];
+  unsigned port = pick_port();
+  listen_ctx_t c = {0, 0, 0};
+  mcast_t *m;
+  snprintf(group, sizeof group, "239.78.%u.%u", ((unsigned)getpid() >> 8) & 0xFF, 1 + ((unsigned)getpid() & 0xFF) % 250);
+  m = mcast_open(AF_INET, group, port, NULL, 50);
+  ck_assert_ptr_nonnull(m);
+  close(mcast_fd(m));
+  ck_assert_int_eq(dvbstp_listen(m, 30.0, on_segment, &c), -1);
+  ck_assert_int_eq(c.calls, 0);
+  free(m);
+}
+END_TEST
+
+START_TEST(listen_fails_without_memory) {
+  char group[32];
+  unsigned port = pick_port();
+  listen_ctx_t c = {0, 0, 0};
+  mcast_t *m;
+  int rc;
+  snprintf(group, sizeof group, "239.79.%u.%u", ((unsigned)getpid() >> 8) & 0xFF, 1 + ((unsigned)getpid() & 0xFF) % 250);
+  m = mcast_open(AF_INET, group, port, NULL, 50);
+  ck_assert_ptr_nonnull(m);
+  alloc_fail_at(0);
+  rc = dvbstp_listen(m, 1.0, on_segment, &c);
+  alloc_fail_end();
+  ck_assert_int_eq(rc, -2);
+  mcast_close(m);
+}
+END_TEST
+
 static Suite *dvbstp_suite(void) {
   Suite *s = suite_create("dvbstp");
   TCase *tc = tcase_create("core");
@@ -611,9 +876,10 @@ static Suite *dvbstp_suite(void) {
   tcase_add_test(tc, parse_header_reads_provider_id);
   tcase_add_test(tc, parse_header_skips_private_words);
   tcase_add_test(tc, parse_header_rejects_short_buffer);
-  tcase_add_test(tc, parse_header_rejects_nonzero_version);
-  tcase_add_test(tc, parse_header_rejects_nonzero_compression);
-  tcase_add_test(tc, parse_header_rejects_nonzero_compression_broadcast_discovery);
+  tcase_add_test(tc, parse_header_rejects_undefined_version);
+  tcase_add_test(tc, parse_header_reads_ipv6_provider_id);
+  tcase_add_test(tc, parse_header_rejects_nonzero_encryption);
+  tcase_add_test(tc, parse_header_compression_follows_table_12);
   tcase_add_test(tc, parse_header_accepts_compression_for_bcg_payload);
   tcase_add_test(tc, parse_header_rejects_truncated_provider_id);
   tcase_add_test(tc, parse_header_rejects_truncated_private_words);
@@ -640,6 +906,15 @@ static Suite *dvbstp_suite(void) {
   tcase_add_test(tc, send_segment_v6_keeps_datagrams_within_1452);
   tcase_add_test(tc, send_segment_default_gap_is_1ms_per_section);
   tcase_add_test(tc, send_segment_pacing_budget_caps_total_delay);
+  tcase_add_test(tc, reasm_new_and_feed_survive_allocation_failures);
+  tcase_add_test(tc, listen_delivers_segments_until_callback_stops_or_time_runs_out);
+  tcase_add_test(tc, listen_gives_up_after_repeated_receive_errors);
+  tcase_add_test(tc, listen_fails_without_memory);
+  tcase_add_test(tc, already_seen_is_false_on_first_sighting);
+  tcase_add_test(tc, already_seen_is_true_on_repeat);
+  tcase_add_test(tc, already_seen_distinguishes_by_all_three_fields);
+  tcase_add_test(tc, already_seen_stops_recording_past_the_cap);
+  tcase_add_test(tc, already_seen_distinguishes_by_provider_id);
   suite_add_tcase(s, tc);
   return s;
 }

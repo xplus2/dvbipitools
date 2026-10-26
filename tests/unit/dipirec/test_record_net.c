@@ -1,57 +1,16 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "dipirec/config.h"
 #include "dipirec/record/priv.h"
-
-static int bind_udp_loopback(unsigned port) {
-  struct sockaddr_in addr;
-  int fd = socket(AF_INET, SOCK_DGRAM, 0);
-
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons((unsigned short)port);
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  if (bind(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
-    close(fd);
-    return -1;
-  }
-  return fd;
-}
-
-static unsigned free_even_udp_port_pair(void) {
-  for (int tries = 0; tries < 100; tries++) {
-    struct sockaddr_in addr;
-    socklen_t alen = sizeof addr;
-    int a = bind_udp_loopback(0);
-    unsigned port;
-    int b;
-
-    ck_assert_int_ge(a, 0);
-    ck_assert_int_eq(getsockname(a, (struct sockaddr *)&addr, &alen), 0);
-    port = ntohs(addr.sin_port) & ~1u;
-    close(a);
-    a = bind_udp_loopback(port);
-    b = bind_udp_loopback(port + 1);
-    if (a >= 0) close(a);
-    if (b >= 0) close(b);
-    if (a >= 0 && b >= 0) return port;
-  }
-  ck_abort_msg("no free even/odd udp port pair");
-  return 0;
-}
+#include "../fx_net.h"
 
 START_TEST(src_open_listens_for_rist) {
   config_t cfg;
@@ -103,13 +62,6 @@ END_TEST
 #define LINK_DEADLINE_S 10.0
 #define CHUNKS 5
 #define CHUNK_BYTES 1316
-
-static double now_seconds(void) {
-  struct timespec ts;
-
-  ck_assert_int_eq(clock_gettime(CLOCK_MONOTONIC, &ts), 0);
-  return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
-}
 
 static void fill_payload(unsigned char *buf, size_t n) {
   for (size_t i = 0; i < n; i++) buf[i] = (unsigned char)(i * 13 + 5);

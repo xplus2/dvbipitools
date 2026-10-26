@@ -13,13 +13,7 @@
 #include "dipifccret/ret/ret.h"
 #include "lib/demux/rtcp.h"
 #include "lib/demux/rtx.h"
-
-/* channel_lookup() takes raw address bytes now, not text */
-static channel_t *lookup_ip(channel_table_t *t, const char *ip, unsigned port) {
-  unsigned char addr[4];
-  inet_pton(AF_INET, ip, addr);
-  return channel_lookup(t, AF_INET, addr, sizeof addr, port);
-}
+#include "../fx_proto.h"
 
 #define MAX_MC 32
 #define MAX_UNI 32

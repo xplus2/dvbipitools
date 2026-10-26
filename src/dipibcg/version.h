@@ -5,6 +5,6 @@
 #define DIPIBCG_VERSION_H
 
 #define TOOL_NAME    "dipibcg"
-#define TOOL_VERSION "1.2.1"
+#define TOOL_VERSION "1.3.0"
 
 #endif

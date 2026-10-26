@@ -10,6 +10,7 @@
 #include "dipixy/segstore_int.h"
 #include "dipixy/reactor/qsbr.h"
 #include "dipixy/ts/pidfilter.h"
+#include "../fx_mux.h"
 
 #define POOL_CAP 16
 #define NWORKERS 2
@@ -67,11 +68,6 @@ static const hls_snapshot_t *snapshot_of(unsigned pmt) {
   snap = atomic_load_explicit(&st->snap, memory_order_acquire);
   ck_assert_ptr_nonnull(snap);
   return snap;
-}
-
-static int uniform(const uint8_t *buf, size_t len) {
-  for (size_t i = 1; i < len; i++) if (buf[i] != buf[0]) return 0;
-  return 1;
 }
 
 static int snapshot_intact(const hls_snapshot_t *snap) {

@@ -145,6 +145,34 @@ START_TEST(timefmt_round_trips_utc) {
 }
 END_TEST
 
+START_TEST(timefmt_zone_and_length_edge_cases) {
+  static const char *const rej[] = {"", "123", "12345", "123456789012345", "2024050110203 +0100", "20240501102030 +01", "20240501102030 +01:0x", "20240501102030 1230", "20240501102030 +0a00",
+                                    "20240501102030 abcdefghijklmnopq", "20240501102030 +01:30:00", "20240501102030 -"};
+  static const struct {
+    const char *in;
+    const char *want;
+    int rc;
+  } ok[] = {
+    {"2024", "2024-01-01T00:00:00", 0}, {"20240501", "2024-05-01T00:00:00", 0}, {"202405011020", "2024-05-01T10:20:00", 0}, {"20240501102030", "2024-05-01T10:20:30", 0},
+    {"20240501102030 +0100", "2024-05-01T10:20:30+01:00", 0}, {"20240501102030 -0930", "2024-05-01T10:20:30-09:30", 0}, {"20240501102030\t+01:30", "2024-05-01T10:20:30+01:30", 0},
+    {"20240501102030 CEST", "2024-05-01T10:20:30+02:00", 0}, {"20240501102030 UTC  ", "2024-05-01T10:20:30Z", 0}, {"20240501102030 EEST", "2024-05-01T10:20:30+03:00", 0},
+    {"20240501102030 FOO", "2024-05-01T10:20:30", 1}, {"20240501102030 +0000", "2024-05-01T10:20:30Z", 0},
+  };
+  char out[40];
+  for (size_t i = 0; i < sizeof rej / sizeof *rej; i++) ck_assert_msg(xmltv_time_to_iso8601(rej[i], out, sizeof out) == -1, "accepted '%s'", rej[i]);
+  for (size_t i = 0; i < sizeof ok / sizeof *ok; i++) {
+    ck_assert_msg(xmltv_time_to_iso8601(ok[i].in, out, sizeof out) == ok[i].rc, "rc for '%s'", ok[i].in);
+    ck_assert_msg(!strncmp(out, ok[i].want, strlen(ok[i].want)), "'%s' gave '%s'", ok[i].in, out);
+  }
+  ck_assert_int_eq(iso8601_to_xmltv_time("2024-05-01T10:20:30-09:30", out, sizeof out), 0);
+  ck_assert_str_eq(out, "20240501102030 -0930");
+  ck_assert_int_eq(iso8601_to_xmltv_time("2024-05-01T10:20:30+00:00", out, sizeof out), 0);
+  ck_assert_str_eq(out, "20240501102030 +0000");
+  ck_assert_int_eq(iso8601_to_xmltv_time("2024-05-01T10:20:30", out, 5), 0);
+  ck_assert_int_eq(iso8601_to_xmltv_time("bad", out, sizeof out), -1);
+}
+END_TEST
+
 static Suite *timefmt_suite(void) {
   Suite *s = suite_create("timefmt");
   TCase *tc = tcase_create("core");
@@ -164,6 +192,7 @@ static Suite *timefmt_suite(void) {
   tcase_add_test(tc, iso8601_to_xmltv_time_rejects_malformed);
   tcase_add_test(tc, iso8601_to_xmltv_time_accepts_fractional_seconds);
   tcase_add_test(tc, timefmt_round_trips_utc);
+  tcase_add_test(tc, timefmt_zone_and_length_edge_cases);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -14,23 +14,13 @@
 #include "lib/demux/crc32.h"
 #include "lib/scrambler/scrambler.h"
 #include "lib/sys/signal.h"
+#include "../fx_ts.h"
 
 #define PMT_PID 0x1000
 #define ECM_PID 0x0064
 #define EMM_PID 0x0065
 
-static void wrap_section_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++)
-    pkt[i] = 0xFF;
-}
-
-static size_t build_pat(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
+static size_t build_pat_local(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
   unsigned char body[16];
   size_t n = 0, hdr, crc_at;
   uint32_t crc;
@@ -226,7 +216,7 @@ START_TEST(biss1e_ecm_on_null_dev_does_not_crash) {
 
   setup_biss1e();
 
-  slen = build_pat(sec, 1, PMT_PID);
+  slen = build_pat_local(sec, 1, PMT_PID);
   wrap_section_packet(pkt, 0x0000, sec, slen);
   ck_assert_int_eq(pkt_cb(&g_lc, pkt), 0);
 
@@ -254,7 +244,7 @@ START_TEST(biss1e_emm_on_null_dev_does_not_crash) {
   unsigned char sec[64];
   size_t slen;
   setup_biss1e();
-  slen = build_pat(sec, 1, PMT_PID);
+  slen = build_pat_local(sec, 1, PMT_PID);
   wrap_section_packet(pkt, 0x0000, sec, slen);
   ck_assert_int_eq(pkt_cb(&g_lc, pkt), 0);
 
@@ -391,7 +381,7 @@ static int prime_cas(loop_ctx_t *lc, unsigned ca_system_id, unsigned scrambling_
   size_t slen;
   int rc = 0;
 
-  slen = build_pat(sec, 1, PMT_PID);
+  slen = build_pat_local(sec, 1, PMT_PID);
   rc |= feed_psi(lc, 0x0000, sec, slen);
   slen = build_pmt_with_ca(sec, 1, ca_system_id, ECM_PID, scrambling_mode);
   rc |= feed_psi(lc, PMT_PID, sec, slen);

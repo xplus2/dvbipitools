@@ -5,7 +5,6 @@
 
 #include <arpa/inet.h>
 #include <check.h>
-#include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdint.h>

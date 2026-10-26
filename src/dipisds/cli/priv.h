@@ -41,6 +41,12 @@
 #define OPT_FUS_LOGO 1026
 #define OPT_DSCP 1027
 #define OPT_CONFIG_STRICT 1031
+#define OPT_BCG_NAME 1032
+#define OPT_BCG_ID 1033
+#define OPT_BCG_DESCRIPTION 1034
+#define OPT_BCG_PROVIDER_NAME 1035
+#define OPT_BCG_MCAST 1036
+#define OPT_BIM_NAMESPACE 1037
 #define OPT_CONFIGTEST 1030
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
@@ -62,6 +68,6 @@ args_status_t sds_cli_check(config_t *cfg);
 
 int sds_mcast_parse(const char *s, config_t *cfg);
 int sds_ret_addr_parse(const char *s, char *addr_out, size_t addr_cap, unsigned *port_out);
-int sds_has_suffix(const char *s, const char *sfx);
+int sds_mcast_addr_parse(const char *s, char *addr_out, size_t addr_cap, unsigned *port_out);
 
 #endif

@@ -2,7 +2,6 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <ctype.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,16 +31,6 @@ static playlist_item_t *list_append(playlist_list_t *pl) {
   return &pl->items[pl->count++];
 }
 
-static int slurp(const char *path, char **out, size_t *out_len) {
-  FILE *f = fopen(path, "r");
-  int rc;
-  if (!f)
-    return -1;
-  rc = read_all(f, out, out_len);
-  fclose(f);
-  return rc;
-}
-
 /* rejects a hit inside a longer name, e.g. "sid" inside "tsid=" */
 static int uint_attr(const char *s, const char *name, unsigned *out) {
   char pat[8];
@@ -64,15 +53,6 @@ static int uint_attr(const char *s, const char *name, unsigned *out) {
 
 /* "-1 tsid=\"1\" onid=\"2\" sid=\"3\",name" or generic "-1,name" after "#EXTINF:".
    tvg-logo="..." (de facto M3U icon attribute) recognized alongside the triplet */
-static const char *extinf_comma(const char *body) {
-  int quoted = 0;
-  for (const char *p = body; *p; p++) {
-    if (*p == '"') quoted = !quoted;
-    else if (*p == ',' && !quoted) return p;
-  }
-  return NULL;
-}
-
 static void extinf_parse(const char *body, playlist_item_t *it) {
   const char *comma = extinf_comma(body);
   char attrs[1024];
@@ -115,7 +95,7 @@ playlist_list_t *playlist_in_parse_m3u(const char *path) {
   playlist_item_t pending;
   int have_pending = 0;
 
-  if (slurp(path, &buf, &len))
+  if (read_path(path, &buf, &len))
     return NULL;
 
   pl = calloc(1, sizeof *pl);
@@ -171,13 +151,8 @@ playlist_list_t *playlist_in_parse_m3u(const char *path) {
 }
 
 static int csv_u16(const char *s, unsigned *out) {
-  char *end;
   unsigned long v;
-  if (!*s)
-    return -1;
-  errno = 0;
-  v = strtoul(s, &end, 10);
-  if (errno || *end || v > 0xFFFF)
+  if (parse_ulong(s, 0xFFFF, &v))
     return -1;
   *out = (unsigned)v;
   return 0;
@@ -304,7 +279,7 @@ playlist_list_t *playlist_in_parse_xspf(const char *path) {
   size_t len;
   playlist_list_t *pl;
 
-  if (slurp(path, &buf, &len))
+  if (read_path(path, &buf, &len))
     return NULL;
 
   pl = calloc(1, sizeof *pl);

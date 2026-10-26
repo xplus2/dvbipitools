@@ -1,9 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <errno.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdlib.h>
@@ -14,22 +12,8 @@
 
 #include "lib/cas/emmg_server/emmg_server.h"
 #include "lib/cas/simulcrypt_msg.h"
-
-static int find_tlv(const unsigned char *payload, size_t payload_len, unsigned short want_tag, const unsigned char **val_out, unsigned short *len_out) {
-  simulcrypt_tlv_reader_t r;
-  unsigned short tag;
-  unsigned short vlen;
-  const unsigned char *val;
-  simulcrypt_tlv_reader_init(&r, payload, payload_len);
-  while (simulcrypt_tlv_reader_next(&r, &tag, &val, &vlen) == 1) {
-    if (tag == want_tag) {
-      *val_out = val;
-      *len_out = vlen;
-      return 1;
-    }
-  }
-  return 0;
-}
+#include "../fx_net.h"
+#include "../fx_proto.h"
 
 START_TEST(channel_status_builds_expected_fields) {
   unsigned char buf[64];
@@ -619,31 +603,6 @@ START_TEST(emmg_server_rejects_channel_setup_wrong_version) {
   emmg_server_stop(s);
 }
 END_TEST
-
-static double monotonic_seconds(void) {
-  struct timespec ts;
-  ck_assert_int_eq(clock_gettime(CLOCK_MONOTONIC, &ts), 0);
-  return (double)ts.tv_sec + (double)ts.tv_nsec / 1000000000.0;
-}
-
-/* some fds still hold an unread reply: drain it before expecting EOF */
-static void assert_closed_by_server(int fd) {
-  double deadline = monotonic_seconds() + 2.0;
-  for (;;) {
-    struct pollfd pfd = {fd, POLLIN, 0};
-    unsigned char buf[256];
-    ssize_t rn;
-    int remain_ms = (int)((deadline - monotonic_seconds()) * 1000.0);
-    int pr;
-    if (remain_ms <= 0) ck_abort_msg("fd %d: server never closed the connection", fd);
-    pr = poll(&pfd, 1, remain_ms);
-    ck_assert_msg(pr > 0, "fd %d: expected server-side close to be observable, poll returned %d", fd, pr);
-    rn = read(fd, buf, sizeof buf);
-    if (rn == 0) return;
-    if (rn < 0 && errno == ECONNRESET) return;
-    ck_assert_msg(rn > 0, "fd %d: unexpected read error, rn=%zd errno=%d", fd, rn, errno);
-  }
-}
 
 static int test_listen_loopback(unsigned *port_out) {
   struct sockaddr_in addr;

@@ -3,7 +3,6 @@
 
 #include <check.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "dipixy/altsvc.h"
 

@@ -1,3 +1,35 @@
+dvbipitools (2.6.0-1) unstable; urgency=low
+  * libs
+    + BiM (ISO/IEC 15938-1, 23001-1, TS 102 323, TS 102 822-3-2)
+    + dvbstp
+      - BiM (001) accepted on all payload ids
+      - IPv6 header layout (128-bit provider id)
+  * dipibim
+    + -s/--schema, --profile dvb-tva|tva|sdns|generic
+    + TS 102 323 clause 8 validation on dvb-tva
+    + --syntax 15938-1, --compat for the MPEG-7 conformance streams
+  * dipibcg
+    + -s/--schema (required)
+    + -f xmltv|tva|bim, --encoding bim|plain
+    + stable fragment ids, versions bumped on change
+    + schedule fragment per TS 102 323 8.5
+    + --publisher, --lang, --index
+    + --dvb-locator, --dvb-duration, --dvb-pubtime
+    + container header order fixed
+    + --ttl (default 16)
+  * dipisds
+    + bcg Discovery record: --bcg-mcast, --bcg-name, --bcg-id, ...
+    + all five SD&S namespaces in plain XML
+    + listener decodes bim sd&s, -s/--schema for an XSD
+    + compiled-in tables stay the default, an XSD can replace them
+    + --ttl (default 16)
+  * dipixy
+    + decodes bim sd&s, --sds-schema for an XSD
+  * dipiscan
+    + csv rfc 4180
+    + timeout-less option (-t 0)
+ -- dvbipitools authors <unspecified@example.com>  tbd
+
 dvbipitools (2.5.1-1) unstable; urgency=medium
   * error codes
   * static 64-bit workflow builds now include http/3 support
@@ -58,8 +90,8 @@ dvbipitools (2.5.1-1) unstable; urgency=medium
     + last cw and ecm/biss-ca keys were not properly wiped
   * dipiscan
     + write error handling
-    * softened 300ms initial wait to 30% of teh time budget
-    * convert SDT names to UTF-8 in output lists
+    + softened 300ms initial wait to 30% of the time budget
+    + convert SDT names to UTF-8 in output lists
   * dipirec
     + fixed stack-use-after-scope on mkv/mp4/flv muxers (asan)
     + mkv 30s cues / 1s clusters, cue sync at stop

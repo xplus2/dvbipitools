@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,7 +8,6 @@
 
 #include "dipixy/dash/dash.h"
 #include "dipixy/dash/dash_int.h"
-#include "lib/sys/ioutil.h"
 
 /* "dsegTTTT.m4s" muxed, "dsegvTTTT.m4s" video track, "dsegaTTTT.m4s" audio track. 1 ok (t, container set), 0 wrong shape */
 int parse_dash_seg_filename(const char *fn, uint64_t *t, seg_container_t *container) {

@@ -2,10 +2,8 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "priv.h"
-
 #include "lib/demux/bitreader.h"
 #include "lib/demux/tspack.h"
-#include "lib/sys/ioutil.h"
 
 #include <string.h>
 
@@ -44,19 +42,15 @@ void video_reset(hls_seg_ctx_t *s) {
 
 /* builds s->video.nal_scratch (AVCC AU bytes) as a side effect, used by fmp4 mode */
 int detect_keyframe(hls_seg_ctx_t *s, const unsigned char *d, size_t len) {
-  size_t p;
-  size_t scl = 0;
+  sc_iter_t it;
+  size_t ns;
+  size_t q;
   int key = 0;
   if (s->demux.video_codec == CODEC_MPEG2V) {
-    p = find_startcode(d, len, 0, &scl);
-    while (p < len) {
-      size_t ns = p + scl;
-      size_t scl2 = 0;
-      size_t q = find_startcode(d, len, ns, &scl2);
+    sc_iter_init(&it, d, len);
+    while (sc_iter_next(&it, &ns, &q)) {
       unsigned code = (ns < len) ? d[ns] : 0xFF;
       if (code == 0x00 && q >= ns + 3 && ((d[ns + 2] >> 3) & 0x07) == 1) key = 1; /* picture_coding_type: 1 = I */
-      p = q;
-      scl = scl2;
     }
     return key;
   }

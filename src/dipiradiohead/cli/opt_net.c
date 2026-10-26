@@ -6,15 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/cas/biss/biss.h"
-#include "lib/cas/cas_args.h"
-#include "lib/cas/emmg_server/emmg_server.h"
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
-#include "lib/helper/log.h"
 #include "lib/mux/fec2022.h"
 #include "lib/net/netconnect.h"
-
 #include "priv.h"
 
 args_status_t rdh_opt_net(rdh_opt_t *p, int c) {
@@ -22,10 +16,7 @@ args_status_t rdh_opt_net(rdh_opt_t *p, int c) {
 
   switch (c) {
     case OPT_DSCP:
-      if (net_dscp_parse(optarg, &cfg->dscp)) {
-        argerr("RS000106", "invalid --dscp: %s (video-high|video-low|voice|signalling|best-effort|0..63)", optarg);
-        return ARGS_ERR;
-      }
+      if (argutil_int_opt(TOOL_NAME, "RS000106", "dscp", optarg, net_dscp_parse, NET_DSCP_NAMES, &cfg->dscp)) return ARGS_ERR;
       break;
     case OPT_AL_FEC:
       if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {

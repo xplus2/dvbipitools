@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "lib/helper/dateutil.h"
 #include "../helper/beutil.h"
 #include "../demux/crc32.h"
 
@@ -289,7 +290,7 @@ void psi_ver_track_stamp(psi_ver_track_t *t, unsigned char *sec, size_t n) {
 static void put_utc(unsigned char *p, time_t utc) {
   time_t days = utc / 86400;
   unsigned sod = (unsigned)(utc % 86400);
-  unsigned mjd = (unsigned)days + 40587;
+  unsigned mjd = (unsigned)(days + MJD_UNIX_EPOCH);
   unsigned hh = sod / 3600;
   unsigned mm = sod % 3600 / 60;
   unsigned ss = sod % 60;

@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
@@ -94,11 +93,6 @@ static size_t build_emm_g(unsigned char *out, unsigned service_id, const unsigne
   return EMM_HDR + 4 + CRYPTO_EMM_G_LEN;
 }
 
-static void fill(unsigned char *p, unsigned char base) {
-  for (int i = 0; i < CRYPTO_KEY_LEN; i++)
-    p[i] = (unsigned char)(base + i);
-}
-
 START_TEST(init_rejects_missing_key_and_oversized_serial) {
   device_core_t core;
   char serial[DEVICE_SERIAL_MAX + 1];
@@ -154,6 +148,11 @@ START_TEST(services_active_counts_only_services_with_a_key) {
   key_end();
 }
 END_TEST
+
+static void fill(unsigned char *p, unsigned char base) {
+  for (int i = 0; i < CRYPTO_KEY_LEN; i++)
+    p[i] = (unsigned char)(base + i);
+}
 
 START_TEST(emm_u_decrypt_failure_leaves_bk_unset) {
   device_core_t core;

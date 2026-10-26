@@ -11,8 +11,6 @@
 #include "lib/helper/log.h"
 #include "lib/net/netconnect.h"
 #include "lib/sys/ioutil.h"
-#include "lib/sys/signal.h"
-
 #include "../version.h"
 #include "dlna_int.h"
 

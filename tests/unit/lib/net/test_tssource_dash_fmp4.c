@@ -1,21 +1,20 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/time.h>
 #include <unistd.h>
 
 #include "lib/mux/fmp4/fmp4.h"
 #include "lib/net/ts/source.h"
 #include "lib/net/ts/source_priv.h"
+#include "../../fx_net.h"
+#include "../../fx_mux.h"
 
 typedef struct {
   int listen_fd;
@@ -23,6 +22,25 @@ typedef struct {
   const size_t *response_lens;
   int n_responses;
 } scripted_server_t;
+
+static size_t drive_read(tssrc_t *s, unsigned char *buf, size_t cap, int max_iters) {
+  size_t got = 0;
+  for (int i = 0; i < max_iters && got < cap; i++) {
+    struct pollfd pfd;
+    ssize_t n;
+    int fd = tssrc_fd(s);
+    if (fd >= 0) {
+      pfd.fd = fd;
+      pfd.events = POLLIN;
+      pfd.revents = 0;
+      poll(&pfd, 1, 50);
+    }
+    n = tssrc_read(s, buf + got, cap - got, NULL);
+    if (n > 0) got += (size_t)n;
+    else if (n < 0) break;
+  }
+  return got;
+}
 
 static void *serve_scripted(void *arg) {
   const scripted_server_t *a = arg;
@@ -45,21 +63,6 @@ static void *serve_scripted(void *arg) {
   return NULL;
 }
 
-static int make_listener(unsigned *port_out) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 4), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
-}
-
 static tssrc_open_state_t drive_open(tssrc_open_t *o, int max_iters) {
   tssrc_open_state_t st = TSSRC_OPEN_PENDING;
   for (int i = 0; i < max_iters && st == TSSRC_OPEN_PENDING; i++) {
@@ -76,25 +79,6 @@ static tssrc_open_state_t drive_open(tssrc_open_t *o, int max_iters) {
     st = tssrc_open_async_step(o, NULL);
   }
   return st;
-}
-
-static size_t drive_read(tssrc_t *s, unsigned char *buf, size_t cap, int max_iters) {
-  size_t got = 0;
-  for (int i = 0; i < max_iters && got < cap; i++) {
-    struct pollfd pfd;
-    ssize_t n;
-    int fd = tssrc_fd(s);
-    if (fd >= 0) {
-      pfd.fd = fd;
-      pfd.events = POLLIN;
-      pfd.revents = 0;
-      poll(&pfd, 1, 50);
-    }
-    n = tssrc_read(s, buf + got, cap - got, NULL);
-    if (n > 0) got += (size_t)n;
-    else if (n < 0) break;
-  }
-  return got;
 }
 
 START_TEST(tssrc_http_dispatches_dash_fmp4_and_remuxes_to_ts) {
@@ -264,20 +248,6 @@ static void script_add(script_t *sc, const void *body, size_t body_len) {
   sc->len[i] = head + body_len;
 }
 
-static void script_start(script_t *sc) {
-  sc->fd = make_listener(&sc->port);
-  sc->srv.listen_fd = sc->fd;
-  sc->srv.responses = sc->ptr;
-  sc->srv.response_lens = sc->len;
-  sc->srv.n_responses = sc->n;
-  ck_assert_int_eq(pthread_create(&sc->th, NULL, serve_scripted, &sc->srv), 0);
-}
-
-static void script_stop(const script_t *sc) {
-  pthread_join(sc->th, NULL);
-  close(sc->fd);
-}
-
 static tssrc_t *open_hls(const script_t *sc, const char *path) {
   tssrc_cfg_t cfg;
   tssrc_open_t *o;
@@ -293,32 +263,22 @@ static tssrc_t *open_hls(const script_t *sc, const char *path) {
   return tssrc_open_async_take(o);
 }
 
-static size_t build_avc_init(unsigned char *out, size_t cap) {
-  static const unsigned char avcc[] = {0x01, 0x64, 0x00, 0x1F, 0xFF, 0xE1, 0x00, 0x00, 0x01, 0x00, 0x00};
-  fmp4_track_cfg_t tcfg;
-  fmp4_mux_t *m;
-  unsigned char *buf;
-  size_t len;
-
-  memset(&tcfg, 0, sizeof tcfg);
-  tcfg.codec = CODEC_H264;
-  tcfg.track_id = 1;
-  tcfg.timescale = 90000;
-  tcfg.width = 1280;
-  tcfg.height = 720;
-  tcfg.cpriv = avcc;
-  tcfg.cpriv_len = sizeof avcc;
-  m = fmp4_mux_new(&tcfg, 1);
-  ck_assert_ptr_nonnull(m);
-  len = fmp4_init_segment(m, &buf);
-  ck_assert_uint_le(len, cap);
-  memcpy(out, buf, len);
-  fmp4_mux_free(m);
-  return len;
-}
-
 static const char hls_ts_media[] = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4.0,\nseg1.ts\n";
 static const char hls_fmp4_media[] = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:4.0,\nseg1.m4s\n";
+
+static void script_start(script_t *sc) {
+  sc->fd = make_listener(&sc->port);
+  sc->srv.listen_fd = sc->fd;
+  sc->srv.responses = sc->ptr;
+  sc->srv.response_lens = sc->len;
+  sc->srv.n_responses = sc->n;
+  ck_assert_int_eq(pthread_create(&sc->th, NULL, serve_scripted, &sc->srv), 0);
+}
+
+static void script_stop(const script_t *sc) {
+  pthread_join(sc->th, NULL);
+  close(sc->fd);
+}
 
 START_TEST(hls_media_playlist_without_map_opens_as_ts_passthrough) {
   script_t sc = {0};

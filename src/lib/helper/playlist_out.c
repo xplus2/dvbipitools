@@ -3,6 +3,7 @@
 
 #include "playlist_out.h"
 
+#include <string.h>
 #include <time.h>
 
 #include "xml_util.h"
@@ -66,10 +67,22 @@ void playlist_out_m3u_item(FILE *f, const char *name, const char *uri, const cha
   fputc('\n', f);
 }
 
+/* RFC 4180 quoting where reader would split, trim or skip ('#' comment) */
+static int csv_needs_quotes(const char *s) {
+  size_t n = strlen(s);
+  return strpbrk(s, ",\"") || s[0] == '#' || (n && (s[0] == ' ' || s[0] == '\t' || s[n - 1] == ' ' || s[n - 1] == '\t'));
+}
+
 void playlist_out_csv_item(FILE *f, const char *name, const char *uri, unsigned tsid, unsigned onid, unsigned sid) {
-  for (const char *p = name; *p; p++)
-    if (*p != ',')
-      fputc(*p, f);
+  int quote = csv_needs_quotes(name);
+  if (quote) fputc('"', f);
+  for (const char *p = name; *p; p++) {
+    unsigned char c = (unsigned char)*p;
+    if (c < 0x20 || c == 0x7f) continue;
+    if (c == '"') fputc('"', f);
+    fputc(c, f);
+  }
+  if (quote) fputc('"', f);
   fprintf(f, ",%s,%u,%u,%u\n", uri, tsid, onid, sid);
 }
 

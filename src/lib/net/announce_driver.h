@@ -17,6 +17,7 @@ typedef struct {
   unsigned mcast_port;
   const char *iface;
   int dscp;
+  int ttl; /* 0 = kernel default */
   long interval_s;
 } announce_driver_t;
 

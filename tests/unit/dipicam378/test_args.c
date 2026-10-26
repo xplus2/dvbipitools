@@ -9,6 +9,7 @@
 #include "lib/config/yamlcfg.h"
 
 #include "dipicam378/cli/args.h"
+#include "../cfg_fixture.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
 
@@ -207,13 +208,6 @@ START_TEST(metrics_id_alone_is_accepted) {
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
-
-static void write_cfg(char *path, const char *text) {
-  int fd = mkstemp(path);
-  ck_assert_int_ge(fd, 0);
-  ck_assert_int_eq((int)write(fd, text, strlen(text)), (int)strlen(text));
-  close(fd);
-}
 
 START_TEST(config_file_provides_settings) {
   char path[] = "/tmp/dipicam378_cfg_XXXXXX";

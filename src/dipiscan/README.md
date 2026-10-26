@@ -64,7 +64,7 @@ Every address/port combination in range gets probed once.
 | format | description                                        |
 |--------|----------------------------------------------------|
 | `m3u`  | `#EXTM3U` playlist, `#EXTINF` name + URI per entry |
-| `csv`  | `name,uri,tsid,onid,sid` per line                  |
+| `csv`  | `name,uri,tsid,onid,sid` per line, RFC 4180 quoted |
 | `xspf` | XSPF playlist                                      |
 | `xml`  | SD&S Broadcast Discovery (ETSI TS 102 034)         |
 | `null` | no playlist output, just the stderr log            |

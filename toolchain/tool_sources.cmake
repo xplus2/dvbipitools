@@ -5,6 +5,25 @@
 # multicall build. absolute paths only: CMAKE_CURRENT_SOURCE_DIR reflects caller
 # dir, not this file's dir.
 
+# schema loader and compiler
+set(BIM_XSD_SRCS
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/model/core.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/model/parse.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/model/doc.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/model/resolve.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/load.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/compile/util.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/compile/simple.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/compile/attrs.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/compile/content.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/compile/sbc.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/compile/codes.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/compile/compile.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/pattern.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/encschema.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/schemaupdate.c
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/schemagen.c)
+
 function(dipibcg_resolve_sources)
     option(DIPIBCG_ZLIB "build dipibcg with zlib compression support for BCG containers" ON)
     set(DIPIBCG_HAVE_ZLIB FALSE)
@@ -23,11 +42,6 @@ function(dipibcg_resolve_sources)
             message(WARNING "dipibcg: zlib not found, building without BCG container compression support")
         endif ()
     endif ()
-    if (DIPIBCG_HAVE_ZLIB)
-        set(ZLIB_SRC ${CMAKE_SOURCE_DIR}/src/dipibcg/wrapper.c)
-    else ()
-        set(ZLIB_SRC ${CMAKE_SOURCE_DIR}/src/dipibcg/wrapper_stub.c)
-    endif ()
     set(DIPIBCG_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipibcg/main.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/cli/args.c
@@ -41,13 +55,14 @@ function(dipibcg_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/time.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/programmes.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/doc.c
+            ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/tvadoc.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/dvbstream.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/dvbtva_rules.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/segment.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/announce/run.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/announce_driver.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/listen.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
-            ${CMAKE_SOURCE_DIR}/src/dipibcg/container.c
-            ${ZLIB_SRC}
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
@@ -61,6 +76,7 @@ function(dipibcg_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
@@ -68,9 +84,6 @@ function(dipibcg_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/crid.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/time.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/write.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_info.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_schedule.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/mapping.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/xmltv.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/timefmt.c
@@ -78,54 +91,130 @@ function(dipibcg_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/dvbtypes.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/tvatypes.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/node.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_media.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_text.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_desc.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_prog.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/coding.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/accessunit.c)
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/simple.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/element.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/any.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/lax.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/aod.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/zlib.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/coding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/m7time.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/simple.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/element.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/any.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/lax.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/laxsym.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/aod.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/aod.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bimio.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/index.c
+            ${CMAKE_SOURCE_DIR}/src/dipibcg/schema.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bcgau.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/nodexml.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bcgfrag.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bcgip.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/container.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/dvbtva.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/tvafrag.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/tvainit.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/decoderinit/read.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/decoderinit/write.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/tree.c
+            ${BIM_XSD_SRCS})
     set(DIPIBCG_SRCS ${DIPIBCG_SRCS} PARENT_SCOPE)
     set(DIPIBCG_HAVE_ZLIB ${DIPIBCG_HAVE_ZLIB} PARENT_SCOPE)
 endfunction()
 
 function(dipibim_resolve_sources)
+    option(DIPIBIM_ZLIB "build dipibim with zlib for the Zlib string codec of the tva and sdns profiles" ON)
+    set(DIPIBIM_HAVE_ZLIB FALSE)
+    if (DIPIBIM_ZLIB)
+        if (DVBIPITOOLS_STATIC)
+            set(SAVED_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+            set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+        endif ()
+        find_package(ZLIB)
+        if (DVBIPITOOLS_STATIC)
+            set(CMAKE_FIND_LIBRARY_SUFFIXES ${SAVED_SUFFIXES})
+        endif ()
+        if (ZLIB_FOUND)
+            set(DIPIBIM_HAVE_ZLIB TRUE)
+        else ()
+            message(WARNING "dipibim: zlib not found, building without the tva and sdns profiles")
+        endif ()
+    endif ()
     set(DIPIBIM_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipibim/main.c
+            ${CMAKE_SOURCE_DIR}/src/dipibim/schema.c
+            ${CMAKE_SOURCE_DIR}/src/dipibim/encode.c
+            ${CMAKE_SOURCE_DIR}/src/dipibim/decode.c
             ${CMAKE_SOURCE_DIR}/src/dipibim/cli/args.c
             ${CMAKE_SOURCE_DIR}/src/dipibim/cli/help.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
-            ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
+            ${CMAKE_SOURCE_DIR}/src/dipibim/config.c
+            ${BIM_XSD_SRCS}
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fuu/parse.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fuu/apply.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fuu/util.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fuu/write.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/fuu/position.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bimio.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bimau.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/tvabim.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/dvbtva.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/dvbstream.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/dvbtva_rules.c
+            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/time.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/sdnsbim.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/tvafrag.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/tvainit.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/container.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/decoderinit/read.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/decoderinit/write.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/simple.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/element.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/any.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/lax.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/laxsym.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/aod.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/aod.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/simple.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/element.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/any.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/lax.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/aod.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/zlib.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/coding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/m7time.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/dvbtypes.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/tvatypes.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/node.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/tree.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/crid.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/time.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/write.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_info.c
-            ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/read_schedule.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/dvbtypes.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/node.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_media.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_text.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_desc.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/types_prog.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/fragment/coding.c
-            ${CMAKE_SOURCE_DIR}/src/lib/bim/accessunit.c)
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/nodexml.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/scanner.c
+            ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/parser.c
+            ${CMAKE_SOURCE_DIR}/src/lib/config/yamlcfg.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/fileutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c)
     set(DIPIBIM_SRCS ${DIPIBIM_SRCS} PARENT_SCOPE)
+    set(DIPIBIM_HAVE_ZLIB ${DIPIBIM_HAVE_ZLIB} PARENT_SCOPE)
 endfunction()
 
 function(dipicam378_resolve_sources)
@@ -300,7 +389,6 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-            ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -308,9 +396,8 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/read.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
-            ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
-            ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/descriptors.c
@@ -338,7 +425,6 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/write.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/mkv/feed.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/teletext.c
-            ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/amf.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/flv.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/flv/feed.c
@@ -622,6 +708,7 @@ function(dipiradiohead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
@@ -830,6 +917,7 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/rtx.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
@@ -964,6 +1052,7 @@ function(dipirist_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
@@ -1002,7 +1091,6 @@ function(dipirist_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/tspacket_write.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
-            ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/fec2022.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/ts/sink.c
             ${CMAKE_SOURCE_DIR}/src/lib/mux/fec2022.c
@@ -1101,6 +1189,7 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
@@ -1218,6 +1307,7 @@ function(dipiscan_resolve_sources)
 endfunction()
 
 function(dipixy_resolve_sources)
+    sdns_bim_resolve(dipixy)
     set(DIPIXY_HAVE_TLS FALSE)
     if (DVBIPITOOLS_TLS)
         if (DVBIPITOOLS_STATIC)
@@ -1568,6 +1658,7 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/cpuaffinity.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/byte_ring.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/jsonbuf.c
@@ -1616,15 +1707,82 @@ function(dipixy_resolve_sources)
             ${DIPIXY_SRT_SRC}
             ${DIPIXY_HTTP2_SRCS}
             ${DIPIXY_HTTP3_SRCS}
-            ${DIPIXY_HTTPNG_SRCS})
+            ${DIPIXY_HTTPNG_SRCS}
+            ${SDNS_BIM_SRCS})
     set(DIPIXY_SRCS ${DIPIXY_SRCS} PARENT_SCOPE)
+    set(DIPIXY_HAVE_ZLIB ${DIPIXY_HAVE_ZLIB} PARENT_SCOPE)
     set(DIPIXY_HAVE_TLS ${DIPIXY_HAVE_TLS} PARENT_SCOPE)
     set(DIPIXY_HAVE_HTTP2 ${DIPIXY_HAVE_HTTP2} PARENT_SCOPE)
     set(DIPIXY_HAVE_HTTP3 ${DIPIXY_HAVE_HTTP3} PARENT_SCOPE)
     set(DIPIXY_ATOMIC_LIB ${ATOMIC_LIB} PARENT_SCOPE)
 endfunction()
 
+# BiM SD&S (TS 102 034 5.5) sources, zlib detection: set SDNS_BIM_SRCS, <TOOL>_HAVE_ZLIB
+function(sdns_bim_resolve tool)
+    string(TOUPPER ${tool} T)
+    option(${T}_ZLIB "build ${tool} with zlib for BiM-encoded SD&S" ON)
+    set(have FALSE)
+    if (${T}_ZLIB)
+        if (DVBIPITOOLS_STATIC)
+            set(SAVED_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+            set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+        endif ()
+        find_package(ZLIB)
+        if (DVBIPITOOLS_STATIC)
+            set(CMAKE_FIND_LIBRARY_SUFFIXES ${SAVED_SUFFIXES})
+        endif ()
+        if (ZLIB_FOUND)
+            set(have TRUE)
+        else ()
+            message(WARNING "${tool}: zlib not found, BiM-encoded SD&S segments are dropped")
+        endif ()
+    endif ()
+    set(${T}_HAVE_ZLIB ${have} PARENT_SCOPE)
+    set(SDNS_BIM_SRCS
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/sdns/types.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/sdnsbim.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/dvbtva.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/tvafrag.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/tvainit.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/nodexml.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/tree.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
+            ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${BIM_XSD_SRCS}
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/sdns/decode.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bitwriter.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bimreader.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/strrepo.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/dvbtypes.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/tvatypes.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/node.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/simple.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/element.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/any.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/lax.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/aod.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/encode/zlib.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/coding.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/m7time.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/simple.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/element.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/any.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/lax.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/laxsym.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/codec/decode/aod.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/aod.c
+            ${CMAKE_SOURCE_DIR}/src/lib/bim/bimio.c PARENT_SCOPE)
+endfunction()
+
 function(dipisds_resolve_sources)
+    sdns_bim_resolve(dipisds)
     set(DIPISDS_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipisds/main.c
             ${CMAKE_SOURCE_DIR}/src/dipisds/cli/args.c
@@ -1670,8 +1828,10 @@ function(dipisds_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
-            ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c)
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
+            ${SDNS_BIM_SRCS})
     set(DIPISDS_SRCS ${DIPISDS_SRCS} PARENT_SCOPE)
+    set(DIPISDS_HAVE_ZLIB ${DIPISDS_HAVE_ZLIB} PARENT_SCOPE)
 endfunction()
 
 function(dipitvhead_resolve_sources)
@@ -1876,6 +2036,7 @@ function(dipitvhead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
@@ -1922,6 +2083,8 @@ function(dipixmltv_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/crid.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/tva_xml/time.c

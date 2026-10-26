@@ -8,14 +8,16 @@
 
 START_TEST(every_entry_point_fails_cleanly) {
   char buf[8];
+  int dummy = 0;
+  tls_t *t = (tls_t *)&dummy;
   ck_assert_ptr_null(tls_connect(-1, "example.org", 0));
   ck_assert_ptr_null(tls_connect_start(-1, "example.org", 1));
-  ck_assert_int_eq(tls_handshake_step(NULL), TLS_HANDSHAKE_ERROR);
-  ck_assert_int_eq((int)tls_read(NULL, buf, sizeof buf), -1);
-  ck_assert_int_eq((int)tls_write(NULL, buf, sizeof buf), -1);
-  ck_assert_int_eq(tls_pending(NULL), 0);
-  ck_assert_int_eq(tls_eof(NULL), 0);
-  ck_assert_int_eq(tls_want_read(NULL), 0);
+  ck_assert_int_eq(tls_handshake_step(t), TLS_HANDSHAKE_ERROR);
+  ck_assert_int_eq((int)tls_read(t, buf, sizeof buf), -1);
+  ck_assert_int_eq((int)tls_write(t, buf, sizeof buf), -1);
+  ck_assert_int_eq(tls_pending(t), 0);
+  ck_assert_int_eq(tls_eof(t), 0);
+  ck_assert_int_eq(tls_want_read(t), 0);
   tls_close(NULL);
 }
 END_TEST

@@ -9,7 +9,6 @@
 #include "http3_int.h"
 
 #include <sys/socket.h>
-#include <unistd.h>
 
 void h3_notify_close_all(void) {
   if (!t_h3_init) return;

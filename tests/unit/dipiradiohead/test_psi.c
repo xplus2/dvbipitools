@@ -12,17 +12,7 @@
 #include "lib/demux/crc32.h"
 #include "lib/demux/psi/psi.h"
 #include "lib/mux/psi_build.h"
-
-/* wraps one PSI section into a single 188-byte TS packet, pusi=1, pointer=0 */
-static void wrap_ts_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++) pkt[i] = 0xFF;
-}
+#include "../fx_ts.h"
 
 START_TEST(psi_build_pmt_round_trips_through_psi_feed) {
   unsigned char section[64], pkt[188];
@@ -34,13 +24,13 @@ START_TEST(psi_build_pmt_round_trips_through_psi_feed) {
   /* psi_feed only recognizes a PMT pid once the PAT has pointed at it */
   slen = psi_build_pat(0x2222, 0, 101, 0x0100, section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
-  wrap_ts_packet(pkt, 0x0000, section, slen);
+  wrap_section_packet(pkt, 0x0000, section, slen);
   psi_feed(p, pkt);
   ck_assert_int_eq(psi_have_pat(p), 1);
   slen = psi_build_pmt(3, 101, 0x0101, 0x0F, 0x0101, 0, NULL, 0, section, sizeof section);
   ck_assert_uint_ne(slen, 0u);
   ck_assert_uint_eq(crc32_mpeg(section, slen), 0u);
-  wrap_ts_packet(pkt, 0x0100, section, slen);
+  wrap_section_packet(pkt, 0x0100, section, slen);
   psi_feed(p, pkt);
   ck_assert_int_eq(psi_have_pmt(p), 1);
   ck_assert_uint_eq(psi_program_number(p), 101u);

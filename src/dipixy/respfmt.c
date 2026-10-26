@@ -3,10 +3,8 @@
 
 #include "segstore_int.h"
 #include "altsvc.h"
-#include "core/metrics.h"
 #include "reactor/internal.h"
 #include "version.h"
-
 #include "lib/sys/ioutil.h"
 
 #include <stdlib.h>

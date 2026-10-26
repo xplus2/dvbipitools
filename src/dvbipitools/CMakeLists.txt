@@ -273,12 +273,24 @@ if (DIPIXY_HAVE_HTTP3)
     target_link_libraries(dvbipitools PRIVATE PkgConfig::NGTCP2 PkgConfig::NGTCP2_CRYPTO_OSSL PkgConfig::NGHTTP3)
 endif ()
 
-if (DIPIBCG_HAVE_ZLIB OR DIPIRADIOHEAD_HAVE_ZLIB)
+if (DIPIBCG_HAVE_ZLIB OR DIPIBIM_HAVE_ZLIB OR DIPIRADIOHEAD_HAVE_ZLIB OR DIPISDS_HAVE_ZLIB OR DIPIXY_HAVE_ZLIB)
     target_link_libraries(dvbipitools PRIVATE ZLIB::ZLIB)
+endif ()
+
+if (DIPISDS_HAVE_ZLIB OR DIPIXY_HAVE_ZLIB)
+    target_compile_definitions(dvbipitools PRIVATE DVBIPITOOLS_SDNS_ZLIB)
 endif ()
 
 if (DIPIRADIOHEAD_HAVE_ZLIB)
     target_compile_definitions(dvbipitools PRIVATE DIPIRADIOHEAD_ZLIB)
+endif ()
+
+if (DIPIBIM_HAVE_ZLIB)
+    target_compile_definitions(dvbipitools PRIVATE DIPIBIM_ZLIB)
+endif ()
+
+if (DIPIBCG_HAVE_ZLIB)
+    target_compile_definitions(dvbipitools PRIVATE DIPIBCG_ZLIB)
 endif ()
 
 if (DVBIPITOOLS_NEED_CSA)

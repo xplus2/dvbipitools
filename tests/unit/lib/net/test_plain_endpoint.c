@@ -1,0 +1,170 @@
+/* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
+ * See NOTICE and LICENSE for details and authorship information. */
+
+#include <check.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+
+#include "lib/net/plain_endpoint.h"
+
+START_TEST(tssrc_cfg_file_with_path) {
+  plain_endpoint_t s;
+  tssrc_cfg_t tc;
+  memset(&s, 0, sizeof s);
+  s.kind = PLAIN_EP_FILE;
+  strcpy(s.file_path, "/tmp/fixture.ts");
+
+  plain_endpoint_to_tssrc_cfg(&s, NULL, "test/1", 0, &tc);
+  ck_assert_int_eq(tc.kind, TSSRC_FILE);
+  ck_assert_str_eq(tc.file_path, "/tmp/fixture.ts");
+  ck_assert_str_eq(tc.user_agent, "test/1");
+}
+END_TEST
+
+START_TEST(tssrc_cfg_file_empty_path_is_stdin) {
+  plain_endpoint_t s;
+  tssrc_cfg_t tc;
+  memset(&s, 0, sizeof s);
+  s.kind = PLAIN_EP_FILE;
+
+  plain_endpoint_to_tssrc_cfg(&s, NULL, "test/1", 0, &tc);
+  ck_assert_int_eq(tc.kind, TSSRC_STDIN);
+}
+END_TEST
+
+START_TEST(tssrc_cfg_http_carries_tls_and_insecure) {
+  plain_endpoint_t s;
+  tssrc_cfg_t tc;
+  memset(&s, 0, sizeof s);
+  s.kind = PLAIN_EP_HTTP;
+  s.http.tls = 1;
+
+  plain_endpoint_to_tssrc_cfg(&s, NULL, "test/1", 1, &tc);
+  ck_assert_int_eq(tc.kind, TSSRC_HTTP);
+  ck_assert_int_eq(tc.http.tls, 1);
+  ck_assert_int_eq(tc.insecure_tls, 1);
+}
+END_TEST
+
+START_TEST(tssrc_cfg_rtp_ipv4_carries_family_group_port_iface) {
+  plain_endpoint_t s;
+  tssrc_cfg_t tc;
+  memset(&s, 0, sizeof s);
+  s.kind = PLAIN_EP_RTP;
+  s.family = AF_INET;
+  strcpy(s.group, "239.1.1.1");
+  s.port = 5000;
+
+  plain_endpoint_to_tssrc_cfg(&s, "eth0", "test/1", 0, &tc);
+  ck_assert_int_eq(tc.kind, TSSRC_RTP);
+  ck_assert_int_eq(tc.family, AF_INET);
+  ck_assert_str_eq(tc.group, "239.1.1.1");
+  ck_assert_uint_eq(tc.port, 5000u);
+  ck_assert_str_eq(tc.iface, "eth0");
+}
+END_TEST
+
+START_TEST(tssrc_cfg_rtp_ipv6_carries_family) {
+  plain_endpoint_t s;
+  tssrc_cfg_t tc;
+  memset(&s, 0, sizeof s);
+  s.kind = PLAIN_EP_RTP;
+  s.family = AF_INET6;
+  strcpy(s.group, "ff3e::1");
+  s.port = 8700;
+
+  plain_endpoint_to_tssrc_cfg(&s, NULL, "test/1", 0, &tc);
+  ck_assert_int_eq(tc.family, AF_INET6);
+  ck_assert_str_eq(tc.group, "ff3e::1");
+}
+END_TEST
+
+START_TEST(tssrc_cfg_udp_kind) {
+  plain_endpoint_t s;
+  tssrc_cfg_t tc;
+  memset(&s, 0, sizeof s);
+  s.kind = PLAIN_EP_UDP;
+
+  plain_endpoint_to_tssrc_cfg(&s, NULL, "test/1", 0, &tc);
+  ck_assert_int_eq(tc.kind, TSSRC_UDP);
+}
+END_TEST
+
+START_TEST(tssink_cfg_file_with_path) {
+  plain_endpoint_t s;
+  tssink_cfg_t tk;
+  memset(&s, 0, sizeof s);
+  s.kind = PLAIN_EP_FILE;
+  strcpy(s.file_path, "/tmp/out.ts");
+
+  plain_endpoint_to_tssink_cfg(&s, NULL, &tk);
+  ck_assert_int_eq(tk.kind, TSSINK_FILE);
+  ck_assert_str_eq(tk.file_path, "/tmp/out.ts");
+}
+END_TEST
+
+START_TEST(tssink_cfg_file_empty_path_is_stdout) {
+  plain_endpoint_t s;
+  tssink_cfg_t tk;
+  memset(&s, 0, sizeof s);
+  s.kind = PLAIN_EP_FILE;
+
+  plain_endpoint_to_tssink_cfg(&s, NULL, &tk);
+  ck_assert_int_eq(tk.kind, TSSINK_STDOUT);
+}
+END_TEST
+
+START_TEST(tssink_cfg_rtp_ipv6_carries_family_group_port_iface) {
+  plain_endpoint_t s;
+  tssink_cfg_t tk;
+  memset(&s, 0, sizeof s);
+  s.kind = PLAIN_EP_RTP;
+  s.family = AF_INET6;
+  strcpy(s.group, "ff3e::1");
+  s.port = 8700;
+
+  plain_endpoint_to_tssink_cfg(&s, "eth1", &tk);
+  ck_assert_int_eq(tk.kind, TSSINK_RTP);
+  ck_assert_int_eq(tk.family, AF_INET6);
+  ck_assert_str_eq(tk.group, "ff3e::1");
+  ck_assert_uint_eq(tk.port, 8700u);
+  ck_assert_str_eq(tk.iface, "eth1");
+}
+END_TEST
+
+START_TEST(tssink_cfg_udp_kind) {
+  plain_endpoint_t s;
+  tssink_cfg_t tk;
+  memset(&s, 0, sizeof s);
+  s.kind = PLAIN_EP_UDP;
+
+  plain_endpoint_to_tssink_cfg(&s, NULL, &tk);
+  ck_assert_int_eq(tk.kind, TSSINK_UDP);
+}
+END_TEST
+
+static Suite *plain_endpoint_suite(void) {
+  Suite *s = suite_create("plain_endpoint");
+  TCase *tc = tcase_create("core");
+  tcase_add_test(tc, tssrc_cfg_file_with_path);
+  tcase_add_test(tc, tssrc_cfg_file_empty_path_is_stdin);
+  tcase_add_test(tc, tssrc_cfg_http_carries_tls_and_insecure);
+  tcase_add_test(tc, tssrc_cfg_rtp_ipv4_carries_family_group_port_iface);
+  tcase_add_test(tc, tssrc_cfg_rtp_ipv6_carries_family);
+  tcase_add_test(tc, tssrc_cfg_udp_kind);
+  tcase_add_test(tc, tssink_cfg_file_with_path);
+  tcase_add_test(tc, tssink_cfg_file_empty_path_is_stdout);
+  tcase_add_test(tc, tssink_cfg_rtp_ipv6_carries_family_group_port_iface);
+  tcase_add_test(tc, tssink_cfg_udp_kind);
+  suite_add_tcase(s, tc);
+  return s;
+}
+
+int main(void) {
+  SRunner *sr = srunner_create(plain_endpoint_suite());
+  srunner_run_all(sr, CK_NORMAL);
+  int failed = srunner_ntests_failed(sr);
+  srunner_free(sr);
+  return failed == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+}

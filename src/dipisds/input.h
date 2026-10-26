@@ -15,7 +15,7 @@ typedef struct {
   unsigned char *raw_xml; /* kind==INPUT_RAW_XML, malloc'd */
   size_t raw_xml_len;
   unsigned raw_payload_id;
-  int raw_provider_count; /* kind==INPUT_RAW_XML: ServiceProvider elements; service_count = SingleService elements */
+  int raw_provider_count; /* kind==INPUT_RAW_XML: elements carrying DomainName; service_count = SingleService elements */
   int raw_version; /* root Version attr 0..255, -1 if absent or invalid */
 } input_t;
 

@@ -71,23 +71,73 @@ START_TEST(bitreader_vluimsbf8_rejects_overlong_and_overflowing_runs) {
 }
 END_TEST
 
-START_TEST(bitreader_vluimsbf4_rejects_overlong_prefix) {
+START_TEST(bitreader_vluimsbf5_rejects_overlong_prefix) {
   static const unsigned char buf[16] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
   bitreader_t br;
   uint64_t v;
   bitreader_init(&br, buf, sizeof buf);
-  ck_assert_int_ne(bitreader_get_vluimsbf4(&br, &v), 0);
+  ck_assert_int_ne(bitreader_get_vluimsbf5(&br, &v), 0);
 }
 END_TEST
 
-START_TEST(bitreader_vluimsbf4_matches_known_encoding) {
+START_TEST(bitreader_vluimsbf5_matches_known_encoding) {
   /* value=20 needs 2 nibbles (1 nibble caps at 15): unary prefix "10" (continue once, then stop), then n*4=8 payload bits = 20 -> bits 1 0 0001 0100 */
   static const unsigned char d[] = {0x85, 0x00}; /* 1,0 prefix + 00010100 (20) payload */
   bitreader_t br;
   uint64_t v;
   bitreader_init(&br, d, sizeof d);
-  ck_assert_int_eq(bitreader_get_vluimsbf4(&br, &v), 0);
+  ck_assert_int_eq(bitreader_get_vluimsbf5(&br, &v), 0);
   ck_assert(v == 20u);
+}
+END_TEST
+
+START_TEST(bitreader_unaligned_skip_bytes_and_fuu_header) {
+  static const unsigned char d[] = {0xA5, 0x5A, 0xFF, 0x00, 0x81, 0x02, 0x03, 0x04, 0x05};
+  unsigned char out[4];
+  uint64_t v;
+  uint64_t flen;
+  uint64_t ctx;
+  bitreader_t br;
+  bitreader_init(&br, d, sizeof d);
+  ck_assert_int_eq(bitreader_skip(&br, 3), 0);
+  ck_assert_int_eq(bitreader_get_bytes(&br, out, 2), 0);
+  ck_assert_uint_eq(out[0], 0x2A);
+  ck_assert_int_eq(bitreader_skip(&br, 5), 0);
+  ck_assert_int_eq(bitreader_get_bytes(&br, out, 1), 0);
+  ck_assert_int_eq(bitreader_get_bytes(&br, out, 100), -1);
+  ck_assert_int_eq(bitreader_skip(&br, 1000), -1);
+  ck_assert_int_eq(bitreader_get(&br, 64, &v), -1);
+  bitreader_init(&br, d, sizeof d);
+  ck_assert_int_eq(bitreader_get(&br, 3, &v), 0);
+  ck_assert_int_eq(bitreader_get(&br, 21, &v), 0);
+  ck_assert_int_eq(bitreader_get(&br, 16, &v), 0);
+  bitreader_init(&br, d, sizeof d);
+  ck_assert_int_eq(bitreader_get(&br, 64, &v), 0);
+  {
+    static const unsigned char ok[] = {0x02, 0x12, 0x34, 0xAA, 0xBB};
+    static const unsigned char misaligned[] = {0x02, 0x12, 0x34, 0xAA, 0xBB};
+    static const unsigned char too_long[] = {0x09, 0x12, 0x34, 0xAA};
+    static const unsigned char many[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01};
+    static const unsigned char overflow[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F};
+    bitreader_init(&br, ok, sizeof ok);
+    ck_assert_int_eq(bitreader_fuu_header(&br, &flen, &ctx), 0);
+    ck_assert_uint_eq(flen, 2u);
+    ck_assert_uint_eq(ctx, 0x1234u);
+    bitreader_init(&br, misaligned, sizeof misaligned);
+    ck_assert_int_eq(bitreader_get(&br, 1, &v), 0);
+    ck_assert_int_eq(bitreader_fuu_header(&br, &flen, &ctx), -1);
+    bitreader_init(&br, too_long, sizeof too_long);
+    ck_assert_int_eq(bitreader_fuu_header(&br, &flen, &ctx), -1);
+    bitreader_init(&br, many, sizeof many);
+    ck_assert_int_eq(bitreader_get_vluimsbf8(&br, &v), -1);
+    bitreader_init(&br, overflow, sizeof overflow);
+    ck_assert_int_eq(bitreader_get_vluimsbf8(&br, &v), -1);
+    bitreader_init(&br, many, 1);
+    ck_assert_int_eq(bitreader_get_vluimsbf8(&br, &v), -1);
+    bitreader_init(&br, many, 0);
+    ck_assert_int_eq(bitreader_get_vluimsbf5(&br, &v), -1);
+    ck_assert_int_eq(bitreader_get_vluimsbf8(&br, &v), -1);
+  }
 }
 END_TEST
 
@@ -99,8 +149,9 @@ static Suite *bitreader_suite(void) {
   tcase_add_test(tc, bitreader_get_rejects_short_read);
   tcase_add_test(tc, bitreader_vluimsbf8_matches_known_encoding);
   tcase_add_test(tc, bitreader_vluimsbf8_rejects_overlong_and_overflowing_runs);
-  tcase_add_test(tc, bitreader_vluimsbf4_rejects_overlong_prefix);
-  tcase_add_test(tc, bitreader_vluimsbf4_matches_known_encoding);
+  tcase_add_test(tc, bitreader_vluimsbf5_rejects_overlong_prefix);
+  tcase_add_test(tc, bitreader_vluimsbf5_matches_known_encoding);
+  tcase_add_test(tc, bitreader_unaligned_skip_bytes_and_fuu_header);
   suite_add_tcase(s, tc);
   return s;
 }

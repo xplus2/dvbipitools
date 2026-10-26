@@ -81,10 +81,6 @@ int rdh_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
-  if (cond) yamlcfg_warn(y, code, "%s", msg);
-}
-
 int rdh_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   config_t cfg;
@@ -98,23 +94,23 @@ int rdh_cfg_test(const char *path, int strict) {
   }
   pwlen = strlen(cfg.srt_passphrase);
 
-  warn_if(&y, cfg.n_inputs == 0, "RA000363", "input not set (required unless given on the command line)");
-  warn_if(&y, !cfg.mcast_port && cfg.n_rist == 0 && cfg.n_srt == 0, "RA000513", "mcast, rist or srt not set (one is required unless given on the command line)");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "RA000120", "metrics.sock and metrics.interval require metrics.id");
-  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "RA000161", "metrics.inspect-ts requires metrics.id");
-  warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "RA000162", "al-fec requires al-fec-port");
-  warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "RA000163", "al-fec-port has no effect without al-fec");
-  warn_if(&y, cfg.al_fec_l && !cfg.rtp, "RA000514", "al-fec requires rtp");
-  warn_if(&y, cfg.al_fec_l && !cfg.mcast_port, "RA000515", "al-fec has no effect without mcast");
-  warn_if(&y, cfg.n_rist == 0 && (cfg.rist_profile_given || cfg.rist_secret[0] || cfg.rist_key_size || cfg.rist_cname[0] || cfg.rist_buffer_ms), "RA000516", "profile/secret/encryption-type/cname/buffer have no effect without rist");
-  warn_if(&y, cfg.n_rist > 0 && cfg.rist_secret[0] && cfg.rist_profile != RIST_PROF_MAIN, "RA000517", "rist-secret requires rist-profile main");
-  warn_if(&y, cfg.n_rist > 0 && cfg.rist_key_size && cfg.rist_profile != RIST_PROF_MAIN, "RA000518", "rist-encryption-type requires rist-profile main");
-  warn_if(&y, cfg.n_srt > 1 && cfg.srt_group_mode == SRT_BOND_NONE, "RA000519", "bonding several srt:// peers requires srt.group-mode");
-  warn_if(&y, cfg.n_srt == 1 && cfg.srt_group_mode != SRT_BOND_NONE, "RA000520", "srt.group-mode has no effect with a single srt:// peer");
-  warn_if(&y, cfg.n_srt == 0 && (cfg.srt_group_mode != SRT_BOND_NONE || cfg.srt_passphrase[0] || cfg.srt_pbkeylen || cfg.srt_streamid[0] || cfg.srt_packetfilter[0] || cfg.srt_latency_ms), "RA000521", "srt.* settings need an srt:// peer");
-  warn_if(&y, pwlen && (pwlen < 10 || pwlen > 79), "RA000378", "srt.passphrase must be 10..79 characters");
-  warn_if(&y, cfg.srt_pbkeylen && !pwlen, "RA000379", "srt.pbkeylen requires srt.passphrase");
-  warn_if(&y, cfg.any_cas_flag && cfg.cas_algo == CAS_ALGO_NONE, "RA000522", "cas.* options require cas.algo");
+  yamlcfg_warn_if(&y, cfg.n_inputs == 0, "RA000363", "input not set (required unless given on the command line)");
+  yamlcfg_warn_if(&y, !cfg.mcast_port && cfg.n_rist == 0 && cfg.n_srt == 0, "RA000513", "mcast, rist or srt not set (one is required unless given on the command line)");
+  yamlcfg_warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "RA000120", "metrics.sock and metrics.interval require metrics.id");
+  yamlcfg_warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "RA000161", "metrics.inspect-ts requires metrics.id");
+  yamlcfg_warn_if(&y, cfg.al_fec_l && !cfg.al_fec_port, "RA000162", "al-fec requires al-fec-port");
+  yamlcfg_warn_if(&y, !cfg.al_fec_l && cfg.al_fec_port, "RA000163", "al-fec-port has no effect without al-fec");
+  yamlcfg_warn_if(&y, cfg.al_fec_l && !cfg.rtp, "RA000514", "al-fec requires rtp");
+  yamlcfg_warn_if(&y, cfg.al_fec_l && !cfg.mcast_port, "RA000515", "al-fec has no effect without mcast");
+  yamlcfg_warn_if(&y, cfg.n_rist == 0 && (cfg.rist_profile_given || cfg.rist_secret[0] || cfg.rist_key_size || cfg.rist_cname[0] || cfg.rist_buffer_ms), "RA000516", "profile/secret/encryption-type/cname/buffer have no effect without rist");
+  yamlcfg_warn_if(&y, cfg.n_rist > 0 && cfg.rist_secret[0] && cfg.rist_profile != RIST_PROF_MAIN, "RA000517", "rist-secret requires rist-profile main");
+  yamlcfg_warn_if(&y, cfg.n_rist > 0 && cfg.rist_key_size && cfg.rist_profile != RIST_PROF_MAIN, "RA000518", "rist-encryption-type requires rist-profile main");
+  yamlcfg_warn_if(&y, cfg.n_srt > 1 && cfg.srt_group_mode == SRT_BOND_NONE, "RA000519", "bonding several srt:// peers requires srt.group-mode");
+  yamlcfg_warn_if(&y, cfg.n_srt == 1 && cfg.srt_group_mode != SRT_BOND_NONE, "RA000520", "srt.group-mode has no effect with a single srt:// peer");
+  yamlcfg_warn_if(&y, cfg.n_srt == 0 && (cfg.srt_group_mode != SRT_BOND_NONE || cfg.srt_passphrase[0] || cfg.srt_pbkeylen || cfg.srt_streamid[0] || cfg.srt_packetfilter[0] || cfg.srt_latency_ms), "RA000521", "srt.* settings need an srt:// peer");
+  yamlcfg_warn_if(&y, pwlen && (pwlen < 10 || pwlen > 79), "RA000378", "srt.passphrase must be 10..79 characters");
+  yamlcfg_warn_if(&y, cfg.srt_pbkeylen && !pwlen, "RA000379", "srt.pbkeylen requires srt.passphrase");
+  yamlcfg_warn_if(&y, cfg.any_cas_flag && cfg.cas_algo == CAS_ALGO_NONE, "RA000522", "cas.* options require cas.algo");
   if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg.cas_algo, cfg.cas_vendors, cfg.n_cas_vendors, cfg.biss2_enabled, cfg.biss1_enabled, cfg.biss2_ca_enabled, cfg.biss2_emit_esw, cfg.biss2_ca_session_id_given, cfg.cas_cp_duration_ms}) != 0)
     y.warnings++;
   rc = yamlcfg_report(&y);

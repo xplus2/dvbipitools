@@ -72,6 +72,11 @@ sds:
   timeout: 3
   # --sds-refresh-interval 30 # seconds
   refresh-interval: 30
+  # --sds-bim-namespace [not set]
+  #bim-namespace: urn:dvb:metadata:iptv:sdns:2008-1
+  # --sds-schema [not set]
+  #schema:
+  #  - <path>
 
 # --segment-size 3 # seconds
 segment-size: 3
@@ -85,8 +90,8 @@ hls:
 dash:
   # --dash-part-size 0.333 # seconds
   part-size: 0.333
-  # --dash-utc-url <url> # empty: /time
-  utc-url: ""
+  # --dash-utc-url [not set] # /time
+  #utc-url: <url>
 
 metrics:
   # --metrics /run/dvbipitools/metrics.sock

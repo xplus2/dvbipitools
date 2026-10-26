@@ -3,7 +3,6 @@
 
 #include <check.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>

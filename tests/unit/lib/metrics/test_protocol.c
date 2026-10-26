@@ -467,6 +467,154 @@ START_TEST(signed_values_roundtrip_zigzag) {
 }
 END_TEST
 
+START_TEST(utf8_sequences_are_validated) {
+  static const unsigned char two[] = {0xC3, 0xA4};
+  static const unsigned char three[] = {0xE2, 0x82, 0xAC};
+  static const unsigned char four[] = {0xF0, 0x9F, 0x98, 0x80};
+  static const unsigned char over3[] = {0xE0, 0x80, 0x80};
+  static const unsigned char over4[] = {0xF0, 0x80, 0x80, 0x80};
+  static const unsigned char surrogate[] = {0xED, 0xA0, 0x80};
+  static const unsigned char beyond[] = {0xF4, 0x90, 0x80, 0x80};
+  static const unsigned char badcont[] = {0xE2, 0x41, 0xAC};
+  static const unsigned char lone_cont[] = {0x80};
+  static const unsigned char overlong2[] = {0xC0, 0x80};
+  static const unsigned char f5[] = {0xF5, 0x80, 0x80, 0x80};
+  ck_assert_uint_eq(metrics_utf8_seq_len(NULL, 0), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len((const unsigned char *)"a", 1), 1u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(two, 2), 2u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(two, 1), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(three, 3), 3u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(three, 2), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(four, 4), 4u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(four, 3), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(over3, 3), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(over4, 4), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(surrogate, 3), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(beyond, 4), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(badcont, 3), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(lone_cont, 1), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(overlong2, 2), 0u);
+  ck_assert_uint_eq(metrics_utf8_seq_len(f5, 4), 0u);
+}
+END_TEST
+
+static size_t build_v2(unsigned char *buf, const unsigned char *body, size_t n) {
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  make_hdr(&hdr, "x");
+  ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
+  memcpy(buf, w.buf, METRICS_HDR_LEN);
+  memcpy(buf + METRICS_HDR_LEN, body, n);
+  return METRICS_HDR_LEN + n;
+}
+
+START_TEST(reader_rejects_bad_varints) {
+  unsigned char body[32];
+  unsigned char pkt[METRICS_HDR_LEN + 32];
+  metrics_reader_t r;
+  metrics_hdr_t h;
+  metrics_id_t id;
+  uint64_t v;
+  size_t n;
+
+  n = 0;
+  body[n++] = 0;
+  body[n++] = 1;
+  body[n++] = 0;
+  body[n++] = 10;
+  for (int i = 0; i < 10; i++) body[n++] = 0xFF;
+  n = build_v2(pkt, body, n);
+  ck_assert_int_eq(metrics_reader_init(&r, pkt, n, &h), 0);
+  ck_assert_int_eq(metrics_reader_next(&r, &id, NULL, 0, &v), -1);
+
+  n = 0;
+  body[n++] = 0;
+  body[n++] = 1;
+  body[n++] = 0;
+  body[n++] = 10;
+  for (int i = 0; i < 9; i++) body[n++] = 0xFF;
+  body[n++] = 0x02;
+  n = build_v2(pkt, body, n);
+  ck_assert_int_eq(metrics_reader_init(&r, pkt, n, &h), 0);
+  ck_assert_int_eq(metrics_reader_next(&r, &id, NULL, 0, &v), -1);
+
+  n = 0;
+  body[n++] = 0;
+  body[n++] = 1;
+  body[n++] = 0;
+  body[n++] = 10;
+  for (int i = 0; i < 9; i++) body[n++] = 0xFF;
+  body[n++] = 0x01;
+  n = build_v2(pkt, body, n);
+  ck_assert_int_eq(metrics_reader_init(&r, pkt, n, &h), 0);
+  ck_assert_int_eq(metrics_reader_next(&r, &id, NULL, 0, &v), 1);
+  ck_assert_uint_eq(v, UINT64_MAX);
+
+  n = 0;
+  body[n++] = 0;
+  body[n++] = 1;
+  body[n++] = 0;
+  body[n++] = 10;
+  body[n++] = 0x80;
+  n = build_v2(pkt, body, n);
+  ck_assert_int_eq(metrics_reader_init(&r, pkt, n, &h), 0);
+  ck_assert_int_eq(metrics_reader_next(&r, &id, NULL, 0, &v), -1);
+}
+END_TEST
+
+START_TEST(writer_cuts_labels_inside_multibyte_sequences) {
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  metrics_reader_t r;
+  metrics_hdr_t out;
+  metrics_id_t id;
+  char label[METRICS_LABEL_MAX + 1];
+  char big[METRICS_LABEL_MAX + 8];
+  uint64_t v;
+  make_hdr(&hdr, "utf");
+  for (int lead = 0; lead < 4; lead++) {
+    memset(big, 'a', sizeof big - 1);
+    big[sizeof big - 1] = 0;
+    for (int k = 0; k < lead; k++) big[METRICS_LABEL_MAX - 1 + k - lead + 1] = (char)0x80;
+    big[METRICS_LABEL_MAX - lead] = (char)(lead == 0 ? 'b' : 0xE2);
+    ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
+    ck_assert_int_eq(metrics_writer_put(&w, METRICS_ID_INPUT_UP, big, 5), 0);
+    ck_assert_uint_gt(metrics_writer_finish(&w), 0u);
+    ck_assert_int_eq(metrics_reader_init(&r, w.buf, w.len, &out), 0);
+    ck_assert_int_eq(metrics_reader_next(&r, &id, label, sizeof label, &v), 1);
+    ck_assert_uint_le(strlen(label), (size_t)METRICS_LABEL_MAX);
+  }
+}
+END_TEST
+
+START_TEST(reader_without_label_buffer_and_finish_without_begin) {
+  metrics_writer_t w;
+  metrics_hdr_t hdr;
+  metrics_reader_t r;
+  metrics_hdr_t out;
+  metrics_id_t id;
+  uint64_t v;
+  char tiny[1];
+  memset(&w, 0, sizeof w);
+  ck_assert_uint_eq(metrics_writer_finish(&w), 0u);
+  ck_assert_int_eq(metrics_writer_put(&w, METRICS_ID_INPUT_UP, "a", 1), -1);
+  make_hdr(&hdr, "x");
+  ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
+  ck_assert_int_eq(metrics_writer_put(&w, METRICS_ID_INPUT_UP, "abc", 1), 0);
+  ck_assert_int_eq(metrics_writer_put(&w, METRICS_ID_INPUT_UP, "abc", 2), 0);
+  ck_assert_int_eq(metrics_writer_put(&w, METRICS_ID_INPUT_UP, "abd", 3), 0);
+  ck_assert_int_eq(metrics_writer_put(&w, METRICS_ID_INPUT_UP, "ab", 3), 0);
+  ck_assert_uint_gt(metrics_writer_finish(&w), 0u);
+  ck_assert_int_eq(metrics_reader_init(&r, w.buf, w.len, &out), 0);
+  ck_assert_int_eq(metrics_reader_next(&r, &id, NULL, 0, &v), 1);
+  ck_assert_int_eq(metrics_reader_next(&r, &id, tiny, sizeof tiny, &v), 1);
+  ck_assert_str_eq(tiny, "");
+  ck_assert_int_eq(metrics_reader_next(&r, &id, tiny, 0, &v), 1);
+  ck_assert_int_eq(metrics_reader_next(&r, &id, NULL, 0, &v), 1);
+  ck_assert_int_eq(metrics_reader_next(&r, &id, NULL, 0, &v), 0);
+}
+END_TEST
+
 static Suite *protocol_suite(void) {
   Suite *s = suite_create("metrics_protocol");
   TCase *tc = tcase_create("core");
@@ -490,6 +638,10 @@ static Suite *protocol_suite(void) {
   tcase_add_test(tc, reader_rejects_oversized_v1_label);
   tcase_add_test(tc, reader_rejects_malformed_v2_groups);
   tcase_add_test(tc, signed_values_roundtrip_zigzag);
+  tcase_add_test(tc, utf8_sequences_are_validated);
+  tcase_add_test(tc, reader_rejects_bad_varints);
+  tcase_add_test(tc, writer_cuts_labels_inside_multibyte_sequences);
+  tcase_add_test(tc, reader_without_label_buffer_and_finish_without_begin);
   suite_add_tcase(s, tc);
   return s;
 }

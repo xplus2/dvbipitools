@@ -4,6 +4,8 @@
 #ifndef DVBIPITOOLS_LIB_HELPER_TOOLMAIN_H
 #define DVBIPITOOLS_LIB_HELPER_TOOLMAIN_H
 
+#include <stdio.h>
+
 /* startup banner: name, version, arch, build type, link mode */
 void toolmain_print_banner(const char *tool_name, const char *tool_version, const char *build_arch, const char *build_type, const char *build_link);
 

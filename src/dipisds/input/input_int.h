@@ -17,7 +17,10 @@
 #include "dipisds/input.h"
 
 const char *suffix(const char *path);
-int read_whole_file(const char *path, unsigned char **out, size_t *out_len);
+/* UTF-8 BOM skipped on line 1 */
+char *skip_bom(char *line, int lineno);
+/* NULL: blank or '#' comment line */
+char *csv_line_body(char *line, int lineno);
 int parse_mcast_uri(const char *uri, sds_service_t *s);
 int dvb_id(const char *name, const char *v, unsigned *out);
 int load_csv(FILE *f, input_t *in);

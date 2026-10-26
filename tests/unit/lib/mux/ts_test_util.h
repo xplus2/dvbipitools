@@ -12,10 +12,12 @@
 
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
+#include "../../fx_ts.h"
 
 #define DISCOVERY_PACKETS 3
 #define EDGE_MAX_PACKETS 3
 #define EDGE_MARKER_LEN 20
+#define PES_ES_MAX (16u * 1024u * 1024u)
 
 static inline void wrap_ts_packet(unsigned char pkt[188], unsigned pid, int pusi, const unsigned char *payload, size_t plen) {
   pkt[0] = 0x47;
@@ -40,14 +42,6 @@ static inline void wrap_ts_packet_exact(unsigned char pkt[188], unsigned pid, in
     memset(pkt + 6, 0xFF, af_len - 1);
   }
   memcpy(pkt + 5 + af_len, payload, plen);
-}
-
-static inline void wrap_section_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  unsigned char payload[184];
-
-  payload[0] = 0x00;
-  memcpy(payload + 1, section, slen);
-  wrap_ts_packet(pkt, pid, 1, payload, slen + 1);
 }
 
 static inline size_t build_adts_frame(unsigned char *out, size_t total_len) {
@@ -628,6 +622,46 @@ static inline void ts_script_discovery(ts_script_t *s, unsigned prog_num, unsign
     slen = psi_build_sdt(0, 0x1234, 2, prog_num, 0x01, "Provider", "Service", sec, sizeof sec);
     ts_script_section(s, 0x0011, sec, slen);
   }
+}
+
+#define VPID 0x201
+#define APID 0x101
+#define TPID 0x301
+#define PMT_PID 0x100
+
+static inline void pes_at(ts_script_t *s, unsigned pid, unsigned char sid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *es, size_t n) {
+  unsigned char *pes;
+  size_t len;
+  ck_assert_uint_le(n, PES_ES_MAX);
+  pes = malloc(n + 64);
+  ck_assert_ptr_nonnull(pes);
+  len = build_pes_any(pes, sid, has_pts, pts, has_dts, dts, es, n);
+  ts_script_pes(s, pid, pes, len);
+  free(pes);
+}
+
+static inline void audio_pes(ts_script_t *s, unsigned pid, int has_pts, uint64_t pts, const unsigned char *es, size_t n) {
+  pes_at(s, pid, 0xC0, has_pts, pts, 0, 0, es, n);
+}
+
+static inline void video_pes(ts_script_t *s, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *es, size_t n) {
+  pes_at(s, VPID, 0xE0, has_pts, pts, has_dts, dts, es, n);
+}
+
+static inline void discovery(ts_script_t *s, const ts_es_spec_t *es, size_t n, int sdt) {
+  ts_script_discovery(s, 101, PMT_PID, NULL, 0, es, n, sdt);
+}
+
+static inline void ttx_pes_at(ts_script_t *s, unsigned page, unsigned pkt, const char *text, uint64_t pts_ms) {
+  unsigned char es[64];
+  size_t n = build_ttx_pes(es, page, pkt, text);
+  pes_at(s, TPID, 0xBD, 1, pts_ms * 90, 0, 0, es, n);
+}
+
+static inline void ttx_cue(ts_script_t *s, const char *text, uint64_t start_ms, uint64_t end_ms) {
+  ttx_pes_at(s, 777, 0, "", start_ms);
+  ttx_pes_at(s, 777, 1, text, start_ms);
+  ttx_pes_at(s, 777, 0, "", end_ms);
 }
 
 #endif

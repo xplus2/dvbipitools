@@ -6,10 +6,8 @@
 
 #include "lib/cas/cas_core.h"
 #include "lib/cas/cas_group.h"
-#include "lib/cas/ecmg_client/ecmg_client.h"
 #include "lib/helper/log.h"
 #include "lib/net/retryset.h"
-
 #include "cas.h"
 
 #define CAS_CLOCK_MARGIN_S 10.0 /* HLS: playlist, key, first segment */

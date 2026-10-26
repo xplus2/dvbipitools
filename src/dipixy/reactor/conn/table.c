@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <errno.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stddef.h>
@@ -12,12 +11,8 @@
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "dipixy/reactor/conn.h"
-#include "dipixy/reactor/internal.h"
-#include "dipixy/reactor/reactor.h"
-#include "dipixy/reactor/reactor_tls.h"
 #include "dipixy/version.h"
 #include "lib/helper/log.h"
 

@@ -2,13 +2,10 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <errno.h>
-#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
 
-#include "lib/demux/mpts_probe.h"
 #include "lib/demux/psi/psi.h"
 #include "lib/demux/tspack.h"
 #include "lib/sys/antidebug.h"
@@ -18,10 +15,8 @@
 #include "lib/metrics/export.h"
 #include "lib/tsinspect/inspect.h"
 #include "lib/mux/flv/flv.h"
-#include "lib/net/rtmp/rtmpout.h"
 #include "lib/net/ts/source.h"
 #include "lib/sys/signal.h"
-
 #include "cli/args.h"
 #include "biss_ca_state.h"
 #include "device.h"

@@ -6,7 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "chankey.h"
 #include "sds_xml.h"
+#include "lib/net/dvbstp.h"
 #include "xml_util.h"
 
 static void put_lang(FILE *f, const char *lang) {
@@ -20,28 +22,33 @@ static void put_lang(FILE *f, const char *lang) {
   xml_escape(f, l3);
 }
 
-void sds_broadcast_open(FILE *f, const char *domain, unsigned version) {
-  fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<BroadcastDiscovery DomainName=\"", f);
+#define SDS_PROLOG "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n"
+
+static void doc_open(FILE *f, const char *record, const char *domain, unsigned version) {
+  fprintf(f, "%s<%s DomainName=\"", SDS_PROLOG, record);
   xml_escape(f, domain);
-  fprintf(f, "\" Version=\"%u\">\n<ServiceList>\n", version);
+  fprintf(f, "\" Version=\"%u\">\n", version);
 }
 
-/* must match chan_key_hash() in src/dipifccret/channel/hash.c exactly: same constants, same
-   xor/mul order (addr bytes, family, port) or both tools disagree on port */
+static size_t mem_finish(FILE *f, char **ptr, size_t *len, unsigned char **out) {
+  int err = ferror(f);
+  if (fclose(f) || err) {
+    free(*ptr);
+    return 0;
+  }
+  *out = (unsigned char *)*ptr;
+  return *len;
+}
+
+void sds_broadcast_open(FILE *f, const char *domain, unsigned version) {
+  doc_open(f, "BroadcastDiscovery", domain, version);
+  fputs("<ServiceList>\n", f);
+}
+
 static unsigned fcc_resolve_port(const sds_service_t *s, const sds_fcc_t *fcc) {
   unsigned char addr[16];
-  size_t addr_len = s->family == AF_INET6 ? 16 : 4;
-  uint64_t h = 1469598103934665603ULL;
   if (inet_pton(s->family, s->address, addr) != 1) return fcc->port;
-  for (size_t i = 0; i < addr_len; i++) {
-    h ^= addr[i];
-    h *= 1099511628211ULL;
-  }
-  h ^= (unsigned)s->family;
-  h *= 1099511628211ULL;
-  h ^= s->port;
-  h *= 1099511628211ULL;
-  return fcc->resolve_base_port + (unsigned)((size_t)h % fcc->resolve_max_channels);
+  return fcc->resolve_base_port + (unsigned)((size_t)chan_key_fnv(s->family, addr, s->family == AF_INET6 ? 16 : 4, s->port) % fcc->resolve_max_channels);
 }
 
 void sds_broadcast_item(FILE *f, const sds_service_t *s, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec) {
@@ -98,21 +105,21 @@ void sds_broadcast_close(FILE *f) {
   fputs("</ServiceList>\n</BroadcastDiscovery>\n</ServiceDiscovery>\n", f);
 }
 
-size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, unsigned char **out) {
+size_t sds_build_broadcast(const char *domain, unsigned version, const sds_service_t *svcs, int count, const sds_ret_t *ret, const sds_fcc_t *fcc, const sds_fec_t *fec, const char *bcg_id, unsigned char **out) {
   char *ptr;
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
   if (!f) return 0;
   sds_broadcast_open(f, domain, version);
+  if (bcg_id) {
+    fputs("<ServicesDescriptionLocation preferred=\"true\">", f);
+    xml_escape(f, bcg_id);
+    fputs("</ServicesDescriptionLocation>\n", f);
+  }
   for (int i = 0; i < count; i++)
     sds_broadcast_item(f, &svcs[i], ret, fcc, fec);
   sds_broadcast_close(f);
-  if (fclose(f)) {
-    free(ptr);
-    return 0;
-  }
-  *out = (unsigned char *)ptr;
-  return len;
+  return mem_finish(f, &ptr, &len, out);
 }
 
 size_t sds_build_sp(const char *domain, const char *display_name, const char *lang, unsigned version, const char *push_addr, unsigned push_port, const unsigned *extra_payload_ids, int extra_count, unsigned char **out) {
@@ -120,30 +127,21 @@ size_t sds_build_sp(const char *domain, const char *display_name, const char *la
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
   if (!f) return 0;
-  fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<ServiceProviderDiscovery>\n<ServiceProvider DomainName=\"", f);
+  fputs(SDS_PROLOG "<ServiceProviderDiscovery>\n<ServiceProvider DomainName=\"", f);
   xml_escape(f, domain);
   fprintf(f, "\" Version=\"%u\">\n<Name Language=\"", version);
   put_lang(f, lang);
   fputs("\">", f);
   xml_escape(f, display_name);
-  fprintf(f, "</Name>\n<Offering><Push Address=\"%s\" Port=\"%u\"><PayloadId Id=\"2\"/>", push_addr, push_port);
-  for (int i = 0; i < extra_count; i++) fprintf(f, "<PayloadId Id=\"%u\"/>", extra_payload_ids[i]);
+  fprintf(f, "</Name>\n<Offering><Push Address=\"%s\" Port=\"%u\"><PayloadId Id=\"%X\"/>", push_addr, push_port, DVBSTP_PAYLOAD_BROADCAST_DISCOVERY);
+  for (int i = 0; i < extra_count; i++) fprintf(f, "<PayloadId Id=\"%X\"/>", extra_payload_ids[i]);
   fputs("</Push></Offering>\n</ServiceProvider>\n</ServiceProviderDiscovery>\n</ServiceDiscovery>\n", f);
-  if (fclose(f)) {
-    free(ptr);
-    return 0;
-  }
-  *out = (unsigned char *)ptr;
-  return len;
+  return mem_finish(f, &ptr, &len, out);
 }
 
-void sds_package_open(FILE *f, const char *domain, unsigned version) {
-  fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<PackageDiscovery DomainName=\"", f);
-  xml_escape(f, domain);
-  fprintf(f, "\" Version=\"%u\">\n", version);
-}
+void sds_package_open(FILE *f, const char *domain, unsigned version) { doc_open(f, "PackageDiscovery", domain, version); }
 
-static const sds_service_t *sds_find_service(const char *name, const sds_service_t *svcs, int svc_count) {
+const sds_service_t *sds_find_service(const char *name, const sds_service_t *svcs, int svc_count) {
   for (int i = 0; i < svc_count; i++) {
     if (!strcmp(svcs[i].name, name)) return &svcs[i];
   }
@@ -179,19 +177,10 @@ size_t sds_build_package(const char *domain, unsigned version, const sds_package
   sds_package_open(f, domain, version);
   for (int i = 0; i < pkg_count; i++) sds_package_item(f, &pkgs[i], svcs, svc_count);
   sds_package_close(f);
-  if (fclose(f)) {
-    free(ptr);
-    return 0;
-  }
-  *out = (unsigned char *)ptr;
-  return len;
+  return mem_finish(f, &ptr, &len, out);
 }
 
-void sds_regionalisation_open(FILE *f, const char *domain, unsigned version) {
-  fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<RegionalisationDiscovery DomainName=\"", f);
-  xml_escape(f, domain);
-  fprintf(f, "\" Version=\"%u\">\n", version);
-}
+void sds_regionalisation_open(FILE *f, const char *domain, unsigned version) { doc_open(f, "RegionalisationDiscovery", domain, version); }
 
 void sds_regionalisation_item(FILE *f, const sds_cell_t *cell) {
   fputs("<Cell Id=\"", f);
@@ -220,12 +209,34 @@ size_t sds_build_regionalisation(const char *domain, unsigned version, const sds
   sds_regionalisation_open(f, domain, version);
   for (int i = 0; i < count; i++) sds_regionalisation_item(f, &cells[i]);
   sds_regionalisation_close(f);
-  if (fclose(f)) {
-    free(ptr);
-    return 0;
-  }
-  *out = (unsigned char *)ptr;
-  return len;
+  return mem_finish(f, &ptr, &len, out);
+}
+
+static void put_multilingual(FILE *f, const char *tag, const char *lang, const char *text) {
+  fprintf(f, "<%s Language=\"", tag);
+  put_lang(f, lang);
+  fputs("\">", f);
+  xml_escape(f, text);
+  fprintf(f, "</%s>", tag);
+}
+
+size_t sds_build_bcg(const char *domain, unsigned version, const sds_bcg_t *bcg, unsigned char **out) {
+  char *ptr;
+  size_t len;
+  FILE *f = open_memstream(&ptr, &len);
+  if (!f) return 0;
+  doc_open(f, "BCGDiscovery", domain, version);
+  fputs("<BCG Id=\"", f);
+  xml_escape(f, bcg->id);
+  fprintf(f, "\" Version=\"%u\">", version);
+  put_multilingual(f, "Name", bcg->lang, bcg->name);
+  if (bcg->description) put_multilingual(f, "Description", bcg->lang, bcg->description);
+  fputs("<TransportMode>", f);
+  fprintf(f, "<DVBSTP Address=\"%s\" Port=\"%u\"><PayloadId Id=\"%X\"/><PayloadId Id=\"%X\"/></DVBSTP>", bcg->mcast_addr, bcg->mcast_port, DVBSTP_PAYLOAD_BCG_TVA_INIT, DVBSTP_PAYLOAD_BCG_DATA_CONTAINER);
+  fputs("</TransportMode>", f);
+  if (bcg->provider_name) put_multilingual(f, "BCGProviderName", bcg->lang, bcg->provider_name);
+  fputs("</BCG>\n</BCGDiscovery>\n</ServiceDiscovery>\n", f);
+  return mem_finish(f, &ptr, &len, out);
 }
 
 size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *rms, int rms_count, const sds_fus_t *fus, int fus_count, unsigned char **out) {
@@ -233,9 +244,7 @@ size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *
   size_t len;
   FILE *f = open_memstream(&ptr, &len);
   if (!f) return 0;
-  fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ServiceDiscovery xmlns=\"urn:dvb:metadata:iptv:sdns:2008-1\">\n<RMSFUSDiscovery DomainName=\"", f);
-  xml_escape(f, domain);
-  fprintf(f, "\" Version=\"%u\">\n", version);
+  doc_open(f, "RMSFUSDiscovery", domain, version);
   for (int i = 0; i < rms_count; i++) {
     fputs("<RMSProvider RMSLocation=\"", f);
     xml_escape(f, rms[i].location);
@@ -267,12 +276,7 @@ size_t sds_build_rms_fus(const char *domain, unsigned version, const sds_rms_t *
     fputs("</FUSAnnouncement></FUSProvider>\n", f);
   }
   fputs("</RMSFUSDiscovery>\n</ServiceDiscovery>\n", f);
-  if (fclose(f)) {
-    free(ptr);
-    return 0;
-  }
-  *out = (unsigned char *)ptr;
-  return len;
+  return mem_finish(f, &ptr, &len, out);
 }
 
 static void parse_ret(const char *tag, const char *end, sds_service_t *s) {

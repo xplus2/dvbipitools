@@ -35,7 +35,9 @@ daemonize: off
 # -L|--lang deu
 #lang: deu
 # --dscp signalling
-dscp: signalling
+#dscp: signalling
+# -T|--ttl 16
+#ttl: 16
 # -t|--interval 5 # seconds
 interval: 5
 
@@ -88,6 +90,18 @@ rms:
   # --rms-logo [not set]
   #logo: <uri>
 
+# --bcg-name [not set]
+bcg:
+  #name: <name>
+  # --bcg-id [not set]
+  #id: <id>
+  # --bcg-description [not set]
+  #description: <text>
+  # --bcg-provider-name [not set]
+  #provider-name: <name>
+  # --bcg-mcast [not set]
+  #mcast: <addr>:<port>
+
 # --fus-name [not set]
 fus:
   #name: <name>
@@ -102,7 +116,12 @@ fus:
 
 
 ## listen-only
-# -t|--timeout 35 # seconds
+# --bim-namespace [not set]
+#bim-namespace: urn:dvb:metadata:iptv:sdns:2008-1
+# -s|--schema [not set]
+#schema:
+#  - <path>
+# -t|--timeout 35 # seconds, 0 = until signal
 timeout: 35
 # -o|--output -
 #output: <path>

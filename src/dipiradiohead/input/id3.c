@@ -6,7 +6,7 @@
 #include <string.h>
 
 #ifdef DIPIRADIOHEAD_ZLIB
-#include <zlib.h>
+#include "lib/helper/zutil.h"
 #endif
 
 #include "lib/sys/ioutil.h"
@@ -196,10 +196,8 @@ static unsigned be24(const unsigned char *b) { return ((unsigned)b[0] << 16) | (
 
 /* returns inflated length, 0 on error or overflow */
 static size_t inflate_frame(const unsigned char *in, size_t len, unsigned char *out) {
-  uLongf olen = INFLATE_MAX;
-  if (uncompress(out, &olen, in, (uLong)len) != Z_OK)
-    return 0;
-  return (size_t)olen;
+  size_t olen = INFLATE_MAX;
+  return zinflate(in, len, out, &olen) ? 0 : olen;
 }
 #endif
 

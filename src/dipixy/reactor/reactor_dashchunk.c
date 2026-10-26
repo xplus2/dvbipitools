@@ -9,9 +9,6 @@
 #include "reactor_tls.h"
 #include "../dash/lldash.h"
 
-#include <sys/epoll.h>
-#include <sys/socket.h>
-
 void reactor_dashchunk_begin(int epfd, conn_t *c) {
   c->in.len = 0;
   c->in.off = 0;

@@ -9,9 +9,9 @@
 
 #include "../cfg_fixture.h"
 #include "dipicam378/config.h"
-#include "dipicam378/version.h"
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/log.h"
+#include "dipicam378/version.h"
 
 #define A64 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 #define A256 A64 A64 A64 A64

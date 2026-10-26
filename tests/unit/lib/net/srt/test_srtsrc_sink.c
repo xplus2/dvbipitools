@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -12,40 +11,16 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
-
 #include <srt/srt.h>
 
 #include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtsink.h"
 #include "lib/net/srt/srtsrc.h"
+#include "../../../fx_net.h"
 
 #define PAYLOAD_CHUNKS 5
 #define PAYLOAD_CHUNK_BYTES 1316
 #define LINK_DEADLINE_S 15.0
-
-static double now_seconds(void) {
-  struct timespec ts;
-
-  ck_assert_int_eq(clock_gettime(CLOCK_MONOTONIC, &ts), 0);
-  return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
-}
-
-static unsigned free_udp_port(void) {
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-  int fd = socket(AF_INET, SOCK_DGRAM, 0);
-  unsigned port;
-
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  port = ntohs(addr.sin_port);
-  close(fd);
-  return port;
-}
 
 typedef struct {
   const char *passphrase;

@@ -45,6 +45,8 @@ ssize_t net_sendto_tos(int fd, const void *buf, size_t len, const struct sockadd
 #define NET_DSCP_SIGNALLING   (0x1A << 2)
 #define NET_DSCP_BEST_EFFORT  (0x00 << 2)
 
+#define NET_DSCP_NAMES "video-high|video-low|voice|signalling|best-effort|0..63"
+
 /* name or raw 0..63 dscp; *tos_out = full tos byte */
 int net_dscp_parse(const char *s, int *tos_out);
 

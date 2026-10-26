@@ -7,6 +7,8 @@
 #include <stddef.h>
 
 typedef enum { MODE_ANNOUNCE, MODE_LISTEN } sds_mode_t;
+
+#define SCHEMA_MAX 16
 typedef enum { OUT_M3U, OUT_CSV, OUT_XSPF, OUT_XML, OUT_NULL } out_fmt_t;
 
 typedef struct {
@@ -15,6 +17,8 @@ typedef struct {
   int have_mcast;
   int have_t;
   int have_format;
+  int have_dscp;
+  int have_ttl;
   long t_value;
   int have_ret_rtx_time;
   int have_ret_rtx_pt;
@@ -26,6 +30,7 @@ typedef struct {
   int have_rms_lang;
   int have_fus_lang;
   int have_fus_id;
+  int schema_cli; /* -s seen on the command line */
 } args_flags_t;
 
 typedef struct {
@@ -40,9 +45,13 @@ typedef struct {
   unsigned mcast_port;     /* -m port */
   const char *iface;       /* -I; NULL = kernel default route */
   int dscp;                /* --dscp, announce only; default NET_DSCP_SIGNALLING */
+  unsigned ttl;            /* -T, announce only: multicast TTL / hop limit, default 16 */
   long interval_s;         /* -t, announce: repeat interval, default 5 */
   long timeout_s;          /* -t, listen: default 35 (> 30s max cycle time) */
   const char *output_path; /* -o, listen; NULL = stdout */
+  const char *sdns_ns;     /* --bim-namespace. NULL: newest, with -s: ns of schema file */
+  const char *schemas[SCHEMA_MAX]; /* -s: schema file or dirs. empty: compiled-in SD&S schemas */
+  int nschemas;
   out_fmt_t format;        /* -f, listen */
   int verbose;             /* -v */
   int daemonize;           /* -d, --daemonize: fork to background after startup */
@@ -91,6 +100,14 @@ typedef struct {
   char fus_announce_addr[64]; /* --fus-announce host part, empty = omit MulticastAnnouncementAddress */
   unsigned fus_announce_port; /* --fus-announce port part */
   const char *fus_logo;       /* --fus-logo */
+
+  int bcg_enabled;               /* --bcg-name given, announce */
+  const char *bcg_name;          /* --bcg-name */
+  const char *bcg_id;            /* --bcg-id, default "bcg" */
+  const char *bcg_description;   /* --bcg-description */
+  const char *bcg_provider_name; /* --bcg-provider-name */
+  char bcg_mcast_addr[64];       /* --bcg-mcast host, empty = no DVBSTP transport */
+  unsigned bcg_mcast_port;       /* --bcg-mcast port */
   void *str_pool;
 } config_t;
 
@@ -108,13 +125,40 @@ static inline int sds_al_fec_set(const config_t *c) {
   return c->al_fec_enabled || c->fl.have_al_fec_pt;
 }
 
+static inline int sds_bcg_opts_set(const config_t *c) {
+  return c->bcg_id || c->bcg_description || c->bcg_provider_name || c->bcg_mcast_addr[0];
+}
+
+static inline int sds_bcg_set(const config_t *c) {
+  return c->bcg_enabled || sds_bcg_opts_set(c);
+}
+
 static inline int sds_disco_set(const config_t *c) {
   return c->packages_path || c->cells_path || c->rms_enabled || c->fl.have_rms_lang || c->rms_location || c->rms_logo || c->fus_enabled ||
-         c->fl.have_fus_lang || c->fl.have_fus_id || c->fus_announce_addr[0] || c->fus_logo;
+         c->fl.have_fus_lang || c->fl.have_fus_id || c->fus_announce_addr[0] || c->fus_logo || sds_bcg_set(c);
 }
 
 static inline int sds_announce_only_set(const config_t *c) {
   return sds_ret_set(c) || sds_fcc_set(c) || sds_al_fec_set(c) || c->metrics_id || sds_disco_set(c);
+}
+
+static inline int sds_announce_basics_set(const config_t *c) {
+  return c->input_path || c->provider || c->offering || c->lang[0] || c->fl.have_dscp || c->fl.have_ttl;
+}
+
+static inline int sds_listen_only_set(const config_t *c) {
+  return c->output_path || c->fl.have_format || c->sdns_ns;
+}
+
+#define SDS_FCC_MAX_CHANNELS_DEFAULT 300
+
+static inline unsigned long sds_fcc_resolve_base_port(const config_t *c) {
+  return c->fcc_resolve_base_port ? c->fcc_resolve_base_port : (unsigned long)c->fcc_port + 1;
+}
+
+static inline unsigned long sds_fcc_resolve_last_port(const config_t *c) {
+  size_t n = c->fl.have_fcc_resolve_max_channels ? c->fcc_resolve_max_channels : SDS_FCC_MAX_CHANNELS_DEFAULT;
+  return sds_fcc_resolve_base_port(c) + n - 1;
 }
 
 typedef enum { ARGS_OK, ARGS_HELP, ARGS_ERR } args_status_t;
@@ -123,5 +167,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg);
 
 /* mcast as text, e.g. "239.1.2.3:5000" or "[ff15::1]:5000" */
 void mcast_describe(const config_t *cfg, char *buf, size_t n);
+int sds_has_suffix(const char *s, const char *sfx);
 
 #endif

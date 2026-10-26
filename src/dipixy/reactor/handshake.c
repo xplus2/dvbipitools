@@ -5,16 +5,13 @@
 
 #define _GNU_SOURCE
 #include "internal.h"
-#include "reactor.h"
 #include "reactor_tls.h"
 #ifdef HAVE_HTTP2
 #include "../http2/http2.h"
 #endif
 
-#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <string.h>
 #include <sys/epoll.h>

@@ -3,9 +3,10 @@
 
 #include <getopt.h>
 
+#include "lib/helper/argutil.h"
 #include "priv.h"
 
-static const char *const shortopts = "ali:p:O:L:m:I:t:o:f:c:vdh";
+static const char *const shortopts = "ali:p:O:L:m:I:T:t:o:f:c:s:vdh";
 
 static const struct option longopts[] = {
   {"announce", no_argument, 0, 'a'},
@@ -16,6 +17,7 @@ static const struct option longopts[] = {
   {"lang", required_argument, 0, 'L'},
   {"mcast", required_argument, 0, 'm'},
   {"iface", required_argument, 0, 'I'},
+  {"ttl", required_argument, 0, 'T'},
   {"interval", required_argument, 0, 't'},
   {"timeout", required_argument, 0, 't'},
   {"output", required_argument, 0, 'o'},
@@ -50,6 +52,13 @@ static const struct option longopts[] = {
   {"fus-id", required_argument, 0, OPT_FUS_ID},
   {"fus-announce", required_argument, 0, OPT_FUS_ANNOUNCE},
   {"fus-logo", required_argument, 0, OPT_FUS_LOGO},
+  {"bcg-name", required_argument, 0, OPT_BCG_NAME},
+  {"bcg-id", required_argument, 0, OPT_BCG_ID},
+  {"bcg-description", required_argument, 0, OPT_BCG_DESCRIPTION},
+  {"bcg-provider-name", required_argument, 0, OPT_BCG_PROVIDER_NAME},
+  {"bcg-mcast", required_argument, 0, OPT_BCG_MCAST},
+  {"bim-namespace", required_argument, 0, OPT_BIM_NAMESPACE},
+  {"schema", required_argument, 0, 's'},
   {"dscp", required_argument, 0, OPT_DSCP},
   {"daemonize", no_argument, 0, 'd'},
   {"config", required_argument, 0, 'c'},
@@ -57,24 +66,6 @@ static const struct option longopts[] = {
   {"configtest", no_argument, 0, OPT_CONFIGTEST},
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
-
-static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
-  int c;
-  optind = 1;
-  opterr = 0;
-  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
-    if (c == 'c') *cfg_path = optarg;
-    if (c == OPT_CONFIGTEST) *configtest = 1;
-    if (c == OPT_CONFIG_STRICT) *strict = 1;
-    if (c == 'h') {
-      sds_print_help();
-      opterr = 1;
-      return ARGS_HELP;
-    }
-  }
-  opterr = 1;
-  return ARGS_OK;
-}
 
 static args_status_t dispatch(sds_opt_t *p, int c) {
   static args_status_t (*const groups[])(sds_opt_t *, int) = {sds_opt_general, sds_opt_ret, sds_opt_rms};
@@ -91,11 +82,12 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int configtest = 0;
   int strict = 0;
   sds_opt_t p = {.cfg = cfg};
-  args_status_t pst;
   int c;
 
-  pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
-  if (pst != ARGS_OK) return pst;
+  if (argutil_prescan(argc, argv, shortopts, longopts, OPT_CONFIGTEST, OPT_CONFIG_STRICT, &cfg_path, &configtest, &strict)) {
+    sds_print_help();
+    return ARGS_HELP;
+  }
   if (configtest) return sds_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
 
   sds_cfg_defaults(cfg);

@@ -5,10 +5,8 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "dipixy/segment/priv.h"
 #include "dipixy/segstore.h"

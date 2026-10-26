@@ -1,21 +1,14 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/xml_util.h"
-#include "lib/tva/tva_xml.h"
 #include "lib/tva/tva_xml/tva_xml_int.h"
-
-static int progtext_idx_cmp(const void *a, const void *b) {
-  return strcmp(((const progtext_idx_t *)a)->crid, ((const progtext_idx_t *)b)->crid);
-}
 
 /* 0 ok, -1 OOM. pl->items must not change after this: idx entries are built from it */
 int progtext_list_build_index(progtext_list_t *pl) {
@@ -23,34 +16,21 @@ int progtext_list_build_index(progtext_list_t *pl) {
   pl->idx = malloc(sizeof *pl->idx * (size_t)pl->n);
   if (!pl->idx) return -1;
   for (int i = 0; i < pl->n; i++) {
-    pl->idx[i].crid = pl->items[i].crid;
+    pl->idx[i].key = pl->items[i].crid;
     pl->idx[i].idx = i;
   }
-  qsort(pl->idx, (size_t)pl->n, sizeof *pl->idx, progtext_idx_cmp);
+  bcg_key_index_sort(pl->idx, pl->n);
   return 0;
 }
 
 bcg_progtext_t *find_progtext(const progtext_list_t *pl, const char *crid) {
-  int lo = 0;
-  int hi = pl->n - 1;
-  while (lo <= hi) {
-    int mid = (lo + hi) / 2;
-    int c = strcmp(crid, pl->idx[mid].crid);
-    if (c == 0) return &pl->items[pl->idx[mid].idx];
-    if (c < 0) hi = mid - 1;
-    else       lo = mid + 1;
-  }
-  return NULL;
+  int i = bcg_key_index_find(pl->idx, pl->n, crid);
+  return i < 0 ? NULL : &pl->items[i];
 }
 
 /* grows pl->items to fit one more entry if needed. 0 ok, -1 OOM */
 static int progtext_grow(progtext_list_t *pl) {
-  void *np;
-  if (pl->n < pl->cap) return 0;
-  np = array_grow(pl->items, &pl->cap, pl->n + 1, sizeof *pl->items);
-  if (!np) return -1;
-  pl->items = np;
-  return 0;
+  return array_reserve((void **)&pl->items, &pl->cap, pl->n + 1, sizeof *pl->items);
 }
 
 static int program_text_cb(const char *tag, const char *blk_end, void *ctx) {
@@ -115,9 +95,6 @@ static int service_url_cb(const char *tag, const char *blk_end, void *vctx) {
   service_url_ctx_t *u = vctx;
   char kind[16];
   char text[sizeof u->c->uri];
-  unsigned onid;
-  unsigned tsid;
-  unsigned sid;
   int cut = 0;
 
   if (xml_tag_attr(tag, blk_end, "name", kind, sizeof kind) || xml_span_text_chk(tag, blk_end, text, sizeof text, &cut)) return 0;
@@ -127,11 +104,7 @@ static int service_url_cb(const char *tag, const char *blk_end, void *vctx) {
     bufcpy(u->c->uri, sizeof u->c->uri, text);
   } else if (!u->have_dtt && !strcmp(kind, "DTT")) {
     u->have_dtt = 1;
-    if (sscanf(text, "dvb://%x.%x.%x", &onid, &tsid, &sid) == 3) {
-      u->c->onid = onid;
-      u->c->tsid = tsid;
-      u->c->sid = sid;
-    }
+    bcg_channel_dtt_parse(u->c, text);
   }
   return 0;
 }

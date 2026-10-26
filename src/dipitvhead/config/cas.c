@@ -4,7 +4,6 @@
 #include <stdio.h>
 
 #include "lib/config/yamlcfg.h"
-#include "lib/sys/ioutil.h"
 #include "../config.h"
 #include "priv.h"
 

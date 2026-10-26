@@ -1,6 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +9,7 @@
 
 #include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
+#include "lib/helper/uriparse.h"
 #include "lib/metrics/export.h"
 #include "lib/net/announce_driver.h"
 #include "lib/net/dvbstp.h"
@@ -46,24 +48,28 @@ static void doc_failed(const char *what) {
   log_code("AE500114", "out of memory building %s document", what);
 }
 
-void state_free(sds_state_t *st) {
-  free(st->broadcast_doc);
-  free(st->sp_doc);
-  free(st->package_doc);
-  free(st->cell_doc);
-  free(st->rmsfus_doc);
-  input_free(&st->in);
+static const char *sds_bcg_id(const config_t *cfg) {
+  return cfg->bcg_id ? cfg->bcg_id : "bcg";
 }
 
-static int build_broadcast_and_sp_docs(const config_t *cfg, sds_state_t *st) {
-  unsigned extra_payload_ids[3];
-  int extra_count = 0;
+/* --packages, --cells, loaded once per state build */
+typedef struct {
+  sds_package_t *pkgs;
+  int pkg_count;
+  sds_cell_t *cells;
+  int cell_count;
+} side_t;
+
+typedef size_t (*doc_build_fn)(const config_t *cfg, const input_t *in, const side_t *sd, unsigned version, unsigned char **out);
+
+static size_t build_broadcast(const config_t *cfg, const input_t *in, const side_t *sd, unsigned version, unsigned char **out) {
   sds_ret_t ret_val;
   const sds_ret_t *ret = NULL;
   sds_fcc_t fcc_val;
   const sds_fcc_t *fcc = NULL;
   sds_fec_t fec_val;
   const sds_fec_t *fec = NULL;
+  (void)sd;
 
   if (cfg->ret_enabled) {
     memset(&ret_val, 0, sizeof ret_val);
@@ -83,7 +89,7 @@ static int build_broadcast_and_sp_docs(const config_t *cfg, sds_state_t *st) {
     fcc_val.rtx_time_ms = cfg->fcc_rtx_time;
     fcc_val.rtx_pt = cfg->fcc_rtx_pt;
     fcc_val.resolve_by_port = cfg->fcc_resolve_by_port;
-    fcc_val.resolve_base_port = cfg->fcc_resolve_base_port ? cfg->fcc_resolve_base_port : cfg->fcc_port + 1;
+    fcc_val.resolve_base_port = (unsigned)sds_fcc_resolve_base_port(cfg);
     fcc_val.resolve_max_channels = cfg->fcc_resolve_max_channels;
     fcc = &fcc_val;
   }
@@ -94,85 +100,36 @@ static int build_broadcast_and_sp_docs(const config_t *cfg, sds_state_t *st) {
     fec_val.pt = cfg->al_fec_pt;
     fec = &fec_val;
   }
+  return sds_build_broadcast(cfg->provider, version, in->services, in->service_count, ret, fcc, fec, cfg->bcg_enabled ? sds_bcg_id(cfg) : NULL, out);
+}
+
+static size_t build_sp(const config_t *cfg, const input_t *in, const side_t *sd, unsigned version, unsigned char **out) {
+  unsigned extra_payload_ids[4];
+  int extra_count = 0;
+  (void)in;
+  (void)sd;
   if (cfg->packages_path) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_PACKAGE_DISCOVERY;
   if (cfg->cells_path) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY;
   if (cfg->rms_enabled || cfg->fus_enabled) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_RMSFUS_DISCOVERY;
-
-  st->broadcast_len = sds_build_broadcast(cfg->provider, st->version, st->in.services, st->in.service_count, ret, fcc, fec, &st->broadcast_doc);
-  if (!st->broadcast_len) {
-    doc_failed("Broadcast Discovery");
-    state_free(st);
-    return -1;
-  }
-  st->sp_len = sds_build_sp(cfg->provider, cfg->offering, cfg->lang, st->version, cfg->mcast_group, cfg->mcast_port, extra_payload_ids, extra_count, &st->sp_doc);
-  if (!st->sp_len) {
-    doc_failed("Service Provider Discovery");
-    state_free(st);
-    return -1;
-  }
-  return 0;
+  if (cfg->bcg_enabled) extra_payload_ids[extra_count++] = DVBSTP_PAYLOAD_BCG_DISCOVERY;
+  return sds_build_sp(cfg->provider, cfg->offering, cfg->lang, version, cfg->mcast_group, cfg->mcast_port, extra_payload_ids, extra_count, out);
 }
 
-static int check_package_services(const char *path, const sds_package_t *pkgs, int pkg_count, const sds_service_t *svcs, int svc_count) {
-  for (int i = 0; i < pkg_count; i++) {
-    for (int j = 0; j < pkgs[i].service_count; j++) {
-      int found = 0;
-      for (int k = 0; k < svc_count && !found; k++) found = !strcmp(svcs[k].name, pkgs[i].service_names[j]);
-      if (!found) {
-        log_code("AE400220", "%s: package %u: unknown service: %s", path, pkgs[i].id, pkgs[i].service_names[j]);
-        return -1;
-      }
-    }
-  }
-  return 0;
+static size_t build_package(const config_t *cfg, const input_t *in, const side_t *sd, unsigned version, unsigned char **out) {
+  return sds_build_package(cfg->provider, version, sd->pkgs, sd->pkg_count, in->services, in->service_count, out);
 }
 
-static int build_package_doc(const config_t *cfg, sds_state_t *st) {
-  sds_package_t *pkgs;
-  int pkg_count;
-  if (!cfg->packages_path) return 0;
-  pkgs = malloc(sizeof *pkgs * SDS_MAX_PACKAGES);
-  if (!pkgs || input_load_packages(cfg->packages_path, pkgs, SDS_MAX_PACKAGES, &pkg_count) ||
-      check_package_services(cfg->packages_path, pkgs, pkg_count, st->in.services, st->in.service_count)) {
-    free(pkgs);
-    state_free(st);
-    return -1;
-  }
-  st->package_len = sds_build_package(cfg->provider, st->version, pkgs, pkg_count, st->in.services, st->in.service_count, &st->package_doc);
-  free(pkgs);
-  if (!st->package_len) {
-    doc_failed("Package Discovery");
-    state_free(st);
-    return -1;
-  }
-  return 0;
+static size_t build_cell(const config_t *cfg, const input_t *in, const side_t *sd, unsigned version, unsigned char **out) {
+  (void)in;
+  return sds_build_regionalisation(cfg->provider, version, sd->cells, sd->cell_count, out);
 }
 
-static int build_cell_doc(const config_t *cfg, sds_state_t *st) {
-  sds_cell_t *cells;
-  int cell_count;
-  if (!cfg->cells_path) return 0;
-  cells = malloc(sizeof *cells * SDS_MAX_CELLS);
-  if (!cells || input_load_cells(cfg->cells_path, cells, SDS_MAX_CELLS, &cell_count)) {
-    free(cells);
-    state_free(st);
-    return -1;
-  }
-  st->cell_len = sds_build_regionalisation(cfg->provider, st->version, cells, cell_count, &st->cell_doc);
-  free(cells);
-  if (!st->cell_len) {
-    doc_failed("Regionalisation Discovery");
-    state_free(st);
-    return -1;
-  }
-  return 0;
-}
-
-static int build_rmsfus_doc(const config_t *cfg, sds_state_t *st) {
+static size_t build_rmsfus(const config_t *cfg, const input_t *in, const side_t *sd, unsigned version, unsigned char **out) {
   sds_rms_t rms_val;
   sds_fus_t fus_val;
   int rms_count = 0, fus_count = 0;
-  if (!(cfg->rms_enabled || cfg->fus_enabled)) return 0;
+  (void)in;
+  (void)sd;
   memset(&rms_val, 0, sizeof rms_val);
   memset(&fus_val, 0, sizeof fus_val);
   if (cfg->rms_enabled) {
@@ -190,62 +147,174 @@ static int build_rmsfus_doc(const config_t *cfg, sds_state_t *st) {
     fus_val.logo_uri = cfg->fus_logo;
     fus_count = 1;
   }
-  st->rmsfus_len = sds_build_rms_fus(cfg->provider, st->version, &rms_val, rms_count, &fus_val, fus_count, &st->rmsfus_doc);
-  if (!st->rmsfus_len) {
-    doc_failed("RMS-FUS Discovery");
-    state_free(st);
-    return -1;
+  return sds_build_rms_fus(cfg->provider, version, &rms_val, rms_count, &fus_val, fus_count, out);
+}
+
+static size_t build_bcg(const config_t *cfg, const input_t *in, const side_t *sd, unsigned version, unsigned char **out) {
+  sds_bcg_t bcg = {sds_bcg_id(cfg), cfg->bcg_name, cfg->lang, cfg->bcg_description, cfg->bcg_provider_name,
+    cfg->bcg_mcast_addr, cfg->bcg_mcast_port};
+  (void)in;
+  (void)sd;
+  return sds_build_bcg(cfg->provider, version, &bcg, out);
+}
+
+static int on_always(const config_t *cfg) {
+  (void)cfg;
+  return 1;
+}
+
+static int on_packages(const config_t *cfg) { return cfg->packages_path != NULL; }
+
+static int on_cells(const config_t *cfg) { return cfg->cells_path != NULL; }
+
+static int on_rmsfus(const config_t *cfg) { return cfg->rms_enabled || cfg->fus_enabled; }
+
+static int on_bcg(const config_t *cfg) { return cfg->bcg_enabled; }
+
+/* send order */
+static const struct {
+  size_t off;
+  doc_build_fn build;
+  int (*enabled)(const config_t *cfg);
+  unsigned payload_id;
+  const char *what;
+} doc_slots[] = {
+  {offsetof(sds_state_t, broadcast), build_broadcast, on_always, DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, "Broadcast Discovery"},
+  {offsetof(sds_state_t, sp), build_sp, on_always, DVBSTP_PAYLOAD_SP_DISCOVERY, "Service Provider Discovery"},
+  {offsetof(sds_state_t, package), build_package, on_packages, DVBSTP_PAYLOAD_PACKAGE_DISCOVERY, "Package Discovery"},
+  {offsetof(sds_state_t, cell), build_cell, on_cells, DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY, "Regionalisation Discovery"},
+  {offsetof(sds_state_t, rmsfus), build_rmsfus, on_rmsfus, DVBSTP_PAYLOAD_RMSFUS_DISCOVERY, "RMS-FUS Discovery"},
+  {offsetof(sds_state_t, bcg), build_bcg, on_bcg, DVBSTP_PAYLOAD_BCG_DISCOVERY, "BCG Discovery"},
+};
+
+#define DOC_SLOTS (sizeof doc_slots / sizeof doc_slots[0])
+
+static sds_doc_t *slot_doc(sds_state_t *st, size_t i) { return (sds_doc_t *)((char *)st + doc_slots[i].off); }
+
+static const sds_doc_t *slot_cdoc(const sds_state_t *st, size_t i) { return (const sds_doc_t *)((const char *)st + doc_slots[i].off); }
+
+void state_free(sds_state_t *st) {
+  for (size_t i = 0; i < DOC_SLOTS; i++) free(slot_doc(st, i)->data);
+  input_free(&st->in);
+}
+
+static int check_package_services(const char *path, const sds_package_t *pkgs, int pkg_count, const sds_service_t *svcs, int svc_count) {
+  for (int i = 0; i < pkg_count; i++) {
+    for (int j = 0; j < pkgs[i].service_count; j++) {
+      const char *name = pkgs[i].service_names[j];
+      const sds_service_t *s = sds_find_service(name, svcs, svc_count);
+      if (!s) {
+        log_code("AE400220", "%s: package %u: unknown service: %s", path, pkgs[i].id, name);
+        return -1;
+      }
+      if (sds_find_service(name, s + 1, svc_count - (int)(s - svcs) - 1)) {
+        log_code("AE400321", "%s: package %u: ambiguous service name: %s", path, pkgs[i].id, name);
+        return -1;
+      }
+    }
   }
   return 0;
 }
 
-static int state_load_version(const config_t *cfg, sds_state_t *st, unsigned version) {
+static void side_free(side_t *sd) {
+  free(sd->pkgs);
+  free(sd->cells);
+}
+
+static int side_load(const config_t *cfg, const input_t *in, side_t *sd) {
+  memset(sd, 0, sizeof *sd);
+  if (cfg->packages_path) {
+    if (!(sd->pkgs = malloc(sizeof *sd->pkgs * SDS_MAX_PACKAGES))) {
+      doc_failed("Package Discovery");
+      return -1;
+    }
+    if (input_load_packages(cfg->packages_path, sd->pkgs, SDS_MAX_PACKAGES, &sd->pkg_count) ||
+        check_package_services(cfg->packages_path, sd->pkgs, sd->pkg_count, in->services, in->service_count))
+      return -1;
+  }
+  if (cfg->cells_path) {
+    if (!(sd->cells = malloc(sizeof *sd->cells * SDS_MAX_CELLS))) {
+      doc_failed("Regionalisation Discovery");
+      return -1;
+    }
+    if (input_load_cells(cfg->cells_path, sd->cells, SDS_MAX_CELLS, &sd->cell_count)) return -1;
+  }
+  return 0;
+}
+
+static int doc_same(const sds_doc_t *a, const sds_doc_t *b) {
+  if (!a->data || !b->data) return a->data == b->data;
+  return a->version == b->version && a->len == b->len && !memcmp(a->data, b->data, a->len);
+}
+
+/* prev NULL: version 1. else version of prev, bumped where content changed */
+static int docs_build(const config_t *cfg, sds_state_t *st, const side_t *sd, const sds_state_t *prev) {
+  for (size_t i = 0; i < DOC_SLOTS; i++) {
+    sds_doc_t *d = slot_doc(st, i);
+    const sds_doc_t *p = prev ? slot_cdoc(prev, i) : NULL;
+    if (!doc_slots[i].enabled(cfg)) continue;
+    d->version = p && p->data ? p->version : 1;
+    d->len = doc_slots[i].build(cfg, &st->in, sd, d->version, &d->data);
+    if (d->len && p && p->data && !doc_same(d, p)) {
+      free(d->data);
+      d->data = NULL;
+      d->version = dvbstp_version_next(d->version);
+      d->len = doc_slots[i].build(cfg, &st->in, sd, d->version, &d->data);
+    }
+    if (!d->len) {
+      doc_failed(doc_slots[i].what);
+      return -1;
+    }
+  }
+  return 0;
+}
+
+static int raw_same(const sds_state_t *a, const sds_state_t *b) {
+  return a->in.raw_payload_id == b->in.raw_payload_id && a->in.raw_xml_len == b->in.raw_xml_len &&
+         !memcmp(a->in.raw_xml, b->in.raw_xml, a->in.raw_xml_len);
+}
+
+/* document Version wins, else bumped on change */
+static unsigned raw_version(const sds_state_t *st, const sds_state_t *prev) {
+  if (st->in.raw_version >= 0) return (unsigned)st->in.raw_version;
+  if (!prev || prev->in.kind != INPUT_RAW_XML) return 1;
+  return raw_same(st, prev) ? prev->version : dvbstp_version_next(prev->version);
+}
+
+static int state_build(const config_t *cfg, sds_state_t *st, const sds_state_t *prev) {
+  side_t sd;
+  int rc;
   memset(st, 0, sizeof *st);
-  st->version = version;
   if (input_load(cfg->input_path, &st->in)) return -1;
   if (st->in.kind == INPUT_RAW_XML) {
-    if (st->in.raw_version >= 0) st->version = (unsigned)st->in.raw_version;
+    st->version = raw_version(st, prev);
     return 0;
   }
-  if (build_broadcast_and_sp_docs(cfg, st)) return -1;
-  if (build_package_doc(cfg, st)) return -1;
-  if (build_cell_doc(cfg, st)) return -1;
-  if (build_rmsfus_doc(cfg, st)) return -1;
-  return 0;
+  rc = side_load(cfg, &st->in, &sd);
+  if (!rc) rc = docs_build(cfg, st, &sd, prev);
+  side_free(&sd);
+  if (rc) state_free(st);
+  return rc;
 }
 
 int state_load(const config_t *cfg, sds_state_t *st) {
-  return state_load_version(cfg, st, 1);
-}
-
-static int doc_same(const unsigned char *a, size_t alen, const unsigned char *b, size_t blen) {
-  if (!a || !b) return a == b;
-  return alen == blen && !memcmp(a, b, alen);
+  return state_build(cfg, st, NULL);
 }
 
 static int state_same(const sds_state_t *a, const sds_state_t *b) {
   if (a->in.kind != b->in.kind) return 0;
-  if (a->in.kind == INPUT_RAW_XML)
-    return a->in.raw_payload_id == b->in.raw_payload_id && a->version == b->version &&
-           doc_same(a->in.raw_xml, a->in.raw_xml_len, b->in.raw_xml, b->in.raw_xml_len);
-  return doc_same(a->broadcast_doc, a->broadcast_len, b->broadcast_doc, b->broadcast_len) &&
-         doc_same(a->sp_doc, a->sp_len, b->sp_doc, b->sp_len) &&
-         doc_same(a->package_doc, a->package_len, b->package_doc, b->package_len) &&
-         doc_same(a->cell_doc, a->cell_len, b->cell_doc, b->cell_len) &&
-         doc_same(a->rmsfus_doc, a->rmsfus_len, b->rmsfus_doc, b->rmsfus_len);
+  if (a->in.kind == INPUT_RAW_XML) return a->version == b->version && raw_same(a, b);
+  for (size_t i = 0; i < DOC_SLOTS; i++)
+    if (!doc_same(slot_cdoc(a, i), slot_cdoc(b, i))) return 0;
+  return 1;
 }
 
 int state_reload(const config_t *cfg, sds_state_t *st) {
   sds_state_t next;
-  unsigned bumped = st->version % 255 + 1;
-  if (state_load_version(cfg, &next, st->version)) return -1;
+  if (state_build(cfg, &next, st)) return -1;
   if (state_same(st, &next)) {
     state_free(&next);
     return 1;
-  }
-  if (next.in.kind == INPUT_SERVICES || next.in.raw_version < 0) {
-    state_free(&next);
-    if (state_load_version(cfg, &next, bumped)) return -1;
   }
   state_free(st);
   *st = next;
@@ -260,7 +329,7 @@ static void reload_state(const config_t *cfg, sds_state_t *st, sds_metrics_t *sm
     return;
   }
   if (rc > 0) {
-    log_line("reload %s: unchanged, version %u kept", cfg->input_path, st->version);
+    log_line("reload %s: unchanged, versions kept", cfg->input_path);
     return;
   }
   log_line("reloaded %s: %d service%s", cfg->input_path, st->in.service_count, st->in.service_count == 1 ? "" : "s");
@@ -277,13 +346,13 @@ typedef struct {
 
 static void sds_announce_ready(void *ctx_, const mcast_t *m) {
   const sds_announce_ctx_t *ctx = ctx_;
+  char mcast[80];
   (void)m;
+  uriparse_mcast_describe(ctx->cfg->family, ctx->cfg->mcast_group, ctx->cfg->mcast_port, mcast, sizeof mcast);
   if (ctx->st.in.kind == INPUT_RAW_XML) {
-    log_line("announcing raw %s (payload 0x%02x) on %s:%u every %lds", ctx->cfg->input_path, ctx->st.in.raw_payload_id, ctx->cfg->mcast_group,
-             ctx->cfg->mcast_port, ctx->cfg->interval_s);
+    log_line("announcing raw %s (payload 0x%02x) on %s every %lds", ctx->cfg->input_path, ctx->st.in.raw_payload_id, mcast, ctx->cfg->interval_s);
   } else {
-    log_line("announcing %d service%s on %s:%u every %lds", ctx->st.in.service_count, ctx->st.in.service_count == 1 ? "" : "s",
-             ctx->cfg->mcast_group, ctx->cfg->mcast_port, ctx->cfg->interval_s);
+    log_line("announcing %d service%s on %s every %lds", ctx->st.in.service_count, ctx->st.in.service_count == 1 ? "" : "s", mcast, ctx->cfg->interval_s);
   }
 }
 
@@ -292,18 +361,22 @@ static void sds_announce_reload(void *ctx_) {
   reload_state(ctx->cfg, &ctx->st, &ctx->sm, ctx->metrics_on);
 }
 
+static int send_doc(mcast_t *m, const sds_announce_ctx_t *ctx, unsigned payload_id, unsigned version, const unsigned char *doc, size_t len) {
+  int64_t budget = (int64_t)ctx->cfg->interval_s * 500000000;
+  return dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = payload_id, .segment_id = 1, .segment_version = version, .want_crc = 1, .pacing_budget_ns = budget}, doc, len) == 0;
+}
+
 static int sds_announce_cycle(void *ctx_, mcast_t *m, unsigned cycle) {
   sds_announce_ctx_t *ctx = ctx_;
-  int64_t budget = (int64_t)ctx->cfg->interval_s * 500000000;
-  int ok;
-  if (ctx->st.in.kind == INPUT_RAW_XML) {
-    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = ctx->st.in.raw_payload_id, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1, .pacing_budget_ns = budget}, ctx->st.in.raw_xml, ctx->st.in.raw_xml_len) == 0;
+  const sds_state_t *st = &ctx->st;
+  int ok = 1;
+  if (st->in.kind == INPUT_RAW_XML) {
+    ok = send_doc(m, ctx, st->in.raw_payload_id, st->version, st->in.raw_xml, st->in.raw_xml_len);
   } else {
-    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_BROADCAST_DISCOVERY, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1, .pacing_budget_ns = budget}, ctx->st.broadcast_doc, ctx->st.broadcast_len) == 0;
-    ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_SP_DISCOVERY, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1, .pacing_budget_ns = budget}, ctx->st.sp_doc, ctx->st.sp_len) == 0 && ok;
-    if (ctx->st.package_doc) ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_PACKAGE_DISCOVERY, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1, .pacing_budget_ns = budget}, ctx->st.package_doc, ctx->st.package_len) == 0 && ok;
-    if (ctx->st.cell_doc) ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1, .pacing_budget_ns = budget}, ctx->st.cell_doc, ctx->st.cell_len) == 0 && ok;
-    if (ctx->st.rmsfus_doc) ok = dvbstp_send_segment(m, &(dvbstp_send_t){.payload_id = DVBSTP_PAYLOAD_RMSFUS_DISCOVERY, .segment_id = 1, .segment_version = ctx->st.version, .want_crc = 1, .pacing_budget_ns = budget}, ctx->st.rmsfus_doc, ctx->st.rmsfus_len) == 0 && ok;
+    for (size_t i = 0; i < DOC_SLOTS; i++) {
+      const sds_doc_t *d = slot_cdoc(st, i);
+      if (d->data) ok = send_doc(m, ctx, doc_slots[i].payload_id, d->version, d->data, d->len) && ok;
+    }
   }
   if (!ok) log_code("AE100144", "cycle %u: send failed", cycle);
   if (ctx->metrics_on) {
@@ -343,6 +416,7 @@ int announce_run(const config_t *cfg, metrics_exporter_t *mx) {
   d.mcast_port = cfg->mcast_port;
   d.iface = cfg->iface;
   d.dscp = cfg->dscp;
+  d.ttl = (int)cfg->ttl;
   d.interval_s = cfg->interval_s;
   return announce_driver_run(&d);
 }

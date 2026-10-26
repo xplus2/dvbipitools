@@ -1,9 +1,7 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -11,13 +9,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "lib/demux/crc32.h"
 #include "lib/hls/aes128cbc.h"
 #include "lib/hls/live.h"
+#include "../../fx_net.h"
+#include "../../fx_ts.h"
 
 typedef struct {
   int listen_fd;
@@ -72,50 +71,6 @@ static void *serve_one_conn_scripted(void *arg) {
   return NULL;
 }
 
-static int make_listener(unsigned *port_out) {
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in addr;
-  socklen_t alen = sizeof addr;
-  ck_assert_int_ge(fd, 0);
-  memset(&addr, 0, sizeof addr);
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ck_assert_int_eq(bind(fd, (struct sockaddr *)&addr, sizeof addr), 0);
-  ck_assert_int_eq(listen(fd, 4), 0);
-  ck_assert_int_eq(getsockname(fd, (struct sockaddr *)&addr, &alen), 0);
-  *port_out = ntohs(addr.sin_port);
-  return fd;
-}
-
-static size_t build_pat(unsigned char *out, unsigned pmt_pid) {
-  unsigned char body[16];
-  size_t n = 0;
-  size_t hdr;
-  size_t crc_at;
-  uint32_t crc;
-  body[n++] = 0x00;
-  body[n++] = 0x01;
-  body[n++] = 0xC1;
-  body[n++] = 0x00;
-  body[n++] = 0x00;
-  body[n++] = 0x00;
-  body[n++] = 0x01;
-  body[n++] = (unsigned char)(0xE0 | ((pmt_pid >> 8) & 0x1F));
-  body[n++] = (unsigned char)pmt_pid;
-  hdr = n + 4;
-  out[0] = 0x00;
-  out[1] = (unsigned char)(0xB0 | ((hdr >> 8) & 0x0F));
-  out[2] = (unsigned char)hdr;
-  memcpy(out + 3, body, n);
-  crc_at = 3 + n;
-  crc = crc32_mpeg(out, crc_at);
-  out[crc_at + 0] = (unsigned char)(crc >> 24);
-  out[crc_at + 1] = (unsigned char)(crc >> 16);
-  out[crc_at + 2] = (unsigned char)(crc >> 8);
-  out[crc_at + 3] = (unsigned char)crc;
-  return crc_at + 4;
-}
-
 static size_t build_pmt_1audio(unsigned char *out, unsigned pid) {
   unsigned char body[16];
   size_t n = 0;
@@ -150,27 +105,6 @@ static size_t build_pmt_1audio(unsigned char *out, unsigned pid) {
   return crc_at + 4;
 }
 
-static void wrap_psi_packet(unsigned char pkt[188], unsigned pid, const unsigned char *section, size_t slen) {
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  pkt[4] = 0x00;
-  memcpy(pkt + 5, section, slen);
-  for (size_t i = 5 + slen; i < 188; i++) pkt[i] = 0xFF;
-}
-
-static void wrap_pes_packet(unsigned char pkt[188], unsigned pid, const unsigned char *payload, size_t plen) {
-  unsigned char hdr[9] = {0x00, 0x00, 0x01, 0xC0, 0x00, 0x00, 0x80, 0x00, 0x00};
-  pkt[0] = 0x47;
-  pkt[1] = (unsigned char)(0x40 | ((pid >> 8) & 0x1F));
-  pkt[2] = (unsigned char)pid;
-  pkt[3] = 0x10;
-  memcpy(pkt + 4, hdr, sizeof hdr);
-  memcpy(pkt + 4 + sizeof hdr, payload, plen);
-  for (size_t i = 4 + sizeof hdr + plen; i < 188; i++) pkt[i] = 0xFF;
-}
-
 /* 2nd PES needed: flush waits for next PUSI */
 static size_t build_segment(unsigned char *out, const char *tag) {
   unsigned char section[32];
@@ -178,10 +112,10 @@ static size_t build_segment(unsigned char *out, const char *tag) {
   size_t off = 0;
 
   slen = build_pat(section, 0x100);
-  wrap_psi_packet(out + off, 0x0000, section, slen);
+  wrap_section_packet(out + off, 0x0000, section, slen);
   off += 188;
   slen = build_pmt_1audio(section, 0x101);
-  wrap_psi_packet(out + off, 0x100, section, slen);
+  wrap_section_packet(out + off, 0x100, section, slen);
   off += 188;
   wrap_pes_packet(out + off, 0x101, (const unsigned char *)tag, strlen(tag));
   off += 188;
@@ -538,11 +472,6 @@ static const unsigned char enc_cipher_iv1[32] = {0x0d, 0xa1, 0xe3, 0xd4, 0xb9, 0
 static const unsigned char enc_cipher_seq7[32] = {0xf4, 0x0e, 0x5e, 0x44, 0x5f, 0xdf, 0xfd, 0xaa, 0xa5, 0xd2, 0x2b, 0xd6, 0x04, 0xdf, 0x6f, 0x6c,
   0x3b, 0x77, 0xa6, 0xb7, 0x79, 0x24, 0x85, 0xea, 0xc0, 0x93, 0x2a, 0x50, 0x5d, 0xcb, 0x32, 0xf6};
 
-static void rig_init(rig_t *r) {
-  memset(r, 0, sizeof *r);
-  r->fd = make_listener(&r->port);
-}
-
 static void rig_add_with(rig_t *r, const char *conn, const void *body, size_t len) {
   size_t hl;
 
@@ -561,25 +490,7 @@ static void rig_add_text(rig_t *r, const char *text) { rig_add(r, text, strlen(t
 
 static void rig_add_keepalive_text(rig_t *r, const char *text) { rig_add_with(r, "", text, strlen(text)); }
 
-static void rig_add_raw(rig_t *r, const char *text) {
-  ck_assert_int_lt(r->n, RIG_MAX);
-  r->resp[r->n] = text;
-  r->lens[r->n] = strlen(text);
-  r->n++;
-}
-
 #define BIG_BODY_LEN (9 * 1024 * 1024)
-
-static void rig_add_big(rig_t *r) {
-  static char big[BIG_BODY_LEN + 128];
-  size_t hl = (size_t)snprintf(big, sizeof big, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", BIG_BODY_LEN);
-
-  ck_assert_int_lt(r->n, RIG_MAX);
-  memset(big + hl, 'A', BIG_BODY_LEN);
-  r->resp[r->n] = big;
-  r->lens[r->n] = hl + BIG_BODY_LEN;
-  r->n++;
-}
 
 static void rig_add_playlist(rig_t *r, unsigned seq, const char *body) {
   char pl[768];
@@ -742,6 +653,18 @@ static void run_idle_case(rig_t *r) {
   rig_close(r);
 }
 
+static void rig_init(rig_t *r) {
+  memset(r, 0, sizeof *r);
+  r->fd = make_listener(&r->port);
+}
+
+static void rig_add_raw(rig_t *r, const char *text) {
+  ck_assert_int_lt(r->n, RIG_MAX);
+  r->resp[r->n] = text;
+  r->lens[r->n] = strlen(text);
+  r->n++;
+}
+
 START_TEST(hls_live_stays_idle_on_not_modified) {
   rig_t r;
 
@@ -851,6 +774,17 @@ START_TEST(hls_live_skips_segment_that_fails_decrypt) {
   rig_close(&r);
 }
 END_TEST
+
+static void rig_add_big(rig_t *r) {
+  static char big[BIG_BODY_LEN + 128];
+  size_t hl = (size_t)snprintf(big, sizeof big, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", BIG_BODY_LEN);
+
+  ck_assert_int_lt(r->n, RIG_MAX);
+  memset(big + hl, 'A', BIG_BODY_LEN);
+  r->resp[r->n] = big;
+  r->lens[r->n] = hl + BIG_BODY_LEN;
+  r->n++;
+}
 
 START_TEST(hls_live_skips_oversize_segment) {
   rig_t r;

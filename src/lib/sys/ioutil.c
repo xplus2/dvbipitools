@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <poll.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
@@ -62,6 +63,15 @@ int read_all(FILE *f, char **out, size_t *out_len) {
   *out = buf;
   *out_len = len;
   return 0;
+}
+
+int read_path(const char *path, char **out, size_t *out_len) {
+  FILE *f = fopen(path, "rb");
+  int rc;
+  if (!f) return -1;
+  rc = read_all(f, out, out_len) ? -2 : 0;
+  fclose(f);
+  return rc;
 }
 
 size_t bufcpy(char *dst, size_t dstsz, const char *src) {
@@ -127,6 +137,26 @@ void *array_grow(void *arr, int *cap, int need, size_t elemsz) {
   return p;
 }
 
+int array_reserve(void **arr, int *cap, int need, size_t elemsz) {
+  void *np;
+  if (need <= *cap) return 0;
+  np = array_grow(*arr, cap, need, elemsz);
+  if (!np) return -1;
+  *arr = np;
+  return 0;
+}
+
+int grow_zeroed(void **arr, int *n, int need, size_t elemsz) {
+  unsigned char *np;
+  if (need <= *n) return 0;
+  np = realloc(*arr, (size_t)need * elemsz);
+  if (!np) return -1;
+  memset(np + (size_t)*n * elemsz, 0, (size_t)(need - *n) * elemsz);
+  *arr = np;
+  *n = need;
+  return 0;
+}
+
 int growbuf_reserve(void **buf, size_t *cap, size_t elem_size, size_t need_elems, size_t initial_elems) {
   size_t ncap;
   void *np;
@@ -185,71 +215,59 @@ int read_line(FILE *f, char *buf, size_t cap) {
   return -1;
 }
 
+static int csv_blank(char c) { return c == ' ' || c == '\t'; }
+
+/* first ',' or NUL outside quotes. quotes only at field start, RFC 4180 */
+static char *csv_field_end(char *p) {
+  if (*p == '"') {
+    for (p++; *p; p++) {
+      if (*p != '"') continue;
+      if (p[1] != '"') {
+        p++;
+        break;
+      }
+      p++;
+    }
+  }
+  return p + strcspn(p, ",");
+}
+
+/* in place: "a""b"c gives a"bc */
+static void csv_unquote(char *p) {
+  char *w = p;
+  char *r = p + 1;
+  while (*r) {
+    if (*r == '"') {
+      if (r[1] != '"') {
+        r++;
+        break;
+      }
+      r++;
+    }
+    *w++ = *r++;
+  }
+  while (*r) *w++ = *r++;
+  *w = '\0';
+}
+
 size_t csv_split(char *line, char **fields, size_t max_fields) {
   size_t nf = 0;
   char *p = line;
   while (nf < max_fields) {
+    char *end;
+    char *e;
+    int last;
+    while (csv_blank(*p)) p++;
+    end = csv_field_end(p);
+    last = !*end;
+    *end = '\0';
+    for (e = end; e > p && csv_blank(e[-1]); e--) e[-1] = '\0';
+    if (*p == '"') csv_unquote(p);
     fields[nf++] = p;
-    p = strchr(p, ',');
-    if (!p) break;
-    *p = '\0';
-    p++;
+    if (last) break;
+    p = end + 1;
   }
   return nf;
-}
-
-static int days_in_month(int y, int mo) {
-  static const unsigned char dim[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-  if (mo == 2 && (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0))) return 29;
-  return dim[mo - 1];
-}
-
-int iso8601_split(const char *in, iso8601_t *out) {
-  size_t l = strlen(in);
-  const char *tail;
-  if (l < 19 || in[4] != '-' || in[7] != '-' || in[10] != 'T' || in[13] != ':' || in[16] != ':')
-    return -1;
-  if (!all_digits(in, 4) || !all_digits(in + 5, 2) || !all_digits(in + 8, 2) || !all_digits(in + 11, 2) || !all_digits(in + 14, 2) || !all_digits(in + 17, 2))
-    return -1;
-  out->y = (in[0] - '0') * 1000 + (in[1] - '0') * 100 + (in[2] - '0') * 10 + (in[3] - '0');
-  out->mo = (in[5] - '0') * 10 + (in[6] - '0');
-  out->d = (in[8] - '0') * 10 + (in[9] - '0');
-  out->h = (in[11] - '0') * 10 + (in[12] - '0');
-  out->mi = (in[14] - '0') * 10 + (in[15] - '0');
-  out->s = (in[17] - '0') * 10 + (in[18] - '0');
-  if (out->mo < 1 || out->mo > 12 || out->d < 1 || out->d > days_in_month(out->y, out->mo)) return -1;
-  if (out->h > 23 || out->mi > 59 || out->s > 59) return -1;
-  out->off_min = 0;
-  tail = in + 19;
-  if (*tail == '.') {
-    const char *fe = tail + 1;
-    while (isdigit((unsigned char)*fe)) fe++;
-    if (fe == tail + 1) return -1;
-    tail = fe;
-  }
-  if (tail[0] == 'Z' && tail[1] == '\0') {
-    out->offset_kind = ISO8601_OFF_Z;
-    return 0;
-  }
-  if (*tail == '\0') {
-    out->offset_kind = ISO8601_OFF_NONE;
-    return 0;
-  }
-  if ((*tail == '+' || *tail == '-') && strlen(tail) == 6 && tail[3] == ':' && all_digits(tail + 1, 2) && all_digits(tail + 4, 2)) {
-    int oh = (tail[1] - '0') * 10 + (tail[2] - '0');
-    int om = (tail[4] - '0') * 10 + (tail[5] - '0');
-    if (oh > 23 || om > 59) return -1;
-    out->off_min = (oh * 60 + om) * (tail[0] == '-' ? -1 : 1);
-    out->offset_kind = ISO8601_OFF_NUMERIC;
-    return 0;
-  }
-  return -1;
-}
-
-long date_to_mjd(int y, int mo, int d) {
-  int yy = mo <= 2 ? y - 1 : y;
-  int mm = mo <= 2 ? mo + 12 : mo;
-  return 14956L + d + (long)((yy - 1900) * 365.25) + (long)((mm + 1) * 30.6001);
 }
 
 int pipe_write_all(int fd, const unsigned char *buf, size_t n, const atomic_int *stop) {
@@ -410,22 +428,3 @@ void dstrbuf_appendf(dstrbuf_t *sb, const char *fmt, ...) {
   }
 }
 
-void pct_encode_seg(const char *s, char *out, size_t outcap) {
-  static const char unreserved[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-  static const char hex[] = "0123456789ABCDEF";
-  size_t oi = 0;
-  if (!outcap) return;
-  for (; *s && oi + 1 < outcap; s++) {
-    if (strchr(unreserved, *s)) {
-      out[oi++] = *s;
-    } else {
-      unsigned char c = (unsigned char)*s;
-      if (oi + 4 > outcap) break;
-      out[oi] = '%';
-      out[oi + 1] = hex[c >> 4];
-      out[oi + 2] = hex[c & 0xF];
-      oi += 3;
-    }
-  }
-  out[oi] = '\0';
-}

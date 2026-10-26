@@ -3,6 +3,7 @@
 
 #include <getopt.h>
 
+#include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
 
 #include "priv.h"
@@ -29,35 +30,18 @@ static const struct option longopts[] = {
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
-static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
-  int c;
-  optind = 1;
-  opterr = 0;
-  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
-    if (c == 'c') *cfg_path = optarg;
-    if (c == OPT_CONFIGTEST) *configtest = 1;
-    if (c == OPT_CONFIG_STRICT) *strict = 1;
-    if (c == 'h') {
-      scan_print_help();
-      opterr = 1;
-      return ARGS_HELP;
-    }
-  }
-  opterr = 1;
-  return ARGS_OK;
-}
-
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
   int strict = 0;
-  args_status_t pst;
   int c;
   int rc;
 
   if (argc == 1 && !scan_cfg_default_exists()) return ARGS_NOARGS;
-  pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
-  if (pst != ARGS_OK) return pst;
+  if (argutil_prescan(argc, argv, shortopts, longopts, OPT_CONFIGTEST, OPT_CONFIG_STRICT, &cfg_path, &configtest, &strict)) {
+    scan_print_help();
+    return ARGS_HELP;
+  }
   if (configtest) return scan_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
 
   scan_cfg_defaults(cfg);
@@ -137,12 +121,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->verbose = 1;
         break;
       case OPT_COLOR: {
-        log_color_t v;
-        if (log_color_from_string(optarg, &v)) {
-          argerr("SS000105", "invalid --color: %s (auto|always|never)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->color_mode = v;
+        if (argutil_color_opt(TOOL_NAME, "SS000105", optarg, &cfg->color_mode)) return ARGS_ERR;
         break;
       }
       case 'c':

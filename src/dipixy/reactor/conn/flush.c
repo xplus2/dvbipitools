@@ -8,18 +8,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/epoll.h>
-#include <sys/resource.h>
-#include <sys/socket.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "dipixy/reactor/conn.h"
 #include "dipixy/reactor/internal.h"
-#include "dipixy/reactor/reactor.h"
 #include "dipixy/reactor/reactor_tls.h"
-#include "dipixy/version.h"
-#include "lib/helper/log.h"
 
 int conn_flush(conn_t *c, int epfd) {
   conn_zc_drain(c);

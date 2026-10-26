@@ -7,17 +7,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../../alloc_fail.h"
 #include "lib/tva/mapping.h"
 #include "../../log_capture.h"
-
-static void write_temp_csv(char *path, const char *content) {
-  int fd = mkstemp(path);
-  FILE *f;
-  ck_assert_int_ge(fd, 0);
-  f = fdopen(fd, "w");
-  fputs(content, f);
-  fclose(f);
-}
+#include "../../cfg_fixture.h"
 
 START_TEST(mapping_load_accepts_quoted_fields) {
   char path[] = "/tmp/dvbipitools_test_mapping_XXXXXX";
@@ -197,6 +190,57 @@ START_TEST(mapping_load_id_length_limit) {
 }
 END_TEST
 
+START_TEST(mapping_survives_allocation_failures_and_writes_rows) {
+  char path[] = "/tmp/dvbipitools_test_mapping_XXXXXX";
+  mapping_t m;
+  char uri[128];
+  unsigned tsid, onid, sid;
+  bcg_channel_t c;
+  char *buf = NULL;
+  size_t sz = 0;
+  FILE *f;
+  int rc;
+  write_temp_csv(path, "a,rtp://h/a,1,2,3\nb,rtp://h/b,4,5,6\n\"q\",\"x\"junk,1,2,3\n");
+  ck_assert_int_ne(mapping_load(path, &m), 0);
+  unlink(path);
+  strcpy(path, "/tmp/dvbipitools_test_mapping_XXXXXX");
+  write_temp_csv(path, "a,rtp://h/a,1,2,3\nb,rtp://h/b,4,5,6\n");
+  for (long n = 0;; n++) {
+    int hit;
+    alloc_fail_at(n);
+    rc = mapping_load(path, &m);
+    hit = alloc_fail_end();
+    if (!rc) {
+      ck_assert_int_eq(mapping_lookup(&m, "b", uri, sizeof uri, &tsid, &onid, &sid), 0);
+      ck_assert_uint_eq(sid, 6u);
+      ck_assert_int_eq(mapping_lookup(&m, "zz", uri, sizeof uri, &tsid, &onid, &sid), -1);
+      mapping_free(&m);
+    }
+    if (!hit) break;
+  }
+  unlink(path);
+  memset(&c, 0, sizeof c);
+  snprintf(c.id, sizeof c.id, "plain");
+  snprintf(c.uri, sizeof c.uri, "rtp://h/p");
+  c.tsid = 1;
+  c.onid = 2;
+  c.sid = 3;
+  f = open_memstream(&buf, &sz);
+  ck_assert_ptr_nonnull(f);
+  mapping_write_row(f, &c);
+  snprintf(c.id, sizeof c.id, "we\"ird,id");
+  mapping_write_row(f, &c);
+  snprintf(c.id, sizeof c.id, "ok");
+  snprintf(c.uri, sizeof c.uri, "rtp://h/a,b");
+  mapping_write_row(f, &c);
+  fclose(f);
+  ck_assert_ptr_nonnull(strstr(buf, "plain,rtp://h/p,1,2,3\n"));
+  ck_assert_ptr_nonnull(strstr(buf, "\"we\"\"ird,id\",\"rtp://h/p\",1,2,3\n"));
+  ck_assert_ptr_nonnull(strstr(buf, "\"ok\",\"rtp://h/a,b\",1,2,3\n"));
+  free(buf);
+}
+END_TEST
+
 static Suite *mapping_suite(void) {
   Suite *s = suite_create("mapping");
   TCase *tc = tcase_create("core");
@@ -209,6 +253,7 @@ static Suite *mapping_suite(void) {
   tcase_add_test(tc, mapping_load_rejects_missing_file);
   tcase_add_test(tc, mapping_load_rejects_overlong_line_with_right_lineno);
   tcase_add_test(tc, mapping_load_id_length_limit);
+  tcase_add_test(tc, mapping_survives_allocation_failures_and_writes_rows);
   tcase_add_test(tc, mapping_duplicate_id_first_wins_and_warns);
   suite_add_tcase(s, tc);
   return s;

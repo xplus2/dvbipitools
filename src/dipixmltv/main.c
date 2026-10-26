@@ -107,34 +107,10 @@ static void write_xmltv(FILE *out, bcg_doc_t *doc, int have_rev, const revmap_t 
 }
 
 static int flush_output(FILE *buf, const char *path) {
-  char chunk[8192];
-  size_t n;
-  FILE *out;
-  int rc = 0;
-
-  if (fflush(buf) || fseek(buf, 0, SEEK_SET)) {
-    log_code("XE100102", TOOL_NAME ": error writing %s", path);
-    return 1;
-  }
-  out = fileutil_open_std(path, "w");
-  if (!out) {
-    log_code("XS100104", TOOL_NAME ": cannot open %s", path);
-    return 1;
-  }
-  while ((n = fread(chunk, 1, sizeof chunk, buf)) > 0) {
-    if (fwrite(chunk, 1, n, out) != n) {
-      rc = 1;
-      break;
-    }
-  }
-  if (ferror(buf)) rc = 1;
-  if (out == stdout) {
-    if (fflush(out)) rc = 1;
-  } else if (fclose(out)) {
-    rc = 1;
-  }
-  if (rc) log_code("XE100102", TOOL_NAME ": error writing %s", path);
-  return rc;
+  int rc = fileutil_copy_out(buf, path);
+  if (rc == -1) log_code("XS100104", TOOL_NAME ": cannot open %s", path);
+  if (rc == -2) log_code("XE100102", TOOL_NAME ": error writing %s", path);
+  return rc != 0;
 }
 
 int main(int argc, char **argv) {

@@ -13,6 +13,11 @@ add_custom_command(
 add_executable(dipixy ${DIPIXY_SRCS} ${DIPIXY_HTDOCS_INDEX_GEN})
 target_link_libraries(dipixy PRIVATE m)
 
+if (DIPIXY_HAVE_ZLIB)
+    target_link_libraries(dipixy PRIVATE ZLIB::ZLIB)
+    target_compile_definitions(dipixy PRIVATE DVBIPITOOLS_SDNS_ZLIB)
+endif ()
+
 if (DIPIXY_HAVE_TLS)
     target_compile_definitions(dipixy PRIVATE HAVE_TLS)
     target_link_libraries(dipixy PRIVATE OpenSSL::SSL OpenSSL::Crypto ${DIPIXY_ATOMIC_LIB})

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "lib/helper/beutil.h"
 #include "lib/helper/log.h"
 
 #include "cw_encryption.h"
@@ -23,18 +24,11 @@ void cwenc_des56_expand(const unsigned char in7[7], unsigned char out8[CWENC_DES
   }
 }
 
-static int cwenc_hex_nibble(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
-
 static int cwenc_hex_decode(const char *hex, unsigned char *out, size_t out_len) {
   if (strlen(hex) != out_len * 2) return -1;
   for (size_t i = 0; i < out_len; i++) {
-    int hi = cwenc_hex_nibble(hex[2 * i]);
-    int lo = cwenc_hex_nibble(hex[2 * i + 1]);
+    int hi = hex_nibble(hex[2 * i]);
+    int lo = hex_nibble(hex[2 * i + 1]);
     if (hi < 0 || lo < 0) return -1;
     out[i] = (unsigned char)((hi << 4) | lo);
   }

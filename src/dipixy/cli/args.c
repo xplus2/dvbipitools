@@ -4,6 +4,7 @@
 #include <getopt.h>
 #include <unistd.h>
 
+#include "lib/helper/argutil.h"
 #include "priv.h"
 
 static const char shortopts[] = "I:i:Jkl:L:j:c:f:n:dvh";
@@ -24,6 +25,8 @@ static const struct option longopts[] = {
   {"ts-startup-timeout", required_argument, 0, OPT_TS_STARTUP_TIMEOUT},
   {"sds-timeout", required_argument, 0, OPT_SDS_TIMEOUT},
   {"sds-refresh-interval", required_argument, 0, OPT_SDS_REFRESH_INTERVAL},
+  {"sds-bim-namespace", required_argument, 0, OPT_SDS_BIM_NAMESPACE},
+  {"sds-schema", required_argument, 0, OPT_SDS_SCHEMA},
   {"segment-size", required_argument, 0, OPT_SEGMENT_SIZE},
   {"segment-count", required_argument, 0, OPT_SEGMENT_COUNT},
   {"hls-part-size", required_argument, 0, OPT_HLS_PART_SIZE},
@@ -84,24 +87,6 @@ static const struct option longopts[] = {
   {0, 0, 0, 0}};
 
 
-static args_status_t prescan(int argc, char **argv, const char **cfg_path, int *configtest, int *strict) {
-  int c;
-  optind = 1;
-  opterr = 0;
-  while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
-    if (c == 'c') *cfg_path = optarg;
-    if (c == OPT_CONFIGTEST) *configtest = 1;
-    if (c == OPT_CONFIG_STRICT) *strict = 1;
-    if (c == 'h') {
-      dixy_print_help();
-      opterr = 1;
-      return ARGS_HELP;
-    }
-  }
-  opterr = 1;
-  return ARGS_OK;
-}
-
 static args_status_t dispatch(dixy_opt_t *p, int c) {
   static args_status_t (*const groups[])(dixy_opt_t *, int) = {dixy_opt_server, dixy_opt_dlna, dixy_opt_stream, dixy_opt_general, dixy_opt_http};
 
@@ -118,14 +103,15 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int configtest = 0;
   int strict = 0;
   dixy_opt_t p = {.cfg = cfg};
-  args_status_t pst;
   int c;
 
   if (argc == 1 && access(DEFAULT_CONFIG_PATH, R_OK))
     return ARGS_NOARGS;
 
-  pst = prescan(argc, argv, &cfg_path, &configtest, &strict);
-  if (pst != ARGS_OK) return pst;
+  if (argutil_prescan(argc, argv, shortopts, longopts, OPT_CONFIGTEST, OPT_CONFIG_STRICT, &cfg_path, &configtest, &strict)) {
+    dixy_print_help();
+    return ARGS_HELP;
+  }
   if (configtest) return dixy_cfg_test(cfg_path, strict) ? ARGS_ERR : ARGS_HELP;
 
   dixy_cfg_defaults(cfg);

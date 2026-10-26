@@ -11,8 +11,6 @@
 #include <string.h>
 
 #include "lib/cas/simulcrypt_msg.h"
-#include "lib/bim/accessunit.h"
-#include "lib/bim/bitwriter.h"
 #include "lib/demux/rtcp.h"
 #include "lib/mux/psi_build.h"
 #include "lib/mux/rtcp_build.h"
@@ -22,8 +20,8 @@
 #include "lib/sys/ioutil.h"
 #include "lib/metrics/protocol.h"
 #include "lib/tva/tva_xml.h"
-#include "dipibcg/container.h"
-#include "dipibcg/wrapper.h"
+#include "lib/bim/bcgip.h"
+#include "lib/bim/container.h"
 
 static int write_file(const char *dir, const char *name, const unsigned char *data, size_t len) {
   char path[512];
@@ -58,68 +56,6 @@ static void gen_psi(const char *dir) {
   write_file(dir, "psi_pat.bin", pkt, sizeof pkt);
 }
 
-static void gen_bim(const char *dir) {
-  bcg_doc_t doc;
-  bcg_channel_t *c;
-  bcg_programme_t *pr;
-  bitwriter_t bw;
-  strrepo_writer_t sw;
-  accessunit_scratch_t sc;
-  const unsigned char *bits, *strs;
-  size_t bits_len, strs_len;
-  unsigned char *out;
-  size_t cap, off;
-  int nfuu = 0;
-
-  bcg_doc_init(&doc);
-  c = bcg_add_channel(&doc);
-  bufcpy(c->id, sizeof c->id, "channel1");
-  bufcpy(c->uri, sizeof c->uri, "rtp://239.1.1.1:5000");
-  c->onid = 2;
-  c->tsid = 1;
-  c->sid = 101;
-  bcg_channel_add_name(c, "Channel One");
-
-  pr = bcg_add_programme(&doc);
-  bufcpy(pr->channel_id, sizeof pr->channel_id, "channel1");
-  bufcpy(pr->start, sizeof pr->start, "2020-12-15T12:00:00Z");
-  bufcpy(pr->stop, sizeof pr->stop, "2020-12-15T12:30:00Z");
-  bcg_set_text(&pr->title, "News");
-
-  bitwriter_init(&bw);
-  strrepo_writer_init(&sw);
-  accessunit_scratch_init(&sc);
-  if (accessunit_encode(&sc, &doc, &bw, &sw, &nfuu)) {
-    accessunit_scratch_free(&sc);
-    strrepo_writer_free(&sw);
-    bitwriter_free(&bw);
-    bcg_doc_free(&doc);
-    return;
-  }
-  accessunit_scratch_free(&sc);
-
-  bits = bitwriter_data(&bw, &bits_len);
-  strs = strrepo_writer_data(&sw, &strs_len);
-  cap = 4 + bits_len + strs_len;
-  out = malloc(cap);
-  if (out) {
-    out[0] = (unsigned char)(bits_len >> 24);
-    out[1] = (unsigned char)(bits_len >> 16);
-    out[2] = (unsigned char)(bits_len >> 8);
-    out[3] = (unsigned char)bits_len;
-    off = 4;
-    memcpy(out + off, bits, bits_len);
-    off += bits_len;
-    memcpy(out + off, strs, strs_len);
-    write_file(dir, "bim_min.bin", out, cap);
-    free(out);
-  }
-
-  strrepo_writer_free(&sw);
-  bitwriter_free(&bw);
-  bcg_doc_free(&doc);
-}
-
 static void gen_sds(const char *dir) {
   sds_service_t svc;
   unsigned char *doc = NULL;
@@ -135,7 +71,7 @@ static void gen_sds(const char *dir) {
   svc.onid = 2;
   svc.sid = 101;
 
-  n = sds_build_broadcast("dvb-ip.example", 1, &svc, 1, NULL, NULL, NULL, &doc);
+  n = sds_build_broadcast("dvb-ip.example", 1, &svc, 1, NULL, NULL, NULL, NULL, &doc);
   if (n) write_file(dir, "sds_min.xml", doc, n);
   free(doc);
 }
@@ -306,7 +242,7 @@ static void gen_bcg_container(const char *dir) {
   size_t wrapped_len = 0;
   unsigned char *seed;
 
-  if (container_build(au, sizeof au, sr, sizeof sr, NULL, 0, &cont, &cont_len)) return;
+  if (bim_container_build(BIM_FRAGREF_DVB_BIM, au, sizeof au, sr, sizeof sr, NULL, 0, &cont, &cont_len)) return;
   seed = malloc(cont_len + 1);
   if (seed) {
     seed[0] = 0;
@@ -314,7 +250,7 @@ static void gen_bcg_container(const char *dir) {
     write_file(dir, "bcg_container_min.bin", seed, cont_len + 1);
     free(seed);
   }
-  if (wrapper_build(cont, cont_len, 0, &wrapped, &wrapped_len) == 0) {
+  if (bim_bcg_wrap(cont, cont_len, NULL, &wrapped, &wrapped_len) == 0) {
     seed = malloc(wrapped_len + 1);
     if (seed) {
       seed[0] = 1;
@@ -363,7 +299,6 @@ int main(int argc, char **argv) {
     return 1;
   }
   gen_psi(argv[1]);
-  gen_bim(argv[1]);
   gen_sds(argv[1]);
   gen_rtcp(argv[1]);
   gen_rtcp_sdes(argv[1]);

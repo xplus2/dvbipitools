@@ -1,25 +1,17 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <time.h>
 
 #include "dipifccret/fcc/burst.h"
 #include "lib/demux/rtx.h"
+#include "../fx_proto.h"
 
 static channel_table_t *g_table;
-
-/* channel_lookup() takes raw address bytes now, not text */
-static channel_t *lookup_ip(channel_table_t *t, const char *ip, unsigned port) {
-  unsigned char addr[4];
-  inet_pton(AF_INET, ip, addr);
-  return channel_lookup(t, AF_INET, addr, sizeof addr, port);
-}
 
 static channel_t *make_channel_with_rap(size_t cache_cap, int n_extra_entries) {
   channel_t *c;

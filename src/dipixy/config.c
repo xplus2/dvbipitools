@@ -176,6 +176,16 @@ static int apply_sds_timeout(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_double(&((config_t *)c)->sds_timeout_s, v, 0.0, 1e9, 1, e, n);
 }
 
+static int apply_sds_bim_ns(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
+  return yamlcfg_set_str(&cfg->str_pool, &cfg->sdns_ns, v, e, n);
+}
+
+static int apply_sds_schema(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
+  return yamlcfg_add_str(&cfg->str_pool, cfg->schemas, &cfg->nschemas, SCHEMA_MAX, v, e, n);
+}
+
 static int apply_sds_refresh_interval(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_double(&((config_t *)c)->sds_refresh_interval_s, v, 0.0, 1e9, 1, e, n);
 }
@@ -420,6 +430,8 @@ static const yamlcfg_key_t keys[] = {
   {"join-all", apply_join_all, 0, 0},
   {"insecure", apply_insecure, 0, 0},
   {"sds.timeout", apply_sds_timeout, 0, 0},
+  {"sds.bim-namespace", apply_sds_bim_ns, 0, 0},
+  {"sds.schema", apply_sds_schema, 1, 1},
   {"sds.refresh-interval", apply_sds_refresh_interval, 0, 0},
   {"segment-size", apply_segment_size, 0, 0},
   {"segment-count", apply_segment_count, 0, 0},
@@ -485,10 +497,6 @@ int dixy_cfg_load(config_t *cfg, const char *path, int strict) {
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
-static void warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
-  if (cond) yamlcfg_warn(y, code, "%s", msg);
-}
-
 int dixy_cfg_test(const char *path, int strict) {
   yamlcfg_t y;
   config_t cfg;
@@ -501,16 +509,16 @@ int dixy_cfg_test(const char *path, int strict) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }
-  warn_if(&y, cfg.tls_cert && !cfg.tls_key, "YA000700", "tls.cert given without tls.key");
-  warn_if(&y, cfg.tls_key && !cfg.tls_cert, "YA000660", "tls.key given without tls.cert");
-  warn_if(&y, cfg.hls_part_size >= cfg.segment_size, "YA000661", "hls.part-size must be smaller than segment-size");
-  warn_if(&y, cfg.dash_part_size >= cfg.segment_size, "YA000662", "dash.part-size must be smaller than segment-size");
-  warn_if(&y, (double)cfg.ssdp_max_age_s < 2.0 * cfg.ssdp_interval_s, "YA000663", "ssdp.max-age must be at least 2x ssdp.interval");
-  warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "YA000120", "metrics.sock and metrics.interval require metrics.id");
-  warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "YA000161", "metrics.inspect-ts requires metrics.id");
-  warn_if(&y, cfg.enable_dlna && cfg.no_spts, "YA000664", "enable-dlna requires spts in format");
-  warn_if(&y, cfg.enable_dlna && cfg.no_rawaudio, "YA000665", "enable-dlna requires rawaudio in format");
-  warn_if(&y, cfg.enable_dlna && !cfg.dlna_host_opt && cfg.listen.scope == LISTEN_ANY, "YA000666", "enable-dlna needs dlna.host or a concrete listen address, not 'all'");
+  yamlcfg_warn_if(&y, cfg.tls_cert && !cfg.tls_key, "YA000700", "tls.cert given without tls.key");
+  yamlcfg_warn_if(&y, cfg.tls_key && !cfg.tls_cert, "YA000660", "tls.key given without tls.cert");
+  yamlcfg_warn_if(&y, cfg.hls_part_size >= cfg.segment_size, "YA000661", "hls.part-size must be smaller than segment-size");
+  yamlcfg_warn_if(&y, cfg.dash_part_size >= cfg.segment_size, "YA000662", "dash.part-size must be smaller than segment-size");
+  yamlcfg_warn_if(&y, (double)cfg.ssdp_max_age_s < 2.0 * cfg.ssdp_interval_s, "YA000663", "ssdp.max-age must be at least 2x ssdp.interval");
+  yamlcfg_warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "YA000120", "metrics.sock and metrics.interval require metrics.id");
+  yamlcfg_warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "YA000161", "metrics.inspect-ts requires metrics.id");
+  yamlcfg_warn_if(&y, cfg.enable_dlna && cfg.no_spts, "YA000664", "enable-dlna requires spts in format");
+  yamlcfg_warn_if(&y, cfg.enable_dlna && cfg.no_rawaudio, "YA000665", "enable-dlna requires rawaudio in format");
+  yamlcfg_warn_if(&y, cfg.enable_dlna && !cfg.dlna_host_opt && cfg.listen.scope == LISTEN_ANY, "YA000666", "enable-dlna needs dlna.host or a concrete listen address, not 'all'");
   rc = yamlcfg_report(&y);
   args_free(&cfg);
   yamlcfg_strpool_free(cfg.str_pool);

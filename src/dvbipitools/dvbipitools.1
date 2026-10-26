@@ -1,56 +1,40 @@
-.TH DVBIPITOOLS 1 "2026-08-27" "dvbipitools" "dvbipitools Manual"
+.TH DVBIPITOOLS 1 "2026-10-19" "dvbipitools" "dvbipitools Manual"
 .SH NAME
 dvbipitools \- multicall binary bundling every dvbipitools tool
+
 .SH SYNOPSIS
-.B dvbipitools
-\fItool\fR [\fIargs\fR ...]
+\fBdvbipitools\f1 \fItool\fR [\fIargs\fR ...]
 .br
-.B dipi
-\fIshort\-name\fR [\fIargs\fR ...]
+\fBdipi\f1 \fIshort\-name\fR [\fIargs\fR ...]
 .br
 \fItool\fR [\fIargs\fR ...]
 .br
-.B dvbipitools \-\-list
+\fBdvbipitools\f1 \-\-list
 .br
-.B dvbipitools \-\-install
-[\fB\-h\fR] \fIDIR\fR
+\fBdvbipitools\f1 \-\-install [\fB\-h\fR] \fIDIR\fR
+
 .SH DESCRIPTION
-.B dvbipitools
-is one executable containing every tool in this project
-(\fBdipibcg\fR, \fBdipibim\fR, \fBdipicam378\fR, \fBdipidescramble\fR,
+\fBdvbipitools\f1 is one executable containing every tool/daemon in this project:
+\fBdipibcg\fR, \fBdipibim\fR, \fBdipicam378\fR, \fBdipidescramble\fR,
 \fBdipifccret\fR, \fBdipimetrics\fR, \fBdipiradiohead\fR, \fBdipirec\fR,
 \fBdipirist\fR, \fBdipiscan\fR, \fBdipisds\fR, \fBdipisrt\fR,
-\fBdipitvhead\fR, \fBdipixmltv\fR, \fBdipixy\fR), reached one of three ways:
+\fBdipitvhead\fR, \fBdipixmltv\fR, \fBdipixy\fR.
+.br
+
+Three ways to call it:
 
 .TP
-.B by full tool name
+.B By full tool name
 \fBdvbipitools\fR \fItool\fR [\fIargs\fR ...], e.g. \fBdvbipitools dipiscan \-h\fR.
 .TP
-.B by short name
+.B By short name
 \fBdipi\fR \fIshort\-name\fR [\fIargs\fR ...], where \fIshort\-name\fR drops
 the \fBdipi\fR prefix, e.g. \fBdipi scan \-h\fR. Both entry points accept
 either the full or the short name.
 .TP
-.B by symlink or hardlink
-Linking \fBdvbipitools\fR under any tool's own name (e.g.
-.I dipiscan
-\-> \fBdvbipitools\fR) makes running that link behave exactly like the
-standalone tool, with \fIargs\fR passed through unchanged.
-.PP
-Run
-.B dvbipitools
-or
-.B dipi
-with no arguments for the full applet list. Once dispatched, a tool's own
-options, exit status, and behavior are identical to running it standalone;
-see that tool's own manual page.
-.B dvbipitools
-itself only adds the options described below.
-.PP
-Not all tools are necessarily present: \fBdipicam378\fR and
-\fBdipidescramble\fR require OpenSSL, \fBdipirist\fR requires librist,
-\fBdipisrt\fR requires libsrt, each built in only if that dependency was
-found (matching the standalone build).
+.B By symlink or hardlink
+Linking \fBdvbipitools\fR under any tool's own name, e.g.  \fIdipiscan\f1 \-> \fBdvbipitools\fR.
+
 .SH OPTIONS
 .TP
 .B \-\-list
@@ -58,9 +42,7 @@ Print the name of every applet.
 .TP
 \fB\-\-install\fR [\fB\-h\fR] \fIDIR\fR
 Create a symlink per applet in \fIDIR\fR, each pointing to the
-absolute path of the running binary.
-.BR \-h ,
-creates hardlinks.
+absolute path of the running binary. \fB \-h \f1 creates hardlinks.
 .SH APPLETS
 Full name and short name (for the
 .B dipi
@@ -130,6 +112,7 @@ Symlink every applet at \fI/usr/local/bin\fR.
 .BR dipixmltv (1),
 .BR dipixy (1)
 .PP
-Project homepage: https://github.com/xplus2/dvbipitools
-.SH COPYRIGHT
+Project homepage:
+.URL "https://github.com/xplus2/dvbipitools" "" "."
+.SH LICENSE
 Licensed under the GNU General Public License, version 3 or later.

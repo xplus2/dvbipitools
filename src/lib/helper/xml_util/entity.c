@@ -3,12 +3,9 @@
 
 #define _GNU_SOURCE
 #include <ctype.h>
-#include <errno.h>
-#include <iconv.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/helper/xml_util.h"
 #include "lib/helper/xml_util/xml_util_int.h"
 
 void sink_put(sink_t *k, const char *src, size_t n) {

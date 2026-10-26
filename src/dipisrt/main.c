@@ -2,7 +2,6 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <stdio.h>
-#include <unistd.h>
 
 #include "cli/args.h"
 #include "bridge.h"

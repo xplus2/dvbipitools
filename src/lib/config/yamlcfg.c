@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <errno.h>
+#include <limits.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -398,6 +399,16 @@ typedef struct strnode {
   char s[];
 } strnode_t;
 
+int yamlcfg_add_str(void **pool, const char **list, int *n, int max, const char *val, char *err, size_t errsz) {
+  if (*n >= max) {
+    snprintf(err, errsz, "too many entries (max %d)", max);
+    return -1;
+  }
+  if (yamlcfg_set_str(pool, &list[*n], val, err, errsz)) return -1;
+  (*n)++;
+  return 0;
+}
+
 int yamlcfg_set_str(void **pool, const char **dst, const char *val, char *err, size_t errsz) {
   size_t n = strlen(val);
   strnode_t *node;
@@ -488,4 +499,30 @@ int yamlcfg_set_color(int *dst, const char *val, char *err, size_t errsz) {
   }
   *dst = v;
   return 0;
+}
+
+int yamlcfg_set_long(long *dst, const char *val, unsigned min, char *err, size_t errsz) {
+  unsigned u;
+  if (yamlcfg_set_uint(&u, val, min, UINT_MAX, err, errsz)) return -1;
+  *dst = (long)u;
+  return 0;
+}
+
+int yamlcfg_set_u8(unsigned char *dst, const char *val, unsigned max, char *err, size_t errsz) {
+  unsigned u;
+  if (yamlcfg_set_uint(&u, val, 0, max, err, errsz)) return -1;
+  *dst = (unsigned char)u;
+  return 0;
+}
+
+int yamlcfg_set_int_by(int *dst, const char *val, int (*parse)(const char *s, int *out), const char *hint, char *err, size_t errsz) {
+  if (parse(val, dst)) {
+    snprintf(err, errsz, "invalid '%s' (%s)", val, hint);
+    return -1;
+  }
+  return 0;
+}
+
+void yamlcfg_warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {
+  if (cond) yamlcfg_warn(y, code, "%s", msg);
 }

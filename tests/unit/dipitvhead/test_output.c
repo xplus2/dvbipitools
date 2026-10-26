@@ -1,7 +1,6 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <arpa/inet.h>
 #include <check.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,17 +11,9 @@
 
 #include "lib/metrics/export.h"
 #include "lib/metrics/protocol.h"
-
 #include "dipitvhead/tvhead/priv.h"
 #include "../run_helper.h"
-
-static void make_packet(unsigned char pkt[188], unsigned char marker) {
-  memset(pkt, 0xAB, 188);
-  pkt[0] = 0x47;
-  pkt[1] = 0x00;
-  pkt[2] = marker;
-  pkt[3] = 0x10;
-}
+#include "../fx_ts.h"
 
 static void init_out_ctx(out_ctx_t *o, mcast_t *mc, int rtp, rtpheader_t *rtph, bitrate_pacer_t *pacer) {
   memset(o, 0, sizeof *o);

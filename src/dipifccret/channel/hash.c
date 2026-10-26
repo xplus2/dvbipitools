@@ -4,20 +4,11 @@
 #include <sched.h>
 #include <string.h>
 
+#include "lib/helper/chankey.h"
 #include "priv.h"
 
 size_t chan_key_hash(int family, const void *addr, size_t addr_len, unsigned port) {
-  uint64_t h = 1469598103934665603ULL; /* FNV-1a 64-bit offset basis */
-  const unsigned char *p = (const unsigned char *)addr;
-  for (size_t i = 0; i < addr_len; i++) {
-    h ^= p[i];
-    h *= 1099511628211ULL; /* FNV prime */
-  }
-  h ^= (unsigned)family;
-  h *= 1099511628211ULL;
-  h ^= port;
-  h *= 1099511628211ULL;
-  return (size_t)h;
+  return (size_t)chan_key_fnv(family, addr, addr_len, port);
 }
 
 /* rebuild vs single-bucket CAS exclusion (find_or_claim, reap_slot): busy-wait, rebuild rare */
