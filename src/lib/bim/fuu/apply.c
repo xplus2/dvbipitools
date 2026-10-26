@@ -163,7 +163,7 @@ static int op_text(bim_node_t *n, unsigned cmd, char **v, bim_err_t *err) {
   return 0;
 }
 
-static int op_child(bim_fuu_state_t *st, bim_fuu_t *f, size_t pi, bim_node_t *parent, const bim_type_t *pt, bim_err_t *err) {
+static int op_child(const bim_fuu_state_t *st, bim_fuu_t *f, size_t pi, bim_node_t *parent, const bim_type_t *pt, bim_err_t *err) {
   const bim_tbc_t *op = &f->tbcs[f->ntbcs - 1];
   uint64_t pos = op->has_pos ? f->pos[pi * f->ntbcs + f->ntbcs - 1] : 0;
   int idx = find_child(st, parent, pt, op, pos, err);

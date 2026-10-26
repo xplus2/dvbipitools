@@ -223,7 +223,7 @@ static bim_aod_t *manual_aod(const bim_simple_t *s, int preserve, int kind, int 
   }
   a->maps[0].simple = s;
   a->maps[0].preserve = preserve;
-  a->maps[0].inst = ids;
+  a->maps[0].inst = a->maps[0].heap_inst = ids;
   a->maps[0].ninst = 1;
   return a;
 }
@@ -277,7 +277,7 @@ START_TEST(aod_values_round_trip_through_every_decoder_kind) {
       p = bitwriter_data(&bw, &n);
       copy = malloc(n ? n : 1);
       ck_assert_ptr_nonnull(copy);
-      memcpy(copy, p, n);
+      if (n) memcpy(copy, p, n);
       memset(&dopt, 0, sizeof dopt);
       dopt.mpegb = 1;
       dopt.lax_schema = -1;

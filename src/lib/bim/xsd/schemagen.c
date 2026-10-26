@@ -89,6 +89,16 @@ static int anon_id(gn_t *c, const xsd_type_t *t) {
   return c->nanon++;
 }
 
+static int type_id(gn_t *c, const xsd_type_t *t, uint64_t *id) {
+  if (!eq(t->q.ns, c->in->tns)) return known_id(c, 0, t->q.ns, t->q.name, id) ? -1 : 0;
+  for (int i = 0; i < c->ntypes; i++)
+    if (c->types[i] == t) {
+      *id = (uint64_t)i;
+      return 0;
+    }
+  return fail(c, "type %s not in schema", t->q.name);
+}
+
 /* typeReferenceType child elname of parent */
 static int typeref(gn_t *c, bim_node_t *parent, const char *elname, const xsd_type_t *t) {
   bim_node_t *tr = node(c, parent, elname, NULL);
@@ -103,17 +113,7 @@ static int typeref(gn_t *c, bim_node_t *parent, const char *elname, const xsd_ty
     if (!r) return -1;
     return attru(r, "idref", (uint64_t)a) ? -1 : 0;
   }
-  if (eq(t->q.ns, c->in->tns)) {
-    int found = 0;
-    for (int i = 0; i < c->ntypes && !found; i++)
-      if (c->types[i] == t) {
-        id = (uint64_t)i;
-        found = 1;
-      }
-    if (!found) return fail(c, "type %s not in schema", t->q.name);
-  } else if (known_id(c, 0, t->q.ns, t->q.name, &id)) {
-    return -1;
-  }
+  if (type_id(c, t, &id)) return -1;
   if (!(r = node(c, tr, "namedTypeReference", NULL))) return fail(c, "out of memory");
   if (!eq(t->q.ns, c->in->tns)) {
     id_ns = ns_id(c, t->q.ns);
