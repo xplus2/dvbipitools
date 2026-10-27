@@ -108,21 +108,19 @@ void log_code(const char *code, const char *fmt, ...) {
 
 void log_throttled(log_throttle_t *t, int window_s, const char *code, const char *fmt, ...) {
   struct timespec now;
-  long long now_ms;
-  long long next;
-  long long new_next;
+  long next;
+  long new_next;
   va_list ap;
   char msg[512];
   unsigned long suppressed;
   clock_gettime(CLOCK_MONOTONIC, &now);
-  now_ms = (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
-  next = atomic_load_explicit(&t->next_log_ms, memory_order_relaxed);
-  if (now_ms < next) {
+  next = atomic_load_explicit(&t->next_log_s, memory_order_relaxed);
+  if ((long)now.tv_sec < next) {
     atomic_fetch_add_explicit(&t->suppressed, 1, memory_order_relaxed);
     return;
   }
-  new_next = now_ms + (long long)window_s * 1000;
-  if (!atomic_compare_exchange_strong_explicit(&t->next_log_ms, &next, new_next, memory_order_relaxed, memory_order_relaxed)) {
+  new_next = (long)now.tv_sec + window_s;
+  if (!atomic_compare_exchange_strong_explicit(&t->next_log_s, &next, new_next, memory_order_relaxed, memory_order_relaxed)) {
     atomic_fetch_add_explicit(&t->suppressed, 1, memory_order_relaxed);
     return;
   }

@@ -42,7 +42,7 @@ int log_stderr_is_tty(void);
 int log_colors_enabled(void);
 
 typedef struct {
-  _Atomic long long next_log_ms;
+  atomic_long next_log_s;
   atomic_ulong suppressed;
 } log_throttle_t;
 

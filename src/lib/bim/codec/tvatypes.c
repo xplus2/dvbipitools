@@ -38,7 +38,7 @@ int tva_datetime_encode(bitwriter_t *bw, const char *v) {
   days = floor_div(sec, 86400L);
   mjd += days;
   sec -= days * 86400L;
-  if (mjd < 0 || mjd > 0xFFFFFFFFL) return -1;
+  if (mjd < 0 || (uint64_t)mjd > 0xFFFFFFFFu) return -1;
   return bitwriter_put(bw, (uint64_t)mjd, 32) || bitwriter_put(bw, (uint64_t)(sec * 1000L + ms), 32) ? -1 : 0;
 }
 
@@ -80,7 +80,7 @@ int tva_date_encode(bitwriter_t *bw, const char *v) {
   mjd = date_to_mjd(y, mo, d);
   mjd_to_date(mjd, &y, &mo, &d);
   snprintf(back, sizeof back, "%04d-%02d-%02d", y, mo, d);
-  if (strcmp(back, v) || mjd < 0 || mjd > 0xFFFFFFFFL) return -1;
+  if (strcmp(back, v) || mjd < 0 || (uint64_t)mjd > 0xFFFFFFFFu) return -1;
   return bitwriter_put(bw, (uint64_t)mjd, 32) ? -1 : 0;
 }
 
