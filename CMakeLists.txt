@@ -229,6 +229,45 @@ foreach (d ${tool_dirs})
     endif ()
 endforeach ()
 
+# static builds: SBOM from link maps
+if (DVBIPITOOLS_STATIC)
+    set(SBOM_TARGETS "")
+    set(SBOM_BINS "")
+    foreach (d ${tool_dirs})
+        get_filename_component(t "${d}" NAME)
+        if (TARGET ${t})
+            target_link_options(${t} PRIVATE "-Wl,-Map=$<TARGET_FILE:${t}>.map")
+            list(APPEND SBOM_TARGETS ${t})
+            list(APPEND SBOM_BINS "$<TARGET_FILE:${t}>")
+        endif ()
+    endforeach ()
+    set(SBOM_CPPFLAGS "")
+    if (CMAKE_SYSROOT)
+        string(APPEND SBOM_CPPFLAGS " --sysroot=${CMAKE_SYSROOT}")
+    endif ()
+    foreach (i ${OPENSSL_INCLUDE_DIR} ${ZLIB_INCLUDE_DIR})
+        string(APPEND SBOM_CPPFLAGS " -I${i}")
+    endforeach ()
+    # build step lacks configure-time pkg-config env
+    set(SBOM_ENV "")
+    if (PKG_CONFIG_EXECUTABLE)
+        list(APPEND SBOM_ENV "PKG_CONFIG=${PKG_CONFIG_EXECUTABLE}")
+    endif ()
+    foreach (v PKG_CONFIG_PATH PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR)
+        if (DEFINED ENV{${v}})
+            list(APPEND SBOM_ENV "${v}=$ENV{${v}}")
+        endif ()
+    endforeach ()
+    set(SBOM_OUT ${CMAKE_BINARY_DIR}/dvbipitools.cdx.json)
+    add_custom_command(
+        OUTPUT ${SBOM_OUT}
+        COMMAND ${CMAKE_COMMAND} -E env ${SBOM_ENV} sh ${CMAKE_SOURCE_DIR}/toolchain/sbom.sh -o ${SBOM_OUT} -c ${CMAKE_C_COMPILER} -f "${SBOM_CPPFLAGS}" ${SBOM_BINS}
+        DEPENDS ${SBOM_TARGETS} ${CMAKE_SOURCE_DIR}/toolchain/sbom.sh
+        COMMENT "sbom: dvbipitools.cdx.json"
+        VERBATIM)
+    add_custom_target(sbom ALL DEPENDS ${SBOM_OUT})
+endif ()
+
 if (DVBIPITOOLS_TESTS)
     enable_testing()
     add_subdirectory(tests)

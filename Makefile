@@ -1,7 +1,7 @@
 # Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
 # See NOTICE and LICENSE for details and authorship information.
 
-# run ./cofigure first for config.mk
+# run ./configure first for config.mk
 
 include config.mk
 
@@ -10,6 +10,13 @@ include config.mk
 PREFIX ?= /usr/local
 BINDIR := $(PREFIX)/bin
 MANDIR := $(PREFIX)/share/man/man1
+
+# static builds: SBOM from link maps
+SBOM_OUT := dvbipitools.cdx.json
+ifneq (,$(findstring -static,$(LDFLAGS)))
+SBOM_LDFLAGS = -Wl,-Map=$@.map
+SBOM_ALL := $(SBOM_OUT)
+endif
 
 TOOLS := dipibim dipibcg dipirec dipiscan dipiradiohead dipisds dipixmltv dipitvhead dipimetrics
 
@@ -2026,7 +2033,7 @@ $(1)_OBJS := $$($(1)_SRCS:.c=.o)
 ALL_OBJS += $$($(1)_OBJS)
 $$($(1)_OBJS): CFLAGS += $$($(1)_EXTRA_CFLAGS)
 $(1): $$($(1)_OBJS)
-	$$(CC) $$^ $$(LDFLAGS) $$($(1)_EXTRA_LDFLAGS) -o $$@
+	$$(CC) $$^ $$(LDFLAGS) $$($(1)_EXTRA_LDFLAGS) $$(SBOM_LDFLAGS) -o $$@
 endef
 
 $(foreach t,$(TOOLS),$(eval $(call TOOL_template,$(t))))
@@ -2050,7 +2057,8 @@ DVBIPITOOLS_OBJS := $(patsubst src/%.c,build/dvbipitools/src/%.o,$(DVBIPITOOLS_S
 ALL_OBJS += $(DVBIPITOOLS_OBJS)
 
 DVBIPITOOLS_EXTRA_CFLAGS := $(sort $(foreach t,$(DVBIPITOOLS_TOOLS),$($(t)_EXTRA_CFLAGS)))
-DVBIPITOOLS_EXTRA_LDFLAGS := $(sort $(foreach t,$(DVBIPITOOLS_TOOLS),$($(t)_EXTRA_LDFLAGS)))
+# no sort: static link needs per-tool library order
+DVBIPITOOLS_EXTRA_LDFLAGS := $(foreach t,$(DVBIPITOOLS_TOOLS),$($(t)_EXTRA_LDFLAGS))
 $(DVBIPITOOLS_OBJS): CFLAGS += $(DVBIPITOOLS_EXTRA_CFLAGS)
 
 # main()/args_parse() collide across all tools once linked together, plus a
@@ -2122,7 +2130,7 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 	$(CC) $(CFLAGS) $(DVBIPITOOLS_DEFS) -MMD -MP -c $< -o $@
 
 dvbipitools: $(DVBIPITOOLS_OBJS)
-	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) -o $@
+	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) $(SBOM_LDFLAGS) -o $@
 
 UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_net_tls_stub_lib lib_cas_biss_ca_stub lib_cas_cw_encryption_stub lib_net_rist_stubs lib_net_srt_stubs lib_sys_ioutil lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_fileutil lib_helper_playlist_out lib_helper_argutil lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_ac4 lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
 	lib_demux_mpts_probe \
@@ -10928,7 +10936,10 @@ endif
 MAN_PAGES := $(foreach t,$(TOOLS),src/$(t)/$(t).1) src/dvbipitools/dvbipitools.1
 
 .PHONY: all clean install
-all: $(TOOLS) dvbipitools
+all: $(TOOLS) dvbipitools $(SBOM_ALL)
+
+$(SBOM_OUT): $(TOOLS) dvbipitools toolchain/sbom.sh
+	sh toolchain/sbom.sh -o $@ -c "$(CC)" -f "$(foreach m,openssl zlib,$(shell pkg-config --cflags-only-I $(m) 2>/dev/null))" $(TOOLS) dvbipitools
 
 install: $(TOOLS) dvbipitools
 	install -d $(DESTDIR)$(BINDIR)
@@ -10945,5 +10956,6 @@ TLS_VARIANTS := src/lib/net/tls.o src/lib/net/tls_stub.o
 
 clean:
 	rm -f $(ALL_OBJS) $(ALL_OBJS:.o=.d) $(TLS_VARIANTS) $(TLS_VARIANTS:.o=.d) $(TOOLS) dvbipitools $(TEST_BINS) $(FUZZ_BINS) $(RIST_SEND_HELPER_BIN) $(ITEST_HELPER_BIN)
+	rm -f $(SBOM_OUT) $(TOOLS:=.map) dvbipitools.map
 	rm -f $(GEN_HTDOCS_BIN) src/dipixy/htdocs_index.gen.c src/dipixy/htdocs_index.gen.d
 	rm -rf build/dvbipitools

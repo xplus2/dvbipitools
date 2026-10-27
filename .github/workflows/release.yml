@@ -437,6 +437,7 @@ jobs:
         [ -f build/src/dipicam378/dipicam378 ] && install -m 0755 build/src/dipicam378/dipicam378 "${PKGDIR}/"
         [ -f build/src/dipirist/dipirist ] && install -m 0755 build/src/dipirist/dipirist "${PKGDIR}/"
         [ -f build/src/dipisrt/dipisrt ] && install -m 0755 build/src/dipisrt/dipisrt "${PKGDIR}/"
+        install -m 0644 build/dvbipitools.cdx.json LICENSE THIRD_PARTY_LICENSES "${PKGDIR}/"
         (cd "${PKGDIR}" && sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
         tar czf "${PKGDIR}.tar.gz" "${PKGDIR}"
     - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

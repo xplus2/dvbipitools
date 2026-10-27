@@ -128,6 +128,21 @@ if [ "$TESTS" = yes ]; then
   CHECK_LIBS=$(pkg-config --libs check)
 fi
 
+static_links() {
+  printf 'int main(void){return 0;}\n' | $CC -xc - -static $(pkg-config --static --libs "$1") -latomic -o /dev/null >/dev/null 2>&1
+}
+
+if [ "$BUILD_LINK" = static ]; then
+  if [ "$RIST" = auto ] && pkg-config --exists librist && ! static_links librist; then
+    echo "configure: librist has no static libraries: dipirist skipped, rist:// unavailable" >&2
+    RIST=no
+  fi
+  if [ "$SRT" = auto ] && pkg-config --exists srt && ! static_links srt; then
+    echo "configure: libsrt has no static libraries: dipisrt skipped, srt:// unavailable" >&2
+    SRT=no
+  fi
+fi
+
 cat > config.mk <<EOF
 # generated - do not edit
 CC := $CC
