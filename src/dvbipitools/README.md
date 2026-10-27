@@ -16,6 +16,7 @@ dipi <short-name> [args...]    # this tool, renamed to "dipi"
 <toolname> [args...]           # symlink/hardlink to <toolname>
 dvbipitools --list             # list compiled-in applets
 dvbipitools --install [-h] DIR # create symlinks (-h for hardlinks) in DIR
+dvbipitools --version          # print version
 ```
 
 > Fairness note: as of now, it's as static as glibc can be.

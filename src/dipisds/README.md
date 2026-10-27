@@ -24,6 +24,7 @@ dipisds -l -m <mcast>:<port> [options]
 |      | `--config-strict` |                       | config file issues are errors             |
 |      | `--configtest`    |                       | check the config file, then exit          |
 | `-h` | `--help`          |                       | show help                                 |
+|      | `--version`       |                       | print version and exit                    |
 
 ### Announce mode options
 
@@ -82,7 +83,7 @@ dipisds -l -m <mcast>:<port> [options]
 
 ## Configuration file
 
-All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipisds.yaml](dipisds.yaml).
+All options (except `-h`, `-c`, `--config-strict`, `--configtest` and `--version`) can be set in a YAML file, see [dipisds.yaml](dipisds.yaml).
 Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipisds.yaml` is read if it exists.

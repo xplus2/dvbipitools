@@ -41,6 +41,7 @@ dipibim -f bim -s <schema> [-i <path>] [-o <path>] [options]
 |      | `--config-strict` |                               | config file issues are errors   |
 |      | `--configtest`    |                               | check the config file           |
 | `-h` | `--help`          |                               |                                 |
+|      | `--version`       |                               | print version and exit          |
 
 ## Input/output (`-i`, `-o`, `-f`)
 
@@ -59,7 +60,7 @@ No DVBSTP container, index structures or versioning (TS 102 822-3-2 4.5/4.6). Se
 
 ## Configuration file
 
-All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipibim.yaml](dipibim.yaml).
+All options (except `-h`, `-c`, `--config-strict`, `--configtest` and `--version`) can be set in a YAML file, see [dipibim.yaml](dipibim.yaml).
 Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 ## Schemas (`-s`)

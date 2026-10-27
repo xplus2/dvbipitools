@@ -54,10 +54,11 @@ dipirist -i <uri> -o <uri> [options]
 |      | `--config-strict`       |                             | config file issues are errors            |
 |      | `--configtest`          |                             | check the config file, then exit         |
 | `-h` | `--help`                |                             |                                          |
+|      | `--version`             |                             | print version and exit                   |
 
 ## Configuration file
 
-All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipirist.yaml](dipirist.yaml).
+All options (except `-h`, `-c`, `--config-strict`, `--configtest` and `--version`) can be set in a YAML file, see [dipirist.yaml](dipirist.yaml).
 Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipirist.yaml` is read if it exists.

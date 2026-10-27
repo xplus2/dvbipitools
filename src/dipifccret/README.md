@@ -46,6 +46,7 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 |      | --config-strict         |             |                                    | config file issues are errors                       |
 |      | --configtest            |             |                                    | check the config file, then exit                    |
 | -h   | --help                  |             |                                    | prints help                                         |
+|      | --version               |             |                                    | print version and exit                              |
 
 
 ### RET (Annex F)
@@ -84,7 +85,7 @@ dipifccret -g <range> -l <addr>:<port> -I <iface> [options]
 
 ## Configuration file
 
-All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipifccret.yaml](dipifccret.yaml).
+All options (except `-h`, `-c`, `--config-strict`, `--configtest` and `--version`) can be set in a YAML file, see [dipifccret.yaml](dipifccret.yaml).
 Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipifccret.yaml` is read if it exists.

@@ -179,7 +179,8 @@ static void print_help(const char *invoked_as) {
   fprintf(stderr, "       %s <short>  [args...]   short form\n", invoked_as);
   fprintf(stderr, "       <toolname>  [args...]   via symlink or hardlink to this binary\n");
   fprintf(stderr, "       %s --list               list applet names\n", invoked_as);
-  fprintf(stderr, "       %s --install [-h] DIR   symlink (-h hardlink) all applets at DIR\n\n", invoked_as);
+  fprintf(stderr, "       %s --install [-h] DIR   symlink (-h hardlink) all applets at DIR\n", invoked_as);
+  fprintf(stderr, "       %s --version            print version and exit\n\n", invoked_as);
   fprintf(stderr, "applets:\n");
   for (size_t i = 0; i < N_APPLETS; i++) fprintf(stderr, "  %-16s%s\n", APPLETS[i].full_name, APPLETS[i].short_name);
 }
@@ -205,6 +206,10 @@ int main(int argc, char **argv) {
   if (strcmp(base, "dvbipitools") == 0 || strcmp(base, "dipi") == 0) {
     if (argc < 2) {
       print_help(base);
+      return 0;
+    }
+    if (strcmp(argv[1], "--version") == 0) {
+      printf("%s %s\n", TOOL_NAME, TOOL_VERSION);
       return 0;
     }
     if (strcmp(argv[1], "--list") == 0 || strcmp(argv[1], "--install") == 0) return run_option(base, argc, argv);

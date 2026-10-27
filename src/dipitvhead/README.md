@@ -71,6 +71,7 @@ across every input.
 |      | `--config-strict`            |                                | config file issues are errors        |           |
 |      | `--configtest`               |                                | check the config file, then exit     |           |
 | `-h` | `--help`                     |                                |                                      |           |
+|      | `--version`                  |                                | print version and exit               |           |
 
 > Note that the default output changed from _plain UDP_ to _RTP_, since neither FCC nor RET would work
 > on plain streams. You can restore the old behavior by setting `-u`|`--udp`.
@@ -170,7 +171,7 @@ this tool for that. `--srt-passphrase-in`/`--srt-pbkeylen-in`/`--srt-streamid-in
 
 ## Configuration file
 
-All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipitvhead.yaml](dipitvhead.yaml).
+All options (except `-h`, `-c`, `--config-strict`, `--configtest` and `--version`) can be set in a YAML file, see [dipitvhead.yaml](dipitvhead.yaml).
 Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipitvhead.yaml` is read if it exists.

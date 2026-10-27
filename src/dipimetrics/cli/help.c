@@ -27,7 +27,8 @@ void metrics_print_help(void) {
     "  -c, --config <path>      YAML config file (default: %s, if present)\n"
     "      --config-strict      fail on config file issues instead of warnings\n"
     "      --configtest         check the config file, then exit\n"
-    "  -h, --help               this help\n\n"
+    "  -h, --help               this help\n"
+    "      --version            print version and exit\n\n"
     "example:\n"
     "  %s -l 0.0.0.0:9109\n"
     "  %s -l 0.0.0.0:9109 --tls-cert srv.crt --tls-key srv.key\n",

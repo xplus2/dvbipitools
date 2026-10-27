@@ -46,6 +46,7 @@ int main(int argc, char **argv) {
   int i;
   int j;
 
+  TOOLMAIN_VERSION_EXIT(argc, argv);
   dipixy_status_init(argc, argv);
   log_set_color(log_color_prescan(argc, argv));
   toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);

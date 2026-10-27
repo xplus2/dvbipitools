@@ -9,12 +9,24 @@
 /* startup banner: name, version, arch, build type, link mode */
 void toolmain_print_banner(const char *tool_name, const char *tool_version, const char *build_arch, const char *build_type, const char *build_link);
 
+/* 1 if argv is --version b4 any "--" */
+int toolmain_version_requested(int argc, char **argv);
+
 /* daemon(1,1) if requested, tool_name tags failure log line. 0 ok, -1 failed (already logged) */
 int toolmain_daemonize(int daemonize, const char *tool_name);
+
+#define TOOLMAIN_VERSION_EXIT(argc, argv) \
+  do { \
+    if (toolmain_version_requested((argc), (argv))) { \
+      printf("%s %s\n", TOOL_NAME, TOOL_VERSION); \
+      return 0; \
+    } \
+  } while (0)
 
 #define TOOLMAIN_STARTUP(argc, argv, cfg_ptr, parse_fn) \
   do { \
     args_status_t toolmain_st_; \
+    TOOLMAIN_VERSION_EXIT((argc), (argv)); \
     log_set_color(log_color_prescan((argc), (argv))); \
     toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK); \
     toolmain_st_ = (parse_fn)((argc), (argv), (cfg_ptr)); \

@@ -21,6 +21,7 @@ dipixmltv -S <scan.csv> [-i <guide.xml>] [-o <path>] [options]
 | `-v`  | `--verbose`     |                       | progress on stderr                                    |
 |       | `--color`       | `auto\|always\|never` | auto                                                  |
 | `-h`  | `--help`        |                       |                                                       |
+|       | `--version`     |                       | print version and exit                                |
 
 ## Input/output (`-i`, `-o`, `-f`)
 

@@ -12,6 +12,8 @@ dvbipitools \- multicall binary bundling every dvbipitools tool
 \fBdvbipitools\f1 \-\-list
 .br
 \fBdvbipitools\f1 \-\-install [\fB\-h\fR] \fIDIR\fR
+.br
+\fBdvbipitools\f1 \-\-version
 
 .SH DESCRIPTION
 \fBdvbipitools\f1 is one executable containing every tool/daemon in this project:
@@ -43,6 +45,9 @@ Print the name of every applet.
 \fB\-\-install\fR [\fB\-h\fR] \fIDIR\fR
 Create a symlink per applet in \fIDIR\fR, each pointing to the
 absolute path of the running binary. \fB \-h \f1 creates hardlinks.
+.TP
+.B \-\-version
+Print the version and exit.
 .SH APPLETS
 Full name and short name (for the
 .B dipi

@@ -12,6 +12,14 @@ void toolmain_print_banner(const char *tool_name, const char *tool_version, cons
   log_line_ansi("\e[1m%s\e[0m \e[0;32mv%s\e[0m \e[0;37m%s\e[0m \e[0;37m%s\e[0m \e[0;34m%s\e[0m", tool_name, tool_version, build_arch, build_type, build_link);
 }
 
+int toolmain_version_requested(int argc, char **argv) {
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--") == 0) return 0;
+    if (strcmp(argv[i], "--version") == 0) return 1;
+  }
+  return 0;
+}
+
 int toolmain_daemonize(int daemonize, const char *tool_name) {
   if (!daemonize)
     return 0;

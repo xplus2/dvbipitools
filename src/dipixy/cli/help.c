@@ -104,6 +104,7 @@ void dixy_print_help(void) {
   "      --config-strict            fail on config file issues instead of warnings\n"
   "      --configtest               check the config file, then exit\n"
   "  -h, --help                     this help\n"
+  "      --version                  print version and exit\n"
   "\n"
   "Each -i's list index is its own position on the command line.\n"
   "any URL takes ?filter=<pids> to drop PIDs, e.g. ?filter=101,0x20.\n\n"

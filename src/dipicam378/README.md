@@ -29,6 +29,7 @@ dipicam378 -k <keyfile> [options]
 |      | `--config-strict`    |                       | config file issues are errors       |
 |      | `--configtest`       |                       | check the config file, then exit    |
 | `-h` | `--help`             |                       |                                     |
+|      | `--version`          |                       | print version and exit              |
 
 This tool is for debugging and validation only. A password is required because the
 protocol's encryption relies on it. A username is optional, give one only if you
@@ -36,7 +37,7 @@ want this server to reject connections that don't send it.
 
 ## Configuration file
 
-All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipicam378.yaml](dipicam378.yaml).
+All options (except `-h`, `-c`, `--config-strict`, `--configtest` and `--version`) can be set in a YAML file, see [dipicam378.yaml](dipicam378.yaml).
 Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipicam378.yaml` is read if it exists.

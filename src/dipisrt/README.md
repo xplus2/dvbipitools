@@ -49,10 +49,11 @@ dipisrt -i <uri> -o <uri> [options]
 |      | `--config-strict`       |                             | config file issues are errors                 |
 |      | `--configtest`          |                             | check the config file, then exit              |
 | `-h` | `--help`                |                             |                                               |
+|      | `--version`             |                             | print version and exit                        |
 
 ## Configuration file
 
-All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipisrt.yaml](dipisrt.yaml).
+All options (except `-h`, `-c`, `--config-strict`, `--configtest` and `--version`) can be set in a YAML file, see [dipisrt.yaml](dipisrt.yaml).
 Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipisrt.yaml` is read if it exists.

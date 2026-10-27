@@ -46,6 +46,7 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 |      | `--config-strict`           |                            | config file issues are errors                |
 |      | `--configtest`              |                            | check the config file, then exit             |
 | `-h` | `--help`                    |                            |                                              |
+|      | `--version`                 |                            | print version and exit                       |
 
 ### Related to BISS
 | flag  | long form               | argument              | default                                             |
@@ -74,7 +75,7 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 
 ## Configuration file
 
-All options (except `-h`, `-c`, `--config-strict` and `--configtest`) can be set in a YAML file, see [dipidescramble.yaml](dipidescramble.yaml).
+All options (except `-h`, `-c`, `--config-strict`, `--configtest` and `--version`) can be set in a YAML file, see [dipidescramble.yaml](dipidescramble.yaml).
 Debian installs config examples to: `/usr/share/dvbipitools/etc/`.
 
 Without `-c`, `/etc/dvbipitools/dipidescramble.yaml` is read if it exists.

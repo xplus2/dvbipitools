@@ -107,6 +107,27 @@ START_TEST(daemonize_detaches_into_a_running_grandchild) {
 }
 END_TEST
 
+START_TEST(version_requested_finds_the_long_option) {
+  char *argv[] = {"tool", "-i", "x", "--version", NULL};
+  ck_assert_int_eq(toolmain_version_requested(4, argv), 1);
+}
+END_TEST
+
+START_TEST(version_requested_ignores_absent_and_abbreviated) {
+  char *none[] = {"tool", "-i", "x", NULL};
+  char *abbr[] = {"tool", "--vers", NULL};
+  ck_assert_int_eq(toolmain_version_requested(1, none), 0);
+  ck_assert_int_eq(toolmain_version_requested(3, none), 0);
+  ck_assert_int_eq(toolmain_version_requested(2, abbr), 0);
+}
+END_TEST
+
+START_TEST(version_requested_stops_at_double_dash) {
+  char *argv[] = {"tool", "--", "--version", NULL};
+  ck_assert_int_eq(toolmain_version_requested(3, argv), 0);
+}
+END_TEST
+
 START_TEST(daemonize_reports_a_failing_daemon_call) {
   g_daemon_fail = 1;
   ck_assert_int_eq(toolmain_daemonize(1, "tool"), -1);
@@ -122,6 +143,9 @@ static Suite *toolmain_suite(void) {
   tcase_add_test(tc, daemonize_not_requested_does_nothing);
   tcase_add_test(tc, daemonize_detaches_into_a_running_grandchild);
   tcase_add_test(tc, daemonize_reports_a_failing_daemon_call);
+  tcase_add_test(tc, version_requested_finds_the_long_option);
+  tcase_add_test(tc, version_requested_ignores_absent_and_abbreviated);
+  tcase_add_test(tc, version_requested_stops_at_double_dash);
   suite_add_tcase(s, tc);
   return s;
 }

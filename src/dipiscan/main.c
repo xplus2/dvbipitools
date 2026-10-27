@@ -18,6 +18,7 @@ int main(int argc, char **argv) {
   args_status_t st;
   FILE *out;
   int rc;
+  TOOLMAIN_VERSION_EXIT(argc, argv);
   log_set_color(log_color_prescan(argc, argv));
   toolmain_print_banner(TOOL_NAME, TOOL_VERSION, BUILD_ARCH, BUILD_TYPE, BUILD_LINK);
   st = args_parse(argc, argv, &cfg);

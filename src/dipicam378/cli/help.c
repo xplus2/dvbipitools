@@ -30,7 +30,8 @@ void cam378_print_help(void) {
     "  -c, --config <path>        YAML config file (default: %s, if present)\n"
     "      --config-strict        fail on config file issues instead of warnings\n"
     "      --configtest           check the config file, then exit\n"
-    "  -h, --help                 this help\n\n"
+    "  -h, --help                 this help\n"
+    "      --version              print version and exit\n\n"
     "example:\n"
     "  %s -k device.key -s e2e-01 -p %u\n",
     TOOL_NAME, ARGS_DEFAULT_BIND, ARGS_DEFAULT_PORT, ARGS_DEFAULT_PASSWORD, DEFAULT_CONFIG_PATH, TOOL_NAME, ARGS_DEFAULT_PORT);
