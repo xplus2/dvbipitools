@@ -54,7 +54,8 @@ MULTIARCH="$($CC_CMD -print-multiarch 2>/dev/null || true)"
 # map to component ids, archives count only if ld pulled members
 MAPAWK='
 function lib(n) {
-	if (n ~ /^lib(c|m|pthread|dl|rt|resolv|mvec|util|anl)$/) return "glibc"
+	# amd64 libm.a is ld script for libm-<ver>.a
+	if (n ~ /^lib(c|m|pthread|dl|rt|resolv|mvec|util|anl)(-[0-9.]+)?$/) return "glibc"
 	if (n ~ /^lib(gcc|gcc_eh|atomic|atomic_asneeded|stdc\+\+|supc\+\+)$/) return "gcc"
 	if (n ~ /^lib(ssl|crypto)$/) return "openssl"
 	if (n == "libz") return "zlib"
@@ -70,6 +71,8 @@ function lib(n) {
 	return ""
 }
 /^Archive member included/ { sec = 1; next }
+# ld notes on aarch64 gnu property merge
+/^(Removed|Updated) property / { next }
 /^(Discarded input sections|Allocating common symbols|As-needed library included|Memory Configuration)/ { sec = 0 }
 sec && /^[^ \t].*\.a\(/ {
 	p = $0; sub(/\.a\(.*/, ".a", p)
