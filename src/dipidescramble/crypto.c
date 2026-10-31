@@ -29,7 +29,7 @@ static int ecm_des3_decrypt(crypto_ecm_cipher_t cipher, int cbc, const unsigned 
   des_key_t k1;
   des_key_t k2;
   des_key_t k3;
-  unsigned char prev[DES_BLOCK_LEN];
+  unsigned char prev[DES_BLOCK_LEN] = {0};
   if (ct_len == 0 || ct_len % DES_BLOCK_LEN != 0) return -1;
   des_set_key(&k1, key);
   des_set_key(&k2, key + DES_BLOCK_LEN);
