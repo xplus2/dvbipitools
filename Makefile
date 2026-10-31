@@ -707,12 +707,12 @@ endif
 
 ifeq ($(HAVE_OPENSSL),yes)
 dipiradiohead_CISSA_SRC := src/lib/scrambler/cissa.c
-dipiradiohead_BISS_SRC := src/lib/cas/biss/biss.c src/lib/cas/biss/hex.c
+dipiradiohead_BISS_SRC := src/lib/cas/biss/biss.c src/lib/cas/biss/hex.c src/lib/cas/biss/biss1e.c src/lib/cas/des.c
 dipiradiohead_BISS_CA_SRC := src/lib/cas/biss/ca.c
 dipiradiohead_CWENC_SRC := src/lib/cas/ecmg_client/cw_encryption.c
 else
 dipiradiohead_CISSA_SRC := src/lib/scrambler/cissa_stub.c
-dipiradiohead_BISS_SRC := src/lib/cas/biss/stub.c src/lib/cas/biss/hex.c
+dipiradiohead_BISS_SRC := src/lib/cas/biss/stub.c src/lib/cas/biss/hex.c src/lib/cas/biss/biss1e.c src/lib/cas/des.c
 dipiradiohead_BISS_CA_SRC := src/lib/cas/biss/ca_stub.c
 dipiradiohead_CWENC_SRC := src/lib/cas/ecmg_client/cw_encryption_stub.c
 $(warning dipiradiohead: OpenSSL not found via pkg-config, building without CISSA support)
@@ -861,6 +861,7 @@ dipiradiohead_SRCS := \
 	src/lib/cas/ecmg_client/run.c \
 	$(dipiradiohead_CWENC_SRC) \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/des.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
@@ -903,12 +904,12 @@ endif
 
 ifeq ($(HAVE_OPENSSL),yes)
 dipitvhead_CISSA_SRC := src/lib/scrambler/cissa.c
-dipitvhead_BISS_SRC := src/lib/cas/biss/biss.c src/lib/cas/biss/hex.c
+dipitvhead_BISS_SRC := src/lib/cas/biss/biss.c src/lib/cas/biss/hex.c src/lib/cas/biss/biss1e.c src/lib/cas/des.c
 dipitvhead_BISS_CA_SRC := src/lib/cas/biss/ca.c
 dipitvhead_CWENC_SRC := src/lib/cas/ecmg_client/cw_encryption.c
 else
 dipitvhead_CISSA_SRC := src/lib/scrambler/cissa_stub.c
-dipitvhead_BISS_SRC := src/lib/cas/biss/stub.c src/lib/cas/biss/hex.c
+dipitvhead_BISS_SRC := src/lib/cas/biss/stub.c src/lib/cas/biss/hex.c src/lib/cas/biss/biss1e.c src/lib/cas/des.c
 dipitvhead_BISS_CA_SRC := src/lib/cas/biss/ca_stub.c
 dipitvhead_CWENC_SRC := src/lib/cas/ecmg_client/cw_encryption_stub.c
 $(warning dipitvhead: OpenSSL not found via pkg-config, building without CISSA support)
@@ -1040,6 +1041,7 @@ dipitvhead_SRCS := \
 	src/lib/cas/ecmg_client/run.c \
 	$(dipitvhead_CWENC_SRC) \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/des.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
@@ -1386,6 +1388,8 @@ dipidescramble_SRCS := \
 	src/lib/scrambler/cissa.c \
 	src/lib/cas/biss/biss.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca.c \
 	src/lib/cas/biss/ca_sections.c \
 	$(dipidescramble_CSA2_SRC) \
@@ -2141,7 +2145,7 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 dvbipitools: $(DVBIPITOOLS_OBJS)
 	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) $(SBOM_LDFLAGS) -o $@
 
-UNIT_TESTS := lib_demux_crc32 lib_demux_aacprobe lib_mux_amf lib_helper_describe lib_net_tls_stub_lib lib_cas_biss_ca_stub lib_cas_cw_encryption_stub lib_net_rist_stubs lib_net_srt_stubs lib_sys_ioutil lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_fileutil lib_helper_playlist_out lib_helper_argutil lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_ac4 lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
+UNIT_TESTS := lib_demux_crc32 lib_demux_aacprobe lib_mux_amf lib_helper_describe lib_net_tls_stub_lib lib_cas_biss_ca_stub lib_cas_des lib_cas_cw_encryption_stub lib_net_rist_stubs lib_net_srt_stubs lib_sys_ioutil lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_fileutil lib_helper_playlist_out lib_helper_argutil lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_ac4 lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mkv_feed lib_mux_mp4 lib_mux_mp4_feed lib_mux_flv lib_mux_flv_feed lib_mux_fmp4 lib_mux_cadescbuild lib_demux_fmp4_box lib_demux_fmp4_track lib_demux_fmp4_sample lib_mux_esbuild lib_mux_esbuild_pes lib_mux_esbuild_pmtbuild lib_mux_esbuild_remux \
@@ -2190,7 +2194,11 @@ lib_cas_biss_BIN := tests/unit/lib/cas/test_biss
 lib_cas_biss_SRCS := \
 	tests/unit/lib/cas/test_biss.c \
 	src/lib/cas/biss/biss.c \
-	src/lib/cas/biss/hex.c
+	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
+	src/lib/helper/secure_zero.c \
+	src/lib/helper/log.c
 lib_cas_biss_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_cas_biss_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
 
@@ -2241,6 +2249,7 @@ lib_cas_cw_encryption_SRCS := \
 	tests/unit/lib/cas/test_cw_encryption.c \
 	src/lib/cas/ecmg_client/cw_encryption.c \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/des.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/helper/log.c
 lib_cas_cw_encryption_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
@@ -2688,6 +2697,7 @@ dipidescramble_crypto_BIN := tests/unit/dipidescramble/test_crypto
 dipidescramble_crypto_SRCS := \
 	tests/unit/dipidescramble/test_crypto.c \
 	src/dipidescramble/crypto.c \
+	src/lib/cas/des.c \
 	src/lib/demux/crc32.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/helper/secure_zero.c
@@ -2700,6 +2710,7 @@ dipidescramble_device_SRCS := \
 	tests/unit/dipidescramble/test_device.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
+	src/lib/cas/des.c \
 	src/lib/demux/crc32.c \
 	src/dipidescramble/ecm_profile/common.c \
 	src/dipidescramble/ecm_profile/parse.c \
@@ -2722,6 +2733,7 @@ dipidescramble_emmcache_SRCS := \
 	src/dipidescramble/emmcache.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
+	src/lib/cas/des.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/tspack.c \
 	src/dipidescramble/ecm_profile/common.c \
@@ -2748,6 +2760,7 @@ dipidescramble_ecm_profile_SRCS := \
 	src/dipidescramble/ecm_profile/wire.c \
 	src/dipidescramble/ecm_profile/crypto.c \
 	src/dipidescramble/crypto.c \
+	src/lib/cas/des.c \
 	src/lib/demux/crc32.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/helper/log.c \
@@ -2846,6 +2859,8 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/scrambler/csa2.c \
 	src/lib/cas/biss/biss.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/net/tls.c \
@@ -2867,6 +2882,7 @@ dipidescramble_ipiclient_SRCS := \
 	src/dipidescramble/emmcache.c \
 	src/dipidescramble/device.c \
 	src/dipidescramble/crypto.c \
+	src/lib/cas/des.c \
 	src/lib/demux/crc32.c \
 	src/dipidescramble/ecm_profile/common.c \
 	src/dipidescramble/ecm_profile/parse.c \
@@ -2920,6 +2936,8 @@ dipidescramble_args_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
@@ -2950,6 +2968,8 @@ dipidescramble_config_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/cas/device_crypto.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
@@ -4062,11 +4082,19 @@ lib_cas_biss_ca_stub_SRCS := \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/helper/log.c
 
+lib_cas_des_BIN := tests/unit/lib/cas/test_des
+lib_cas_des_SRCS := \
+	tests/unit/lib/cas/test_des.c \
+	src/lib/cas/des.c
+
 lib_cas_cw_encryption_stub_BIN := tests/unit/lib/cas/test_cw_encryption_stub
 lib_cas_cw_encryption_stub_SRCS := \
 	tests/unit/lib/cas/test_cw_encryption_stub.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
-	src/lib/helper/log.c
+	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/helper/log.c \
+	src/lib/cas/des.c \
+	src/lib/helper/secure_zero.c
 
 lib_net_rist_stubs_BIN := tests/unit/lib/net/rist/test_rist_stubs
 lib_net_rist_stubs_SRCS := \
@@ -6265,6 +6293,8 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -6360,6 +6390,8 @@ dipiradiohead_cas_SRCS := \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -6401,8 +6433,11 @@ dipiradiohead_args_SRCS := \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
-	src/lib/helper/log.c
+	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c
 
 dipiradiohead_config_BIN := tests/unit/dipiradiohead/test_config
 dipiradiohead_config_SRCS := \
@@ -6439,8 +6474,11 @@ dipiradiohead_config_SRCS := \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
-	src/lib/helper/log.c
+	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c
 
 dipiradiohead_args_cas_BIN := tests/unit/dipiradiohead/test_args_cas
 dipiradiohead_args_cas_SRCS := \
@@ -6477,8 +6515,11 @@ dipiradiohead_args_cas_SRCS := \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
-	src/lib/helper/log.c
+	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c
 
 dipiradiohead_args_general_BIN := tests/unit/dipiradiohead/test_args_general
 dipiradiohead_args_general_SRCS := \
@@ -6515,8 +6556,11 @@ dipiradiohead_args_general_SRCS := \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
-	src/lib/helper/log.c
+	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c
 
 dipiradiohead_args_net_BIN := tests/unit/dipiradiohead/test_args_net
 dipiradiohead_args_net_SRCS := \
@@ -6553,8 +6597,11 @@ dipiradiohead_args_net_SRCS := \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
-	src/lib/helper/log.c
+	src/lib/helper/log.c \
+	src/lib/helper/secure_zero.c
 
 dipiradiohead_framequeue_BIN := tests/unit/dipiradiohead/input/test_framequeue
 dipiradiohead_framequeue_SRCS := \
@@ -7058,6 +7105,8 @@ dipitvhead_args_SRCS := \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -7068,7 +7117,8 @@ dipitvhead_args_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/log.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/secure_zero.c
 
 dipitvhead_args_cas_BIN := tests/unit/dipitvhead/test_args_cas
 dipitvhead_args_cas_SRCS := \
@@ -7105,6 +7155,8 @@ dipitvhead_args_cas_SRCS := \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -7115,7 +7167,8 @@ dipitvhead_args_cas_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/log.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/secure_zero.c
 
 dipitvhead_args_input_BIN := tests/unit/dipitvhead/test_args_input
 dipitvhead_args_input_SRCS := \
@@ -7152,6 +7205,8 @@ dipitvhead_args_input_SRCS := \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -7162,7 +7217,8 @@ dipitvhead_args_input_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/log.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/secure_zero.c
 
 dipitvhead_args_net_BIN := tests/unit/dipitvhead/test_args_net
 dipitvhead_args_net_SRCS := \
@@ -7199,6 +7255,8 @@ dipitvhead_args_net_SRCS := \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -7209,7 +7267,8 @@ dipitvhead_args_net_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/log.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/secure_zero.c
 
 dipitvhead_args_general_BIN := tests/unit/dipitvhead/test_args_general
 dipitvhead_args_general_SRCS := \
@@ -7246,6 +7305,8 @@ dipitvhead_args_general_SRCS := \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/net/httpclient/httpclient.c \
 	src/lib/net/httpclient/url.c \
@@ -7256,7 +7317,8 @@ dipitvhead_args_general_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/log.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/secure_zero.c
 
 dipitvhead_discover_BIN := tests/unit/dipitvhead/test_discover
 dipitvhead_discover_SRCS := \
@@ -7437,6 +7499,8 @@ dipitvhead_remux_SRCS := \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -7500,6 +7564,8 @@ dipitvhead_output_SRCS := \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -7621,6 +7687,8 @@ dipitvhead_mpts_SRCS := \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -7737,6 +7805,8 @@ dipitvhead_single_SRCS := \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -7806,6 +7876,7 @@ dipitvhead_ecmg_client_SRCS := \
 	src/lib/cas/cas_dial.c \
 	src/lib/cas/ecmg_client/cw_encryption.c \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/des.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
@@ -7903,6 +7974,8 @@ dipitvhead_cas_SRCS := \
 	src/lib/scrambler/csa2_stub.c \
 	src/lib/cas/biss/stub.c \
 	src/lib/cas/biss/hex.c \
+	src/lib/cas/biss/biss1e.c \
+	src/lib/cas/des.c \
 	src/lib/cas/biss/ca_stub.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/cas/biss/ca_engine.c \
@@ -8553,6 +8626,7 @@ lib_cas_cas_group_SRCS := \
 	src/lib/cas/ecmg_client/run.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/des.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/emmg_server/emmg_server.c \
 	src/lib/cas/emmg_server/protocol.c \
@@ -10773,6 +10847,7 @@ fuzz_ecmg_channel_status_SRCS := \
 	src/lib/cas/cas_dial.c \
 	src/lib/cas/ecmg_client/cw_encryption_stub.c \
 	src/lib/cas/ecmg_client/cw_encryption_common.c \
+	src/lib/cas/des.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
@@ -10989,8 +11064,7 @@ $(SBOM_OUT): $(TOOLS) dvbipitools toolchain/sbom.sh
 install: $(TOOLS) dvbipitools
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 0755 $(TOOLS) dvbipitools $(DESTDIR)$(BINDIR)/
-	install -d $(DESTDIR)$(MANDIR)
-	install -m 0644 $(MAN_PAGES) $(DESTDIR)$(MANDIR)/
+	for p in $(MAN_PAGES); do sh toolchain/stamp_man.sh "$$p" "$(DESTDIR)$(MANDIR)/$${p##*/}" || exit 1; done
 
 %.o: %.c config.mk
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@

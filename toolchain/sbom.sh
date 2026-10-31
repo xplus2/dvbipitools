@@ -189,7 +189,8 @@ version_of() {
 
 # id to name|license|website
 meta() {
-	case "$1" in
+	comp="$1"
+	case "$comp" in
 	glibc) echo "glibc|LGPL-2.1-or-later|https://www.gnu.org/software/libc/" ;;
 	gcc) echo "gcc-runtime|GPL-3.0-or-later WITH GCC-exception-3.1|https://gcc.gnu.org/" ;;
 	openssl) echo "openssl|Apache-2.0|https://www.openssl.org/" ;;
@@ -205,7 +206,7 @@ meta() {
 	nghttp2) echo "nghttp2|MIT|https://github.com/nghttp2/nghttp2" ;;
 	libyaml) echo "libyaml|MIT|https://github.com/yaml/libyaml" ;;
 	picohttpparser) echo "picohttpparser|MIT|https://github.com/h2o/picohttpparser" ;;
-	*) die "no metadata for component $1" ;;
+	*) die "no metadata for component $comp" ;;
 	esac
 }
 

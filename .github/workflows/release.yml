@@ -15,6 +15,7 @@ jobs:
     outputs:
       label: ${{ steps.v.outputs.label }}
       version: ${{ steps.v.outputs.version }}
+      source_date_epoch: ${{ steps.v.outputs.source_date_epoch }}
     steps:
     - id: v
       run: |
@@ -27,9 +28,11 @@ jobs:
         fi
         echo "label=${LABEL}" >> "$GITHUB_OUTPUT"
         echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        echo "source_date_epoch=$(date -u +%s)" >> "$GITHUB_OUTPUT"
 
 
   deb:
+    needs: version
     strategy:
       matrix:
         include:
@@ -65,6 +68,7 @@ jobs:
           PLATFORM_ARGS="--platform ${{ matrix.platform }}"
         fi
         docker run --rm $PLATFORM_ARGS \
+          -e SOURCE_DATE_EPOCH=${{ needs.version.outputs.source_date_epoch }} \
           -v "$PARENT:/work" -w "/work/$NAME" \
           ${{ matrix.image }} \
           bash -c '
@@ -458,12 +462,14 @@ jobs:
     - name: checksums
       run: |
         emit() {
-          echo "# $(basename "$1")"
-          echo "sha256: $(sha256sum "$1" | cut -d' ' -f1)"
+          local pkg="$1"
+          local tree="$2"
+          echo "# $(basename "$pkg")"
+          echo "sha256: $(sha256sum "$pkg" | cut -d' ' -f1)"
           echo
           echo "| file | sha256 |"
           echo "|------|--------|"
-          (cd "$2" && find . -type f ! -name LICENSE | sort | while read -r p; do
+          (cd "$tree" && find . -type f ! -name LICENSE | sort | while read -r p; do
             echo "| ${p#./} | $(sha256sum "$p" | cut -d' ' -f1) |"
           done)
           echo

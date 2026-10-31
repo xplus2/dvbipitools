@@ -70,6 +70,11 @@ typedef struct {
   int biss2_id_given;                    /* --biss2-id */
   int biss1_sw_given;                    /* --biss1-sw, mutually exclusive with --biss2-sw/--biss2-esw */
   unsigned char biss1_sw[BISS1_KEY_LEN]; /* --biss1-sw, parsed into full checksummed CSA1 CW */
+  int biss1_esw_given;                   /* --biss1-esw, mutually exclusive with --biss1-sw/--biss2-sw/--biss2-esw */
+  unsigned char biss1_esw[BISS1_ESW_LEN]; /* --biss1-esw, parsed */
+  int biss1_id_given;                    /* --biss1-id, required with --biss1-esw */
+  unsigned char biss1_id[BISS1_ID_LEN];  /* --biss1-id, parsed */
+  int biss1_id_buried;                   /* --biss1-id-buried: --biss1-id is a buried ID */
   const char *biss2_ca_key[DIPIDESCRAMBLE_MAX_CA_KEYS]; /* --biss2-ca-key, file or dir */
   int n_biss2_ca_key;
   ecm_profile_t ecm_profile;             /* --ecm-profile, ecm_profile.set == 0 = AES-256-ECB/CBCnoIV, unchanged */

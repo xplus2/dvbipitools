@@ -227,6 +227,12 @@ int cas_set_biss1_sw(int *enabled, unsigned char *cw, const char *val, char *err
   return 0;
 }
 
+int cas_set_biss1_emit_esw(int *enabled, unsigned char *id, const char *val, char *err, size_t errsz) {
+  if (biss1_parse_id(val, id)) return bad(err, errsz, val, "14 hex chars");
+  *enabled = 1;
+  return 0;
+}
+
 int cas_set_biss2_ca_session_id(unsigned *dst, int *given, const char *val, char *err, size_t errsz) {
   char *end;
   unsigned long v = strtoul(val, &end, 0);
@@ -268,6 +274,14 @@ int cas_args_validate(const char *tool_name, const cas_args_t *a) {
   }
   if (a->biss2_emit_esw && !a->biss2_enabled) {
     args_err(tool_name, "LS000273", "--biss2-emit-esw requires --biss2-sw");
+    return -1;
+  }
+  if (a->biss1_emit_esw && !a->biss1_enabled) {
+    args_err(tool_name, "LS000779", "--biss1-emit-esw requires --biss1-sw");
+    return -1;
+  }
+  if (a->biss1_emit_esw_buried && !a->biss1_emit_esw) {
+    args_err(tool_name, "LS000780", "--biss1-emit-esw-buried requires --biss1-emit-esw");
     return -1;
   }
   if (a->biss2_ca_session_id_given && !a->biss2_ca_enabled) {

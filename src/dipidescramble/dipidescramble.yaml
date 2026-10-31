@@ -37,6 +37,12 @@ daemonize: off
 biss1:
   # --biss1-sw [not set] # 12 hex chars
   #sw: <hex12>
+  # --biss1-esw [not set] # 16 hex chars
+  #esw: <hex16>
+  # --biss1-id [not set] # 14 hex chars
+  #id: <hex14>
+  # --biss1-id-buried off
+  #id-buried: off
 
 biss2:
   # --biss2-sw [not set] # 32 hex chars

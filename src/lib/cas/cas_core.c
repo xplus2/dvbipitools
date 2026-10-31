@@ -94,7 +94,7 @@ unsigned cas_core_vendor_super_cas_id(cas_core_t *core, size_t idx) {
 }
 
 size_t cas_core_prog_desc(cas_core_t *core, unsigned char *out, size_t cap) {
-  if (core->biss_engine) return cadescbuild_ca_descriptor(BISS_CA_SYSTEM_ID, BISS_CA_PID, out, cap);
+  if (core->biss_engine) return cadescbuild_ca_descriptor(core->biss_ca_system_id, BISS_CA_PID, out, cap);
   if (core->biss_ca) return biss_ca_engine_prog_desc(core->biss_ca, out, cap);
   return cas_group_prog_desc(core->group, out, cap);
 }
@@ -140,13 +140,25 @@ int cas_core_start_biss(scramble_algo_t algo, const unsigned char *cw, size_t cw
     out->biss_engine = NULL;
     return -1;
   }
+  out->biss_ca_system_id = algo == SCRAMBLE_ALGO_CISSA ? BISS2_CA_SYSTEM_ID : BISS1_CA_SYSTEM_ID;
   log_line("%sbiss: %s active, %zu pid(s) scrambled, no ECMG/EMMG", log_prefix, label, pid_count);
   return 0;
 }
 
 int cas_core_start_biss_dispatch(const cas_biss_cfg_t *cfg, const unsigned *pids, size_t pid_count, unsigned flush_pid, const char *log_prefix, cas_core_t *out) {
-  if (cfg->biss1_enabled)
-    return cas_core_start_biss(SCRAMBLE_ALGO_CSA2, cfg->biss1_cw, BISS1_KEY_LEN, pids, pid_count, flush_pid, "BISS1 Mode 1", log_prefix, out);
+  if (cfg->biss1_enabled) {
+    if (cfg->biss1_emit_esw) {
+      unsigned char esw[BISS1_ESW_LEN];
+      char hex[BISS1_ESW_LEN * 2 + 1];
+      if (biss1_esw_encrypt(cfg->biss1_esw_id, cfg->biss1_cw, cfg->biss1_emit_esw_buried, esw) == 0) {
+        cas_core_hex_format(esw, BISS1_ESW_LEN, hex);
+        log_line("%sbiss: ESW for this SW under the given --biss1-emit-esw ID: %s", log_prefix, hex);
+      } else {
+        log_code("LS300178", "%sbiss: failed to compute BISS1 ESW", log_prefix);
+      }
+    }
+    return cas_core_start_biss(SCRAMBLE_ALGO_CSA2, cfg->biss1_cw, BISS1_KEY_LEN, pids, pid_count, flush_pid, cfg->biss1_emit_esw ? "BISS1 Mode 1/E" : "BISS1 Mode 1", log_prefix, out);
+  }
   if (cfg->biss2_emit_esw) {
     unsigned char esw[BISS_KEY_LEN];
     char hex[BISS_KEY_LEN * 2 + 1];

@@ -36,7 +36,7 @@ wait $DESCPID 2>/dev/null
 
 assert_not_contains "$WORK/dipidescramble.log" "cannot load RSA private key" "dipidescramble startup"
 
-assert_contains "$WORK/dipidescramble.log" "BISS Mode 1/E detected" "dipidescramble BISS detection"
+assert_contains "$WORK/dipidescramble.log" "BISS Mode 1/E detected (ca_system_id=0x2600)" "dipidescramble BISS detection"
 
 [ -s "$out" ] || fail "dipidescramble: no output file produced"
 

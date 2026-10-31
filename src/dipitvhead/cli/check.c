@@ -98,7 +98,7 @@ int tvh_cfg_check(const config_t *cfg, int partial, tvh_report_fn rep, void *ud)
   if ((cfg->cas_algo == CAS_ALGO_CISSA || cfg->biss2_enabled || cfg->biss2_ca_enabled) && !cissa_available())
     FATAL("TS000726", "CISSA/BISS-2 needs a build with OpenSSL");
   if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
-    cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms}) != 0)
+    cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms, cfg->biss1_emit_esw, cfg->biss1_emit_esw_buried}) != 0)
     fatal++;
   if (cfg->cas_algo != CAS_ALGO_NONE) {
     unsigned n_programs = cfg->n_inputs ? cfg->n_inputs : 1;

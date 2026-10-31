@@ -109,6 +109,8 @@ BISS modes are mutually exclusive with `--cas-algo`/`--cas-ecmg` and with each o
 | long form               | argument   | default                                             |
 |-------------------------|------------|-----------------------------------------------------|
 | `--biss1-sw`            | `<hex12>`  | BISS1 Mode 1                                        |
+| `--biss1-emit-esw`      | `<hex14>`  | log an Encrypted Session Word for this injected ID  |
+| `--biss1-emit-esw-buried` |          | `--biss1-emit-esw` takes a buried ID                |
 | `--biss2-sw`            | `<hex32>`  | BISS2 Mode 1/E                                      |
 | `--biss2-emit-esw`      | `<hex32>`  | log the Encrypted Session Word for this receiver ID |
 | `--biss2-ca-receivers`  | `<dir>`    | BISS2 Mode CA: directory of receiver PEM pubkeys    |
@@ -330,11 +332,17 @@ none are marked `--cas-required`) even if all of them are down.
 = 00) once every vendor is down, or once any vendor marked `--cas-required` is down
 specifically - regardless of whether other, non-required vendors are still up.
 
-### BISS (`--biss1-sw`, `--biss2-sw`, `--biss2-emit-esw`)
+### BISS (`--biss1-sw`, `--biss1-emit-esw`, `--biss2-sw`, `--biss2-emit-esw`)
 
 `--biss1-sw <hex12>` scrambles with legacy BISS1 Mode 1: a static 12 hex char Session Word, no ECMG/EMMG.
 Mutually exclusive with `--biss2-sw`/`--cas-algo`/`--cas-ecmg`.
-Same `CA_descriptor`/CAT signaling as BISS2 Mode 1/E, only the cipher (CSA1, not CISSA) differs. BISS1 Mode E (DES) is not supported.
+Emits a `CA_descriptor` (`CA_system_id 0x2600`, no real ECM PID) and an empty CAT. Only the signaled id and the cipher
+(CSA1, not CISSA) differ from BISS2 Mode 1/E.
+
+`--biss1-emit-esw <hex14>` (needs `--biss1-sw`) logs a single-DES Encrypted Session Word for the given 14 hex injected ID
+once at startup, for operators distributing the SW to receivers out of band (BISS1 Mode E).
+Add `--biss1-emit-esw-buried` for a buried ID. The ESW has random filler bits: it differs on every start, every
+value decrypts to the same SW.
 
 `--biss2-sw <hex32>` scrambles with BISS2 Mode 1/E (EBU Tech 3292) instead: a static 32 hex  Session Word used directly
 as the CISSA key, no ECMG/EMMG at all. Mutually exclusive with `--cas-algo`/`--cas-ecmg`.
@@ -364,10 +372,7 @@ ECM/EMM PIDs are auto-allocated.
 
 ### Limitations
 
-CISSA, CSA1, CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA only.
-
 * No CSA3
-* No BISS1 Mode E (DES)
 * No `entitlement_priv_data_loop` vendor extensions, `prevent_descrambled_forward`/
   `prevent_decoded_forward`/`insert_watermark` entitlement flags always 0 (unenforced)
 * This is a single-pass scrambler
@@ -376,7 +381,7 @@ CISSA, CSA1, CSA2, BISS1 Mode 1, BISS2 Mode 1/E, BISS2 Mode CA only.
 ### Dependencies
 
 CAS support is a CMake/configure-time option (`DIPIRADIOHEAD_CAS`, on by default).
-* CISSA needs OpenSSL (same dependency as HTTPS input)
+* CISSA needs OpenSSL.
 * CSA1, CSA2 and BISS1 dlopen libdvbcsa at runtime, if it is present. It is not built against it and does not bundle it.
 * `-R rist://` output needs librist (`DVBIPITOOLS_RIST` / `HAVE_RIST`, toolkit-wide).
 * `-R srt://` output needs libsrt (`DVBIPITOOLS_SRT` / `HAVE_SRT`, toolkit-wide).

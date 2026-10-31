@@ -244,6 +244,16 @@ args_status_t rdh_opt_cas(rdh_opt_t *p, int c) {
       }
       cfg->biss1_enabled = 1;
       break;
+    case OPT_BISS1_EMIT_ESW:
+      if (biss1_parse_id(optarg, cfg->biss1_esw_id)) {
+        argerr("RS000786", "invalid --biss1-emit-esw: %s (14 hex chars)", optarg);
+        return ARGS_ERR;
+      }
+      cfg->biss1_emit_esw = 1;
+      break;
+    case OPT_BISS1_EMIT_ESW_BURIED:
+      cfg->biss1_emit_esw_buried = 1;
+      break;
     case OPT_BISS2_CA_RECEIVERS:
       cfg->biss2_ca_receivers_dir = optarg;
       cfg->biss2_ca_enabled = 1;

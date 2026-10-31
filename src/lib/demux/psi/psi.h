@@ -177,7 +177,7 @@ unsigned psi_ca_system_id(const psi_t *c);
 unsigned char psi_scrambling_mode(const psi_t *c);
 
 /* PMT program_info's own first CA_descriptor CA_system_id, 0 if none, not CAT's
-   (psi_ca_system_id above). BISS: 0x2602 Mode 1/E, 0x2610 Mode CA, no CAT/scrambling_descriptor */
+   (psi_ca_system_id above). BISS: 0x2600 BISS1, 0x2602 BISS2 Mode 1/E, 0x2610 Mode CA, no CAT/scrambling_descriptor */
 unsigned psi_pmt_ca_system_id(const psi_t *c);
 
 /* PMT program_info's own first CA_descriptor CA_PID, 0 if none. pairs with

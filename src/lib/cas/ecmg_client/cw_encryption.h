@@ -10,7 +10,6 @@
 #define CWENC_AES_BLOCK_LEN 16
 #define CWENC_DES_KEY_LEN 8
 
-void cwenc_des56_expand(const unsigned char in7[7], unsigned char out8[CWENC_DES_KEY_LEN]);
 int cwenc_des_ecb_encrypt(const unsigned char key[CWENC_DES_KEY_LEN], const unsigned char *pt, size_t pt_len, unsigned char *out);
 int cwenc_aes_ecb_encrypt(int key_bits, const unsigned char *key, const unsigned char in[CWENC_AES_BLOCK_LEN], unsigned char out[CWENC_AES_BLOCK_LEN]);
 int cwenc_aes_ctr_xcrypt(int key_bits, const unsigned char *key, const unsigned char iv[CWENC_AES_BLOCK_LEN], const unsigned char *in, unsigned char *out, size_t len);
@@ -61,6 +60,10 @@ typedef struct {
 
 int cwenc_config_init(cwenc_config_t *cfg, const char *algorithm, const char *aes_mode, const char *fixed_key_hex, const char *key_list_a_path, const char *key_list_b_path);
 int cwenc_config_validate(const cwenc_config_t *cfg, int cw_len);
+/* 0 if fixed key or key list set, -1 logged otherwise */
+int cwenc_config_validate_key(const cwenc_config_t *cfg);
+/* in place CW encryption ... or tbh, more like an interop-encoding */
+int cwenc_encrypt_des56(const cwenc_selection_t *sel, int cw_len, unsigned char *cw);
 void cwenc_ctx_init(cwenc_ctx_t *ctx, const cwenc_config_t *cfg);
 int cwenc_select_next(cwenc_ctx_t *ctx, cwenc_selection_t *out);
 int cwenc_encrypt_cw(const cwenc_config_t *cfg, const cwenc_selection_t *sel, int cw_len, unsigned short ecm_channel_id, unsigned short ecm_stream_id, unsigned short combo_cp_number, unsigned char *cw);

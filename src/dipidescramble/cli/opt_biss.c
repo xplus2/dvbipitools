@@ -39,6 +39,23 @@ args_status_t dscr_opt_biss(dscr_opt_t *p, int c) {
       }
       cfg->biss1_sw_given = 1;
       break;
+    case OPT_BISS1_ESW:
+      if (biss1_parse_esw(optarg, cfg->biss1_esw)) {
+        argerr("DS000784", "invalid --biss1-esw: %s (16 hex chars)", optarg);
+        return ARGS_ERR;
+      }
+      cfg->biss1_esw_given = 1;
+      break;
+    case OPT_BISS1_ID:
+      if (biss1_parse_id(optarg, cfg->biss1_id)) {
+        argerr("DS000785", "invalid --biss1-id: %s (14 hex chars)", optarg);
+        return ARGS_ERR;
+      }
+      cfg->biss1_id_given = 1;
+      break;
+    case OPT_BISS1_ID_BURIED:
+      cfg->biss1_id_buried = 1;
+      break;
     case OPT_BISS2_CA_KEY:
       if (!p->cli_ca_key) {
         cfg->n_biss2_ca_key = 0;

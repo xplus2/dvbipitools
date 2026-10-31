@@ -46,6 +46,8 @@ static void wipe_cfg_secrets(config_t *cfg) {
   secure_zero(cfg->biss2_esw, sizeof cfg->biss2_esw);
   secure_zero(cfg->biss2_id, sizeof cfg->biss2_id);
   secure_zero(cfg->biss1_sw, sizeof cfg->biss1_sw);
+  secure_zero(cfg->biss1_esw, sizeof cfg->biss1_esw);
+  secure_zero(cfg->biss1_id, sizeof cfg->biss1_id);
   secure_zero(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in);
   secure_zero(cfg->srt_passphrase, sizeof cfg->srt_passphrase);
 }

@@ -102,7 +102,9 @@ jobs:
           mkdir -p coverage
           gcovr "${COMMON[@]}" --exclude 'src/lib/vendor/' --json-summary coverage/src-novendor.json --txt coverage/src-novendor.txt
           summarize() {
-            echo "## $1"
+            local title="$1"
+            local summary_json="$2"
+            echo "## $title"
             echo ""
             jq -r '
               def pct(c; t): if t == 0 then "-" else "\(((c * 1000 / t) | round) / 10)%" end;
@@ -117,7 +119,7 @@ jobs:
                 | map(. + {mod: (.filename | split("/") | if .[1] == "lib" then .[0:3] else .[0:2] end | join("/"))})
                 | group_by(.mod) | .[] | row(.[0].mod; .)),
               row("**total**"; .files)
-            ' "$2"
+            ' "$summary_json"
             echo ""
           }
           summarize "Coverage: src/ excl. src/lib/vendor/" coverage/src-novendor.json >> "$GITHUB_STEP_SUMMARY"
@@ -207,6 +209,7 @@ jobs:
                 integration_dipirist_bonding_reorder) impair="90% reorder, one link" ;;
                 integration_dipirist_bonding_link_flap) impair="100% loss flapping, one link" ;;
                 integration_dipirist_bonding_disappearance_recovery) impair="100% loss then recovery, one link" ;;
+                *) impair="unknown" ;;
               esac
               result=$(grep -q "$t .*Passed" bonding-results.log && echo pass || echo fail)
               observed="n/a (pass, no logs kept)"
@@ -255,6 +258,7 @@ jobs:
       - name: fuzz smoke (30s per harness)
         env:
           AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES: "1"
+          AFL_SKIP_CPUFREQ: "1"
         run: |
           fail=0
           for h in fuzz_aacprobe fuzz_bcg_container fuzz_dvbstp fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_metrics_store fuzz_pesstamp fuzz_psi fuzz_route fuzz_rtcp fuzz_rtmp fuzz_scte35stamp fuzz_sds_xml fuzz_simulcrypt_msg fuzz_ssdp fuzz_tva_xml fuzz_ws_frame fuzz_xmltv fuzz_yamlcfg; do

@@ -92,6 +92,8 @@ static const yamlcfg_key_t keys[] = {
 {"cas.ecmg.cwenc-key-list-a", tvh_apply_cas_cwenc_key_list_a, 1, 0},
 {"cas.ecmg.cwenc-key-list-b", tvh_apply_cas_cwenc_key_list_b, 1, 0},
 {"biss1.sw", tvh_apply_biss1_sw, 0, 0},
+{"biss1.emit-esw", tvh_apply_biss1_emit_esw, 0, 0},
+{"biss1.emit-esw-buried", tvh_apply_biss1_emit_esw_buried, 0, 0},
 {"biss2.sw", tvh_apply_biss2_sw, 0, 0},
 {"biss2.emit-esw", tvh_apply_biss2_emit_esw, 0, 0},
 {"biss2.ca-receivers", tvh_apply_biss2_ca_receivers, 1, 0},

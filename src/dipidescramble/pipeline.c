@@ -16,7 +16,6 @@
 #include "pipeline.h"
 #include "version.h"
 
-#define BISS_CA_SYSTEM_ID 0x2602
 #define BISS_CA_SYSTEM_ID_CA 0x2610
 
 #define SC_SECTION_TID_ECM_EVEN 0x80
@@ -201,13 +200,19 @@ static void emit_downstream(void *ctx, const unsigned char pkt[188]) {
   lc->packets++;
 }
 
-/* resolves BISS1/E key into (algo, cw, cw_len). cw aliases cfg->biss1_sw or fills sw_buf. 0 ok, -1 esw decrypt failed */
-static int resolve_biss1e_key(const config_t *cfg, unsigned char sw_buf[BISS_KEY_LEN], scramble_algo_t *algo, const unsigned char **cw, size_t *cw_len) {
-  if (cfg->biss1_sw_given) {
+/* BISS Mode 1/E key per system. 0x2600 CSA1, 0x2602 CISSA */
+static int have_biss_key(const config_t *cfg, int biss1) {
+  return biss1 ? cfg->biss1_sw_given || cfg->biss1_esw_given : cfg->biss2_sw_given || cfg->biss2_esw_given;
+}
+
+/* cw aliases cfg->biss1_sw or fills sw_buf. 0 ok, -1 esw decrypt failed */
+static int resolve_biss1e_key(const config_t *cfg, int biss1, unsigned char sw_buf[BISS_KEY_LEN], scramble_algo_t *algo, const unsigned char **cw, size_t *cw_len) {
+  if (biss1) {
     *algo = SCRAMBLE_ALGO_CSA2;
-    *cw = cfg->biss1_sw;
     *cw_len = BISS1_KEY_LEN;
-    return 0;
+    *cw = cfg->biss1_sw_given ? cfg->biss1_sw : sw_buf;
+    if (cfg->biss1_sw_given) return 0;
+    return biss1_esw_decrypt(cfg->biss1_id, cfg->biss1_esw, cfg->biss1_id_buried, sw_buf) == 0 ? 0 : -1;
   }
   *algo = SCRAMBLE_ALGO_CISSA;
   *cw = sw_buf;
@@ -299,20 +304,22 @@ static int detect_cas_scheme(loop_ctx_t *lc) {
       lc->cas_mode = "biss-ca";
       break;
     }
-    case BISS_CA_SYSTEM_ID: {
+    case BISS1_CA_SYSTEM_ID:
+    case BISS2_CA_SYSTEM_ID: {
+      int biss1 = pmt_ca == BISS1_CA_SYSTEM_ID;
       unsigned char sw[BISS_KEY_LEN];
       scramble_algo_t algo;
       const unsigned char *cw;
       size_t cw_len;
       lc->cas_logged = 1;
-      log_line(TOOL_NAME ": BISS Mode 1/E detected (ca_system_id=0x%04x)", BISS_CA_SYSTEM_ID);
-      if (!lc->cfg->biss1_sw_given && !lc->cfg->biss2_sw_given && !lc->cfg->biss2_esw_given) {
-        log_code("DW300152", TOOL_NAME ": BISS stream detected, no --biss1-sw/--biss2-sw/--biss2-esw given");
+      log_line(TOOL_NAME ": BISS Mode 1/E detected (ca_system_id=0x%04x)", pmt_ca);
+      if (!have_biss_key(lc->cfg, biss1)) {
+        log_code("DW300152", TOOL_NAME ": BISS%d stream detected, no --biss%d-sw/--biss%d-esw given", biss1 ? 1 : 2, biss1 ? 1 : 2, biss1 ? 1 : 2);
         lc->fatal = 1;
         return 1;
       }
-      if (resolve_biss1e_key(lc->cfg, sw, &algo, &cw, &cw_len) != 0) {
-        log_code("DW300153", TOOL_NAME ": failed to decrypt --biss2-esw (no OpenSSL in this build?)");
+      if (resolve_biss1e_key(lc->cfg, biss1, sw, &algo, &cw, &cw_len) != 0) {
+        log_code("DW300153", TOOL_NAME ": failed to decrypt --biss%d-esw", biss1 ? 1 : 2);
         lc->key_load_errors_total++;
         lc->fatal = 1;
         return 1;

@@ -37,9 +37,13 @@ static const signed char *offset_row(unsigned fs) {
   return fs > 64000 ? start_offset[5] : NULL;
 }
 
+static int start_base(unsigned fs) {
+  if (fs < 32000) return 3000;
+  return fs < 64000 ? 4000 : 5000;
+}
+
 static int stop_band(unsigned fs, int k0, unsigned stop) {
-  int base = fs < 32000 ? 6000 : (fs < 64000 ? 8000 : 10000);
-  int stop_min = nint((double)base * 128.0 / fs);
+  int stop_min = nint((double)(2 * start_base(fs)) * 128.0 / fs);
   int dk[13];
   int k2 = stop_min;
   if (stop == 14) k2 = 2 * k0;
@@ -116,7 +120,6 @@ static int master_warped(int k0, int k2, unsigned scale, unsigned alter, int *f)
 
 int aacprobe_sbr_bands(aacprobe_sbr_t *sbr, unsigned fs, unsigned start, unsigned stop, unsigned xover, unsigned scale, unsigned alter, unsigned noise) {
   const signed char *offset = offset_row(fs);
-  int base = fs < 32000 ? 3000 : (fs < 64000 ? 4000 : 5000);
   int f[MAX_BANDS + 1];
   int k0;
   int k2;
@@ -124,7 +127,7 @@ int aacprobe_sbr_bands(aacprobe_sbr_t *sbr, unsigned fs, unsigned start, unsigne
   int n_high;
   int nq = 1;
   if (!offset || start > 15 || stop > 15) return -1;
-  k0 = nint((double)base * 128.0 / fs) + offset[start];
+  k0 = nint((double)start_base(fs) * 128.0 / fs) + offset[start];
   k2 = stop_band(fs, k0, stop);
   if (k0 <= 0 || k2 <= k0) return -1;
   n_master = scale ? master_warped(k0, k2, scale, alter, f) : master_linear(k0, k2, alter, f);

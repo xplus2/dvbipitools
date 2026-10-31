@@ -37,6 +37,7 @@ static const opt_case_t BAD_STANDALONE_VALUE[] = {
   {"--biss2-sw", "0011"},
   {"--biss2-emit-esw", "0011"},
   {"--biss1-sw", "0011"},
+  {"--biss1-emit-esw", "0011"},
   {"--biss2-ca-session-id", "0x10000"},
 };
 
@@ -225,6 +226,37 @@ START_TEST(biss_options_enable_and_store_keys) {
 }
 END_TEST
 
+START_TEST(biss1_emit_esw_stores_id_with_sw) {
+  const char *extra[] = {"--biss1-sw", "001122334455", "--biss1-emit-esw", "ffeeddccbbaa99", "--biss1-emit-esw-buried", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_OK);
+  ck_assert_int_eq(cfg.biss1_emit_esw, 1);
+  ck_assert_int_eq(cfg.biss1_emit_esw_buried, 1);
+  ck_assert_uint_eq(cfg.biss1_esw_id[0], 0xffu);
+  ck_assert_uint_eq(cfg.biss1_esw_id[6], 0x99u);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(biss1_emit_esw_without_sw_is_rejected) {
+  const char *extra[] = {"--biss1-emit-esw", "ffeeddccbbaa99", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(biss1_emit_esw_buried_without_id_is_rejected) {
+  const char *extra[] = {"--biss1-sw", "001122334455", "--biss1-emit-esw-buried", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
 START_TEST(biss1_sw_enables_and_stores_key) {
   const char *extra[] = {"--biss1-sw", "001122334455", NULL};
   config_t cfg = {0};
@@ -299,6 +331,9 @@ static Suite *args_cas_suite(void) {
   tcase_add_test(tc, cwenc_options_are_recorded_before_validation);
   tcase_add_test(tc, biss_options_enable_and_store_keys);
   tcase_add_test(tc, biss1_sw_enables_and_stores_key);
+  tcase_add_test(tc, biss1_emit_esw_stores_id_with_sw);
+  tcase_add_test(tc, biss1_emit_esw_without_sw_is_rejected);
+  tcase_add_test(tc, biss1_emit_esw_buried_without_id_is_rejected);
   tcase_add_test(tc, biss2_ca_options_fill_config);
   tcase_add_loop_test(tc, muxer_pid_collision_is_rejected, 0, (int)ARRAY_LEN(MUXER_PID));
   tcase_add_test(tc, pid_outside_muxer_blocks_is_accepted);

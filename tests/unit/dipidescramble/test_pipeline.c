@@ -676,12 +676,59 @@ START_TEST(classic_cas_accepts_csa_scrambling_modes) {
 END_TEST
 
 START_TEST(biss1e_without_any_key_is_fatal) {
+  const unsigned ids[2] = {0x2600, 0x2602};
+  unsigned i;
+
+  for (i = 0; i < 2; i++) {
+    cls_t c;
+
+    cls_open(&c);
+    ck_assert_int_eq(prime_cas(&c.lc, ids[i], 0), 1);
+    ck_assert_int_eq(c.lc.fatal, 1);
+    ck_assert_ptr_null(c.lc.scr);
+    cls_close(&c);
+  }
+}
+END_TEST
+
+START_TEST(biss1_stream_rejects_biss2_keys) {
   cls_t c;
 
   cls_open(&c);
+  c.cfg.biss2_sw_given = 1;
+  ck_assert_int_eq(prime_cas(&c.lc, 0x2600, 0), 1);
+  ck_assert_int_eq(c.lc.fatal, 1);
+  ck_assert_ptr_null(c.lc.scr);
+  cls_close(&c);
+}
+END_TEST
+
+START_TEST(biss2_stream_rejects_biss1_keys) {
+  cls_t c;
+
+  cls_open(&c);
+  c.cfg.biss1_sw_given = 1;
   ck_assert_int_eq(prime_cas(&c.lc, 0x2602, 0), 1);
   ck_assert_int_eq(c.lc.fatal, 1);
   ck_assert_ptr_null(c.lc.scr);
+  cls_close(&c);
+}
+END_TEST
+
+START_TEST(biss1_stream_with_esw_and_id_resolves_a_csa_descrambler) {
+  static const unsigned char id[BISS1_ID_LEN] = {0xFB, 0x5F, 0x9C, 0x58, 0x5D, 0xD3, 0x59};
+  static const unsigned char esw[BISS1_ESW_LEN] = {0xE8, 0x18, 0x16, 0xB8, 0x7E, 0x5C, 0xF9, 0xC4};
+  cls_t c;
+
+  cls_open(&c);
+  c.cfg.biss1_esw_given = 1;
+  c.cfg.biss1_id_given = 1;
+  memcpy(c.cfg.biss1_esw, esw, sizeof esw);
+  memcpy(c.cfg.biss1_id, id, sizeof id);
+  ck_assert_int_eq(prime_cas(&c.lc, 0x2600, 0), 0);
+  ck_assert_ptr_nonnull(c.lc.scr);
+  ck_assert_str_eq(c.lc.cas_mode, "biss1e");
+  ck_assert_int_eq(c.lc.cw_len, 8);
   cls_close(&c);
 }
 END_TEST
@@ -708,7 +755,7 @@ START_TEST(biss1e_with_biss1_sw_resolves_a_csa_descrambler) {
   cls_open(&c);
   c.cfg.biss1_sw_given = 1;
   memset(c.cfg.biss1_sw, 0x33, sizeof c.cfg.biss1_sw);
-  ck_assert_int_eq(prime_cas(&c.lc, 0x2602, 0), 0);
+  ck_assert_int_eq(prime_cas(&c.lc, 0x2600, 0), 0);
   ck_assert_ptr_nonnull(c.lc.scr);
   ck_assert_int_eq(c.lc.cw_len, 8);
   cls_close(&c);
@@ -1102,6 +1149,9 @@ static Suite *pipeline_suite(void) {
   tcase_add_test(tc, classic_cas_with_unrecognized_scrambling_mode_is_fatal);
   tcase_add_test(tc, classic_cas_accepts_csa_scrambling_modes);
   tcase_add_test(tc, biss1e_without_any_key_is_fatal);
+  tcase_add_test(tc, biss1_stream_rejects_biss2_keys);
+  tcase_add_test(tc, biss2_stream_rejects_biss1_keys);
+  tcase_add_test(tc, biss1_stream_with_esw_and_id_resolves_a_csa_descrambler);
   tcase_add_test(tc, biss1e_with_esw_and_id_resolves_a_cissa_descrambler);
   tcase_add_test(tc, biss1e_with_biss1_sw_resolves_a_csa_descrambler);
   tcase_add_test(tc, biss_ca_without_a_private_key_is_fatal);

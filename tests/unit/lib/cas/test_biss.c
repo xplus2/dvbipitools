@@ -92,6 +92,93 @@ START_TEST(biss1_parse_sw_rejects_non_hex_chars) {
 }
 END_TEST
 
+/* EBU Tech 3292 rev. 2 Tables A.1, A.2. id: 14 hex, sw: expected clear SW */
+typedef struct {
+  const char *esw;
+  const char *id;
+  const char *sw;
+  int buried;
+} biss1_vector_t;
+
+static const biss1_vector_t biss1_vectors[] = {
+  {"E81816B87E5CF9C4", "FB5F9C585DD359", "6651DC93B1FC", 0},
+  {"FE0E810E96648C43", "DC91106F13C87B", "5406386BE70D", 0},
+  {"51B276C10BA89683", "89F27FB3ACA107", "0F1050049893", 0},
+  {"1D599C25C30C2C11", "85513F83A5FF36", "17A7A594057F", 0},
+  {"ED89E0D818B43B98", "CD23BF7D8F6BC3", "086220EE2993", 0},
+  {"DA457923D39BDB81", "E0A48CAA093AC7", "FF00C8306C91", 0},
+  {"389C30A2AB29F3F2", "FB5F9C585DD359", "6651DC93B1FC", 1},
+  {"288871F187278E6A", "DC91106F13C87B", "5406386BE70D", 1},
+  {"53C0C292CC2A88B3", "89F27FB3ACA107", "0F1050049893", 1},
+  {"6EC275343C161742", "85513F83A5FF36", "17A7A594057F", 1},
+  {"0E027A2DBDB5622C", "CD23BF7D8F6BC3", "086220EE2993", 1},
+  {"C5E9F325179F97A2", "E0A48CAA093AC7", "FF00C8306C91", 1},
+};
+
+START_TEST(biss1_esw_decrypt_matches_ebu_appendix_a_vector) {
+  const biss1_vector_t *v = &biss1_vectors[_i];
+  unsigned char esw[BISS1_ESW_LEN], id[BISS1_ID_LEN], want[BISS1_KEY_LEN], got[BISS1_KEY_LEN];
+  ck_assert_int_eq(biss1_parse_esw(v->esw, esw), 0);
+  ck_assert_int_eq(biss1_parse_id(v->id, id), 0);
+  ck_assert_int_eq(biss1_parse_sw(v->sw, want), 0);
+  ck_assert_int_eq(biss1_esw_decrypt(id, esw, v->buried, got), 0);
+  ck_assert_mem_eq(got, want, BISS1_KEY_LEN);
+}
+END_TEST
+
+START_TEST(biss1_esw_round_trips_for_each_id_kind) {
+  const biss1_vector_t *v = &biss1_vectors[_i];
+  unsigned char id[BISS1_ID_LEN], cw[BISS1_KEY_LEN], esw[BISS1_ESW_LEN], back[BISS1_KEY_LEN];
+  ck_assert_int_eq(biss1_parse_id(v->id, id), 0);
+  ck_assert_int_eq(biss1_parse_sw(v->sw, cw), 0);
+  ck_assert_int_eq(biss1_esw_encrypt(id, cw, v->buried, esw), 0);
+  ck_assert_int_eq(biss1_esw_decrypt(id, esw, v->buried, back), 0);
+  ck_assert_mem_eq(back, cw, BISS1_KEY_LEN);
+}
+END_TEST
+
+START_TEST(biss1_esw_encrypt_fills_outer_bits_randomly) {
+  unsigned char id[BISS1_ID_LEN], cw[BISS1_KEY_LEN], a[BISS1_ESW_LEN], b[BISS1_ESW_LEN];
+  ck_assert_int_eq(biss1_parse_id("FB5F9C585DD359", id), 0);
+  ck_assert_int_eq(biss1_parse_sw("6651DC93B1FC", cw), 0);
+  ck_assert_int_eq(biss1_esw_encrypt(id, cw, 0, a), 0);
+  ck_assert_int_eq(biss1_esw_encrypt(id, cw, 0, b), 0);
+  ck_assert_mem_ne(a, b, BISS1_ESW_LEN);
+}
+END_TEST
+
+START_TEST(biss1_esw_rejects_null_args) {
+  unsigned char id[BISS1_ID_LEN] = {0}, buf[BISS1_KEY_LEN] = {0};
+  ck_assert_int_eq(biss1_esw_decrypt(NULL, buf, 0, buf), -1);
+  ck_assert_int_eq(biss1_esw_decrypt(id, NULL, 0, buf), -1);
+  ck_assert_int_eq(biss1_esw_decrypt(id, buf, 0, NULL), -1);
+  ck_assert_int_eq(biss1_esw_encrypt(NULL, buf, 0, buf), -1);
+  ck_assert_int_eq(biss1_esw_encrypt(id, NULL, 0, buf), -1);
+  ck_assert_int_eq(biss1_esw_encrypt(id, buf, 0, NULL), -1);
+}
+END_TEST
+
+START_TEST(biss1_parse_id_accepts_0x_prefix_and_rejects_bad_input) {
+  static const unsigned char expect[BISS1_ID_LEN] = {0xF0, 0x9A, 0x42, 0x3F, 0x56, 0x73, 0x8A};
+  unsigned char id[BISS1_ID_LEN];
+  ck_assert_int_eq(biss1_parse_id("0xF09A423F56738A", id), 0);
+  ck_assert_mem_eq(id, expect, BISS1_ID_LEN);
+  ck_assert_int_eq(biss1_parse_id("F09A423F5673", id), -1);
+  ck_assert_int_eq(biss1_parse_id("F09A423F56738AFF", id), -1);
+  ck_assert_int_eq(biss1_parse_id("F09A423F56738Z", id), -1);
+}
+END_TEST
+
+START_TEST(biss1_parse_esw_accepts_0x_prefix_and_rejects_bad_input) {
+  static const unsigned char expect[BISS1_ESW_LEN] = {0xF7, 0x6E, 0xE2, 0x49, 0xBE, 0x01, 0xA2, 0x86};
+  unsigned char esw[BISS1_ESW_LEN];
+  ck_assert_int_eq(biss1_parse_esw("0xF76EE249BE01A286", esw), 0);
+  ck_assert_mem_eq(esw, expect, BISS1_ESW_LEN);
+  ck_assert_int_eq(biss1_parse_esw("F76EE249BE01A2", esw), -1);
+  ck_assert_int_eq(biss1_parse_esw("F76EE249BE01A2Z6", esw), -1);
+}
+END_TEST
+
 static Suite *biss_suite(void) {
   Suite *s = suite_create("biss");
   TCase *tc = tcase_create("core");
@@ -106,6 +193,12 @@ static Suite *biss_suite(void) {
   tcase_add_test(tc, biss1_parse_sw_accepts_0x_prefix);
   tcase_add_test(tc, biss1_parse_sw_rejects_wrong_length);
   tcase_add_test(tc, biss1_parse_sw_rejects_non_hex_chars);
+  tcase_add_loop_test(tc, biss1_esw_decrypt_matches_ebu_appendix_a_vector, 0, (int)(sizeof biss1_vectors / sizeof biss1_vectors[0]));
+  tcase_add_loop_test(tc, biss1_esw_round_trips_for_each_id_kind, 0, (int)(sizeof biss1_vectors / sizeof biss1_vectors[0]));
+  tcase_add_test(tc, biss1_esw_encrypt_fills_outer_bits_randomly);
+  tcase_add_test(tc, biss1_esw_rejects_null_args);
+  tcase_add_test(tc, biss1_parse_id_accepts_0x_prefix_and_rejects_bad_input);
+  tcase_add_test(tc, biss1_parse_esw_accepts_0x_prefix_and_rejects_bad_input);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -66,6 +66,9 @@ typedef struct {
   int biss2_emit_esw;                   /* --biss2-emit-esw given; requires --biss2-sw */
   unsigned char biss2_esw_id[BISS_KEY_LEN]; /* --biss2-emit-esw <id>, parsed */
   int biss1_enabled;                    /* --biss1-sw given; mutually exclusive with --biss2-sw/--cas-algo/--cas-ecmg */
+  int biss1_emit_esw;                   /* --biss1-emit-esw given; requires --biss1-sw */
+  unsigned char biss1_esw_id[BISS1_ID_LEN]; /* --biss1-emit-esw <id>, parsed */
+  int biss1_emit_esw_buried;            /* --biss1-emit-esw-buried: <id> is a buried ID */
   unsigned char biss1_cw[BISS1_KEY_LEN];/* --biss1-sw, parsed into full checksummed CSA1 CW */
   int biss2_ca_enabled;                 /* --biss2-ca-receivers given; mutually exclusive with --biss1-sw/--biss2-sw/--cas-algo/--cas-ecmg */
   const char *biss2_ca_receivers_dir;   /* --biss2-ca-receivers <dir>: PEM public keys, one per receiver/group */

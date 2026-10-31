@@ -128,7 +128,7 @@ args_status_t rdh_cli_check(config_t *cfg, const rdh_opt_t *p) {
     return ARGS_ERR;
   }
   if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg->cas_algo, cfg->cas_vendors, cfg->n_cas_vendors, cfg->biss2_enabled, cfg->biss1_enabled,
-    cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms}) != 0)
+    cfg->biss2_ca_enabled, cfg->biss2_emit_esw, cfg->biss2_ca_session_id_given, cfg->cas_cp_duration_ms, cfg->biss1_emit_esw, cfg->biss1_emit_esw_buried}) != 0)
     return ARGS_ERR;
   if (cfg->cas_algo != CAS_ALGO_NONE) {
     unsigned pid;

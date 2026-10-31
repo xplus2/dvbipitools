@@ -33,7 +33,7 @@ run_expect_rc 1 "dipidescramble without --biss2-sw" \
 kill $TVHEADPID 2>/dev/null
 wait $TVHEADPID 2>/dev/null
 
-assert_contains "$WORK/dipidescramble.log" "BISS stream detected, no --biss1-sw/--biss2-sw/--biss2-esw given" "dipidescramble missing-key error"
+assert_contains "$WORK/dipidescramble.log" "BISS2 stream detected, no --biss2-sw/--biss2-esw given" "dipidescramble missing-key error"
 
 echo "OK"
 

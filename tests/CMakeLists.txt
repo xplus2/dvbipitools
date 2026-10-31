@@ -41,9 +41,17 @@ dvbipitools_add_unit_test(lib_cas_biss_ca_stub
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
+dvbipitools_add_unit_test(lib_cas_des
+    unit/lib/cas/test_des.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
+
 dvbipitools_add_unit_test(lib_cas_cw_encryption_stub
     unit/lib/cas/test_cw_encryption_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 
 dvbipitools_add_unit_test(lib_net_rist_stubs
@@ -1301,7 +1309,11 @@ if (OpenSSL_FOUND)
     dvbipitools_add_unit_test(lib_cas_biss
         unit/lib/cas/test_biss.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c
-        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
     target_link_libraries(test_lib_cas_biss PRIVATE OpenSSL::Crypto)
 
     dvbipitools_add_unit_test(lib_cas_biss_ca
@@ -1340,6 +1352,7 @@ if (OpenSSL_FOUND)
         unit/lib/cas/test_cw_encryption.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
     target_link_libraries(test_lib_cas_cw_encryption PRIVATE OpenSSL::Crypto)
@@ -1486,6 +1499,7 @@ if (OpenSSL_FOUND)
     dvbipitools_add_unit_test(dipidescramble_crypto
         unit/dipidescramble/test_crypto.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
@@ -1495,6 +1509,7 @@ if (OpenSSL_FOUND)
         unit/dipidescramble/test_device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_state_core.c
@@ -1514,6 +1529,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/emmcache.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/tspack.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
@@ -1537,6 +1553,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/wire.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/ecm_profile/crypto.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
@@ -1629,6 +1646,8 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
         ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c
@@ -1647,6 +1666,7 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/emmcache.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/device.c
         ${CMAKE_SOURCE_DIR}/src/dipidescramble/crypto.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_state_core.c
@@ -1697,6 +1717,8 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -1724,6 +1746,8 @@ if (OpenSSL_FOUND)
         ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/device_crypto.c
         ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+        ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
         ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
@@ -3171,8 +3195,11 @@ dvbipitools_add_unit_test(dipiradiohead_args
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 
 dvbipitools_add_unit_test(dipiradiohead_config
     unit/dipiradiohead/test_config.c
@@ -3208,8 +3235,11 @@ dvbipitools_add_unit_test(dipiradiohead_config
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 
 dvbipitools_add_unit_test(dipiradiohead_args_cas
     unit/dipiradiohead/test_args_cas.c
@@ -3245,8 +3275,11 @@ dvbipitools_add_unit_test(dipiradiohead_args_cas
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 
 dvbipitools_add_unit_test(dipiradiohead_args_general
     unit/dipiradiohead/test_args_general.c
@@ -3282,8 +3315,11 @@ dvbipitools_add_unit_test(dipiradiohead_args_general
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 
 dvbipitools_add_unit_test(dipiradiohead_args_net
     unit/dipiradiohead/test_args_net.c
@@ -3319,8 +3355,11 @@ dvbipitools_add_unit_test(dipiradiohead_args_net
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
-    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 
 dvbipitools_add_unit_test(dipiradiohead_source_async
     unit/dipiradiohead/input/test_source_async.c
@@ -3476,6 +3515,8 @@ dvbipitools_add_unit_test(dipiradiohead_radiohead
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -3843,6 +3884,8 @@ dvbipitools_add_unit_test(dipiradiohead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -3952,6 +3995,8 @@ dvbipitools_add_unit_test(dipitvhead_args
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -3962,7 +4007,8 @@ dvbipitools_add_unit_test(dipitvhead_args
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 
 dvbipitools_add_unit_test(dipitvhead_args_cas
     unit/dipitvhead/test_args_cas.c
@@ -3998,6 +4044,8 @@ dvbipitools_add_unit_test(dipitvhead_args_cas
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -4008,7 +4056,8 @@ dvbipitools_add_unit_test(dipitvhead_args_cas
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 
 dvbipitools_add_unit_test(dipitvhead_args_input
     unit/dipitvhead/test_args_input.c
@@ -4044,6 +4093,8 @@ dvbipitools_add_unit_test(dipitvhead_args_input
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -4054,7 +4105,8 @@ dvbipitools_add_unit_test(dipitvhead_args_input
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 
 dvbipitools_add_unit_test(dipitvhead_args_net
     unit/dipitvhead/test_args_net.c
@@ -4090,6 +4142,8 @@ dvbipitools_add_unit_test(dipitvhead_args_net
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -4100,7 +4154,8 @@ dvbipitools_add_unit_test(dipitvhead_args_net
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 
 dvbipitools_add_unit_test(dipitvhead_args_general
     unit/dipitvhead/test_args_general.c
@@ -4136,6 +4191,8 @@ dvbipitools_add_unit_test(dipitvhead_args_general
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/url.c
@@ -4146,7 +4203,8 @@ dvbipitools_add_unit_test(dipitvhead_args_general
     ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
     ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
-    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
+    ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+    ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
 
 dvbipitools_add_unit_test(dipitvhead_discover
     unit/dipitvhead/test_discover.c
@@ -4317,6 +4375,8 @@ dvbipitools_add_unit_test(dipitvhead_remux
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -4379,6 +4439,8 @@ dvbipitools_add_unit_test(dipitvhead_output
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -4499,6 +4561,8 @@ dvbipitools_add_unit_test(dipitvhead_mpts
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -4614,6 +4678,8 @@ dvbipitools_add_unit_test(dipitvhead_single
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -4697,6 +4763,7 @@ dvbipitools_add_unit_test(dipitvhead_ecmg_client
     ${CMAKE_SOURCE_DIR}/src/lib/cas/cas_dial.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/simulcrypt_msg.c
     ${CMAKE_SOURCE_DIR}/src/lib/mux/psi_build.c
@@ -4775,6 +4842,8 @@ dvbipitools_add_unit_test(dipitvhead_cas
     ${CMAKE_SOURCE_DIR}/src/lib/scrambler/csa2_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_engine.c
@@ -4792,6 +4861,7 @@ dvbipitools_add_unit_test(lib_cas_cas_group
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/run.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_common.c
+    ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/emmg_server.c
     ${CMAKE_SOURCE_DIR}/src/lib/cas/emmg_server/protocol.c

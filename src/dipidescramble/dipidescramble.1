@@ -1,4 +1,4 @@
-.TH DIPIDESCRAMBLE 1 "2026-10-19" "dvbipitools" "dvbipitools Manual"
+.TH DIPIDESCRAMBLE 1 "@DATE@" "dipidescramble @VERSION@" "dvbipitools Manual"
 .SH NAME
 dipidescramble \- standalone CAS validation client / descrambler
 .SH SYNOPSIS
@@ -52,8 +52,9 @@ again. An optional unicast EMM pull
 fetches EMMs once at startup instead of waiting on the carousel.
 .PP
 BISS (EBU Tech 3292) is supported directly without a device key: BISS1
-Mode 1 (CSA1, 12 hex char Session Word,
-.BR \-\-biss1\-sw ),
+Mode 1 or Mode E (CSA1, 12 hex char Session Word or 16 hex char Encrypted
+Session Word + 14 hex char ID,
+.BR \-\-biss1\-sw / \-\-biss1\-esw / \-\-biss1\-id ),
 BISS2 Mode 1 or Mode E (CISSA, 32 hex char Session Word or Encrypted
 Session Word + receiver ID,
 .BR \-\-biss2\-sw / \-\-biss2\-esw / \-\-biss2\-id ),
@@ -72,7 +73,7 @@ treat it as an opaque blob.
 .PP
 Known gaps shared with
 .BR dipitvhead / dipiradiohead :
-no ETSI TS 103 197 CSA3 or non-standard CSA2 modes, no BISS1 Mode E, no eECMs.
+no ETSI TS 103 197 CSA3 or non-standard CSA2 modes, no eECMs.
 .SH OPTIONS
 .TP
 .BR \-i ", " \-\-input " " \fIuri\fR
@@ -145,7 +146,21 @@ BISS2 Mode E: 32 hex char receiver ID for
 .TP
 .B \-\-biss1\-sw \fIhex12\fR
 Legacy BISS1 Mode 1: 12 hex char Session Word. Mutually exclusive with
-.BR \-\-biss2\-sw / \-\-biss2\-esw .
+.BR \-\-biss1\-esw / \-\-biss2\-sw / \-\-biss2\-esw .
+.TP
+.B \-\-biss1\-esw \fIhex16\fR
+Legacy BISS1 Mode E: 16 hex char Encrypted Session Word, single DES. Needs
+.BR \-\-biss1\-id ,
+mutually exclusive with
+.BR \-\-biss1\-sw / \-\-biss2\-sw / \-\-biss2\-esw .
+.TP
+.B \-\-biss1\-id \fIhex14\fR
+Legacy BISS1 Mode E: 14 hex char injected ID for
+.BR \-\-biss1\-esw .
+.TP
+.B \-\-biss1\-id\-buried
+.B \-\-biss1\-id
+is a buried ID.
 .TP
 .B \-\-biss2\-ca\-key \fIpath\fR
 BISS Mode CA: RSA private key PEM file (may hold several keys) or a directory of such files.
@@ -414,6 +429,7 @@ defaults ships as
 .BR dipisrt (1)
 .PP
 Project homepage:
-.URL "https://github.com/xplus2/dvbipitools" "" "."
+.UR https://github.com/xplus2/dvbipitools
+.UE .
 .SH LICENSE
 Licensed under the GNU General Public License, version 3 or later.

@@ -26,13 +26,12 @@ static size_t build_mpd(const mpd_fmt_ctx_t *ctx, char *mpd, size_t cap) {
   double min_buffer;
   int ll = ctx->want_ll && snap->part_target > 0.0;
   size_t utc_len = xml_escaped_len(ctx->utc_url);
-  size_t audio_max = split ? DASH_MPD_AUDIO_MAX + (ll ? utc_len : 0) : 0;
+  size_t audio_max = split ? DASH_MPD_AUDIO_MAX : 0;
+  size_t audio_utc = split ? utc_len : 0;
 
   /* url in tail, LL: also once per AdaptationSet. omit LL timing if it can't fit */
-  if (ll && DASH_MPD_HEAD_MAX + audio_max + 2 * utc_len + DASH_MPD_TAIL_MAX > cap) {
-    ll = 0;
-    audio_max = split ? DASH_MPD_AUDIO_MAX : 0;
-  }
+  if (ll && DASH_MPD_HEAD_MAX + audio_max + audio_utc + 2 * utc_len + DASH_MPD_TAIL_MAX > cap) ll = 0;
+  if (ll) audio_max += audio_utc;
   if (DASH_MPD_HEAD_MAX + audio_max + utc_len + DASH_MPD_TAIL_MAX > cap) utc_len = 0;
   mpd_avail_time(s, vsnap, avail, sizeof avail);
   iso8601_utc(time(NULL), publish, sizeof publish);

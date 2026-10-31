@@ -1187,6 +1187,8 @@ static const setter_case_t setter_cases[] = {
     BAD("cas required invalid", tvh_apply_cas_required, SCOPE_VENDOR, "perhaps", "invalid boolean 'perhaps'"),
     OKU("cas required", tvh_apply_cas_required, SCOPE_VENDOR, "yes", VD_OFF(required), 1),
     BAD("biss1 key too short", tvh_apply_biss1_sw, SCOPE_NONE, "short", "invalid 'short' (12 hex chars)"),
+    BAD("biss1 esw id not hex", tvh_apply_biss1_emit_esw, SCOPE_NONE, "zz", "invalid 'zz' (14 hex chars)"),
+    BAD("biss1 buried invalid", tvh_apply_biss1_emit_esw_buried, SCOPE_NONE, "perhaps", "invalid boolean 'perhaps'"),
     BAD("biss2 key too short", tvh_apply_biss2_sw, SCOPE_NONE, "short", "invalid 'short' (32 hex chars)"),
     BAD("biss2 esw id not hex", tvh_apply_biss2_emit_esw, SCOPE_NONE, "zz", "invalid 'zz' (32 hex chars)"),
     BAD("biss2 session id not hex", tvh_apply_biss2_ca_session_id, SCOPE_NONE, "zz", "invalid 'zz' (16 bit, dec or 0x-hex)"),

@@ -1,4 +1,4 @@
-.TH DIPITVHEAD 1 "2026-10-19" "dvbipitools" "dvbipitools Manual"
+.TH DIPITVHEAD 1 "@DATE@" "dipitvhead @VERSION@" "dvbipitools Manual"
 .SH NAME
 dipitvhead \- re-package transport streams as a DVB-IPI multicast, with bitrate shaping, HbbTV AIT injection, and Simulcrypt/BISS scrambling
 .SH SYNOPSIS
@@ -81,7 +81,7 @@ DVB SimulCrypt
 acting as SCS and EMMG-side MUX against one or more ECMG vendors) or
 BISS
 .RB ( \-\-biss1\-sw / \-\-biss2\-sw / \-\-biss2\-ca\-receivers ,
-EBU Tech 3292): BISS1 Mode 1 (CSA1), BISS2 Mode 1/E (CISSA, static
+EBU Tech 3292): BISS1 Mode 1/E (CSA1), BISS2 Mode 1/E (CISSA, static
 Session Word), or BISS2 Mode CA (RSA-OAEP per-receiver entitlement).
 Supported ciphers are CISSA, CSA1, and CSA2; see
 .B KNOWN GAPS
@@ -803,8 +803,20 @@ scrambled on the last known-good control word.
 .TP
 .B \-\-biss1\-sw \fIhex12\fR
 Enable legacy BISS1 Mode 1: 12 hex char Session Word, scrambles with
-CSA1. BISS1 Mode E (DES) is not supported. Mutually exclusive with
+CSA1. Mutually exclusive with
 .BR \-\-biss2\-sw / \-\-cas\-algo .
+.TP
+.B \-\-biss1\-emit\-esw \fIid\fR
+With
+.BR \-\-biss1\-sw :
+log a single-DES Encrypted Session Word for this 14 hex char injected ID,
+for out-of-band distribution (BISS1 Mode E).
+Filler bits are random: the ESW differs on every start, every value
+decrypts to the same Session Word.
+.TP
+.B \-\-biss1\-emit\-esw\-buried
+.B \-\-biss1\-emit\-esw
+takes a buried ID.
 .TP
 .B \-\-biss2\-sw \fIhex32\fR
 Enable BISS2 Mode 1/E: 32 hex char Session Word, scrambles with CISSA.
@@ -914,7 +926,7 @@ CAS support is a build-time option
 .RI ( DIPITVHEAD_CAS ,
 on by default). CISSA needs OpenSSL. CSA1, CSA2, and BISS1 dlopen
 .I libdvbcsa
-at runtime if present; dipitvhead is not built against it and does
+at runtime if present. dipitvhead is not built against it and does
 not bundle it, and static release tarballs do not contain it either.
 RIST input/output needs
 .IR librist ,
@@ -935,10 +947,10 @@ Re-read the BISS2 Mode CA receivers directory
 .RB ( \-\-biss2\-ca\-receivers )
 and apply any added, removed, or changed keys.
 .SH KNOWN LIMITATIONS
-* CISSA, CSA1, CSA2, BISS1 Mode 1, BISS2 Mode 1/E, and BISS2 Mode CA
+* CISSA, CSA1, CSA2, BISS1 Mode 1/E, BISS2 Mode 1/E, and BISS2 Mode CA
 only.
 
-* No CSA3, no BISS1 Mode E (DES). BISS2 Mode CA: at most 3840
+* No CSA3. BISS2 Mode CA: at most 3840
 receiver or group keys.
 
 * No entitlement_priv_data_loop vendor extensions:
@@ -997,6 +1009,7 @@ defaults ships as
 .BR dipifccret (1)
 .PP
 Project homepage:
-.URL "https://github.com/xplus2/dvbipitools" "" "."
+.UR https://github.com/xplus2/dvbipitools
+.UE .
 .SH LICENSE
 Licensed under the GNU General Public License, version 3 or later.

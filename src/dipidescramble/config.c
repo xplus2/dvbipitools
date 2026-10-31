@@ -168,6 +168,30 @@ static int apply_biss1_sw(void *c, const char *v, char *e, size_t n) {
   return 0;
 }
 
+static int apply_biss1_esw(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
+  if (biss1_parse_esw(v, cfg->biss1_esw)) {
+    snprintf(e, n, "invalid '%s' (16 hex chars)", v);
+    return -1;
+  }
+  cfg->biss1_esw_given = 1;
+  return 0;
+}
+
+static int apply_biss1_id(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
+  if (biss1_parse_id(v, cfg->biss1_id)) {
+    snprintf(e, n, "invalid '%s' (14 hex chars)", v);
+    return -1;
+  }
+  cfg->biss1_id_given = 1;
+  return 0;
+}
+
+static int apply_biss1_id_buried(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_bool(&((config_t *)c)->biss1_id_buried, v, e, n);
+}
+
 static int apply_biss2_ca_key(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   if (cfg->n_biss2_ca_key >= DIPIDESCRAMBLE_MAX_CA_KEYS) {
@@ -304,6 +328,9 @@ static const yamlcfg_key_t keys[] = {
   {"rist.profile", apply_profile, 0, 0},
   {"rist.encryption-type", apply_encryption_type, 0, 0},
   {"biss1.sw", apply_biss1_sw, 0, 0},
+  {"biss1.esw", apply_biss1_esw, 0, 0},
+  {"biss1.id", apply_biss1_id, 0, 0},
+  {"biss1.id-buried", apply_biss1_id_buried, 0, 0},
   {"biss2.sw", apply_biss2_sw, 0, 0},
   {"biss2.esw", apply_biss2_esw, 0, 0},
   {"biss2.id", apply_biss2_id, 0, 0},
@@ -366,6 +393,10 @@ int dscr_cfg_test(const char *path, int strict) {
   yamlcfg_warn_if(&y, cfg.biss2_esw_given && !cfg.biss2_id_given, "DA000369", "biss2.esw requires biss2.id");
   yamlcfg_warn_if(&y, cfg.biss2_id_given && !cfg.biss2_esw_given, "DA000370", "biss2.id requires biss2.esw");
   yamlcfg_warn_if(&y, cfg.biss1_sw_given && (cfg.biss2_sw_given || cfg.biss2_esw_given), "DA000371", "biss1.sw is mutually exclusive with biss2.sw/biss2.esw");
+  yamlcfg_warn_if(&y, cfg.biss1_esw_given && !cfg.biss1_id_given, "DA000787", "biss1.esw requires biss1.id");
+  yamlcfg_warn_if(&y, cfg.biss1_id_given && !cfg.biss1_esw_given, "DA000788", "biss1.id requires biss1.esw");
+  yamlcfg_warn_if(&y, cfg.biss1_esw_given && (cfg.biss1_sw_given || cfg.biss2_sw_given || cfg.biss2_esw_given), "DA000789", "biss1.esw is mutually exclusive with biss1.sw/biss2.sw/biss2.esw");
+  yamlcfg_warn_if(&y, cfg.biss1_id_buried && !cfg.biss1_id_given, "DA000790", "biss1.id-buried requires biss1.id");
   yamlcfg_warn_if(&y, (cfg.metrics_sock || cfg.metrics_interval_s) && !cfg.metrics_id, "DA000120", "metrics.sock and metrics.interval require metrics.id");
   yamlcfg_warn_if(&y, cfg.metrics_inspect_ts != METRICS_INSPECT_TS_OFF && !cfg.metrics_id, "DA000161", "metrics.inspect-ts requires metrics.id");
   yamlcfg_warn_if(&y, cfg.profile_given && cfg.have_input && cfg.input.kind != INPUT_RIST, "DA000372", "rist.profile needs input rist://");

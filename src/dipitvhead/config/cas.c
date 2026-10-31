@@ -79,6 +79,15 @@ int tvh_apply_biss1_sw(void *c, const char *v, char *e, size_t n) {
   return cas_set_biss1_sw(&cfg->biss1_enabled, cfg->biss1_cw, v, e, n);
 }
 
+int tvh_apply_biss1_emit_esw(void *c, const char *v, char *e, size_t n) {
+  config_t *cfg = c;
+  return cas_set_biss1_emit_esw(&cfg->biss1_emit_esw, cfg->biss1_esw_id, v, e, n);
+}
+
+int tvh_apply_biss1_emit_esw_buried(void *c, const char *v, char *e, size_t n) {
+  return yamlcfg_set_bool(&((config_t *)c)->biss1_emit_esw_buried, v, e, n);
+}
+
 int tvh_apply_biss2_sw(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   return cas_set_biss2_sw(&cfg->biss2_enabled, cfg->biss2_sw, v, e, n);

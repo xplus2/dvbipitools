@@ -1,11 +1,11 @@
 # dvbipitools
 
-Tools for handling DVB-IPI.
-Build carrier-grade IPTV infrastructure. Or just pretend you do in your basement.
+Build carrier-grade IPTV infrastructure. Or just pretend you do in your lab.
 
-Although DVB-IPI provides the conceptual backbone for the toolkit, individual services are intentionally decoupled.
+Although DVB-IPI ([ETSI TS 102 034](https://www.etsi.org/deliver/etsi_ts/102000_102099/102034/02.01.01_60/ts_102034v020101p.pdf)) provides
+the conceptual backbone for the toolkit, individual services are intentionally decoupled.
 You don’t need a complete DVB-IPI environment to benefit from them.
-Components like `dipitvhead` or `dipiradiohead` work just as well feeding an RF modulator, acting as stream processors,
+Daemons like `dipitvhead` or `dipiradiohead` work just as well feeding an RF modulator, acting as stream processors,
 or powering custom video distribution setups.
 
 GitHub is not the primary development repository, but releases are published here and pull requests are welcome.
@@ -29,7 +29,7 @@ I did not let it mess up the hard parts.
 | [dipirec](src/dipirec/README.md)               |         |         |      | ✔️     | ✔️  | record and replay (FCC/RET client)           |
 | [dipiscan](src/dipiscan/README.md)             |         |         |      | ✔️     | ✔️  | Multicast TV/radio scanner (w/o SD&S)        |
 | [dipixy](src/dipixy/README.md)                 |         |         | ✔️   | ✔️HN   | ✔️  | MC/RIST/SRT → (LL)HLS/(LL)DASH/MP4/TS + DLNA |
-| [dipibim](src/dipibim/README.md)               |         |         |      |        | ✔️  | TVA XML BiM enc/dec (debug `dipibcg`)        |
+| [dipibim](src/dipibim/README.md)               |         |         |      |        | ✔️  | BiM encoder/decoder                          |
 | [dipicam378](src/dipicam378/README.md)         |         |         |      |        | ✔️  | cs378x CAS test CAM                          |
 | [dipidescramble](src/dipidescramble/README.md) |         | ✔️      |      |        | ✔️  | descrambler (BISS & CAS validation)          |
 | [dvbipitools](src/dvbipitools/README.md)       | ✔️      | ✔️      | ✔️   | ✔️     | ✔️  | All of the above (multicall)                 |
@@ -64,7 +64,7 @@ cmake --build build
 
 * libssl
   + Required for HTTPS sources in `dipitvhead`, `dipiradiohead`, `dipixy`, `dipirist`, `dipisrt` and `dipirec`.
-  + Enables _CISSA/AES-128_ Conditional Access, and BISS2 (Mode 1/E Session Word AES-128,
+  + Enables _CISSA/AES-128_ Conditional Access, and BISS1E / BISS2 (Mode 1/E Session Word AES-128,
     Mode CA RSA-OAEP receiver keys) in `dipitvhead` and `dipiradiohead`.
   + Required to build `dipicam378`/`dipidescramble` at all - RSA/AES crypto is their whole purpose.
   + Required for `dipimetrics` and `dipixy` to serve HTTPS.
@@ -105,10 +105,10 @@ between real-world usage of media formats and the standard.
     ETSI TS 102 034 v2.1.1 mentions Multi Program Transport Streams (MPTS) exactly twice:
     + In the abbreviation list
     + According to §7.1.0, Content Service Providers can use them
-  - BISS (EBU Tech 3292): BISS1 Mode 1 (CSA1), BISS2 Mode 1/E (CISSA) and BISS2 Mode CA
+  - BISS (EBU Tech 3292): BISS1 Mode 1/E (CSA1), BISS2 Mode 1/E (CISSA) and BISS2 Mode CA
     (RSA-OAEP receiver entitlement). DVB-IPI prioritizes SimulCrypt.
 * dipiradiohead
-  - Icecast/Shoutcast as an input source - none of this is part of DVB.
+  - Icecast/Shoutcast as an input source - none of this is part of DVB-IPI.
   - ICY `StreamTitle`, inline ID3v2 `TIT2`/`TPE1` mapping into EIT.
 * dipirec
   - Matroska containers (`mkv` and `mka`).
@@ -133,11 +133,11 @@ between real-world usage of media formats and the standard.
   - HLS, LL-HLS, MPEG-DASH and LL-DASH output are not part of DVB-IPI.
   - MPEG-5 LCEVC is too young for DVB-IPI, but just fits.
 
-### Known gaps
-On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
+### Known / deliberate gaps
+On the other hand, full DVB-IPI goes way beyond the scope of this project.
 
-* FEC (Annex E Layer 2): Raptor RFC 5053/6330
-* Companion Stream FCC (Annex J)
+* The implemented AL-FEC is Annex E Layer 1, not Layer 2 (Raptor RFC 5053/6330)
+* FCC in `dipifccret` is Annex I (RFC 6285 RAMS), not an Annex J Companion Stream
 * DVB Companion Screens and Streams
 * SD&S record type "CoD Discovery" and "Services From Other SPs"
 * RTSP command/control for CoD services and multicast join (§6)
@@ -149,8 +149,7 @@ On the other hand, full DVB-IPI goes way beyond the scope of this toolkit.
 
 Indirectly related: 
 * `dipitvhead`, `dipiradiohead` and `dipidescramble`:
-  - no support for ETSI TS 103 197 CSA3 or non-standard CSA2 modes
-  - no BISS1 Mode E
+  - no ETSI TS 103 197 CSA3 or non-standard CSA2 "alternative" modes
   - no eECMs
 
 ## Licence

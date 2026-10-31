@@ -5,23 +5,39 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "lib/cas/des.h"
 #include "lib/helper/beutil.h"
 #include "lib/helper/log.h"
+#include "lib/helper/secure_zero.h"
 
 #include "cw_encryption.h"
 
-void cwenc_des56_expand(const unsigned char in7[7], unsigned char out8[CWENC_DES_KEY_LEN]) {
-  uint64_t bits = 0;
-  for (int i = 0; i < 7; i++) bits = (bits << 8) | in7[i];
-  for (int g = 0; g < 8; g++) {
-    int shift = 56 - 7 * (g + 1);
-    unsigned char byte = (unsigned char)(((bits >> shift) & 0x7F) << 1);
-    int ones = 0;
-    for (int b = 0; b < 8; b++) {
-      if (byte & (1 << b)) ones++;
-    }
-    out8[g] = (ones % 2 == 0) ? (byte | 1) : byte;
+int cwenc_des_ecb_encrypt(const unsigned char key[CWENC_DES_KEY_LEN], const unsigned char *pt, size_t pt_len, unsigned char *out) {
+  des_key_t ks;
+  if (pt_len == 0 || pt_len % CWENC_DES_KEY_LEN != 0) return -1;
+  des_set_key(&ks, key);
+  for (size_t off = 0; off < pt_len; off += CWENC_DES_KEY_LEN) des_encrypt(&ks, pt + off, out + off);
+  secure_zero(&ks, sizeof ks);
+  return 0;
+}
+
+int cwenc_encrypt_des56(const cwenc_selection_t *sel, int cw_len, unsigned char *cw) {
+  unsigned char key[CWENC_DES_KEY_LEN];
+  size_t len = (size_t)(cw_len / CWENC_DES_KEY_LEN) * CWENC_DES_KEY_LEN;
+  int rc;
+  if (len == 0) return 0;
+  des_key_expand(sel->key_material, key);
+  rc = cwenc_des_ecb_encrypt(key, cw, len, cw);
+  secure_zero(key, sizeof key);
+  return rc;
+}
+
+int cwenc_config_validate_key(const cwenc_config_t *cfg) {
+  if (!cfg->key_list_a_loaded && !cfg->key_list_b_loaded && cfg->fixed_key_len == 0) {
+    log_code("LS000287", "cw_encryption: no fixed_key configured and no key list loaded");
+    return -1;
   }
+  return 0;
 }
 
 static int cwenc_hex_decode(const char *hex, unsigned char *out, size_t out_len) {

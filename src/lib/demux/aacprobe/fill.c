@@ -43,7 +43,7 @@ static unsigned dynamic_range_info(br_t *b) {
   return n + bands;
 }
 
-static void sbr_payload(br_t *b, aacprobe_t *p, int crc, int prev_id, size_t end) {
+static void sbr_payload(const br_t *b, aacprobe_t *p, int crc, int prev_id, size_t end) {
   br_t s = *b;
   int ps = 0;
   p->sbr_seen = 1;

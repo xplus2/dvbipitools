@@ -5,6 +5,7 @@ dvbipitools (2.6.0-1) unstable; urgency=low
       - BiM (001) accepted on all payload ids
       - IPv6 header layout (128-bit provider id)
     + fmp4: vvcC is a FullBox (mux, demux)
+    + replaced legacy.so dependency
   * dipibim
     + -s/--schema, --profile dvb-tva|tva|sdns|generic
     + TS 102 323 clause 8 validation on dvb-tva
@@ -36,7 +37,10 @@ dvbipitools (2.6.0-1) unstable; urgency=low
   * dipiscan
     + csv rfc 4180
     + timeout-less option (-t 0)
- -- dvbipitools authors <unspecified@example.com>  tbd
+  * dipitvhead, dipiradiohead, dipidescramble
+    + fixed BISS CAIDs
+    + BISS1/E support
+ -- dvbipitools authors <unspecified@example.com>  Sat, 31 Oct 2026 00:00:00 +0100
 
 dvbipitools (2.5.1-1) unstable; urgency=medium
   * error codes

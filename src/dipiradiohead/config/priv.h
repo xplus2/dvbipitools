@@ -65,6 +65,8 @@ int rdh_apply_cas_cwenc_fixed_key(void *c, const char *v, char *e, size_t n);
 int rdh_apply_cas_cwenc_key_list_a(void *c, const char *v, char *e, size_t n);
 int rdh_apply_cas_cwenc_key_list_b(void *c, const char *v, char *e, size_t n);
 int rdh_apply_biss1_sw(void *c, const char *v, char *e, size_t n);
+int rdh_apply_biss1_emit_esw(void *c, const char *v, char *e, size_t n);
+int rdh_apply_biss1_emit_esw_buried(void *c, const char *v, char *e, size_t n);
 int rdh_apply_biss2_sw(void *c, const char *v, char *e, size_t n);
 int rdh_apply_biss2_emit_esw(void *c, const char *v, char *e, size_t n);
 int rdh_apply_biss2_ca_receivers(void *c, const char *v, char *e, size_t n);

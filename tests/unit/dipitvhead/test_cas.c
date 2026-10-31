@@ -664,6 +664,8 @@ typedef struct {
 static const biss_case_t biss_cases[] = {
     {"biss1 single", 1, 0, 0},
     {"biss1 multi", 1, 0, 1},
+    {"biss1 with esw single", 1, 1, 0},
+    {"biss1 with esw multi", 1, 1, 1},
     {"biss2 single", 0, 0, 0},
     {"biss2 multi", 0, 0, 1},
     {"biss2 with esw single", 0, 1, 0},
@@ -678,9 +680,11 @@ static cas_t *start_biss(const biss_case_t *bc, config_t *cfg, const psi_t *psi,
   init_cas_cfg(cfg, 0);
   cfg->biss1_enabled = bc->biss1;
   cfg->biss2_enabled = !bc->biss1;
-  cfg->biss2_emit_esw = bc->emit_esw;
+  cfg->biss1_emit_esw = bc->biss1 && bc->emit_esw;
+  cfg->biss2_emit_esw = !bc->biss1 && bc->emit_esw;
   memset(cfg->biss1_cw, 0x11, sizeof cfg->biss1_cw);
   memset(cfg->biss2_sw, 0x22, sizeof cfg->biss2_sw);
+  memset(cfg->biss1_esw_id, 0x44, sizeof cfg->biss1_esw_id);
   memset(cfg->biss2_esw_id, 0x33, sizeof cfg->biss2_esw_id);
   if (bc->multi) return cas_start_multi(cfg, lists, counts, 1);
   return cas_start(cfg, psi, es, 1, 0x0100);
@@ -723,6 +727,7 @@ START_TEST(biss_modes_scramble_with_a_fixed_key) {
   psi_t *with_pcr = build_psi_with_pcr(0x0100);
   unsigned char pkt[188];
   emit_rec_t emitted = {0, 0};
+  unsigned char desc[32];
   cas_t *c;
 
   set_es(&es, &pe, 0x0100, PID_VIDEO);
@@ -735,6 +740,8 @@ START_TEST(biss_modes_scramble_with_a_fixed_key) {
   ck_assert_msg(c != NULL, "%s: not started", bc->name);
   ck_assert_int_eq(cas_failed(c), 0);
   ck_assert_uint_eq(cas_pcr_pid(c), bc->multi ? 0x1FFFu : 0x0100u);
+  ck_assert_uint_eq(cas_prog_desc(c, desc, sizeof desc), 6u);
+  ck_assert_uint_eq(((unsigned)desc[2] << 8) | desc[3], bc->biss1 ? 0x2600u : 0x2602u);
   memset(pkt, 0xFF, sizeof pkt);
   pkt[0] = 0x47;
   pkt[1] = 0x01;

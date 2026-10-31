@@ -68,6 +68,8 @@ static const yamlcfg_key_t keys[] = {
 {"cas.ecmg.cwenc-key-list-a", rdh_apply_cas_cwenc_key_list_a, 1, 0},
 {"cas.ecmg.cwenc-key-list-b", rdh_apply_cas_cwenc_key_list_b, 1, 0},
 {"biss1.sw", rdh_apply_biss1_sw, 0, 0},
+{"biss1.emit-esw", rdh_apply_biss1_emit_esw, 0, 0},
+{"biss1.emit-esw-buried", rdh_apply_biss1_emit_esw_buried, 0, 0},
 {"biss2.sw", rdh_apply_biss2_sw, 0, 0},
 {"biss2.emit-esw", rdh_apply_biss2_emit_esw, 0, 0},
 {"biss2.ca-receivers", rdh_apply_biss2_ca_receivers, 1, 0},
@@ -111,7 +113,7 @@ int rdh_cfg_test(const char *path, int strict) {
   yamlcfg_warn_if(&y, pwlen && (pwlen < 10 || pwlen > 79), "RA000378", "srt.passphrase must be 10..79 characters");
   yamlcfg_warn_if(&y, cfg.srt_pbkeylen && !pwlen, "RA000379", "srt.pbkeylen requires srt.passphrase");
   yamlcfg_warn_if(&y, cfg.any_cas_flag && cfg.cas_algo == CAS_ALGO_NONE, "RA000522", "cas.* options require cas.algo");
-  if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg.cas_algo, cfg.cas_vendors, cfg.n_cas_vendors, cfg.biss2_enabled, cfg.biss1_enabled, cfg.biss2_ca_enabled, cfg.biss2_emit_esw, cfg.biss2_ca_session_id_given, cfg.cas_cp_duration_ms}) != 0)
+  if (cas_args_validate(TOOL_NAME, &(cas_args_t){cfg.cas_algo, cfg.cas_vendors, cfg.n_cas_vendors, cfg.biss2_enabled, cfg.biss1_enabled, cfg.biss2_ca_enabled, cfg.biss2_emit_esw, cfg.biss2_ca_session_id_given, cfg.cas_cp_duration_ms, cfg.biss1_emit_esw, cfg.biss1_emit_esw_buried}) != 0)
     y.warnings++;
   rc = yamlcfg_report(&y);
   yamlcfg_strpool_free(cfg.str_pool);

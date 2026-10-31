@@ -6,14 +6,14 @@
 #include "lib/helper/beutil.h"
 #include "biss.h"
 
-int biss_parse_hex16(const char *hex, unsigned char out[BISS_KEY_LEN]) {
+static int parse_hex(const char *hex, unsigned char *out, size_t len) {
   if (!hex || !out)
     return -1;
   if ((hex[0] == '0') && (hex[1] == 'x' || hex[1] == 'X'))
     hex += 2;
-  if (strlen(hex) != BISS_KEY_LEN * 2)
+  if (strlen(hex) != len * 2)
     return -1;
-  for (size_t i = 0; i < BISS_KEY_LEN; i++) {
+  for (size_t i = 0; i < len; i++) {
     int hi = hex_nibble(hex[2 * i]);
     int lo = hex_nibble(hex[2 * i + 1]);
     if (hi < 0 || lo < 0)
@@ -23,21 +23,22 @@ int biss_parse_hex16(const char *hex, unsigned char out[BISS_KEY_LEN]) {
   return 0;
 }
 
+int biss_parse_hex16(const char *hex, unsigned char out[BISS_KEY_LEN]) { return parse_hex(hex, out, BISS_KEY_LEN); }
+
+int biss1_parse_id(const char *hex, unsigned char out[BISS1_ID_LEN]) { return parse_hex(hex, out, BISS1_ID_LEN); }
+
+int biss1_parse_esw(const char *hex, unsigned char out[BISS1_ESW_LEN]) { return parse_hex(hex, out, BISS1_ESW_LEN); }
+
+void biss1_sw_to_cw(const unsigned char sw[BISS1_SW_LEN], unsigned char cw_out[BISS1_KEY_LEN]) {
+  for (size_t i = 0; i < BISS1_SW_LEN; i++) cw_out[i < 3 ? i : i + 1] = sw[i];
+  cw_out[3] = (unsigned char)(((unsigned)sw[0] + sw[1] + sw[2]) % 256);
+  cw_out[7] = (unsigned char)(((unsigned)sw[3] + sw[4] + sw[5]) % 256);
+}
+
 int biss1_parse_sw(const char *hex, unsigned char cw_out[BISS1_KEY_LEN]) {
-  if (!hex || !cw_out)
+  unsigned char sw[BISS1_SW_LEN];
+  if (!cw_out || parse_hex(hex, sw, BISS1_SW_LEN))
     return -1;
-  if ((hex[0] == '0') && (hex[1] == 'x' || hex[1] == 'X'))
-    hex += 2;
-  if (strlen(hex) != BISS1_SW_HEX_LEN)
-    return -1;
-  for (size_t i = 0; i < 6; i++) {
-    int hi = hex_nibble(hex[2 * i]);
-    int lo = hex_nibble(hex[2 * i + 1]);
-    if (hi < 0 || lo < 0)
-      return -1;
-    cw_out[i < 3 ? i : i + 1] = (unsigned char)((hi << 4) | lo);
-  }
-  cw_out[3] = (unsigned char)(((unsigned)cw_out[0] + cw_out[1] + cw_out[2]) % 256);
-  cw_out[7] = (unsigned char)(((unsigned)cw_out[4] + cw_out[5] + cw_out[6]) % 256);
+  biss1_sw_to_cw(sw, cw_out);
   return 0;
 }

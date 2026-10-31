@@ -48,6 +48,18 @@ args_status_t dscr_cli_check(const config_t *cfg) {
     argerr("DS000335", "--biss1-sw is mutually exclusive with --biss2-sw/--biss2-esw");
     return ARGS_ERR;
   }
+  if (cfg->biss1_esw_given != cfg->biss1_id_given) {
+    argerr("DS000781", "--biss1-esw and --biss1-id must be given together");
+    return ARGS_ERR;
+  }
+  if (cfg->biss1_esw_given && (cfg->biss1_sw_given || cfg->biss2_sw_given || cfg->biss2_esw_given)) {
+    argerr("DS000782", "--biss1-esw is mutually exclusive with --biss1-sw/--biss2-sw/--biss2-esw");
+    return ARGS_ERR;
+  }
+  if (cfg->biss1_id_buried && !cfg->biss1_id_given) {
+    argerr("DS000783", "--biss1-id-buried requires --biss1-id");
+    return ARGS_ERR;
+  }
   if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
   if (argutil_metrics_inspect_ts_validate(TOOL_NAME, cfg->metrics_id, cfg->metrics_inspect_ts)) return ARGS_ERR;
   if (cfg->metrics_n_known_pids && cfg->metrics_inspect_ts != METRICS_INSPECT_TS_FULL) {

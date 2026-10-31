@@ -40,6 +40,7 @@ static const opt_case_t BAD_STANDALONE_VALUE[] = {
   {"--biss2-sw", "0011"},
   {"--biss2-emit-esw", "0011"},
   {"--biss1-sw", "0011"},
+  {"--biss1-emit-esw", "0011"},
   {"--biss2-ca-session-id", "0x10000"},
   {"--biss2-ca-session-id", "zz"},
 };
@@ -192,7 +193,7 @@ START_TEST(emmg_reverse_fills_host_and_port) {
 }
 END_TEST
 
-START_TEST(cwenc_options_are_recorded_before_validation) {
+START_TEST(cwenc_des56_options_validate_without_openssl) {
   const char *extra[] = {
     "--cas-algo", "csa2",
     "--cas-ecmg", "ecmg.example:1234",
@@ -204,7 +205,7 @@ START_TEST(cwenc_options_are_recorded_before_validation) {
     NULL};
   config_t cfg = {0};
 
-  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_ERR);
+  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_OK);
   ck_assert_str_eq(cfg.cas_vendors[0].cwenc_algorithm, "des56");
   ck_assert_str_eq(cfg.cas_vendors[0].cwenc_aes_mode, "ecb");
   ck_assert_str_eq(cfg.cas_vendors[0].cwenc_fixed_key_hex, "4DA19FF0AF6B8F");
@@ -267,6 +268,37 @@ START_TEST(biss2_emit_esw_stores_id_with_sw) {
   ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_OK);
   ck_assert_int_eq(cfg.biss2_emit_esw, 1);
   ck_assert_uint_eq(cfg.biss2_esw_id[0], 0xffu);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(biss1_emit_esw_stores_id_with_sw) {
+  const char *extra[] = {"--biss1-sw", "001122334455", "--biss1-emit-esw", "ffeeddccbbaa99", "--biss1-emit-esw-buried", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_OK);
+  ck_assert_int_eq(cfg.biss1_emit_esw, 1);
+  ck_assert_int_eq(cfg.biss1_emit_esw_buried, 1);
+  ck_assert_uint_eq(cfg.biss1_esw_id[0], 0xffu);
+  ck_assert_uint_eq(cfg.biss1_esw_id[6], 0x99u);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(biss1_emit_esw_without_sw_is_rejected) {
+  const char *extra[] = {"--biss1-emit-esw", "ffeeddccbbaa99", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_ERR);
+  yamlcfg_strpool_free(cfg.str_pool);
+}
+END_TEST
+
+START_TEST(biss1_emit_esw_buried_without_id_is_rejected) {
+  const char *extra[] = {"--biss1-sw", "001122334455", "--biss1-emit-esw-buried", NULL};
+  config_t cfg = {0};
+
+  ck_assert_int_eq(args_fixture_parse_list(&cfg, extra), ARGS_ERR);
   yamlcfg_strpool_free(cfg.str_pool);
 }
 END_TEST
@@ -349,12 +381,15 @@ static Suite *args_cas_suite(void) {
   tcase_add_test(tc, vendor_options_fill_the_current_vendor);
   tcase_add_test(tc, emmg_listen_fills_host_and_port);
   tcase_add_test(tc, emmg_reverse_fills_host_and_port);
-  tcase_add_test(tc, cwenc_options_are_recorded_before_validation);
+  tcase_add_test(tc, cwenc_des56_options_validate_without_openssl);
   tcase_add_test(tc, cwenc_key_list_paths_are_recorded);
   tcase_add_test(tc, too_many_vendors_are_rejected);
   tcase_add_test(tc, biss2_sw_enables_and_stores_key);
   tcase_add_test(tc, biss2_emit_esw_stores_id_with_sw);
   tcase_add_test(tc, biss1_sw_enables_and_stores_key);
+  tcase_add_test(tc, biss1_emit_esw_stores_id_with_sw);
+  tcase_add_test(tc, biss1_emit_esw_without_sw_is_rejected);
+  tcase_add_test(tc, biss1_emit_esw_buried_without_id_is_rejected);
   tcase_add_loop_test(tc, single_input_muxer_pid_collision_is_rejected, 0, (int)ARRAY_LEN(MUXER_PID_SINGLE));
   tcase_add_loop_test(tc, multi_input_muxer_pid_collision_is_rejected, 0, (int)ARRAY_LEN(MUXER_PID_MULTI));
   tcase_add_test(tc, single_input_uses_second_program_pids_freely);

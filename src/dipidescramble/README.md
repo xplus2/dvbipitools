@@ -52,6 +52,9 @@ The CAS scheme is auto-detected from the stream itself (PMT `CA_descriptor`/`scr
 | flag  | long form               | argument              | default                                             |
 |-------|-------------------------|-----------------------|-----------------------------------------------------|
 |       | `--biss1-sw`            | `<hex12>`             | BISS1 Mode 1, mutually exclusive with `--biss2-*`   |
+|       | `--biss1-esw`           | `<hex16>`             | BISS1 Mode E, exclusive with other `-sw`/`-esw`     |
+|       | `--biss1-id`            | `<hex14>`             | required with `--biss1-esw`                         |
+|       | `--biss1-id-buried`     |                       | `--biss1-id` is a buried ID, not an injected one    |
 |       | `--biss2-sw`            | `<hex32>`             | BISS2 Mode 1, mutually exclusive with `--biss2-esw` |
 |       | `--biss2-esw`           | `<hex32>`             | BISS2 Mode E                                        |
 |       | `--biss2-id`            | `<hex32>`             | required with `--biss2-esw`                         |
@@ -203,13 +206,15 @@ This only applies to plain file `-o` targets; an `rtmp(s)://` target always gets
 It lives inside the base video's own PES stream, not a separate pid, so it survives an ordinary remux otherwise.
 No effect on raw `ts` output with no `rtmp(s)://` target.
 
-### BISS (`--biss1-sw`, `--biss2-sw`, `--biss2-esw`/`--biss2-id`)
+### BISS (`--biss1-sw`, `--biss1-esw`/`--biss1-id`, `--biss2-sw`, `--biss2-esw`/`--biss2-id`)
 
-BISS Mode 1/E: both BISS1 and BISS2 (EBU Tech 3292) share `ca_system_id 0x2602`, is detected from the PMT's `CA_descriptor`.
-The *value length* the operator supplies picks the cipher, since both share the same signaling:
+BISS Mode 1/E (EBU Tech 3292) is detected from the PMT's `CA_descriptor`: `ca_system_id 0x2600` is BISS1, `0x2602` is BISS2.
+Mode 1 and Mode E look identical on the wire, the key option picks one. A key for the other BISS version is rejected:
 
-* `--biss1-sw <hex12>`: 12 hex chars, BISS1 Mode 1, CSA1
-* `--biss2-sw <hex32>`: 32 hex chars, BISS2 Mode 1 or `--biss2-esw <hex32> --biss2-id <hex32>` for BISS2 Mode E, CISSA.
+* `0x2600`: `--biss1-sw <hex12>` for Mode 1 or `--biss1-esw <hex16> --biss1-id <hex14>` for Mode E, CSA1.
+* `0x2602`: `--biss2-sw <hex32>` for Mode 1 or `--biss2-esw <hex32> --biss2-id <hex32>` for Mode E, CISSA.
+
+Add `--biss1-id-buried` if the ESW was generated for a buried ID, it changes how the Session Word is derived.
 
 ### BISS-CA (`--biss2-ca-key`)
 
@@ -280,6 +285,9 @@ dipidescramble -i rtp://@239.0.0.1:1975 -k device.key -s mysmartcardserial-01 -e
 
 # legacy BISS1 Mode 1, no device key needed
 dipidescramble -i rtp://@239.0.0.1:1975 --biss1-sw 0123456789ab -o out.ts -v
+
+# legacy BISS1 Mode E, injected ID
+dipidescramble -i rtp://@239.0.0.1:1975 --biss1-esw e81816b87e5cf9c4 --biss1-id fb5f9c585dd359 -o out.ts -v
 
 # BISS2 Mode 1, no device key needed
 dipidescramble -i rtp://@239.0.0.1:1975 --biss2-sw 00112233445566778899aabbccddeeff -o out.ts -v

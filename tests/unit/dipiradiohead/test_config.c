@@ -81,6 +81,8 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, ECMG("        cwenc-aes-mode: ecb\n"), CFG_CHARARR, cas_vendors[0].cwenc_aes_mode, 0, "ecb"),
   CFG_FIELD(config_t, ECMG("        cwenc-fixed-key: 00112233445566778899aabbccddeeff\n"), CFG_CHARARR, cas_vendors[0].cwenc_fixed_key_hex, 0, "00112233445566778899aabbccddeeff"),
   CFG_FIELD(config_t, "biss1:\n  sw: 001122334455\n", CFG_INT, biss1_enabled, 1, NULL),
+  CFG_FIELD(config_t, "biss1:\n  sw: 001122334455\n  emit-esw: 00112233445566\n", CFG_INT, biss1_emit_esw, 1, NULL),
+  CFG_FIELD(config_t, "biss1:\n  sw: 001122334455\n  emit-esw: 00112233445566\n  emit-esw-buried: on\n", CFG_INT, biss1_emit_esw_buried, 1, NULL),
   CFG_FIELD(config_t, "biss2:\n  sw: 00112233445566778899aabbccddeeff\n", CFG_INT, biss2_enabled, 1, NULL),
   CFG_FIELD(config_t, "biss2:\n  sw: 00112233445566778899aabbccddeeff\n  emit-esw: 00112233445566778899aabbccddeeff\n", CFG_INT, biss2_emit_esw, 1, NULL),
   CFG_FIELD(config_t, "biss2:\n  ca-session-id: 0x10\n", CFG_UINT, biss2_ca_session_id, 16, NULL),

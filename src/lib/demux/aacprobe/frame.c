@@ -98,7 +98,12 @@ static void data_stream(br_t *b) {
 }
 
 static void program_config(br_t *b) {
-  unsigned front, side, back, lfe, assoc, cc;
+  unsigned front;
+  unsigned side;
+  unsigned back;
+  unsigned lfe;
+  unsigned assoc;
+  unsigned cc;
   br_u(b, 10);
   front = br_u(b, 4);
   side = br_u(b, 4);

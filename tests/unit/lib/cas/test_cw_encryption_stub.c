@@ -17,15 +17,37 @@ START_TEST(every_entry_point_reports_unavailable) {
   unsigned char cw[16] = {0};
   memset(&cfg, 0, sizeof cfg);
   memset(&sel, 0, sizeof sel);
-  ck_assert_int_eq(cwenc_des_ecb_encrypt(key, cw, 8, out), -1);
   ck_assert_int_eq(cwenc_aes_ecb_encrypt(128, key, blk, out), -1);
   ck_assert_int_eq(cwenc_aes_ctr_xcrypt(128, key, blk, cw, out, sizeof cw), -1);
   ck_assert_int_eq(cwenc_hkdf_sha256(key, sizeof key, blk, sizeof blk, mac), -1);
   cfg.algo = CWENC_ALGO_OFF;
   ck_assert_int_eq(cwenc_config_validate(&cfg, 8), 0);
-  cfg.algo = CWENC_ALGO_OFF + 1;
+  cfg.algo = CWENC_ALGO_AES128;
   ck_assert_int_eq(cwenc_config_validate(&cfg, 8), -1);
   ck_assert_int_eq(cwenc_encrypt_cw(&cfg, &sel, 8, 1, 2, 3, cw), -1);
+}
+END_TEST
+
+START_TEST(des56_works_without_openssl) {
+  static const unsigned char expect[8] = {0x3F, 0xA4, 0x0E, 0x8A, 0x98, 0x4D, 0x48, 0x15};
+  static const unsigned char key[8] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF};
+  unsigned char cw[8] = {0x4E, 0x6F, 0x77, 0x20, 0x69, 0x73, 0x20, 0x74};
+  ck_assert_int_eq(cwenc_des_ecb_encrypt(key, cw, sizeof cw, cw), 0);
+  ck_assert_mem_eq(cw, expect, sizeof cw);
+}
+END_TEST
+
+START_TEST(des56_config_needs_a_key_and_encrypts_a_cw) {
+  cwenc_config_t cfg;
+  cwenc_selection_t sel;
+  unsigned char cw[8] = {0};
+  memset(&cfg, 0, sizeof cfg);
+  memset(&sel, 0, sizeof sel);
+  cfg.algo = CWENC_ALGO_DES56;
+  ck_assert_int_eq(cwenc_config_validate(&cfg, 8), -1);
+  cfg.fixed_key_len = 7;
+  ck_assert_int_eq(cwenc_config_validate(&cfg, 8), 0);
+  ck_assert_int_eq(cwenc_encrypt_cw(&cfg, &sel, 8, 1, 2, 3, cw), 0);
 }
 END_TEST
 
@@ -33,6 +55,8 @@ static Suite *cw_stub_suite(void) {
   Suite *s = suite_create("cw_encryption_stub");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, every_entry_point_reports_unavailable);
+  tcase_add_test(tc, des56_works_without_openssl);
+  tcase_add_test(tc, des56_config_needs_a_key_and_encrypts_a_cw);
   suite_add_tcase(s, tc);
   return s;
 }

@@ -13,7 +13,6 @@
 #include "cas_scramble_engine.h"
 #include "lib/scrambler/scrambler.h"
 
-#define BISS_CA_SYSTEM_ID 0x2602    /* EBU Tech 3292, BISS2 Mode 1/E */
 #define BISS_CA_PID 0x1FFF          /* sentinel: no real ECM stream */
 #define BISS_CA_ECM_PID_BASE 0x1FFA /* auto-allocated, scanned upward against pids in use */
 
@@ -21,6 +20,7 @@
 typedef struct {
   cas_group_t *group;                /* NULL unless Simulcrypt (ECMG/EMMG-driven) */
   cas_scramble_engine_t *biss_engine; /* NULL unless BISS1/BISS2 Mode 1/E */
+  unsigned biss_ca_system_id;         /* pairs with biss_engine */
   biss_ca_engine_t *biss_ca;          /* NULL unless BISS2 Mode CA */
 } cas_core_t;
 
@@ -62,12 +62,15 @@ int cas_core_start_biss(scramble_algo_t algo, const unsigned char *cw, size_t cw
 typedef struct {
   int biss1_enabled;
   const unsigned char *biss1_cw; /* BISS1_KEY_LEN */
+  int biss1_emit_esw;
+  int biss1_emit_esw_buried;
+  const unsigned char *biss1_esw_id; /* BISS1_ID_LEN */
   int biss2_emit_esw;
   const unsigned char *biss2_esw_id; /* BISS_KEY_LEN */
   const unsigned char *biss2_sw;     /* BISS_KEY_LEN */
 } cas_biss_cfg_t;
 
-/* dispatches to BISS1 or BISS2 Mode 1/E per cfg, logs ESW first if biss2_emit_esw set. fills *out, 0 ok, -1 OOM/engine start failed */
+/* dispatches to BISS1 or BISS2 Mode 1/E per cfg, logs ESW first if biss1_emit_esw/biss2_emit_esw set. fills *out, 0 ok, -1 OOM/engine start failed */
 int cas_core_start_biss_dispatch(const cas_biss_cfg_t *cfg, const unsigned *pids, size_t pid_count, unsigned flush_pid, const char *log_prefix, cas_core_t *out);
 
 typedef struct {

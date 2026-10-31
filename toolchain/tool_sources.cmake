@@ -440,6 +440,8 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c
+            ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c
+            ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c
             ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_sections.c
             ${CSA2_SRC}
@@ -624,12 +626,12 @@ function(dipiradiohead_resolve_sources)
     endif ()
     if (DIPIRADIOHEAD_HAVE_CISSA)
         set(CISSA_SRC ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c)
-        set(BISS_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c)
+        set(BISS_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c)
         set(BISS_CA_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c)
         set(CWENC_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption.c)
     else ()
         set(CISSA_SRC ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c)
-        set(BISS_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c)
+        set(BISS_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c)
         set(BISS_CA_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c)
         set(CWENC_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c)
     endif ()
@@ -1879,12 +1881,12 @@ function(dipitvhead_resolve_sources)
     endif ()
     if (DIPITVHEAD_HAVE_CISSA)
         set(CISSA_SRC ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa.c)
-        set(BISS_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c)
+        set(BISS_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c)
         set(BISS_CA_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca.c)
         set(CWENC_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption.c)
     else ()
         set(CISSA_SRC ${CMAKE_SOURCE_DIR}/src/lib/scrambler/cissa_stub.c)
-        set(BISS_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c)
+        set(BISS_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/stub.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/hex.c ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/biss1e.c ${CMAKE_SOURCE_DIR}/src/lib/cas/des.c)
         set(BISS_CA_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/biss/ca_stub.c)
         set(CWENC_SRC ${CMAKE_SOURCE_DIR}/src/lib/cas/ecmg_client/cw_encryption_stub.c)
     endif ()

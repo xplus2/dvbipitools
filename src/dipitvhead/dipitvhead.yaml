@@ -178,6 +178,10 @@ cas:
 biss1:
   # --biss1-sw [not set] # 12 hex chars
   #sw: <hex12>
+  # --biss1-emit-esw [not set] # 14 hex chars
+  #emit-esw: <hex14>
+  # --biss1-emit-esw-buried off
+  #emit-esw-buried: off
 
 biss2:
   # --biss2-sw [not set] # 32 hex chars

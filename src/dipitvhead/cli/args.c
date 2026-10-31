@@ -66,6 +66,8 @@ static const struct option longopts[] = {
   {"biss2-sw", required_argument, 0, OPT_BISS2_SW},
   {"biss2-emit-esw", required_argument, 0, OPT_BISS2_EMIT_ESW},
   {"biss1-sw", required_argument, 0, OPT_BISS1_SW},
+  {"biss1-emit-esw", required_argument, 0, OPT_BISS1_EMIT_ESW},
+  {"biss1-emit-esw-buried", no_argument, 0, OPT_BISS1_EMIT_ESW_BURIED},
   {"biss2-ca-receivers", required_argument, 0, OPT_BISS2_CA_RECEIVERS},
   {"biss2-ca-session-id", required_argument, 0, OPT_BISS2_CA_SESSION_ID},
   {"remote", required_argument, 0, 'R'},

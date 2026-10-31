@@ -1,48 +1,15 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <pthread.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-#include <openssl/provider.h>
-#endif
 #include "lib/helper/log.h"
 #include "lib/helper/secure_zero.h"
 
 #include "cw_encryption.h"
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-static OSSL_PROVIDER *cwenc_legacy_provider;
-static OSSL_PROVIDER *cwenc_default_provider;
-
-static void cwenc_unload_providers(void) {
-  if (cwenc_legacy_provider)
-    OSSL_PROVIDER_unload(cwenc_legacy_provider);
-  if (cwenc_default_provider)
-    OSSL_PROVIDER_unload(cwenc_default_provider);
-}
-#endif
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-static pthread_once_t cwenc_provider_once = PTHREAD_ONCE_INIT;
-
-static void cwenc_load_providers(void) {
-  cwenc_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
-  cwenc_default_provider = OSSL_PROVIDER_load(NULL, "default");
-  atexit(cwenc_unload_providers);
-}
-#endif
-
-static void cwenc_ensure_legacy_provider(void) {
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-  pthread_once(&cwenc_provider_once, cwenc_load_providers);
-#endif
-}
 
 static int cwenc_block_encrypt(const EVP_CIPHER *cipher, const unsigned char *key, const unsigned char *in, size_t len, unsigned char *out) {
   EVP_CIPHER_CTX *ctx;
@@ -65,12 +32,6 @@ static int cwenc_block_encrypt(const EVP_CIPHER *cipher, const unsigned char *ke
 done:
   EVP_CIPHER_CTX_free(ctx);
   return ret;
-}
-
-int cwenc_des_ecb_encrypt(const unsigned char key[CWENC_DES_KEY_LEN], const unsigned char *pt, size_t pt_len, unsigned char *out) {
-  if (pt_len == 0 || pt_len % CWENC_DES_KEY_LEN != 0) return -1;
-  cwenc_ensure_legacy_provider();
-  return cwenc_block_encrypt(EVP_des_ecb(), key, pt, pt_len, out);
 }
 
 int cwenc_aes_ecb_encrypt(int key_bits, const unsigned char *key, const unsigned char in[CWENC_AES_BLOCK_LEN], unsigned char out[CWENC_AES_BLOCK_LEN]) {
@@ -130,11 +91,7 @@ int cwenc_config_validate(const cwenc_config_t *cfg, int cw_len) {
     log_code("LS000286", "cw_encryption: aes_mode=ecb is invalid with cw_len=8 (AES has no 8-byte block mode)");
     return -1;
   }
-  if (!cfg->key_list_a_loaded && !cfg->key_list_b_loaded && cfg->fixed_key_len == 0) {
-    log_code("LS000287", "cw_encryption: no fixed_key configured and no key list loaded");
-    return -1;
-  }
-  return 0;
+  return cwenc_config_validate_key(cfg);
 }
 
 int cwenc_encrypt_cw(const cwenc_config_t *cfg, const cwenc_selection_t *sel, int cw_len, unsigned short ecm_channel_id, unsigned short ecm_stream_id, unsigned short combo_cp_number, unsigned char *cw) {
@@ -144,21 +101,7 @@ int cwenc_encrypt_cw(const cwenc_config_t *cfg, const cwenc_selection_t *sel, in
   int rc;
   unsigned char out_buf[CWENC_AES_BLOCK_LEN];
 
-  if (cfg->algo == CWENC_ALGO_DES56) {
-    unsigned char des_key[CWENC_DES_KEY_LEN];
-    int nblocks = cw_len / CWENC_DES_KEY_LEN;
-    cwenc_des56_expand(sel->key_material, des_key);
-    for (int b = 0; b < nblocks; b++) {
-      unsigned char block_out[CWENC_DES_KEY_LEN];
-      if (cwenc_des_ecb_encrypt(des_key, cw + b * CWENC_DES_KEY_LEN, CWENC_DES_KEY_LEN, block_out) != 0) {
-        secure_zero(des_key, sizeof des_key);
-        return -1;
-      }
-      memcpy(cw + b * CWENC_DES_KEY_LEN, block_out, CWENC_DES_KEY_LEN);
-    }
-    secure_zero(des_key, sizeof des_key);
-    return 0;
-  }
+  if (cfg->algo == CWENC_ALGO_DES56) return cwenc_encrypt_des56(sel, cw_len, cw);
 
   memcpy(info, "annexd-cwenc-ctx-v01", 20);
   info[20] = (unsigned char)(ecm_channel_id >> 8);

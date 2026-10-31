@@ -99,6 +99,9 @@ static cas_biss_cfg_t biss_cfg_of(const config_t *cfg) {
   cas_biss_cfg_t bc;
   bc.biss1_enabled = cfg->biss1_enabled;
   bc.biss1_cw = cfg->biss1_cw;
+  bc.biss1_emit_esw = cfg->biss1_emit_esw;
+  bc.biss1_emit_esw_buried = cfg->biss1_emit_esw_buried;
+  bc.biss1_esw_id = cfg->biss1_esw_id;
   bc.biss2_emit_esw = cfg->biss2_emit_esw;
   bc.biss2_esw_id = cfg->biss2_esw_id;
   bc.biss2_sw = cfg->biss2_sw;

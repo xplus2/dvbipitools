@@ -72,6 +72,7 @@ int cas_set_cp_duration(unsigned *dst, const char *val, char *err, size_t errsz)
 int cas_set_biss2_sw(int *enabled, unsigned char *sw, const char *val, char *err, size_t errsz);
 int cas_set_biss2_emit_esw(int *enabled, unsigned char *id, const char *val, char *err, size_t errsz);
 int cas_set_biss1_sw(int *enabled, unsigned char *cw, const char *val, char *err, size_t errsz);
+int cas_set_biss1_emit_esw(int *enabled, unsigned char *id, const char *val, char *err, size_t errsz);
 int cas_set_biss2_ca_session_id(unsigned *dst, int *given, const char *val, char *err, size_t errsz);
 
 typedef struct {
@@ -84,6 +85,8 @@ typedef struct {
   int biss2_emit_esw;
   int biss2_ca_session_id_given;
   unsigned cas_cp_duration_ms;
+  int biss1_emit_esw;
+  int biss1_emit_esw_buried;
 } cas_args_t;
 
 /* biss2/biss1/biss2-ca/simulcrypt are mutually exclusive, 0 ok, -1 err (message already printed) */

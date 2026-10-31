@@ -4,15 +4,6 @@
 #include "lib/helper/log.h"
 #include "cw_encryption.h"
 
-int cwenc_des_ecb_encrypt(const unsigned char key[CWENC_DES_KEY_LEN], const unsigned char *pt, size_t pt_len, unsigned char *out) {
-  (void)key;
-  (void)pt;
-  (void)pt_len;
-  (void)out;
-  log_code("LA300131", "cw_encryption: this build has no OpenSSL, CW_encryption unavailable");
-  return -1;
-}
-
 int cwenc_aes_ecb_encrypt(int key_bits, const unsigned char *key, const unsigned char in[CWENC_AES_BLOCK_LEN], unsigned char out[CWENC_AES_BLOCK_LEN]) {
   (void)key_bits;
   (void)key;
@@ -43,17 +34,15 @@ int cwenc_hkdf_sha256(const unsigned char *ikm, size_t ikm_len, const unsigned c
 int cwenc_config_validate(const cwenc_config_t *cfg, int cw_len) {
   (void)cw_len;
   if (cfg->algo == CWENC_ALGO_OFF) return 0;
-  log_code("LA300131", "cw_encryption: this build has no OpenSSL, CW_encryption unavailable");
+  if (cfg->algo == CWENC_ALGO_DES56) return cwenc_config_validate_key(cfg);
+  log_code("LA300131", "cw_encryption: this build has no OpenSSL, AES CW_encryption unavailable");
   return -1;
 }
 
 int cwenc_encrypt_cw(const cwenc_config_t *cfg, const cwenc_selection_t *sel, int cw_len, unsigned short ecm_channel_id, unsigned short ecm_stream_id, unsigned short combo_cp_number, unsigned char *cw) {
-  (void)cfg;
-  (void)sel;
-  (void)cw_len;
+  if (cfg->algo == CWENC_ALGO_DES56) return cwenc_encrypt_des56(sel, cw_len, cw);
   (void)ecm_channel_id;
   (void)ecm_stream_id;
   (void)combo_cp_number;
-  (void)cw;
   return -1;
 }

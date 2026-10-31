@@ -127,6 +127,12 @@ args_status_t tvh_opt_cas(tvh_opt_t *p, int c) {
     case OPT_BISS1_SW:
       CHECK(cas_set_biss1_sw(&cfg->biss1_enabled, cfg->biss1_cw, optarg, err, sizeof err), "--biss1-sw");
       break;
+    case OPT_BISS1_EMIT_ESW:
+      CHECK(cas_set_biss1_emit_esw(&cfg->biss1_emit_esw, cfg->biss1_esw_id, optarg, err, sizeof err), "--biss1-emit-esw");
+      break;
+    case OPT_BISS1_EMIT_ESW_BURIED:
+      cfg->biss1_emit_esw_buried = 1;
+      break;
     case OPT_BISS2_CA_RECEIVERS:
       cfg->biss2_ca_receivers_dir = optarg;
       cfg->biss2_ca_enabled = 1;

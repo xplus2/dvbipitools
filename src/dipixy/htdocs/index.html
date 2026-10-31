@@ -244,7 +244,7 @@ function loadStat() {
 function appFlags() {
   var flags = (state.status && state.status.flags) || {};
   ['ts', 'spts', 'rawaudio', 'mp4', 'hls', 'hls-fmp4', 'llhls', 'llhls-fmp4', 'dash', 'lldash'].forEach(function (fmt) {
-    var off = !!flags['no_' + (fmt === 'hls-fmp4' ? 'hls' : fmt === 'llhls-fmp4' ? 'llhls' : fmt)];
+    var off = !!flags['no_' + fmt.replace('-fmp4', '')];
     $('fmt-' + fmt).disabled = off;
     $('plfmt-' + fmt).disabled = off;
   });

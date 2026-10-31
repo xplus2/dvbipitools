@@ -1,46 +1,15 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <pthread.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include <openssl/hmac.h>
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-#include <openssl/provider.h>
-#endif
 
+#include "lib/cas/des.h"
 #include "lib/demux/crc32.h"
 #include "lib/helper/secure_zero.h"
 
 #include "crypto.h"
-
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-static OSSL_PROVIDER *ecm_legacy_provider;
-static OSSL_PROVIDER *ecm_default_provider;
-
-static void ecm_unload_legacy_provider(void) {
-  if (ecm_legacy_provider) OSSL_PROVIDER_unload(ecm_legacy_provider);
-  if (ecm_default_provider) OSSL_PROVIDER_unload(ecm_default_provider);
-}
-#endif
-
-/* DES-EDE/EDE3 live in OpenSSL 3's "legacy" provider, not loaded by default */
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-static pthread_once_t ecm_legacy_provider_once = PTHREAD_ONCE_INIT;
-
-static void ecm_load_legacy_provider(void) {
-  ecm_default_provider = OSSL_PROVIDER_load(NULL, "default");
-  ecm_legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
-  atexit(ecm_unload_legacy_provider);
-}
-#endif
-
-static void ecm_ensure_legacy_provider(void) {
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-  pthread_once(&ecm_legacy_provider_once, ecm_load_legacy_provider);
-#endif
-}
 
 static const EVP_CIPHER *ecm_evp_cipher(crypto_ecm_cipher_t cipher, int cbc) {
   switch (cipher) {
@@ -49,13 +18,34 @@ static const EVP_CIPHER *ecm_evp_cipher(crypto_ecm_cipher_t cipher, int cbc) {
     case CRYPTO_ECM_AES256:
       return cbc ? EVP_aes_256_cbc() : EVP_aes_256_ecb();
     case CRYPTO_ECM_DES_EDE:
-      ecm_ensure_legacy_provider();
-      return cbc ? EVP_des_ede_cbc() : EVP_des_ede_ecb();
     case CRYPTO_ECM_DES_EDE3:
-      ecm_ensure_legacy_provider();
-      return cbc ? EVP_des_ede3_cbc() : EVP_des_ede3_ecb();
+      break;
   }
   return NULL;
+}
+
+/* key: k1|k2 for EDE, k1|k2|k3 for EDE3. ct/out may alias */
+static int ecm_des3_decrypt(crypto_ecm_cipher_t cipher, int cbc, const unsigned char *key, const unsigned char *iv, const unsigned char *ct, size_t ct_len, unsigned char *out) {
+  des_key_t k1, k2, k3;
+  unsigned char prev[DES_BLOCK_LEN];
+  if (ct_len == 0 || ct_len % DES_BLOCK_LEN != 0) return -1;
+  des_set_key(&k1, key);
+  des_set_key(&k2, key + DES_BLOCK_LEN);
+  des_set_key(&k3, cipher == CRYPTO_ECM_DES_EDE3 ? key + 2 * DES_BLOCK_LEN : key);
+  if (cbc) memcpy(prev, iv, DES_BLOCK_LEN);
+  for (size_t off = 0; off < ct_len; off += DES_BLOCK_LEN) {
+    unsigned char next[DES_BLOCK_LEN];
+    memcpy(next, ct + off, DES_BLOCK_LEN);
+    des3_decrypt(&k1, &k2, &k3, next, out + off);
+    if (cbc) {
+      for (size_t i = 0; i < DES_BLOCK_LEN; i++) out[off + i] ^= prev[i];
+      memcpy(prev, next, DES_BLOCK_LEN);
+    }
+  }
+  secure_zero(&k1, sizeof k1);
+  secure_zero(&k2, sizeof k2);
+  secure_zero(&k3, sizeof k3);
+  return 0;
 }
 
 int crypto_ecm_block_decrypt(crypto_ecm_cipher_t cipher, int cbc, const unsigned char *key,
@@ -63,6 +53,7 @@ int crypto_ecm_block_decrypt(crypto_ecm_cipher_t cipher, int cbc, const unsigned
   const EVP_CIPHER *evp = ecm_evp_cipher(cipher, cbc);
   EVP_CIPHER_CTX *ctx;
   int len = 0, finlen = 0, ret = -1;
+  if (cipher == CRYPTO_ECM_DES_EDE || cipher == CRYPTO_ECM_DES_EDE3) return ecm_des3_decrypt(cipher, cbc, key, iv, ct, ct_len, out);
   if (!evp || ct_len == 0) return -1;
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx) return -1;

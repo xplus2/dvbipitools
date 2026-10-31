@@ -134,6 +134,11 @@ START_TEST(cas_start_dispatches_each_mode_and_round_trips) {
   ck_assert_msg(cas != NULL, "%s: not started", c->name);
   ck_assert_msg(cas_vendor_count(cas) == c->n_vendors, "%s: %zu vendors", c->name, cas_vendor_count(cas));
   ck_assert_int_eq(cas_failed(cas), 0);
+  if (c->biss1 || c->biss2) {
+    unsigned char desc[32];
+    ck_assert_uint_eq(cas_prog_desc(cas, desc, sizeof desc), 6u);
+    ck_assert_uint_eq(((unsigned)desc[2] << 8) | desc[3], c->biss1 ? 0x2600u : 0x2602u);
+  }
   cas_stop(cas);
 }
 END_TEST
