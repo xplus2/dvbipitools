@@ -127,6 +127,10 @@ void ts_push_feed_pkt(capture_ctx_t *ctx, const uint8_t *pkt) {
     if (!atomic_load_explicit(&s->ready, memory_order_acquire)) goto next_sub;
     if (s->rawaudio) {
       rawaudio_demux_feed(s->rawaudio, pkt);
+      if (!atomic_load_explicit(&s->ctype_ready, memory_order_relaxed) && rawaudio_demux_codec(s->rawaudio, &s->audio_codec)) {
+        atomic_store_explicit(&s->ctype_ready, 1, memory_order_release);
+        ts_push_wake_reactor(s->reactor_tid);
+      }
       goto next_sub;
     }
     filter_psi_track(s, pkt, pid);

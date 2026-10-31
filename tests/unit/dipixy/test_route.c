@@ -144,6 +144,27 @@ START_TEST(udp_llhls_direct_route_parses) {
 }
 END_TEST
 
+START_TEST(udp_llhls_fmp4_direct_route_parses) {
+  route_t r;
+  ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/llhls-fmp4", &r), 0);
+  ck_assert_int_eq(r.kind, ROUTE_UDP);
+  ck_assert_int_eq(r.fmt, ROUTE_FMT_LLHLS_FMP4);
+  ck_assert_str_eq(r.hls_file, "index_ll.m3u8");
+}
+END_TEST
+
+START_TEST(llhls_fmp4_part_filename_route_parses) {
+  route_t r;
+  ck_assert_int_eq(route_parse("/rtp/239.0.0.1:8000/seg00042.3.m4s", &r), 0);
+  ck_assert_int_eq(r.kind, ROUTE_RTP);
+  ck_assert_int_eq(r.fmt, ROUTE_FMT_LLHLS_FMP4);
+  ck_assert_str_eq(r.hls_file, "seg00042.3.m4s");
+  ck_assert_int_eq(route_parse("/rtp/239.0.0.1:8000/seg00042.m4s", &r), 0);
+  ck_assert_int_eq(r.fmt, ROUTE_FMT_HLS_FMP4);
+  ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/seg00042.3.mp4", &r), 0);
+}
+END_TEST
+
 START_TEST(llhls_part_filename_route_parses) {
   route_t r;
   ck_assert_int_eq(route_parse("/rtp/239.0.0.1:8000/seg00042.3.ts", &r), 0);
@@ -156,7 +177,7 @@ END_TEST
 START_TEST(malformed_llhls_part_filename_rejected) {
   route_t r;
   ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/seg42..ts", &r), 0);
-  ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/seg42.3.m4s", &r), 0);
+  ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/seg42.3.mp4", &r), 0);
 }
 END_TEST
 
@@ -526,6 +547,8 @@ static Suite *route_suite(void) {
   tcase_add_test(tc, malformed_fmp4_segment_filename_rejected);
   tcase_add_test(tc, udp_llhls_direct_route_parses);
   tcase_add_test(tc, llhls_part_filename_route_parses);
+  tcase_add_test(tc, udp_llhls_fmp4_direct_route_parses);
+  tcase_add_test(tc, llhls_fmp4_part_filename_route_parses);
   tcase_add_test(tc, malformed_llhls_part_filename_rejected);
   tcase_add_test(tc, udp_dash_direct_route_parses);
   tcase_add_test(tc, udp_lldash_direct_route_parses);

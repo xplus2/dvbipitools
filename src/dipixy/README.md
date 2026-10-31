@@ -42,11 +42,11 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--sds-refresh-interval` | `<seconds>`                 | `30`, sds:// retry                                |       |
 |      | `--sds-bim-namespace`    | `<ns>`                      | newest that decodes, sds:// BiM                   |       |
 |      | `--sds-schema`           | `<path>`                    | compiled-in schemas, sds:// BiM, repeatable       |       |
-|      | `--segment-size`         | `<seconds>`                 | `3` (hls, hls-fmp4, llhls, dash, lldash)          |       |
+|      | `--segment-size`         | `<seconds>`                 | `3` (hls, hls-fmp4, llhls, llhls-fmp4, dash, ...) |       |
 |      | `--segment-count`        | `<n>`                       | `4` (3-10)                                        |       |
-|      | `--hls-part-size`        | `<seconds>`                 | `0.35` (llhls, must be `<` segment-size)          |       |
+|      | `--hls-part-size`        | `<seconds>`                 | `0.35` (llhls, llhls-fmp4, `<` segment-size)      |       |
 |      | `--dash-part-size`       | `<seconds>`                 | `0.333` (`lldash`, must be `<` segment-size)      |       |
-|      | `--dash-utc-url`         | `<url>`                     | `/time` (`lldash`)                                |       |
+|      | `--dash-utc-url`         | `<url>`                     | `/time` (`dash`, `lldash`)                        |       |
 |      | `--hls-seg-pool`         | `<n>`                       | `8`, per-size-class segment buffer cap            |       |
 |      | `--metrics`              | `<path>`                    | `/run/dvbipitools/metrics.sock`                   |       |
 |      | `--metrics-id`           | `<name>`                    | none (metrics disabled unless set)                |       |
@@ -167,7 +167,7 @@ The included web interface is as basic, but:
 
 Anyway, here are the details if you want to craft your URIs manually:
 
-These routes address a source directly (`fmt` is one of `ts`, `spts`, `rawaudio`, `mp4`, `hls`, `hls-fmp4`, `llhls`, `dash`, `lldash`):
+These routes address a source directly (`fmt` is one of `ts`, `spts`, `rawaudio`, `mp4`, `hls`, `hls-fmp4`, `llhls`, `llhls-fmp4`, `dash`, `lldash`):
 
 ```
 /rtp/<addr>:<port>/<fmt>    RTP source
@@ -204,7 +204,7 @@ Any path above accepts `?filter=<pids>` to drop PIDs from the output (comma-sepa
 `0x`-hex, e.g. `?filter=101,0x20`). Disable this feature with `--no-pid-filters`.
 
 On a multi-program transport stream (MPTS), `ts` always passes every program through unchanged.
-`spts`/`hls`/`hls-fmp4`/`llhls`/`dash`/`lldash` demux a single program and default to the first PMT that
+`spts`/`hls`/`hls-fmp4`/`llhls`/`llhls-fmp4`/`dash`/`lldash` demux a single program and default to the first PMT that
 resolves. 
 You can override this by selecting a specific PMT:`?pmt=<pid>` (decimal or `0x`-hex). 
 `spts` is a continuous raw HTTP/TS like `ts`, just guaranteed single-program: only the locked program's PAT/PMT/PCR/ES PIDs go out.
@@ -212,7 +212,7 @@ You can override this by selecting a specific PMT:`?pmt=<pid>` (decimal or `0x`-
 `rawaudio` locks the same way (`?pmt=`, default first PMT that resolves), then picks that program's lowest-numbered audio ES 
 that is not dropped by `?filter=` and forwards its PES payload as-is: raw data.
 
-When a locked program carries LCEVC (MPEG-5 Part 2) enhancement, `hls`/`hls-fmp4`/`llhls`/`dash`/`lldash`
+When a locked program carries LCEVC (MPEG-5 Part 2) enhancement, `hls`/`hls-fmp4`/`llhls`/`llhls-fmp4`/`dash`/`lldash`
 accept `?lcevc=<mode>` to pick what goes out: 
 * `base`: strip all LCEVC
 * `full`: default, strip nothing
@@ -231,7 +231,7 @@ one playlist, for VLC/Kodi/tvheadend/... to subscribe to instead of hand-feeding
 ```
 
 `<fmt>` is any of the entry formats above (`ts`, `spts`, `rawaudio`, `mp4`, `hls`, `hls-fmp4`, `llhls`,
-`dash`, `lldash`); `<type>` is `m3u` or `xspf`.
+`llhls-fmp4`, `dash`, `lldash`); `<type>` is `m3u` or `xspf`.
 
 Optional query params:
 * `?host=<hostname_or_ip>[:port]`: base host for generated URLs. Default: the request's own
@@ -247,7 +247,7 @@ A channel's `tvg-logo`/`<image>` (M3U/XSPF) carries through if the source playli
 ## Time Endpoint
 
 `/time` serves ISO 8601, UTC with milliseconds (`2026-01-01T12:00:00.123Z`) on all listeners.
-`lldash` MPDs point their `UTCTiming` (`urn:mpeg:dash:utc:http-xsiso:2014`) at it,
+`dash` and `lldash` MPDs point their `UTCTiming` (`urn:mpeg:dash:utc:http-xsdate:2014`) at it,
 as `<scheme>://<Host header>/time`, so https MPDs get an https time source. Set `--dash-utc-url`
 to use a different source.
 
@@ -257,7 +257,7 @@ to use a different source.
 Segmenting still needs to locate keyframes, understood for MPEG-2 Video, H.264/AVC, H.265/HEVC, H.266/VVC, and AV1.
 Other video codecs won't cut cleanly on an IDR/I-frame.
 
-`mp4`, `hls-fmp4`, `llhls`, `dash` and `lldash` build actual ISOBMFF (fMP4) sample entries, so their codec support is narrower:
+`mp4`, `hls-fmp4`, `llhls-fmp4`, `dash` and `lldash` build actual ISOBMFF (fMP4) sample entries, so their codec support is narrower:
 * video: H.264/AVC, H.265/HEVC, H.266/VVC, AV1. MPEG-2 Video has no fMP4 sample entry and won't produce output.
 * audio: AAC (ADTS or LATM), AC-3, E-AC-3, MP2, MP3, Opus, DTS, DTS-HD, DTS-HD-MA, TrueHD (incl. Atmos over TrueHD), AC-4.
 
@@ -266,6 +266,22 @@ elementary stream, inline SEI-wrapped NAL units, or inline dedicated NAL unit ty
 base video ES. See `?lcevc=` above to control what carries through.
 
 `rawaudio` just forwards a program's lowest-numbered audio ES's PES payload as-is, codec-agnostic.
+
+`dash` and `lldash` MPDs add the DVB-DASH profiles of ETSI TS 103 285 when a stream qualifies:
+* video: H.264/AVC, H.265/HEVC or H.266/VVC, with known dimensions and frame rate, every segment starting on SAP type 1 or 2
+* audio: AAC-LC >24 kHz, HE-AAC, HE-AACv2, E-AC-3, AC-4 or DTS, with known sampling rate and channel configuration
+
+Everything else plays as plain `isoff-live`.
+
+HE-AAC and HE-AACv2 work from ADTS and LATM, signalled or not: AAC at 24 kHz or below is probed for SBR and PS on its
+first frames, which delays audio start by up to 32 frames. MPDs and init segments then carry explicit backward
+compatible signaling and the output rate and channels.
+A stream that stays undecided keeps its core rate and channels and does not qualify above.
+ `startWithSAP` is 3 once a stream shows RASL pictures, which rules out those profiles.
+Interlaced video carries `scanType="interlaced"`, its `frameRate` counts frames: 25 for 50 fields per second.
+
+The response head waits for the PMT, then `Content-Type` follows the codec: `audio/aac` (AAC, AAC-LATM), `audio/ac3`, `audio/eac3`,
+`audio/opus`, else `audio/mpeg`. `HEAD` is always `audio/mpeg`.
 
 ## DLNA / UPnP-AV
 
@@ -405,12 +421,13 @@ What's lost:
 ```sh
 # direct routes, no channel list needed
 dipixy -l 0.0.0.0:9080
-vlc http://localhost:9080/udp/239.1.1.1:5000/ts      # Progressive HTTP/TS
-vlc http://localhost:9080/udp/239.1.1.1:5000/mp4     # Progressive HTTP/MP4
-vlc http://localhost:9080/rtp/239.1.1.1:5000/dash    # MPEG DASH
-vlc http://localhost:9080/srt/1.2.3.4:9000/hls       # HLS (TS segments)
-vlc http://localhost:9080/srt/1.2.3.4:9000/hls-fmp4  # HLS (fMP4 segments)
-vlc http://localhost:9080/srt/1.2.3.4:9000/llhls     # Low-Latency HLS
+vlc http://localhost:9080/udp/239.1.1.1:5000/ts       # Progressive HTTP/TS
+vlc http://localhost:9080/udp/239.1.1.1:5000/mp4      # Progressive HTTP/MP4
+vlc http://localhost:9080/rtp/239.1.1.1:5000/dash     # MPEG DASH
+vlc http://localhost:9080/srt/1.2.3.4:9000/hls        # HLS (TS segments)
+vlc http://localhost:9080/srt/1.2.3.4:9000/hls-fmp4   # HLS (fMP4 segments)
+vlc http://localhost:9080/srt/1.2.3.4:9000/llhls      # Low-Latency HLS
+vlc http://localhost:9080/srt/1.2.3.4:9000/llhls-fmp4 # Low-Latency HLS (fMP4 parts)
 
 # live SD&S discovery as list 1
 dipixy -i sds://239.19.75.1:3937

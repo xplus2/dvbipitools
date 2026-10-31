@@ -30,13 +30,13 @@ int find_header(const struct phr_header *headers, size_t num_headers, const char
 typedef struct { const char *s; size_t len; } cors_span_t;
 
 static pthread_once_t g_cors_once = PTHREAD_ONCE_INIT;
-static const config_t *g_cors_cfg;
+static _Thread_local const config_t *t_cors_cfg; /* pthread_once() has no arg, runs on caller */
 static cors_span_t *g_cors_list;
 static int g_cors_n;
 static int g_cors_all;
 
 static void cors_parse_once(void) {
-  const char *p = g_cors_cfg->cors_origins;
+  const char *p = t_cors_cfg->cors_origins;
   int cap;
   if (!p) {
     g_cors_all = 1;
@@ -79,7 +79,7 @@ static void cors_parse_once(void) {
 const char *cors_match(const config_t *cfg, const char *origin_hdr, int *vary) {
   size_t olen;
   *vary = 0;
-  g_cors_cfg = cfg;
+  t_cors_cfg = cfg;
   pthread_once(&g_cors_once, cors_parse_once);
   if (g_cors_all) return "*";
   if (!origin_hdr) return NULL;

@@ -8,7 +8,7 @@
 #define AC4_DEFER_MAX_FRAMES 4
 
 /* 1 ok (trk filled), 0 not enough decoded yet (no SPS/PPS, or malformed) */
-int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned char *cpriv, size_t cpriv_cap) {
+int build_video_track_cfg(hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned char *cpriv, size_t cpriv_cap) {
   unsigned w = 0, h = 0;
   size_t cpriv_len;
 
@@ -18,13 +18,10 @@ int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigne
       if (h264_dims(s->video.es.sps, s->video.es.spslen, &w, &h)) return 0; /* h264_dims: 0 ok, -1 malformed */
       cpriv_len = build_avcc(&s->video.es, cpriv, cpriv_cap);
       break;
-    case CODEC_HEVC: {
-      unsigned char ptl[12];
-      unsigned chroma;
-      if (hevc_info(s->video.es.sps, s->video.es.spslen, ptl, &chroma, &w, &h)) return 0; /* hevc_info: 0 ok, -1 malformed */
+    case CODEC_HEVC:
+      if (hevc_info(s->video.es.sps, s->video.es.spslen, s->video.es.ptl, &s->video.es.chroma, &w, &h)) return 0; /* hevc_info: 0 ok, -1 malformed */
       cpriv_len = build_hvcc(&s->video.es, cpriv, cpriv_cap);
       break;
-    }
     case CODEC_VVC:
       if (vvc_dims(s->video.es.sps, s->video.es.spslen, &w, &h)) return 0;
       cpriv_len = build_vvcc(&s->video.es, cpriv, cpriv_cap);
@@ -59,6 +56,9 @@ static void build_audio_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk,
   switch (s->demux.audio_codec) {
     case CODEC_AAC:
     case CODEC_AAC_LATM:
+      trk->cpriv = s->audio.aac_cfg_len ? s->audio.aac_cfg : s->audio.es.cpriv;
+      trk->cpriv_len = s->audio.aac_cfg_len ? s->audio.aac_cfg_len : s->audio.es.cpriv_len;
+      break;
     case CODEC_AC4:
       trk->cpriv = s->audio.es.cpriv;
       trk->cpriv_len = s->audio.es.cpriv_len;
@@ -152,8 +152,8 @@ static hls_chcfg_t audio_chcfg(const hls_seg_ctx_t *s, unsigned *value) {
     case CODEC_AAC_LATM:
     case CODEC_OPUS:
     case CODEC_MP2A:
-      *value = s->audio.channels;
-      return s->audio.channels ? HLS_CHCFG_COUNT : HLS_CHCFG_NONE;
+      *value = s->audio.out_channels ? s->audio.out_channels : s->audio.channels;
+      return *value ? HLS_CHCFG_COUNT : HLS_CHCFG_NONE;
     default:
       return HLS_CHCFG_NONE;
   }
@@ -185,8 +185,93 @@ static void create_track_muxes(hls_seg_ctx_t *s, const fmp4_track_cfg_t *trk) {
   track_init_segment(s, s->store_v, s->fmp4.fmux_v);
   track_init_segment(s, s->store_a, s->fmp4.fmux_a);
   chcfg = audio_chcfg(s, &chcfg_value);
-  if (hls_set_audio_params_at(s->store_a, s->audio.rate, chcfg, chcfg_value) < 0)
+  if (hls_set_audio_params_at(s->store_a, s->audio.out_rate ? s->audio.out_rate : s->audio.rate, chcfg, chcfg_value) < 0)
     log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700160", "hls: audio parameters not recorded, DASH audio rate and channels missing");
+}
+
+static unsigned leading_sap(unsigned leading) {
+  if (leading & ESC_LEADING_RASL) return 3;
+  return (leading & ESC_LEADING_RADL) ? 2 : 1;
+}
+
+static void video_info_publish(hls_seg_ctx_t *s) {
+  int failed = s->store && hls_set_video_info_at(s->store, &s->video.info) < 0;
+  if (s->store_v && hls_set_video_info_at(s->store_v, &s->video.info) < 0) failed = 1;
+  if (failed) log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700173", "hls: video parameters not recorded, DASH video attributes stale");
+}
+
+static uint64_t gcd64(uint64_t a, uint64_t b) {
+  while (b) {
+    uint64_t t = a % b;
+    a = b;
+    b = t;
+  }
+  return a;
+}
+
+/* tick = field duration: rate = time_scale / (2 * tick) */
+static void set_rate_from_h264_vui(hls_video_info_t *v, const h264_sps_info_t *o) {
+  uint64_t den = (uint64_t)o->num_units_in_tick * 2;
+  uint64_t g = gcd64(o->time_scale, den);
+  uint64_t num = o->time_scale / g;
+  den /= g;
+  if (num <= UINT32_MAX && den <= UINT32_MAX && num >= den && num / den <= 300) {
+    v->rate_num = (unsigned)num;
+    v->rate_den = (unsigned)den;
+  }
+}
+
+/* one PES = one sample, field-coded: maybe 1 field. no measuring */
+static void video_info_init(hls_seg_ctx_t *s, unsigned w, unsigned h) {
+  const esc_track_t *es = &s->video.es;
+  hls_video_info_t *v = &s->video.info;
+  int maybe_fields = 0;
+  memset(v, 0, sizeof *v);
+  v->width = w;
+  v->height = h;
+  v->sap = leading_sap(es->leading);
+  if (s->demux.video_codec == CODEC_H264) {
+    h264_sps_info_t o;
+    if (h264_sps_info(es->sps, es->spslen, &o) == 0) {
+      v->interlaced = !o.frame_mbs_only;
+      maybe_fields = v->interlaced;
+      if (o.num_units_in_tick && (o.fixed_frame_rate || maybe_fields)) set_rate_from_h264_vui(v, &o);
+    }
+  } else if (s->demux.video_codec == CODEC_HEVC) {
+    unsigned progressive = es->ptl[5] & 0x80;
+    unsigned interlaced = es->ptl[5] & 0x40;
+    v->interlaced = interlaced && !progressive;
+    maybe_fields = interlaced || !progressive;
+  } else if (s->demux.video_codec == CODEC_VVC) {
+    vvc_ptl_t p;
+    maybe_fields = vvc_ptl_info(es->sps, es->spslen, &p) != 0 || !p.frame_only;
+  }
+  s->video.measure_rate = !v->rate_num && !maybe_fields;
+}
+
+static void measure_frame_rate(hls_seg_ctx_t *s) {
+  static const unsigned rates[][2] = {{24000, 1001}, {24, 1}, {25, 1}, {30000, 1001}, {30, 1}, {48, 1}, {50, 1}, {60000, 1001}, {60, 1}, {100, 1}, {120000, 1001}, {120, 1}};
+  double fps;
+  if (!s->video.measure_rate || !s->video.seg_samples || s->fmp4.pend_elapsed <= 0.0) return;
+  fps = (double)s->video.seg_samples / s->fmp4.pend_elapsed;
+  for (size_t i = 0; i < sizeof rates / sizeof rates[0]; i++) {
+    double r = (double)rates[i][0] / rates[i][1];
+    double d = fps > r ? fps - r : r - fps;
+    if (d < r * 0.0003) {
+      s->video.info.rate_num = rates[i][0];
+      s->video.info.rate_den = rates[i][1];
+      s->video.measure_rate = 0;
+      video_info_publish(s);
+      return;
+    }
+  }
+}
+
+void fmp4_note_leading(hls_seg_ctx_t *s) {
+  unsigned sap = leading_sap(s->video.es.leading);
+  if (!s->fmp4.fmux || sap <= s->video.info.sap) return;
+  s->video.info.sap = sap;
+  video_info_publish(s);
 }
 
 /* creates fmux once video ready (and audio too, if present). called from both feed paths */
@@ -221,10 +306,12 @@ void try_create_fmux(hls_seg_ctx_t *s) {
   if (!s->fmp4.fmux) return;
   fmp4_track_seed_dts(s->fmp4.fmux, 0, s->fmp4.tl_base_ms * (HLS_TS_HZ / 1000));
   if (s->audio.present && s->store) create_track_muxes(s, trk);
+  video_info_init(s, trk[0].width, trk[0].height);
+  video_info_publish(s);
   outlen = fmp4_init_segment(s->fmp4.fmux, &out);
   if (outlen && (!s->store || hls_set_init_segment_at(s->store, s->demux.video_codec, out, outlen) < 0))
     log_throttled(&s->seg_push_fail_throttle, LOG_THROTTLE_WINDOW_S, "YW700144", "hls: hls_set_init_segment failed, init segment lost");
-  if (outlen) mp4push_deliver(s, out, outlen); /* inline for live subscribers, late joiners read the store */
+  if (outlen) mp4push_deliver(s, out, outlen); /* inline for live subscribers, late joiners read store */
 }
 
 static void push_track_fragment(hls_seg_ctx_t *s, hls_store_t *store, fmp4_mux_t *m, double pt, double chunk_dur, int key) {
@@ -244,6 +331,10 @@ static void fmp4_close_fragment(hls_seg_ctx_t *s, double pt) {
   unsigned char *out;
   size_t outlen;
   double chunk_dur = (double)(s->fmp4.pend_ts - s->fmp4.fmp4_frag_start_ts) / HLS_TS_HZ;
+  if (s->fmp4.pend_ends_seg) {
+    measure_frame_rate(s);
+    s->video.seg_samples = 0;
+  }
   push_track_fragment(s, s->store_v, s->fmp4.fmux_v, pt, chunk_dur, s->fmp4.fmp4_frag_key);
   push_track_fragment(s, s->store_a, s->fmp4.fmux_a, pt, chunk_dur, 1);
   outlen = fmp4_segment_end(s->fmp4.fmux, &out);
@@ -324,6 +415,7 @@ void fmp4_feed_au(hls_seg_ctx_t *s, int kf, int64_t ts, int32_t cts_ticks, int o
     samp.keyframe = s->fmp4.pend_key;
     fmp4_segment_add_sample(s->fmp4.fmux, &samp);
     if (s->fmp4.fmux_v) fmp4_segment_add_sample(s->fmp4.fmux_v, &samp);
+    s->video.seg_samples++;
   }
   if (buf_reserve(&s->fmp4.pend_data, &s->fmp4.pend_cap, s->video.nal_scratch_len) < 0) {
     log_throttled(&s->oom_drop_throttle, LOG_THROTTLE_WINDOW_S, "YW500216", "hls: buf_reserve failed, fmp4 access unit dropped");

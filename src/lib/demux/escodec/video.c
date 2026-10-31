@@ -20,8 +20,33 @@ void skip_scaling_matrices(br_t *b, int n) {
   }
 }
 
-/* H.264 SPS -> dimensions */
-int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
+static void h264_read_vui_timing(br_t *b, h264_sps_info_t *o) {
+  unsigned tick;
+  unsigned scale;
+  unsigned fixed;
+  if (!br_u(b, 1)) return; /* vui_parameters_present_flag */
+  if (br_u(b, 1) && br_u(b, 8) == 255) br_u(b, 32); /* aspect_ratio_info, Extended_SAR */
+  if (br_u(b, 1)) br_u(b, 1); /* overscan_info */
+  if (br_u(b, 1)) { /* video_signal_type */
+    br_u(b, 4);
+    if (br_u(b, 1)) br_u(b, 24);
+  }
+  if (br_u(b, 1)) { /* chroma_loc_info */
+    br_ue(b);
+    br_ue(b);
+  }
+  if (!br_u(b, 1)) return; /* timing_info_present_flag */
+  tick = br_u(b, 32);
+  scale = br_u(b, 32);
+  fixed = br_u(b, 1);
+  if (b->err || !tick || !scale) return;
+  o->num_units_in_tick = tick;
+  o->time_scale = scale;
+  o->fixed_frame_rate = fixed;
+}
+
+/* H.264 SPS -> dimensions, scan, timing */
+int h264_sps_info(const unsigned char *nal, size_t len, h264_sps_info_t *o) {
   unsigned char rb[ESCODEC_PS_MAX];
   br_t b;
   unsigned profile;
@@ -94,9 +119,21 @@ int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
     subw = 1;
     subh = 1;
   }
-  *w = (wmbs + 1) * 16 - (cl + cr) * subw;
-  *h = (2 - fmo) * (hmus + 1) * 16 - (ct + cb) * subh * (2 - fmo);
-  return (*w && *h) ? 0 : -1;
+  memset(o, 0, sizeof *o);
+  o->width = (wmbs + 1) * 16 - (cl + cr) * subw;
+  o->height = (2 - fmo) * (hmus + 1) * 16 - (ct + cb) * subh * (2 - fmo);
+  o->frame_mbs_only = fmo;
+  if (!o->width || !o->height) return -1;
+  h264_read_vui_timing(&b, o);
+  return 0;
+}
+
+int h264_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
+  h264_sps_info_t o;
+  if (h264_sps_info(nal, len, &o)) return -1;
+  *w = o.width;
+  *h = o.height;
+  return 0;
 }
 
 static int hevc_parse_sps(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned *chroma, unsigned *w, unsigned *h, unsigned *bd_luma, unsigned *bd_chroma) {
@@ -202,20 +239,40 @@ void skip_vvc_ptl(br_t *b, unsigned max_sublayers_minus1) {
   br_skip(b, (size_t)num_sub_profiles * 32);
 }
 
-int vvc_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
+/* positions b at SPS profile_tier_level. -1: multi-layer VPS only ptl signaling */
+static int vvc_sps_to_ptl(br_t *b, unsigned *max_sublayers_minus1) {
+  br_u(b, 16 + 4 + 4);
+  *max_sublayers_minus1 = br_u(b, 3);
+  br_u(b, 2 + 2);
+  return br_u(b, 1) ? 0 : -1;
+}
+
+int vvc_ptl_info(const unsigned char *nal, size_t len, vvc_ptl_t *ptl) {
   unsigned char rb[ESCODEC_PS_MAX];
   br_t b;
   unsigned max_sublayers_minus1;
-  unsigned ptl_dpb_hrd_present;
   b.len = rbsp_unescape(nal, len, rb, sizeof rb);
   b.d = rb;
   b.bit = 0;
   b.err = 0;
-  br_u(&b, 16 + 4 + 4);
-  max_sublayers_minus1 = br_u(&b, 3);
-  br_u(&b, 2 + 2);
-  ptl_dpb_hrd_present = br_u(&b, 1);
-  if (!ptl_dpb_hrd_present) return -1; /* multi-layer VPS-only ptl signaling, out of scope */
+  if (vvc_sps_to_ptl(&b, &max_sublayers_minus1)) return -1;
+  ptl->profile_idc = br_u(&b, 7);
+  ptl->tier = br_u(&b, 1);
+  ptl->level_idc = br_u(&b, 8);
+  ptl->frame_only = br_u(&b, 1);
+  ptl->multilayer = br_u(&b, 1);
+  return b.err ? -1 : 0;
+}
+
+int vvc_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h) {
+  unsigned char rb[ESCODEC_PS_MAX];
+  br_t b;
+  unsigned max_sublayers_minus1;
+  b.len = rbsp_unescape(nal, len, rb, sizeof rb);
+  b.d = rb;
+  b.bit = 0;
+  b.err = 0;
+  if (vvc_sps_to_ptl(&b, &max_sublayers_minus1)) return -1;
   skip_vvc_ptl(&b, max_sublayers_minus1);
   br_u(&b, 1);
   if (br_u(&b, 1)) br_u(&b, 1);

@@ -61,7 +61,7 @@ route_result_t dispatch_route_ts(conn_t *c, const route_t *rt, const pid_filter_
     return ROUTE_RESULT_FINISH;
   }
   c->slot = sub;
-  conn_queue(c, header, header_len);
+  if (!rawaudio) conn_queue(c, header, header_len);
   c->next_state = CONN_NEXT_TSPUSH;
   return ROUTE_RESULT_FINISH;
 }
@@ -104,13 +104,14 @@ route_result_t dispatch_route_llhls(conn_t *c, const route_t *rt, const pid_filt
   unsigned list_num;
   client_info_t cinfo;
   route_item_bufs_t item_bufs;
+  seg_container_t container = rt->fmt == ROUTE_FMT_LLHLS_FMP4 ? SEG_CONTAINER_FMP4 : SEG_CONTAINER_TS;
   uint32_t want_seg;
   int want_part;
   route_setup_t rs;
   route_setup_status_t st;
   size_t bytes = 0;
   st = route_setup(rt, &list_num, filter, pmt_pid, lcevc, c->client_ip, 1, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
-    SEG_CONTAINER_TS, reactor_cfg()->hls_part_size, &rs);
+    container, reactor_cfg()->hls_part_size, &rs);
   if (st == ROUTE_SETUP_PENDING) return park_open(c, rs.job, keep_alive);
   if (st == ROUTE_SETUP_404) {
     respond_status(c, RESP_404, keep_alive);
@@ -120,18 +121,18 @@ route_result_t dispatch_route_llhls(conn_t *c, const route_t *rt, const pid_filt
     respond_status(c, RESP_503, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
-  if (!strcmp(rt->hls_file, "index_ll.m3u8") && !hls_ll_store_ready(rs.ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_TS) && hls_cold_try_park(c, &(hls_cold_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, HLS_COLD_LLHLS, SEG_CONTAINER_TS, 0, is_head, keep_alive, origin_hdr,
+  if (!strcmp(rt->hls_file, "index_ll.m3u8") && !hls_ll_store_ready(rs.ctx, filter, pmt_pid, lcevc, container) && hls_cold_try_park(c, &(hls_cold_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, HLS_COLD_LLHLS, container, 0, is_head, keep_alive, origin_hdr,
       hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle, NULL})) {
     c->state = CONN_DISPATCH;
     return ROUTE_RESULT_PARKED;
   }
   if (!strcmp(rt->hls_file, "index_ll.m3u8") && parse_blocking_reload(query, &want_seg, &want_part) &&
-      !hls_part_available(rs.ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_TS, want_seg, want_part) &&
-      llhls_try_park(c, &(llhls_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, is_head, keep_alive, NULL, origin_hdr, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), rs.ws_handle})) {
+      !hls_part_available(rs.ctx, filter, pmt_pid, lcevc, container, want_seg, want_part) &&
+      llhls_try_park(c, &(llhls_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, is_head, keep_alive, NULL, origin_hdr, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), rs.ws_handle, container})) {
     c->state = CONN_DISPATCH;
     return ROUTE_RESULT_PARKED;
   }
-  if (hls_serve_ll(c, rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, is_head, keep_alive, if_none_match, origin_hdr, &bytes)) {
+  if (hls_serve_ll(c, rs.ctx, filter, pmt_pid, lcevc, container, rt->hls_file, is_head, keep_alive, if_none_match, origin_hdr, &bytes)) {
     ws_clients_add_bytes(rs.ws_handle, bytes);
   } else {
     respond_status(c, RESP_404, keep_alive);

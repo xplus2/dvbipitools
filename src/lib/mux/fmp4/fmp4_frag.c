@@ -26,7 +26,6 @@ size_t fmp4_segment_end(fmp4_mux_t *m, unsigned char **out) {
   mb_fourcc(&styp, "msdh");
   mb_u32(&styp, 0);
   mb_fourcc(&styp, "msdh");
-  mb_fourcc(&styp, "msix");
   mb_box(&m->out, "styp", &styp);
   out_moof_start = m->out.len;
   memset(&moof, 0, sizeof moof);

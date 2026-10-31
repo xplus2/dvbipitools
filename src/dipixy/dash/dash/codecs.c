@@ -8,6 +8,7 @@
 
 #include "dipixy/dash/dash.h"
 #include "dipixy/dash/dash_int.h"
+#include "lib/demux/escodec/escodec.h"
 #include "lib/sys/ioutil.h"
 
 static void hevc_codecs_string(const uint8_t *p, char *out, size_t outsz) {
@@ -26,6 +27,25 @@ static void hevc_codecs_string(const uint8_t *p, char *out, size_t outsz) {
   for (int i = 0; i <= last && n < outsz; i++) n += (size_t)snprintf(out + n, outsz - n, ".%X", p[6 + i]);
 }
 
+/* TS 103 285 table 3a. vvcC without native PTL: from its SPS. general_constraint_info left out */
+static int vvc_codecs_string(const uint8_t *rec, size_t n, char *out, size_t outsz) {
+  static const char *const constraints[4] = {"CA", "CIA", "CQA", "CYA"};
+  size_t pos = 2;
+  vvc_ptl_t ptl;
+  if (n < 2 || (rec[0] & 1)) return 0;
+  for (unsigned a = 0; a < rec[1] && pos + 5 <= n; a++) {
+    size_t len = ((size_t)rec[pos + 3] << 8) | rec[pos + 4];
+    if (pos + 5 + len > n) return 0;
+    if ((rec[pos] & 0x1F) == 15) { /* SPS_NUT */
+      if (vvc_ptl_info(rec + pos + 5, len, &ptl)) return 0;
+      snprintf(out, outsz, "vvc1.%u.%c%u.%s", ptl.profile_idc, ptl.tier ? 'H' : 'L', ptl.level_idc, constraints[ptl.frame_only * 2 + ptl.multilayer]);
+      return 1;
+    }
+    pos += 5 + len;
+  }
+  return 0;
+}
+
 /* avc1.PPCCLL from AVCProfileIndication/profile_compatibility/AVCLevelIndication in init seg's avcC box.
    hvc1.1.6.L93.B0 (Main, Level 3.1) when no hvcC found */
 static void dash_codecs(const uint8_t *init, size_t initsz, codec_t vcodec, char *out, size_t outsz) {
@@ -40,7 +60,9 @@ static void dash_codecs(const uint8_t *init, size_t initsz, codec_t vcodec, char
     return;
   }
   if (vcodec == CODEC_VVC) {
-    bufcpy(out, outsz, "vvc1.1.L1.CQ");
+    for (size_t i = 0; i + 8 <= initsz; i++)
+      if (!memcmp(init + i, "vvcC", 4) && vvc_codecs_string(init + i + 8, initsz - i - 8, out, outsz)) return;
+    bufcpy(out, outsz, "vvc1.1.L83.CQA");
     return;
   }
   if (vcodec == CODEC_AV1) {
@@ -78,7 +100,15 @@ static void dash_codecs(const uint8_t *init, size_t initsz, codec_t vcodec, char
   bufcpy(out, outsz, "avc1.640028");
 }
 
-/* if init has no audio track="". mp4a.40.<N>: N from the AAC ASC's top 5 bits, fixed offset into build_esds() layout */
+/* table 7 of TS 103 285: explicit SBR, PS win over core type. dsi_len 0: first 5 bits */
+static uint64_t aac_object_type(const uint8_t *dsi, size_t dsi_len, size_t avail) {
+  asc_info_t a;
+  if (!dsi_len || dsi_len > avail || asc_parse(dsi, dsi_len, &a)) return dsi[0] >> 3;
+  if (a.ps == 1) return 29;
+  return a.sbr == 1 ? 5 : a.aot;
+}
+
+/* no audio track in init: "". mp4a.40.<N>: aac_object_type(), fixed offset into build_esds() layout */
 static void dash_audio_codecs(const uint8_t *init, size_t initsz, char *out, size_t outsz) {
   out[0] = '\0';
   for (size_t i = 0; i + 4 <= initsz; i++) {
@@ -119,7 +149,7 @@ static void dash_audio_codecs(const uint8_t *init, size_t initsz, char *out, siz
         sbuf_t b;
         sbuf_init(&b, out, outsz);
         sbuf_add(&b, "mp4a.40.");
-        sbuf_add_u64(&b, (uint64_t)(init[i + 30] >> 3));
+        sbuf_add_u64(&b, aac_object_type(init + i + 30, init[i + 29], initsz - i - 30));
       } else bufcpy(out, outsz, "mp4a.6B");
       return;
     }

@@ -14,6 +14,9 @@
 #define ESCODEC_AU_MAX 8192
 #define ESCODEC_CPRIV_MAX 1024
 
+#define ESC_LEADING_RADL 1
+#define ESC_LEADING_RASL 2
+
 /* container-agnostic codec state: avcC/hvcC/ASC, param sets, LATM cache */
 typedef struct {
   codec_t codec;
@@ -28,6 +31,7 @@ typedef struct {
   size_t spslen;
   size_t ppslen;
   unsigned char ptl[12]; /* HEVC profile_tier_level */
+  unsigned leading; /* ESC_LEADING_* seen */
   unsigned chroma;
   unsigned av1_reduced_still_picture_header;
   unsigned char au[ESCODEC_AU_MAX];
@@ -98,6 +102,48 @@ int hevc_info(const unsigned char *nal, size_t len, unsigned char *ptl, unsigned
 int hevc_bit_depth(const unsigned char *nal, size_t len, unsigned *luma, unsigned *chroma);
 int vvc_dims(const unsigned char *nal, size_t len, unsigned *w, unsigned *h);
 int av1_seq_hdr_info(const unsigned char *obu, size_t len, av1_seq_hdr_t *info, unsigned *w, unsigned *h);
+#define ASC_EXPLICIT_MAX 7
+
+/* sbr, ps: -1 not declared */
+typedef struct {
+  unsigned aot; /* core */
+  unsigned sfi;
+  unsigned rate;
+  unsigned channels;
+  unsigned ext_sfi;
+  unsigned ext_rate;
+  int sbr;
+  int ps;
+} asc_info_t;
+
+extern const unsigned esc_aac_rates[13];
+
+/* 0 ok */
+int asc_parse(const unsigned char *d, size_t len, asc_info_t *a);
+size_t asc_build_explicit(unsigned sfi, unsigned channels, unsigned ext_sfi, int ps, unsigned char *o, size_t cap);
+
+typedef struct {
+  unsigned width;
+  unsigned height;
+  unsigned frame_mbs_only;
+  unsigned num_units_in_tick; /* 0: no VUI timing */
+  unsigned time_scale;
+  unsigned fixed_frame_rate;
+} h264_sps_info_t;
+
+int h264_sps_info(const unsigned char *nal, size_t len, h264_sps_info_t *o);
+
+typedef struct {
+  unsigned profile_idc;
+  unsigned tier;
+  unsigned level_idc;
+  unsigned frame_only;
+  unsigned multilayer;
+} vvc_ptl_t;
+
+/* VVC SPS -> general profile_tier_level. 0 ok */
+int vvc_ptl_info(const unsigned char *nal, size_t len, vvc_ptl_t *ptl);
+
 size_t build_avcc(const esc_track_t *t, unsigned char *o, size_t cap);
 size_t build_hvcc(const esc_track_t *t, unsigned char *o, size_t cap);
 size_t build_vvcc(const esc_track_t *t, unsigned char *o, size_t cap);

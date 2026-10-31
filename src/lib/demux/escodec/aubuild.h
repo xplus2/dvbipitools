@@ -18,6 +18,10 @@
 #define H264_NAL_LCEVC_NON_IDR 25
 #define H264_NAL_LCEVC_IDR 27
 
+#define HEVC_NAL_RADL_N 6
+#define HEVC_NAL_RADL_R 7
+#define HEVC_NAL_RASL_N 8
+#define HEVC_NAL_RASL_R 9
 #define HEVC_NAL_IRAP_FIRST 16 /* BLA_W_LP */
 #define HEVC_NAL_IRAP_LAST 21  /* CRA_NUT */
 #define HEVC_NAL_VPS 32
@@ -30,6 +34,8 @@
 #define HEVC_NAL_LCEVC_NON_IDR 60
 #define HEVC_NAL_LCEVC_IDR 61
 
+#define VVC_NAL_RADL 2
+#define VVC_NAL_RASL 3
 #define VVC_NAL_IRAP_FIRST 7 /* IDR_W_RADL */
 #define VVC_NAL_IRAP_LAST 9  /* CRA_NUT, excl. GDR_NUT(10) */
 #define VVC_NAL_VPS 14

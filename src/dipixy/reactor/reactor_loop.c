@@ -45,7 +45,7 @@ void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, struct epo
   uint32_t e;
   conn_t *c;
 
-  if (ptr >= (void *)&rl->L[0] && ptr <= (void *)&rl->L[rl->nL - 1]) {
+  if (ptr >= (void *)&rl->L[0] && ptr < (void *)&rl->L[rl->nL]) {
     reactor_listener *lp = ptr;
     switch (lp->kind) {
       case RL_TSPUSH_EFD: {
@@ -259,6 +259,9 @@ out:
   reactor_teardown_listeners(&rl);
   close(epfd);
   reactor_ws_pool_release();
+#ifdef HAVE_HTTP2
+  h2_body_pool_release();
+#endif
   conn_zc_linger_flush();
   conn_retire_handoff();
   return NULL;

@@ -46,7 +46,7 @@ static int handle_browse(const config_t *cfg, const channels_t *channels, const 
 }
 
 void dlna_source_protocol_info(const config_t *cfg, char *out, size_t outsz) {
-  size_t off = bufcpy(out, outsz, TS_PROTOCOL_INFO "," RADIO_PROTOCOL_INFO);
+  size_t off = bufcpy(out, outsz, TS_PROTOCOL_INFO "," RADIO_PROTOCOL_INFO "," RADIO_AAC_PROTOCOL_INFO);
   if (cfg->dlna_keep_multicast) {
     off += bufcpy(out + off, outsz - off, "," MCAST_IGMP_PROTOCOL_INFO ",");
     bufcpy(out + off, outsz - off, MCAST_MLD_PROTOCOL_INFO);
@@ -75,7 +75,7 @@ int dlna_handle_control(const config_t *cfg, const channels_t *channels, const c
   }
   if (!strcmp(service, "cm")) {
     if (!strcmp(action, "GetProtocolInfo")) {
-      char source[256];
+      char source[512];
       dlna_source_protocol_info(cfg, source, sizeof source);
       soap_field_t f[2] = {{"Source", source}, {"Sink", ""}};
       return soap_action_response(out, out_len, CM_URN, "GetProtocolInfoResponse", f, 2);

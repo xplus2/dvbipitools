@@ -50,6 +50,10 @@ static void h2_body_src_free(h2_body_src_t *src) {
     free(src);
 }
 
+void h2_body_pool_release(void) {
+  while (t_h2_body_src_pool_n > 0) free(t_h2_body_src_pool[--t_h2_body_src_pool_n]);
+}
+
 void h2_body_on_stream_close(h2_conn_t *conn, int32_t stream_id) {
   for (h2_body_src_t *src = conn->body_srcs; src; src = src->next) {
     if (src->sid != stream_id) continue;
@@ -168,7 +172,7 @@ void h2_llhls_on_conn_close(const h2_conn_t *conn) {
 static void h2_llhls_finish(hls_waiter_t *w) {
   h2_conn_t *conn = w->owner;
   hls_resp_t resp;
-  if (!hls_render_ll(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, w->inm[0] ? w->inm : NULL, &resp)) {
+  if (!hls_render_ll(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container, w->filename, w->is_head, w->inm[0] ? w->inm : NULL, &resp)) {
     h2_submit_resp(conn, (int32_t)w->stream_id, 404, NULL, NULL, 0, NULL, NULL, 0, w->origin[0] ? w->origin : NULL);
   } else {
     h2_submit_resp(conn, (int32_t)w->stream_id, resp.status, resp.content_type, resp.etag, resp.body_len, resp.body, resp.owner, resp.zc, w->origin[0] ? w->origin : NULL);

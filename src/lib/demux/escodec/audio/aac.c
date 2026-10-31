@@ -5,7 +5,7 @@
 
 #include <string.h>
 
-static const unsigned aac_sample_rates[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000,  7350};
+const unsigned esc_aac_rates[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350};
 
 int next_aac(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f) {
   unsigned prof;
@@ -31,7 +31,7 @@ int next_aac(esc_track_t *t, const unsigned char *d, size_t len, esc_frame_t *f)
   f->consumed = fl;
   f->out = d + hl;
   f->outlen = fl - hl;
-  f->rate = aac_sample_rates[sfi];
+  f->rate = esc_aac_rates[sfi];
   f->ch = chcfg ? chcfg : 2;
   f->samples = 1024 * (1 + (d[6] & 3));
   return 0;
@@ -87,9 +87,10 @@ static int latm_cfg(br_t *b, esc_track_t *t) {
     if (asc_len < asc_end - asc_start || asc_start + asc_len > b->len * 8) return -1;
     b->bit = asc_start + asc_len;
   }
+  if (amv) asc_end = asc_start + asc_len; /* keeps sync extensions */
   t->cpriv_len = br_slice(b, asc_start, asc_end, t->cpriv, sizeof t->cpriv);
   if (!t->cpriv_len) return -1;
-  t->rate = aac_sample_rates[sfi];
+  t->rate = esc_aac_rates[sfi];
   t->channels = ch ? ch : 2;
   t->latm_flt = (int)br_u(b, 3);
   if (t->latm_flt == 0) br_u(b, 8);

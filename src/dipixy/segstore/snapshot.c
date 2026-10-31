@@ -67,8 +67,10 @@ hls_snapshot_t *snap_clone(const hls_snapshot_t *base) {
   atomic_store_explicit(&ns->cache_ll, NULL, memory_order_relaxed);
   atomic_store_explicit(&ns->cache_lcevc[0], NULL, memory_order_relaxed);
   atomic_store_explicit(&ns->cache_lcevc[1], NULL, memory_order_relaxed);
-  atomic_store_explicit(&ns->cache_mpd, NULL, memory_order_relaxed);
-  for (int i = 0; i < MPD_LL_VARIANTS; i++) atomic_store_explicit(&ns->cache_mpd_ll[i], NULL, memory_order_relaxed);
+  for (int i = 0; i < MPD_VARIANTS; i++) {
+    atomic_store_explicit(&ns->cache_mpd[i], NULL, memory_order_relaxed);
+    atomic_store_explicit(&ns->cache_mpd_ll[i], NULL, memory_order_relaxed);
+  }
   return ns;
 }
 
@@ -103,8 +105,10 @@ void snap_free(hls_snapshot_t *ns) {
   cached_text_free(atomic_load_explicit(&ns->cache_ll, memory_order_relaxed));
   cached_text_free(atomic_load_explicit(&ns->cache_lcevc[0], memory_order_relaxed));
   cached_text_free(atomic_load_explicit(&ns->cache_lcevc[1], memory_order_relaxed));
-  cached_text_free(atomic_load_explicit(&ns->cache_mpd, memory_order_relaxed));
-  for (int i = 0; i < MPD_LL_VARIANTS; i++) cached_text_free(atomic_load_explicit(&ns->cache_mpd_ll[i], memory_order_relaxed));
+  for (int i = 0; i < MPD_VARIANTS; i++) {
+    cached_text_free(atomic_load_explicit(&ns->cache_mpd[i], memory_order_relaxed));
+    cached_text_free(atomic_load_explicit(&ns->cache_mpd_ll[i], memory_order_relaxed));
+  }
   free(ns);
 }
 

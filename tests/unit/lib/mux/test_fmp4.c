@@ -355,6 +355,9 @@ START_TEST(fragment_moof_and_mdat_match_samples) {
   len = fmp4_segment_end(m, &out);
 
   ck_assert_int_eq(memcmp(out + 4, "styp", 4), 0);
+  ck_assert_uint_eq(rd32(out), 20); /* no msix, no sidx written */
+  ck_assert_int_eq(memcmp(out + 8, "msdh", 4), 0);
+  ck_assert_int_eq(memcmp(out + 16, "msdh", 4), 0);
 
   ck_assert(find_box(out, len, "moof.mfhd", &mfhd, &mfhd_len));
   ck_assert_uint_eq(rd32(mfhd + 4), 42); /* sequence_number */
@@ -439,7 +442,8 @@ START_TEST(vvc_stsd_has_vvc1_vvcc_entry) {
   ck_assert_uint_eq(rd16(vvc1 + 24), 1920);
   ck_assert_uint_eq(rd16(vvc1 + 26), 1080);
   ck_assert(find_box(vvc1 + 78, vvc1_len - 78, "vvcC", &vvcc, &vvcc_len));
-  ck_assert_int_eq(vvcc[0], 0xFE);
+  ck_assert_uint_eq(rd32(vvcc), 0); /* FullBox version, flags */
+  ck_assert_int_eq(vvcc[4], 0xFE);
   fmp4_mux_free(m);
 }
 END_TEST

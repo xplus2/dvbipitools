@@ -106,6 +106,8 @@ void esc_handle_hevc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen,
       break;
     default:
       if (type >= HEVC_NAL_IRAP_FIRST && type <= HEVC_NAL_IRAP_LAST) *key = 1;
+      if (type == HEVC_NAL_RADL_N || type == HEVC_NAL_RADL_R) es->leading |= ESC_LEADING_RADL;
+      if (type == HEVC_NAL_RASL_N || type == HEVC_NAL_RASL_R) es->leading |= ESC_LEADING_RASL;
       vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500133", "escodec: esc_vbuf_add failed, hevc nal dropped");
   }
 }
@@ -187,6 +189,8 @@ void esc_handle_vvc_nal(esc_track_t *es, unsigned char **vbuf, size_t *vbuflen, 
       break;
     default:
       if (type >= VVC_NAL_IRAP_FIRST && type <= VVC_NAL_IRAP_LAST) *key = 1;
+      if (type == VVC_NAL_RADL) es->leading |= ESC_LEADING_RADL;
+      if (type == VVC_NAL_RASL) es->leading |= ESC_LEADING_RASL;
       vbuf_add_logged(es, vbuf, vbuflen, vbufcap, p, n, "LW500134", "escodec: esc_vbuf_add failed, vvc nal dropped");
   }
 }

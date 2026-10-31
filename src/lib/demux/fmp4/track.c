@@ -249,7 +249,7 @@ static void parse_video_config(const fmp4_box_t *cfg, fmp4_stsd_entry_t *out) {
   const unsigned char *end = p + cfg->body_len;
   if (!memcmp(cfg->fourcc, "avcC", 4)) fmp4_parse_avcc(p, end, out);
   else if (!memcmp(cfg->fourcc, "hvcC", 4)) fmp4_parse_hvcc(p, end, out);
-  else if (!memcmp(cfg->fourcc, "vvcC", 4)) fmp4_parse_vvcc(p, end, out);
+  else if (!memcmp(cfg->fourcc, "vvcC", 4) && end - p > 4) fmp4_parse_vvcc(p + 4, end, out); /* FullBox */
   else if (!memcmp(cfg->fourcc, "av1C", 4) && end - p > 4) {
     out->cpriv = p + 4;
     out->cpriv_len = (size_t)(end - p - 4);

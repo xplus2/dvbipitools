@@ -104,6 +104,8 @@ conn_t *conn_for_fd_gen(int fd, uint64_t gen) {
   return (conn_t *)(intptr_t)(fd + 1);
 }
 
+static const char *g_last_head;
+
 uint64_t conn_gen_for_fd(int fd) {
   (void)fd;
   return 0;
@@ -122,6 +124,22 @@ int conn_send_buffered(conn_t *c, const void *a, size_t alen, const void *b, siz
   g_sent_len[fd] += alen;
   g_sent_calls[fd]++;
   return 0;
+}
+
+int reactor_tspush_send_head(int sub_idx, const char *content_type) {
+  (void)sub_idx;
+  g_last_head = content_type;
+  return 0;
+}
+
+void h2_tspush_send_head(int sub_idx, const char *content_type) {
+  (void)sub_idx;
+  g_last_head = content_type;
+}
+
+void h3_tspush_send_head(int sub_idx, const char *content_type) {
+  (void)sub_idx;
+  g_last_head = content_type;
 }
 
 void h2_tspush_wake(int sub_idx) {
@@ -838,6 +856,29 @@ START_TEST(feed_ignores_subscribers_of_unknown_protocol) {
 }
 END_TEST
 
+START_TEST(rawaudio_head_waits_for_codec_then_is_sent_once) {
+  static const conn_proto_t protos[] = {CONN_PROTO_H1, CONN_PROTO_H2, CONN_PROTO_H3};
+  ts_sub_t *a;
+
+  ts_push_init(0, 4);
+  a = attached_sub(0, protos[_i], 3, 0);
+  a->rawaudio = rawaudio_demux_new(0, NULL, NULL, ts_push_rawaudio_emit, a);
+  ck_assert_ptr_nonnull(a->rawaudio);
+  g_last_head = NULL;
+  ts_push_flush_ready(0);
+  ck_assert_ptr_null(g_last_head);
+  a->audio_codec = CODEC_AAC;
+  atomic_store(&a->ctype_ready, 1);
+  ts_push_flush_ready(0);
+  ck_assert_str_eq(g_last_head, "audio/aac");
+  g_last_head = NULL;
+  ts_push_flush_ready(0);
+  ck_assert_ptr_null(g_last_head);
+  rawaudio_demux_free(a->rawaudio);
+  a->rawaudio = NULL;
+}
+END_TEST
+
 START_TEST(rawaudio_emit_delivers_to_the_ring_of_the_subscriber_protocol) {
   static const conn_proto_t protos[] = {CONN_PROTO_H1, CONN_PROTO_H2, CONN_PROTO_H3, (conn_proto_t)99};
   conn_proto_t proto = protos[_i];
@@ -887,6 +928,7 @@ static Suite *ts_push_queue_suite(void) {
   tcase_add_loop_test(tc, feed_delivers_to_the_ring_of_the_subscriber_protocol, 0, 3);
   tcase_add_test(tc, feed_ignores_subscribers_of_unknown_protocol);
   tcase_add_loop_test(tc, rawaudio_emit_delivers_to_the_ring_of_the_subscriber_protocol, 0, 4);
+  tcase_add_loop_test(tc, rawaudio_head_waits_for_codec_then_is_sent_once, 0, 3);
   suite_add_tcase(s, tc);
   return s;
 }

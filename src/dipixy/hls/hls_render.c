@@ -144,13 +144,13 @@ int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
 #define HLS_LL_PLAYLIST_BUF_CAP 16384
 
 int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
-                    const char *filename, const char *if_none_match, hls_ll_resolve_t *r) {
+  seg_container_t container, const char *filename, const char *if_none_match, hls_ll_resolve_t *r) {
   hls_store_t *s;
   hls_snapshot_t *snap;
   uint32_t req_seq;
   int req_part;
   memset(r, 0, sizeof *r);
-  s = hls_store_find(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_TS);
+  s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
   snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
 
   if (!strcmp(filename, "index_ll.m3u8")) {
@@ -170,7 +170,7 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     } else {
       ll_playlist_snap_t llsnap;
       const cached_text_t *ct;
-      snapshot_ll_playlist(snap, lcevc, &llsnap);
+      snapshot_ll_playlist(snap, container, lcevc, &llsnap);
       ct = snapshot_cache_text(&snap->cache_ll, fmt_ll_cb, &llsnap, HLS_LL_PLAYLIST_BUF_CAP);
       if (!ct) return 0;
       r->body = (const uint8_t *)ct->text;
@@ -180,7 +180,7 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     r->content_type = "application/vnd.apple.mpegurl";
     return 1;
   }
-  if (!parse_part_filename(filename, &req_seq, &req_part)) return 0;
+  if (!parse_part_filename(filename, container, &req_seq, &req_part)) return 0;
   r->kind = HLS_RESOLVE_SEGMENT;
   if (req_part < 0) {
     r->status = 404;
@@ -208,15 +208,15 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     r->status = 404;
     return 1;
   }
-  r->content_type = "video/mp2t";
+  r->content_type = container == SEG_CONTAINER_FMP4 ? "video/mp4" : "video/mp2t";
   r->status = hls_inm_match(if_none_match, r->etag) ? 304 : 200;
   return 1;
 }
 
-int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
+int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
   hls_ll_resolve_t r;
   memset(out, 0, sizeof *out);
-  if (!hls_resolve_ll(ctx, filter, pmt_pid, lcevc, filename, if_none_match, &r)) return 0;
+  if (!hls_resolve_ll(ctx, filter, pmt_pid, lcevc, container, filename, if_none_match, &r)) return 0;
   if (r.status == 404) {
     resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
   } else if (r.status == 304) {

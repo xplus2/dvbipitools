@@ -240,6 +240,29 @@ START_TEST(first_adts_frame_fills_the_audio_parameters) {
 }
 END_TEST
 
+START_TEST(low_rate_aac_waits_for_the_probe) {
+  seg_t g;
+  pid_filter_t none = {0};
+  uint8_t frame[256];
+  size_t n = adts_frame(frame, ADTS_PAYLOAD);
+  int frames = 0;
+
+  frame[2] = (uint8_t)((frame[2] & 0xC3) | (6u << 2)); /* 24 kHz: SBR possible */
+  seg_open(&g, &none, SEG_CONTAINER_FMP4);
+  audio_ready(&g);
+  while (!g.s->audio.ready && frames < 64) {
+    handle_audio_pes(g.s, 0, 0, frame, n);
+    frames++;
+  }
+  ck_assert_int_eq(g.s->audio.ready, 1);
+  ck_assert_int_gt(frames, 1);
+  ck_assert_uint_eq(g.s->audio.rate, 24000u);
+  ck_assert_uint_eq(g.s->audio.out_rate, 0u); /* undecided: core rate stands */
+  ck_assert_uint_eq(g.s->audio.aac_cfg_len, 0u);
+  seg_close(&g);
+}
+END_TEST
+
 START_TEST(frames_split_across_pes_packets_are_reassembled) {
   seg_t g;
   pid_filter_t none = {0};
@@ -697,6 +720,7 @@ static Suite *demux_suite(void) {
   tcase_add_test(tc, transport_pmt_loses_filtered_streams);
   tcase_add_test(tc, first_adts_frame_fills_the_audio_parameters);
   tcase_add_test(tc, frames_split_across_pes_packets_are_reassembled);
+  tcase_add_test(tc, low_rate_aac_waits_for_the_probe);
   tcase_add_test(tc, several_frames_in_one_pes_all_count);
   tcase_add_test(tc, leading_garbage_is_skipped_to_the_next_frame);
   tcase_add_test(tc, pure_garbage_never_makes_audio_ready);

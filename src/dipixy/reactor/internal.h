@@ -203,7 +203,7 @@ typedef struct {
   uint32_t want_seg;
   int want_part;
   hls_cold_kind_t kind;      /* hls-cold only */
-  seg_container_t container; /* hls-cold HLS_COLD_HLS only */
+  seg_container_t container; /* llhls blocking-reload, hls-cold HLS_COLD_HLS/HLS_COLD_LLHLS */
   int want_ll;               /* hls-cold HLS_COLD_DASH only */
   int64_t deadline_ms;
   int active;
@@ -227,6 +227,7 @@ typedef struct {
   int want_part;
   int timeout_ms;
   int ws_handle;
+  seg_container_t container;
 } llhls_park_req_t;
 
 typedef struct {
@@ -247,7 +248,7 @@ typedef struct {
 } hls_cold_park_req_t;
 
 static inline int llhls_ready_part(const hls_waiter_t *w) {
-  return hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, SEG_CONTAINER_TS, w->want_seg, w->want_part);
+  return hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container, w->want_seg, w->want_part);
 }
 
 static inline int hls_cold_ready(const hls_waiter_t *w) {
@@ -282,6 +283,7 @@ static inline int llhls_waiter_pool_try_park(hls_waiter_t *slots, int cap, int *
     w->keep_alive = req->keep_alive;
     bufcpy(w->inm, sizeof w->inm, req->inm ? req->inm : "");
     bufcpy(w->origin, sizeof w->origin, req->origin_hdr ? req->origin_hdr : "");
+    w->container = req->container;
     w->want_seg = req->want_seg;
     w->want_part = req->want_part;
     w->deadline_ms = now_ms() + req->timeout_ms;

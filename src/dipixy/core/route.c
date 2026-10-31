@@ -18,7 +18,7 @@
 int fmt_parse(const char *s, route_fmt_t *out) {
   static const enum_map_t map[] = {
 {"ts", ROUTE_FMT_TS}, {"spts", ROUTE_FMT_SPTS}, {"hls", ROUTE_FMT_HLS}, {"hls-fmp4", ROUTE_FMT_HLS_FMP4},
-{"llhls", ROUTE_FMT_LLHLS}, {"dash", ROUTE_FMT_DASH}, {"lldash", ROUTE_FMT_LLDASH},
+{"llhls", ROUTE_FMT_LLHLS}, {"llhls-fmp4", ROUTE_FMT_LLHLS_FMP4}, {"dash", ROUTE_FMT_DASH}, {"lldash", ROUTE_FMT_LLDASH},
 {"rawaudio", ROUTE_FMT_RAWAUDIO}, {"mp4", ROUTE_FMT_MP4},
   };
   int v;
@@ -59,15 +59,15 @@ static int dash_seg_filename(const char *s) {
   return n > 0 && !strcmp(s + n, ".m4s");
 }
 
-/* "segNNNNN.PP.ts": LL-HLS part, distinct from plain "segNNNNN.ts" */
-static int llhls_part_filename(const char *s) {
+/* "segNNNNN.PP.<ext>": LL-HLS part, distinct from plain "segNNNNN.<ext>" */
+static int llhls_part_filename(const char *s, const char *ext) {
   size_t n;
   size_t n2;
   if (strncmp(s, "seg", 3) != 0) return 0;
   n = digit_run(s + 3);
   if (n == 0 || s[3 + n] != '.') return 0;
   n2 = digit_run(s + 3 + n + 1);
-  return n2 > 0 && !strcmp(s + 3 + n + 1 + n2, ".ts");
+  return n2 > 0 && !strcmp(s + 3 + n + 1 + n2, ext);
 }
 
 unsigned route_file_fmts(const route_t *rt) {
@@ -75,14 +75,20 @@ unsigned route_file_fmts(const route_t *rt) {
   unsigned own = 1u << rt->fmt;
   if (rt->fmt == ROUTE_FMT_HLS && hls_ts_seg_filename(f)) return own | 1u << ROUTE_FMT_LLHLS;
   if ((rt->fmt == ROUTE_FMT_DASH || rt->fmt == ROUTE_FMT_LLDASH) && strcmp(f, "manifest.mpd")) return 1u << ROUTE_FMT_DASH | 1u << ROUTE_FMT_LLDASH;
-  if (rt->fmt == ROUTE_FMT_HLS_FMP4 && !strcmp(f, "init.mp4")) return own | 1u << ROUTE_FMT_DASH;
+  if (rt->fmt == ROUTE_FMT_HLS_FMP4 && !strcmp(f, "init.mp4")) return own | 1u << ROUTE_FMT_DASH | 1u << ROUTE_FMT_LLHLS_FMP4;
+  if (rt->fmt == ROUTE_FMT_HLS_FMP4 && hls_fmp4_seg_filename(f)) return own | 1u << ROUTE_FMT_LLHLS_FMP4;
   return own;
 }
 
 /* playlist-referenced segment/init filenames carry no format token */
 static int fmt_or_hls_file_parse(const char *s, route_t *out) {
-  if (llhls_part_filename(s) || !strcmp(s, "index_ll.m3u8")) {
+  if (llhls_part_filename(s, ".ts") || !strcmp(s, "index_ll.m3u8")) {
     out->fmt = ROUTE_FMT_LLHLS;
+    bufcpy(out->hls_file, sizeof out->hls_file, s);
+    return 0;
+  }
+  if (llhls_part_filename(s, ".m4s")) {
+    out->fmt = ROUTE_FMT_LLHLS_FMP4;
     bufcpy(out->hls_file, sizeof out->hls_file, s);
     return 0;
   }
@@ -105,7 +111,7 @@ static int fmt_or_hls_file_parse(const char *s, route_t *out) {
     return -1;
   if (out->fmt == ROUTE_FMT_HLS || out->fmt == ROUTE_FMT_HLS_FMP4)
     bufcpy(out->hls_file, sizeof out->hls_file, "index.m3u8");
-  else if (out->fmt == ROUTE_FMT_LLHLS)
+  else if (out->fmt == ROUTE_FMT_LLHLS || out->fmt == ROUTE_FMT_LLHLS_FMP4)
     bufcpy(out->hls_file, sizeof out->hls_file, "index_ll.m3u8");
   else if (out->fmt == ROUTE_FMT_DASH || out->fmt == ROUTE_FMT_LLDASH)
     bufcpy(out->hls_file, sizeof out->hls_file, "manifest.mpd");

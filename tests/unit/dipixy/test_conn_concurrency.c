@@ -68,6 +68,7 @@ static void *owner_thread(void *arg) {
     conn_free(c);
     qsbr_worker_quiescent(g_test_qsbr, OWNER_TID);
   }
+  conn_retire_handoff();
   return NULL;
 }
 
@@ -109,6 +110,7 @@ START_TEST(concurrent_readers_never_see_torn_or_freed_conn_data) {
   atomic_store_explicit(&g_stop, 1, memory_order_relaxed);
   pthread_join(owner, NULL);
   for (int i = 0; i < NREADERS; i++) pthread_join(readers[i], NULL);
+  conn_graveyard_free();
   ck_assert_int_eq(atomic_load_explicit(&g_bad, memory_order_relaxed), 0);
 }
 END_TEST

@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
+#include "lib/demux/aacprobe/aacprobe.h"
 #include "lib/demux/escodec/aubuild.h"
 #include "lib/demux/pes.h"
 #include "lib/demux/psi/psi.h"
@@ -64,6 +65,9 @@ typedef struct {
   double seg_target;
   int max_segs;
   int boot_left; /* classic TS cold-open cut countdown */
+  hls_video_info_t info; /* fmp4 only, valid once fmux exists */
+  int measure_rate;      /* 1: frame rate pending, derive from sample count */
+  unsigned seg_samples;  /* samples in current segment */
 } seg_video_t;
 
 /* fmp4 only, ts already carries audio raw. picked at video pid lock-on. audio.c owns this */
@@ -76,6 +80,14 @@ typedef struct {
   int ready; /* 1 once first audio frame parsed: rate/channels/etc below are valid */
   unsigned rate;
   unsigned channels;
+  unsigned out_rate; /* with SBR, else 0 */
+  unsigned out_channels; /* with SBR, else 0 */
+  aacprobe_t aac_probe;
+  int aac_probing;
+  int aac_settled;
+  asc_info_t aac_asc;
+  unsigned char aac_cfg[ASC_EXPLICIT_MAX]; /* explicit SBR/PS config, 0 len: source config stands */
+  size_t aac_cfg_len;
   unsigned bsid; /* AC3/EAC3 only */
   unsigned bsmod;
   unsigned acmod;
@@ -240,7 +252,7 @@ void fmp4_feed_lcevc_au(hls_seg_ctx_t *s, int64_t ts, const unsigned char *data,
 void fmp4_track_stores_sync(hls_seg_ctx_t *s);
 void fmp4_track_stores_anchor(hls_seg_ctx_t *s, uint64_t wall_ms);
 void fmp4_mux_free_all(hls_seg_ctx_t *s);
-int build_video_track_cfg(const hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned char *cpriv, size_t cpriv_cap);
+int build_video_track_cfg(hls_seg_ctx_t *s, fmp4_track_cfg_t *trk, unsigned char *cpriv, size_t cpriv_cap);
 
 /* video.c */
 void hls_seg_stamp_cc(unsigned char *cc, unsigned char *pkts, size_t n_pkts, unsigned pid);
@@ -248,6 +260,7 @@ void video_reset(hls_seg_ctx_t *s);
 void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len);
 void handle_lcevc_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigned char *data, size_t len);
 int detect_keyframe(hls_seg_ctx_t *s, const unsigned char *d, size_t len);
+void fmp4_note_leading(hls_seg_ctx_t *s);
 
 /* audio.c */
 void audio_reset(hls_seg_ctx_t *s);

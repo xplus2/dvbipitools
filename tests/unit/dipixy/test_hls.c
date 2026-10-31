@@ -207,12 +207,12 @@ START_TEST(llhls_part_roundtrip) {
   ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
   ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), 1);
   ck_assert_int_eq(hls_part_available(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0, 0), 1);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "seg0.0.ts", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.0.ts", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_uint_eq(r.body_len, sizeof part);
   ck_assert_mem_eq(r.body, part, sizeof part);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "index_ll.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index_ll.m3u8", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(memmem(r.body, r.body_len, "#EXT-X-PART-INF", 15) != NULL);
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -231,7 +231,7 @@ START_TEST(llhls_large_part_is_served_by_reference) {
   hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5);
   ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, p0, sizeof p0, 0.5, 1), 0);
   ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, p1, sizeof p1, 0.5, 0), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "seg0.1.ts", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.1.ts", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_eq(r.zc, 1);
   ck_assert_ptr_nonnull(r.owner);
@@ -251,16 +251,16 @@ START_TEST(llhls_part_with_matching_etag_is_not_modified) {
   hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
   hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5);
   ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "seg0.0.ts", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.0.ts", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_ne(r.etag[0], '\0');
   snprintf(etag, sizeof etag, "%s", r.etag);
   hls_resp_body_release(r.body, r.owner, r.zc);
 
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "seg0.0.ts", 0, etag, &r), 1);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.0.ts", 0, etag, &r), 1);
   ck_assert_int_eq(r.status, 304);
   ck_assert_ptr_null(r.body);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "seg0.0.ts", 0, "stale", &r), 1);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.0.ts", 0, "stale", &r), 1);
   ck_assert_int_eq(r.status, 200);
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
@@ -278,7 +278,7 @@ START_TEST(llhls_lcevc_all_playlist_becomes_a_master_once_pids_are_known) {
   ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
   ck_assert_int_eq(hls_set_lcevc_pids(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, pids, 2), 0);
 
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &all, "index_ll.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, "index_ll.m3u8", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(memmem(r.body, r.body_len, "EXT-X-STREAM-INF", 16) != NULL);
   ck_assert(memmem(r.body, r.body_len, "GROUP-ID=\"lcevc\"", 16) != NULL);
@@ -295,7 +295,7 @@ START_TEST(llhls_finalized_segment_part_still_served) {
   hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5);
   hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1);
   ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "seg0.0.ts", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.0.ts", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_uint_eq(r.body_len, sizeof part);
   ck_assert_mem_eq(r.body, part, sizeof part);
@@ -474,7 +474,7 @@ START_TEST(llhls_playlist_carries_the_lcevc_selector_into_part_uris) {
   hls_store_open(CTX_A, &f, 0, &base, 2.0, 6, SEG_CONTAINER_TS);
   hls_llhls_enable(CTX_A, &f, 0, &base, SEG_CONTAINER_TS, 0.5);
   ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &base, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &base, "index_ll.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &base, SEG_CONTAINER_TS, "index_ll.m3u8", 0, NULL, &r), 1);
   ck_assert_int_eq(body_has(&r, "URI=\"seg00000.0.ts?lcevc=base\",INDEPENDENT=YES"), 1);
   ck_assert_int_eq(body_has(&r, "PRELOAD-HINT:TYPE=PART,URI=\"seg00000.1.ts?lcevc=base\""), 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -493,10 +493,76 @@ START_TEST(llhls_discontinuity_precedes_the_first_live_part) {
   ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
   ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), &base), 0);
   ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, "index_ll.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index_ll.m3u8", 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY\n#EXT-X-PART:"), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY-SEQUENCE"), 0);
+  hls_resp_body_release(r.body, r.owner, r.zc);
+}
+END_TEST
+
+START_TEST(llhls_fmp4_playlist_maps_the_init_and_lists_m4s_parts) {
+  pid_filter_t f;
+  hls_resp_t r;
+  const uint8_t init[8] = {'f', 't', 'y', 'p'};
+  const uint8_t part[64] = {0x11};
+  no_filter(&f);
+  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
+  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
+  ck_assert_int_eq(hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init), 0);
+  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 0), 0);
+  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 1.0), 0);
+  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "index_ll.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(r.status, 200);
+  ck_assert_int_eq(body_has(&r, "#EXT-X-VERSION:7\n"), 1);
+  ck_assert_int_eq(body_has(&r, "#EXT-X-MAP:URI=\"init.mp4?g=1\"\n"), 1);
+  ck_assert_int_eq(body_has(&r, "URI=\"seg00000.0.m4s\",INDEPENDENT=YES"), 1);
+  ck_assert_int_eq(body_has(&r, "URI=\"seg00000.1.m4s\"\n"), 1);
+  ck_assert_int_eq(body_has(&r, "#EXTINF:1.000,\nseg00000.m4s\n"), 1);
+  ck_assert_int_eq(body_has(&r, "URI=\"seg00001.0.m4s\""), 1);
+  ck_assert_int_eq(body_has(&r, "#EXT-X-PRELOAD-HINT:TYPE=PART,URI=\"seg00001.1.m4s\""), 1);
+  ck_assert_int_eq(body_has(&r, ".ts"), 0);
+  hls_resp_body_release(r.body, r.owner, r.zc);
+}
+END_TEST
+
+START_TEST(llhls_fmp4_parts_are_served_as_mp4_and_only_by_their_container) {
+  pid_filter_t f;
+  hls_resp_t r;
+  const uint8_t part[64] = {0x11};
+  no_filter(&f);
+  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
+  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
+  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "seg00000.0.m4s", 0, NULL, &r), 1);
+  ck_assert_int_eq(r.status, 200);
+  ck_assert_str_eq(r.content_type, "video/mp4");
+  ck_assert_uint_eq(r.body_len, sizeof part);
+  hls_resp_body_release(r.body, r.owner, r.zc);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "seg00000.0.ts", 0, NULL, &r), 0);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg00000.0.m4s", 0, NULL, &r), 0);
+}
+END_TEST
+
+START_TEST(llhls_fmp4_discontinuity_precedes_the_init_map) {
+  pid_filter_t f;
+  hls_resp_t r;
+  const uint8_t init[8] = {'f', 't', 'y', 'p'};
+  const uint8_t part[64] = {0x11};
+  uint64_t base = 0;
+  no_filter(&f);
+  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
+  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
+  hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
+  hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 1);
+  hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4), &base), 0);
+  ck_assert_int_eq(hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_HEVC, init, sizeof init), 0);
+  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "index_ll.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"init.mp4?g=2\"\n#EXT-X-PART:"), 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
 END_TEST
@@ -603,6 +669,114 @@ START_TEST(dash_manifest_splits_video_and_audio_when_track_stores_list_segments)
   ck_assert(!body_has(&r, "initialization=\"init.mp4\""));
   hls_resp_body_release(r.body, r.owner, r.zc);
   hls_set_init_codecs_cb(NULL);
+}
+END_TEST
+
+static const hls_video_info_t video_1080p25 = {1920, 1080, 25, 1, 0, 1};
+
+START_TEST(dash_manifest_describes_the_video_and_claims_the_dvb_profile) {
+  pid_filter_t f;
+  hls_resp_t r;
+  no_filter(&f);
+  open_split_stores(&f, 0, &full);
+  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert(!body_has(&r, "dvb-dash"));
+  hls_resp_body_release(r.body, r.owner, r.zc);
+  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO), &video_1080p25), 0);
+  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
+  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert(body_has(&r, "profiles=\"urn:mpeg:dash:profile:isoff-live:2011,urn:dvb:dash:profile:dvb-dash:2014,urn:dvb:dash:profile:dvb-dash:isoff-ext-live:2014\""));
+  ck_assert(body_has(&r, "<AdaptationSet id=\"1\" contentType=\"video\""));
+  ck_assert(body_has(&r, "<AdaptationSet id=\"2\" contentType=\"audio\""));
+  ck_assert(body_has(&r, " width=\"1920\" height=\"1080\" frameRate=\"25\">"));
+  ck_assert(!body_has(&r, "scanType"));
+  hls_resp_body_release(r.body, r.owner, r.zc);
+  hls_set_init_codecs_cb(NULL);
+}
+END_TEST
+
+START_TEST(dash_manifest_signals_interlace_fractions_and_sap) {
+  static const hls_video_info_t i = {1920, 1080, 30000, 1001, 1, 3};
+  pid_filter_t f;
+  hls_resp_t r;
+  no_filter(&f);
+  open_split_stores(&f, 0, &full);
+  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO), &i), 0);
+  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
+  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert(body_has(&r, " frameRate=\"30000/1001\" scanType=\"interlaced\">"));
+  ck_assert(body_has(&r, "contentType=\"video\" mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"3\""));
+  ck_assert(!body_has(&r, "dvb-dash")); /* SAP 3 */
+  hls_resp_body_release(r.body, r.owner, r.zc);
+  hls_set_init_codecs_cb(NULL);
+}
+END_TEST
+
+START_TEST(dash_manifest_without_dvb_audio_keeps_the_plain_profile) {
+  static const uint8_t mp2_init[32] = {'e', 's', 'd', 's', [15] = 0x6B};
+  pid_filter_t f;
+  hls_resp_t r;
+  no_filter(&f);
+  open_split_stores(&f, 0, &full);
+  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO), &video_1080p25), 0);
+  hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, mp2_init, sizeof mp2_init);
+  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
+  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert(body_has(&r, "codecs=\"mp4a.6B\""));
+  ck_assert(!body_has(&r, "dvb-dash"));
+  hls_resp_body_release(r.body, r.owner, r.zc);
+  hls_set_init_codecs_cb(NULL);
+}
+END_TEST
+
+START_TEST(dash_manifest_profile_follows_the_aac_signalling) {
+  static const struct {
+    uint8_t aot_byte;
+    unsigned rate;
+    int dvb;
+  } cases[] = {{0x10, 48000, 1}, {0x10, 24000, 0}, {0x28, 48000, 1}, {0xE8, 48000, 1}};
+  pid_filter_t f;
+  hls_resp_t r;
+  uint8_t init[32] = {'e', 's', 'd', 's', [15] = 0x40};
+  no_filter(&f);
+  open_split_stores(&f, 0, &full);
+  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO), &video_1080p25), 0);
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+    init[30] = cases[i].aot_byte;
+    hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
+    ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_AUDIO), cases[i].rate, HLS_CHCFG_COUNT, 2), 0);
+    ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
+    ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+    ck_assert_int_eq(body_has(&r, "dvb-dash"), cases[i].dvb);
+    hls_resp_body_release(r.body, r.owner, r.zc);
+  }
+  hls_set_init_codecs_cb(NULL);
+}
+END_TEST
+
+START_TEST(dash_plain_manifest_follows_the_requesting_clients_utc_url) {
+  pid_filter_t f;
+  hls_resp_t r;
+  no_filter(&f);
+  open_split_stores(&f, 0, &full);
+  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://a.example/time", 0, &r), 1);
+  ck_assert(body_has(&r, "value=\"http://a.example/time\""));
+  hls_resp_body_release(r.body, r.owner, r.zc);
+  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://b.example/time", 0, &r), 1);
+  ck_assert(body_has(&r, "value=\"http://b.example/time\""));
+  ck_assert(!body_has(&r, "a.example"));
+  hls_resp_body_release(r.body, r.owner, r.zc);
+  hls_set_init_codecs_cb(NULL);
+}
+END_TEST
+
+START_TEST(dash_vvc_codecs_come_from_the_sps) {
+  /* vvcC, FullBox, record without native PTL, 1 array: profile 1, main tier, level 83, frame_only */
+  static const uint8_t init[] = {'v', 'v', 'c', 'C', 0, 0, 0, 0, 0xFE, 1, 0x8F, 0, 1, 0, 8, 0x00, 0x79, 0x00, 0x00, 0x02, 0x53, 0x80, 0x00};
+  char v[32];
+  char a[32];
+  dash_compute_codecs(init, sizeof init, CODEC_VVC, v, sizeof v, a, sizeof a);
+  ck_assert_str_eq(v, "vvc1.1.L83.CQA");
 }
 END_TEST
 
@@ -752,8 +926,10 @@ START_TEST(dash_split_lldash_manifest_gives_each_set_its_own_reference_time) {
   }
   ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 1, "http://t.example/", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
-  ck_assert(body_has(&r, "<ProducerReferenceTime id=\"0\""));
+  ck_assert(body_has(&r, "<ProducerReferenceTime id=\"0\" inband=\"false\" type=\"encoder\" wallClockTime=\""));
   ck_assert(body_has(&r, "<ProducerReferenceTime id=\"1\""));
+  ck_assert(body_has(&r, "</ProducerReferenceTime>\n      <Resync type=\"0\""));
+  ck_assert(body_has(&r, "<UTCTiming schemeIdUri=\"urn:mpeg:dash:utc:http-xsdate:2014\""));
   ck_assert(body_has(&r, "dinita.mp4"));
   ck_assert(memcmp((const char *)r.body + r.body_len - 7, "</MPD>\n", 7) == 0);
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -976,7 +1152,7 @@ typedef struct {
 static const codec_case_t codec_cases[] = {
     {"hevc", CODEC_HEVC, {0}, 8, "hvc1.1.6.L93.B0", ""},
     {"hevc main10 with box", CODEC_HEVC, {0, 'h', 'v', 'c', 'C', 1, 0x02, 0x20, 0, 0, 0, 0xB0, 0, 0, 0, 0, 0, 120}, 18, "hvc1.2.4.L120.B0", ""},
-    {"vvc", CODEC_VVC, {0}, 8, "vvc1.1.L1.CQ", ""},
+    {"vvc", CODEC_VVC, {0}, 8, "vvc1.1.L83.CQA", ""},
     {"av1 without box", CODEC_AV1, {0}, 8, "av01.0.04M.08", ""},
     {"av1 10 bit high tier", CODEC_AV1, {0, 0, 'a', 'v', '1', 'C', 0, 0x28, 0xC0}, 9, "av01.1.08H.10", ""},
     {"av1 12 bit", CODEC_AV1, {0, 0, 'a', 'v', '1', 'C', 0, 0x4D, 0x20}, 9, "av01.2.13M.12", ""},
@@ -1028,7 +1204,8 @@ START_TEST(lldash_manifest_advertises_chunked_availability_and_utc_timing) {
 
   ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://t.example/", 0, &r), 1);
   ck_assert(memmem(r.body, r.body_len, "availabilityTimeOffset", 22) == NULL);
-  ck_assert(memmem(r.body, r.body_len, "<UTCTiming", 10) == NULL);
+  ck_assert(body_has(&r, "<UTCTiming schemeIdUri=\"urn:mpeg:dash:utc:http-xsdate:2014\" value=\"http://t.example/\"/>"));
+  ck_assert(!body_has(&r, "ProducerReferenceTime"));
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
 END_TEST
@@ -1212,6 +1389,9 @@ static Suite *hls_suite(void) {
   tcase_add_test(tc, plain_playlist_carries_the_lcevc_selector_into_segment_uris);
   tcase_add_test(tc, fmp4_map_uri_carries_the_lcevc_selector);
   tcase_add_test(tc, llhls_playlist_carries_the_lcevc_selector_into_part_uris);
+  tcase_add_test(tc, llhls_fmp4_playlist_maps_the_init_and_lists_m4s_parts);
+  tcase_add_test(tc, llhls_fmp4_parts_are_served_as_mp4_and_only_by_their_container);
+  tcase_add_test(tc, llhls_fmp4_discontinuity_precedes_the_init_map);
   tcase_add_test(tc, discontinuity_opens_a_new_dash_period_on_continuing_time);
   tcase_add_test(tc, discontinuity_on_a_store_without_segments_is_a_noop);
   tcase_add_test(tc, store_ready_reflects_pushed_segments);
@@ -1227,6 +1407,12 @@ static Suite *hls_suite(void) {
   tcase_add_test(tc, async_retire_defers_free_to_the_sweep);
   tcase_add_test(tc, store_close_oom_leaves_the_store_open);
   tcase_add_test(tc, llhls_full_window_keeps_live_edge_and_drops_old_parts);
+  tcase_add_test(tc, dash_manifest_describes_the_video_and_claims_the_dvb_profile);
+  tcase_add_test(tc, dash_manifest_signals_interlace_fractions_and_sap);
+  tcase_add_test(tc, dash_manifest_without_dvb_audio_keeps_the_plain_profile);
+  tcase_add_test(tc, dash_manifest_profile_follows_the_aac_signalling);
+  tcase_add_test(tc, dash_plain_manifest_follows_the_requesting_clients_utc_url);
+  tcase_add_test(tc, dash_vvc_codecs_come_from_the_sps);
   suite_add_tcase(s, tc);
   return s;
 }

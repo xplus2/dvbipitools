@@ -108,7 +108,7 @@ int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_on) {
   if (!seg_try_pin(s)) return 0;
   atomic_store_explicit(&s->last_request_ms, now_ms(), memory_order_relaxed);
   *llhls_newly_on = part_target > 0.0 && atomic_load_explicit(&s->part.part_target, memory_order_relaxed) <= 0.0;
-  if (part_target > 0.0) atomic_store_explicit(&s->part.part_target, part_target, memory_order_release);
+  if (*llhls_newly_on) atomic_store_explicit(&s->part.part_target, part_target, memory_order_release);
   seg_unpin(s);
   return 1;
 }

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #define HLS_AUDIO_REM_MAX 65536
+#define AAC_SBR_CORE_MAX 24000 /* dual-rate SBR up to 48 kHz output */
 
 /* buffers survive */
 void audio_reset(hls_seg_ctx_t *s) {
@@ -13,6 +14,46 @@ void audio_reset(hls_seg_ctx_t *s) {
   memset(&s->audio, 0, sizeof s->audio);
   s->audio.rem = rem;
   s->audio.remcap = remcap;
+}
+
+static int sfi_of_rate(unsigned rate) {
+  for (int i = 0; i < 13; i++)
+    if (esc_aac_rates[i] == rate) return i;
+  return -1;
+}
+
+static void aac_settle(hls_seg_ctx_t *s, aacprobe_result_t result) {
+  const asc_info_t *a = &s->audio.aac_asc;
+  int ext_sfi;
+  s->audio.aac_settled = 1;
+  s->audio.aac_probing = 0;
+  if (result != AACPROBE_SBR && result != AACPROBE_SBR_PS) return;
+  ext_sfi = a->ext_rate ? sfi_of_rate(a->ext_rate) : sfi_of_rate(a->rate * 2);
+  if (ext_sfi < 0) return;
+  s->audio.aac_cfg_len = asc_build_explicit(a->sfi, a->channels, (unsigned)ext_sfi, result == AACPROBE_SBR_PS, s->audio.aac_cfg, sizeof s->audio.aac_cfg);
+  s->audio.out_rate = esc_aac_rates[ext_sfi];
+  s->audio.out_channels = result == AACPROBE_SBR_PS ? 2 : a->channels;
+}
+
+/* 1st declared cfg, then probe. 1 while frames needed */
+static int aac_signalling_pending(hls_seg_ctx_t *s, const esc_frame_t *f) {
+  asc_info_t *a = &s->audio.aac_asc;
+  if ((s->demux.audio_codec != CODEC_AAC && s->demux.audio_codec != CODEC_AAC_LATM) || s->audio.aac_settled) return 0;
+  if (!s->audio.aac_probing) {
+    if (asc_parse(s->audio.es.cpriv, s->audio.es.cpriv_len, a) || a->aot != 2 || a->sfi > 12) {
+      s->audio.aac_settled = 1;
+      return 0;
+    }
+    if (a->ps == 1 || a->sbr == 0 || (a->sbr == -1 && a->rate > AAC_SBR_CORE_MAX)) {
+      aac_settle(s, a->ps == 1 ? AACPROBE_SBR_PS : AACPROBE_LC);
+      return 0;
+    }
+    aacprobe_init(&s->audio.aac_probe, a->sfi, a->ext_rate ? a->ext_rate : a->rate * 2);
+    s->audio.aac_probing = 1;
+  }
+  if (!aacprobe_feed(&s->audio.aac_probe, f->out, f->outlen)) return 1;
+  aac_settle(s, s->audio.aac_probe.result == AACPROBE_UNDECIDED && a->sbr == 1 ? AACPROBE_SBR : s->audio.aac_probe.result);
+  return 0;
 }
 
 void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigned char *data, size_t len) {
@@ -51,6 +92,10 @@ void handle_audio_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, const unsigne
       continue;
     }
     if (!s->audio.ready) {
+      if (aac_signalling_pending(s, &f)) {
+        pos += f.consumed;
+        continue;
+      }
       s->audio.rate = f.rate;
       s->audio.channels = f.ch;
       s->audio.bsid = f.bsid;

@@ -69,6 +69,9 @@ typedef struct {
   lcevc_select_t lcevc;
   int lcevc_locked;
   rawaudio_demux_t *rawaudio; /* non-NULL = /rawaudio subscriber */
+  _Atomic int ctype_ready;    /* pump sets, audio_codec valid after */
+  codec_t audio_codec;
+  int head_sent;              /* reactor thread only */
   int ws_handle;              /* ws_clients.c registry handle, -1 none */
   log_throttle_t ring_drop_throttle;
 } ts_sub_t;
@@ -124,6 +127,10 @@ void ts_push_feed_pkt(capture_ctx_t *ctx, const uint8_t *pkt);
 /* count of subscriber slots currently alive, any protocol */
 int ts_push_active_count(void);
 
+/* rawaudio head, owning reactor thread. H1: -1 on failure */
+int reactor_tspush_send_head(int sub_idx, const char *content_type);
+void h2_tspush_send_head(int sub_idx, const char *content_type);
+void h3_tspush_send_head(int sub_idx, const char *content_type);
 void h2_tspush_wake(int sub_idx);
 void h3_tspush_wake(int sub_idx);
 /* ring overrun: reset the stream, unsubscribe comes with its close */

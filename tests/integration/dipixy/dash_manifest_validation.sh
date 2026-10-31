@@ -42,6 +42,9 @@ assert_contains "$mpd" 'media="dsega\$Time\$.m4s"' "manifest missing audio Segme
 assert_contains "$mpd" 'initialization="dinitv.mp4"' "manifest missing video init"
 assert_contains "$mpd" 'initialization="dinita.mp4"' "manifest missing audio init"
 assert_contains "$mpd" 'audioSamplingRate="' "manifest missing audioSamplingRate"
+assert_contains "$mpd" 'width="320" height="240" frameRate="25"' "manifest missing video attributes"
+assert_contains "$mpd" 'urn:dvb:dash:profile:dvb-dash:2014' "manifest missing DVB profile"
+assert_contains "$mpd" 'urn:mpeg:dash:utc:http-xsdate:2014' "manifest missing UTCTiming"
 assert_contains "$mpd" "<AudioChannelConfiguration" "manifest missing AudioChannelConfiguration"
 if grep -q 'codecs="[^"]*,' "$mpd"; then
     fail "manifest still lists muxed codecs in one Representation"

@@ -72,6 +72,21 @@ dvbipitools_add_fuzz_harness(sds_xml
     ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/encoding.c ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/entity.c ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c)
 
+dvbipitools_add_fuzz_harness(aacprobe
+    fuzz_aacprobe.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/frame.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/ics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/spectral.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/fill.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/sbr_header.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/sbr_data.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/tab_aac.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/tab_sbr.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/asc.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/aac.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c)
+target_link_libraries(fuzz_aacprobe PRIVATE m)
+
 dvbipitools_add_fuzz_harness(rtcp
     fuzz_rtcp.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c)

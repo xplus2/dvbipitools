@@ -129,6 +129,21 @@ dvbipitools_add_unit_test(lib_helper_log
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c)
 
+dvbipitools_add_unit_test(lib_demux_aacprobe
+    unit/lib/demux/test_aacprobe.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/frame.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/ics.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/spectral.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/fill.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/sbr_header.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/sbr_data.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/tab_aac.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/tab_sbr.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/asc.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/aac.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c)
+target_link_libraries(test_lib_demux_aacprobe PRIVATE m)
+
 dvbipitools_add_unit_test(lib_demux_rtcp
     unit/lib/demux/test_rtcp.c
     ${CMAKE_SOURCE_DIR}/src/lib/demux/rtcp.c
@@ -7634,6 +7649,10 @@ dvbipitools_add_unit_test(dipixy_hls
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/pidfilter.c
     ${CMAKE_SOURCE_DIR}/src/dipixy/ts/lcevcselect.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/asc.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/aac.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/video.c
+    ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
 target_link_libraries(test_dipixy_hls PRIVATE m)
 target_compile_options(test_dipixy_hls PRIVATE -ffunction-sections -fdata-sections)

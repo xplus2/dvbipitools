@@ -55,12 +55,12 @@ char *write_xml_escaped(char *dst, const char *s) {
   return dst;
 }
 
-char *write_mpd_prolog(char *mp, const char *avail, const char *publish, double min_update, double tsb_depth, double pres_delay, double min_buffer, int want_ll, double part_target) {
+char *write_mpd_prolog(char *mp, const char *avail, const char *publish, double min_update, double tsb_depth, double pres_delay, double min_buffer, int want_ll, double part_target, int dvb) {
   mp = WRITE_LIT(mp, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
     "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\"\n"
-    "     profiles=\"urn:mpeg:dash:profile:isoff-live:2011\"\n"
-    "     type=\"dynamic\"\n"
-    "     availabilityStartTime=\"");
+    "     profiles=\"urn:mpeg:dash:profile:isoff-live:2011");
+  if (dvb) mp = WRITE_LIT(mp, ",urn:dvb:dash:profile:dvb-dash:2014,urn:dvb:dash:profile:dvb-dash:isoff-ext-live:2014");
+  mp = WRITE_LIT(mp, "\"\n     type=\"dynamic\"\n     availabilityStartTime=\"");
   mp = write_lit(mp, avail, strlen(avail));
   mp = WRITE_LIT(mp, "\"\n     publishTime=\"");
   mp = write_lit(mp, publish, strlen(publish));
@@ -83,16 +83,21 @@ char *write_mpd_prolog(char *mp, const char *avail, const char *publish, double 
 
 /* DASH-IF LL CR-r8 9.X.6.2.8/9.X.4.3/9.X.4.2, inside a SegmentTemplate's own AdaptationSet */
 char *write_ll_resync(char *mp, const char *avail, const char *utc_url, double part_target, unsigned prt_id) {
-  mp = WRITE_LIT(mp, "      <Resync type=\"0\" dT=\"");
-  mp = write_u64_gen(mp, (uint64_t)(part_target * 1000.0 + 0.5), 0);
-  mp = WRITE_LIT(mp, "\"/>\n      <ProducerReferenceTime id=\"");
+  mp = WRITE_LIT(mp, "      <ProducerReferenceTime id=\"");
   mp = write_u32(mp, prt_id, 0);
-  mp = WRITE_LIT(mp, "\" inband=\"true\" type=\"encoder\" wallclockTime=\"");
+  mp = WRITE_LIT(mp, "\" inband=\"false\" type=\"encoder\" wallClockTime=\"");
   mp = write_lit(mp, avail, strlen(avail));
-  mp = WRITE_LIT(mp, "\" presentationTime=\"0\">\n        <UTCTiming schemeIdUri=\"urn:mpeg:dash:utc:http-xsiso:2014\" value=\"");
+  mp = WRITE_LIT(mp, "\" presentationTime=\"0\">\n        <UTCTiming schemeIdUri=\"" DASH_UTC_SCHEME "\" value=\"");
   mp = write_xml_escaped(mp, utc_url);
-  mp = WRITE_LIT(mp, "\"/>\n      </ProducerReferenceTime>\n");
-  return mp;
+  mp = WRITE_LIT(mp, "\"/>\n      </ProducerReferenceTime>\n      <Resync type=\"0\" dT=\"");
+  mp = write_u64_gen(mp, (uint64_t)(part_target * 1000.0 + 0.5), 0);
+  return WRITE_LIT(mp, "\"/>\n");
+}
+
+char *write_mpd_utc_timing(char *mp, const char *utc_url) {
+  mp = WRITE_LIT(mp, "  <UTCTiming schemeIdUri=\"" DASH_UTC_SCHEME "\" value=\"");
+  mp = write_xml_escaped(mp, utc_url);
+  return WRITE_LIT(mp, "\"/>\n");
 }
 
 /* new period per stream format break: media time continues, init changes */
@@ -169,6 +174,48 @@ uint64_t mpd_bandwidth(const hls_snapshot_t *snap) {
   return bw_secs > 0.0 ? (uint64_t)(bw_bits / bw_secs) : 1000000ULL;
 }
 
+char *write_video_attrs(char *mp, const hls_video_info_t *v) {
+  if (v->width && v->height) {
+    mp = WRITE_LIT(mp, " width=\"");
+    mp = write_u32(mp, v->width, 0);
+    mp = WRITE_LIT(mp, "\" height=\"");
+    mp = write_u32(mp, v->height, 0);
+    mp = WRITE_LIT(mp, "\"");
+  }
+  if (v->rate_num) {
+    mp = WRITE_LIT(mp, " frameRate=\"");
+    mp = write_u32(mp, v->rate_num, 0);
+    if (v->rate_den != 1) {
+      mp = WRITE_LIT(mp, "/");
+      mp = write_u32(mp, v->rate_den, 0);
+    }
+    mp = WRITE_LIT(mp, "\"");
+  }
+  if (v->interlaced) mp = WRITE_LIT(mp, " scanType=\"interlaced\"");
+  return mp;
+}
+
+char *write_start_with_sap(char *mp, const hls_video_info_t *v) {
+  return write_u32(mp, v->sap ? v->sap : 1, 0);
+}
+
+/* mp4a.40.2 at 24 kHz or below: SBR probe may have been undecided */
+static int audio_in_dvb_dash(const char *c, unsigned rate) {
+  if (!strcmp(c, "mp4a.40.5") || !strcmp(c, "mp4a.40.29")) return 1;
+  if (!strncmp(c, "mp4a.", 5)) return !strcmp(c, "mp4a.40.2") && rate > 24000;
+  return !strcmp(c, "ec-3") || !strncmp(c, "ac-4.", 5) || !strncmp(c, "dts", 3);
+}
+
+/* TS 103 285 clauses 4.4, 5, 6. video + audio must qualify */
+int mpd_dvb_conformant(const mpd_fmt_ctx_t *ctx) {
+  const hls_snapshot_t *v = ctx->vsnap ? ctx->vsnap : ctx->snap;
+  const hls_video_info_t *i = &v->video;
+  if (v->video_codec != CODEC_H264 && v->video_codec != CODEC_HEVC && v->video_codec != CODEC_VVC) return 0;
+  if (!i->width || !i->height || !i->rate_num || i->sap < 1 || i->sap > 2) return 0;
+  if (!ctx->asnap) return 1;
+  return audio_in_dvb_dash(ctx->snap->acodec_str, ctx->asnap->audio_rate) && ctx->asnap->audio_rate && ctx->asnap->audio_chcfg != HLS_CHCFG_NONE;
+}
+
 static char *write_hex_upper(char *mp, unsigned v, int digits) {
   static const char hex[] = "0123456789ABCDEF";
   for (int sh = (digits - 1) * 4; sh >= 0; sh -= 4) *mp++ = hex[(v >> sh) & 0xF];
@@ -206,13 +253,9 @@ static char *write_audio_channel_configuration(char *mp, hls_chcfg_t scheme, uns
 /* split mode. cap: as write_segment_timeline() */
 char *write_audio_set(char *mp, const char *mpd_start, size_t cap, const mpd_fmt_ctx_t *ctx, const char *avail, int ll, unsigned as_id) {
   unsigned rate = ctx->asnap->audio_rate;
-  mp = WRITE_LIT(mp, "    <AdaptationSet");
-  if (as_id) {
-    mp = WRITE_LIT(mp, " id=\"");
-    mp = write_u32(mp, as_id, 0);
-    mp = WRITE_LIT(mp, "\"");
-  }
-  mp = WRITE_LIT(mp, " contentType=\"audio\" mimeType=\"audio/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">\n");
+  mp = WRITE_LIT(mp, "    <AdaptationSet id=\"");
+  mp = write_u32(mp, as_id, 0);
+  mp = WRITE_LIT(mp, "\" contentType=\"audio\" mimeType=\"audio/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">\n");
   if (ll) mp = write_ll_resync(mp, avail, ctx->utc_url, ctx->snap->part_target, 1);
   mp = WRITE_LIT(mp, "      <Representation id=\"audio\" codecs=\"");
   mp = write_cstr(mp, ctx->snap->acodec_str);

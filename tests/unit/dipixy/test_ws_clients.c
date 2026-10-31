@@ -363,6 +363,7 @@ START_TEST(every_route_format_has_a_json_name) {
       {ROUTE_FMT_HLS, "\"fmt\":\"hls\""},
       {ROUTE_FMT_HLS_FMP4, "\"fmt\":\"hls-fmp4\""},
       {ROUTE_FMT_LLHLS, "\"fmt\":\"llhls\""},
+      {ROUTE_FMT_LLHLS_FMP4, "\"fmt\":\"llhls-fmp4\""},
       {ROUTE_FMT_DASH, "\"fmt\":\"dash\""},
       {ROUTE_FMT_LLDASH, "\"fmt\":\"lldash\""},
       {ROUTE_FMT_RAWAUDIO, "\"fmt\":\"rawaudio\""},

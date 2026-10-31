@@ -12,6 +12,7 @@ typedef enum {
   ROUTE_FMT_HLS,
   ROUTE_FMT_HLS_FMP4,
   ROUTE_FMT_LLHLS,
+  ROUTE_FMT_LLHLS_FMP4,
   ROUTE_FMT_DASH,
   ROUTE_FMT_LLDASH,
   ROUTE_FMT_RAWAUDIO,
@@ -44,6 +45,7 @@ typedef struct {
   char hls_file[32];       /* ROUTE_FMT_HLS: "index.m3u8" or "segNNNNN.ts".
                               ROUTE_FMT_HLS_FMP4: "index.m3u8", "init.mp4", or "segNNNNN.m4s".
                               ROUTE_FMT_LLHLS: "index_ll.m3u8" or "segNNNNN.PP.ts".
+                              ROUTE_FMT_LLHLS_FMP4: "index_ll.m3u8" (via "llhls-fmp4" token only) or "segNNNNN.PP.m4s".
                               ROUTE_FMT_DASH/ROUTE_FMT_LLDASH: "manifest.mpd", "dsegTTTT.m4s" (TTTT: start time, ms),
                               "dsegvTTTT.m4s"/"dsegaTTTT.m4s" or "dinitv.mp4"/"dinita.mp4" (split video/audio).
                               dseg/dinit: no format (playlist): always resolve to ROUTE_FMT_DASH.

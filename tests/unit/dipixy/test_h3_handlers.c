@@ -265,7 +265,7 @@ START_TEST(llhls_waiter_is_answered_when_its_deadline_passes) {
   ck_assert_ptr_nonnull(ctx);
   sid = parked_request(&h, PARK_PATH);
   {
-    llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 0, -1};
+    llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 0, -1, SEG_CONTAINER_TS};
 
     ck_assert_int_eq(h3_llhls_try_park(server_conn(), sid, &req), 1);
   }
@@ -289,7 +289,7 @@ START_TEST(llhls_waiter_table_fills_and_releases_by_stream_and_connection) {
   ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
   {
-    llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 60000, -1};
+    llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 60000, -1, SEG_CONTAINER_TS};
 
     for (int i = 0; i < LLHLS_WAITERS_MAX; i++) ck_assert_int_eq(h3_llhls_try_park(c, 1000 + 4 * i, &req), 1);
     ck_assert_int_eq(h3_llhls_try_park(c, 9999, &req), 0);

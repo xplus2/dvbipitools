@@ -1975,6 +1975,15 @@ dipixy_SRCS := \
 	src/lib/demux/escodec/audio/ac3.c \
 	src/lib/demux/escodec/audio/mpeg.c \
 	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/audio/asc.c \
+	src/lib/demux/aacprobe/frame.c \
+	src/lib/demux/aacprobe/ics.c \
+	src/lib/demux/aacprobe/spectral.c \
+	src/lib/demux/aacprobe/fill.c \
+	src/lib/demux/aacprobe/sbr_header.c \
+	src/lib/demux/aacprobe/sbr_data.c \
+	src/lib/demux/aacprobe/tab_aac.c \
+	src/lib/demux/aacprobe/tab_sbr.c \
 	src/lib/demux/escodec/audio/opus.c \
 	src/lib/demux/escodec/audio/truehd.c \
 	src/lib/demux/escodec/audio/dts.c \
@@ -2132,7 +2141,7 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 dvbipitools: $(DVBIPITOOLS_OBJS)
 	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) $(SBOM_LDFLAGS) -o $@
 
-UNIT_TESTS := lib_demux_crc32 lib_mux_amf lib_helper_describe lib_net_tls_stub_lib lib_cas_biss_ca_stub lib_cas_cw_encryption_stub lib_net_rist_stubs lib_net_srt_stubs lib_sys_ioutil lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_fileutil lib_helper_playlist_out lib_helper_argutil lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_ac4 lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
+UNIT_TESTS := lib_demux_crc32 lib_demux_aacprobe lib_mux_amf lib_helper_describe lib_net_tls_stub_lib lib_cas_biss_ca_stub lib_cas_cw_encryption_stub lib_net_rist_stubs lib_net_srt_stubs lib_sys_ioutil lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_fileutil lib_helper_playlist_out lib_helper_argutil lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_ac4 lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mkv_feed lib_mux_mp4 lib_mux_mp4_feed lib_mux_flv lib_mux_flv_feed lib_mux_fmp4 lib_mux_cadescbuild lib_demux_fmp4_box lib_demux_fmp4_track lib_demux_fmp4_sample lib_mux_esbuild lib_mux_esbuild_pes lib_mux_esbuild_pmtbuild lib_mux_esbuild_remux \
@@ -4010,6 +4019,22 @@ lib_demux_crc32_BIN := tests/unit/lib/demux/test_crc32
 lib_demux_crc32_SRCS := \
 	tests/unit/lib/demux/test_crc32.c \
 	src/lib/demux/crc32.c
+
+lib_demux_aacprobe_BIN := tests/unit/lib/demux/test_aacprobe
+lib_demux_aacprobe_SRCS := \
+	tests/unit/lib/demux/test_aacprobe.c \
+	src/lib/demux/aacprobe/frame.c \
+	src/lib/demux/aacprobe/ics.c \
+	src/lib/demux/aacprobe/spectral.c \
+	src/lib/demux/aacprobe/fill.c \
+	src/lib/demux/aacprobe/sbr_header.c \
+	src/lib/demux/aacprobe/sbr_data.c \
+	src/lib/demux/aacprobe/tab_aac.c \
+	src/lib/demux/aacprobe/tab_sbr.c \
+	src/lib/demux/escodec/audio/asc.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/bitreader.c
+lib_demux_aacprobe_EXTRA_LDFLAGS := -lm
 
 lib_mux_amf_BIN := tests/unit/lib/mux/test_amf
 lib_mux_amf_SRCS := \
@@ -9880,6 +9905,10 @@ dipixy_hls_SRCS := \
 	src/dipixy/ts/pidfilter.c \
 	src/dipixy/ts/lcevcselect.c \
 	src/lib/sys/ioutil.c \
+	src/lib/demux/escodec/audio/asc.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/escodec/video.c \
+	src/lib/demux/bitreader.c \
 	src/lib/helper/log.c
 dipixy_hls_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
 dipixy_hls_EXTRA_LDFLAGS := -Wl,--gc-sections -Wl,--wrap=malloc
@@ -10677,7 +10706,7 @@ FUZZ_BCG_ENGINE := $(FUZZ_BCG_NEW) \
 	src/lib/helper/log.c
 
 # _BIN/_SRCS and FUZZ_BINS stay unconditional.
-FUZZ_HARNESSES := fuzz_psi fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_dvbstp fuzz_ws_frame fuzz_route fuzz_ssdp fuzz_yamlcfg fuzz_pesstamp fuzz_scte35stamp fuzz_tva_xml fuzz_xmltv fuzz_bcg_container fuzz_metrics_store fuzz_rtmp
+FUZZ_HARNESSES := fuzz_aacprobe fuzz_psi fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_dvbstp fuzz_ws_frame fuzz_route fuzz_ssdp fuzz_yamlcfg fuzz_pesstamp fuzz_scte35stamp fuzz_tva_xml fuzz_xmltv fuzz_bcg_container fuzz_metrics_store fuzz_rtmp
 
 fuzz_psi_BIN := tests/fuzz/fuzz_psi
 fuzz_psi_SRCS := \
@@ -10701,6 +10730,22 @@ fuzz_sds_xml_SRCS := \
 	src/lib/helper/xml_util/entity.c \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c
+
+fuzz_aacprobe_BIN := tests/fuzz/fuzz_aacprobe
+fuzz_aacprobe_SRCS := \
+	tests/fuzz/fuzz_aacprobe.c \
+	src/lib/demux/aacprobe/frame.c \
+	src/lib/demux/aacprobe/ics.c \
+	src/lib/demux/aacprobe/spectral.c \
+	src/lib/demux/aacprobe/fill.c \
+	src/lib/demux/aacprobe/sbr_header.c \
+	src/lib/demux/aacprobe/sbr_data.c \
+	src/lib/demux/aacprobe/tab_aac.c \
+	src/lib/demux/aacprobe/tab_sbr.c \
+	src/lib/demux/escodec/audio/asc.c \
+	src/lib/demux/escodec/audio/aac.c \
+	src/lib/demux/bitreader.c
+fuzz_aacprobe_EXTRA_LDFLAGS := -lm
 
 fuzz_rtcp_BIN := tests/fuzz/fuzz_rtcp
 fuzz_rtcp_SRCS := \

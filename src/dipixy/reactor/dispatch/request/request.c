@@ -92,6 +92,7 @@ void reactor_dispatch(int epfd, conn_t *c, const char *method, size_t method_len
       rr = dispatch_route_hls(c, &rt, &filter, pmt_pid, &lcevc, is_head, keep_alive, if_none_match, origin_hdr);
       break;
     case ROUTE_FMT_LLHLS:
+    case ROUTE_FMT_LLHLS_FMP4:
       rr = dispatch_route_llhls(c, &rt, &filter, pmt_pid, &lcevc, is_head, keep_alive, if_none_match, origin_hdr, query);
       break;
     case ROUTE_FMT_DASH:

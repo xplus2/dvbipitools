@@ -163,6 +163,7 @@ void handle_video_pes(hls_seg_ctx_t *s, int has_pts, uint64_t pts, int has_dts, 
   if (!s->have_pending_pes) return; /* stream start: no offset recorded yet for this PES */
   cut_off = s->pending_pes_off;
   kf = detect_keyframe(s, data, len);
+  if (s->container == SEG_CONTAINER_FMP4) fmp4_note_leading(s);
   pts_t = has_pts ? pts_unwrap_ticks(&s->video.ptswrap, pts) : -1;
   ts = has_dts ? pts_unwrap_ticks(&s->video.dtswrap, dts) : pts_t;
   cts_ticks = (has_dts && pts_t >= 0) ? (int32_t)(pts_t - ts) : 0;

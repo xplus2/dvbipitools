@@ -111,7 +111,7 @@ int httpng_hls_cold_render(hls_cold_kind_t kind, seg_container_t container, int 
                            const lcevc_select_t *lcevc, const char *filename, int is_head, hls_resp_t *out) {
   switch (kind) {
     case HLS_COLD_LLHLS:
-      return hls_render_ll(ctx, filter, pmt_pid, lcevc, filename, is_head, NULL, out);
+      return hls_render_ll(ctx, filter, pmt_pid, lcevc, container, filename, is_head, NULL, out);
     case HLS_COLD_DASH:
       return dash_render(ctx, filter, pmt_pid, lcevc, want_ll, utc_url, is_head, out);
     case HLS_COLD_HLS:
@@ -226,6 +226,7 @@ void dispatch_hls_route(httpng_req_t *rq) {
 }
 
 void dispatch_llhls_route(httpng_req_t *rq) {
+  seg_container_t container = rq->rt->fmt == ROUTE_FMT_LLHLS_FMP4 ? SEG_CONTAINER_FMP4 : SEG_CONTAINER_TS;
   uint32_t want_seg;
   int want_part;
   hls_resp_t resp;
@@ -235,7 +236,7 @@ void dispatch_llhls_route(httpng_req_t *rq) {
   capture_ctx_t *ctx;
   int handled;
   int is_index_ll;
-  st = route_setup(rq->rt, &list_num, rq->filter, rq->pmt_pid, rq->lcevc, rq->client_ip, rq->ops->proto, rq->item_bufs, rq->cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_TS,
+  st = route_setup(rq->rt, &list_num, rq->filter, rq->pmt_pid, rq->lcevc, rq->client_ip, rq->ops->proto, rq->item_bufs, rq->cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count, container,
     reactor_cfg()->hls_part_size, &rs);
   if (st == ROUTE_SETUP_PENDING) {
     park_open(rq, rs.job);
@@ -251,14 +252,14 @@ void dispatch_llhls_route(httpng_req_t *rq) {
   }
   ctx = rs.ctx;
   is_index_ll = !strcmp(rq->rt->hls_file, "index_ll.m3u8");
-  if (is_index_ll && !hls_ll_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, SEG_CONTAINER_TS) &&
-      rq->ops->hls_cold_try_park(rq->conn, rq->req, &(hls_cold_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_LLHLS, SEG_CONTAINER_TS, 0, rq->is_head, 0, rq->origin, hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle, NULL}))
+  if (is_index_ll && !hls_ll_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, container) &&
+      rq->ops->hls_cold_try_park(rq->conn, rq->req, &(hls_cold_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_LLHLS, container, 0, rq->is_head, 0, rq->origin, hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle, NULL}))
     return;
   if (is_index_ll && parse_blocking_reload(rq->query, &want_seg, &want_part) &&
-      !hls_part_available(ctx, rq->filter, rq->pmt_pid, rq->lcevc, SEG_CONTAINER_TS, want_seg, want_part) &&
-      rq->ops->llhls_try_park(rq->conn, rq->req, &(llhls_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->is_head, 0, rq->inm, rq->origin, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), rs.ws_handle}))
+      !hls_part_available(ctx, rq->filter, rq->pmt_pid, rq->lcevc, container, want_seg, want_part) &&
+      rq->ops->llhls_try_park(rq->conn, rq->req, &(llhls_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->is_head, 0, rq->inm, rq->origin, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), rs.ws_handle, container}))
     return;
-  handled = hls_render_ll(ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->is_head, rq->inm, &resp);
+  handled = hls_render_ll(ctx, rq->filter, rq->pmt_pid, rq->lcevc, container, rq->rt->hls_file, rq->is_head, rq->inm, &resp);
   rq->ops->respond_hls(rq->conn, rq->req, handled, &resp, rq->origin);
   if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
 }
@@ -419,6 +420,7 @@ void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, const httpn
       dispatch_hls_route(&rq);
       break;
     case ROUTE_FMT_LLHLS:
+    case ROUTE_FMT_LLHLS_FMP4:
       dispatch_llhls_route(&rq);
       break;
     case ROUTE_FMT_DASH:

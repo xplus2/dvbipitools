@@ -24,7 +24,7 @@ void llhls_waiter_conn_closing(const conn_t *c) {
 static void h1_llhls_finish(hls_waiter_t *w) {
   conn_t *c = w->owner;
   size_t bytes = 0;
-  if (hls_serve_ll(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, w->keep_alive, NULL,w->origin[0] ? w->origin : NULL, &bytes))
+  if (hls_serve_ll(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container, w->filename, w->is_head, w->keep_alive, NULL, w->origin[0] ? w->origin : NULL, &bytes))
     ws_clients_add_bytes(w->ws_handle, bytes);
   else
     respond_status(c, RESP_404, w->keep_alive);
@@ -66,7 +66,7 @@ static void hls_cold_finish(hls_waiter_t *w) {
       if (!mp4push_try_attach(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->ws_handle)) respond_status(c, RESP_503, w->keep_alive);
       break;
     case HLS_COLD_LLHLS:
-      served = hls_serve_ll(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, w->keep_alive, NULL, w->origin[0] ? w->origin : NULL, &bytes);
+      served = hls_serve_ll(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container, w->filename, w->is_head, w->keep_alive, NULL, w->origin[0] ? w->origin : NULL, &bytes);
       if (served) ws_clients_add_bytes(w->ws_handle, bytes); else respond_status(c, RESP_404, w->keep_alive);
       break;
     case HLS_COLD_DASH:
@@ -144,7 +144,7 @@ static void ts_cold_finish(ts_cold_waiter_t *w) {
       respond_status(c, RESP_503, w->keep_alive);
     } else {
       c->slot = sub;
-      conn_queue(c, header, header_len);
+      if (!w->rawaudio) conn_queue(c, header, header_len);
       c->next_state = CONN_NEXT_TSPUSH;
     }
   }

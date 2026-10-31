@@ -55,6 +55,8 @@ jobs:
       - name: build
         run: cmake --build build -j"$(nproc)"
       - name: test
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: ctest --test-dir build --output-on-failure -j"$(nproc)"
 
   coverage:
@@ -245,21 +247,21 @@ jobs:
       - name: configure (afl-clang-fast)
         run: cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DDVBIPITOOLS_FUZZING=ON -DCMAKE_C_COMPILER=afl-clang-fast
       - name: build harnesses
-        run: cmake --build build-fuzz -j"$(nproc)" --target fuzz_psi fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_yamlcfg fuzz_gen_seeds
+        run: cmake --build build-fuzz -j"$(nproc)" --target fuzz_aacprobe fuzz_bcg_container fuzz_dvbstp fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_metrics_store fuzz_pesstamp fuzz_psi fuzz_route fuzz_rtcp fuzz_rtmp fuzz_scte35stamp fuzz_sds_xml fuzz_simulcrypt_msg fuzz_ssdp fuzz_tva_xml fuzz_ws_frame fuzz_xmltv fuzz_yamlcfg fuzz_gen_seeds
       - name: generate seeds
         run: |
           mkdir -p afl-in
           build-fuzz/tests/fuzz/fuzz_gen_seeds afl-in
-      - name: fuzz smoke (60s per harness)
+      - name: fuzz smoke (30s per harness)
         env:
           AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES: "1"
         run: |
           fail=0
-          for h in fuzz_psi fuzz_sds_xml fuzz_rtcp fuzz_simulcrypt_msg fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_yamlcfg; do
+          for h in fuzz_aacprobe fuzz_bcg_container fuzz_dvbstp fuzz_ecmg_channel_status fuzz_emmg_datagrams fuzz_metrics_store fuzz_pesstamp fuzz_psi fuzz_route fuzz_rtcp fuzz_rtmp fuzz_scte35stamp fuzz_sds_xml fuzz_simulcrypt_msg fuzz_ssdp fuzz_tva_xml fuzz_ws_frame fuzz_xmltv fuzz_yamlcfg; do
             echo "=== $h ==="
             mkdir -p "afl-out/$h"
             set +e
-            timeout 90 afl-fuzz -i afl-in -o "afl-out/$h" -V 60 -- "build-fuzz/tests/fuzz/$h" @@
+            timeout 60 afl-fuzz -i afl-in -o "afl-out/$h" -V 30 -- "build-fuzz/tests/fuzz/$h" @@
             rc=$?
             set -e
             if [ "$rc" -ne 0 ]; then

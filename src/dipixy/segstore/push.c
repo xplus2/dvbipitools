@@ -73,6 +73,23 @@ int hls_set_audio_params_at(hls_store_t *s, unsigned rate, hls_chcfg_t scheme, u
   return 0;
 }
 
+int hls_set_video_info_at(hls_store_t *s, const hls_video_info_t *info) {
+  hls_snapshot_t *old;
+  hls_snapshot_t *ns;
+  pthread_mutex_lock(store_lock(s));
+  old = atomic_load_explicit(&s->snap, memory_order_acquire);
+  ns = snap_clone(old);
+  if (!ns) {
+    pthread_mutex_unlock(store_lock(s));
+    return -1;
+  }
+  ns->video = *info;
+  atomic_store_explicit(&s->snap, ns, memory_order_release);
+  snap_retire(s, old);
+  pthread_mutex_unlock(store_lock(s));
+  return 0;
+}
+
 int hls_set_lcevc_pids(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const unsigned *lcevc_pid, int lcevc_pid_count) {
   hls_store_t *s;
   hls_snapshot_t *old;

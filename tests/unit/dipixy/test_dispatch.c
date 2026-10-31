@@ -43,7 +43,8 @@ int playlist_fmt_disabled(const config_t *cfg, route_fmt_t fmt) {
     case ROUTE_FMT_RAWAUDIO: return cfg->no_rawaudio;
     case ROUTE_FMT_HLS:
     case ROUTE_FMT_HLS_FMP4: return cfg->no_hls;
-    case ROUTE_FMT_LLHLS: return cfg->no_llhls;
+    case ROUTE_FMT_LLHLS:
+    case ROUTE_FMT_LLHLS_FMP4: return cfg->no_llhls;
     case ROUTE_FMT_DASH: return cfg->no_dash;
     case ROUTE_FMT_LLDASH: return cfg->no_lldash;
     case ROUTE_FMT_MP4: return cfg->no_mp4;

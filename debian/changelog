@@ -4,6 +4,7 @@ dvbipitools (2.6.0-1) unstable; urgency=low
     + dvbstp
       - BiM (001) accepted on all payload ids
       - IPv6 header layout (128-bit provider id)
+    + fmp4: vvcC is a FullBox (mux, demux)
   * dipibim
     + -s/--schema, --profile dvb-tva|tva|sdns|generic
     + TS 102 323 clause 8 validation on dvb-tva
@@ -25,6 +26,13 @@ dvbipitools (2.6.0-1) unstable; urgency=low
     + --ttl (default 16)
   * dipixy
     + decodes bim sd&s, --sds-schema for an XSD
+    + correct mime-type for /rawaudio: AC3, EAC3, AAC, Opus
+      - unknown and HEAD stays at audio/mpeg
+    + llhls-fmp4 (shared segment store with lldash)
+    + dash mpd overhaul
+    + dvb-dash profiles, when a stream qualifies
+    + he-aac, he-aac v2 from adts and latm: sbr/ps probe, explicit signalling
+    + hevc hvcC profile_tier_level
   * dipiscan
     + csv rfc 4180
     + timeout-less option (-t 0)

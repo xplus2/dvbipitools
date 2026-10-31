@@ -373,6 +373,7 @@ static void trak_build_video_entry(mp4buf_t *stsd, const trak_meta_t *t) {
   mb_u16(&entry, 0x0018);
   mb_u16(&entry, 0xFFFF);
   memset(&cfgbox, 0, sizeof cfgbox);
+  if (t->codec == CODEC_VVC) mb_u32(&cfgbox, 0); /* fullbox version, flags */
   mb_bytes(&cfgbox, t->cpriv, t->cpriv_len);
   mb_box(&entry, cfg_fourcc, &cfgbox);
   mb_box(stsd, trak_entry_fourcc_for(t), &entry);

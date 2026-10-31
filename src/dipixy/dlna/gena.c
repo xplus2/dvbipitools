@@ -118,7 +118,7 @@ static void build_cd_body(char out[EVENT_BODY_MAX]) {
 
 static void build_cm_body(const config_t *cfg, char out[EVENT_BODY_MAX]) {
   sbuf_t b;
-  char source[256];
+  char source[512];
   body_open(&b, out);
   dlna_source_protocol_info(cfg, source, sizeof source);
   add_property(&b, "SourceProtocolInfo", source);

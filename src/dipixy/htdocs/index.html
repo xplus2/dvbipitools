@@ -83,6 +83,7 @@ main{flex:1;padding:16px;overflow:auto}
 <option id="fmt-hls" value="hls">HLS (TS)</option>
 <option id="fmt-hls-fmp4" value="hls-fmp4">HLS (fMP4)</option>
 <option id="fmt-llhls" value="llhls">Low-Latency HLS</option>
+<option id="fmt-llhls-fmp4" value="llhls-fmp4">Low-Latency HLS (fMP4)</option>
 <option id="fmt-dash" value="dash">MPEG DASH</option>
 <option id="fmt-lldash" value="lldash">Low-Latency DASH</option>
 </select>
@@ -150,6 +151,7 @@ main{flex:1;padding:16px;overflow:auto}
 <option id="plfmt-hls" value="hls">HLS (TS)</option>
 <option id="plfmt-hls-fmp4" value="hls-fmp4">HLS (fMP4)</option>
 <option id="plfmt-llhls" value="llhls">Low-Latency HLS</option>
+<option id="plfmt-llhls-fmp4" value="llhls-fmp4">Low-Latency HLS (fMP4)</option>
 <option id="plfmt-dash" value="dash">MPEG DASH</option>
 <option id="plfmt-lldash" value="lldash">Low-Latency DASH</option>
 </select>
@@ -241,8 +243,8 @@ function loadStat() {
 }
 function appFlags() {
   var flags = (state.status && state.status.flags) || {};
-  ['ts', 'spts', 'rawaudio', 'mp4', 'hls', 'hls-fmp4', 'llhls', 'dash', 'lldash'].forEach(function (fmt) {
-    var off = !!flags['no_' + (fmt === 'hls-fmp4' ? 'hls' : fmt)];
+  ['ts', 'spts', 'rawaudio', 'mp4', 'hls', 'hls-fmp4', 'llhls', 'llhls-fmp4', 'dash', 'lldash'].forEach(function (fmt) {
+    var off = !!flags['no_' + (fmt === 'hls-fmp4' ? 'hls' : fmt === 'llhls-fmp4' ? 'llhls' : fmt)];
     $('fmt-' + fmt).disabled = off;
     $('plfmt-' + fmt).disabled = off;
   });
@@ -333,7 +335,7 @@ function renderPlSrc() {
   });
 }
 function lcevcAllSupported(fmt) {
-  return fmt === 'hls' || fmt === 'hls-fmp4' || fmt === 'llhls' || fmt === 'dash' || fmt === 'lldash';
+  return fmt === 'hls' || fmt === 'hls-fmp4' || fmt === 'llhls' || fmt === 'llhls-fmp4' || fmt === 'dash' || fmt === 'lldash';
 }
 function syncLcevcAll(fmtId, selId) {
   var ok = lcevcAllSupported($(fmtId).value);

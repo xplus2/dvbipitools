@@ -77,6 +77,30 @@ void ts_push_flush_ready(int tid) {
       drop_overrun_sub(s, i);
       goto next_sub;
     }
+    if (s->rawaudio && !s->head_sent) {
+      const char *ctype;
+      if (!atomic_load_explicit(&s->ctype_ready, memory_order_acquire)) goto next_sub;
+      ctype = rawaudio_content_type(s->audio_codec);
+      s->head_sent = 1;
+      switch (s->proto) {
+#ifdef HAVE_HTTP2
+        case CONN_PROTO_H2:
+          h2_tspush_send_head(i, ctype);
+          break;
+#endif
+#ifdef HAVE_HTTP3
+        case CONN_PROTO_H3:
+          h3_tspush_send_head(i, ctype);
+          break;
+#endif
+        default:
+          if (reactor_tspush_send_head(i, ctype) < 0) {
+            ts_push_drop_sub(s, i);
+            goto next_sub;
+          }
+          break;
+      }
+    }
 #ifdef HAVE_HTTP2
     if (s->proto == CONN_PROTO_H2) {
       if (atomic_load_explicit(&s->h2_ring.wpos, memory_order_acquire) != atomic_load_explicit(&s->h2_ring.rpos, memory_order_relaxed))

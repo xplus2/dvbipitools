@@ -140,7 +140,7 @@ typedef struct {
 static const touch_case_t touch_cases[] = {
     {"enable low latency", 0.0, 0.5, 1, 0.5},
     {"already enabled", 0.5, 0.5, 0, 0.5},
-    {"retarget while enabled", 0.5, 0.25, 0, 0.25},
+    {"first cadence wins while enabled", 0.5, 0.25, 0, 0.5},
     {"plain request leaves it off", 0.0, 0.0, 0, 0.0},
     {"plain request leaves it on", 0.5, 0.0, 0, 0.5},
 };

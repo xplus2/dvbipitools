@@ -12,6 +12,7 @@
 
 #include "lib/cas/simulcrypt_msg.h"
 #include "lib/demux/rtcp.h"
+#include "../unit/lib/demux/aacprobe_frames.h"
 #include "lib/mux/psi_build.h"
 #include "lib/mux/rtcp_build.h"
 #include "lib/net/dvbstp.h"
@@ -74,6 +75,15 @@ static void gen_sds(const char *dir) {
   n = sds_build_broadcast("dvb-ip.example", 1, &svc, 1, NULL, NULL, NULL, NULL, &doc);
   if (n) write_file(dir, "sds_min.xml", doc, n);
   free(doc);
+}
+
+static void gen_aacprobe(const char *dir) {
+  unsigned char buf[512];
+  size_t n = hev2_frames[1].len;
+  if (n + 1 > sizeof buf) return;
+  buf[0] = 6; /* 24 kHz core */
+  memcpy(buf + 1, hev2_frames[1].data, n);
+  write_file(dir, "aac_hev2.bin", buf, n + 1);
 }
 
 static void gen_rtcp(const char *dir) {
@@ -300,6 +310,7 @@ int main(int argc, char **argv) {
   }
   gen_psi(argv[1]);
   gen_sds(argv[1]);
+  gen_aacprobe(argv[1]);
   gen_rtcp(argv[1]);
   gen_rtcp_sdes(argv[1]);
   gen_rtcp_rams_i(argv[1]);

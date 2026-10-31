@@ -58,7 +58,7 @@ static void sweep_value(const bim_simple_t *s, const char *v, unsigned compat) {
   q = strrepo_writer_data(&sw, &qn);
   copy = malloc(n ? n : 1);
   ck_assert_ptr_nonnull(copy);
-  memcpy(copy, p, n);
+  if (n) memcpy(copy, p, n);
   decode_all(s, compat, copy, n, q, qn);
   for (size_t cut = 0; cut < n; cut++) decode_all(s, compat, copy, cut, q, qn);
   for (size_t bit = 0; bit < n * 8; bit++) {

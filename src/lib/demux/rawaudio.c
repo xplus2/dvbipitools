@@ -18,6 +18,7 @@ struct rawaudio_demux {
   unsigned pid;
   int pid_known;
   int no_audio;
+  codec_t codec;
   rawaudio_emit_cb emit;
   void *ctx;
 };
@@ -75,19 +76,39 @@ static void rawaudio_pick_pid(rawaudio_demux_t *d) {
   int n;
   int best_idx = 0;
   unsigned best_pid = 0;
+  codec_t best_codec = CODEC_NONE;
   const psi_es_t *es = psi_es(d->psi, &n);
   for (int i = 0; i < n; i++) {
     if (!es[i].audio_index || (d->excluded && d->excluded(d->excluded_ctx, es[i].pid))) continue;
     if (!best_idx || es[i].audio_index < best_idx) {
       best_idx = es[i].audio_index;
       best_pid = es[i].pid;
+      best_codec = es[i].codec;
     }
   }
   if (best_idx) {
     d->pid = best_pid;
     pes_track(d->pes, d->pid);
     d->pid_known = 1;
+    d->codec = best_codec;
   } else d->no_audio = 1;
+}
+
+int rawaudio_demux_codec(const rawaudio_demux_t *d, codec_t *codec) {
+  if (!d->pid_known && !d->no_audio) return 0;
+  *codec = d->codec;
+  return 1;
+}
+
+const char *rawaudio_content_type(codec_t codec) {
+  switch (codec) {
+    case CODEC_AAC:
+    case CODEC_AAC_LATM: return "audio/aac";
+    case CODEC_AC3: return "audio/ac3";
+    case CODEC_EAC3: return "audio/eac3";
+    case CODEC_OPUS: return "audio/opus";
+    default: return "audio/mpeg";
+  }
 }
 
 void rawaudio_demux_feed(rawaudio_demux_t *d, const unsigned char *pkt) {

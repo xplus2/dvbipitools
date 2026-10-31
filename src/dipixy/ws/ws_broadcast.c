@@ -98,9 +98,17 @@ void ws_broadcast_unregister(ws_sink_fn fn, void *ctx) {
   snapshot_release(old);
 }
 
+static pthread_key_t g_frame_key;
+static pthread_once_t g_frame_key_once = PTHREAD_ONCE_INIT;
+
 static void publish_done(sink_snapshot_t *snap, int epoch) {
   snapshot_release(snap);
   atomic_fetch_sub_explicit(&g_inflight[epoch], 1, memory_order_release);
+}
+
+/* thread exit frees publish buffer */
+static void frame_key_init(void) {
+  pthread_key_create(&g_frame_key, free);
 }
 
 void ws_broadcast_publish(const char *msg) {
@@ -138,6 +146,8 @@ void ws_broadcast_publish(const char *msg) {
     } else {
       frame = p;
       frame_cap = flen;
+      pthread_once(&g_frame_key_once, frame_key_init);
+      pthread_setspecific(g_frame_key, frame);
     }
   }
   ws_frame_encode(frame, WS_OP_TEXT, msg, mlen);

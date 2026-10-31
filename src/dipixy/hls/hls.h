@@ -15,14 +15,14 @@
 int hls_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
               const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes);
 
-/* filename is bare: "index_ll.m3u8" or "segNNNNN.PP.ts". same conn_queue()/
+/* filename is bare: "index_ll.m3u8" or "segNNNNN.PP.ts" ("segNNNNN.PP.m4s" for SEG_CONTAINER_FMP4). same conn_queue()/
    keep_alive/if_none_match/origin_hdr/out_bytes convention as hls_serve() (if_none_match checked against parts, not index_ll.m3u8) */
-int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes);
+int hls_serve_ll(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes);
 
 /* same lookup as hls_serve() */
 int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out);
 
 /* same lookup as hls_serve_ll() */
-int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out);
+int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out);
 
 #endif

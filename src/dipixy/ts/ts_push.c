@@ -289,6 +289,9 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto
   s->lcevc = *lcevc;
   s->lcevc_locked = 0;
   s->rawaudio = rawaudio_demux;
+  atomic_store_explicit(&s->ctype_ready, 0, memory_order_relaxed);
+  s->audio_codec = CODEC_NONE;
+  s->head_sent = 0;
   head = capture_ts_push_head_ptr(ctx);
   pthread_mutex_lock(&g_chain_mtx);
   old_head = atomic_load_explicit(head, memory_order_relaxed);

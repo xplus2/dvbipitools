@@ -10,7 +10,7 @@
 #define TIME_EP_BODY_MAX 40
 #define TIME_EP_URL_MAX 320
 
-/* UTC now as ISO 8601 with ms (urn:mpeg:dash:utc:http-xsiso:2014). returns length */
+/* UTC now as xs:dateTime with ms (urn:mpeg:dash:utc:http-xsdate:2014). returns length */
 size_t time_ep_render(char *buf, size_t n);
 
 /* UTCTiming URL for MPDs. cfg_url non-empty. else <scheme>://host/time,

@@ -72,6 +72,30 @@ tsanalyze --json "$WORK/$part" >"$part_report" 2>"$WORK/tsanalyze_part.log" \
 part_services=$(jq '.services | length' "$part_report")
 [ "${part_services:-0}" -ge 1 ] || fail "LL-HLS part $part: no service found"
 
+llfmp4_playlist="$WORK/index_ll_fmp4.m3u8"
+timeout 15 curl -s -o "$llfmp4_playlist" "$BASE/llhls-fmp4"
+sleep 4
+timeout 15 curl -s -o "$llfmp4_playlist" "$BASE/llhls-fmp4"
+assert_contains "$llfmp4_playlist" "#EXT-X-PART-INF" "llhls-fmp4 playlist missing PART-INF"
+assert_contains "$llfmp4_playlist" "#EXT-X-MAP:URI=\"init.mp4?g=" "llhls-fmp4 playlist missing init.mp4 map"
+grep -q '\.ts' "$llfmp4_playlist" && fail "llhls-fmp4 playlist references .ts"
+
+llinit_uri=$(grep -oE 'init\.mp4\?g=[0-9]+' "$llfmp4_playlist" | head -1)
+llpart=$(grep -oE 'seg[0-9]+\.[0-9]+\.m4s' "$llfmp4_playlist" | head -1)
+[ -n "$llpart" ] || fail "no llhls-fmp4 part reference in playlist"
+
+timeout 10 curl -s -o "$WORK/llinit.mp4" "$BASE/$llinit_uri"
+timeout 10 curl -s -o "$WORK/$llpart" "$BASE/$llpart"
+[ -s "$WORK/llinit.mp4" ] || fail "empty llhls-fmp4 init.mp4"
+[ -s "$WORK/$llpart" ] || fail "empty llhls-fmp4 part $llpart"
+
+cat "$WORK/llinit.mp4" "$WORK/$llpart" >"$WORK/llcombined.mp4"
+llprobe="$WORK/llprobe.json"
+ffprobe -v error -print_format json -show_streams "$WORK/llcombined.mp4" >"$llprobe" 2>"$WORK/ffprobe_ll.log" \
+    || fail "ffprobe failed on init.mp4+$llpart, see $WORK/ffprobe_ll.log"
+llvideo=$(jq -r '[.streams[] | select(.codec_type == "video")][0].codec_name // empty' "$llprobe")
+[ "$llvideo" = "h264" ] || fail "expected h264 video in llhls-fmp4 part, got '$llvideo'"
+
 kill $FFPID 2>/dev/null
 wait $FFPID 2>/dev/null
 kill $DPID 2>/dev/null

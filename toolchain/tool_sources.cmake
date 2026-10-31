@@ -1689,6 +1689,15 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/ac3.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/mpeg.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/aac.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/asc.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/frame.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/ics.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/spectral.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/fill.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/sbr_header.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/sbr_data.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/tab_aac.c
+            ${CMAKE_SOURCE_DIR}/src/lib/demux/aacprobe/tab_sbr.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/opus.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/truehd.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/escodec/audio/dts.c

@@ -137,8 +137,8 @@ int hls_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, u
   return 1;
 }
 
-/* parses "segNNNNN.PP.ts". 1 ok (seq/part set), 0 wrong shape */
-int parse_part_filename(const char *fn, uint32_t *seq, int *part) {
+/* parses "segNNNNN.PP.ts" ("segNNNNN.PP.m4s" for fmp4). 1 ok (seq/part set), 0 wrong shape */
+int parse_part_filename(const char *fn, seg_container_t container, uint32_t *seq, int *part) {
   const char *p;
   char *end;
   unsigned long v;
@@ -152,7 +152,7 @@ int parse_part_filename(const char *fn, uint32_t *seq, int *part) {
   p = end + 1;
   if (*p < '0' || *p > '9') return 0;
   v = strtoul(p, &end, 10);
-  if (strcmp(end, ".ts") != 0 || v > INT_MAX) return 0;
+  if (strcmp(end, container == SEG_CONTAINER_FMP4 ? ".m4s" : ".ts") != 0 || v > INT_MAX) return 0;
   *part = (int)v;
   return 1;
 }

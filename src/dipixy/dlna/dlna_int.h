@@ -17,6 +17,7 @@
 /* OP=00: no byte/time seek, matches lack of Range support. FLAGS: streaming + sN-increasing + dlna v1.5, no seek bits */
 #define TS_PROTOCOL_INFO "http-get:*:video/mpeg:DLNA.ORG_OP=00;DLNA.ORG_FLAGS=05100000000000000000000000000000"
 #define RADIO_PROTOCOL_INFO "http-get:*:audio/mpeg:DLNA.ORG_OP=00;DLNA.ORG_FLAGS=05100000000000000000000000000000"
+#define RADIO_AAC_PROTOCOL_INFO "http-get:*:audio/aac:DLNA.ORG_OP=00;DLNA.ORG_FLAGS=05100000000000000000000000000000"
 #define MCAST_IGMP_PROTOCOL_INFO "dvb-igmp:*:33:*"
 #define MCAST_MLD_PROTOCOL_INFO "dvb-mld:*:33:*"
 

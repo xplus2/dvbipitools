@@ -1094,157 +1094,157 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 
 ### 5xxxxx System
 
-| Number  | Codes    | Message                                                                                          |
-|---------|----------|--------------------------------------------------------------------------------------------------|
-| 500100  | AS,GS    | cannot join %s                                                                                   |
-| 500101  | *S,AE,GE,LE | out of memory                                                                                 |
-| 500102  | 3E,3S,FS | pthread_create: %s                                                                               |
-| 500103  | 3S,FS,LE | socket: %s                                                                                       |
-| 500104  | 3S       | bind %s port %u: %s                                                                              |
-| 500105  | 3S       | listen: %s                                                                                       |
-| 500106  | 3S,FS,MS | fcntl O_NONBLOCK: %s                                                                             |
-| 500107  | 3E       | accept: %s                                                                                       |
-| 500108  | 3S       | %s: failed to start cs378x listener on %s port %u                                                |
-| 500109  | MS       | socket() failed: %s                                                                              |
-| 500110  | MS       | bind %s:%u failed: %s                                                                            |
-| 500111  | MS       | listen failed: %s                                                                                |
-| 500112  | MS       | bind %s failed: %s                                                                               |
-| 500113  | LE       | rist: receiver create failed                                                                     |
-| 500114  | AE       | out of memory building %s document                                                               |
-| 500115  | HE       | srt output: poll failed: %s                                                                      |
-| 500116  | IS       | dvbipitools: %s: %s                                                                              |
-| 500117  | IS       | dvbipitools: cannot resolve own path, '%s' is not absolute                                       |
-| 500118  | IS       | dvbipitools: %s: %s                                                                              |
-| 500119  | LS       | cas_group: ECMG client %zu failed to start                                                       |
-| 500120  | LS       | cas_group: EMMG server %zu failed to start                                                       |
-| 500121  | LE       | %s: getrandom: %s                                                                                |
-| 500122  | LW       | %sservice key cache full (%zu services), dropping EMM-G for service %04X                         |
-| 500123  | LS       | ecmg: pthread_create: %s                                                                         |
-| 500124  | LS       | emmg: socket: %s                                                                                 |
-| 500125  | LS       | emmg: bind %s:%u: %s                                                                             |
-| 500126  | LS       | emmg: listen: %s                                                                                 |
-| 500127  | LS       | emmg: fcntl O_NONBLOCK: %s                                                                       |
-| 500128  | LE,LS    | emmg: pthread_create: %s                                                                         |
-| 500129  | LE       | emmg: fcntl O_NONBLOCK (slot %d): %s                                                             |
-| 500130  | LE       | emmg: accept: %s                                                                                 |
-| 500131  | LW       | escodec: esc_vbuf_add failed, sei nal dropped                                                    |
-| 500132  | LW       | escodec: esc_vbuf_add failed, h264 nal dropped                                                   |
-| 500133  | LW       | escodec: esc_vbuf_add failed, hevc nal dropped                                                   |
-| 500134  | LW       | escodec: esc_vbuf_add failed, vvc nal dropped                                                    |
-| 500135  | LW       | escodec: esc_vbuf_add failed, av1 obu dropped                                                    |
-| 500136  | LE       | escodec: av1 obu unescape alloc failed                                                           |
-| 500137  | LW       | pes: sgrow failed, pid %u payload bytes dropped                                                  |
-| 500138  | LE       | fcc: socket: %s                                                                                  |
-| 500139  | LE       | fcc: poll: %s                                                                                    |
-| 500140  | LE       | ret: socket: %s                                                                                  |
-| 500141  | LE       | ret: poll: %s                                                                                    |
-| 500142  | LS       | %s: daemonize failed: %s                                                                         |
-| 500143  | LS       | cannot open %s:%u for sending                                                                    |
-| 500144  | LE       | httpclient: fcntl O_NONBLOCK: %s                                                                 |
-| 500145  | LE       | recv: %s                                                                                         |
-| 500146  | LE       | setsockopt SO_RCVBUF: %s                                                                         |
-| 500147  | LW       | SO_RCVBUF capped to %d bytes (wanted %d; raise net.core.rmem_max)                                |
-| 500148  | FS,LE    | bind: %s                                                                                         |
-| 500149  | LE       | join %s: %s                                                                                      |
-| 500150  | LE       | join %s from %s: %s                                                                              |
-| 500151  | LE       | set outgoing interface: %s                                                                       |
-| 500152  | LE       | set ttl: %s                                                                                      |
-| 500153  | LE       | set hop limit: %s                                                                                |
-| 500154  | LE       | rist: pipe/thread setup failed                                                                   |
-| 500155  | LE       | rist: sender create failed                                                                       |
-| 500156  | LE       | rist: UDP port %u already in use                                                                 |
-| 500157  | LE       | rist: UDP port %u (RTCP of %u) already in use                                                    |
-| 500158  | LE       | srt: setsockopt failed: %s                                                                       |
-| 500159  | LE       | srt: socket create failed: %s                                                                    |
-| 500160  | LE       | srt: epoll create failed: %s                                                                     |
-| 500161  | LE       | srt: epoll add failed: %s                                                                        |
-| 500162  | LE       | srt: accept wait failed: %s                                                                      |
-| 500163  | LE       | srt: bind/listen failed: %s                                                                      |
-| 500164  | LE       | srt: group create failed: %s                                                                     |
-| 500165  | LE       | srt: bind/listen failed on peer %d: %s                                                           |
-| 500166  | LE       | srt: startup failed: %s                                                                          |
-| 500167  | LE       | srt output: pending buffer resize to %d chunks failed, keeping %d                                |
-| 500168  | LE       | cpu-affinity: %s: sched_getaffinity: %s                                                          |
-| 500169  | LE       | cpu-affinity: %s: cpu %u: %s                                                                     |
-| 500170  | LE       | xmltv: out of memory reading xmltv                                                               |
-| 500171  | DW       | emm cache full (%zu services), dropping EMM-G for service_id 0x%04x                              |
-| 500172  | DS       | cannot start mkv/mka mux                                                                         |
-| 500173  | DS       | cannot start flv mux                                                                             |
-| 500174  | FE       | out of memory allocating psi state for %s:%u, RAP detection disabled for this packet             |
-| 500175  | FS       | %s failed: %s                                                                                    |
-| 500176  | FS       | SO_REUSEPORT: %s                                                                                 |
-| 500177  | FS       | epoll_create1: %s                                                                                |
-| 500178  | FS       | epoll_ctl: %s                                                                                    |
-| 500179  | FA       | epoll_ctl (wake fd): %s, falling back to bounded poll                                            |
-| 500180  | FW       | pacer: out of memory, burst pacing disabled                                                      |
-| 500181  | FS       | %s: out of memory allocating channel table                                                       |
-| 500182  | FS       | %s: out of memory allocating MC RET session table                                                |
-| 500183  | FS       | %s: out of memory allocating RSI announcement table                                              |
-| 500184  | FS       | %s: out of memory allocating burst table                                                         |
-| 500185  | FS       | %s: out of memory allocating FCC rate limiter                                                    |
-| 500186  | FS       | %s: cannot open capture: %s                                                                      |
-| 500187  | FS       | %s: out of memory creating ret context                                                           |
-| 500188  | FS       | %s: out of memory allocating RET rate limiter                                                    |
-| 500189  | FS       | %s: failed to start listen workers on %s:%u                                                      |
-| 500190  | FS       | %s: failed to start FCC resolve-by-port sockets at %s:%u..%u                                     |
-| 500191  | FS       | %s: failed to start burst pacing thread                                                          |
-| 500192  | FS       | %s: failed to start RSI announcement thread                                                      |
-| 500193  | FS       | %s: failed to start metrics thread                                                               |
-| 500194  | TS       | bitrate pacer setup failed                                                                       |
-| 500195  | TW       | input %u: out of memory allocating psi state, retrying next poll                                 |
-| 500196  | TE       | input %u: remux setup failed                                                                     |
-| 500197  | TE       | input %u: hold-back queue setup failed                                                           |
-| 500198  | TS       | hold-back queue setup failed                                                                     |
-| 500199  | TS       | remux setup failed                                                                               |
-| 500200  | YW       | --status-tpl reload queue full, leaking one old page                                             |
-| 500201  | YW       | --status-tpl %s: reload failed (OOM), keeping previous content                                   |
-| 500202  | YS       | out of memory sizing dash_lldash subscriber table (%d entries)                                   |
-| 500203  | YA       | ssdp: cannot join :%d, DLNA discovery disabled                                                   |
-| 500204  | YE       | ssdp: recv error: %s                                                                             |
-| 500205  | YA       | ssdp: cannot open send socket, DLNA discovery disabled                                           |
-| 500206  | YA       | ssdp: cannot start thread, DLNA discovery disabled                                               |
-| 500207  | YS       | out of mem building channel lists                                                                |
-| 500208  | YW       | conn retire queue full, leaking one conn_t                                                       |
-| 500209  | YA       | out of memory sizing conn table (%d entries), fd tracking disabled                               |
-| 500210  | YE       | conn table overflow, fd %d exceeds table size %d, conn_publish/conn_for_fd no-op past this point |
-| 500211  | YA       | http3: reuseport steering unavailable, conn migration will only work with -j 1                   |
-| 500212  | YA       | out of memory sizing fd_ssl table (%d entries), TLS not bound                                    |
-| 500213  | YW       | tls reload: retire queue full, leaking one SSL_CTX                                               |
-| 500214  | YW       | hls: buf_reserve failed, ts packet dropped                                                       |
-| 500215  | YS       | out of memory sizing mp4push subscriber table (%d entries)                                       |
-| 500216  | YW       | hls: buf_reserve failed, fmp4 access unit dropped                                                |
-| 500217  | YW       | hls: buf_reserve failed, lcevc au dropped                                                        |
-| 500218  | YS       | out of memory sizing segmenter table (%d entries)                                                |
-| 500219  | YE       | segmenter retire alloc failed, leaking segmenter                                                 |
-| 500220  | YE       | hls: snapshot retire alloc failed, leaking snapshot                                              |
-| 500221  | YS       | out of memory sizing store table (%d entries)                                                    |
-| 500222  | YE       | hls: close retire alloc failed, store stays open                                                 |
-| 500223  | YW       | --sds %s: cannot join, list left empty                                                           |
-| 500224  | YS       | out of memory sizing ts_push subscriber table (%d entries)                                       |
-| 500225  | LE       | xmltv: cannot convert encoding %s to UTF-8                                                       |
-| 500226  | YE       | worker %d: epoll_create1: %s                                                                     |
-| 500227  | YW       | http3: udp4 bind failed, no HTTP/3 over IPv4                                                     |
-| 500228  | YW       | http3: udp6 bind failed, no HTTP/3 over IPv6                                                     |
-| 500229  | YW       | segmenter variant cap (%d per source) reached, rejecting new variants                            |
-| 500230  | LE       | tva: cannot read input (read error or out of memory)                                             |
-| 500231  | LE       | tva: out of memory parsing input                                                                 |
-| 500233  | GE       | out of memory, version not advanced                                                              |
-| 500235  | YA       | ssdp: IP_PKTINFO: %s, not answering searches                                                     |
-| 500236  | YE       | cannot listen on %s:%u%s (worker %d): %s                                                         |
-| 500237  | YW       | hls: pes_new failed, program change not applied                                                  |
-| 500238  | YW       | hls: no video keyframe within buffer cap, segment data dropped                                   |
-| 500240  | AE,GE    | receive on %s failed, giving up                                                                  |
-| 500241  | LE       | rist: receiver start failed                                                                      |
-| 500242  | LE,VE    | rist: receiver restart failed                                                                    |
-| 500243  | LE       | srt: listen callback failed: %s                                                                  |
-| 500244  | FE       | %s: capture poll failed: %s                                                                      |
-| 500245  | FW,YW    | %s: cpu pin failed, running unpinned                                                             |
-| 500246  | LE       | scrambler: batch %scrypt failed, dropping affected packets                                       |
-| 500247  | DE       | input poll failed: %s                                                                            |
-| 500248  | DE       | input read error: %s                                                                             |
-| 500249  | LW       | pes: pid %u PES exceeds %u bytes, dropped until next start                                       |
-| 500250  | BS       | cannot create temporary file                                                                     |
-| 500251  | LW       | cannot set DSCP marking: %s                                                                      |
+| Number  | Codes        | Message                                                                                          |
+|---------|--------------|--------------------------------------------------------------------------------------------------|
+| 500100  | AS,GS        | cannot join %s                                                                                   |
+| 500101  | *S,AE,GE,LE  | out of memory                                                                                    |
+| 500102  | 3E,3S,FS     | pthread_create: %s                                                                               |
+| 500103  | 3S,FS,LE     | socket: %s                                                                                       |
+| 500104  | 3S           | bind %s port %u: %s                                                                              |
+| 500105  | 3S           | listen: %s                                                                                       |
+| 500106  | 3S,FS,MS     | fcntl O_NONBLOCK: %s                                                                             |
+| 500107  | 3E           | accept: %s                                                                                       |
+| 500108  | 3S           | %s: failed to start cs378x listener on %s port %u                                                |
+| 500109  | MS           | socket() failed: %s                                                                              |
+| 500110  | MS           | bind %s:%u failed: %s                                                                            |
+| 500111  | MS           | listen failed: %s                                                                                |
+| 500112  | MS           | bind %s failed: %s                                                                               |
+| 500113  | LE           | rist: receiver create failed                                                                     |
+| 500114  | AE           | out of memory building %s document                                                               |
+| 500115  | HE           | srt output: poll failed: %s                                                                      |
+| 500116  | IS           | dvbipitools: %s: %s                                                                              |
+| 500117  | IS           | dvbipitools: cannot resolve own path, '%s' is not absolute                                       |
+| 500118  | IS           | dvbipitools: %s: %s                                                                              |
+| 500119  | LS           | cas_group: ECMG client %zu failed to start                                                       |
+| 500120  | LS           | cas_group: EMMG server %zu failed to start                                                       |
+| 500121  | LE           | %s: getrandom: %s                                                                                |
+| 500122  | LW           | %sservice key cache full (%zu services), dropping EMM-G for service %04X                         |
+| 500123  | LS           | ecmg: pthread_create: %s                                                                         |
+| 500124  | LS           | emmg: socket: %s                                                                                 |
+| 500125  | LS           | emmg: bind %s:%u: %s                                                                             |
+| 500126  | LS           | emmg: listen: %s                                                                                 |
+| 500127  | LS           | emmg: fcntl O_NONBLOCK: %s                                                                       |
+| 500128  | LE,LS        | emmg: pthread_create: %s                                                                         |
+| 500129  | LE           | emmg: fcntl O_NONBLOCK (slot %d): %s                                                             |
+| 500130  | LE           | emmg: accept: %s                                                                                 |
+| 500131  | LW           | escodec: esc_vbuf_add failed, sei nal dropped                                                    |
+| 500132  | LW           | escodec: esc_vbuf_add failed, h264 nal dropped                                                   |
+| 500133  | LW           | escodec: esc_vbuf_add failed, hevc nal dropped                                                   |
+| 500134  | LW           | escodec: esc_vbuf_add failed, vvc nal dropped                                                    |
+| 500135  | LW           | escodec: esc_vbuf_add failed, av1 obu dropped                                                    |
+| 500136  | LE           | escodec: av1 obu unescape alloc failed                                                           |
+| 500137  | LW           | pes: sgrow failed, pid %u payload bytes dropped                                                  |
+| 500138  | LE           | fcc: socket: %s                                                                                  |
+| 500139  | LE           | fcc: poll: %s                                                                                    |
+| 500140  | LE           | ret: socket: %s                                                                                  |
+| 500141  | LE           | ret: poll: %s                                                                                    |
+| 500142  | LS           | %s: daemonize failed: %s                                                                         |
+| 500143  | LS           | cannot open %s:%u for sending                                                                    |
+| 500144  | LE           | httpclient: fcntl O_NONBLOCK: %s                                                                 |
+| 500145  | LE           | recv: %s                                                                                         |
+| 500146  | LE           | setsockopt SO_RCVBUF: %s                                                                         |
+| 500147  | LW           | SO_RCVBUF capped to %d bytes (wanted %d; raise net.core.rmem_max)                                |
+| 500148  | FS,LE        | bind: %s                                                                                         |
+| 500149  | LE           | join %s: %s                                                                                      |
+| 500150  | LE           | join %s from %s: %s                                                                              |
+| 500151  | LE           | set outgoing interface: %s                                                                       |
+| 500152  | LE           | set ttl: %s                                                                                      |
+| 500153  | LE           | set hop limit: %s                                                                                |
+| 500154  | LE           | rist: pipe/thread setup failed                                                                   |
+| 500155  | LE           | rist: sender create failed                                                                       |
+| 500156  | LE           | rist: UDP port %u already in use                                                                 |
+| 500157  | LE           | rist: UDP port %u (RTCP of %u) already in use                                                    |
+| 500158  | LE           | srt: setsockopt failed: %s                                                                       |
+| 500159  | LE           | srt: socket create failed: %s                                                                    |
+| 500160  | LE           | srt: epoll create failed: %s                                                                     |
+| 500161  | LE           | srt: epoll add failed: %s                                                                        |
+| 500162  | LE           | srt: accept wait failed: %s                                                                      |
+| 500163  | LE           | srt: bind/listen failed: %s                                                                      |
+| 500164  | LE           | srt: group create failed: %s                                                                     |
+| 500165  | LE           | srt: bind/listen failed on peer %d: %s                                                           |
+| 500166  | LE           | srt: startup failed: %s                                                                          |
+| 500167  | LE           | srt output: pending buffer resize to %d chunks failed, keeping %d                                |
+| 500168  | LE           | cpu-affinity: %s: sched_getaffinity: %s                                                          |
+| 500169  | LE           | cpu-affinity: %s: cpu %u: %s                                                                     |
+| 500170  | LE           | xmltv: out of memory reading xmltv                                                               |
+| 500171  | DW           | emm cache full (%zu services), dropping EMM-G for service_id 0x%04x                              |
+| 500172  | DS           | cannot start mkv/mka mux                                                                         |
+| 500173  | DS           | cannot start flv mux                                                                             |
+| 500174  | FE           | out of memory allocating psi state for %s:%u, RAP detection disabled for this packet             |
+| 500175  | FS           | %s failed: %s                                                                                    |
+| 500176  | FS           | SO_REUSEPORT: %s                                                                                 |
+| 500177  | FS           | epoll_create1: %s                                                                                |
+| 500178  | FS           | epoll_ctl: %s                                                                                    |
+| 500179  | FA           | epoll_ctl (wake fd): %s, falling back to bounded poll                                            |
+| 500180  | FW           | pacer: out of memory, burst pacing disabled                                                      |
+| 500181  | FS           | %s: out of memory allocating channel table                                                       |
+| 500182  | FS           | %s: out of memory allocating MC RET session table                                                |
+| 500183  | FS           | %s: out of memory allocating RSI announcement table                                              |
+| 500184  | FS           | %s: out of memory allocating burst table                                                         |
+| 500185  | FS           | %s: out of memory allocating FCC rate limiter                                                    |
+| 500186  | FS           | %s: cannot open capture: %s                                                                      |
+| 500187  | FS           | %s: out of memory creating ret context                                                           |
+| 500188  | FS           | %s: out of memory allocating RET rate limiter                                                    |
+| 500189  | FS           | %s: failed to start listen workers on %s:%u                                                      |
+| 500190  | FS           | %s: failed to start FCC resolve-by-port sockets at %s:%u..%u                                     |
+| 500191  | FS           | %s: failed to start burst pacing thread                                                          |
+| 500192  | FS           | %s: failed to start RSI announcement thread                                                      |
+| 500193  | FS           | %s: failed to start metrics thread                                                               |
+| 500194  | TS           | bitrate pacer setup failed                                                                       |
+| 500195  | TW           | input %u: out of memory allocating psi state, retrying next poll                                 |
+| 500196  | TE           | input %u: remux setup failed                                                                     |
+| 500197  | TE           | input %u: hold-back queue setup failed                                                           |
+| 500198  | TS           | hold-back queue setup failed                                                                     |
+| 500199  | TS           | remux setup failed                                                                               |
+| 500200  | YW           | --status-tpl reload queue full, leaking one old page                                             |
+| 500201  | YW           | --status-tpl %s: reload failed (OOM), keeping previous content                                   |
+| 500202  | YS           | out of memory sizing dash_lldash subscriber table (%d entries)                                   |
+| 500203  | YA           | ssdp: cannot join :%d, DLNA discovery disabled                                                   |
+| 500204  | YE           | ssdp: recv error: %s                                                                             |
+| 500205  | YA           | ssdp: cannot open send socket, DLNA discovery disabled                                           |
+| 500206  | YA           | ssdp: cannot start thread, DLNA discovery disabled                                               |
+| 500207  | YS           | out of mem building channel lists                                                                |
+| 500208  | YW           | conn retire queue full, leaking one conn_t                                                       |
+| 500209  | YA           | out of memory sizing conn table (%d entries), fd tracking disabled                               |
+| 500210  | YE           | conn table overflow, fd %d exceeds table size %d, conn_publish/conn_for_fd no-op past this point |
+| 500211  | YA           | http3: reuseport steering unavailable, conn migration will only work with -j 1                   |
+| 500212  | YA           | out of memory sizing fd_ssl table (%d entries), TLS not bound                                    |
+| 500213  | YW           | tls reload: retire queue full, leaking one SSL_CTX                                               |
+| 500214  | YW           | hls: buf_reserve failed, ts packet dropped                                                       |
+| 500215  | YS           | out of memory sizing mp4push subscriber table (%d entries)                                       |
+| 500216  | YW           | hls: buf_reserve failed, fmp4 access unit dropped                                                |
+| 500217  | YW           | hls: buf_reserve failed, lcevc au dropped                                                        |
+| 500218  | YS           | out of memory sizing segmenter table (%d entries)                                                |
+| 500219  | YE           | segmenter retire alloc failed, leaking segmenter                                                 |
+| 500220  | YE           | hls: snapshot retire alloc failed, leaking snapshot                                              |
+| 500221  | YS           | out of memory sizing store table (%d entries)                                                    |
+| 500222  | YE           | hls: close retire alloc failed, store stays open                                                 |
+| 500223  | YW           | --sds %s: cannot join, list left empty                                                           |
+| 500224  | YS           | out of memory sizing ts_push subscriber table (%d entries)                                       |
+| 500225  | LE           | xmltv: cannot convert encoding %s to UTF-8                                                       |
+| 500226  | YE           | worker %d: epoll_create1: %s                                                                     |
+| 500227  | YW           | http3: udp4 bind failed, no HTTP/3 over IPv4                                                     |
+| 500228  | YW           | http3: udp6 bind failed, no HTTP/3 over IPv6                                                     |
+| 500229  | YW           | segmenter variant cap (%d per source) reached, rejecting new variants                            |
+| 500230  | LE           | tva: cannot read input (read error or out of memory)                                             |
+| 500231  | LE           | tva: out of memory parsing input                                                                 |
+| 500233  | GE           | out of memory, version not advanced                                                              |
+| 500235  | YA           | ssdp: IP_PKTINFO: %s, not answering searches                                                     |
+| 500236  | YE           | cannot listen on %s:%u%s (worker %d): %s                                                         |
+| 500237  | YW           | hls: pes_new failed, program change not applied                                                  |
+| 500238  | YW           | hls: no video keyframe within buffer cap, segment data dropped                                   |
+| 500240  | AE,GE        | receive on %s failed, giving up                                                                  |
+| 500241  | LE           | rist: receiver start failed                                                                      |
+| 500242  | LE,VE        | rist: receiver restart failed                                                                    |
+| 500243  | LE           | srt: listen callback failed: %s                                                                  |
+| 500244  | FE           | %s: capture poll failed: %s                                                                      |
+| 500245  | FW,YW        | %s: cpu pin failed, running unpinned                                                             |
+| 500246  | LE           | scrambler: batch %scrypt failed, dropping affected packets                                       |
+| 500247  | DE           | input poll failed: %s                                                                            |
+| 500248  | DE           | input read error: %s                                                                             |
+| 500249  | LW           | pes: pid %u PES exceeds %u bytes, dropped until next start                                       |
+| 500250  | BS           | cannot create temporary file                                                                     |
+| 500251  | LW           | cannot set DSCP marking: %s                                                                      |
 
 ### 6xxxxx Remote
 
@@ -1398,7 +1398,8 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 700169  | GD        | index check: %d indices ok, %d entries, %d other indices ignored                             |
 | 700170  | BD        | %zu fragments -> %zu+%zu bytes                                                               |
 | 700171  | BD        | %zu fragments read                                                                           |
-| 700172  | BD        | %s: %zu                                                                                      |
+| 700172  | BD        | fragment type %s: %zu read                                                                   |
+| 700173  | YW        | hls: video parameters not recorded, DASH video attributes stale                              |
 
 ### 8xxxxx and 9xxxxx
 

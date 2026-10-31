@@ -36,8 +36,9 @@ trap 'rm -rf "$WORK"' EXIT
 
 # tool_version <tool>: TOOL_VERSION from src/<tool>/version.h
 tool_version() {
-	v="$(sed -n 's/^#define TOOL_VERSION "\(.*\)"$/\1/p' "$SRC/src/$1/version.h" 2>/dev/null)" || v=""
-	[ -n "$v" ] || die "no TOOL_VERSION in src/$1/version.h"
+	tool="$1"
+	v="$(sed -n 's/^#define TOOL_VERSION "\(.*\)"$/\1/p' "$SRC/src/$tool/version.h" 2>/dev/null)" || v=""
+	[ -n "$v" ] || die "no TOOL_VERSION in src/$tool/version.h"
 	echo "$v"
 }
 
@@ -116,7 +117,8 @@ sort -u "$WORK/all" > "$WORK/comps"
 
 # headers next to linked archive first: <prefix>/lib or <prefix>/lib/<multiarch>
 archive_incs() {
-	awk -F '\t' -v c="$1" '$1 == c && !s[$2]++ { print $2 }' "$WORK/dirs" | while read -r d; do
+	comp="$1"
+	awk -F '\t' -v c="$comp" '$1 == c && !s[$2]++ { print $2 }' "$WORK/dirs" | while read -r d; do
 		for i in "$d/../include" "$d/../../include"; do
 			[ -d "$i" ] && printf ' -I%s' "$i"
 		done
@@ -125,11 +127,15 @@ archive_incs() {
 
 # macros <component> <header>
 macros() {
-	printf '#include <%s>\n' "$2" | $CC_CMD $(archive_incs "$1") $CPPF $IDA -E -dM -x c - 2>/dev/null
+	comp="$1"
+	hdr="$2"
+	printf '#include <%s>\n' "$hdr" | $CC_CMD $(archive_incs "$comp") $CPPF $IDA -E -dM -x c - 2>/dev/null
 }
 
 macro() {
-	awk -v m="$2" '$1 == "#define" && $2 == m { $1 = ""; $2 = ""; sub(/^ +/, ""); gsub(/"/, ""); print; exit }' "$1"
+	file="$1"
+	mname="$2"
+	awk -v m="$mname" '$1 == "#define" && $2 == m { $1 = ""; $2 = ""; sub(/^ +/, ""); gsub(/"/, ""); print; exit }' "$file"
 }
 
 triple() {
@@ -177,6 +183,7 @@ version_of() {
 	nghttp2) $PKGC --modversion libnghttp2 2>/dev/null ;;
 	cjson) $PKGC --modversion libcjson 2>/dev/null ;;
 	libyaml) sed -n '1s/^libyaml //p' "$SRC/src/lib/vendor/libyaml/README.md" ;;
+	*) return 1 ;;
 	esac
 }
 
@@ -198,6 +205,7 @@ meta() {
 	nghttp2) echo "nghttp2|MIT|https://github.com/nghttp2/nghttp2" ;;
 	libyaml) echo "libyaml|MIT|https://github.com/yaml/libyaml" ;;
 	picohttpparser) echo "picohttpparser|MIT|https://github.com/h2o/picohttpparser" ;;
+	*) die "no metadata for component $1" ;;
 	esac
 }
 
@@ -210,20 +218,23 @@ needs_version() {
 }
 
 jstr() {
-	printf '"%s"' "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+	str="$1"
+	printf '"%s"' "$(printf '%s' "$str" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
 }
 
 library() {
-	m="$(meta "$1")"
+	id="$1"
+	indent="$2"
+	m="$(meta "$id")" || exit 1
 	name="${m%%|*}"
 	rest="${m#*|}"
 	lic="${rest%%|*}"
 	url="${rest#*|}"
-	v="$(version_of "$1")" || v=""
-	if [ -z "$v" ] && needs_version "$1"; then
-		die "$1: linked, but version not determinable"
+	v="$(version_of "$id")" || v=""
+	if [ -z "$v" ] && needs_version "$id"; then
+		die "$id: linked, but version not determinable"
 	fi
-	printf '%s{"type": "library", "bom-ref": %s, "name": %s' "$2" "$(jstr "$1")" "$(jstr "$name")"
+	printf '%s{"type": "library", "bom-ref": %s, "name": %s' "$indent" "$(jstr "$id")" "$(jstr "$name")"
 	if [ -n "$v" ]; then
 		printf ', "version": %s, "purl": %s' "$(jstr "$v")" "$(jstr "pkg:generic/$name@$v")"
 	else
@@ -231,7 +242,7 @@ library() {
 	fi
 	printf ', "licenses": [{"expression": %s}]' "$(jstr "$lic")"
 	printf ', "externalReferences": [{"type": "website", "url": %s}]' "$(jstr "$url")"
-	if [ "$1" = librist ] && grep -qx cjson-bundled "$WORK/comps"; then
+	if [ "$id" = librist ] && grep -qx cjson-bundled "$WORK/comps"; then
 		printf ', "components": [\n'
 		library cjson-bundled "        "
 		printf '\n      ]'

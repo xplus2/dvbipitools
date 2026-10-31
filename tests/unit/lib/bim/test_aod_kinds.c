@@ -223,7 +223,8 @@ static bim_aod_t *manual_aod(const bim_simple_t *s, int preserve, int kind, int 
   }
   a->maps[0].simple = s;
   a->maps[0].preserve = preserve;
-  a->maps[0].inst = a->maps[0].heap_inst = ids;
+  a->maps[0].inst = ids;
+  a->maps[0].heap_inst = ids;
   a->maps[0].ninst = 1;
   return a;
 }

@@ -38,6 +38,7 @@ assert_contains "$mpd" "<ServiceDescription" "manifest missing LL-DASH ServiceDe
 assert_contains "$mpd" "<Latency target=" "manifest missing Latency target"
 assert_contains "$mpd" "availabilityTimeOffset" "manifest missing availabilityTimeOffset"
 assert_contains "$mpd" "<Resync type=" "manifest missing Resync element"
+assert_contains "$mpd" 'inband="false" type="encoder" wallClockTime="' "manifest missing ProducerReferenceTime"
 
 assert_contains "$mpd" 'contentType="video"' "manifest missing video AdaptationSet"
 assert_contains "$mpd" 'contentType="audio"' "manifest missing audio AdaptationSet"

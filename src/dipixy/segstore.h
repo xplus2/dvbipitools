@@ -64,6 +64,19 @@ typedef enum { HLS_CHCFG_NONE, HLS_CHCFG_COUNT, HLS_CHCFG_DOLBY_2011, HLS_CHCFG_
 /* FMP4_AUDIO only: DASH audio rate and channel configuration. kept across pushes, dropped by hls_store_sync_at(). 0 ok, -1 on OOM */
 int hls_set_audio_params_at(hls_store_t *s, unsigned rate, hls_chcfg_t scheme, unsigned value);
 
+/* DASH video Representation. 0 fields: unknown. sap: startWithSAP */
+typedef struct {
+  unsigned width;
+  unsigned height;
+  unsigned rate_num;
+  unsigned rate_den;
+  int interlaced;
+  unsigned sap;
+} hls_video_info_t;
+
+/* kept across pushes, dropped by hls_store_sync_at(). 0 ok, -1 on OOM */
+int hls_set_video_info_at(hls_store_t *s, const hls_video_info_t *info);
+
 /* dst takes src's timeline: seq, media time, epoch, anchor, LL part target. segments and init data dropped, init_gen kept.
    src without snapshot: dst restarts empty. 0 ok, -1 on OOM */
 int hls_store_sync_at(hls_store_t *dst, const hls_store_t *src);
@@ -81,7 +94,8 @@ int hls_set_lcevc_pids(const capture_ctx_t *ctx, const pid_filter_t *filter, uns
 #define HLS_MAX_PARTS 32
 
 /* enables LL part tracking (LL-HLS on a TS store, LL-DASH chunking on a FMP4 store).
-   part_target: target part/chunk duration seconds, drives EXT-X-PART-INF/PART-HOLD-BACK (TS) or chunk cadence (FMP4). 2nd call updates part_target */
+   part_target: target part/chunk duration seconds, drives EXT-X-PART-INF/PART-HOLD-BACK (TS) or chunk cadence (FMP4). 2nd call updates part_target.
+   FMP4 store serves LL-HLS + LL-DASH: 1st sets cadence */
 void hls_llhls_enable(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, double part_target);
 
 /* records one part/chunk: bytes + duration + keyframe flag (independent).

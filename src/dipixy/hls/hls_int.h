@@ -17,10 +17,12 @@ typedef struct {
 
 /* index_ll.m3u8 fields, copied under store_lock. formatting runs unlocked */
 typedef struct {
+  seg_container_t container;
   int td;
   double part_target;
   uint32_t oldest_seq;
   uint32_t disc_seq; /* breaks no longer listed */
+  int init_gen; /* fmp4: EXT-X-MAP URI changes with each init segment */
   char lcevc[16]; /* ?lcevc= value for part/segment URIs, empty: default */
   int hb_ms;
   int seg_count;
@@ -58,7 +60,7 @@ typedef struct {
 } lcevc_master_snap_t;
 
 /* hls_serve.c */
-int parse_part_filename(const char *fn, uint32_t *seq, int *part);
+int parse_part_filename(const char *fn, seg_container_t container, uint32_t *seq, int *part);
 void snapshot_plain_playlist(const hls_snapshot_t *s, seg_container_t container, const lcevc_select_t *lcevc, plain_playlist_snap_t *snap);
 char *write_lcevc_arg(char *mp, const char *lcevc, char sep);
 size_t format_plain_playlist(const plain_playlist_snap_t *snap, char *m3u8, size_t cap);
@@ -66,7 +68,7 @@ void snapshot_lcevc_master(const hls_snapshot_t *s, lcevc_master_snap_t *snap);
 size_t format_lcevc_master_playlist(const lcevc_master_snap_t *snap, char *m3u8, size_t cap);
 
 /* hls_llhls.c */
-void snapshot_ll_playlist(const hls_snapshot_t *s, const lcevc_select_t *lcevc, ll_playlist_snap_t *snap);
+void snapshot_ll_playlist(const hls_snapshot_t *s, seg_container_t container, const lcevc_select_t *lcevc, ll_playlist_snap_t *snap);
 size_t format_ll_playlist(const ll_playlist_snap_t *snap, char *m3u8, size_t cap);
 
 typedef enum { HLS_RESOLVE_PLAYLIST, HLS_RESOLVE_INIT, HLS_RESOLVE_SEGMENT } hls_resolve_kind_t;
@@ -83,8 +85,8 @@ typedef struct {
 /* raw If-None-Match value vs bare etag: "*", or list of [W/]"etag". weak compare */
 int hls_inm_match(const char *inm, const char *etag);
 
-int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
-                const char *filename, const char *if_none_match, hls_resolve_t *r);
+int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
+  seg_container_t container, const char *filename, const char *if_none_match, hls_resolve_t *r);
 
 typedef struct {
   hls_resolve_kind_t kind;
@@ -96,7 +98,7 @@ typedef struct {
   size_t body_len;
 } hls_ll_resolve_t;
 
-int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
-                   const char *filename, const char *if_none_match, hls_ll_resolve_t *r);
+int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
+  const char *filename, const char *if_none_match, hls_ll_resolve_t *r);
 
 #endif

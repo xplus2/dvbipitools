@@ -41,24 +41,38 @@ void h3_tspush_acked(const h3_req_t *r, size_t n) {
   byte_ring_ack(&sub->h3_ring, n);
 }
 
-/* registers TS push stream, submits response. always 1 = dispatched (h3 has
-   no separate slot table, unlike h2) */
-int h3_tspush_dispatch(h3_conn_t *c, h3_req_t *r, int sub, int rawaudio) {
-  const char *ctype = rawaudio ? "audio/mpeg" : "video/mp2t";
+static void h3_submit_tspush_response(h3_conn_t *c, h3_req_t *r, const char *ctype) {
   nghttp3_nv nva[] = {
       {(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP3_NV_FLAG_NONE},
       {(uint8_t *)"content-type", (uint8_t *)ctype, 12, strlen(ctype), NGHTTP3_NV_FLAG_NONE},
   };
   nghttp3_data_reader dr;
+  dr.read_data = h3_tspush_read_cb;
+  nghttp3_conn_submit_response(c->h3conn, r->stream_id, nva, 2, &dr);
+}
+
+/* registers TS push stream, submits response. always 1 = dispatched (h3 has
+   no separate slot table, unlike h2) */
+int h3_tspush_dispatch(h3_conn_t *c, h3_req_t *r, int sub, int rawaudio) {
   g_ts_subs[sub].h3c = c;
   g_ts_subs[sub].h3_sid = r->stream_id;
   ts_push_set_reactor_tid(sub, t_reactor_tid);
   r->tspush_sub_idx = sub;
-  dr.read_data = h3_tspush_read_cb;
   nghttp3_conn_set_stream_user_data(c->h3conn, r->stream_id, r);
-  nghttp3_conn_submit_response(c->h3conn, r->stream_id, nva, 2, &dr);
+  if (!rawaudio) h3_submit_tspush_response(c, r, "video/mp2t");
   atomic_store_explicit(&g_ts_subs[sub].ready, 1, memory_order_release);
   return 1;
+}
+
+void h3_tspush_send_head(int sub_idx, const char *content_type) {
+  const ts_sub_t *sub = &g_ts_subs[sub_idx];
+  h3_conn_t *c = sub->h3c;
+  h3_req_t *r;
+  if (!c || c->done) return;
+  r = find_req(c, sub->h3_sid);
+  if (!r) return;
+  h3_submit_tspush_response(c, r, content_type);
+  h3_push_resume(c, sub->h3_sid);
 }
 
 void h3_tspush_wake(int sub_idx) {

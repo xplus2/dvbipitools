@@ -637,6 +637,7 @@ static const disabled_case_t disabled_cases[] = {
     {ROUTE_RIST, ROUTE_FMT_HLS, offsetof(config_t, no_hls)},
     {ROUTE_RIST, ROUTE_FMT_HLS_FMP4, offsetof(config_t, no_hls)},
     {ROUTE_RIST, ROUTE_FMT_LLHLS, offsetof(config_t, no_llhls)},
+    {ROUTE_RIST, ROUTE_FMT_LLHLS_FMP4, offsetof(config_t, no_llhls)},
     {ROUTE_RIST, ROUTE_FMT_DASH, offsetof(config_t, no_dash)},
     {ROUTE_RIST, ROUTE_FMT_LLDASH, offsetof(config_t, no_lldash)},
     {ROUTE_RIST, ROUTE_FMT_RAWAUDIO, offsetof(config_t, no_rawaudio)},
@@ -662,12 +663,16 @@ typedef struct {
   const char *path;
   size_t off_a;
   size_t off_b;
+  size_t off_c; /* SHARED_NO_THIRD: two owners only */
 } shared_case_t;
 
+#define SHARED_NO_THIRD ((size_t)-1)
+
 static const shared_case_t shared_cases[] = {
-    {"/list/1/item/1/seg00001.ts", offsetof(config_t, no_hls), offsetof(config_t, no_llhls)},
-    {"/list/1/item/1/dseg1000.m4s", offsetof(config_t, no_dash), offsetof(config_t, no_lldash)},
-    {"/list/1/item/1/init.mp4", offsetof(config_t, no_hls), offsetof(config_t, no_dash)},
+    {"/list/1/item/1/seg00001.ts", offsetof(config_t, no_hls), offsetof(config_t, no_llhls), SHARED_NO_THIRD},
+    {"/list/1/item/1/seg00001.m4s", offsetof(config_t, no_hls), offsetof(config_t, no_llhls), SHARED_NO_THIRD},
+    {"/list/1/item/1/dseg1000.m4s", offsetof(config_t, no_dash), offsetof(config_t, no_lldash), SHARED_NO_THIRD},
+    {"/list/1/item/1/init.mp4", offsetof(config_t, no_hls), offsetof(config_t, no_dash), offsetof(config_t, no_llhls)},
 };
 
 START_TEST(shared_segment_names_disabled_only_when_all_owners_are) {
@@ -682,6 +687,10 @@ START_TEST(shared_segment_names_disabled_only_when_all_owners_are) {
   *(int *)((char *)&cfg + sc->off_a) = 1;
   ck_assert_int_eq(route_disabled(&rt), 0);
   *(int *)((char *)&cfg + sc->off_b) = 1;
+  if (sc->off_c != SHARED_NO_THIRD) {
+    ck_assert_int_eq(route_disabled(&rt), 0);
+    *(int *)((char *)&cfg + sc->off_c) = 1;
+  }
   ck_assert_int_eq(route_disabled(&rt), 1);
   *(int *)((char *)&cfg + sc->off_a) = 0;
   ck_assert_int_eq(route_disabled(&rt), 0);

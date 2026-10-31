@@ -177,6 +177,6 @@ void job_log_fragments(const job_t *j) {
   if (!j->cfg->verbose) return;
   for (unsigned code = 0; code < FRAG_CODES; code++) {
     const char *name = j->nfrag[code] ? bim_tvafrag_name(code) : NULL;
-    if (name) log_code("BD700172", "%s: %zu", name, j->nfrag[code]);
+    if (name) log_code("BD700172", "fragment type %s: %zu read", name, j->nfrag[code]);
   }
 }

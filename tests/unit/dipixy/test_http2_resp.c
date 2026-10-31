@@ -274,7 +274,7 @@ START_TEST(llhls_waiter_is_answered_when_its_deadline_passes) {
   capture_ctx_t *ctx = open_cold_ctx();
   pid_filter_t filter = {0};
   lcevc_select_t lcevc = {0};
-  llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 0, -1};
+  llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 0, -1, SEG_CONTAINER_TS};
 
   rig_open(&r);
   sid = open_stream(&r);
@@ -292,7 +292,7 @@ START_TEST(llhls_waiter_table_fills_and_releases_by_stream_and_connection) {
   capture_ctx_t *ctx = open_cold_ctx();
   pid_filter_t filter = {0};
   lcevc_select_t lcevc = {0};
-  llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 60000, -1};
+  llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 60000, -1, SEG_CONTAINER_TS};
 
   rig_open(&r);
   for (int i = 0; i < LLHLS_WAITERS_MAX; i++) ck_assert_int_eq(h2_llhls_try_park(r.h2, r.c, 1 + 2 * i, &req), 1);

@@ -22,6 +22,9 @@ static unsigned g_audio_rate;
 static hls_chcfg_t g_audio_scheme;
 static unsigned g_audio_value;
 static const hls_store_t *g_audio_target;
+static hls_video_info_t g_video_info;
+static const hls_store_t *g_video_info_target;
+static int g_video_info_count;
 static const hls_store_t *g_pushed[8];
 static int g_pushed_n;
 static int g_ntracks;
@@ -53,6 +56,9 @@ static void stubs_reset(void) {
   g_audio_scheme = (hls_chcfg_t)-1;
   g_audio_value = 0;
   g_audio_target = NULL;
+  memset(&g_video_info, 0, sizeof g_video_info);
+  g_video_info_target = NULL;
+  g_video_info_count = 0;
   g_pushed_n = 0;
   g_ntracks = 0;
   g_init_result = 0;
@@ -93,6 +99,12 @@ int hls_set_audio_params_at(hls_store_t *s, unsigned rate, hls_chcfg_t scheme, u
   g_audio_value = value;
   g_audio_rate = rate;
   g_audio_target = s;
+  return 0;
+}
+int hls_set_video_info_at(hls_store_t *s, const hls_video_info_t *info) {
+  g_video_info = *info;
+  g_video_info_target = s;
+  g_video_info_count++;
   return 0;
 }
 int hls_store_sync_at(hls_store_t *dst, const hls_store_t *src) {
@@ -217,6 +229,36 @@ START_TEST(h264_non_idr_nal_is_not_keyframe) {
 }
 END_TEST
 
+START_TEST(hevc_leading_pictures_are_noted) {
+  static const unsigned char radl[] = {0x0C, 0x01, 0xAA};
+  static const unsigned char rasl[] = {0x10, 0x01, 0xAA};
+  unsigned char buf[16];
+  size_t n;
+  hls_seg_ctx_t *s = new_ctx(CODEC_HEVC);
+  wrap_unit(buf, &n, radl, sizeof radl);
+  detect_keyframe(s, buf, n);
+  ck_assert_uint_eq(s->video.es.leading, ESC_LEADING_RADL);
+  wrap_unit(buf, &n, rasl, sizeof rasl);
+  detect_keyframe(s, buf, n);
+  ck_assert_uint_eq(s->video.es.leading, ESC_LEADING_RADL | ESC_LEADING_RASL);
+  free(s->video.nal_scratch);
+  free(s);
+}
+END_TEST
+
+START_TEST(vvc_leading_pictures_are_noted) {
+  static const unsigned char rasl[] = {0x00, 0x19, 0xAA};
+  unsigned char buf[16];
+  size_t n;
+  hls_seg_ctx_t *s = new_ctx(CODEC_VVC);
+  wrap_unit(buf, &n, rasl, sizeof rasl);
+  detect_keyframe(s, buf, n);
+  ck_assert_uint_eq(s->video.es.leading, ESC_LEADING_RASL);
+  free(s->video.nal_scratch);
+  free(s);
+}
+END_TEST
+
 START_TEST(hevc_irap_nal_is_keyframe) {
   static const unsigned char idr[] = {0x26, 0x01, 0xAA, 0xBB};
   unsigned char buf[16];
@@ -333,6 +375,8 @@ START_TEST(build_video_track_cfg_hevc) {
   ck_assert_uint_eq(trk.width, 1);
   ck_assert_uint_eq(trk.height, 1);
   ck_assert(trk.cpriv_len > 0);
+  ck_assert_int_eq(cpriv[1], 0xAA); /* general_profile_space, tier, profile_idc */
+  ck_assert_int_eq(cpriv[12], 0xAA); /* general_level_idc */
   free(s);
 }
 END_TEST
@@ -528,6 +572,82 @@ START_TEST(access_units_open_fragments_and_close_segments) {
   ck_assert_int_eq(g_deliver_count, 2); /* init + fragment */
   ck_assert_int_eq(g_segment_count, 1);
   ck_assert_int_eq(g_part_count, 0);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(frame_rate_is_measured_from_the_first_segment) {
+  hls_seg_ctx_t *s = ready_ctx();
+  set_au(s, 32);
+  fmp4_feed_au(s, 1, 0, 0, 1, 0, 0.0);
+  ck_assert_ptr_eq(g_video_info_target, (hls_store_t *)&g_store_dummy);
+  ck_assert_uint_eq(g_video_info.width, 16);
+  ck_assert_uint_eq(g_video_info.height, 16);
+  ck_assert_uint_eq(g_video_info.rate_num, 0);
+  ck_assert_int_eq(g_video_info.interlaced, 0);
+  ck_assert_uint_eq(g_video_info.sap, 1);
+  for (int i = 1; i < 10; i++) fmp4_feed_au(s, 0, i * 40 * 90, 0, 0, 0, 0.0);
+  fmp4_feed_au(s, 1, 400 * 90, 0, 1, 1, 0.4);
+  fmp4_feed_au(s, 0, 440 * 90, 0, 0, 0, 0.0);
+  ck_assert_uint_eq(g_video_info.rate_num, 25);
+  ck_assert_uint_eq(g_video_info.rate_den, 1);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(unusual_measured_frame_rate_stays_unknown) {
+  hls_seg_ctx_t *s = ready_ctx();
+  set_au(s, 32);
+  fmp4_feed_au(s, 1, 0, 0, 1, 0, 0.0);
+  for (int i = 1; i < 10; i++) fmp4_feed_au(s, 0, i * 37 * 90, 0, 0, 0, 0.0);
+  fmp4_feed_au(s, 1, 370 * 90, 0, 1, 1, 0.37);
+  fmp4_feed_au(s, 0, 407 * 90, 0, 0, 0, 0.0);
+  ck_assert_uint_eq(g_video_info.rate_num, 0);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(interlaced_h264_rate_is_half_the_field_rate) {
+  /* frame_mbs_only 0, VUI timing: tick 1, time_scale 50, not fixed */
+  static const unsigned char sps[] = {0x67, 0x42, 0x00, 0x00, 0xFB, 0x08, 0x40, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x0C, 0x80};
+  hls_seg_ctx_t *s = ready_ctx();
+  memcpy(s->video.es.sps, sps, sizeof sps);
+  s->video.es.spslen = sizeof sps;
+  try_create_fmux(s);
+  ck_assert_int_eq(g_video_info.interlaced, 1);
+  ck_assert_uint_eq(g_video_info.rate_num, 25);
+  ck_assert_uint_eq(g_video_info.rate_den, 1);
+  ck_assert_uint_eq(g_video_info.height, 32);
+  ck_assert_int_eq(s->video.measure_rate, 0);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(interlaced_h264_without_timing_is_not_measured) {
+  static const unsigned char sps[] = {0x67, 0x42, 0x00, 0x00, 0xFB, 0x00};
+  hls_seg_ctx_t *s = ready_ctx();
+  memcpy(s->video.es.sps, sps, sizeof sps);
+  s->video.es.spslen = sizeof sps;
+  try_create_fmux(s);
+  ck_assert_int_eq(g_video_info.interlaced, 1);
+  ck_assert_uint_eq(g_video_info.rate_num, 0);
+  ck_assert_int_eq(s->video.measure_rate, 0);
+  free_ctx(s);
+}
+END_TEST
+
+START_TEST(leading_pictures_raise_start_with_sap) {
+  hls_seg_ctx_t *s = ready_ctx();
+  fmp4_note_leading(s);
+  ck_assert_int_eq(g_video_info_count, 0); /* no mux yet */
+  try_create_fmux(s);
+  ck_assert_uint_eq(g_video_info.sap, 1);
+  s->video.es.leading = ESC_LEADING_RADL;
+  fmp4_note_leading(s);
+  ck_assert_uint_eq(g_video_info.sap, 2);
+  s->video.es.leading = ESC_LEADING_RADL | ESC_LEADING_RASL;
+  fmp4_note_leading(s);
+  ck_assert_uint_eq(g_video_info.sap, 3);
   free_ctx(s);
 }
 END_TEST
@@ -1115,6 +1235,13 @@ static Suite *segment_video_suite(void) {
   tcase_add_test(tc, h264_idr_nal_is_keyframe);
   tcase_add_test(tc, h264_non_idr_nal_is_not_keyframe);
   tcase_add_test(tc, hevc_irap_nal_is_keyframe);
+  tcase_add_test(tc, hevc_leading_pictures_are_noted);
+  tcase_add_test(tc, vvc_leading_pictures_are_noted);
+  tcase_add_test(tc, frame_rate_is_measured_from_the_first_segment);
+  tcase_add_test(tc, unusual_measured_frame_rate_stays_unknown);
+  tcase_add_test(tc, interlaced_h264_rate_is_half_the_field_rate);
+  tcase_add_test(tc, interlaced_h264_without_timing_is_not_measured);
+  tcase_add_test(tc, leading_pictures_raise_start_with_sap);
   tcase_add_test(tc, hevc_non_irap_nal_is_not_keyframe);
   tcase_add_test(tc, vvc_irap_nal_is_keyframe);
   tcase_add_test(tc, vvc_non_irap_nal_is_not_keyframe);

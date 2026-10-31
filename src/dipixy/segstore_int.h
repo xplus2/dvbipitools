@@ -22,7 +22,7 @@ typedef struct {
   char key[TIME_EP_URL_MAX]; /* variant selector, "" if unkeyed */
 } cached_text_t;
 
-#define MPD_LL_VARIANTS 4
+#define MPD_VARIANTS 4
 
 typedef struct {
   size_t offset[HLS_MAX_PARTS]; /* offsets index owning data: hls_seg_t.data or store's live_data */
@@ -70,6 +70,7 @@ typedef struct hls_snapshot {
   char vcodec_str[32];
   char acodec_str[32];
   unsigned audio_rate; /* FMP4_AUDIO store only: DASH audioSamplingRate, exact */
+  hls_video_info_t video;
   hls_chcfg_t audio_chcfg;
   unsigned audio_chcfg_value;
 
@@ -85,8 +86,8 @@ typedef struct hls_snapshot {
   _Atomic(cached_text_t *) cache_plain;
   _Atomic(cached_text_t *) cache_ll;
   _Atomic(cached_text_t *) cache_lcevc[2];
-  _Atomic(cached_text_t *) cache_mpd;
-  _Atomic(cached_text_t *) cache_mpd_ll[MPD_LL_VARIANTS]; /* per UTCTiming url */
+  _Atomic(cached_text_t *) cache_mpd[MPD_VARIANTS]; /* per UTCTiming url */
+  _Atomic(cached_text_t *) cache_mpd_ll[MPD_VARIANTS];
 } hls_snapshot_t;
 
 #define HLS_SNAP_RETIRE_DEPTH 4

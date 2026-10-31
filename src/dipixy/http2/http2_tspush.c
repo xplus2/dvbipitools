@@ -29,8 +29,7 @@ static ssize_t tspush_read_cb(nghttp2_session *ng, int32_t stream_id, uint8_t *b
   return (ssize_t)n;
 }
 
-static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_push_slot_t *tcs, int rawaudio) {
-  const char *ctype = rawaudio ? "audio/mpeg" : "video/mp2t";
+static void h2_submit_tspush_response(h2_conn_t *conn, int32_t stream_id, h2_push_slot_t *tcs, const char *ctype) {
   nghttp2_nv nva[3] = {
       {(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP2_NV_FLAG_NONE},
       {(uint8_t *)"content-type", (uint8_t *)ctype, 12, strlen(ctype), NGHTTP2_NV_FLAG_NONE},
@@ -69,12 +68,20 @@ int h2_tspush_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id, int tspush
   h2_push_slot_t *tcs = &conn->tspush[ci];
   tcs->sub_idx = tspush_sub;
   tcs->sid = stream_id;
-  h2_submit_tspush_response(conn, stream_id, tcs, rawaudio);
+  if (!rawaudio) h2_submit_tspush_response(conn, stream_id, tcs, "video/mp2t");
   g_ts_subs[tspush_sub].h2c = c;
   g_ts_subs[tspush_sub].h2_slot = tcs;
   ts_push_set_reactor_tid(tspush_sub, t_reactor_tid);
   atomic_store_explicit(&g_ts_subs[tspush_sub].ready, 1, memory_order_release);
   return 1;
+}
+
+void h2_tspush_send_head(int sub_idx, const char *content_type) {
+  conn_t *c = g_ts_subs[sub_idx].h2c;
+  h2_push_slot_t *tcs = g_ts_subs[sub_idx].h2_slot;
+  if (!c || !tcs || !tcs->sid) return;
+  h2_submit_tspush_response(c->h2, tcs->sid, tcs, content_type);
+  h2_wake_stream(c, tcs->sid);
 }
 
 void h2_tspush_on_stream_close(h2_conn_t *conn, int32_t stream_id) {
