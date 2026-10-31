@@ -44,7 +44,8 @@ END_TEST
 START_TEST(parity_bits_do_not_change_the_key_schedule) {
   const des_vector_t *v = &vectors[_i];
   unsigned char flipped[DES_BLOCK_LEN];
-  des_key_t a, b;
+  des_key_t a;
+  des_key_t b;
   for (int i = 0; i < DES_BLOCK_LEN; i++) flipped[i] = v->key[i] ^ 1;
   des_set_key(&a, v->key);
   des_set_key(&b, flipped);
@@ -82,7 +83,9 @@ START_TEST(des3_decrypt_matches_known_answer) {
   static const unsigned char k3[DES_BLOCK_LEN] = {0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x01, 0x23};
   static const unsigned char pt[DES_BLOCK_LEN] = {0x54, 0x68, 0x65, 0x20, 0x71, 0x75, 0x66, 0x63};
   static const unsigned char ct[DES_BLOCK_LEN] = {0xA8, 0x26, 0xFD, 0x8C, 0xE5, 0x3B, 0x85, 0x5F};
-  des_key_t a, b, c;
+  des_key_t a;
+  des_key_t b;
+  des_key_t c;
   unsigned char out[DES_BLOCK_LEN];
   des_set_key(&a, k1);
   des_set_key(&b, k2);

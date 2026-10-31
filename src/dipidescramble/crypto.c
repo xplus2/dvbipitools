@@ -26,7 +26,9 @@ static const EVP_CIPHER *ecm_evp_cipher(crypto_ecm_cipher_t cipher, int cbc) {
 
 /* key: k1|k2 for EDE, k1|k2|k3 for EDE3. ct/out may alias */
 static int ecm_des3_decrypt(crypto_ecm_cipher_t cipher, int cbc, const unsigned char *key, const unsigned char *iv, const unsigned char *ct, size_t ct_len, unsigned char *out) {
-  des_key_t k1, k2, k3;
+  des_key_t k1;
+  des_key_t k2;
+  des_key_t k3;
   unsigned char prev[DES_BLOCK_LEN];
   if (ct_len == 0 || ct_len % DES_BLOCK_LEN != 0) return -1;
   des_set_key(&k1, key);

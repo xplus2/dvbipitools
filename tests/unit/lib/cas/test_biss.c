@@ -128,7 +128,10 @@ END_TEST
 
 START_TEST(biss1_esw_round_trips_for_each_id_kind) {
   const biss1_vector_t *v = &biss1_vectors[_i];
-  unsigned char id[BISS1_ID_LEN], cw[BISS1_KEY_LEN], esw[BISS1_ESW_LEN], back[BISS1_KEY_LEN];
+  unsigned char id[BISS1_ID_LEN];
+  unsigned char cw[BISS1_KEY_LEN];
+  unsigned char esw[BISS1_ESW_LEN];
+  unsigned char back[BISS1_KEY_LEN];
   ck_assert_int_eq(biss1_parse_id(v->id, id), 0);
   ck_assert_int_eq(biss1_parse_sw(v->sw, cw), 0);
   ck_assert_int_eq(biss1_esw_encrypt(id, cw, v->buried, esw), 0);
@@ -138,7 +141,10 @@ START_TEST(biss1_esw_round_trips_for_each_id_kind) {
 END_TEST
 
 START_TEST(biss1_esw_encrypt_fills_outer_bits_randomly) {
-  unsigned char id[BISS1_ID_LEN], cw[BISS1_KEY_LEN], a[BISS1_ESW_LEN], b[BISS1_ESW_LEN];
+  unsigned char id[BISS1_ID_LEN];
+  unsigned char cw[BISS1_KEY_LEN];
+  unsigned char a[BISS1_ESW_LEN];
+  unsigned char b[BISS1_ESW_LEN];
   ck_assert_int_eq(biss1_parse_id("FB5F9C585DD359", id), 0);
   ck_assert_int_eq(biss1_parse_sw("6651DC93B1FC", cw), 0);
   ck_assert_int_eq(biss1_esw_encrypt(id, cw, 0, a), 0);
@@ -148,7 +154,8 @@ START_TEST(biss1_esw_encrypt_fills_outer_bits_randomly) {
 END_TEST
 
 START_TEST(biss1_esw_rejects_null_args) {
-  unsigned char id[BISS1_ID_LEN] = {0}, buf[BISS1_KEY_LEN] = {0};
+  unsigned char id[BISS1_ID_LEN] = {0};
+  unsigned char buf[BISS1_KEY_LEN] = {0};
   ck_assert_int_eq(biss1_esw_decrypt(NULL, buf, 0, buf), -1);
   ck_assert_int_eq(biss1_esw_decrypt(id, NULL, 0, buf), -1);
   ck_assert_int_eq(biss1_esw_decrypt(id, buf, 0, NULL), -1);

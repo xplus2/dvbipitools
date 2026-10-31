@@ -93,7 +93,8 @@ static inline uint32_t ks_lookup(const uint32_t t[7][16], uint32_t half) {
 void des_set_key(des_key_t *ks, const unsigned char key[DES_BLOCK_LEN]) {
   uint64_t x = 0;
   uint64_t t;
-  uint32_t c, d;
+  uint32_t c;
+  uint32_t d;
   for (int i = DES_BLOCK_LEN - 1; i >= 0; i--) x = (x << 8) | key[i];
   /* PC-1 8x8 bit transpose, rows reversed */
   t = (x ^ (x >> 7)) & 0x00AA00AA00AA00AAULL;
@@ -106,7 +107,8 @@ void des_set_key(des_key_t *ks, const unsigned char key[DES_BLOCK_LEN]) {
   d = (uint32_t)((x >> 8) & 0xFF) << 20 | (uint32_t)((x >> 16) & 0xFF) << 12 | (uint32_t)((x >> 24) & 0xFF) << 4 | (uint32_t)((x >> 32) & 0x0F);
   for (int i = 0; i < 16; i++) {
     unsigned s = 1 + ((0x7EFCU >> i) & 1);
-    uint32_t wc, wd;
+    uint32_t wc;
+    uint32_t wd;
     c = ((c << s) | (c >> (28 - s))) & 0x0FFFFFFF;
     d = ((d << s) | (d >> (28 - s))) & 0x0FFFFFFF;
     wc = ks_lookup(des_ks_c, c);
@@ -119,7 +121,9 @@ void des_set_key(des_key_t *ks, const unsigned char key[DES_BLOCK_LEN]) {
 static inline uint32_t rol32(uint32_t v, unsigned n) { return (v << n) | (v >> (32 - n)); }
 
 static inline void des_ip(uint32_t *lp, uint32_t *rp) {
-  uint32_t l = *lp, r = *rp, t;
+  uint32_t l = *lp;
+  uint32_t r = *rp;
+  uint32_t t;
   t = ((l >> 4) ^ r) & 0x0F0F0F0F;
   r ^= t;
   l ^= t << 4;
@@ -140,7 +144,9 @@ static inline void des_ip(uint32_t *lp, uint32_t *rp) {
 }
 
 static inline void des_fp(uint32_t *lp, uint32_t *rp) {
-  uint32_t l = rol32(*lp, 31), r = *rp, t;
+  uint32_t l = rol32(*lp, 31);
+  uint32_t r = *rp;
+  uint32_t t;
   t = (l ^ r) & 0xAAAAAAAA;
   l ^= t;
   r = rol32(r ^ t, 31);
@@ -169,7 +175,8 @@ static inline uint32_t des_f(uint32_t r, uint32_t k0, uint32_t k1) {
 
 /* FP/IP cancel between EDE stages: output feeds next stage */
 static inline void des_rounds(const des_key_t *ks, uint32_t *lp, uint32_t *rp, int decrypt) {
-  uint32_t l = *lp, r = *rp;
+  uint32_t l = *lp;
+  uint32_t r = *rp;
   for (int i = 0; i < 8; i++) {
     int a = decrypt ? 30 - 4 * i : 4 * i;
     int b = decrypt ? 28 - 4 * i : 4 * i + 2;
@@ -181,7 +188,8 @@ static inline void des_rounds(const des_key_t *ks, uint32_t *lp, uint32_t *rp, i
 }
 
 static void des_crypt(const des_key_t *ks, const unsigned char in[DES_BLOCK_LEN], unsigned char out[DES_BLOCK_LEN], int decrypt) {
-  uint32_t l = be32_get(in), r = be32_get(in + 4);
+  uint32_t l = be32_get(in);
+  uint32_t r = be32_get(in + 4);
   des_ip(&l, &r);
   des_rounds(ks, &l, &r, decrypt);
   des_fp(&l, &r);
@@ -194,7 +202,8 @@ void des_encrypt(const des_key_t *ks, const unsigned char in[DES_BLOCK_LEN], uns
 void des_decrypt(const des_key_t *ks, const unsigned char in[DES_BLOCK_LEN], unsigned char out[DES_BLOCK_LEN]) { des_crypt(ks, in, out, 1); }
 
 void des3_decrypt(const des_key_t *k1, const des_key_t *k2, const des_key_t *k3, const unsigned char in[DES_BLOCK_LEN], unsigned char out[DES_BLOCK_LEN]) {
-  uint32_t l = be32_get(in), r = be32_get(in + 4);
+  uint32_t l = be32_get(in);
+  uint32_t r = be32_get(in + 4);
   des_ip(&l, &r);
   des_rounds(k3, &l, &r, 1);
   des_rounds(k2, &l, &r, 0);
