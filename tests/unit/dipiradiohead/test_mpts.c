@@ -15,6 +15,7 @@
 #include "lib/sys/ioutil.h"
 #include "lib/sys/signal.h"
 
+#include "dipiradiohead/input/source/priv.h"
 #include "dipiradiohead/radiohead/priv.h"
 #include "input/http_fixture.h"
 
@@ -370,6 +371,30 @@ START_TEST(framing_failure_marks_the_input_down_and_counts_the_error) {
 }
 END_TEST
 
+START_TEST(silent_unready_slot_is_marked_down_after_the_stall_timeout) {
+  static unsigned char body[100];
+  rig_t *r = calloc(1, sizeof *r);
+  source_t *src;
+
+  if (!r) abort();
+  rig_init(r, NULL, body, sizeof body);
+  rig_connect(r);
+  src = inputset_source(r->is, 0);
+  ck_assert_int_eq(source_has_buffered(src), 0);
+  r->input_stats[0].up = 1;
+  r->tk.ready_mask = 0;
+  ck_assert_int_eq(process_input_slot(&r->tk, 0), 0);
+  ck_assert_ptr_nonnull(inputset_source(r->is, 0));
+  src->last_rx = mono_seconds() - SRC_STALL_TIMEOUT_S - 1.0;
+  ck_assert_int_eq(process_input_slot(&r->tk, 0), 0);
+  ck_assert_ptr_null(inputset_source(r->is, 0));
+  ck_assert_int_eq(r->input_stats[0].up, 0);
+  ck_assert_uint_eq(r->input_stats[0].errors_total[NET_ERR_TIMEOUT], 1u);
+  rig_free(r);
+  free(r);
+}
+END_TEST
+
 typedef struct {
   const char *name;
   int cas;
@@ -499,6 +524,7 @@ static Suite *mpts_suite(void) {
   tcase_add_test(tc, stalled_slot_reanchors_instead_of_bursting_the_backlog);
   tcase_add_test(tc, pacing_deadline_ahead_of_the_clock_defers_all_frames);
   tcase_add_test(tc, framing_failure_marks_the_input_down_and_counts_the_error);
+  tcase_add_test(tc, silent_unready_slot_is_marked_down_after_the_stall_timeout);
   tcase_add_loop_test(tc, run_mpts_sets_up_and_tears_down_for_each_configuration, 0, (int)(sizeof run_cases / sizeof run_cases[0]));
   tcase_add_loop_test(tc, run_mpts_loop_carries_a_live_input_until_stopped, 0, 2);
   suite_add_tcase(s, tc);

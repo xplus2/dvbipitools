@@ -1,3 +1,8 @@
+dvbipitools (2.6.1-1) unstable; urgency=low
+  * dipiradiohead
+    + fixed stall check for inputs that never really come up (multi-input mode)
+-- dvbipitools authors <unspecified@example.com>  tbd
+
 dvbipitools (2.6.0-1) unstable; urgency=low
   * libs
     + BiM (ISO/IEC 15938-1, 23001-1, TS 102 323, TS 102 822-3-2)

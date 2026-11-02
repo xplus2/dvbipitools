@@ -38,6 +38,10 @@ source_t *source_open(const char *uri, unsigned idx, const char *label, int inse
    reason_out: nullable, set only on -1 */
 int source_next_frame(source_t *s, source_frame_t *out, net_err_reason_t *reason_out);
 
+/* non-blocking stall check for callers skipping source_next_frame on idle fd.
+   1 (logged, NET_ERR_TIMEOUT) after 20s without wire data. reason_out: nullable */
+int source_stalled(const source_t *s, net_err_reason_t *reason_out);
+
 /* underlying socket fd, for caller's own poll(); valid for life of s */
 int source_fd(const source_t *s);
 

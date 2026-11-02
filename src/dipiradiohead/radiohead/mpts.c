@@ -67,12 +67,22 @@ static tspacketizer_t *program_new(const config_t *cfg, const inputset_t *is, ca
   return t;
 }
 
+static void slot_down(mpts_tick_t *tk, source_t *src, unsigned i, net_err_reason_t reason) {
+  input_metrics_note_read(tk->metrics_on ? &tk->input_stats[i] : NULL, -1, reason);
+  if (tk->metrics_on) tk->rm->framing_errors_total += source_take_resyncs(src) + (reason == NET_ERR_FORMAT);
+  if (tk->metrics_on) tk->input_stats[i].up = 0;
+  sync_input_bytes(tk, src, i);
+  inputset_mark_down(tk->is, i, tk->now_t);
+  mpts_set_program(tk->mpts, i, NULL);
+}
+
 /* processes one input slot for this tick: reads up to RADIOHEAD_MAX_FRAMES_PER_TICK frames,
    feeds packetizer, updates metrics. -1: fatal (tspacketizer_new() OOM), caller must abort */
 int process_input_slot(mpts_tick_t *tk, unsigned i) {
   source_t *src;
   int connected_now;
   int ready = 0;
+  net_err_reason_t reason = NET_ERR_OTHER;
 
   src = inputset_source(tk->is, i);
   connected_now = src != NULL;
@@ -86,22 +96,20 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
   if (!src) return 0;
   ready = (int)((tk->ready_mask >> i) & 1u);
   if (!ready) ready = source_has_buffered(src);
-  if (!ready) return 0;
+  if (!ready) {
+    /* silent peer, socket open: fd never readable */
+    if (source_stalled(src, &reason)) slot_down(tk, src, i, reason);
+    return 0;
+  }
 
   unsigned frames_this_visit = 0;
   while (frames_this_visit < RADIOHEAD_MAX_FRAMES_PER_TICK && tk->pace_deadline[i] <= tk->now + RADIOHEAD_PACE_TOLERANCE_S) {
     source_frame_t f;
     uint64_t pts;
-    net_err_reason_t reason = NET_ERR_OTHER;
     int r = source_next_frame(src, &f, &reason);
     if (r == 0) break;
     if (r < 0) {
-      input_metrics_note_read(tk->metrics_on ? &tk->input_stats[i] : NULL, -1, reason);
-      if (tk->metrics_on) tk->rm->framing_errors_total += source_take_resyncs(src) + (reason == NET_ERR_FORMAT);
-      if (tk->metrics_on) tk->input_stats[i].up = 0;
-      sync_input_bytes(tk, src, i);
-      inputset_mark_down(tk->is, i, tk->now_t);
-      mpts_set_program(tk->mpts, i, NULL);
+      slot_down(tk, src, i, reason);
       return 0;
     }
     frames_this_visit++;

@@ -12,6 +12,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../fx_net.h"
 #include "../run_helper.h"
 #include "lib/net/multicast.h"
 #include "dipixy/ts/capture/capture.h"
@@ -44,9 +45,11 @@ static size_t drain(capture_ctx_t *c, capture_reader_t *r, unsigned char *buf, s
 }
 
 START_TEST(dedup_shares_context_for_same_key) {
-  capture_ctx_t *a = capture_open(AF_INET, "239.8.8.1", NULL, 15801, NULL, 0, NULL, NULL, NULL, 0, 0);
-  capture_ctx_t *b = capture_open(AF_INET, "239.8.8.1", NULL, 15801, NULL, 0, NULL, NULL, NULL, 0, 0);
-  capture_ctx_t *c = capture_open(AF_INET, "239.8.8.1", NULL, 15802, NULL, 0, NULL, NULL, NULL, 0, 0);
+  unsigned port = free_udp_port();
+  unsigned port_b = free_udp_port();
+  capture_ctx_t *a = capture_open(AF_INET, "239.8.8.1", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
+  capture_ctx_t *b = capture_open(AF_INET, "239.8.8.1", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
+  capture_ctx_t *c = capture_open(AF_INET, "239.8.8.1", NULL, port_b, NULL, 0, NULL, NULL, NULL, 0, 0);
 
   ck_assert_ptr_nonnull(a);
   ck_assert_ptr_eq(a, b);
@@ -60,8 +63,9 @@ START_TEST(dedup_shares_context_for_same_key) {
 END_TEST
 
 START_TEST(two_readers_on_same_context_each_see_all_bytes) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.2", 15802, NULL, 1);
-  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.2", NULL, 15802, NULL, 0, NULL, NULL, NULL, 0, 0);
+  unsigned port = free_udp_port();
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.2", port, NULL, 1);
+  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.2", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
   capture_reader_t *r1, *r2;
   unsigned char dgram[188], out1[512], out2[512];
 
@@ -89,14 +93,16 @@ START_TEST(two_readers_on_same_context_each_see_all_bytes) {
 END_TEST
 
 START_TEST(plain_udp_two_ts_packets_round_trip) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.3", 15803, NULL, 1);
-  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.3", NULL, 15803, NULL, 0, NULL, NULL, NULL, 0, 0);
-  capture_reader_t *r = capture_reader_open(cap);
+  unsigned port = free_udp_port();
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.3", port, NULL, 1);
+  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.3", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
+  capture_reader_t *r;
   unsigned char dgram[376], out[512];
   size_t n;
 
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
+  r = capture_reader_open(cap);
   ck_assert_ptr_nonnull(r);
   make_ts_packet(dgram, 1);
   make_ts_packet(dgram + 188, 2);
@@ -114,14 +120,16 @@ START_TEST(plain_udp_two_ts_packets_round_trip) {
 END_TEST
 
 START_TEST(rtp_wrapped_packet_has_header_stripped) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.4", 15804, NULL, 1);
-  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.4", NULL, 15804, NULL, 1, NULL, NULL, NULL, 0, 0);
-  capture_reader_t *r = capture_reader_open(cap);
+  unsigned port = free_udp_port();
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.4", port, NULL, 1);
+  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.4", NULL, port, NULL, 1, NULL, NULL, NULL, 0, 0);
+  capture_reader_t *r;
   unsigned char dgram[12 + 188], ts[188], out[512];
   size_t n;
 
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
+  r = capture_reader_open(cap);
   ck_assert_ptr_nonnull(r);
   make_rtp_header(dgram);
   make_ts_packet(ts, 7);
@@ -139,14 +147,16 @@ START_TEST(rtp_wrapped_packet_has_header_stripped) {
 END_TEST
 
 START_TEST(non_rtp_payload_dropped_when_rtp_expected) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.5", 15805, NULL, 1);
-  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.5", NULL, 15805, NULL, 1, NULL, NULL, NULL, 0, 0);
-  capture_reader_t *r = capture_reader_open(cap);
+  unsigned port = free_udp_port();
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.5", port, NULL, 1);
+  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.5", NULL, port, NULL, 1, NULL, NULL, NULL, 0, 0);
+  capture_reader_t *r;
   unsigned char junk[20], out[512];
   size_t n;
 
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
+  r = capture_reader_open(cap);
   ck_assert_ptr_nonnull(r);
   memset(junk, 0x00, sizeof junk); /* version bits 0, not RTP v2 */
   ck_assert_int_eq(mcast_send(send, junk, sizeof junk), (int)sizeof junk);
@@ -266,7 +276,8 @@ static void run_drain_for(capture_ctx_t *cap, drain_thread_ctx_t *d, int polls) 
 static void run_drain_until(capture_ctx_t *cap, drain_thread_ctx_t *d) { run_drain_for(cap, d, 60); }
 
 START_TEST(ret_wired_capture_delivers_plain_packet) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.6", 15806, NULL, 1);
+  unsigned port = free_udp_port();
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.6", port, NULL, 1);
   sds_ret_t ret;
   capture_ctx_t *cap;
   unsigned char dgram[12 + 188], ts[188];
@@ -277,7 +288,7 @@ START_TEST(ret_wired_capture_delivers_plain_packet) {
   ret.port = 15906; /* UDP connect() succeeds with no listener; NACKs just go nowhere */
   ret.rtx_pt = 99;
 
-  cap = capture_open(AF_INET, "239.8.8.6", NULL, 15806, NULL, 1, &ret, NULL, NULL, 0, 0);
+  cap = capture_open(AF_INET, "239.8.8.6", NULL, port, NULL, 1, &ret, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
 
@@ -297,7 +308,8 @@ START_TEST(ret_wired_capture_delivers_plain_packet) {
 END_TEST
 
 START_TEST(fcc_wired_capture_delivers_plain_multicast_after_cutover) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.7", 15807, NULL, 1);
+  unsigned port = free_udp_port();
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.7", port, NULL, 1);
   sds_fcc_t fcc;
   capture_ctx_t *cap;
   unsigned char dgram[12 + 188], ts[188];
@@ -308,7 +320,7 @@ START_TEST(fcc_wired_capture_delivers_plain_multicast_after_cutover) {
   fcc.port = 15907; /* no real FCC server: burst never arrives, queued multicast comes out after the burst wait */
   fcc.rtx_pt = 99;
 
-  cap = capture_open(AF_INET, "239.8.8.7", NULL, 15807, NULL, 1, NULL, &fcc, NULL, 0, 0);
+  cap = capture_open(AF_INET, "239.8.8.7", NULL, port, NULL, 1, NULL, &fcc, NULL, 0, 0);
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
 
@@ -366,8 +378,9 @@ START_TEST(stdin_source_is_shared_once_initialised) {
 END_TEST
 
 START_TEST(reader_that_falls_behind_loses_the_oldest_bytes) {
+  unsigned port = free_udp_port();
   enum { DGRAM = 1316, SENDS = 6 };
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.5", 15805, NULL, 1);
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.5", port, NULL, 1);
   capture_ctx_t *cap;
   capture_reader_t *r;
   unsigned char dgram[DGRAM];
@@ -375,7 +388,7 @@ START_TEST(reader_that_falls_behind_loses_the_oldest_bytes) {
   size_t n;
 
   capture_set_ring_cap(2 * DGRAM);
-  cap = capture_open(AF_INET, "239.8.8.5", NULL, 15805, NULL, 0, NULL, NULL, NULL, 0, 0);
+  cap = capture_open(AF_INET, "239.8.8.5", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
   r = capture_reader_open(cap);
@@ -404,15 +417,16 @@ START_TEST(reader_that_falls_behind_loses_the_oldest_bytes) {
 END_TEST
 
 START_TEST(datagram_larger_than_the_ring_keeps_only_its_tail) {
+  unsigned port = free_udp_port();
   enum { DGRAM = 1316, RING = 564 };
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.6", 15806, NULL, 1);
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.6", port, NULL, 1);
   capture_ctx_t *cap;
   capture_reader_t *r;
   unsigned char dgram[DGRAM];
   unsigned char out[2 * DGRAM];
 
   capture_set_ring_cap(RING);
-  cap = capture_open(AF_INET, "239.8.8.6", NULL, 15806, NULL, 0, NULL, NULL, NULL, 0, 0);
+  cap = capture_open(AF_INET, "239.8.8.6", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
   r = capture_reader_open(cap);
@@ -508,8 +522,9 @@ START_TEST(http_stream_reassembles_packets_split_across_reads) {
 END_TEST
 
 START_TEST(rtp_source_drain_unwraps_and_skips_non_rtp_datagrams) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.7", 15807, NULL, 1);
-  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.7", NULL, 15807, NULL, 1, NULL, NULL, NULL, 0, 0);
+  unsigned port = free_udp_port();
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.7", port, NULL, 1);
+  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.7", NULL, port, NULL, 1, NULL, NULL, NULL, 0, 0);
   unsigned char junk[188];
   unsigned char rtp[12 + 188];
   sink_count_t got;
@@ -555,19 +570,20 @@ START_TEST(async_open_unavailable_before_lifecycle_start) {
 END_TEST
 
 START_TEST(async_open_completes_wakes_and_dedups) {
+  unsigned port = free_udp_port();
   capture_open_job_t *job;
   capture_ctx_t *ctx;
   capture_ctx_t *again;
 
   capture_pump_set_thread_count(1);
   ck_assert_int_eq(capture_lifecycle_start(wake_cb), 0);
-  job = capture_open_async(7, AF_INET, "239.8.8.31", NULL, 15831, NULL, 0, NULL, NULL, NULL, 0, 0);
+  job = capture_open_async(7, AF_INET, "239.8.8.31", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(job);
   ck_assert(wait_job(job));
   ck_assert_int_eq(atomic_load(&g_woken_tid), 7);
   ctx = capture_open_job_take(job);
   ck_assert_ptr_nonnull(ctx);
-  again = capture_try_ref(AF_INET, "239.8.8.31", NULL, 15831, NULL);
+  again = capture_try_ref(AF_INET, "239.8.8.31", NULL, port, NULL);
   ck_assert_ptr_eq(ctx, again);
   ck_assert_int_eq(capture_active_count(), 1);
   capture_close(again);
@@ -578,11 +594,12 @@ START_TEST(async_open_completes_wakes_and_dedups) {
 END_TEST
 
 START_TEST(close_returns_without_waiting_for_pump_quiescence) {
+  unsigned port = free_udp_port();
   capture_ctx_t *ctx;
 
   capture_pump_set_thread_count(1);
   ck_assert_int_eq(capture_lifecycle_start(wake_cb), 0);
-  ctx = capture_open(AF_INET, "239.8.8.32", NULL, 15832, NULL, 0, NULL, NULL, NULL, 0, 0);
+  ctx = capture_open(AF_INET, "239.8.8.32", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
   capture_close(ctx); /* no pump thread runs: a blocking close never returns */
   ck_assert_int_eq(capture_active_count(), 0);
@@ -591,11 +608,12 @@ START_TEST(close_returns_without_waiting_for_pump_quiescence) {
 END_TEST
 
 START_TEST(cancelled_job_closes_its_result) {
+  unsigned port = free_udp_port();
   capture_open_job_t *job;
 
   capture_pump_set_thread_count(1);
   ck_assert_int_eq(capture_lifecycle_start(wake_cb), 0);
-  job = capture_open_async(0, AF_INET, "239.8.8.33", NULL, 15833, NULL, 0, NULL, NULL, NULL, 0, 0);
+  job = capture_open_async(0, AF_INET, "239.8.8.33", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(job);
   capture_open_job_cancel(job);
   for (int i = 0; i < 3000 && capture_active_count() > 0; i++) nanosleep(&(const struct timespec){0, 1000000L}, NULL);
@@ -673,7 +691,9 @@ START_TEST(async_open_cancelled_mid_flight_releases_the_opened_context) {
 END_TEST
 
 START_TEST(al_fec_repair_stream_that_cannot_open_is_dropped_but_capture_works) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.41", 15841, NULL, 1);
+  unsigned port = free_udp_port();
+  unsigned port_b = free_udp_port();
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.41", port, NULL, 1);
   sds_fec_t fec;
   capture_ctx_t *cap;
   capture_reader_t *r;
@@ -681,8 +701,8 @@ START_TEST(al_fec_repair_stream_that_cannot_open_is_dropped_but_capture_works) {
   unsigned char out[512];
   memset(&fec, 0, sizeof fec);
   snprintf(fec.addr, sizeof fec.addr, "not-a-group");
-  fec.port = 15842;
-  cap = capture_open(AF_INET, "239.8.8.41", NULL, 15841, NULL, 1, NULL, NULL, &fec, 5, 2);
+  fec.port = port_b;
+  cap = capture_open(AF_INET, "239.8.8.41", NULL, port, NULL, 1, NULL, NULL, &fec, 5, 2);
   ck_assert_ptr_nonnull(cap);
   r = capture_reader_open(cap);
   make_rtp_header(dgram);
@@ -696,7 +716,9 @@ START_TEST(al_fec_repair_stream_that_cannot_open_is_dropped_but_capture_works) {
 END_TEST
 
 START_TEST(al_fec_decoder_passes_in_order_source_packets) {
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.42", 15843, NULL, 1);
+  unsigned port = free_udp_port();
+  unsigned port_b = free_udp_port();
+  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.42", port, NULL, 1);
   sds_fec_t fec;
   capture_ctx_t *cap;
   capture_reader_t *r;
@@ -705,8 +727,8 @@ START_TEST(al_fec_decoder_passes_in_order_source_packets) {
   size_t total = 0;
   memset(&fec, 0, sizeof fec);
   snprintf(fec.addr, sizeof fec.addr, "239.8.8.42");
-  fec.port = 15845;
-  cap = capture_open(AF_INET, "239.8.8.42", NULL, 15843, NULL, 1, NULL, NULL, &fec, 5, 2);
+  fec.port = port_b;
+  cap = capture_open(AF_INET, "239.8.8.42", NULL, port, NULL, 1, NULL, NULL, &fec, 5, 2);
   ck_assert_ptr_nonnull(cap);
   r = capture_reader_open(cap);
   for (unsigned i = 0; i < 12; i++) {
