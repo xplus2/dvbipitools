@@ -376,12 +376,14 @@ Announce: one line per cycle. Listen: one line per segment received.
 ## Scope
 
 DVBSTP framing is generic; on announce, the structured (non-`.xml`) side understands Service
-Provider Discovery, Broadcast Discovery, Package Discovery, Regionalisation Discovery, and
-RMS-FUS Discovery (payloads 0x01/0x02/0x05/0x07/0x08), each a minimal producer subset of its
-ETSI TS 102 034 clause 5.2.13 type. Anything wider goes through `.xml` passthrough (see
-Announce, above). Listen (`-l`) remains Broadcast Discovery only.
+Provider Discovery, Broadcast Discovery, Package Discovery, BCG Discovery, Regionalisation
+Discovery, and RMS-FUS Discovery (payloads 0x01/0x02/0x05/0x06/0x07/0x08), each a minimal
+producer subset of its ETSI TS 102 034 clause 5.2.13 type. Anything wider goes through `.xml`
+passthrough (see Announce, above), which also carries CoD Discovery (`CoDDiscovery`, payload
+0x03) and Services From Other SPs (`ServicesFromOtherSP`, payload 0x04). Listen (`-l`) remains
+Broadcast Discovery only.
 
-It is not a general SD&S client: CoD and BCG-carriage records (BCG has its own tool, `dipibcg`)
+It is not a general SD&S client: BCG-carriage records (BCG has its own tool, `dipibcg`)
 remain out of scope. Announce always sends compression "none": gzip is spec-restricted to other payload ids,
 and BiM is not produced (listen decodes it).
 

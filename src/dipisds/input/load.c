@@ -42,6 +42,8 @@ int input_load(const char *path, input_t *in) {
     static const struct { const char *tag; unsigned payload_id; } root_tags[] = {
       {"BroadcastDiscovery", DVBSTP_PAYLOAD_BROADCAST_DISCOVERY},
       {"ServiceProviderDiscovery", DVBSTP_PAYLOAD_SP_DISCOVERY},
+      {"CoDDiscovery", DVBSTP_PAYLOAD_COD_DISCOVERY},
+      {"ServicesFromOtherSP", DVBSTP_PAYLOAD_OTHER_SP_SERVICES},
       {"PackageDiscovery", DVBSTP_PAYLOAD_PACKAGE_DISCOVERY},
       {"RegionalisationDiscovery", DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY},
       {"RegionalizationDiscovery", DVBSTP_PAYLOAD_REGIONALISATION_DISCOVERY}, /* XSD spelling */

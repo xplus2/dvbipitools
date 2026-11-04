@@ -414,6 +414,33 @@ START_TEST(xml_detects_rms_fus_discovery_root) {
 }
 END_TEST
 
+START_TEST(xml_detects_cod_discovery_root) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".xml", "<CoDDiscovery DomainName=\"d\" Version=\"4\"><Catalogue Id=\"0001\"/></CoDDiscovery>\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.kind, INPUT_RAW_XML);
+  ck_assert_uint_eq(in.raw_payload_id, DVBSTP_PAYLOAD_COD_DISCOVERY);
+  ck_assert_int_eq(in.raw_version, 4);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
+START_TEST(xml_detects_services_from_other_sp_root) {
+  char path[160];
+  input_t in;
+  write_temp_file(path, ".xml",
+    "<ServicesFromOtherSP DomainName=\"d\" Version=\"5\"><ReferencedServiceProvider Domain=\"o\"/></ServicesFromOtherSP>\n");
+  ck_assert_int_eq(input_load(path, &in), 0);
+  ck_assert_int_eq(in.kind, INPUT_RAW_XML);
+  ck_assert_uint_eq(in.raw_payload_id, DVBSTP_PAYLOAD_OTHER_SP_SERVICES);
+  ck_assert_int_eq(in.raw_version, 5);
+  input_free(&in);
+  unlink(path);
+}
+END_TEST
+
 START_TEST(xml_rejects_unknown_root_element) {
   char path[160];
   input_t in;
@@ -1044,6 +1071,8 @@ static Suite *input_suite(void) {
   tcase_add_test(tc, xml_detects_regionalisation_discovery_root);
   tcase_add_test(tc, xml_detects_regionalization_discovery_root);
   tcase_add_test(tc, xml_detects_rms_fus_discovery_root);
+  tcase_add_test(tc, xml_detects_cod_discovery_root);
+  tcase_add_test(tc, xml_detects_services_from_other_sp_root);
   tcase_add_test(tc, xml_rejects_unknown_root_element);
   tcase_add_test(tc, xml_rejects_oversize_file);
   tcase_add_test(tc, xml_accepts_file_at_size_limit);

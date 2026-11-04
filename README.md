@@ -140,7 +140,6 @@ On the other hand, full DVB-IPI goes way beyond the scope of this project.
 * The implemented AL-FEC is Annex E Layer 1, not Layer 2 (Raptor RFC 5053)
 * FCC in `dipifccret` is Annex I (RFC 6285 RAMS), not an Annex J Companion Stream
 * DVB Companion Screens and Streams
-* SD&S record type "CoD Discovery" and "Services From Other SPs"
 * RTSP command/control for CoD services and multicast join (§6)
 * DHCP-based IP address assignment for the HNED (§8)
 * FUSS, the mandatory File Upload System Stub (§9)

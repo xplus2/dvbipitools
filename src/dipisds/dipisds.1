@@ -31,7 +31,8 @@ The input format is inferred from the \fB\-i\f1 suffix:
 \fB.csv\f1 and \fB.m3u\f1 / \fB.m3u8\f1 use the same shapes as \fIdipiscan (1)\f1's output,
 \fB.xspf\f1 is XSPF with the DVB triplet carried in a dvbipitools extension element,
 and \fB.xml\f1 is a hand-authored or dipiscan-generated raw SD&S document that is sent
-through unparsed.
+through unparsed, under the payload id its root element implies (any ETSI TS 102 034 clause 5.2.13
+record up to 0x08, including CoD Discovery and Services From Other SPs).
 
 For the structured formats, each entry's URI is \fBrtp:// [ @ ] addr : port\f1 or \fBudp:// [ @ ] addr : port\f1.
 A missing TSId/OrigNetId defaults to 1, a missing ServiceId auto-increments from 1.
