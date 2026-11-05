@@ -21,7 +21,7 @@ void *__real_malloc(size_t size);
 static int g_fail_retire_alloc;
 
 void *__wrap_malloc(size_t size) {
-  if (g_fail_retire_alloc && size >= QSBR_MAX_WORKERS * sizeof(uint64_t) && size < QSBR_MAX_WORKERS * sizeof(uint64_t) + 64) {
+  if (g_fail_retire_alloc && size == sizeof(seg_retiree_t)) {
     g_fail_retire_alloc = 0;
     return NULL;
   }

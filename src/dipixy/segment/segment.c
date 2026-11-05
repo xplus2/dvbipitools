@@ -18,12 +18,6 @@ static qsbr_domain_t *g_seg_qsbr;
 static int g_max_variants;
 static _Atomic int64_t g_variant_warn_ms;
 
-typedef struct seg_retiree {
-  struct seg_retiree *next;
-  hls_seg_ctx_t *s;
-  uint64_t mark[QSBR_MAX_WORKERS];
-} seg_retiree_t;
-
 static seg_retiree_t *g_retired;
 static pthread_mutex_t g_retire_mtx = PTHREAD_MUTEX_INITIALIZER;
 

@@ -229,6 +229,12 @@ typedef struct hls_seg_ctx {
   _Atomic int mp4push_sub_head; /* -1 empty, else segment/mp4push.c chain */
 } hls_seg_ctx_t;
 
+typedef struct seg_retiree {
+  struct seg_retiree *next;
+  hls_seg_ctx_t *s;
+  uint64_t mark[QSBR_MAX_WORKERS];
+} seg_retiree_t;
+
 /* segment.c */
 int buf_reserve(unsigned char **buf, size_t *cap, size_t need);
 void hls_seg_registry_lock(void);

@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -259,7 +260,7 @@ START_TEST(growbuf_reserve_policy) {
   ck_assert_int_eq(growbuf_reserve(&buf, &cap, 0, 100, 0), -1);
   ck_assert_int_eq(growbuf_reserve(&buf, &cap, SIZE_MAX / 2, 100, 0), -1);
   ck_assert_int_eq(growbuf_reserve(&buf, &cap, 1, SIZE_MAX - 5, 0), -1);
-  ck_assert_int_eq(growbuf_reserve(&buf, &cap, (size_t)1 << 20, (size_t)1 << 40, 0), -1);
+  ck_assert_int_eq(growbuf_reserve(&buf, &cap, (size_t)1 << 20, SIZE_MAX / ((size_t)1 << 20) + 1, 0), -1);
   ck_assert_uint_eq(cap, 8u);
   free(buf);
   buf = NULL;
@@ -272,6 +273,8 @@ END_TEST
 
 START_TEST(digit_and_number_parsing) {
   unsigned long v = 0;
+  char max[32];
+  char over[32];
   ck_assert_int_eq(all_digits("123", 3), 1);
   ck_assert_int_eq(all_digits("12a", 3), 0);
   ck_assert_int_eq(all_digits("12a", 2), 1);
@@ -283,8 +286,18 @@ START_TEST(digit_and_number_parsing) {
   ck_assert_int_eq(parse_ulong("100", 100, &v), 0);
   ck_assert_uint_eq(v, 100u);
   ck_assert_int_eq(parse_ulong("99999999999999999999999", ULONG_MAX, &v), -1);
-  ck_assert_int_eq(parse_ulong("18446744073709551615", ULONG_MAX, &v), 0);
-  ck_assert_int_eq(parse_ulong("18446744073709551616", ULONG_MAX, &v), -1);
+  snprintf(max, sizeof max, "%lu", ULONG_MAX);
+  memcpy(over, max, sizeof over);
+  for (size_t i = strlen(over); i-- > 0;) {
+    if (over[i] != '9') {
+      over[i]++;
+      break;
+    }
+    over[i] = '0';
+  }
+  ck_assert_int_eq(parse_ulong(max, ULONG_MAX, &v), 0);
+  ck_assert_uint_eq(v, ULONG_MAX);
+  ck_assert_int_eq(parse_ulong(over, ULONG_MAX, &v), -1);
 }
 END_TEST
 

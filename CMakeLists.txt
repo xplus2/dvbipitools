@@ -16,6 +16,7 @@ option(DVBIPITOOLS_TESTS "build unit tests (requires 'check' via pkg-config)" OF
 option(DVBIPITOOLS_FUZZING "build AFL++ fuzz harnesses (configure with -DCMAKE_C_COMPILER=afl-clang-fast)" OFF)
 option(DVBIPITOOLS_TLS "build with HTTPS/TLS network transport support" ON)
 option(DVBIPITOOLS_CSA "build with DVB-CSA (CSA1/CSA2/BISS1) support" ON)
+option(DVBIPITOOLS_STRIP "strip Release binaries at link time" ON)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -25,7 +26,9 @@ add_compile_options(-Wall -Wextra -Werror)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     set(BUILD_TYPE "Release")
-    add_link_options(-s)
+    if (DVBIPITOOLS_STRIP)
+        add_link_options(-s)
+    endif ()
 else ()
     set(BUILD_TYPE "Debug")
 endif ()
@@ -188,7 +191,10 @@ link_libraries(atomic)
 
 set(BUILD_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
 
+# y2038: 64-bit time_t/off_t on 32-bit glibc, no-op elsewhere
 add_compile_definitions(
+    _FILE_OFFSET_BITS=64
+    _TIME_BITS=64
     BUILD_ARCH="${BUILD_ARCH}"
     BUILD_TYPE="${BUILD_TYPE}"
     BUILD_LINK="${BUILD_LINK}")

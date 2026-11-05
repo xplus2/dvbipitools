@@ -155,6 +155,18 @@ START_TEST(drain_without_errqueue_reports_none) {
 }
 END_TEST
 
+START_TEST(drain_after_peer_close_terminates) {
+  int sv[2];
+  struct zc_acc acc;
+  memset(&acc, 0, sizeof acc);
+  ck_assert_int_eq(socketpair(AF_UNIX, SOCK_STREAM, 0, sv), 0);
+  close(sv[1]);
+  ck_assert_int_eq(tls_zc_drain(sv[0], zc_cb, &acc), 0);
+  ck_assert_uint_eq(acc.calls, 0);
+  close(sv[0]);
+}
+END_TEST
+
 static Suite *tls_stub_suite(void) {
   Suite *s = suite_create("dipixy_tls_stub");
   TCase *tc = tcase_create("core");
@@ -166,6 +178,7 @@ static Suite *tls_stub_suite(void) {
   tcase_add_test(tc, zerocopy_send_delivers_and_completion_drains);
   tcase_add_test(tc, zerocopy_send_error_leaves_used_zc_clear);
   tcase_add_test(tc, drain_without_errqueue_reports_none);
+  tcase_add_test(tc, drain_after_peer_close_terminates);
   suite_add_tcase(s, tc);
   return s;
 }

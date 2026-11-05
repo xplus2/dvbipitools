@@ -55,11 +55,13 @@ ssize_t tls_net_send_zc(int fd, const void *buf, size_t len, int *used_zc) {
   return r;
 }
 
+#define TLS_ZC_DRAIN_MAX 256
+
 int tls_zc_drain(int fd, void (*cb)(uint32_t lo, uint32_t hi, void *arg), void *arg) {
   char cbuf[128];
   struct msghdr msg;
   int found = 0;
-  for (;;) {
+  for (int iter = 0; iter < TLS_ZC_DRAIN_MAX; iter++) { /* 0-byte reads loop forever at EOF */
     memset(&msg, 0, sizeof msg);
     msg.msg_control = cbuf;
     msg.msg_controllen = sizeof cbuf;

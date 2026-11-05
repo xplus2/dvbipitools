@@ -2333,7 +2333,7 @@ lib_net_multicast_SRCS := \
 	src/lib/sys/ioutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c
-lib_net_multicast_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=setsockopt -Wl,--wrap=getsockopt -Wl,--wrap=socket
+lib_net_multicast_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=setsockopt -Wl,--wrap=__setsockopt64 -Wl,--wrap=getsockopt -Wl,--wrap=__getsockopt64 -Wl,--wrap=socket
 
 UNIT_TESTS += dipifccret_dispatch
 dipifccret_dispatch_BIN := tests/unit/dipifccret/test_dispatch
@@ -3689,7 +3689,7 @@ dipisds_announce_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
-dipisds_announce_EXTRA_LDFLAGS := -pthread -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=sendto -Wl,--wrap=sendmsg
+dipisds_announce_EXTRA_LDFLAGS := -pthread -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=__sendmsg64
 
 dipimetrics_httpserver_BIN := tests/unit/dipimetrics/test_httpserver
 dipimetrics_httpserver_SRCS := \
@@ -3857,9 +3857,9 @@ dipibcg_announce_SRCS := \
 	src/lib/helper/xml_util/tree.c \
 	$(BIM_XSD_SRCS)
 ifeq ($(HAVE_ZLIB),yes)
-dipibcg_announce_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib) -pthread -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+dipibcg_announce_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib) -pthread -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=__sendmsg64 -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 else
-dipibcg_announce_EXTRA_LDFLAGS := -pthread -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+dipibcg_announce_EXTRA_LDFLAGS := -pthread -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=__sendmsg64 -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 endif
 
 dipibcg_announce_segment_BIN := tests/unit/dipibcg/test_announce_segment
@@ -8008,7 +8008,7 @@ lib_net_netconnect_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c
 
-lib_net_netconnect_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=fcntl -Wl,--wrap=connect -Wl,--wrap=getsockopt -Wl,--wrap=pthread_create
+lib_net_netconnect_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=fcntl -Wl,--wrap=__fcntl_time64 -Wl,--wrap=fcntl64 -Wl,--wrap=connect -Wl,--wrap=getsockopt -Wl,--wrap=__getsockopt64 -Wl,--wrap=pthread_create
 
 lib_net_announce_driver_BIN := tests/unit/lib/net/test_announce_driver
 lib_net_announce_driver_SRCS := \
@@ -9849,6 +9849,7 @@ dipixy_ts_push_queue_SRCS := \
 	src/lib/demux/pes.c \
 	src/lib/demux/rawaudio.c
 dipixy_ts_push_queue_EXTRA_CFLAGS := -DHAVE_HTTP2 -DHAVE_HTTP3
+dipixy_ts_push_queue_OBJDIR := build/tests/dipixy_ts_push_queue
 
 dipixy_pmtselect_BIN := tests/unit/dipixy/test_pmtselect
 dipixy_pmtselect_SRCS := \
@@ -10626,8 +10627,16 @@ lib_playlist_in_SRCS := \
 	src/lib/helper/xml_util/query.c
 
 # _BIN/_SRCS/TEST_BINS stay unconditional (unlike TESTS=yes gate below).
+# _OBJDIR: own object tree when test -D set differs from tool's
+define UNIT_TEST_OBJDIR_rule
+$$($(1)_OBJS): $($(1)_OBJDIR)/%.o: %.c config.mk
+	@mkdir -p $$(dir $$@)
+	$$(CC) $$(CFLAGS) -MMD -MP -c $$< -o $$@
+endef
+
 define UNIT_TEST_template
-$(1)_OBJS := $$($(1)_SRCS:.c=.o)
+$(1)_OBJS := $(if $($(1)_OBJDIR),$$(patsubst %.c,$($(1)_OBJDIR)/%.o,$$($(1)_SRCS)),$$($(1)_SRCS:.c=.o))
+$(if $($(1)_OBJDIR),$$(eval $$(call UNIT_TEST_OBJDIR_rule,$(1))))
 ALL_OBJS += $$($(1)_OBJS)
 $$($(1)_OBJS): CFLAGS += $(CHECK_CFLAGS) $$($(1)_EXTRA_CFLAGS)
 $$($(1)_BIN): $$($(1)_OBJS)
@@ -11077,4 +11086,4 @@ clean:
 	rm -f $(ALL_OBJS) $(ALL_OBJS:.o=.d) $(TLS_VARIANTS) $(TLS_VARIANTS:.o=.d) $(TOOLS) dvbipitools $(TEST_BINS) $(FUZZ_BINS) $(RIST_SEND_HELPER_BIN) $(ITEST_HELPER_BIN)
 	rm -f $(SBOM_OUT) $(TOOLS:=.map) dvbipitools.map
 	rm -f $(GEN_HTDOCS_BIN) src/dipixy/htdocs_index.gen.c src/dipixy/htdocs_index.gen.d
-	rm -rf build/dvbipitools
+	rm -rf build/dvbipitools build/tests

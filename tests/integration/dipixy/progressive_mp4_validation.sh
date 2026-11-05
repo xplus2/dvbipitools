@@ -74,7 +74,7 @@ h2cap="$WORK/h2.mp4"
 timeout 8 curl -s -k -N --http2 -o "$h2cap" "https://127.0.0.1:$TLSPORT/udp/$MCAST:$MPORT/mp4"
 check_progressive_mp4 "$h2cap" "H2"
 
-if [ "$curl_has_http3" -eq 1 ]; then
+if [ "$curl_has_http3" -eq 1 ] && grep -q "http3: quic context ready" "$WORK/dipixy.log"; then
     h3cap="$WORK/h3.mp4"
     timeout 8 curl -s -k -N --http3-only -o "$h3cap" "https://127.0.0.1:$TLSPORT/udp/$MCAST:$MPORT/mp4"
     check_progressive_mp4 "$h3cap" "H3"

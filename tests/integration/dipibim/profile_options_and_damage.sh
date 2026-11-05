@@ -3,9 +3,20 @@
 # See NOTICE and LICENSE for details and authorship information.
 
 BIN=$1
+UNSUPPORTED_CODE=BE400317
 . "$(dirname "$0")/../common.sh"
 . "$(dirname "$0")/fixture.inc"
 make_fixtures
+
+# tva + sdns need zlib
+"$BIN" -f xml -s "$WORK/sch" --profile tva -i "$WORK/in.xml" -o "$WORK/z.bim" 2> "$WORK/z.err"
+rc=$?
+ZLIB=1
+if [ "$rc" != 0 ]; then
+    log_has "$WORK/z.err" "$UNSUPPORTED_CODE" || fail "tva probe: exit $rc"
+    ZLIB=0
+    echo "tva/sdns skipped: no zlib"
+fi
 
 round_trip() {
     label=$1
@@ -17,9 +28,11 @@ round_trip() {
 
 round_trip "dvb-tva" --profile dvb-tva
 round_trip "dvb-tva locator duration pubtime" --profile dvb-tva --dvb-locator --dvb-duration --dvb-pubtime
-round_trip "tva" --profile tva
-round_trip "tva zbuf" --profile tva --zbuf-size 64
-round_trip "tva gather" --profile tva --zbuf-size 64 --zgather
+if [ "$ZLIB" = 1 ]; then
+    round_trip "tva" --profile tva
+    round_trip "tva zbuf" --profile tva --zbuf-size 64
+    round_trip "tva gather" --profile tva --zbuf-size 64 --zgather
+fi
 round_trip "generic" --profile generic
 round_trip "generic 15938-1" --profile generic --syntax 15938-1
 round_trip "generic len-mode 1" --profile generic --len-mode 1
@@ -27,22 +40,26 @@ round_trip "generic len-mode 2" --profile generic --len-mode 2
 round_trip "generic deferred cast" --profile generic --deferred --cast
 round_trip "generic conformance" --profile generic --compat conformance
 
-run_expect_rc 0 "sdns encode" "$BIN" -v -f xml -s "$WORK/sd" --profile sdns -i "$WORK/sd.xml" -o "$WORK/sd.bim" 2> "$WORK/sd.enc.err"
-run_expect_rc 0 "sdns decode" "$BIN" -v -f bim -s "$WORK/sd" --profile sdns -i "$WORK/sd.bim" -o "$WORK/sd.out.xml" 2> "$WORK/sd.dec.err"
-assert_contains "$WORK/sd.out.xml" "Two" "sdns round trip"
+if [ "$ZLIB" = 1 ]; then
+    run_expect_rc 0 "sdns encode" "$BIN" -v -f xml -s "$WORK/sd" --profile sdns -i "$WORK/sd.xml" -o "$WORK/sd.bim" 2> "$WORK/sd.enc.err"
+    run_expect_rc 0 "sdns decode" "$BIN" -v -f bim -s "$WORK/sd" --profile sdns -i "$WORK/sd.bim" -o "$WORK/sd.out.xml" 2> "$WORK/sd.dec.err"
+    assert_contains "$WORK/sd.out.xml" "Two" "sdns round trip"
+fi
 
 run_expect_rc 0 "dvb-tva encode for mismatch" "$BIN" -f xml -s "$WORK/sch" --profile dvb-tva -i "$WORK/in.xml" -o "$WORK/mm.dvb.bim"
-run_expect_rc 0 "tva encode for mismatch" "$BIN" -f xml -s "$WORK/sch" --profile tva -i "$WORK/in.xml" -o "$WORK/mm.tva.bim"
 for p in tva sdns generic; do
     "$BIN" -f bim -s "$WORK/sch" --profile "$p" -i "$WORK/mm.dvb.bim" -o "$WORK/mm.out.xml" 2> "$WORK/mm.err"
     rc=$?
     [ "$rc" = 0 ] || [ "$rc" = 1 ] || fail "decode dvb-tva stream as $p: exit $rc"
 done
-for p in dvb-tva sdns generic; do
-    "$BIN" -f bim -s "$WORK/sch" --profile "$p" -i "$WORK/mm.tva.bim" -o "$WORK/mm.out.xml" 2> "$WORK/mm.err"
-    rc=$?
-    [ "$rc" = 0 ] || [ "$rc" = 1 ] || fail "decode tva stream as $p: exit $rc"
-done
+if [ "$ZLIB" = 1 ]; then
+    run_expect_rc 0 "tva encode for mismatch" "$BIN" -f xml -s "$WORK/sch" --profile tva -i "$WORK/in.xml" -o "$WORK/mm.tva.bim"
+    for p in dvb-tva sdns generic; do
+        "$BIN" -f bim -s "$WORK/sch" --profile "$p" -i "$WORK/mm.tva.bim" -o "$WORK/mm.out.xml" 2> "$WORK/mm.err"
+        rc=$?
+        [ "$rc" = 0 ] || [ "$rc" = 1 ] || fail "decode tva stream as $p: exit $rc"
+    done
+fi
 run_expect_rc 1 "tva document as sdns" "$BIN" -f xml -s "$WORK/sch" --profile sdns -i "$WORK/in.xml" -o "$WORK/mm.out.bim" 2> "$WORK/mm.err"
 run_expect_rc 1 "sd document as tva" "$BIN" -f xml -s "$WORK/sd" --profile tva -i "$WORK/sd.xml" -o "$WORK/mm.out.bim" 2> "$WORK/mm.err"
 run_expect_rc 1 "sd document as dvb-tva" "$BIN" -f xml -s "$WORK/sd" --profile dvb-tva -i "$WORK/sd.xml" -o "$WORK/mm.out.bim" 2> "$WORK/mm.err"
@@ -90,8 +107,10 @@ damage() {
 }
 
 damage "dvb-tva" "$WORK/mm.dvb.bim" -s "$WORK/sch" --profile dvb-tva
-damage "tva" "$WORK/mm.tva.bim" -s "$WORK/sch" --profile tva
-damage "sdns" "$WORK/sd.bim" -s "$WORK/sd" --profile sdns
+if [ "$ZLIB" = 1 ]; then
+    damage "tva" "$WORK/mm.tva.bim" -s "$WORK/sch" --profile tva
+    damage "sdns" "$WORK/sd.bim" -s "$WORK/sd" --profile sdns
+fi
 run_expect_rc 0 "generic encode for damage" "$BIN" -f xml -s "$WORK/sch" --profile generic -i "$WORK/in.xml" -o "$WORK/mm.gen.bim"
 damage "generic" "$WORK/mm.gen.bim" -s "$WORK/sch" --profile generic
 

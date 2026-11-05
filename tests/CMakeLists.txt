@@ -705,7 +705,7 @@ dvbipitools_add_unit_test(lib_net_netconnect
     ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c)
-target_link_options(test_lib_net_netconnect PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=fcntl -Wl,--wrap=connect -Wl,--wrap=getsockopt -Wl,--wrap=pthread_create)
+target_link_options(test_lib_net_netconnect PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=fcntl -Wl,--wrap=__fcntl_time64 -Wl,--wrap=fcntl64 -Wl,--wrap=connect -Wl,--wrap=getsockopt -Wl,--wrap=__getsockopt64 -Wl,--wrap=pthread_create)
 
 dvbipitools_add_unit_test(lib_net_rtmp
     unit/lib/net/test_rtmp.c
@@ -5812,7 +5812,7 @@ dvbipitools_add_unit_test(dipibcg_announce
     ${CMAKE_SOURCE_DIR}/src/lib/bim/decoderinit/write.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/tree.c
     ${BIM_XSD_SRCS})
-target_link_options(test_dipibcg_announce PRIVATE -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup)
+target_link_options(test_dipibcg_announce PRIVATE -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=__sendmsg64 -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup)
 
 dvbipitools_add_unit_test(dipibcg_announce_segment
     unit/dipibcg/test_announce_segment.c
@@ -6612,7 +6612,7 @@ dvbipitools_add_unit_test(dipisds_announce
     ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c)
-target_link_options(test_dipisds_announce PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=sendto -Wl,--wrap=sendmsg)
+target_link_options(test_dipisds_announce PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=__sendmsg64)
 
 dvbipitools_add_unit_test(dipimetrics_httpserver
     unit/dipimetrics/test_httpserver.c
@@ -7924,7 +7924,7 @@ dvbipitools_add_unit_test(lib_net_multicast
     ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
     ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c)
-target_link_options(test_lib_net_multicast PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=setsockopt -Wl,--wrap=getsockopt -Wl,--wrap=socket)
+target_link_options(test_lib_net_multicast PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=setsockopt -Wl,--wrap=__setsockopt64 -Wl,--wrap=getsockopt -Wl,--wrap=__getsockopt64 -Wl,--wrap=socket)
 
 dvbipitools_add_unit_test(dipifccret_dispatch
     unit/dipifccret/test_dispatch.c

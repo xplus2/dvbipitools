@@ -76,10 +76,10 @@ typedef struct {
 
 static int hex_run(const char **p, unsigned *v) {
   char *end;
-  unsigned long x;
+  unsigned long long x;
   if (!isxdigit((unsigned char)**p)) return -1;
-  x = strtoul(*p, &end, 16);
-  if (x > 0xFFFFFFFFUL) return -1;
+  x = strtoull(*p, &end, 16);
+  if (x > 0xFFFFFFFFULL) return -1;
   *p = end;
   *v = (unsigned)x;
   return 0;

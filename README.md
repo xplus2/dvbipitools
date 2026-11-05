@@ -49,6 +49,7 @@ cmake --build build
 |--------------------------------------|--------------------------|-------------------------------------|
 | `-DCMAKE_BUILD_TYPE=Debug\|Release`  | `--debug` / `--release`  | Build type                          |
 | `-DDVBIPITOOLS_STATIC=ON`            | `--static`               | Static linking (still glibc)        |
+| `-DDVBIPITOOLS_STRIP=OFF`            | `--no-strip`             | Keep symbols in release binaries    |
 | `-DDVBIPITOOLS_TLS=OFF`              | `--no-tls`               | No TLS support                      |
 | `-DDVBIPITOOLS_CSA=OFF`              | `--no-csa`               | No CSA1/CSA2/BISS1                  | 
 | `-DDIPIBCG_ZLIB=OFF`                 | `--no-zlib`              | `dipibcg` w/o compression support   |
@@ -113,7 +114,7 @@ between real-world usage of media formats and the standard.
   - ICY `StreamTitle`, inline ID3v2 `TIT2`/`TPE1` mapping into EIT.
 * dipirec
   - Matroska containers (`mkv` and `mka`).
-  - SubRip subtitles (`.srt`) from EBU Teletext (ETSI EN 300 706). SRT isn't a DVB format.
+  - SubRip subtitles (`.srt`) from EBU Teletext (ETSI EN 300 706). SubRip isn't a DVB format.
 * dipiscan
   - This tool would largely be unnecessary if deployments consistently used DVBSTP/SD&S as implemented by `dipisds`.
   - `m3u`, `xspf` and our own "local" `csv` format.

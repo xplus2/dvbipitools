@@ -16,8 +16,8 @@
 
 int cas_super_id_parse(const char *s, unsigned *out) {
   char *end;
-  unsigned long v = strtoul(s, &end, 0);
-  if (*end != '\0' || v == 0 || v > 0xFFFFFFFFUL) return -1;
+  unsigned long long v = strtoull(s, &end, 0);
+  if (*end != '\0' || v == 0 || v > 0xFFFFFFFFULL) return -1;
   *out = (unsigned)v;
   return 0;
 }

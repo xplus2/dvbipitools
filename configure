@@ -19,6 +19,7 @@ SRT=auto
 ZLIB=auto
 HTTP2=auto
 HTTP3=auto
+STRIP=yes
 
 usage() {
     cat <<EOF
@@ -26,6 +27,7 @@ usage: ./configure [options]
   --debug        debug build (default)
   --release      optimized build, binaries stripped
   --static       link statically
+  --no-strip     keep symbols in --release binaries
   --sanitize     build with AddressSanitizer + UndefinedBehaviorSanitizer
   --tsan         build with ThreadSanitizer (cannot combine with --sanitize)
   --coverage     build with gcov
@@ -51,6 +53,7 @@ while [ $# -gt 0 ]; do case "$1" in
   --debug)    BUILD_TYPE=Debug ;;
   --release)  BUILD_TYPE=Release ;;
   --static)   BUILD_LINK=static ;;
+  --no-strip) STRIP=no ;;
   --sanitize) SANITIZE=yes ;;
   --tsan)     TSAN=yes ;;
   --coverage) COVERAGE=yes ;;
@@ -87,6 +90,8 @@ fi
 BUILD_ARCH=$(uname -m)
 
 CFLAGS="-std=gnu11 -Wall -Wextra -Werror -Isrc -pthread"
+# y2038: 64-bit time_t/off_t on 32-bit glibc, no-op elsewhere
+CFLAGS="$CFLAGS -D_FILE_OFFSET_BITS=64 -D_TIME_BITS=64"
 CFLAGS="$CFLAGS -DBUILD_ARCH=\\\"$BUILD_ARCH\\\""
 CFLAGS="$CFLAGS -DBUILD_TYPE=\\\"$BUILD_TYPE\\\""
 CFLAGS="$CFLAGS -DBUILD_LINK=\\\"$BUILD_LINK\\\""
@@ -98,7 +103,7 @@ fi
 
 LDFLAGS="-pthread"
 [ "$BUILD_LINK" = static ] && LDFLAGS="$LDFLAGS -static"
-[ "$BUILD_TYPE" = Release ] && LDFLAGS="$LDFLAGS -s"
+[ "$BUILD_TYPE" = Release ] && [ "$STRIP" = yes ] && LDFLAGS="$LDFLAGS -s"
 
 if [ "$SANITIZE" = yes ]; then
   CFLAGS="$CFLAGS -fsanitize=address,undefined -fno-omit-frame-pointer"
