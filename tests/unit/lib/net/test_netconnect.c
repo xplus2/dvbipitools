@@ -39,6 +39,10 @@ int __wrap_fcntl(int fd, int cmd, long arg) {
   return __real_fcntl(fd, cmd, arg);
 }
 
+/* LFS/time64 callers; plain fcntl stays for libgcov */
+int __wrap_fcntl64(int fd, int cmd, long arg) __attribute__((alias("__wrap_fcntl")));
+int __wrap___fcntl_time64(int fd, int cmd, long arg) __attribute__((alias("__wrap_fcntl")));
+
 int __wrap_connect(int fd, const struct sockaddr *addr, socklen_t len) {
   if (g_connect_ok) return 0;
   if (g_connect_err) {

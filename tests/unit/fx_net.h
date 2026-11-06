@@ -22,13 +22,6 @@
 
 /* glibc LFS/time64 binds them to *64 symbols, wrap'em */
 #if defined __USE_TIME_BITS64 && __TIMESIZE == 32
-#define __wrap_fcntl __wrap___fcntl_time64
-#define __real_fcntl __real___fcntl_time64
-#elif defined __USE_FILE_OFFSET64
-#define __wrap_fcntl __wrap_fcntl64
-#define __real_fcntl __real_fcntl64
-#endif
-#if defined __USE_TIME_BITS64 && __TIMESIZE == 32
 #define __wrap_getsockopt __wrap___getsockopt64
 #define __real_getsockopt __real___getsockopt64
 #define __wrap_setsockopt __wrap___setsockopt64
