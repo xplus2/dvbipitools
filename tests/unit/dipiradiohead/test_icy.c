@@ -206,13 +206,12 @@ START_TEST(oversized_title_is_truncated_to_the_title_buffer) {
   unsigned char out[16];
   meta_capture_t m;
   icy_t *c;
-  size_t fill = 255 * 16 - (sizeof head - 1) - (sizeof tail - 1);
   size_t w;
 
   memset(&m, 0, sizeof m);
+  memset(tag, 'T', sizeof tag);
   memcpy(tag, head, sizeof head - 1);
-  memset(tag + sizeof head - 1, 'T', fill);
-  memcpy(tag + sizeof head - 1 + fill, tail, sizeof tail);
+  memcpy(tag + sizeof tag - sizeof tail, tail, sizeof tail);
   c = icy_new(2, meta_cb, &m);
   w = feed_one_block(c, tag, out, sizeof out);
   ck_assert_uint_eq(w, 4);

@@ -1,4 +1,6 @@
 dvbipitools (2.6.1-1) unstable; urgency=low
+  * Y2K38 fixes for 32-bit builds
+    + still depends on kernel >5.1 and libs
   * dipiradiohead
     + fixed stall check for inputs that never really come up (multi-input mode)
   * dipisds
