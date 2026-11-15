@@ -47,10 +47,10 @@ typedef struct {
   int mp4push_sub;
   int n_cold;
   hls_cold_park_req_t cold;
-  char cold_file[64];
+  route_file_kind_t cold_file;
   int n_llhls;
   llhls_park_req_t llhls;
-  char llhls_file[64];
+  route_file_kind_t llhls_file;
   int n_admission;
   int n_tspush_raw;
   int n_ts_cold;
@@ -70,11 +70,11 @@ typedef struct {
 static fake_t g_fake;
 static config_t g_cfg;
 
-static void fake_status(void *conn, void *req, const char *status) {
+static void fake_status(void *conn, void *req, int status) {
   (void)conn;
   (void)req;
   g_fake.n_status++;
-  snprintf(g_fake.status, sizeof g_fake.status, "%s", status);
+  snprintf(g_fake.status, sizeof g_fake.status, "%d", status);
 }
 
 static void fake_401(void *conn, void *req) {
@@ -161,7 +161,7 @@ static int fake_cold(void *conn, void *req, const hls_cold_park_req_t *pr) {
   (void)req;
   g_fake.n_cold++;
   g_fake.cold = *pr;
-  snprintf(g_fake.cold_file, sizeof g_fake.cold_file, "%s", pr->filename);
+  g_fake.cold_file = pr->file ? pr->file->kind : ROUTE_FILE_NONE;
   return g_fake.cold_ret;
 }
 
@@ -170,7 +170,7 @@ static int fake_llhls(void *conn, void *req, const llhls_park_req_t *pr) {
   (void)req;
   g_fake.n_llhls++;
   g_fake.llhls = *pr;
-  snprintf(g_fake.llhls_file, sizeof g_fake.llhls_file, "%s", pr->filename);
+  g_fake.llhls_file = pr->file->kind;
   return g_fake.llhls_ret;
 }
 
@@ -278,12 +278,12 @@ static void push_ready_store(seg_container_t container, double part_target) {
 
   ck_assert_ptr_nonnull(ctx);
   memset(&filter, 0, sizeof filter);
-  if (part_target > 0.0) hls_llhls_enable(ctx, &filter, 0, &lcevc, container, part_target);
+  if (part_target > 0.0) hls_llhls_enable(&(stream_key_t){ctx, &filter, 0, &lcevc, container}, part_target);
   if (container == SEG_CONTAINER_FMP4) {
-    ck_assert_int_eq(hls_push_part(ctx, &filter, 0, &lcevc, container, chunk, sizeof chunk, 0.5, 1), 0);
-    ck_assert_int_eq(hls_push_segment_ll(ctx, &filter, 0, &lcevc, container, 2.0), 0);
+    ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){ctx, &filter, 0, &lcevc, container}), chunk, sizeof chunk, 0.5, 1), 0);
+    ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){ctx, &filter, 0, &lcevc, container}), 2.0), 0);
   } else {
-    ck_assert_int_eq(hls_push_segment(ctx, &filter, 0, &lcevc, container, chunk, sizeof chunk, 2.0), 0);
+    ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){ctx, &filter, 0, &lcevc, container}), chunk, sizeof chunk, 2.0), 0);
   }
   capture_close(ctx);
 }
@@ -298,12 +298,12 @@ static void teardown(void) {
 }
 
 static const route_case_t setup_cases[] = {
-  {dispatch_hls_route, "/stdin/hls"},
-  {dispatch_hls_route, "/stdin/hls-fmp4"},
-  {dispatch_llhls_route, "/stdin/llhls"},
-  {dispatch_dash_route, "/stdin/dash"},
-  {dispatch_dash_route, "/stdin/lldash"},
-  {dispatch_mp4_route, "/stdin/mp4"},
+  {dispatch_store_route, "/stdin/hls"},
+  {dispatch_store_route, "/stdin/hls-fmp4"},
+  {dispatch_store_route, "/stdin/llhls"},
+  {dispatch_store_route, "/stdin/dash"},
+  {dispatch_store_route, "/stdin/lldash"},
+  {dispatch_store_route, "/stdin/mp4"},
 };
 #define SETUP_CASES (int)(sizeof setup_cases / sizeof setup_cases[0])
 
@@ -388,37 +388,30 @@ typedef struct {
   const char *path;
   hls_cold_kind_t kind;
   seg_container_t container;
-  const char *file;
+  route_file_kind_t file;
   int want_ll;
   int timeout_ms;
 } park_case_t;
 
 static const park_case_t park_cases[] = {
-  {"/stdin/hls", HLS_COLD_HLS, SEG_CONTAINER_TS, "index.m3u8", 0, 14000},
-  {"/stdin/hls-fmp4", HLS_COLD_HLS, SEG_CONTAINER_FMP4, "index.m3u8", 0, 14000},
-  {"/stdin/llhls", HLS_COLD_LLHLS, SEG_CONTAINER_TS, "index_ll.m3u8", 0, 14000},
-  {"/stdin/dash", HLS_COLD_DASH, SEG_CONTAINER_FMP4, "manifest.mpd", 0, 14000},
-  {"/stdin/lldash", HLS_COLD_DASH, SEG_CONTAINER_FMP4, "manifest.mpd", 1, 14000},
-  {"/stdin/mp4", HLS_COLD_MP4, SEG_CONTAINER_FMP4, "", 0, 14000},
+  {"/stdin/hls", HLS_COLD_HLS, SEG_CONTAINER_TS, ROUTE_FILE_INDEX, 0, 14000},
+  {"/stdin/hls-fmp4", HLS_COLD_HLS, SEG_CONTAINER_FMP4, ROUTE_FILE_INDEX, 0, 14000},
+  {"/stdin/llhls", HLS_COLD_LLHLS, SEG_CONTAINER_TS, ROUTE_FILE_INDEX_LL, 0, 14000},
+  {"/stdin/dash", HLS_COLD_DASH, SEG_CONTAINER_FMP4, ROUTE_FILE_MPD, 0, 14000},
+  {"/stdin/lldash", HLS_COLD_DASH, SEG_CONTAINER_FMP4, ROUTE_FILE_MPD, 1, 14000},
+  {"/stdin/mp4", HLS_COLD_MP4, SEG_CONTAINER_FMP4, ROUTE_FILE_NONE, 0, 14000},
 };
-
-static void (*route_fn_for(const char *path))(httpng_req_t *) {
-  if (strstr(path, "mp4") && !strstr(path, "fmp4")) return &dispatch_mp4_route;
-  if (strstr(path, "dash")) return &dispatch_dash_route;
-  if (strstr(path, "llhls")) return &dispatch_llhls_route;
-  return &dispatch_hls_route;
-}
 
 START_TEST(cold_index_is_parked_with_its_request) {
   const park_case_t *pc = &park_cases[_i];
 
   open_stdin_source();
   g_fake.cold_ret = 1;
-  run(route_fn_for(pc->path), &(call_t){.path = pc->path, .is_head = _i & 1});
+  run(dispatch_store_route, &(call_t){.path = pc->path, .is_head = _i & 1});
   ck_assert_int_eq(g_fake.n_cold, 1);
   ck_assert_int_eq(g_fake.cold.kind, pc->kind);
-  ck_assert_int_eq(g_fake.cold.container, pc->container);
-  ck_assert_str_eq(g_fake.cold_file, pc->file);
+  ck_assert_int_eq(g_fake.cold.key.container, pc->container);
+  ck_assert_int_eq(g_fake.cold_file, pc->file);
   ck_assert_int_eq(g_fake.cold.want_ll, pc->want_ll);
   ck_assert_int_eq(g_fake.cold.is_head, _i & 1);
   ck_assert_int_eq(g_fake.cold.timeout_ms, pc->timeout_ms);
@@ -430,13 +423,13 @@ END_TEST
 START_TEST(cold_index_with_full_waiter_table_falls_through_to_render) {
   open_stdin_source();
   g_fake.cold_ret = 0;
-  run(dispatch_hls_route, &(call_t){.path = "/stdin/hls"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/hls"});
   ck_assert_int_eq(g_fake.n_cold, 1);
   ck_assert_int_eq(g_fake.n_hls, 1);
-  run(dispatch_dash_route, &(call_t){.path = "/stdin/dash"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/dash"});
   ck_assert_int_eq(g_fake.n_cold, 2);
   ck_assert_int_eq(g_fake.n_hls, 2);
-  run(dispatch_llhls_route, &(call_t){.path = "/stdin/llhls"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/llhls"});
   ck_assert_int_eq(g_fake.n_cold, 3);
   ck_assert_int_eq(g_fake.n_hls, 3);
 }
@@ -444,11 +437,11 @@ END_TEST
 
 START_TEST(hls_ready_index_renders_without_parking) {
   open_stdin_source();
-  run(dispatch_hls_route, &(call_t){.path = "/stdin/hls"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/hls"});
   push_ready_store(SEG_CONTAINER_TS, 0.0);
   g_fake.n_hls = 0;
   g_fake.n_cold = 0;
-  run(dispatch_hls_route, &(call_t){.path = "/stdin/hls"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/hls"});
   ck_assert_int_eq(g_fake.n_cold, 0);
   ck_assert_int_eq(g_fake.n_hls, 1);
   ck_assert_int_eq(g_fake.hls_handled, 1);
@@ -459,7 +452,7 @@ END_TEST
 START_TEST(hls_segment_file_renders_without_parking) {
   open_stdin_source();
   g_fake.cold_ret = 1;
-  run(dispatch_hls_route, &(call_t){.path = "/stdin/seg0.ts"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/seg0.ts"});
   ck_assert_int_eq(g_fake.n_cold, 0);
   ck_assert_int_eq(g_fake.n_hls, 1);
   ck_assert_int_eq(g_fake.hls_handled, 1);
@@ -469,35 +462,35 @@ END_TEST
 
 START_TEST(llhls_blocking_reload_parks_until_the_part_exists) {
   open_stdin_source();
-  run(dispatch_llhls_route, &(call_t){.path = "/stdin/llhls"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/llhls"});
   push_ready_store(SEG_CONTAINER_TS, PART_TARGET);
   g_fake.n_cold = 0;
   g_fake.n_hls = 0;
   g_fake.llhls_ret = 1;
-  run(dispatch_llhls_route, &(call_t){.path = "/stdin/llhls", .query = "_HLS_msn=900&_HLS_part=2"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/llhls", .query = "_HLS_msn=900&_HLS_part=2"});
   ck_assert_int_eq(g_fake.n_cold, 0);
   ck_assert_int_eq(g_fake.n_llhls, 1);
   ck_assert_uint_eq(g_fake.llhls.want_seg, 900);
   ck_assert_int_eq(g_fake.llhls.want_part, 2);
   ck_assert_int_eq(g_fake.llhls.timeout_ms, 1000);
-  ck_assert_str_eq(g_fake.llhls_file, "index_ll.m3u8");
+  ck_assert_int_eq(g_fake.llhls_file, ROUTE_FILE_INDEX_LL);
   ck_assert_int_eq(g_fake.n_hls, 0);
 }
 END_TEST
 
 START_TEST(llhls_park_refusal_or_plain_request_renders) {
   open_stdin_source();
-  run(dispatch_llhls_route, &(call_t){.path = "/stdin/llhls"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/llhls"});
   push_ready_store(SEG_CONTAINER_TS, PART_TARGET);
   g_fake.n_hls = 0;
   g_fake.llhls_ret = 0;
-  run(dispatch_llhls_route, &(call_t){.path = "/stdin/llhls", .query = "_HLS_msn=900&_HLS_part=2"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/llhls", .query = "_HLS_msn=900&_HLS_part=2"});
   ck_assert_int_eq(g_fake.n_llhls, 1);
   ck_assert_int_eq(g_fake.n_hls, 1);
-  run(dispatch_llhls_route, &(call_t){.path = "/stdin/llhls"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/llhls"});
   ck_assert_int_eq(g_fake.n_llhls, 1);
   ck_assert_int_eq(g_fake.n_hls, 2);
-  run(dispatch_llhls_route, &(call_t){.path = "/stdin/seg0.1.ts", .query = "_HLS_msn=900&_HLS_part=2"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/seg0.1.ts", .query = "_HLS_msn=900&_HLS_part=2"});
   ck_assert_int_eq(g_fake.n_llhls, 1);
   ck_assert_int_eq(g_fake.n_hls, 3);
 }
@@ -505,11 +498,11 @@ END_TEST
 
 START_TEST(dash_manifest_ready_renders_without_parking) {
   open_stdin_source();
-  run(dispatch_dash_route, &(call_t){.path = "/stdin/dash"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/dash"});
   push_ready_store(SEG_CONTAINER_FMP4, 0.0);
   g_fake.n_cold = 0;
   g_fake.n_hls = 0;
-  run(dispatch_dash_route, &(call_t){.path = "/stdin/dash"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/dash"});
   ck_assert_int_eq(g_fake.n_cold, 0);
   ck_assert_int_eq(g_fake.n_hls, 1);
   ck_assert_int_eq(g_fake.hls_handled, 1);
@@ -539,13 +532,13 @@ START_TEST(dash_segment_request_prefers_progressive_delivery) {
   const dashseg_case_t *dc = &dashseg_cases[_i];
 
   open_stdin_source();
-  run(dispatch_dash_route, &(call_t){.path = "/stdin/lldash"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/lldash"});
   push_ready_store(SEG_CONTAINER_FMP4, PART_TARGET);
   g_cfg.no_lldash = dc->no_lldash;
   g_fake.dashchunk_ret = dc->dispatch_ret;
   g_fake.n_cold = 0;
   g_fake.n_hls = 0;
-  run(dispatch_dash_route, &(call_t){.path = dc->path, .is_head = dc->is_head, .proto = dc->proto});
+  run(dispatch_store_route, &(call_t){.path = dc->path, .is_head = dc->is_head, .proto = dc->proto});
   ck_assert_int_eq(g_fake.n_cold, 0);
   ck_assert_int_eq(g_fake.n_dashchunk, dc->expect_dispatch);
   ck_assert_int_eq(g_fake.n_hls, dc->expect_render);
@@ -557,15 +550,15 @@ START_TEST(dash_refused_progressive_delivery_releases_the_subscription) {
   int refused;
 
   open_stdin_source();
-  run(dispatch_dash_route, &(call_t){.path = "/stdin/lldash"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/lldash"});
   push_ready_store(SEG_CONTAINER_FMP4, PART_TARGET);
   g_fake.dashchunk_ret = 0;
-  run(dispatch_dash_route, &(call_t){.path = "/stdin/dseg2000.m4s"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/dseg2000.m4s"});
   ck_assert_int_eq(g_fake.n_dashchunk, 1);
   refused = g_fake.dashchunk_sub;
   capture_flush_deferred_quiescent();
   g_fake.dashchunk_ret = 1;
-  run(dispatch_dash_route, &(call_t){.path = "/stdin/dseg2000.m4s"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/dseg2000.m4s"});
   ck_assert_int_eq(g_fake.n_dashchunk, 2);
   ck_assert_int_eq(g_fake.dashchunk_sub, refused);
 }
@@ -574,11 +567,11 @@ END_TEST
 START_TEST(mp4_route_hands_the_subscription_to_the_protocol) {
   open_stdin_source();
   g_fake.cold_ret = 1;
-  run(dispatch_mp4_route, &(call_t){.path = "/stdin/mp4"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/mp4"});
   push_ready_store(SEG_CONTAINER_FMP4, 0.0);
   g_fake.n_cold = 0;
   g_fake.n_status = 0;
-  run(dispatch_mp4_route, &(call_t){.path = "/stdin/mp4"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/mp4"});
   ck_assert_int_eq(g_fake.n_cold, 0);
   ck_assert_int_eq(g_fake.n_mp4push, 1);
   ck_assert_int_ge(g_fake.mp4push_sub, 0);
@@ -591,16 +584,16 @@ START_TEST(mp4_route_dispatch_refusal_is_503_and_frees_the_slot) {
 
   open_stdin_source();
   g_fake.cold_ret = 1;
-  run(dispatch_mp4_route, &(call_t){.path = "/stdin/mp4"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/mp4"});
   push_ready_store(SEG_CONTAINER_FMP4, 0.0);
   g_fake.mp4push_ret = 0;
-  run(dispatch_mp4_route, &(call_t){.path = "/stdin/mp4"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/mp4"});
   ck_assert_int_eq(g_fake.n_mp4push, 1);
   ck_assert_str_eq(g_fake.status, "503");
   refused = g_fake.mp4push_sub;
   capture_flush_deferred_quiescent();
   g_fake.mp4push_ret = 1;
-  run(dispatch_mp4_route, &(call_t){.path = "/stdin/mp4"});
+  run(dispatch_store_route, &(call_t){.path = "/stdin/mp4"});
   ck_assert_int_eq(g_fake.n_mp4push, 2);
   ck_assert_int_eq(g_fake.mp4push_sub, refused);
 }

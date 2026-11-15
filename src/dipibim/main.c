@@ -27,6 +27,7 @@ int main(int argc, char **argv) {
   int rc;
 
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
+  log_async_start();
   if (job_uses_zlib(&cfg) && !ZLIB_BUILT) {
     log_code("BE400317", "zlib support not built in");
     return 1;

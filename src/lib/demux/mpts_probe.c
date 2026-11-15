@@ -4,17 +4,12 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/sys/signal.h"
 #include "mpts_probe.h"
 #include "tspack.h"
-
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
+#include "lib/helper/dateutil.h"
 
 typedef struct {
   psi_t *psi;
@@ -61,7 +56,7 @@ mpts_probe_result_t mpts_probe_run(tssrc_t *src, int pat_wait_ms, int name_wait_
   probe_cb_ctx_t ctx;
   double name_deadline = 0; /* gcc maybe-uninitialized fp: set with have_deadline flag */
   int have_deadline = 0;
-  double pat_deadline = mono() + (double)pat_wait_ms / 1000.0;
+  double pat_deadline = mono_seconds() + (double)pat_wait_ms / 1000.0;
 
   memset(&r, 0, sizeof r);
   memset(&pz, 0, sizeof pz);
@@ -87,16 +82,16 @@ mpts_probe_result_t mpts_probe_run(tssrc_t *src, int pat_wait_ms, int name_wait_
       if (n > 0) tspack_feed(&pz, buf, (size_t)n, probe_cb, &ctx);
     }
     if (!psi_have_pat(ctx.psi)) {
-      if (mono() >= pat_deadline) goto fail;
+      if (mono_seconds() >= pat_deadline) goto fail;
       continue;
     }
     named = all_named(ctx.psi, &count);
     if (count <= 1) break; /* spts: name not needed */
     if (!have_deadline) {
       have_deadline = 1;
-      name_deadline = mono() + (double)name_wait_ms / 1000.0;
+      name_deadline = mono_seconds() + (double)name_wait_ms / 1000.0;
     }
-    if (named || mono() >= name_deadline) break;
+    if (named || mono_seconds() >= name_deadline) break;
   }
   fill_result(ctx.psi, &r);
   psi_free(ctx.psi);

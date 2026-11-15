@@ -79,8 +79,7 @@ static int rx_open(int family, unsigned *port_out) {
   return fd;
 }
 
-static void sendv_round_trip(int family, const char *dest) {
-  unsigned char hdr[12];
+static void send_round_trip(int family, const char *dest) {
   unsigned char payload[100];
   unsigned char got[256];
   unsigned port;
@@ -90,44 +89,19 @@ static void sendv_round_trip(int family, const char *dest) {
 
   if (rx < 0)
     return;
-  memset(hdr, 0xA5, sizeof hdr);
   memset(payload, 0x3C, sizeof payload);
   m = mcast_open_send(family, dest, port, NULL, 0);
   ck_assert_ptr_nonnull(m);
-  ck_assert_int_eq(mcast_sendv(m, hdr, sizeof hdr, payload, sizeof payload), (ssize_t)(sizeof hdr + sizeof payload));
+  ck_assert_int_eq(mcast_send(m, payload, sizeof payload), (ssize_t)sizeof payload);
   n = recv(rx, got, sizeof got, 0);
-  ck_assert_int_eq(n, (int)(sizeof hdr + sizeof payload));
-  ck_assert_mem_eq(got, hdr, sizeof hdr);
-  ck_assert_mem_eq(got + sizeof hdr, payload, sizeof payload);
-  mcast_close(m);
-  close(rx);
-}
-
-START_TEST(sendv_v4_gathers_header_and_payload) {
-  sendv_round_trip(AF_INET, "127.0.0.1");
-}
-END_TEST
-
-START_TEST(sendv_v6_gathers_header_and_payload) {
-  sendv_round_trip(AF_INET6, "::1");
-}
-END_TEST
-
-START_TEST(sendv_with_empty_header_sends_payload_only) {
-  unsigned char payload[7] = {1, 2, 3, 4, 5, 6, 7};
-  unsigned char got[32];
-  unsigned port;
-  int rx = rx_open(AF_INET, &port);
-  mcast_t *m;
-
-  ck_assert_int_ge(rx, 0);
-  m = mcast_open_send(AF_INET, "127.0.0.1", port, NULL, 0);
-  ck_assert_ptr_nonnull(m);
-  ck_assert_int_eq(mcast_sendv(m, NULL, 0, payload, sizeof payload), (ssize_t)sizeof payload);
-  ck_assert_int_eq(recv(rx, got, sizeof got, 0), (int)sizeof payload);
+  ck_assert_int_eq(n, (int)sizeof payload);
   ck_assert_mem_eq(got, payload, sizeof payload);
   mcast_close(m);
   close(rx);
+}
+
+START_TEST(send_v6_delivers_one_datagram) {
+  send_round_trip(AF_INET6, "::1");
 }
 END_TEST
 
@@ -150,13 +124,12 @@ START_TEST(send_delivers_one_datagram) {
 }
 END_TEST
 
-START_TEST(send_and_sendv_fail_on_port_zero) {
+START_TEST(send_fails_on_port_zero) {
   unsigned char b[4] = {0};
   mcast_t *m4 = mcast_open_send(AF_INET, "127.0.0.1", 0, NULL, 0);
 
   ck_assert_ptr_nonnull(m4);
   ck_assert_int_eq(mcast_send(m4, b, sizeof b), -1);
-  ck_assert_int_eq(mcast_sendv(m4, b, sizeof b, b, sizeof b), -1);
   mcast_close(m4);
 }
 END_TEST
@@ -303,6 +276,89 @@ START_TEST(rx_timestamps_are_zero_until_enabled_then_wall_clock) {
   ck_assert_uint_lt(now_ns - rx_ns, 5000000000ULL);
   close(tx);
   mcast_close(m);
+}
+END_TEST
+
+static void send_n(int tx, const struct sockaddr_in *dst, unsigned char tag, size_t n) {
+  unsigned char d[3000];
+  memset(d, tag, n);
+  ck_assert_int_eq((int)sendto(tx, d, n, 0, (const struct sockaddr *)dst, sizeof *dst), (int)n);
+}
+
+START_TEST(batch_keeps_order_drops_oversize_then_grows) {
+  struct sockaddr_in dst;
+  unsigned char buf[4096];
+  char group[32];
+  unsigned port = free_udp_port();
+  mcast_t *m;
+  int tx = socket(AF_INET, SOCK_DGRAM, 0);
+
+  ck_assert_int_ge(tx, 0);
+  unique_group(group, sizeof group);
+  m = mcast_open(AF_INET, group, port, NULL, 1000);
+  ck_assert_ptr_nonnull(m);
+  ck_assert_int_eq(mcast_set_batch(m, 8), 0);
+  ck_assert_int_eq(mcast_enable_rx_timestamps(m), 0);
+  memset(&dst, 0, sizeof dst);
+  dst.sin_family = AF_INET;
+  dst.sin_port = htons((unsigned short)port);
+  ck_assert_int_eq(inet_pton(AF_INET, group, &dst.sin_addr), 1);
+
+  send_n(tx, &dst, 'a', 10);
+  send_n(tx, &dst, 'b', 3000);
+  send_n(tx, &dst, 'c', 20);
+  ck_assert_int_eq((int)mcast_recv(m, buf, sizeof buf, NULL), 10);
+  ck_assert_int_eq(buf[0], 'a');
+  ck_assert_int_eq((int)mcast_recv(m, buf, sizeof buf, NULL), 20);
+  ck_assert_int_eq(buf[0], 'c');
+  ck_assert_uint_gt(mcast_last_rx_ns(m), 0u);
+
+  send_n(tx, &dst, 'd', 30);
+  send_n(tx, &dst, 'e', 3000);
+  send_n(tx, &dst, 'f', 40);
+  ck_assert_int_eq((int)mcast_recv(m, buf, sizeof buf, NULL), 30);
+  ck_assert_int_eq(buf[0], 'd');
+  ck_assert_int_eq((int)mcast_recv(m, buf, sizeof buf, NULL), 3000);
+  ck_assert_int_eq(buf[2999], 'e');
+  ck_assert_int_eq((int)mcast_recv(m, buf, sizeof buf, NULL), 40);
+  ck_assert_int_eq(buf[0], 'f');
+  close(tx);
+  mcast_close(m);
+}
+END_TEST
+
+static void recv_expect(mcast_t *rx, unsigned char tag, size_t hlen, size_t plen) {
+  unsigned char buf[4096];
+  ck_assert_int_eq((int)mcast_recv(rx, buf, sizeof buf, NULL), (int)(hlen + plen));
+  if (hlen) ck_assert_int_eq(buf[0], 'H');
+  ck_assert_int_eq(buf[hlen], tag);
+  ck_assert_int_eq(buf[hlen + plen - 1], tag);
+}
+
+START_TEST(send_batch_delivers_each_datagram) {
+  static const unsigned char h[4][12] = {"HHHHHHHHHHH", "HHHHHHHHHHH", "HHHHHHHHHHH", "HHHHHHHHHHH"};
+  unsigned char p[4][1316];
+  const void *hp[4] = {h[0], h[1], h[2], h[3]};
+  const void *pp[4] = {p[0], p[1], p[2], p[3]};
+  size_t uni[4] = {1316, 1316, 1316, 500};
+  size_t mix[3] = {100, 1316, 700};
+  char group[32];
+  unsigned port = free_udp_port();
+  mcast_t *rx;
+  mcast_t *tx;
+  for (int i = 0; i < 4; i++) memset(p[i], 'a' + i, sizeof p[i]);
+  unique_group(group, sizeof group);
+  rx = mcast_open(AF_INET, group, port, NULL, 1000);
+  ck_assert_ptr_nonnull(rx);
+  tx = mcast_open_send(AF_INET, group, port, NULL, 0);
+  ck_assert_ptr_nonnull(tx);
+  ck_assert_int_eq(mcast_send_batch(tx, hp, 12, pp, uni, 4), 0);
+  for (int i = 0; i < 4; i++) recv_expect(rx, (unsigned char)('a' + i), 12, uni[i]);
+  ck_assert_int_eq(mcast_send_batch(tx, hp, 0, pp, mix, 3), 0);
+  for (int i = 0; i < 3; i++) recv_expect(rx, (unsigned char)('a' + i), 0, mix[i]);
+  ck_assert_int_eq(mcast_send_batch(tx, hp, 12, pp, uni, MCAST_SEND_BATCH_MAX + 1), -1);
+  mcast_close(tx);
+  mcast_close(rx);
 }
 END_TEST
 
@@ -546,11 +602,9 @@ END_TEST
 static Suite *multicast_suite(void) {
   Suite *s = suite_create("multicast");
   TCase *tc = tcase_create("core");
-  tcase_add_test(tc, sendv_v4_gathers_header_and_payload);
-  tcase_add_test(tc, sendv_v6_gathers_header_and_payload);
-  tcase_add_test(tc, sendv_with_empty_header_sends_payload_only);
+  tcase_add_test(tc, send_v6_delivers_one_datagram);
   tcase_add_test(tc, send_delivers_one_datagram);
-  tcase_add_test(tc, send_and_sendv_fail_on_port_zero);
+  tcase_add_test(tc, send_fails_on_port_zero);
   tcase_add_test(tc, open_send_applies_ttl_and_tos);
   tcase_add_test(tc, open_send_v6_applies_hop_limit);
   tcase_add_test(tc, open_send_rejects_bad_interface_and_group);
@@ -560,6 +614,8 @@ static Suite *multicast_suite(void) {
   tcase_add_test(tc, open_fails_when_group_port_is_taken_exclusively);
   tcase_add_test(tc, open_ssm_rejects_bad_arguments_and_failed_join);
   tcase_add_test(tc, rx_timestamps_are_zero_until_enabled_then_wall_clock);
+  tcase_add_test(tc, batch_keeps_order_drops_oversize_then_grows);
+  tcase_add_test(tc, send_batch_delivers_each_datagram);
   tcase_add_test(tc, open_survives_every_single_setsockopt_failure);
   tcase_add_test(tc, open_fails_when_socket_fails);
   tcase_add_test(tc, open_warns_when_receive_buffer_is_capped);

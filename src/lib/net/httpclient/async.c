@@ -7,11 +7,11 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../../sys/ioutil.h"
-#include "../../sys/signal.h"
+#include "../../helper/strutil.h"
 #include "../../helper/log.h"
 #include "../netconnect.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 static ssize_t raw_send_nb(struct http *h, const char *buf, size_t n) {
   ssize_t w;

@@ -29,7 +29,7 @@
 #include "lib/helper/xml_util.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/sys/signal.h"
 #include "../fx_net.h"
 
@@ -70,7 +70,8 @@ START_TEST(minutes_to_unix_one_day_later) {
 END_TEST
 
 START_TEST(iso8601_parses_z_suffix) {
-  long a, b;
+  long a;
+  long b;
   ck_assert_int_eq(iso8601_to_minutes("2020-01-01T00:00:00Z", &a), 0);
   ck_assert_int_eq(iso8601_to_minutes("2020-01-01T01:30:00Z", &b), 0);
   ck_assert_int_eq(b - a, 90);
@@ -78,7 +79,8 @@ START_TEST(iso8601_parses_z_suffix) {
 END_TEST
 
 START_TEST(iso8601_positive_offset_converts_to_utc) {
-  long with_offset, utc;
+  long with_offset;
+  long utc;
   ck_assert_int_eq(iso8601_to_minutes("2020-01-01T02:00:00+02:00", &with_offset), 0);
   ck_assert_int_eq(iso8601_to_minutes("2020-01-01T00:00:00Z", &utc), 0);
   ck_assert_int_eq(with_offset, utc);
@@ -86,7 +88,8 @@ START_TEST(iso8601_positive_offset_converts_to_utc) {
 END_TEST
 
 START_TEST(iso8601_negative_offset_converts_to_utc) {
-  long with_offset, utc;
+  long with_offset;
+  long utc;
   ck_assert_int_eq(iso8601_to_minutes("2020-01-01T00:00:00-02:00", &with_offset), 0);
   ck_assert_int_eq(iso8601_to_minutes("2020-01-01T02:00:00Z", &utc), 0);
   ck_assert_int_eq(with_offset, utc);
@@ -148,7 +151,8 @@ static int build_windowed(bcg_doc_t *src, bcg_doc_t *dst, long now, int64_t wind
 }
 
 START_TEST(window_view_copies_all_channels) {
-  bcg_doc_t src, dst;
+  bcg_doc_t src;
+  bcg_doc_t dst;
   bcg_doc_init(&src);
   add_channel(&src, "ch1");
   add_channel(&src, "ch2");
@@ -164,7 +168,8 @@ START_TEST(window_view_copies_all_channels) {
 END_TEST
 
 START_TEST(window_view_filters_programmes_by_window) {
-  bcg_doc_t src, dst;
+  bcg_doc_t src;
+  bcg_doc_t dst;
   bcg_doc_init(&src);
   add_channel(&src, "ch1");
   /* ended before now: excluded */
@@ -198,9 +203,12 @@ START_TEST(window_view_huge_window_does_not_overflow) {
 END_TEST
 
 START_TEST(window_view_includes_in_range_and_no_stop_programmes) {
-  bcg_doc_t src, dst;
+  bcg_doc_t src;
+  bcg_doc_t dst;
   long now = date_to_mjd(2020, 1, 1) * 1440L;
-  char start_a[32], stop_a[32], start_b[32];
+  char start_a[32];
+  char stop_a[32];
+  char start_b[32];
 
   bcg_doc_init(&src);
   add_channel(&src, "ch1");

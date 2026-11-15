@@ -8,7 +8,7 @@
 #include "lib/bim/index.h"
 #include "lib/bim/strrepo.h"
 #include "lib/helper/beutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 #include "lib/tva/tva_xml.h"
 
 #define LEAF_HDR 0xBF    /* leaf_field 1, multiple_locators 0, reserved */
@@ -57,7 +57,7 @@ int bim_index_parse_names(const char *list, unsigned *mask) {
 
 int bim_index_add(bim_index_input_t *in, const char *key0, const char *key1, uint16_t container, uint32_t fragment) {
   if (array_reserve((void **)&in->e, &in->cap, in->n + 1, sizeof *in->e)) return -1;
-  in->e[in->n++] = (bim_index_entry_t){{key0, key1}, container, fragment};
+  in->e[in->n++] = (bim_index_entry_t){{key0, key1}, container, fragment, 0, 0, 0};
   return 0;
 }
 
@@ -78,12 +78,17 @@ static int tuple_cmp(const kind_t *k, const char *const *a, const char *const *b
   return c || k->nfields < 2 ? c : strcmp(a[1], b[1]);
 }
 
-static const kind_t *sort_kind;
+static int ekey_cmp(const kind_t *k, const bim_index_entry_t *a, const bim_index_entry_t *b) {
+  if (k->time_key && a->t_ok && b->t_ok && a->t != b->t) return (a->t > b->t) - (a->t < b->t);
+  return strcmp(a->key[0], b->key[0]);
+}
 
 static int entry_cmp(const void *pa, const void *pb) {
   const bim_index_entry_t *a = pa;
   const bim_index_entry_t *b = pb;
-  int c = tuple_cmp(sort_kind, a->key, b->key);
+  const kind_t *k = &kinds[a->kind];
+  int c = ekey_cmp(k, a, b);
+  if (!c && k->nfields > 1) c = strcmp(a->key[1], b->key[1]);
   if (c) return c;
   if (a->container != b->container) return (a->container > b->container) - (a->container < b->container);
   return (a->fragment > b->fragment) - (a->fragment < b->fragment);
@@ -120,11 +125,59 @@ static int put_locator(bytes_t *b, const bim_index_entry_t *e) {
   return put(b, c, sizeof c);
 }
 
+typedef struct {
+  const char *s;
+  long off;
+} sent_t;
+
+typedef struct {
+  sent_t *v;
+  size_t cap;
+  size_t n;
+} sset_t;
+
+static size_t str_hash(const char *s) {
+  uint64_t h = 1469598103934665603ULL;
+  for (; *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211ULL;
+  return (size_t)h;
+}
+
+static sent_t *sset_slot(const sset_t *t, const char *s) {
+  size_t i = str_hash(s) & (t->cap - 1);
+  while (t->v[i].s && strcmp(t->v[i].s, s)) i = (i + 1) & (t->cap - 1);
+  return &t->v[i];
+}
+
+static sent_t *sset_get(sset_t *t, const char *s, int *fresh) {
+  sent_t *e;
+  if ((t->n + 1) * 2 > t->cap) {
+    sset_t g = {NULL, t->cap ? t->cap * 2 : 64, 0};
+    if (!(g.v = calloc(g.cap, sizeof *g.v))) return NULL;
+    for (size_t i = 0; i < t->cap; i++)
+      if (t->v[i].s) *sset_slot(&g, t->v[i].s) = t->v[i];
+    g.n = t->n;
+    free(t->v);
+    *t = g;
+  }
+  e = sset_slot(t, s);
+  *fresh = !e->s;
+  if (*fresh) {
+    *e = (sent_t){s, -1};
+    t->n++;
+  }
+  return e;
+}
+
 /* string offset into sw, -1 oom or beyond 16 bit */
-static long put_str(strrepo_writer_t *sw, const char *s) {
-  size_t off = sw->len;
-  if (off + strlen(s) + 1 > BIM_REPO_MAX || strrepo_writer_put(sw, s)) return -1;
-  return (long)off;
+static long put_str(strrepo_writer_t *sw, sset_t *seen, const char *s) {
+  int fresh;
+  sent_t *e = sset_get(seen, s, &fresh);
+  if (!e) return -1;
+  if (fresh) {
+    size_t off = sw->len;
+    e->off = off + strlen(s) + 1 > BIM_REPO_MAX || strrepo_writer_put(sw, s) ? -1 : (long)off;
+  }
+  return e->off;
 }
 
 static int add_struct(bim_index_cont_t *c, unsigned type, unsigned id, bytes_t *b) {
@@ -147,13 +200,11 @@ static int add_strings(bim_index_cont_t *c, const strrepo_writer_t *sw) {
   return 0;
 }
 
-static size_t entry_strlen(const kind_t *k, const bim_index_entry_t *e) {
-  return strlen(e->key[0]) + 1 + (k->nfields > 1 ? strlen(e->key[1]) + 1 : 0);
-}
 
 /* 1 sub-index container for e[0..n), single layer or 2 layers (time) */
 static int build_sub(const kind_t *k, const bim_index_entry_t *e, int n, bim_index_cont_t *c) {
   strrepo_writer_t sw;
+  sset_t seen = {NULL, 0, 0};
   bytes_t l1 = {NULL, 0, 0};
   bytes_t l2 = {NULL, 0, 0};
   int rc = -1;
@@ -161,7 +212,7 @@ static int build_sub(const kind_t *k, const bim_index_entry_t *e, int n, bim_ind
   if (k->nfields == 1) {
     if (put8(&l2, LEAF_HDR)) goto done;
     for (int i = 0; i < n; i++) {
-      long off = put_str(&sw, e[i].key[0]);
+      long off = put_str(&sw, &seen, e[i].key[0]);
       if (off < 0 || put16(&l2, (unsigned)off) || put_locator(&l2, &e[i])) goto done;
     }
     if (add_struct(c, BIM_STRUCT_SUB_INDEX, 0, &l2)) goto done;
@@ -169,10 +220,10 @@ static int build_sub(const kind_t *k, const bim_index_entry_t *e, int n, bim_ind
     if (put8(&l1, NODE_HDR) || put8(&l1, 1) || put8(&l2, LEAF_HDR)) goto done;
     for (int i = 0; i < n;) {
       int j = i;
-      long off = put_str(&sw, e[i].key[0]);
+      long off = put_str(&sw, &seen, e[i].key[0]);
       if (off < 0) goto done;
-      while (j < n && !key_cmp(1, e[j].key[0], e[i].key[0])) {
-        long so = put_str(&sw, e[j].key[1]);
+      while (j < n && !ekey_cmp(k, &e[j], &e[i])) {
+        long so = put_str(&sw, &seen, e[j].key[1]);
         if (so < 0 || put16(&l2, (unsigned)so) || put_locator(&l2, &e[j])) goto done;
         j++;
       }
@@ -185,6 +236,7 @@ static int build_sub(const kind_t *k, const bim_index_entry_t *e, int n, bim_ind
 done:
   free(l1.buf);
   free(l2.buf);
+  free(seen.v);
   strrepo_writer_free(&sw);
   return rc;
 }
@@ -200,20 +252,30 @@ static int new_cont(bim_index_cont_t **conts, int *n, unsigned id) {
 
 /* entries of 1 chunk: strings below BIM_REPO_MAX, layer offsets 16 bit */
 static int chunk_len(const kind_t *k, const bim_index_entry_t *e, int n) {
+  sset_t seen = {NULL, 0, 0};
   size_t strs = 1;
   int i;
   for (i = 0; i < n && i < 0xFFFF; i++) {
-    size_t s = entry_strlen(k, &e[i]);
-    if (strs + s > BIM_REPO_MAX) break;
-    strs += s;
+    size_t add = 0;
+    for (int f = 0; f < k->nfields; f++) {
+      int fresh;
+      if (!sset_get(&seen, e[i].key[f], &fresh)) {
+        free(seen.v);
+        return -1;
+      }
+      if (fresh) add += strlen(e[i].key[f]) + 1;
+    }
+    if (strs + add > BIM_REPO_MAX) break;
+    strs += add;
   }
+  free(seen.v);
   return i;
 }
 
-static int list_entry(bytes_t *b, strrepo_writer_t *sw, const kind_t *k, unsigned id) {
+static int list_entry(bytes_t *b, strrepo_writer_t *sw, sset_t *seen, const kind_t *k, unsigned id) {
   if (put8(b, k->nfields == 1 ? 0x0C : 0x12) || put16(b, k->frag_type) || put8(b, (unsigned)k->nfields)) return -1;
   for (int f = 0; f < k->nfields; f++) {
-    long off = put_str(sw, k->xpath[f]);
+    long off = put_str(sw, seen, k->xpath[f]);
     if (off < 0 || put16(b, XPATH_FIELD) || put16(b, (unsigned)off) || put16(b, 0x0000)) return -1;
   }
   return put16(b, BIM_INDEX_LIST_CONTAINER) || put8(b, id);
@@ -221,6 +283,7 @@ static int list_entry(bytes_t *b, strrepo_writer_t *sw, const kind_t *k, unsigne
 
 int bim_index_build(unsigned mask, bim_index_input_t in[BIM_INDEX_KINDS], uint16_t first_id, bim_index_cont_t **conts, int *nconts) {
   strrepo_writer_t sw;
+  sset_t seen = {NULL, 0, 0};
   bytes_t list = {NULL, 0, 0};
   bytes_t ix = {NULL, 0, 0};
   unsigned next_id = first_id;
@@ -234,9 +297,12 @@ int bim_index_build(unsigned mask, bim_index_input_t in[BIM_INDEX_KINDS], uint16
     bim_index_entry_t *e = in[kind].e;
     int n = in[kind].n;
     if (!(mask & (1u << kind))) continue;
-    sort_kind = k;
+    for (int i = 0; i < n; i++) {
+      e[i].kind = kind;
+      e[i].t_ok = k->time_key && !iso8601_utc_secs(e[i].key[0], &e[i].t);
+    }
     if (n > 1) qsort(e, (size_t)n, sizeof *e, entry_cmp);
-    if (list_entry(&list, &sw, k, (unsigned)kind) || put8(&ix, INDEX_HDR) || put8(&ix, LOCATOR_REMOTE)) {
+    if (list_entry(&list, &sw, &seen, k, (unsigned)kind) || put8(&ix, INDEX_HDR) || put8(&ix, LOCATOR_REMOTE)) {
       rc = sw.len + 128 > BIM_REPO_MAX ? -2 : -1;
       goto done;
     }
@@ -244,14 +310,14 @@ int bim_index_build(unsigned mask, bim_index_input_t in[BIM_INDEX_KINDS], uint16
       int m = chunk_len(k, e + i, n - i);
       if (m <= 0) goto done;
       if (k->nfields > 1)
-        while (i + m < n && m > 1 && !key_cmp(1, e[i + m].key[0], e[i + m - 1].key[0])) m--;
+        while (i + m < n && m > 1 && !ekey_cmp(k, &e[i + m], &e[i + m - 1])) m--;
       if (next_id > 0xFFFF) {
         rc = -3;
         goto done;
       }
       if (new_cont(conts, nconts, next_id) || build_sub(k, e + i, m, &(*conts)[*nconts - 1])) goto done;
       for (int f = 0; f < k->nfields; f++) {
-        long off = put_str(&sw, e[i + m - 1].key[f]);
+        long off = put_str(&sw, &seen, e[i + m - 1].key[f]);
         if (off < 0) {
           rc = sw.len + strlen(e[i + m - 1].key[f]) + 1 > BIM_REPO_MAX ? -2 : -1;
           goto done;
@@ -269,6 +335,7 @@ int bim_index_build(unsigned mask, bim_index_input_t in[BIM_INDEX_KINDS], uint16
 done:
   free(list.buf);
   free(ix.buf);
+  free(seen.v);
   strrepo_writer_free(&sw);
   if (rc) {
     bim_index_conts_free(*conts, *nconts);
@@ -336,7 +403,7 @@ static void check_single(const check_t *c, unsigned cont, unsigned id, const cha
       c->rep->malformed++;
       return;
     }
-    if ((prev && key_cmp(0, prev, v) > (prev == lo ? -1 : 0)) || key_cmp(0, v, hi) > 0) c->rep->misordered++;
+    if ((prev && strcmp(prev, v) > (prev == lo ? -1 : 0)) || strcmp(v, hi) > 0) c->rep->misordered++;
     prev = v;
     check_locator(c, b + p + 2);
   }
@@ -478,153 +545,4 @@ int bim_index_check(bim_index_find_fn find, bim_index_has_fn has, const void *ct
     p = end;
   }
   return 0;
-}
-
-int bim_typelist_build(const bim_typelist_entry_t *e, int n, strrepo_writer_t *sw, unsigned char **out, size_t *out_len) {
-  bytes_t b = {NULL, 0, 0};
-  if (n < 0 || n > 0xFFFF || put16(&b, (unsigned)n)) goto fail;
-  for (int i = 0; i < n; i++) {
-    int xp = e[i].fragment_type == XPATH_FIELD;
-    size_t dl = 2 + (xp ? 2u : 0u) + 1 + 2 * (size_t)e[i].ncontainers;
-    long off = 0;
-    if (e[i].ncontainers < 0 || e[i].ncontainers > 0xFF || dl > 0xFFF || e[i].fragment_type > 0xFFFF || (xp && !e[i].xpath)) goto fail;
-    if (xp) {
-      off = put_str(sw, e[i].xpath);
-      if (off < 0) goto fail;
-    }
-    if (put16(&b, 0xF000u | (unsigned)dl)) goto fail;
-    if (put16(&b, e[i].fragment_type)) goto fail;
-    if (xp && put16(&b, (unsigned)off)) goto fail;
-    if (put8(&b, (unsigned)e[i].ncontainers)) goto fail;
-    for (int j = 0; j < e[i].ncontainers; j++)
-      if (put16(&b, e[i].containers[j])) goto fail;
-  }
-  *out = b.buf;
-  *out_len = b.len;
-  return 0;
-fail:
-  free(b.buf);
-  return -1;
-}
-
-void bim_typelist_free(bim_typelist_entry_t *e, int n) {
-  for (int i = 0; i < n; i++) free(e[i].heap_containers);
-  free(e);
-}
-
-int bim_typelist_parse(const unsigned char *body, size_t len, const unsigned char *strings, size_t slen, bim_typelist_entry_t **e, int *n) {
-  size_t p = 2;
-  int cnt;
-  *e = NULL;
-  *n = 0;
-  if (len < 2) return -1;
-  cnt = (int)be16_get(body);
-  if (cnt) {
-    *e = calloc((size_t)cnt, sizeof **e);
-    if (!*e) return -1;
-  }
-  for (int i = 0; i < cnt; i++) {
-    bim_typelist_entry_t *t = &(*e)[i];
-    size_t dl;
-    size_t q = 2;
-    int nc;
-    uint16_t *c = NULL;
-    if (len - p < 2) goto bad;
-    dl = be16_get(body + p) & 0xFFFu;
-    p += 2;
-    if (dl > len - p || dl < 3) goto bad;
-    t->fragment_type = be16_get(body + p);
-    if (t->fragment_type == XPATH_FIELD) {
-      unsigned off;
-      if (dl < 5) goto bad;
-      off = be16_get(body + p + q);
-      q += 2;
-      if (!strings) goto bad;
-      if (off >= slen) goto bad;
-      if (!memchr(strings + off, 0, slen - off)) goto bad;
-      t->xpath = (const char *)strings + off;
-    }
-    nc = body[p + q++];
-    if (dl != q + 2 * (size_t)nc) goto bad;
-    if (nc) {
-      c = malloc(2 * (size_t)nc);
-      if (!c) goto bad;
-    }
-    for (int j = 0; j < nc; j++) c[j] = be16_get(body + p + q + 2 * (size_t)j);
-    t->heap_containers = c;
-    t->containers = c;
-    t->ncontainers = nc;
-    p += dl;
-    *n = i + 1;
-  }
-  if (p == len) return 0;
-bad:
-  bim_typelist_free(*e, *n);
-  *e = NULL;
-  *n = 0;
-  return -1;
-}
-
-int bim_nsmap_build(const char *const *prefix, const char *const *ns, int n, unsigned char **out, size_t *out_len) {
-  bytes_t b = {NULL, 0, 0};
-  if (n < 0 || n > 0xFF || put8(&b, (unsigned)n)) goto fail;
-  for (int i = 0; i < n; i++) {
-    size_t pl = strlen(prefix[i]);
-    size_t nl = strlen(ns[i]);
-    if (pl > 0xFF || nl > 0xFF || put8(&b, (unsigned)pl) || put(&b, prefix[i], pl) || put8(&b, (unsigned)nl) || put(&b, ns[i], nl)) goto fail;
-  }
-  *out = b.buf;
-  *out_len = b.len;
-  return 0;
-fail:
-  free(b.buf);
-  return -1;
-}
-
-void bim_nsmap_free(char **prefix, char **ns, int n) {
-  for (int i = 0; i < n; i++) {
-    free(prefix[i]);
-    free(ns[i]);
-  }
-  free(prefix);
-  free(ns);
-}
-
-int bim_nsmap_parse(const unsigned char *body, size_t len, char ***prefix, char ***ns, int *n) {
-  size_t p = 1;
-  int cnt;
-  *prefix = NULL;
-  *ns = NULL;
-  *n = 0;
-  if (len < 1) return -1;
-  cnt = body[0];
-  *prefix = calloc((size_t)cnt + 1, sizeof **prefix);
-  *ns = calloc((size_t)cnt + 1, sizeof **ns);
-  if (!*prefix || !*ns) goto bad;
-  for (int i = 0; i < cnt; i++) {
-    size_t l;
-    if (len - p < 1) goto bad;
-    l = body[p++];
-    if (len - p < l + 1) goto bad;
-    (*prefix)[i] = strndup((const char *)body + p, l);
-    if (!(*prefix)[i]) goto bad;
-    p += l;
-    l = body[p++];
-    if (len - p < l) goto bad;
-    (*ns)[i] = strndup((const char *)body + p, l);
-    if (!(*ns)[i]) goto bad;
-    p += l;
-  }
-  if (p != len) goto bad;
-  *n = cnt;
-  return 0;
-bad:
-  if (*prefix && *ns) bim_nsmap_free(*prefix, *ns, cnt);
-  else {
-    free(*prefix);
-    free(*ns);
-  }
-  *ns = NULL;
-  *prefix = *ns;
-  return -1;
 }

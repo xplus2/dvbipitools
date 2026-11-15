@@ -12,7 +12,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/secure_zero.h"
 #include "lib/net/tls.h"
@@ -25,7 +25,9 @@
 #define REQ_BUF_CAP 8192
 
 int http_listen(int family, const char *addr, unsigned port) {
-  int fd, on = 1, flags;
+  int fd;
+  int on = 1;
+  int flags;
   struct sockaddr_storage ss;
   socklen_t sslen;
 
@@ -94,7 +96,8 @@ typedef struct {
   size_t reqlen;
   size_t parsed_len; /* last phr_parse_request last_len arg */
   char *resp;
-  size_t resplen, respoff;
+  size_t resplen;
+  size_t respoff;
 } http_conn_t;
 
 struct http_server {
@@ -329,17 +332,26 @@ static void set_response(http_conn_t *c, const char *hdr, size_t hdr_len, const 
   c->resplen = hdr_len + body_len;
 }
 
+static size_t build_header(char *hdr, size_t cap, const char *status, const char *extra_hdr, const char *ctype, size_t body_len) {
+  sbuf_t b;
+  sbuf_init(&b, hdr, cap);
+  sbuf_add(&b, "HTTP/1.1 ");
+  sbuf_add(&b, status);
+  sbuf_add(&b, "\r\n");
+  sbuf_add(&b, extra_hdr);
+  sbuf_add(&b, "Content-Type: ");
+  sbuf_add(&b, ctype);
+  sbuf_add(&b, "\r\nContent-Length: ");
+  sbuf_add_u64(&b, body_len);
+  sbuf_add(&b, "\r\nConnection: close\r\n\r\n");
+  return b.len;
+}
+
 static void build_status_response(http_conn_t *c, const char *status, const char *extra_hdr, const char *body) {
   char hdr[256];
   size_t body_len = strlen(body);
-  int hdr_len = snprintf(hdr, sizeof hdr,
-    "HTTP/1.1 %s\r\n"
-    "%s"
-    "Content-Type: text/plain; charset=utf-8\r\n"
-    "Content-Length: %zu\r\n"
-    "Connection: close\r\n\r\n",
-    status, extra_hdr, body_len);
-  set_response(c, hdr, (size_t)hdr_len, body, body_len);
+  size_t hdr_len = build_header(hdr, sizeof hdr, status, extra_hdr, "text/plain; charset=utf-8", body_len);
+  set_response(c, hdr, hdr_len, body, body_len);
 }
 
 /* head: headers only, Content-Length still the GET body size */
@@ -347,16 +359,11 @@ static int build_metrics_response(http_conn_t *c, const store_t *st, double now_
   char *body;
   size_t body_len;
   char hdr[256];
-  int hdr_len;
+  size_t hdr_len;
 
   if (render_openmetrics(st, now_mono, &body, &body_len)) return -1;
-  hdr_len = snprintf(hdr, sizeof hdr,
-    "HTTP/1.1 200 OK\r\n"
-    "Content-Type: application/openmetrics-text; version=1.0.0; charset=utf-8\r\n"
-    "Content-Length: %zu\r\n"
-    "Connection: close\r\n\r\n",
-    body_len);
-  set_response(c, hdr, (size_t)hdr_len, body, head ? 0 : body_len);
+  hdr_len = build_header(hdr, sizeof hdr, "200 OK", "", "application/openmetrics-text; version=1.0.0; charset=utf-8", body_len);
+  set_response(c, hdr, hdr_len, body, head ? 0 : body_len);
   free(body);
   return 0;
 }
@@ -370,12 +377,15 @@ static int authz_matches(const struct phr_header *headers, size_t num_headers, c
 }
 
 static void conn_try_parse_and_respond(http_conn_t *c, store_t *st, double now_mono, int verbose, const char *http_auth) {
-  const char *pmethod, *ppath;
-  size_t method_len = 0, path_len = 0;
+  const char *pmethod;
+  const char *ppath;
+  size_t method_len = 0;
+  size_t path_len = 0;
   int minor_version;
   struct phr_header headers[32];
   size_t num_headers = 32;
-  char method[16] = "", path[256] = "";
+  char method[16] = "";
+  char path[256] = "";
   int pret;
 
   if (c->reqlen == c->parsed_len) return; /* nothing new */

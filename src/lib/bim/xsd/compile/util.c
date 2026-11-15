@@ -95,8 +95,6 @@ int xc_strp_cmp(const void *a, const void *b) {
   return strcmp(x ? x : "", y ? y : "");
 }
 
-int xc_ns_eq(const char *a, const char *b) { return a && b ? !strcmp(a, b) : a == b; }
-
 int xc_add_codec(cc_t *c, const char *ns, const char *name, bim_codec_t codec, int derived) {
   xsd_codec_map_t *m = &c->codecs[c->ncodecs++];
   m->ns = ns;

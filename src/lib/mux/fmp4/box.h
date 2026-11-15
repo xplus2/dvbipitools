@@ -31,10 +31,6 @@ void mb_box(mp4buf_t *parent, const char fourcc[4], mp4buf_t *child);
 /* identity matrix, tkhd/mvhd matrix field */
 void put_matrix_unity(mp4buf_t *b);
 
-/* MPEG-4 descriptor length, base-128 continuation encoding */
-void put_desc_size(mp4buf_t *out, size_t len);
-/* frees payload */
-void put_desc(mp4buf_t *out, unsigned tag, mp4buf_t *payload);
 
 typedef struct {
   unsigned track_id;

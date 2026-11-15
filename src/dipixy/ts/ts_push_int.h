@@ -5,11 +5,17 @@
 #define DIPIXY_TS_PUSH_INT_H
 
 #include "ts_push.h"
+#include "../reactor/subtab.h"
 
 /* ts_push.c */
-extern int g_tid_head[TS_PUSH_MAX_REACTOR_THREADS];
+extern subtab_t g_ts_tab;
 void ts_push_ring_enqueue(ts_sub_t *s, const uint8_t *data, size_t len);
-extern void (*ts_push_note_enqueue)(const byte_ring_t *r, int wrote);
+extern int g_ts_queue_metrics;
+void ts_push_note_enqueue_slow(const byte_ring_t *r, int wrote);
+static inline void ts_push_note_enqueue(const byte_ring_t *r, int wrote) {
+  if (g_ts_queue_metrics) ts_push_note_enqueue_slow(r, wrote);
+}
+void ts_push_account_bytes(ts_sub_t *s);
 
 /* ts_push_feed.c */
 void ts_push_rawaudio_emit(void *vctx, const unsigned char *data, size_t len);

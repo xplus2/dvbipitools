@@ -16,7 +16,9 @@
 #define TSPACKETIZER_PID_AUDIO 0x0101 /* default single-program-out audio ES pid */
 
 typedef struct {
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
   unsigned stream_type; /* PMT stream_type of detected codec */
   unsigned aac_profile_level; /* AAC_descriptor profile_and_level, 0 = none */
   const char *network_name; /* "" = no NIT network_name descriptor; pointer must outlive packetizer */

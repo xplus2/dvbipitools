@@ -7,7 +7,7 @@
 
 #include "cli/args.h"
 #include "lib/helper/fileutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/toolmain.h"
 #include "lib/tva/bcg_doc.h"
@@ -22,7 +22,9 @@ static void write_tva_xml(FILE *out, bcg_doc_t *doc, const mapping_t *map, int v
   for (int i = 0; i < doc->channel_count; i++) {
     bcg_channel_t *c = &doc->channels[i];
     char uri[BCG_ID_LEN];
-    unsigned tsid, onid, sid;
+    unsigned tsid;
+    unsigned onid;
+    unsigned sid;
     if (!mapping_lookup(map, c->id, uri, sizeof uri, &tsid, &onid, &sid)) {
       bufcpy(c->uri, sizeof c->uri, uri);
       c->tsid = tsid;
@@ -116,10 +118,12 @@ static int flush_output(FILE *buf, const char *path) {
 int main(int argc, char **argv) {
   config_t cfg = {0};
   bcg_doc_t doc;
-  FILE *in, *out;
+  FILE *in;
+  FILE *out;
   int rc = 0;
 
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
+  log_async_start();
   in = fileutil_open_std(cfg.input_path, "r");
   if (!in) {
     log_code("XS000100", TOOL_NAME ": cannot open %s", cfg.input_path);

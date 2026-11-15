@@ -35,7 +35,6 @@ typedef struct {
   char *title; /* heap, NULL = absent, never "" */
   char *desc;
   char *category;
-  char *crid; /* heap, optional cache of tva_build_crid, NULL = build on demand */
 } bcg_programme_t;
 
 /* CRID-keyed prg text, pending merge into bcg_programme_t */
@@ -115,11 +114,8 @@ static inline const char *bcg_str(const char *s) { return s ? s : ""; }
 /* *dst = heap copy of s, old value freed. NULL or "" -> NULL. 0 ok, -1 OOM (*dst unchanged) */
 int bcg_set_text(char **dst, const char *s);
 
-/* frees title/desc/category/crid, leaves rest */
+/* frees title/desc/category, leaves rest */
 void bcg_programme_free_text(bcg_programme_t *pr);
-
-/* deep copy, dst overwritten (not freed). 0 ok, -1 OOM (dst holds no text) */
-int bcg_programme_copy(bcg_programme_t *dst, const bcg_programme_t *src);
 
 /* *out = text of first <tag> in [s,end), NULL if absent or empty. old value freed. 0 ok, -1 OOM */
 int bcg_elem_text(const char *s, const char *end, const char *tag, char **out);

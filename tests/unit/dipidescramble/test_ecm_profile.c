@@ -118,7 +118,7 @@ START_TEST(validate_rejects_cw_count_without_explicit_field_order) {
 }
 END_TEST
 
-/* independent reflected CRC-32, IEEE polynomial: same public algorithm crypto_crc32() implements,
+/* independent reflected CRC-32, IEEE polynomial: same public algorithm crc32_zlib() implements,
    built here from scratch rather than calling it, keeping round-trip test from just checking itself */
 static uint32_t ref_crc32_ieee(const unsigned char *data, size_t len) {
   uint32_t crc = 0xFFFFFFFFu;
@@ -134,11 +134,15 @@ static uint32_t ref_crc32_ieee(const unsigned char *data, size_t len) {
 
 START_TEST(roundtrip_ecb_legacy_equivalent) {
   ecm_profile_t p;
-  unsigned char sk[CRYPTO_KEY_LEN], enc_key[32];
-  unsigned char cw[16], wire[16];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char enc_key[32];
+  unsigned char cw[16];
+  unsigned char wire[16];
   unsigned char ct[16];
   ecm_cw_combo_t combos[ECM_PROFILE_CW_MAX];
-  int combo_count = 0, i, len = 0;
+  int combo_count = 0;
+  int i;
+  int len = 0;
   EVP_CIPHER_CTX *ctx;
 
   for (i = 0; i < CRYPTO_KEY_LEN; i++) sk[i] = (unsigned char)(i * 3 + 1);
@@ -163,15 +167,22 @@ END_TEST
 
 START_TEST(roundtrip_cbc_pkcs7_hmac_truncated) {
   ecm_profile_t p;
-  unsigned char sk[CRYPTO_KEY_LEN], enc_key[32], mac_key[32];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char enc_key[32];
+  unsigned char mac_key[32];
   unsigned char cw[16];
   unsigned char plaintext[22]; /* h1(2) + ecm_id(2) + cp_number(2) + cw(16) */
   unsigned char padded[32];    /* pkcs7 to next 16B boundary */
-  unsigned char ct[32], iv[16];
-  unsigned char assoc[4], full_tag[32];
+  unsigned char ct[32];
+  unsigned char iv[16];
+  unsigned char assoc[4];
+  unsigned char full_tag[32];
   unsigned char wire[40]; /* ciphertext(32) + tag(8) */
   ecm_cw_combo_t combos[ECM_PROFILE_CW_MAX];
-  int combo_count = 0, i, len = 0, finlen = 0;
+  int combo_count = 0;
+  int i;
+  int len = 0;
+  int finlen = 0;
   unsigned ecm_id = 0x0020, cp_number = 0x0007;
   EVP_CIPHER_CTX *ctx;
   unsigned int hlen;
@@ -232,11 +243,18 @@ END_TEST
 
 START_TEST(roundtrip_gcm_random_iv_no_binds) {
   ecm_profile_t p;
-  unsigned char sk[CRYPTO_KEY_LEN], enc_key[32];
-  unsigned char cw[8], nonce[12], ct[8], tag[16];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char enc_key[32];
+  unsigned char cw[8];
+  unsigned char nonce[12];
+  unsigned char ct[8];
+  unsigned char tag[16];
   unsigned char wire[12 + 8 + 16];
   ecm_cw_combo_t combos[ECM_PROFILE_CW_MAX];
-  int combo_count = 0, i, len = 0, finlen = 0;
+  int combo_count = 0;
+  int i;
+  int len = 0;
+  int finlen = 0;
   EVP_CIPHER_CTX *ctx;
 
   for (i = 0; i < CRYPTO_KEY_LEN; i++) sk[i] = (unsigned char)(200 - i);
@@ -269,11 +287,16 @@ END_TEST
 
 START_TEST(roundtrip_ecb_crc32) {
   ecm_profile_t p;
-  unsigned char sk[CRYPTO_KEY_LEN], enc_key[32];
-  unsigned char cw[16], ct[16];
-  unsigned char assoc[4], wire[20];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char enc_key[32];
+  unsigned char cw[16];
+  unsigned char ct[16];
+  unsigned char assoc[4];
+  unsigned char wire[20];
   ecm_cw_combo_t combos[ECM_PROFILE_CW_MAX];
-  int combo_count = 0, i, len = 0;
+  int combo_count = 0;
+  int i;
+  int len = 0;
   unsigned ecm_id = 0x0020, cp_number = 0x0009;
   uint32_t crc;
   EVP_CIPHER_CTX *ctx;

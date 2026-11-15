@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "lib/bim/xsd/compile/priv.h"
+#include "lib/helper/growutil.h"
 
 static int sbc_add(cc_t *c, sbclist_t *l, const bim_sbc_t *e, char *key) {
   if (l->n >= l->cap) {

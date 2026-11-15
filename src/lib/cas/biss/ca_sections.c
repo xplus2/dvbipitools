@@ -17,14 +17,6 @@ size_t biss_ca_build_entitlement_session_id_desc(unsigned esid, unsigned onid, u
   return 6;
 }
 
-int biss_ca_parse_entitlement_session_id_desc(const unsigned char *in, size_t in_len, unsigned *esid_out, unsigned *onid_out) {
-  if (!in || !esid_out || !onid_out || in_len < 6) return -1;
-  if (in[0] != BISS_CA_ENTITLEMENT_SESSION_ID_DESC_TAG || in[1] < 4) return -1;
-  *esid_out = ((unsigned)in[2] << 8) | in[3];
-  *onid_out = ((unsigned)in[4] << 8) | in[5];
-  return 0;
-}
-
 size_t biss_ca_build_session_data(const unsigned char sk[BISS_CA_SK_LEN], int parity, unsigned char *out, size_t cap) {
   if (!sk || !out || cap < BISS_CA_SESSION_DATA_LEN) return 0;
   out[0] = 0x00;

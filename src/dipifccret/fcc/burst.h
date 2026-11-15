@@ -33,9 +33,7 @@ typedef enum {
   BURST_NO_VALID_START = 507,     /* cached depth < requested min buffer fill, or nominal bitrate not yet measured */
   BURST_NO_RAP = 508,             /* channel known, no random-access point cached yet */
   BURST_SSRC_NOT_FOUND = 509,     /* explicit media_ssrc requested, no matching channel */
-  BURST_REJECT = 510,             /* channel unresolvable, see README known gaps (ignore_media_ssrc) */
-  BURST_PREAMBLE_ONLY = 511,      /* unused, DVB Annex I RAMS-R profile omits triggering TLV */
-  BURST_POLICY_DENIED = 512       /* unused, no policy engine */
+  BURST_REJECT = 510              /* channel unresolvable, see README known gaps (ignore_media_ssrc) */
 } burst_response_t;
 
 /* c NULL: 510 if ignore_media_ssrc else 509. min>bound (0=no bound): 401. max==0: 402.
@@ -56,7 +54,7 @@ typedef struct {
   double bytes_sent;
   double budget_bytes; /* accrued at target_bps in effect per tick, rate cuts not retroactive */
   double last_elapsed_s;
-  struct timespec start_time; /* CLOCK_MONOTONIC, sub-second pacing precision */
+  double start_time;
   _Atomic int done;
   _Atomic int has_stop_seq; /* RAMS-T Extended RTP Seqnum TLV, RFC 6285 Sec 7.5: clip instead of stopping now */
   _Atomic uint16_t stop_seq; /* low 16 bits of client's first-received multicast extended seqnum */

@@ -2,60 +2,27 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
 
-#include "lib/helper/argutil.h"
-#include "lib/mux/fec2022.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+#include "lib/net/rist/ristpeer.h"
 #include "priv.h"
 
-args_status_t dipirist_opt_rist(dipirist_opt_t *p, int c) {
-  config_t *cfg = p->cfg;
+static const yamlcfg_opt_t opts[] = {
+    {OPT_PROFILE, "profile", "VS000151", "invalid --profile: %s (" RIST_PROF_HINT ")", 0},
+    {OPT_SECRET, "secret", "LS000685", "--secret too long", 0},
+    {OPT_ENCRYPTION_TYPE, "encryption-type", "VS000152", "invalid --encryption-type: %s (" ARGUTIL_RIST_KEY_SIZE_HINT ")", 0},
+    {OPT_CNAME, "cname", "LS000685", "--cname too long", 0},
+    {OPT_BUFFER, "buffer", "VS000153", "invalid --buffer: %s (1..60000 ms)", 0},
+    {OPT_AL_FEC, "al-fec", "VS000154", "invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", 0},
+    {OPT_AL_FEC_PORT, "al-fec-port", "VS000155", "invalid --al-fec-port: %s", 0},
+    {OPT_TTL, "ttl", "VS000558", "invalid --ttl: %s (0..255)", 0},
+};
 
-  switch (c) {
-    case OPT_PROFILE: {
-      static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
-      int v;
-      if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-        argerr("VS000151", "invalid --profile: %s (simple|main)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->profile = (rist_profile_sel_t)v;
-      break;
-    }
-    case OPT_SECRET:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->secret, sizeof cfg->secret, optarg, "--secret"))
-        return ARGS_ERR;
-      break;
-    case OPT_ENCRYPTION_TYPE:
-      if (argutil_rist_key_size(optarg, &cfg->key_size)) {
-        argerr("VS000152", "invalid --encryption-type: %s (128|256)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_CNAME:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->cname, sizeof cfg->cname, optarg, "--cname"))
-        return ARGS_ERR;
-      break;
-    case OPT_BUFFER:
-      if (argutil_uint_range(optarg, 1, 60000, &cfg->buffer_ms)) {
-        argerr("VS000153", "invalid --buffer: %s (1..60000 ms)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_AL_FEC:
-      if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
-        argerr("VS000154", "invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_AL_FEC_PORT:
-      if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
-        argerr("VS000155", "invalid --al-fec-port: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    default:
-      return OPT_UNHANDLED;
+args_status_t dipirist_opt_rist(dipirist_opt_t *p, int c) {
+  switch (yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), dipirist_cfg_keys, dipirist_cfg_nkeys, p->cfg, c, optarg)) {
+    case 1: return ARGS_OK;
+    case -1: return ARGS_ERR;
+    default: return OPT_UNHANDLED;
   }
-  return ARGS_OK;
 }

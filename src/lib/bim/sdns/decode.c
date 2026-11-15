@@ -11,7 +11,6 @@
 #include "lib/helper/xml_util.h"
 #include "lib/bim/nodexml.h"
 #include "lib/bim/sdns.h"
-#include "lib/sys/ioutil.h"
 
 #ifdef DVBIPITOOLS_SDNS_ZLIB
 #define SDNS_INFLATE zinflate
@@ -27,7 +26,7 @@ const sdns_set_t *sdns_set_find(const char *ns) {
   return NULL;
 }
 
-int sdns_prefixes(const sdns_set_t *set, bim_nsdecl_t *out, int cap) {
+static int sdns_prefixes(const sdns_set_t *set, bim_nsdecl_t *out, int cap) {
   int n = set->nprefixes < cap ? set->nprefixes : cap;
   for (int i = 0; i < n; i++) out[i] = (bim_nsdecl_t){set->prefixes[i].prefix, set->prefixes[i].uri};
   return n;

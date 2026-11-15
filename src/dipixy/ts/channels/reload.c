@@ -18,6 +18,7 @@
 #include "../../version.h"
 #include "../../ws/ws_broadcast.h"
 #include "../../ws/ws_sources.h"
+#include "lib/helper/dateutil.h"
 
 static pthread_mutex_t g_reload_mtx = PTHREAD_MUTEX_INITIALIZER;
 static atomic_int g_reload_req;

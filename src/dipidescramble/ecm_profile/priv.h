@@ -7,11 +7,9 @@
 #include "../ecm_profile.h"
 
 /* shared across parse/validate/wire/crypto, defined once in common.c */
-
 int cipher_is_ecb(ecm_cipher_t c);
 int cipher_is_cbc(ecm_cipher_t c);
 int cipher_is_gcm(ecm_cipher_t c);
-int cipher_is_3des(ecm_cipher_t c);
 int cipher_block_size(ecm_cipher_t c);
 int cipher_key_len(ecm_cipher_t c);
 crypto_ecm_cipher_t cipher_to_crypto(ecm_cipher_t c);

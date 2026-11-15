@@ -7,6 +7,7 @@
 
 #include "lib/helper/xml_util.h"
 #include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "bcg_doc.h"
 #include "timefmt.h"

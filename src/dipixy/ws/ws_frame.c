@@ -2,29 +2,17 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "ws_frame.h"
+#include "lib/helper/growutil.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 #define WS_MAX_MESSAGE_LEN (1u << 20)
 
-static int buf_reserve(uint8_t **buf, size_t *cap, size_t need) {
-  uint8_t *p;
-  size_t ncap;
-  if (need <= *cap) return 0;
-  ncap = *cap ? *cap * 2 : 256;
-  if (ncap < need) ncap = need;
-  p = realloc(*buf, ncap);
-  if (!p) return -1;
-  *buf = p;
-  *cap = ncap;
-  return 0;
-}
-
 void ws_parser_init(ws_parser_t *p) {
   memset(p, 0, sizeof *p);
-  buf_reserve(&p->buf, &p->cap, 256);
-  buf_reserve(&p->msg, &p->msg_cap, 256);
+  growbuf_reserve((void **)&p->buf, &p->cap, 1, 256, 256);
+  growbuf_reserve((void **)&p->msg, &p->msg_cap, 1, 256, 256);
 }
 
 void ws_parser_free(ws_parser_t *p) {
@@ -39,7 +27,7 @@ int ws_parser_feed(ws_parser_t *p, const uint8_t *data, size_t len) {
     p->len -= p->off;
     p->off = 0;
   }
-  if (buf_reserve(&p->buf, &p->cap, p->len + len))
+  if (growbuf_reserve((void **)&p->buf, &p->cap, 1, p->len + len, 256))
     return -1;
   memcpy(p->buf + p->len, data, len);
   p->len += len;
@@ -128,7 +116,7 @@ int ws_parser_next(ws_parser_t *p, int *opcode, const uint8_t **payload, size_t 
     }
 
     if (p->msg_len + (size_t)plen64 > WS_MAX_MESSAGE_LEN) return -1;
-    if (buf_reserve(&p->msg, &p->msg_cap, p->msg_len + (size_t)plen64)) return -1;
+    if (growbuf_reserve((void **)&p->msg, &p->msg_cap, 1, p->msg_len + (size_t)plen64, 256)) return -1;
     ws_unmask(p->msg + p->msg_len, body, mask, (size_t)plen64);
     p->msg_len += (size_t)plen64;
     consume(p, need);

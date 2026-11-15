@@ -7,6 +7,7 @@
 #include "lib/bim/codec.h"
 #include "lib/bim/aod.h"
 #include "lib/bim/codec/codec_int.h"
+#include "lib/helper/strutil.h"
 
 #define ELEM_DEPTH_MAX 256 /* element nesting, as XML parser */
 
@@ -38,18 +39,14 @@ typedef struct {
 /* append, 0 ok, -1 oom (b->buf NULL) */
 int dec_add_n(dstrbuf_t *b, const char *s, size_t n);
 int dec_add(dstrbuf_t *b, const char *s);
-/* value text appended to b */
-int dec_text(dec_t *d, const bim_simple_t *s, dstrbuf_t *b);
 int dec_plain(dec_t *d, const bim_simple_t *s, dstrbuf_t *b);
 int dec_zstring(dec_t *d, dstrbuf_t *b);
 void dec_float_render(double x, int prec, char *buf, size_t cap);
-int dec_list_count(dec_t *d, const bim_simple_t *s, uint64_t *n);
 /* ISO 23001-1 8.2 .. 8.8, m: mapping of s */
 int dec_aod(dec_t *d, const bim_simple_t *s, const bim_aod_map_t *m, dstrbuf_t *b);
 void dec_init(dec_t *d, const bim_decode_opts_t *opts, bitreader_t *br, strrepo_reader_t *sr);
 void dec_done(dec_t *d);
 int dec_value(dec_t *d, const bim_simple_t *s, char **out);
-int dec_element(dec_t *d, const bim_part_t *p, const bim_type_t *t, bim_node_t *k, int top, int *deferred);
 int dec_add_child(dec_t *d, bim_node_t *node, const bim_part_t *p, const bim_type_t *t, const char *name, const char *ns);
 /* ISO 23001-1 7.4.8, 7.4.9 */
 int dec_fragment_reference(dec_t *d, const bim_type_t *t, bim_node_t *k, int *deferred);

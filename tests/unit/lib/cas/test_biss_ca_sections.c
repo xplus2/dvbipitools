@@ -37,7 +37,8 @@ END_TEST
 
 START_TEST(session_data_round_trips_odd_parity) {
   unsigned char sw[BISS_CA_SK_LEN] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-  unsigned char out[BISS_CA_SESSION_DATA_LEN], sk[BISS_CA_SK_LEN];
+  unsigned char out[BISS_CA_SESSION_DATA_LEN];
+  unsigned char sk[BISS_CA_SK_LEN];
   int parity = -1;
   ck_assert_uint_eq(biss_ca_build_session_data(sw, 1, out, sizeof out), BISS_CA_SESSION_DATA_LEN);
   ck_assert_int_eq(biss_ca_parse_session_data(out, sizeof out, sk, &parity), 0);
@@ -46,20 +47,11 @@ START_TEST(session_data_round_trips_odd_parity) {
 }
 END_TEST
 
-START_TEST(entitlement_session_id_desc_round_trips) {
+START_TEST(entitlement_session_id_desc_builds) {
+  static const unsigned char want[6] = {BISS_CA_ENTITLEMENT_SESSION_ID_DESC_TAG, 4, 0x12, 0x34, 0x56, 0x78};
   unsigned char buf[8];
-  unsigned esid = 0, onid = 0;
   ck_assert_uint_eq(biss_ca_build_entitlement_session_id_desc(0x1234, 0x5678, buf, sizeof buf), 6);
-  ck_assert_int_eq(biss_ca_parse_entitlement_session_id_desc(buf, 6, &esid, &onid), 0);
-  ck_assert_uint_eq(esid, 0x1234);
-  ck_assert_uint_eq(onid, 0x5678);
-}
-END_TEST
-
-START_TEST(entitlement_session_id_desc_rejects_wrong_tag) {
-  unsigned char buf[6] = {0x7F, 4, 0, 0, 0, 0};
-  unsigned esid, onid;
-  ck_assert_int_eq(biss_ca_parse_entitlement_session_id_desc(buf, sizeof buf, &esid, &onid), -1);
+  ck_assert_mem_eq(buf, want, 6);
 }
 END_TEST
 
@@ -92,7 +84,8 @@ END_TEST
 START_TEST(emm_section_round_trips_multiple_entries) {
   unsigned char sec[4096];
   biss_ca_emm_entry_t entries[3];
-  size_t len, i;
+  size_t len;
+  size_t i;
   biss_ca_emm_parsed_t parsed;
 
   for (i = 0; i < 3; i++) {
@@ -231,8 +224,7 @@ static Suite *biss_ca_sections_suite(void) {
   tcase_add_test(tc, session_data_matches_annex_c_vector);
   tcase_add_test(tc, session_data_parse_matches_annex_c_vector);
   tcase_add_test(tc, session_data_round_trips_odd_parity);
-  tcase_add_test(tc, entitlement_session_id_desc_round_trips);
-  tcase_add_test(tc, entitlement_session_id_desc_rejects_wrong_tag);
+  tcase_add_test(tc, entitlement_session_id_desc_builds);
   tcase_add_test(tc, emm_section_round_trips_single_entry);
   tcase_add_test(tc, emm_section_round_trips_multiple_entries);
   tcase_add_test(tc, emm_find_entry_returns_null_for_unknown_ekid);

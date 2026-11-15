@@ -16,10 +16,7 @@ const char *tva_genre_href(const char *category);
 /* crid://dipixmltv.invalid/<percent-encoded-channel-id>/<14-digit-timestamp> */
 void tva_build_crid(const char *channel_id, const char *start_iso, char *out, size_t outcap);
 
-/* caches crid in pr->crid. 0 ok, -1 OOM (pr unchanged) */
-int tva_programme_cache_crid(bcg_programme_t *pr);
-
-/* pr->crid if cached, else built into buf (cap >= TVA_CRID_BUF) */
+/* built into buf (cap >= TVA_CRID_BUF) */
 const char *tva_programme_crid(const bcg_programme_t *pr, char *buf, size_t cap);
 
 /* channels with no uri are dropped, along with their programmes */

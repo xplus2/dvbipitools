@@ -10,7 +10,7 @@
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
 #include "lib/helper/base64.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
 #include "config.h"
@@ -136,15 +136,12 @@ static int apply_verbose(void *c, const char *val, char *err, size_t errsz) {
 
 static int apply_color(void *c, const char *val, char *err, size_t errsz) {
   log_color_t v;
-  if (log_color_from_string(val, &v)) {
-    snprintf(err, errsz, "invalid '%s' (auto|always|never)", val);
-    return -1;
-  }
+  if (log_color_from_string(val, &v)) return yamlcfg_bad(err, errsz, val, "auto|always|never");
   ((config_t *)c)->color_mode = v;
   return 0;
 }
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t metrics_cfg_keys[] = {
     {"sock", apply_sock, 0, 0},
     {"listen", apply_listen, 0, 0},
     {"tls.cert", apply_tls_cert, 1, 0},
@@ -155,11 +152,12 @@ static const yamlcfg_key_t keys[] = {
     {"verbose", apply_verbose, 0, 0},
     {"color", apply_color, 0, 0},
 };
+const size_t metrics_cfg_nkeys = sizeof metrics_cfg_keys / sizeof metrics_cfg_keys[0];
 
 int metrics_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
+  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, metrics_cfg_keys, metrics_cfg_nkeys, cfg);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -170,7 +168,7 @@ int metrics_cfg_test(const char *path, int strict) {
   const char *code;
 
   metrics_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, metrics_cfg_keys, metrics_cfg_nkeys, &cfg) != YAMLCFG_LOADED) return -1;
   conflict = metrics_cfg_conflict(&cfg, &code);
   if (conflict) yamlcfg_warn(&y, code, "%s", conflict);
   return yamlcfg_report(&y);

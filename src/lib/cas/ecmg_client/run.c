@@ -7,9 +7,9 @@
 #include "lib/cas/cas_dial.h"
 #include "lib/helper/log.h"
 #include "lib/helper/secure_zero.h"
-#include "lib/sys/ioutil.h"
 
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 /* pre-seed hist[] from cw_source - cache-hit path, no self-gen.
    window: same first_cp calc as ecmg_build_cw_provision, exact match required. */
@@ -44,7 +44,8 @@ static void log_ecm_wait_failed(ecmg_client_t *c, unsigned short cp_number) {
 
 static void publish_ecm_response(ecmg_client_t *c, unsigned short cp_number, const unsigned char *payload, unsigned short payload_len) {
   simulcrypt_tlv_reader_t it;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *val;
   simulcrypt_tlv_reader_init(&it, payload, payload_len);
   while (simulcrypt_tlv_reader_next(&it, &tag, &val, &vlen) == 1) {

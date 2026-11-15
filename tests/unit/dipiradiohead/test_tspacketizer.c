@@ -171,7 +171,8 @@ START_TEST(tspacketizer_set_metadata_accepts_returning_title) {
   tspacketizer_cfg_t cfg;
   tspacketizer_t *t;
   unsigned char sec[512];
-  unsigned ver, id;
+  unsigned ver;
+  unsigned id;
   memset(&cfg, 0, sizeof cfg);
   cfg.standalone = 1;
   cfg.tsid = 1;

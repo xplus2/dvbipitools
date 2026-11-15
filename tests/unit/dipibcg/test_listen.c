@@ -21,7 +21,7 @@
 #include "lib/bim/index.h"
 #include "lib/bim/strrepo.h"
 #include "lib/net/dvbstp.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/sys/signal.h"
 #include "lib/tva/tva_xml.h"
 

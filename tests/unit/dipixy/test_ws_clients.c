@@ -22,7 +22,8 @@ static client_info_t make_info(const char *ip) {
 
 START_TEST(touch_same_info_twice_returns_same_handle) {
   client_info_t info = make_info("10.0.0.1");
-  int h1, h2;
+  int h1;
+  int h2;
   ws_clients_init(4);
   h1 = ws_clients_touch(&info);
   h2 = ws_clients_touch(&info);
@@ -52,7 +53,8 @@ END_TEST
 START_TEST(stale_remove_handle_does_not_evict_new_occupant) {
   client_info_t info_a = make_info("10.0.0.3");
   client_info_t info_b = make_info("10.0.0.4");
-  int h_a, h_b;
+  int h_a;
+  int h_b;
   char *snap = NULL;
 
   ws_clients_init(2);
@@ -77,7 +79,8 @@ END_TEST
 START_TEST(stale_add_bytes_handle_does_not_corrupt_new_occupant) {
   client_info_t info_a = make_info("10.0.0.5");
   client_info_t info_b = make_info("10.0.0.6");
-  int h_a, h_b;
+  int h_a;
+  int h_b;
   char *snap = NULL;
 
   ws_clients_init(2);
@@ -96,7 +99,8 @@ END_TEST
 START_TEST(touch_distinguishes_different_clients) {
   client_info_t info_a = make_info("10.1.0.1");
   client_info_t info_b = make_info("10.1.0.2");
-  int h_a, h_b;
+  int h_a;
+  int h_b;
   ws_clients_init(8);
   h_a = ws_clients_touch(&info_a);
   h_b = ws_clients_touch(&info_b);
@@ -152,7 +156,8 @@ END_TEST
 START_TEST(handle_changes_across_slot_reuse) {
   client_info_t info_a = make_info("10.0.0.7");
   client_info_t info_b = make_info("10.0.0.8");
-  int h_a, h_b;
+  int h_a;
+  int h_b;
 
   ws_clients_init(2);
   h_a = ws_clients_add_persistent(&info_a);
@@ -434,7 +439,7 @@ START_TEST(tick_expires_idle_pull_clients) {
   ck_assert_int_ge(ws_clients_touch(&info), 0);
   idx = slot_of_pull_client();
   ck_assert_int_ge(idx, 0);
-  g_clients[idx].last_seen = time(NULL) - 3600;
+  atomic_store(&g_clients[idx].last_seen, time(NULL) - 3600);
   sink_attach();
 
   ws_clients_tick();
@@ -454,7 +459,7 @@ START_TEST(tick_keeps_persistent_clients_however_idle) {
   ws_clients_init(4);
   h = ws_clients_add_persistent(&info);
   ck_assert_int_ge(h, 0);
-  g_clients[h & 0xFFFFF].last_seen = time(NULL) - 3600;
+  atomic_store(&g_clients[h & 0xFFFFF].last_seen, time(NULL) - 3600);
 
   ws_clients_tick();
   ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);
@@ -471,7 +476,7 @@ START_TEST(tick_without_sinks_still_expires_idle_clients) {
   ck_assert_int_ge(ws_clients_touch(&info), 0);
   idx = slot_of_pull_client();
   ck_assert_int_ge(idx, 0);
-  g_clients[idx].last_seen = time(NULL) - 3600;
+  atomic_store(&g_clients[idx].last_seen, time(NULL) - 3600);
 
   ws_clients_tick();
   ck_assert_int_eq(ws_clients_build_snapshot(&snap), 0);

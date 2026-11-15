@@ -9,10 +9,10 @@
 #include <srt/srt.h>
 
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 #include "lib/net/srt/srtcommon.h"
 #include "lib/net/srt/srtout.h"
 #include "lib/net/srt/srtout/srtout_int.h"
+#include "lib/helper/dateutil.h"
 
 static unsigned char *pending_slot(srtout_t *r, int idx) { return r->pending + (size_t)idx * SRTOUT_PLSIZE; }
 

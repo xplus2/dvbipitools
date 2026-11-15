@@ -38,7 +38,7 @@ ts_sub_t *g_ts_subs;
 int g_ts_subs_n;
 
 void ts_push_set_reactor_tid(int idx, int tid) {
-  g_ts_subs[idx].reactor_tid = tid;
+  g_ts_subs[idx].h.reactor_tid = tid;
 }
 
 void flush_tx(h3_conn_t *c, int udp_fd) {
@@ -143,7 +143,7 @@ static int mp4_get_sub(const h3_req_t *r) { return r->mp4push_sub_idx; }
 static void ts_bound(int sub, h3_conn_t **c, int64_t *sid, int *tid, int *ws) {
   *c = g_ts_subs[sub].h3c;
   *sid = g_ts_subs[sub].h3_sid;
-  *tid = g_ts_subs[sub].reactor_tid;
+  *tid = g_ts_subs[sub].h.reactor_tid;
   *ws = FAKE_WS_HANDLE;
 }
 
@@ -197,7 +197,7 @@ static void world_open(h3_conn_t *c) {
   ck_assert_ptr_nonnull(g_ts_subs);
   for (int i = 0; i < FAKE_SUBS; i++) {
     byte_ring_reset(&g_ts_subs[i].h3_ring, FAKE_RING_BYTES);
-    atomic_store(&g_ts_subs[i].alive, TS_SUB_ALIVE);
+    atomic_store(&g_ts_subs[i].h.alive, TS_SUB_ALIVE);
   }
   memset(c, 0, sizeof *c);
   nghttp3_settings_default(&st);
@@ -321,7 +321,7 @@ START_TEST(read_callback_ends_after_an_overflowed_ring_where_supported) {
     ck_assert_int_eq((int)k->read_cb(NULL, 4, vec, 1, &flags, &c, &r), 0);
     ck_assert_uint_eq(flags, (uint32_t)NGHTTP3_DATA_FLAG_EOF);
   } else {
-    atomic_store(&g_ts_subs[3].alive, TS_SUB_CLOSING);
+    atomic_store(&g_ts_subs[3].h.alive, TS_SUB_CLOSING);
     ck_assert_int_eq((int)k->read_cb(NULL, 4, vec, 1, &flags, &c, &r), 0);
     ck_assert_uint_eq(flags, (uint32_t)NGHTTP3_DATA_FLAG_EOF);
   }

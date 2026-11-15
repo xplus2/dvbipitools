@@ -3,6 +3,7 @@
 
 #include "ts_push_int.h"
 #include "../reactor/conn.h"
+#include "../reactor/wake.h"
 #include "../segment/pidlock.h"
 
 #include "lib/demux/psi/section_asm.h"
@@ -33,6 +34,7 @@ static void lcevc_lock(ts_sub_t *s, const psi_t *tp) {
     }
   }
   pidlock_apply_lcevc(&s->lcevc, &s->filter, pids, (int)count);
+  pid_mask_from_filter(&s->filter_mask, &s->filter);
   s->lcevc_locked = 1;
 }
 
@@ -82,9 +84,8 @@ static const unsigned char *rewrite_psi(ts_sub_t *s, const unsigned char *pkt, u
   return pidlock_rewrite_pmt(tp, &s->filter, &s->cc_pmt, pkt, pid, rw, out, n_pkts);
 }
 
-void ts_push_rawaudio_emit(void *vctx, const unsigned char *data, size_t len) {
-  ts_sub_t *s = vctx;
-  switch (s->proto) {
+static void sub_emit(ts_sub_t *s, const unsigned char *data, size_t len) {
+  switch (s->h.proto) {
     case CONN_PROTO_H1:
       ts_push_ring_enqueue(s, data, len);
       break;
@@ -103,60 +104,42 @@ void ts_push_rawaudio_emit(void *vctx, const unsigned char *data, size_t len) {
   }
 }
 
+void ts_push_rawaudio_emit(void *vctx, const unsigned char *data, size_t len) { sub_emit(vctx, data, len); }
+
 void ts_push_drop_sub(const ts_sub_t *s, int idx) {
-  if (s->proto == CONN_PROTO_H1) {
-    conn_t *c = conn_for_fd_gen(s->fd, s->conn_gen);
+  if (s->h.proto == CONN_PROTO_H1) {
+    conn_t *c = conn_for_fd_gen(s->h.fd, s->h.conn_gen);
     if (c) conn_request_close(c);
   }
   ts_push_unsubscribe_by_idx(idx);
+}
+
+static void feed_sub(ts_sub_t *s, const uint8_t *pkt, unsigned pid, unsigned char *pmt_rw, unsigned char *pmt_pkt) {
+  const unsigned char *out;
+  size_t n_pkts;
+  if (s->rawaudio) {
+    rawaudio_demux_feed(s->rawaudio, pkt);
+    if (!atomic_load_explicit(&s->ctype_ready, memory_order_relaxed) && rawaudio_demux_codec(s->rawaudio, &s->audio_codec)) {
+      atomic_store_explicit(&s->ctype_ready, 1, memory_order_release);
+      reactor_wake(s->h.reactor_tid, WAKE_TSPUSH);
+    }
+    return;
+  }
+  filter_psi_track(s, pkt, pid);
+  if (s->spts && !spts_admit(s, pkt, pid)) return;
+  if (pid_mask_has(&s->filter_mask, pid)) return;
+  out = rewrite_psi(s, pkt, pid, pmt_rw, pmt_pkt, &n_pkts);
+  if (out) sub_emit(s, out, n_pkts * 188);
 }
 
 void ts_push_feed_pkt(capture_ctx_t *ctx, const uint8_t *pkt) {
   unsigned pid = tspack_pid(pkt);
   unsigned char pmt_rw[PSI_SECTION_ASM_BUF_LEN];
   unsigned char pmt_pkt[PMT_FILTER_PKT_MAX * 188];
-  int i;
-  i = atomic_load_explicit(capture_ts_push_head_ptr(ctx), memory_order_acquire);
-  while (i != -1) {
+  for (int i = atomic_load_explicit(capture_ts_push_head_ptr(ctx), memory_order_acquire); i != -1; i = atomic_load_explicit(&g_ts_subs[i].h.chain_next, memory_order_relaxed)) {
     ts_sub_t *s = &g_ts_subs[i];
-    int next = atomic_load_explicit(&s->ctx_next, memory_order_relaxed);
-    const unsigned char *out;
-    size_t out_len;
-    if (atomic_load_explicit(&s->alive, memory_order_acquire) != TS_SUB_ALIVE) goto next_sub;
-    if (atomic_load_explicit(&s->ctx, memory_order_relaxed) != ctx) goto next_sub;
-    if (!atomic_load_explicit(&s->ready, memory_order_acquire)) goto next_sub;
-    if (s->rawaudio) {
-      rawaudio_demux_feed(s->rawaudio, pkt);
-      if (!atomic_load_explicit(&s->ctype_ready, memory_order_relaxed) && rawaudio_demux_codec(s->rawaudio, &s->audio_codec)) {
-        atomic_store_explicit(&s->ctype_ready, 1, memory_order_release);
-        ts_push_wake_reactor(s->reactor_tid);
-      }
-      goto next_sub;
-    }
-    filter_psi_track(s, pkt, pid);
-    if (s->spts && !spts_admit(s, pkt, pid)) goto next_sub;
-    if (pid_filter_excludes(&s->filter, pid)) goto next_sub;
-    out = rewrite_psi(s, pkt, pid, pmt_rw, pmt_pkt, &out_len);
-    if (!out) goto next_sub;
-    out_len *= 188;
-    switch (s->proto) {
-      case CONN_PROTO_H1:
-        ts_push_ring_enqueue(s, out, out_len);
-        break;
-#ifdef HAVE_HTTP2
-      case CONN_PROTO_H2:
-        ts_push_h2_enqueue(i, out, out_len);
-        break;
-#endif
-#ifdef HAVE_HTTP3
-      case CONN_PROTO_H3:
-        ts_push_h3_enqueue(i, out, out_len);
-        break;
-#endif
-      default:
-        break;
-    }
-  next_sub:
-    i = next;
+    if (atomic_load_explicit(&s->h.alive, memory_order_acquire) != TS_SUB_ALIVE || atomic_load_explicit(&s->h.cap_ctx, memory_order_relaxed) != ctx || !atomic_load_explicit(&s->ready, memory_order_acquire))
+      continue;
+    feed_sub(s, pkt, pid, pmt_rw, pmt_pkt);
   }
 }

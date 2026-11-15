@@ -69,4 +69,6 @@ void h3_cleanup(void);
 
 #endif /* HAVE_HTTP3 */
 
+void h3_ws_buf_pool_release(void);
+
 #endif /* DIPIXY_HTTP3_H */

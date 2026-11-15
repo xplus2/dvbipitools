@@ -23,10 +23,10 @@ typedef struct {
   int zmode; /* 0 chunk per string, 1 collecting strings, 2 emitting planned chunks */
   struct enc_zplan *zp;
   size_t zi; /* strings emitted in mode 2 */
+  struct enc_cnt *cnt;
 } enc_t;
 
 int enc_bit(bitwriter_t *bw, int v);
-const char *enc_skip_ws(const char *s);
 /* mapped advanced optimised decoder, else default codec */
 int enc_text(enc_t *e, const bim_simple_t *s, const char *v);
 int enc_plain(enc_t *e, const bim_simple_t *s, const char *v);
@@ -41,11 +41,10 @@ int enc_zchunks(enc_t *e, const char *v);
 int enc_gathered(enc_t *e, const bim_type_t *t, const bim_node_t *root);
 /* ISO 23001-1 8.2 .. 8.8, m: mapping of s */
 int enc_aod(enc_t *e, const bim_simple_t *s, const bim_aod_map_t *m, const char *v);
-/* body into a temporary writer, then length (bits) and body. fn writes to e->bw */
+/* length (bits) and body. fn writes to e->bw */
 int enc_counted(enc_t *e, int (*fn)(enc_t *e, void *arg), void *arg);
+size_t enc_counted_progress(const enc_t *e);
 int enc_element(enc_t *e, const bim_part_t *p, const bim_type_t *t, const bim_node_t *k, int top);
-/* ISO 23001-1 7.4.8, 7.4.9 */
-int enc_fragment_reference(enc_t *e, const bim_node_t *k);
 /* 7.5.2.4.5.2 (Amd 2) */
 int enc_any_element(enc_t *e, const bim_node_t *k);
 /* 7.5.3.2, 7.5.3.3 (Amd 2): attributes of node not declared by t */
@@ -55,8 +54,6 @@ int enc_lax(enc_t *e, const bim_node_t *k);
 /* global element of a known schema other than lax, by name or pointer. sid, code may be NULL */
 int enc_global_name(const enc_t *e, const bim_node_t *k, const bim_elem_t **x, int *sid, uint64_t *code);
 int enc_global_ptr(const enc_t *e, const bim_elem_t *x, int *sid, uint64_t *code);
-int enc_is_nil(const bim_node_t *k);
-int enc_wildcard_allows(const bim_wildcard_t *w, const char *ns);
 /* attribute not declared by t and not xsi */
 int enc_extra_attr(const bim_type_t *t, const bim_node_t *node, int i);
 

@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 
 static int frag_reserve_samples(frag_track_t *f, int need) {
   size_t cap = (size_t)f->cap;
@@ -47,7 +47,8 @@ void fmp4_mux_free(fmp4_mux_t *m) {
 }
 
 size_t fmp4_init_segment(fmp4_mux_t *m, unsigned char **out) {
-  mp4buf_t ftyp, moov;
+  mp4buf_t ftyp;
+  mp4buf_t moov;
   mp4buf_free(&m->out);
   memset(&ftyp, 0, sizeof ftyp);
   mb_fourcc(&ftyp, "iso5"); /* major_brand */

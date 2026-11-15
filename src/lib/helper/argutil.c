@@ -2,7 +2,8 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "argutil.h"
-#include "../sys/ioutil.h"
+#include "../demux/tspack.h"
+#include "strutil.h"
 #include "log.h"
 
 #include <getopt.h>
@@ -90,7 +91,7 @@ int metrics_known_pids_parse(const char *s, unsigned *out, unsigned *n) {
     unsigned long v;
     errno = 0;
     v = strtoul(s, &end, 0);
-    if (end == s || errno || v > 8191 || cnt == METRICS_KNOWN_PIDS_MAX) return -1;
+    if (end == s || errno || v > TS_PID_MAX || cnt == METRICS_KNOWN_PIDS_MAX) return -1;
     out[cnt++] = (unsigned)v;
     if (*end == ',') end++;
     else if (*end) return -1;
@@ -145,6 +146,24 @@ int argutil_uint_range(const char *s, unsigned min, unsigned max, unsigned *out)
   v = strtoul(s, &end, 10);
   if (errno || *end != '\0' || v < min || v > max) return -1;
   *out = (unsigned)v;
+  return 0;
+}
+
+int argutil_pid_parse(const char *s, unsigned min, unsigned *out) {
+  char *end;
+  unsigned long v = strtoul(s, &end, 0);
+  if (*end != '\0' || v < min || v > 0x1FFE) return -1;
+  *out = (unsigned)v;
+  return 0;
+}
+
+int argutil_pmt_sel_parse(const char *s, pmt_sel_t *sel, unsigned *pid) {
+  if (!strcmp(s, "all")) {
+    *sel = PMT_SEL_ALL;
+    return 0;
+  }
+  if (argutil_pid_parse(s, 0x10, pid)) return -1;
+  *sel = PMT_SEL_PID;
   return 0;
 }
 

@@ -8,6 +8,7 @@
 #include "lib/sys/signal.h"
 #include "../version.h"
 #include "run.h"
+#include "lib/helper/dateutil.h"
 
 void fccret_push_metrics(metrics_ctx_t *mc) {
   metrics_writer_t w;

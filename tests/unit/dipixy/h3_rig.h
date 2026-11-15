@@ -24,6 +24,7 @@
 #include "dipixy/http3/http3.h"
 #include "dipixy/http3/http3_int.h"
 #include "dipixy/reactor/internal.h"
+#include "lib/helper/dateutil.h"
 
 #define H3R_STREAMS 6
 #define H3R_PKT 1452
@@ -213,7 +214,7 @@ static inline int h3r_recv_stream_data(ngtcp2_conn *c, uint32_t flags, int64_t s
       return 0;
     }
   }
-  n = nghttp3_conn_read_stream2(h->h3, sid, data, len, (flags & NGTCP2_STREAM_DATA_FLAG_FIN) != 0, h3_ts());
+  n = nghttp3_conn_read_stream2(h->h3, sid, data, len, (flags & NGTCP2_STREAM_DATA_FLAG_FIN) != 0, now_ns());
   if (n < 0) return NGTCP2_ERR_CALLBACK_FAILURE;
   ngtcp2_conn_extend_max_stream_offset(h->qc, sid, (uint64_t)n);
   ngtcp2_conn_extend_max_offset(h->qc, (uint64_t)n);
@@ -351,7 +352,7 @@ static inline void h3r_client_start(h3rig_t *h) {
   cbs.get_new_connection_id2 = h3r_new_cid;
 
   ngtcp2_settings_default(&settings);
-  settings.initial_ts = h3_ts();
+  settings.initial_ts = now_ns();
   ngtcp2_transport_params_default(&tp);
   tp.initial_max_streams_uni = 3;
   tp.initial_max_streams_bidi = 16;
@@ -394,7 +395,7 @@ static inline void h3r_client_flush(h3rig_t *h) {
       }
       if (fin) flags |= NGTCP2_WRITE_STREAM_FLAG_FIN;
     }
-    nwrite = ngtcp2_conn_writev_stream(h->qc, &ps.path, NULL, buf, sizeof buf, &ndatalen, flags, sid, dv, (size_t)vcnt, h3_ts());
+    nwrite = ngtcp2_conn_writev_stream(h->qc, &ps.path, NULL, buf, sizeof buf, &ndatalen, flags, sid, dv, (size_t)vcnt, now_ns());
     if (nwrite < 0) {
       if (nwrite == NGTCP2_ERR_STREAM_DATA_BLOCKED) {
         nghttp3_conn_block_stream(h->h3, sid);
@@ -431,14 +432,14 @@ static inline void h3r_client_recv(h3rig_t *h) {
     path.local.addrlen = sizeof h->cli_addr;
     path.remote.addr = (ngtcp2_sockaddr *)&h->srv_addr;
     path.remote.addrlen = sizeof h->srv_addr;
-    rv = ngtcp2_conn_read_pkt(h->qc, &path, &pi, buf, (size_t)n, h3_ts());
+    rv = ngtcp2_conn_read_pkt(h->qc, &path, &pi, buf, (size_t)n, now_ns());
     if (rv != 0) {
       h->closed_by_peer = 1;
       return;
     }
   }
-  if (ngtcp2_conn_get_expiry(h->qc) <= h3_ts()) {
-    if (ngtcp2_conn_handle_expiry(h->qc, h3_ts()) != 0) h->closed_by_peer = 1;
+  if (ngtcp2_conn_get_expiry(h->qc) <= now_ns()) {
+    if (ngtcp2_conn_handle_expiry(h->qc, now_ns()) != 0) h->closed_by_peer = 1;
   }
 }
 
@@ -454,9 +455,9 @@ static inline int h3r_cond_met(int (*cond)(h3rig_t *, void *), h3rig_t *h, void 
 }
 
 static inline int h3r_pump_timed(h3rig_t *h, int (*cond)(h3rig_t *, void *), void *arg, unsigned ms) {
-  uint64_t deadline = h3_ts() + (uint64_t)ms * 1000000ULL;
+  uint64_t deadline = now_ns() + (uint64_t)ms * 1000000ULL;
 
-  while (h3_ts() < deadline) {
+  while (now_ns() < deadline) {
     struct pollfd pfd = {.fd = h->srv_fd, .events = POLLIN};
 
     if (h3r_cond_met(cond, h, arg)) return 1;
@@ -570,7 +571,7 @@ static inline void h3r_send_raw(h3rig_t *h, int64_t sid, const uint8_t *data, si
   while (off < len || fin) {
     ngtcp2_vec vec = {(uint8_t *)data + off, len - off};
     ngtcp2_ssize ndatalen = 0;
-    ngtcp2_ssize nwrite = ngtcp2_conn_writev_stream(h->qc, &ps.path, NULL, buf, sizeof buf, &ndatalen, fin ? NGTCP2_WRITE_STREAM_FLAG_FIN : NGTCP2_WRITE_STREAM_FLAG_NONE, sid, &vec, len - off ? 1 : 0, h3_ts());
+    ngtcp2_ssize nwrite = ngtcp2_conn_writev_stream(h->qc, &ps.path, NULL, buf, sizeof buf, &ndatalen, fin ? NGTCP2_WRITE_STREAM_FLAG_FIN : NGTCP2_WRITE_STREAM_FLAG_NONE, sid, &vec, len - off ? 1 : 0, now_ns());
 
     ck_assert_int_ge((int)nwrite, 0);
     if (ndatalen > 0) off += (size_t)ndatalen;

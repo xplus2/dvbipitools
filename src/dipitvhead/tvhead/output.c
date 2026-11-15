@@ -12,6 +12,7 @@
 
 #include "../version.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 ristout_t *tvhead_rist_open(const config_t *cfg) {
   ristout_cfg_t rc;
@@ -19,7 +20,7 @@ ristout_t *tvhead_rist_open(const config_t *cfg) {
   memset(&rc, 0, sizeof rc);
   for (unsigned i = 0; i < cfg->n_rist; i++) rc.peer_uri[i] = cfg->rist_uri[i];
   rc.npeers = (int)cfg->n_rist;
-  rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
+  rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RIST_PROF_MAIN : RIST_PROF_SIMPLE;
   rc.secret = cfg->rist_secret;
   rc.key_size = cfg->rist_key_size;
   rc.cname = cfg->rist_cname;
@@ -370,7 +371,8 @@ int run_output(tvsrc_t *src, remux_t *rx, out_ctx_t *out, const config_t *cfg, c
   unsigned char buf[65536];
   tspack_t pz;
   feed_ctx_t fc;
-  double start = mono_seconds(), last_stat = 0;
+  double start = mono_seconds();
+  double last_stat = 0;
   net_err_reason_t reason;
 
   memset(&pz, 0, sizeof pz);

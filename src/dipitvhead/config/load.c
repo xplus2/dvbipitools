@@ -6,7 +6,7 @@
 #include "../version.h"
 #include "priv.h"
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t tvh_cfg_keys[] = {
 {"input", tvh_apply_input, 0, YAMLCFG_LIST_KEYED},
 {"input.pmt-pid", tvh_apply_input_pmt_pid, 0, 0},
 {"input.sid", tvh_apply_input_sid, 0, 0},
@@ -99,11 +99,12 @@ static const yamlcfg_key_t keys[] = {
 {"biss2.ca-receivers", tvh_apply_biss2_ca_receivers, 1, 0},
 {"biss2.ca-session-id", tvh_apply_biss2_ca_session_id, 0, 0},
 };
+const size_t tvh_cfg_nkeys = sizeof tvh_cfg_keys / sizeof tvh_cfg_keys[0];
 
 int tvh_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load_items(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg, tvh_item_hook);
+  int rc = yamlcfg_load_items(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, tvh_cfg_keys, tvh_cfg_nkeys, cfg, tvh_item_hook);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -124,7 +125,7 @@ int tvh_cfg_test(const char *path, int strict) {
   report_t r = {&y, 0};
   int fatal;
   tvh_cfg_defaults(&cfg);
-  if (yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg, tvh_item_hook) != YAMLCFG_LOADED) return -1;
+  if (yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, tvh_cfg_keys, tvh_cfg_nkeys, &cfg, tvh_item_hook) != YAMLCFG_LOADED) return -1;
   yamlcfg_warn_if(&y, cfg.n_inputs == 0, "TA000363", "input not set (required unless given on the command line)");
   yamlcfg_warn_if(&y, !cfg.mcast_port && cfg.n_rist == 0 && cfg.n_srt == 0, "TA000513", "mcast, rist or srt not set (one is required unless given on the command line)");
   fatal = tvh_cfg_check(&cfg, 1, warn_report, &r);

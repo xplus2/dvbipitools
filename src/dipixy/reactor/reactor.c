@@ -16,18 +16,23 @@
 #include "lib/helper/log.h"
 #include "reactor_tls.h"
 #include "qsbr.h"
+#include "wake.h"
 #include "../core/tlscert.h"
 #include "../altsvc.h"
 #ifdef HAVE_HTTP3
 #include "../http3/http3.h"
+#include "lib/helper/strutil.h"
 #endif
 
+#include <stdatomic.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <sys/epoll.h>
 #include <unistd.h>
 
-long g_connections_total = 0;
+static void wake_tspush(int tid) { reactor_wake(tid, WAKE_TSPUSH); }
+
+_Atomic long g_connections_total;
 
 /* both used by reactor_tls.c: t_reactor_fd stays -1 here (dipixy has no deferred-close reactor path) */
 _Thread_local int t_reactor_fd = -1;
@@ -55,11 +60,11 @@ void reactor_set_context(const config_t *cfg, const channels_t *channels, metric
   g_metrics = mx;
 }
 
-long reactor_connections_total(void) { return __atomic_load_n(&g_connections_total, __ATOMIC_RELAXED); }
+long reactor_connections_total(void) { return atomic_load_explicit(&g_connections_total, memory_order_relaxed); }
 
-static int g_workers;
+static _Atomic int g_workers;
 
-int reactor_worker_count(void) { return __atomic_load_n(&g_workers, __ATOMIC_RELAXED); }
+int reactor_worker_count(void) { return atomic_load_explicit(&g_workers, memory_order_relaxed); }
 
 void reactor_arm(int epfd, conn_t *c, int want_out) { conn_epoll_mod(c, epfd, want_out); }
 
@@ -172,6 +177,8 @@ void reactor_notify_listening(void) {
 int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporter_t *mx, void (*on_listening)(const config_t *cfg)) {
   int workers;
   int n_pump;
+  pthread_t maint;
+  int maint_started;
   int i;
   int conn_cap;
   pthread_t threads[REACTOR_MAX_WORKERS];
@@ -227,7 +234,7 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
 #endif
   } else log_code("YA300171", TOOL_NAME ": no usable TLS certificate found, --listen-tls not bound");
 
-  __atomic_store_n(&g_workers, workers, __ATOMIC_RELAXED);
+  atomic_store_explicit(&g_workers, workers, memory_order_relaxed);
   tls_gc_init(workers);
   g_reactor_qsbr = qsbr_domain_create(workers);
   hls_store_set_qsbr(g_reactor_qsbr);
@@ -237,11 +244,12 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   capture_pump_set_thread_count(n_pump);
   _Static_assert(CONN_PUMP_MARKS == CAPTURE_PUMP_MAX_THREADS, "conn retire pump marks");
   conn_set_pump_qsbr(capture_pump_mark, capture_pump_mark_passed);
-  capture_lifecycle_start(ts_push_wake_reactor);
+  capture_lifecycle_start(wake_tspush);
 
   for (i = 0; i < n_pump; i++) {
     pumps_started[i] = pthread_create(&pumps[i], NULL, pump_thread, (void *)(intptr_t)i) == 0;
   }
+  maint_started = pthread_create(&maint, NULL, maint_thread, NULL) == 0;
   reactor_startup_begin(workers);
   for (i = 1; i < workers; i++) {
     threads_started[i] = pthread_create(&threads[i], NULL, worker_thread, (void *)(intptr_t)i) == 0;
@@ -255,11 +263,10 @@ int reactor_run(const config_t *cfg, const channels_t *channels, metrics_exporte
   for (i = 0; i < n_pump; i++) {
     if (pumps_started[i]) pthread_join(pumps[i], NULL);
   }
+  if (maint_started) pthread_join(maint, NULL);
   /* After reactor and pump joins. Frees queued jobs */
   capture_lifecycle_stop();
-  ts_push_close_reactor_efds();
-  dash_lldash_close_reactor_efds();
-  mp4push_close_reactor_efds();
+  reactor_wake_close_all();
   conn_graveyard_free();
 
 #ifdef HAVE_HTTP3

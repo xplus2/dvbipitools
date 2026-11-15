@@ -44,7 +44,9 @@ static size_t build_pmt(unsigned char *out, unsigned pcr_pid, const unsigned cha
 /* count/verify ES entries in a rewritten PMT's ES loop, pil at out[10..11] */
 static size_t es_loop(const unsigned char *sec, size_t seclen, unsigned *pids, size_t max) {
   size_t pil = (((size_t)sec[10] & 0x0F) << 8) | sec[11];
-  size_t i = 12 + pil, end = seclen - 4, n = 0;
+  size_t i = 12 + pil;
+  size_t end = seclen - 4;
+  size_t n = 0;
   while (i + 5 <= end && n < max) {
     size_t esil = (((size_t)sec[i + 3] & 0x0F) << 8) | sec[i + 4];
     pids[n++] = (((unsigned)sec[i + 1] & 0x1F) << 8) | sec[i + 2];
@@ -54,11 +56,13 @@ static size_t es_loop(const unsigned char *sec, size_t seclen, unsigned *pids, s
 }
 
 START_TEST(pmt_filter_rewrite_drops_one_es) {
-  unsigned char in[64], out[64];
+  unsigned char in[64];
+  unsigned char out[64];
   pmt_es_spec_t es[] = {{0x0100, 0x1B}, {0x0101, 0x0F}};
   unsigned drop[] = {0x0101};
   unsigned pids[4];
-  size_t inlen, outlen;
+  size_t inlen;
+  size_t outlen;
 
   inlen = build_pmt(in, 0x0100, NULL, 0, es, 2);
   outlen = pmt_filter_rewrite(in, inlen, drop, 1, out, sizeof out);
@@ -71,11 +75,13 @@ START_TEST(pmt_filter_rewrite_drops_one_es) {
 END_TEST
 
 START_TEST(pmt_filter_rewrite_drops_multiple_es) {
-  unsigned char in[64], out[64];
+  unsigned char in[64];
+  unsigned char out[64];
   pmt_es_spec_t es[] = {{0x0100, 0x1B}, {0x0101, 0x0F}, {0x0102, 0x06}};
   unsigned drop[] = {0x0100, 0x0102};
   unsigned pids[4];
-  size_t inlen, outlen;
+  size_t inlen;
+  size_t outlen;
 
   inlen = build_pmt(in, 0x0100, NULL, 0, es, 3);
   outlen = pmt_filter_rewrite(in, inlen, drop, 2, out, sizeof out);
@@ -88,11 +94,13 @@ START_TEST(pmt_filter_rewrite_drops_multiple_es) {
 END_TEST
 
 START_TEST(pmt_filter_rewrite_drops_multiple_es_out_of_order_drop_list) {
-  unsigned char in[64], out[64];
+  unsigned char in[64];
+  unsigned char out[64];
   pmt_es_spec_t es[] = {{0x0100, 0x1B}, {0x0101, 0x0F}, {0x0102, 0x06}};
   unsigned drop[] = {0x0102, 0x0100};
   unsigned pids[4];
-  size_t inlen, outlen;
+  size_t inlen;
+  size_t outlen;
 
   inlen = build_pmt(in, 0x0100, NULL, 0, es, 3);
   outlen = pmt_filter_rewrite(in, inlen, drop, 2, out, sizeof out);
@@ -125,11 +133,14 @@ START_TEST(pmt_filter_rewrite_pid_not_present_leaves_es_loop_unchanged) {
 END_TEST
 
 START_TEST(pmt_filter_rewrite_preserves_program_info) {
-  unsigned char in[64], out[64];
+  unsigned char in[64];
+  unsigned char out[64];
   static const unsigned char prog_info[] = {0x09, 4, 0x4A, 0x75, 0xE0, 0x20};
   pmt_es_spec_t es[] = {{0x0100, 0x1B}};
   unsigned drop[] = {0x9999};
-  size_t inlen, outlen, pil;
+  size_t inlen;
+  size_t outlen;
+  size_t pil;
 
   inlen = build_pmt(in, 0x0100, prog_info, sizeof prog_info, es, 1);
   outlen = pmt_filter_rewrite(in, inlen, drop, 1, out, sizeof out);
@@ -142,14 +153,16 @@ START_TEST(pmt_filter_rewrite_preserves_program_info) {
 END_TEST
 
 START_TEST(pmt_filter_rewrite_rejects_short_section) {
-  unsigned char in[15] = {0x02}, out[64];
+  unsigned char in[15] = {0x02};
+  unsigned char out[64];
   unsigned drop[] = {0};
   ck_assert_uint_eq(pmt_filter_rewrite(in, sizeof in, drop, 1, out, sizeof out), 0u);
 }
 END_TEST
 
 START_TEST(pmt_filter_rewrite_rejects_wrong_table_id) {
-  unsigned char in[64], out[64];
+  unsigned char in[64];
+  unsigned char out[64];
   pmt_es_spec_t es[] = {{0x0100, 0x1B}};
   unsigned drop[] = {0};
   size_t inlen = build_pmt(in, 0x0100, NULL, 0, es, 1);
@@ -159,7 +172,8 @@ START_TEST(pmt_filter_rewrite_rejects_wrong_table_id) {
 END_TEST
 
 START_TEST(pmt_filter_rewrite_rejects_corrupt_program_info_length) {
-  unsigned char in[64], out[64];
+  unsigned char in[64];
+  unsigned char out[64];
   pmt_es_spec_t es[] = {{0x0100, 0x1B}};
   unsigned drop[] = {0};
   size_t inlen = build_pmt(in, 0x0100, NULL, 0, es, 1);
@@ -170,7 +184,8 @@ START_TEST(pmt_filter_rewrite_rejects_corrupt_program_info_length) {
 END_TEST
 
 START_TEST(pmt_filter_rewrite_rejects_small_out_cap) {
-  unsigned char in[64], out[14]; /* room for header, not the first ES entry */
+  unsigned char in[64];
+  unsigned char out[14]; /* room for header, not the first ES entry */
   pmt_es_spec_t es[] = {{0x0100, 0x1B}, {0x0101, 0x0F}};
   unsigned drop[] = {0};
   size_t inlen = build_pmt(in, 0x0100, NULL, 0, es, 2);

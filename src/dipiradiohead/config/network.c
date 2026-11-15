@@ -10,6 +10,7 @@
 #include "lib/mux/fec2022.h"
 #include "lib/net/netconnect.h"
 #include "priv.h"
+#include "lib/net/rist/ristpeer.h"
 
 int rdh_apply_mcast(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
@@ -36,10 +37,7 @@ int rdh_apply_dscp(void *c, const char *v, char *e, size_t n) {
 
 int rdh_apply_al_fec(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) {
-    snprintf(e, n, "invalid '%s' (want L:D, L*D<=400, L<=40)", v);
-    return -1;
-  }
+  if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) return yamlcfg_bad(e, n, v, "want L:D, L*D<=400, L<=40");
   return 0;
 }
 
@@ -49,12 +47,12 @@ int rdh_apply_al_fec_port(void *c, const char *v, char *e, size_t n) {
 
 int rdh_apply_nit(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return rdh_set_buf(cfg->nit_text, sizeof cfg->nit_text, v, e, n);
+  return yamlcfg_set_buf(cfg->nit_text, sizeof cfg->nit_text, v, e, n);
 }
 
 int rdh_apply_default_provider(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return rdh_set_buf(cfg->default_provider_text, sizeof cfg->default_provider_text, v, e, n);
+  return yamlcfg_set_buf(cfg->default_provider_text, sizeof cfg->default_provider_text, v, e, n);
 }
 
 int rdh_apply_rist(void *c, const char *v, char *e, size_t n) {
@@ -62,34 +60,27 @@ int rdh_apply_rist(void *c, const char *v, char *e, size_t n) {
 }
 
 int rdh_apply_profile(void *c, const char *v, char *e, size_t n) {
-  static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
   config_t *cfg = c;
   int m;
-  if (map_lookup(map, sizeof map / sizeof map[0], v, &m)) {
-    snprintf(e, n, "invalid '%s' (simple|main)", v);
-    return -1;
-  }
-  cfg->rist_profile = (rist_profile_sel_t)m;
+  if (rist_prof_parse(v, &m)) return yamlcfg_bad(e, n, v, RIST_PROF_HINT);
+  cfg->rist_profile = (rist_prof_t)m;
   cfg->rist_profile_given = 1;
   return 0;
 }
 
 int rdh_apply_secret(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return rdh_set_buf(cfg->rist_secret, sizeof cfg->rist_secret, v, e, n);
+  return yamlcfg_set_buf(cfg->rist_secret, sizeof cfg->rist_secret, v, e, n);
 }
 
 int rdh_apply_encryption_type(void *c, const char *v, char *e, size_t n) {
-  if (argutil_rist_key_size(v, &((config_t *)c)->rist_key_size)) {
-    snprintf(e, n, "invalid '%s' (128|256)", v);
-    return -1;
-  }
+  if (argutil_rist_key_size(v, &((config_t *)c)->rist_key_size)) return yamlcfg_bad(e, n, v, ARGUTIL_RIST_KEY_SIZE_HINT);
   return 0;
 }
 
 int rdh_apply_cname(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return rdh_set_buf(cfg->rist_cname, sizeof cfg->rist_cname, v, e, n);
+  return yamlcfg_set_buf(cfg->rist_cname, sizeof cfg->rist_cname, v, e, n);
 }
 
 int rdh_apply_buffer(void *c, const char *v, char *e, size_t n) {
@@ -99,31 +90,28 @@ int rdh_apply_buffer(void *c, const char *v, char *e, size_t n) {
 int rdh_apply_srt_group_mode(void *c, const char *v, char *e, size_t n) {
   static const enum_map_t map[] = {{"broadcast", SRT_BOND_BROADCAST}, {"backup", SRT_BOND_BACKUP}};
   int m;
-  if (map_lookup(map, sizeof map / sizeof map[0], v, &m)) {
-    snprintf(e, n, "invalid '%s' (broadcast|backup)", v);
-    return -1;
-  }
+  if (map_lookup(map, sizeof map / sizeof map[0], v, &m)) return yamlcfg_bad(e, n, v, "broadcast|backup");
   ((config_t *)c)->srt_group_mode = (srt_bond_mode_t)m;
   return 0;
 }
 
 int rdh_apply_srt_passphrase(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return rdh_set_buf(cfg->srt_passphrase, sizeof cfg->srt_passphrase, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_passphrase, sizeof cfg->srt_passphrase, v, e, n);
 }
 
 int rdh_apply_srt_pbkeylen(void *c, const char *v, char *e, size_t n) {
-  return rdh_set_pbkeylen(&((config_t *)c)->srt_pbkeylen, v, e, n);
+  return yamlcfg_set_int_by(&((config_t *)c)->srt_pbkeylen, v, argutil_srt_pbkeylen, ARGUTIL_SRT_PBKEYLEN_HINT, e, n);
 }
 
 int rdh_apply_srt_streamid(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return rdh_set_buf(cfg->srt_streamid, sizeof cfg->srt_streamid, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_streamid, sizeof cfg->srt_streamid, v, e, n);
 }
 
 int rdh_apply_srt_packetfilter(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return rdh_set_buf(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, v, e, n);
 }
 
 int rdh_apply_srt_latency(void *c, const char *v, char *e, size_t n) {

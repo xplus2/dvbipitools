@@ -279,7 +279,8 @@ END_TEST
 
 START_TEST(reasm_feed_reassembles_two_sections_in_order) {
   dvbstp_reasm_t *r = dvbstp_reasm_new();
-  unsigned char pkt0[12 + 3], pkt1[12 + 4];
+  unsigned char pkt0[12 + 3];
+  unsigned char pkt1[12 + 4];
   const unsigned char *out_data;
   size_t out_len;
   size_t h0 = build_header(pkt0, 1, 1, 1, 0, 1, 0, 0, 0, 0);
@@ -486,7 +487,8 @@ END_TEST
 
 START_TEST(reasm_feed_ignores_duplicate_section) {
   dvbstp_reasm_t *r = dvbstp_reasm_new();
-  unsigned char pkt0[12 + 3], pkt1[12 + 4];
+  unsigned char pkt0[12 + 3];
+  unsigned char pkt1[12 + 4];
   const unsigned char *out_data;
   size_t out_len;
   size_t h0 = build_header(pkt0, 1, 1, 1, 0, 1, 0, 0, 0, 0);
@@ -508,7 +510,9 @@ END_TEST
 
 START_TEST(reasm_feed_version_bump_resets_in_progress_slot) {
   dvbstp_reasm_t *r = dvbstp_reasm_new();
-  unsigned char pkt_v1[12 + 3], pkt_v2_0[12 + 3], pkt_v2_1[12 + 4];
+  unsigned char pkt_v1[12 + 3];
+  unsigned char pkt_v2_0[12 + 3];
+  unsigned char pkt_v2_1[12 + 4];
   const unsigned char *out_data;
   size_t out_len;
   size_t h;

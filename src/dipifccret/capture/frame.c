@@ -49,7 +49,9 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
   size_t addr_len;
   size_t end;
   size_t payload_len;
-  unsigned ethertype, dport, udp_len;
+  unsigned ethertype;
+  unsigned dport;
+  unsigned udp_len;
   int family;
   struct in_addr dst4;
   struct in6_addr dst6;
@@ -70,7 +72,8 @@ void capture_handle_frame(const unsigned char *pkt, size_t len, const cidr_t *ra
 
   switch (ethertype) {
     case 0x0800: {
-      unsigned ihl, proto;
+      unsigned ihl;
+      unsigned proto;
 
       ip_off = off;
       if (len < ip_off + 20 || (pkt[ip_off] >> 4) != 4)

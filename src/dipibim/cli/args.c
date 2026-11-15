@@ -8,6 +8,8 @@
 #include "lib/bim/codec.h"
 #include "lib/helper/argutil.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
 
 static const char *const shortopts = "i:o:f:s:c:vh";
 
@@ -63,6 +65,14 @@ int bim_compat_parse(const char *s, unsigned *out) {
   return 0;
 }
 
+static const yamlcfg_opt_t opts[] = {
+    {'f', "format", "BS000121", "invalid -f format: %s (xml|bim)", 0},
+    {OPT_PROFILE, "profile", "BS000749", "invalid --profile: %s (" PROFILE_NAMES ")", 0},
+    {OPT_SYNTAX, "syntax", "BS000769", "invalid --syntax: %s (" SYNTAX_NAMES ")", 0},
+    {OPT_LEN_MODE, "len-mode", "BS000750", "invalid --len-mode: %s (0|1|2)", 0},
+    {OPT_ZBUF_SIZE, "zbuf-size", "BS000751", "invalid --zbuf-size: %s (0..16777215)", 0},
+};
+
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
@@ -70,6 +80,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int schema_cli = 0;
   int compat_cli = 0;
   int c;
+  int r;
 
   if (argutil_prescan(argc, argv, shortopts, longopts, OPT_CONFIGTEST, OPT_CONFIG_STRICT, &cfg_path, &configtest, &strict)) {
     bim_print_help();
@@ -81,6 +92,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
 
   optind = 1;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    r = yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), bim_cfg_keys, bim_cfg_nkeys, cfg, c, optarg);
+    if (r < 0) return ARGS_ERR;
+    if (r > 0) continue;
     switch (c) {
       case OPT_CONFIG_STRICT:
       case OPT_CONFIGTEST:
@@ -92,17 +106,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'o':
         cfg->output_path = optarg;
         break;
-      case 'f': {
-        static const enum_map_t map[] = {{"xml", FMT_XML}, {"bim", FMT_BIM}};
-        int v;
-        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-          argerr("BS000121", "invalid -f format: %s (xml|bim)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->format = (input_fmt_t)v;
-        cfg->have_format = 1;
-        break;
-      }
       case 's':
         if (!schema_cli) cfg->nschemas = 0;
         schema_cli = 1;
@@ -112,29 +115,11 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         cfg->schemas[cfg->nschemas++] = optarg;
         break;
-      case OPT_PROFILE:
-        if (bim_profile_parse(optarg, &cfg->profile)) {
-          argerr("BS000749", "invalid --profile: %s (" PROFILE_NAMES ")", optarg);
-          return ARGS_ERR;
-        }
-        break;
-      case OPT_SYNTAX:
-        if (bim_syntax_parse(optarg, &cfg->syntax)) {
-          argerr("BS000769", "invalid --syntax: %s (" SYNTAX_NAMES ")", optarg);
-          return ARGS_ERR;
-        }
-        break;
       case OPT_COMPAT:
         if (!compat_cli) cfg->compat = 0;
         compat_cli = 1;
         if (bim_compat_parse(optarg, &cfg->compat)) {
           argerr("BS000768", "invalid --compat: %s (" COMPAT_NAMES ")", optarg);
-          return ARGS_ERR;
-        }
-        break;
-      case OPT_LEN_MODE:
-        if (argutil_uint_range(optarg, 0, 2, &cfg->len_mode)) {
-          argerr("BS000750", "invalid --len-mode: %s (0|1|2)", optarg);
           return ARGS_ERR;
         }
         break;
@@ -152,12 +137,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         break;
       case OPT_DVB_PUBTIME:
         cfg->dvb_pubtime = 1;
-        break;
-      case OPT_ZBUF_SIZE:
-        if (argutil_uint_range(optarg, 0, ZBUF_MAX, &cfg->zbuf_size)) {
-          argerr("BS000751", "invalid --zbuf-size: %s (0..16777215)", optarg);
-          return ARGS_ERR;
-        }
         break;
       case OPT_ZGATHER:
         cfg->zgather = 1;

@@ -55,6 +55,9 @@ typedef struct {
   const char *key[2];
   uint16_t container;
   uint32_t fragment;
+  long long t;
+  int t_ok;
+  int kind;
 } bim_index_entry_t;
 
 typedef struct {
@@ -89,28 +92,5 @@ typedef struct {
 
 /* walks index list of container 0x0000. 0 checked, -1 no index list */
 int bim_index_check(bim_index_find_fn find, bim_index_has_fn has, const void *ctx, bim_index_report_t *rep);
-
-/* TS 102 323 9.5.2.2 type list structure entry. xpath only for fragment_type 0xFFFF */
-typedef struct {
-  unsigned fragment_type;
-  const char *xpath;
-  const uint16_t *containers;
-  int ncontainers;
-  uint16_t *heap_containers; /* freed by bim_typelist_free */
-} bim_typelist_entry_t;
-
-/* type list body (BIM_STRUCT_TYPE_LIST, id 0), container 0. xpath strings in sw, 16 bit offsets.
-   *out mallocd. 0 ok, -1 oom, entry too long, offset over 16 bit */
-int bim_typelist_build(const bim_typelist_entry_t *e, int n, strrepo_writer_t *sw, unsigned char **out, size_t *out_len);
-/* entries of received body, xpath in string repository (points into strings), containers copied.
-   *e mallocd, bim_typelist_free. 0 ok, -1 malformed or oom */
-int bim_typelist_parse(const unsigned char *body, size_t len, const unsigned char *strings, size_t slen, bim_typelist_entry_t **e, int *n);
-void bim_typelist_free(bim_typelist_entry_t *e, int n);
-
-/* 9.5.2.3 namespace map structure (type BIM_STRUCT_NS_MAP, id 0). *out mallocd. 0 ok, -1 oom or field above 255 bytes */
-int bim_nsmap_build(const char *const *prefix, const char *const *ns, int n, unsigned char **out, size_t *out_len);
-/* *prefix, *ns mallocd arrays of mallocd strings, bim_nsmap_free. 0 ok, -1 malformed or oom */
-int bim_nsmap_parse(const unsigned char *body, size_t len, char ***prefix, char ***ns, int *n);
-void bim_nsmap_free(char **prefix, char **ns, int n);
 
 #endif

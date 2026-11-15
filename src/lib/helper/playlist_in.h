@@ -19,7 +19,9 @@ typedef struct {
   char *name; /* malloc'd, "" if absent */
   char *uri;  /* malloc'd */
   char *icon_uri; /* malloc'd, NULL if absent */
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
   int has_triplet; /* nonzero: triplet came from source, not defaulted */
 } playlist_item_t;
 

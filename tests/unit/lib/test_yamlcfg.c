@@ -10,7 +10,7 @@
 
 #include "../alloc_fail.h"
 #include "lib/config/yamlcfg.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "../cfg_fixture.h"
 
 #define TOOL "testtool"
@@ -762,6 +762,34 @@ START_TEST(load_and_set_str_survive_allocation_failures) {
 }
 END_TEST
 
+static int opt_apply_uint(void *c, const char *v, char *e, size_t n) { return yamlcfg_set_uint((unsigned *)c, v, 1, 9, e, n); }
+
+START_TEST(opt_apply_routes_by_key) {
+  static const yamlcfg_key_t keys[] = {{"a.b", opt_apply_uint, 0, 0}};
+  static const yamlcfg_opt_t opts[] = {{7, "a.b", "LS000001", "bad %s", 0}, {8, "missing", "LS000002", "bad %s", 0}, {9, "a.b", "LS000003", "--x: %s", 1}};
+  unsigned v = 0;
+  ck_assert_int_eq(yamlcfg_opt_apply("t", opts, 2, keys, 1, &v, 7, "5"), 1);
+  ck_assert_uint_eq(v, 5);
+  ck_assert_int_eq(yamlcfg_opt_apply("t", opts, 2, keys, 1, &v, 7, "50"), -1);
+  ck_assert_uint_eq(v, 5);
+  ck_assert_int_eq(yamlcfg_opt_apply("t", opts, 2, keys, 1, &v, 8, "1"), 0);
+  ck_assert_int_eq(yamlcfg_opt_apply("t", opts, 2, keys, 1, &v, 9, "1"), 0);
+  ck_assert_int_eq(yamlcfg_opt_apply("t", opts, 3, keys, 1, &v, 9, "1"), 1);
+  ck_assert_int_eq(yamlcfg_opt_apply("t", opts, 3, keys, 1, &v, 9, "0"), -1);
+}
+END_TEST
+
+START_TEST(set_buf_bounds) {
+  char b[4];
+  char e[64];
+  ck_assert_int_eq(yamlcfg_set_buf(b, sizeof b, "abc", e, sizeof e), 0);
+  ck_assert_str_eq(b, "abc");
+  ck_assert_int_eq(yamlcfg_set_buf(b, sizeof b, "abcd", e, sizeof e), -1);
+  ck_assert_str_eq(e, "too long (max 3)");
+  ck_assert_str_eq(b, "abc");
+}
+END_TEST
+
 static Suite *yamlcfg_suite(void) {
   Suite *s = suite_create("yamlcfg");
   TCase *tc = tcase_create("core");
@@ -826,6 +854,8 @@ static Suite *yamlcfg_suite(void) {
   tcase_add_test(tc, load_resets_state_between_calls);
   tcase_add_test(tc, load_with_zero_keys_warns_on_everything);
   tcase_add_test(tc, warn_counts_and_report_reflects_mode);
+  tcase_add_test(tc, opt_apply_routes_by_key);
+  tcase_add_test(tc, set_buf_bounds);
   suite_add_tcase(s, tc);
   return s;
 }

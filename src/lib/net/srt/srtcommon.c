@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 
 #include "srtcommon.h"
@@ -89,7 +89,7 @@ fail:
 int srtcommon_resolve(const char *host, unsigned port, struct sockaddr_storage *ss, int *len) {
   struct addrinfo hints;
   struct addrinfo *res;
-  char portbuf[6];
+  char portbuf[12];
   int rc;
 
   memset(&hints, 0, sizeof hints);

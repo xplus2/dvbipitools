@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <time.h>
 
+#include "lib/helper/idxstack.h"
 #include "lib/helper/jsonbuf.h"
 
 #include "ws_clients.h"
@@ -19,7 +20,7 @@ typedef struct {
   char ip[64];
   int http_ver;
   time_t connect_time;
-  time_t last_seen; /* pull sessions only */
+  _Atomic int64_t last_seen; /* pull sessions only */
   route_fmt_t fmt;
   unsigned pmt_pid;
   char filter[128];
@@ -69,8 +70,7 @@ typedef struct {
 extern ws_client_t *g_clients;
 extern int g_clients_cap;
 extern pthread_mutex_t g_clients_mtx;
-extern int *g_free_slots;
-extern int g_free_slots_n;
+extern idxstack_t g_free_slots;
 extern ws_stripe_t g_stripes[WS_STRIPE_COUNT_MAX];
 extern int g_stripe_count;
 ws_stripe_t *stripe_for_entry(int idx);
@@ -84,7 +84,7 @@ extern tick_rate_t *g_tick_rate_scratch;
 /* ws_clients_json.c */
 void snapshot_client(ws_client_snapshot_t *dst, const ws_client_t *src);
 void emit_client_json(jbuf_t *j, int id, const ws_client_snapshot_t *e);
-void publish_client_event(const char *type, int id);
-void publish_client_event_snap(const char *type, int id, const ws_client_snapshot_t *snap);
+void publish_client_remove(int id);
+void publish_client_add(int id, const ws_client_snapshot_t *snap);
 
 #endif

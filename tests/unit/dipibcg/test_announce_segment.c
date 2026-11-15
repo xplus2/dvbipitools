@@ -17,6 +17,7 @@
 #include "lib/bim/bcgau.h"
 #include "lib/bim/bcgfrag.h"
 #include "lib/bim/dvbtva.h"
+#include "lib/helper/strutil.h"
 
 typedef struct {
   char dir[64];

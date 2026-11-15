@@ -5,12 +5,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/mux/cadescbuild.h"
 
 #include "../../version.h"
 #include "priv.h"
+
+static void remux_es_map_build(remux_t *r) {
+  ts_pidmap_clear(&r->es_map);
+  for (int i = r->es_count - 1; i >= 0; i--) ts_pidmap_set(&r->es_map, r->es[i].in_pid, i);
+}
 
 static unsigned resolve_service_type(const psi_t *psi) {
   int n = 0;
@@ -113,6 +118,7 @@ remux_t *remux_new(const config_t *cfg, const dipitvhead_input_t *input, const p
     return NULL;
   }
   r->es_count = n;
+  remux_es_map_build(r);
   if (cfg->pcr_mode != PCR_MODE_PRESERVE) {
     for (int i = 0; i < n; i++) {
       if (r->es[i].stream_type != 0x86 || r->es[i].is_ca != CA_PASS_NONE) continue;
@@ -310,7 +316,7 @@ static void remap_es(remux_t *r, double now, remux_packet_cb cb, void *ctx, ts_m
   migrate_slots(r, neu, n);
   memcpy(r->es, neu, sizeof neu[0] * (size_t)n);
   r->es_count = n;
-  r->last_es_idx = 0;
+  remux_es_map_build(r);
   r->pcr_pid_in = psi_pcr_pid(r->watch);
   if (r->hold_clock) pick_hold_ref(r);
   psi_free(r->watch_prev);

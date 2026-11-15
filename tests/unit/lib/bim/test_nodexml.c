@@ -79,7 +79,7 @@ START_TEST(nodexml_assigns_prefixes_and_types) {
 END_TEST
 
 typedef struct {
-  char buf[256];
+  char buf[16384];
   size_t n;
   int puts;
 } sink_t;
@@ -98,6 +98,7 @@ START_TEST(nodexml_write_streams_through_put_callback) {
   sink_t k = {{0}, 0, 0};
   bim_node_t *r = bim_node_new("Root");
   bim_node_add_new(r, "Kid", "a<b");
+  for (int i = 0; i < 600; i++) bim_node_add_new(r, "More", "x");
   ck_assert_int_eq(bim_node_write_xml(r, &o, sink_put, &k), 0);
   ck_assert_int_gt(k.puts, 1);
   ck_assert_ptr_eq(strstr(k.buf, "<?xml"), k.buf);

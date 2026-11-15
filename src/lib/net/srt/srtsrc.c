@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/pipereader.h"
 #include "lib/sys/signal.h"
 

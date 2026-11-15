@@ -13,6 +13,7 @@
 #include "lib/mux/tspacket_write.h"
 #include "pes.h"
 #include "tspacketize.h"
+#include "lib/helper/growutil.h"
 
 static unsigned char stream_id_for(codec_t c) {
   switch (c) {
@@ -140,16 +141,6 @@ static esbuild_remux_track_t *find_track(esbuild_remux_t *r, unsigned stream_idx
   return NULL;
 }
 
-static int grow_buf(unsigned char **buf, size_t *cap, size_t need) {
-  unsigned char *p;
-  if (*cap >= need) return 1;
-  p = realloc(*buf, need);
-  if (!p) return 0;
-  *buf = p;
-  *cap = need;
-  return 1;
-}
-
 static unsigned emit_pat_pmt(esbuild_remux_t *r, ts_packet_cb cb, void *cb_ctx) {
   unsigned char sec[188];
   unsigned char ptr = 0x00;
@@ -214,7 +205,7 @@ static unsigned feed_fragment(esbuild_remux_t *r, unsigned stream_idx, const fmp
     for (unsigned i = 0; i < n_samples; i++) {
       size_t bound = esbuild_es_bound(&rt->track, samples[i].size);
       size_t eslen = 0;
-      if (grow_buf(&r->esbuf, &r->es_cap, bound) && grow_buf(&r->pesbuf, &r->pes_cap, bound + ESBUILD_PES_HDR_MAX)) eslen = esbuild_convert_sample(&rt->track, &samples[i], r->esbuf, r->es_cap);
+      if (!growbuf_reserve((void **)&r->esbuf, &r->es_cap, 1, bound, 0) && !growbuf_reserve((void **)&r->pesbuf, &r->pes_cap, 1, bound + ESBUILD_PES_HDR_MAX, 0)) eslen = esbuild_convert_sample(&rt->track, &samples[i], r->esbuf, r->es_cap);
       if (eslen) {
         uint64_t dts_90k = to_90k(dts, rt->timescale);
         int64_t pts_t = (int64_t)dts + samples[i].cts_offset;

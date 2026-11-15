@@ -14,7 +14,7 @@
 typedef struct tls_gc_node {
   SSL *ssl;
   int fd;
-  long long ts_ms;
+  int64_t ts_ms;
   _Atomic(struct tls_gc_node *) next;
 } tls_gc_node_t;
 
@@ -34,7 +34,7 @@ int alpn_select_cb(SSL *ssl, const unsigned char **out, unsigned char *outlen, c
 #endif
 
 /* reactor_tls_conn.c. calloc by tls_init(fd_table_cap entries) */
-extern SSL **fd_ssl;
+extern _Atomic(SSL *) *fd_ssl;
 extern tls_gc_shard_t *tls_gc_shards;
 extern int tls_gc_nshards;
 

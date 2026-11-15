@@ -6,6 +6,7 @@
 #include "lib/sys/signal.h"
 
 #include "pace.h"
+#include "lib/helper/dateutil.h"
 
 #define RESYNC_THRESHOLD_S 2.0 /* discontinuity, not scheduler jitter */
 

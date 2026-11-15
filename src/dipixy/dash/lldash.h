@@ -9,6 +9,7 @@
 #ifndef DIPIXY_DASH_LLDASH_H
 #define DIPIXY_DASH_LLDASH_H
 
+#include "../core/route.h"
 #include "../segstore.h"
 #include "../reactor/conn.h"
 
@@ -18,10 +19,10 @@
 void dash_lldash_init(int max_clients);
 
 /* c: headers not yet queued.1 attached (caller must not touch c), 0 no store/filename: 404 */
-int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int keep_alive, const char *origin_hdr, int ws_handle);
+int dash_lldash_try_attach(conn_t *c, const stream_key_t *k, const route_file_t *f, int keep_alive, const char *origin_hdr, int ws_handle);
 
 /* protocol-agnostic. -1: not applicable/full, caller falls to normal render path */
-int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, conn_proto_t proto);
+int dash_lldash_subscribe(const stream_key_t *k, const route_file_t *f, conn_proto_t proto);
 
 void dash_lldash_h2_bind(int slot, void *h2c, void *h2_slot, int reactor_tid, int ws_handle);
 
@@ -59,11 +60,7 @@ void dash_lldash_sub_attach(int slot);
 /* reactor_dashchunk.c/http2_dashchunk.c/http3_dashchunk.c: releases slot */
 void dash_lldash_sub_close(int slot);
 
-/* reactor_listen.c: per-reactor-thread wakeup eventfd for h2/h3 chunk. -1 efd: unregister */
-void dash_lldash_register_reactor_efd(int tid, int efd);
 
-/* reactor.c: after all pump and reactor threads joined. closes registered efds */
-void dash_lldash_close_reactor_efds(void);
 
 /* reactor_loop.c: called on that eventfd's readable event, wakes pending h2/h3 subs owned by tid */
 void dash_lldash_flush_ready(int tid);
@@ -76,8 +73,6 @@ void h3_dashchunk_wake(int sub_idx);
 
 void link_store_chain(hls_store_t *store, int idx);
 void unlink_store_chain(hls_store_t *store, int idx);
-void link_tid_chain(int idx, int tid);
-void unlink_tid_chain(int idx);
 void on_part_pushed(const hls_store_t *store, uint32_t seq, int part_idx, const uint8_t *data, size_t len);
 void on_segment_done(const hls_store_t *store, uint32_t seq);
 void on_store_closing(const hls_store_t *store);

@@ -3,6 +3,7 @@
 
 #include <pthread.h>
 #include <stdatomic.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -11,23 +12,17 @@
 #include "dipixy/altsvc.h"
 #include "dipixy/version.h"
 #include "lib/helper/byte_ring.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "dipixy/dash/lldash/lldash_int.h"
 
 dashchunk_sub_t *g_lldash_subs;
 int g_lldash_subs_n;
-int g_lldash_reactor_efds[DASHCHUNK_MAX_REACTOR_THREADS];
-int g_lldash_tid_head[DASHCHUNK_MAX_REACTOR_THREADS];
-static int *g_free_slots;
-static int g_free_slots_n;
-static pthread_mutex_t g_free_lock = PTHREAD_MUTEX_INITIALIZER;
+subtab_t g_lldash_tab;
 
 static void free_slot(int idx) {
-  atomic_store_explicit(&g_lldash_subs[idx].alive, DASHCHUNK_SUB_FREE, memory_order_release);
-  pthread_mutex_lock(&g_free_lock);
-  g_free_slots[g_free_slots_n++] = idx;
-  pthread_mutex_unlock(&g_free_lock);
+  atomic_store_explicit(&g_lldash_subs[idx].h.alive, DASHCHUNK_SUB_FREE, memory_order_release);
+  subtab_free(&g_lldash_tab, idx);
 }
 
 void dash_lldash_init(int max_clients) {
@@ -41,54 +36,40 @@ void dash_lldash_init(int max_clients) {
   }
   g_lldash_subs_n = n;
   for (int i = 0; i < n; i++) pthread_mutex_init(&g_lldash_subs[i].lock, NULL);
-  for (int i = 0; i < DASHCHUNK_MAX_REACTOR_THREADS; i++) {
-    g_lldash_reactor_efds[i] = -1;
-    g_lldash_tid_head[i] = -1;
-  }
-  g_free_slots = malloc(sizeof(int) * (size_t)n);
-  if (g_free_slots) {
-    for (int i = 0; i < n; i++) g_free_slots[i] = i;
-    g_free_slots_n = n;
-  }
+  if (subtab_init(&g_lldash_tab, n, g_lldash_subs, sizeof *g_lldash_subs)) log_code("YS500202", TOOL_NAME ": out of memory sizing dash_lldash subscriber table (%d entries)", n);
   hls_set_part_pushed_cb(on_part_pushed);
   hls_set_segment_done_cb(on_segment_done);
   hls_set_store_closing_cb(on_store_closing);
 }
 
-int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, conn_proto_t proto) {
+int dash_lldash_subscribe(const stream_key_t *k, const route_file_t *f, conn_proto_t proto) {
   hls_store_t *s;
   const hls_snapshot_t *snap;
-  seg_container_t container;
-  uint64_t want_t_ms;
   uint32_t want_seg;
   int idx = -1;
 
-  if (!parse_dash_seg_filename(filename, &want_t_ms, &container)) return -1;
-  s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+  if (f->kind != ROUTE_FILE_DSEG) return -1;
+  s = hls_store_find(STREAM_KEY_AS(k, dash_track_container(f->track)));
   snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
-  if (!snap || snap->part_target <= 0.0 || snap->cum_ms != want_t_ms) return -1;
+  if (!snap || snap->part_target <= 0.0 || snap->cum_ms != f->t_ms) return -1;
   want_seg = snap->live_msn;
-  pthread_mutex_lock(&g_free_lock);
-  if (g_free_slots_n > 0) idx = g_free_slots[--g_free_slots_n];
-  pthread_mutex_unlock(&g_free_lock);
+  idx = subtab_alloc(&g_lldash_tab);
   if (idx < 0) return -1;
 
   g_lldash_subs[idx].store = s;
-  g_lldash_subs[idx].cap_ctx = ctx;
-  g_lldash_subs[idx].filter = *filter;
-  g_lldash_subs[idx].pmt_pid = pmt_pid;
-  g_lldash_subs[idx].lcevc = *lcevc;
+  g_lldash_subs[idx].h.cap_ctx = k->ctx;
+  g_lldash_subs[idx].filter = *k->filter;
+  g_lldash_subs[idx].pmt_pid = k->pmt_pid;
+  g_lldash_subs[idx].lcevc = *k->lcevc;
   g_lldash_subs[idx].want_seg = want_seg;
-  g_lldash_subs[idx].proto = proto;
-  g_lldash_subs[idx].fd = -1;
-  g_lldash_subs[idx].conn_gen = 0;
+  g_lldash_subs[idx].h.proto = proto;
+  g_lldash_subs[idx].h.fd = -1;
+  g_lldash_subs[idx].h.conn_gen = 0;
   g_lldash_subs[idx].h2c = NULL;
   g_lldash_subs[idx].h2_slot = NULL;
   g_lldash_subs[idx].h3c = NULL;
   g_lldash_subs[idx].h3_sid = -1;
-  g_lldash_subs[idx].ws_handle = -1;
-  g_lldash_subs[idx].reactor_tid = -1;
-  g_lldash_subs[idx].tid_next = -1;
+  g_lldash_subs[idx].h.ws_handle = -1;
   atomic_store_explicit(&g_lldash_subs[idx].finalized, 0, memory_order_relaxed);
   atomic_store_explicit(&g_lldash_subs[idx].ring_errored, 0, memory_order_relaxed);
   g_lldash_subs[idx].attached = 0;
@@ -102,41 +83,40 @@ int dash_lldash_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsign
       return -1;
     }
   }
-  atomic_store_explicit(&g_lldash_subs[idx].alive, DASHCHUNK_SUB_ALIVE, memory_order_release);
+  atomic_store_explicit(&g_lldash_subs[idx].h.alive, DASHCHUNK_SUB_ALIVE, memory_order_release);
   link_store_chain(s, idx);
   return idx;
 }
 
 void dash_lldash_flush_ready(int tid) {
   int i;
-  if (tid < 0 || tid >= DASHCHUNK_MAX_REACTOR_THREADS) return;
-  i = g_lldash_tid_head[tid];
+  i = subtab_first(&g_lldash_tab, tid);
   while (i != -1) {
     const dashchunk_sub_t *s = &g_lldash_subs[i];
-    int next = s->tid_next;
-    if (atomic_load_explicit(&s->alive, memory_order_relaxed) == DASHCHUNK_SUB_ALIVE &&
+    int next = subtab_next(&g_lldash_tab, i);
+    if (atomic_load_explicit(&s->h.alive, memory_order_relaxed) == DASHCHUNK_SUB_ALIVE &&
         (dash_lldash_ring_pending(i) || atomic_load_explicit(&s->finalized, memory_order_acquire) ||
          atomic_load_explicit(&s->ring_errored, memory_order_acquire))) {
 #ifdef HAVE_HTTP2
-      if (s->proto == CONN_PROTO_H2) h2_dashchunk_wake(i);
+      if (s->h.proto == CONN_PROTO_H2) h2_dashchunk_wake(i);
 #endif
 #ifdef HAVE_HTTP3
-      if (s->proto == CONN_PROTO_H3) h3_dashchunk_wake(i);
+      if (s->h.proto == CONN_PROTO_H3) h3_dashchunk_wake(i);
 #endif
     }
     i = next;
   }
 }
 
-int dash_lldash_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int keep_alive, const char *origin_hdr, int ws_handle) {
+int dash_lldash_try_attach(conn_t *c, const stream_key_t *k, const route_file_t *f, int keep_alive, const char *origin_hdr, int ws_handle) {
   char cors_hdr[192];
   char hdr[448];
   sbuf_t b;
-  int idx = dash_lldash_subscribe(ctx, filter, pmt_pid, lcevc, filename, 1);
+  int idx = dash_lldash_subscribe(STREAM_KEY_AS(k, SEG_CONTAINER_FMP4), f, 1);
   if (idx < 0) return 0;
-  g_lldash_subs[idx].fd = c->fd;
-  g_lldash_subs[idx].conn_gen = atomic_load_explicit(&c->gen, memory_order_relaxed);
-  g_lldash_subs[idx].ws_handle = ws_handle;
+  g_lldash_subs[idx].h.fd = c->fd;
+  g_lldash_subs[idx].h.conn_gen = atomic_load_explicit(&c->gen, memory_order_relaxed);
+  g_lldash_subs[idx].h.ws_handle = ws_handle;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
   sbuf_init(&b, hdr, sizeof hdr);
   sbuf_add(&b, "HTTP/1.1 200 OK\r\nServer: " TOOL_NAME "/" TOOL_VERSION "\r\nContent-Type: video/mp4\r\nTransfer-Encoding: chunked\r\nCache-Control: no-cache, no-store, must-revalidate\r\n");
@@ -164,8 +144,7 @@ int dash_lldash_sub_finalized(int slot) {
 
 static void dashchunk_finish_sub_close(void *arg) {
   int slot = (int)(intptr_t)arg;
-  const dashchunk_sub_t *s = &g_lldash_subs[slot];
-  if (s->proto == CONN_PROTO_H2 || s->proto == CONN_PROTO_H3) unlink_tid_chain(slot);
+  subtab_unlink(&g_lldash_tab, slot);
   free_slot(slot);
 }
 
@@ -175,7 +154,7 @@ void dash_lldash_sub_close(int slot) {
   if (slot < 0 || slot >= g_lldash_subs_n) return;
   s = &g_lldash_subs[slot];
   expected = DASHCHUNK_SUB_ALIVE;
-  if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, DASHCHUNK_SUB_CLOSING, memory_order_acquire, memory_order_relaxed)) return;
+  if (!atomic_compare_exchange_strong_explicit(&s->h.alive, &expected, DASHCHUNK_SUB_CLOSING, memory_order_acquire, memory_order_relaxed)) return;
   unlink_store_chain(s->store, slot);
   if (!capture_defer_after_quiescent(dashchunk_finish_sub_close, (void *)(intptr_t)slot)) {
     capture_wait_pumps_quiescent();

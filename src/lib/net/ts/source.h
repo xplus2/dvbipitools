@@ -90,6 +90,8 @@ mcast_t *tssrc_mcast(const tssrc_t *s);
 /* underlying fd, for caller's own poll(). valid for life of s. */
 int tssrc_fd(const tssrc_t *s);
 
+tssrc_kind_t tssrc_kind(const tssrc_t *s);
+
 /* events to poll tssrc_fd() for. POLLIN except HLS/DASH mid-connect */
 short tssrc_poll_events(const tssrc_t *s);
 

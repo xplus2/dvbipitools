@@ -1,12 +1,15 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#define _GNU_SOURCE
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <stdint.h>
 #include <fcntl.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <netinet/udp.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -15,6 +18,27 @@
 #include "../helper/log.h"
 #include "multicast.h"
 #include "netconnect.h"
+
+#define MCAST_BATCH_MAX 32
+#define MCAST_BATCH_SLOT_MIN 2048
+#define MCAST_BATCH_SLOT_MAX 65536
+
+typedef struct {
+  int n;
+  int head;
+  int count;
+  size_t slot_sz;
+  size_t want_sz;
+  unsigned char *slots;
+  size_t len[MCAST_BATCH_MAX];
+  uint64_t ts[MCAST_BATCH_MAX];
+  struct mmsghdr msg[MCAST_BATCH_MAX];
+  struct iovec iov[MCAST_BATCH_MAX];
+  union {
+    struct cmsghdr align;
+    char space[CMSG_SPACE(sizeof(struct timespec))];
+  } ctl[MCAST_BATCH_MAX];
+} mcast_batch_t;
 
 struct mcast {
   int fd;
@@ -32,6 +56,8 @@ struct mcast {
   } dest; /* send-side only */
   int ts_on;
   uint64_t last_rx_ns;
+  mcast_batch_t *batch;
+  int no_gso;
   log_throttle_t send_fail_throttle;
   log_throttle_t trunc_throttle;
 };
@@ -206,6 +232,94 @@ uint64_t mcast_last_rx_ns(const mcast_t *m) {
   return m->last_rx_ns;
 }
 
+int mcast_set_batch(mcast_t *m, int n) {
+  mcast_batch_t *b;
+  if (m->batch) return 0;
+  if (n < 2) return 0;
+  if (n > MCAST_BATCH_MAX) n = MCAST_BATCH_MAX;
+  b = calloc(1, sizeof *b);
+  if (!b) return -1;
+  b->slots = malloc((size_t)(n - 1) * MCAST_BATCH_SLOT_MIN);
+  if (!b->slots) {
+    free(b);
+    return -1;
+  }
+  b->n = n;
+  b->slot_sz = MCAST_BATCH_SLOT_MIN;
+  b->want_sz = MCAST_BATCH_SLOT_MIN;
+  m->batch = b;
+  return 0;
+}
+
+static uint64_t cmsg_rx_ns(struct msghdr *mh) {
+  for (struct cmsghdr *c = CMSG_FIRSTHDR(mh); c; c = CMSG_NXTHDR(mh, c)) {
+    if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_TIMESTAMPNS && c->cmsg_len >= CMSG_LEN(sizeof(struct timespec))) {
+      struct timespec ts;
+      memcpy(&ts, CMSG_DATA(c), sizeof ts);
+      return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+    }
+  }
+  return 0;
+}
+
+static void batch_grow(mcast_batch_t *b) {
+  unsigned char *p;
+  if (b->want_sz <= b->slot_sz) return;
+  p = realloc(b->slots, (size_t)(b->n - 1) * b->want_sz);
+  if (!p) return;
+  b->slots = p;
+  b->slot_sz = b->want_sz;
+}
+
+static ssize_t batch_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_out) {
+  mcast_batch_t *b = m->batch;
+  int r;
+  for (;;) {
+    while (b->head < b->count) {
+      int i = b->head++;
+      if (b->len[i] > cap || b->len[i] > b->slot_sz) {
+        log_throttled(&m->trunc_throttle, LOG_THROTTLE_WINDOW_S, "LW500148", "datagram larger than %zu byte buffer dropped", b->len[i] > cap ? cap : b->slot_sz);
+        continue;
+      }
+      memcpy(buf, b->slots + (size_t)(i - 1) * b->slot_sz, b->len[i]);
+      m->last_rx_ns = b->ts[i];
+      return (ssize_t)b->len[i];
+    }
+    batch_grow(b);
+    for (int i = 0; i < b->n; i++) {
+      memset(&b->msg[i].msg_hdr, 0, sizeof b->msg[i].msg_hdr);
+      b->iov[i].iov_base = i ? b->slots + (size_t)(i - 1) * b->slot_sz : buf;
+      b->iov[i].iov_len = i ? b->slot_sz : cap;
+      b->msg[i].msg_hdr.msg_iov = &b->iov[i];
+      b->msg[i].msg_hdr.msg_iovlen = 1;
+      if (m->ts_on) {
+        b->msg[i].msg_hdr.msg_control = b->ctl[i].space;
+        b->msg[i].msg_hdr.msg_controllen = sizeof b->ctl[i].space;
+      }
+    }
+    r = recvmmsg(m->fd, b->msg, (unsigned)b->n, MSG_WAITFORONE | MSG_TRUNC, NULL);
+    b->head = 1;
+    b->count = r > 0 ? r : 0;
+    if (r < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) return 0;
+      log_code("LE500145", "recv: %s", strerror(errno));
+      if (reason_out) *reason_out = NET_ERR_READ;
+      return -1;
+    }
+    for (int i = 0; i < r; i++) {
+      b->len[i] = b->msg[i].msg_len;
+      b->ts[i] = m->ts_on ? cmsg_rx_ns(&b->msg[i].msg_hdr) : 0;
+      if (i && b->len[i] > b->slot_sz && b->len[i] <= MCAST_BATCH_SLOT_MAX && b->len[i] > b->want_sz) b->want_sz = b->len[i];
+    }
+    if (b->len[0] > cap) {
+      log_throttled(&m->trunc_throttle, LOG_THROTTLE_WINDOW_S, "LW500148", "datagram larger than %zu byte buffer dropped", cap);
+      continue;
+    }
+    m->last_rx_ns = b->ts[0];
+    return (ssize_t)b->len[0];
+  }
+}
+
 static ssize_t recv_stamped(mcast_t *m, void *buf, size_t cap) {
   struct iovec iov = {buf, cap};
   union {
@@ -235,7 +349,9 @@ static ssize_t recv_stamped(mcast_t *m, void *buf, size_t cap) {
 }
 
 ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_out) {
-  ssize_t n = m->ts_on ? recv_stamped(m, buf, cap) : recv(m->fd, buf, cap, MSG_TRUNC);
+  ssize_t n;
+  if (m->batch) return batch_recv(m, buf, cap, reason_out);
+  n = m->ts_on ? recv_stamped(m, buf, cap) : recv(m->fd, buf, cap, MSG_TRUNC);
   if (n == -2 || n > (ssize_t)cap) {
     log_throttled(&m->trunc_throttle, LOG_THROTTLE_WINDOW_S, "LW500148", "datagram larger than %zu byte buffer dropped", cap);
     return 0;
@@ -326,18 +442,21 @@ fail:
   return NULL;
 }
 
+static const struct sockaddr *dest_sa(const mcast_t *m, socklen_t *salen) {
+  if (m->family == AF_INET) {
+    *salen = sizeof m->dest.v4;
+    return (const struct sockaddr *)&m->dest.v4;
+  }
+  *salen = sizeof m->dest.v6;
+  return (const struct sockaddr *)&m->dest.v6;
+}
+
 ssize_t mcast_send(mcast_t *m, const void *buf, size_t len) {
   const struct sockaddr *sa;
   socklen_t salen;
   ssize_t n;
 
-  if (m->family == AF_INET) {
-    sa = (const struct sockaddr *)&m->dest.v4;
-    salen = sizeof m->dest.v4;
-  } else {
-    sa = (const struct sockaddr *)&m->dest.v6;
-    salen = sizeof m->dest.v6;
-  }
+  sa = dest_sa(m, &salen);
   n = sendto(m->fd, buf, len, 0, sa, salen);
   if (n < 0) {
     log_throttled(&m->send_fail_throttle, LOG_THROTTLE_WINDOW_S, "LE100127", "sendto: %s", strerror(errno));
@@ -351,45 +470,8 @@ ssize_t mcast_send_tos(mcast_t *m, const void *buf, size_t len, int tos) {
   socklen_t salen;
   ssize_t n;
 
-  if (m->family == AF_INET) {
-    sa = (const struct sockaddr *)&m->dest.v4;
-    salen = sizeof m->dest.v4;
-  } else {
-    sa = (const struct sockaddr *)&m->dest.v6;
-    salen = sizeof m->dest.v6;
-  }
+  sa = dest_sa(m, &salen);
   n = net_sendto_tos(m->fd, buf, len, sa, salen, tos);
-  if (n < 0) {
-    log_throttled(&m->send_fail_throttle, LOG_THROTTLE_WINDOW_S, "LE100128", "sendmsg: %s", strerror(errno));
-    return -1;
-  }
-  return n;
-}
-
-ssize_t mcast_sendv(mcast_t *m, const void *hdr, size_t hdr_len, const void *payload, size_t payload_len) {
-  const struct sockaddr *sa;
-  socklen_t salen;
-  struct iovec iov[2];
-  struct msghdr msg;
-  ssize_t n;
-
-  if (m->family == AF_INET) {
-    sa = (const struct sockaddr *)&m->dest.v4;
-    salen = sizeof m->dest.v4;
-  } else {
-    sa = (const struct sockaddr *)&m->dest.v6;
-    salen = sizeof m->dest.v6;
-  }
-  iov[0].iov_base = (void *)hdr;
-  iov[0].iov_len = hdr_len;
-  iov[1].iov_base = (void *)payload;
-  iov[1].iov_len = payload_len;
-  memset(&msg, 0, sizeof msg);
-  msg.msg_name = (void *)sa;
-  msg.msg_namelen = salen;
-  msg.msg_iov = iov;
-  msg.msg_iovlen = 2;
-  n = sendmsg(m->fd, &msg, 0);
   if (n < 0) {
     log_throttled(&m->send_fail_throttle, LOG_THROTTLE_WINDOW_S, "LE100128", "sendmsg: %s", strerror(errno));
     return -1;
@@ -413,5 +495,96 @@ void mcast_close(mcast_t *m) {
     }
     close(m->fd);
   }
+  if (m->batch) free(m->batch->slots);
+  free(m->batch);
   free(m);
+}
+
+static int gso_send(mcast_t *m, const void *const *hdr, size_t hdr_len, const void *const *payload, const size_t *len, int n) {
+  struct iovec iov[2 * MCAST_SEND_BATCH_MAX];
+  union {
+    struct cmsghdr align;
+    char space[CMSG_SPACE(sizeof(uint16_t))];
+  } ctl;
+  struct msghdr msg;
+  struct cmsghdr *c;
+  uint16_t seg = (uint16_t)(hdr_len + len[0]);
+  socklen_t salen;
+  int k = 0;
+  memset(&msg, 0, sizeof msg);
+  msg.msg_name = (void *)dest_sa(m, &salen);
+  msg.msg_namelen = salen;
+  for (int i = 0; i < n; i++) {
+    if (hdr_len) {
+      iov[k].iov_base = (void *)hdr[i];
+      iov[k++].iov_len = hdr_len;
+    }
+    iov[k].iov_base = (void *)payload[i];
+    iov[k++].iov_len = len[i];
+  }
+  msg.msg_iov = iov;
+  msg.msg_iovlen = (size_t)k;
+  msg.msg_control = ctl.space;
+  msg.msg_controllen = sizeof ctl.space;
+  c = CMSG_FIRSTHDR(&msg);
+  c->cmsg_level = IPPROTO_UDP;
+  c->cmsg_type = UDP_SEGMENT;
+  c->cmsg_len = CMSG_LEN(sizeof seg);
+  memcpy(CMSG_DATA(c), &seg, sizeof seg);
+  return sendmsg(m->fd, &msg, 0) < 0 ? -1 : 0;
+}
+
+static int mmsg_send(mcast_t *m, const void *const *hdr, size_t hdr_len, const void *const *payload, const size_t *len, int n) {
+  struct iovec iov[MCAST_SEND_BATCH_MAX][2];
+  struct mmsghdr msgs[MCAST_SEND_BATCH_MAX];
+  socklen_t salen;
+  const struct sockaddr *sa = dest_sa(m, &salen);
+  int done = 0;
+  memset(msgs, 0, sizeof msgs[0] * (size_t)n);
+  for (int i = 0; i < n; i++) {
+    int k = 0;
+    if (hdr_len) {
+      iov[i][k].iov_base = (void *)hdr[i];
+      iov[i][k++].iov_len = hdr_len;
+    }
+    iov[i][k].iov_base = (void *)payload[i];
+    iov[i][k++].iov_len = len[i];
+    msgs[i].msg_hdr.msg_name = (void *)sa;
+    msgs[i].msg_hdr.msg_namelen = salen;
+    msgs[i].msg_hdr.msg_iov = iov[i];
+    msgs[i].msg_hdr.msg_iovlen = (size_t)k;
+  }
+  while (done < n) {
+    int r = sendmmsg(m->fd, msgs + done, (unsigned)(n - done), 0);
+    if (r < 0) {
+      if (errno == EINTR) continue;
+      return -1;
+    }
+    done += r;
+  }
+  return 0;
+}
+
+int mcast_send_batch(mcast_t *m, const void *const *hdr, size_t hdr_len, const void *const *payload, const size_t *len, int n) {
+  int uniform = 1;
+  size_t total = 0;
+  if (n <= 0) return 0;
+  if (n > MCAST_SEND_BATCH_MAX) return -1;
+  for (int i = 0; i < n; i++) {
+    total += hdr_len + len[i];
+    if (i + 1 < n ? len[i] != len[0] : len[i] > len[0]) uniform = 0;
+  }
+  if (n > 1 && uniform && !m->no_gso && total <= 65000 && hdr_len + len[0] <= UINT16_MAX) {
+    if (!gso_send(m, hdr, hdr_len, payload, len, n)) return 0;
+    if (errno != EIO && errno != EINVAL && errno != ENOPROTOOPT && errno != EOPNOTSUPP) {
+      log_throttled(&m->send_fail_throttle, LOG_THROTTLE_WINDOW_S, "LE100128", "sendmsg: %s", strerror(errno));
+      return -1;
+    }
+    m->no_gso = 1;
+  }
+  if (mmsg_send(m, hdr, hdr_len, payload, len, n)) {
+    log_throttled(&m->send_fail_throttle, LOG_THROTTLE_WINDOW_S, "LE100128", "sendmsg: %s", strerror(errno));
+    return -1;
+  }
+  return 0;
 }

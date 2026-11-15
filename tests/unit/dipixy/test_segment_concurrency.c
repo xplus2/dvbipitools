@@ -42,7 +42,7 @@ static void *toucher(void *arg) {
 
   while (!atomic_load(&g_stop)) {
     unsigned pmt = 0x100 + (seed++ % KEYS);
-    int ok = hls_seg_touch(open_ctx(), &none, pmt, &full, SEG_TARGET, MAX_SEGS, SEG_CONTAINER_TS, (seed & 1) ? 0.5 : 0.0);
+    int ok = hls_seg_touch(&(stream_key_t){open_ctx(), &none, pmt, &full, SEG_CONTAINER_TS}, SEG_TARGET, MAX_SEGS, (seed & 1) ? 0.5 : 0.0);
 
     if (!ok) atomic_fetch_add(&g_touch_failures, 1);
     atomic_fetch_add(&g_touches, 1);
@@ -62,7 +62,7 @@ static void *finder(void *arg) {
       int newly = 0;
 
       hls_seg_registry_lock();
-      s = find_locked(ctx, &none, 0x100 + k, &full, SEG_CONTAINER_TS);
+      s = find_locked(&(stream_key_t){ctx, &none, 0x100 + k, &full, SEG_CONTAINER_TS});
       if (s && seg_try_pin(s)) {
         if (atomic_load(&s->refcount) < 2) atomic_fetch_add(&g_pin_failures, 1);
         hls_seg_registry_unlock();
@@ -87,7 +87,7 @@ static void *evictor(void *arg) {
       hls_seg_ctx_t *s;
 
       hls_seg_registry_lock();
-      s = find_locked(ctx, &none, 0x100 + k, &full, SEG_CONTAINER_TS);
+      s = find_locked(&(stream_key_t){ctx, &none, 0x100 + k, &full, SEG_CONTAINER_TS});
       if (s) atomic_store(&s->last_request_ms, 0);
       hls_seg_registry_unlock();
     }
@@ -132,7 +132,7 @@ START_TEST(touch_pin_and_eviction_race_without_corruption) {
       hls_seg_ctx_t *s;
 
       hls_seg_registry_lock();
-      s = find_locked(ctx, &none, 0x100 + k, &full, SEG_CONTAINER_TS);
+      s = find_locked(&(stream_key_t){ctx, &none, 0x100 + k, &full, SEG_CONTAINER_TS});
       if (s) atomic_store(&s->last_request_ms, 0);
       hls_seg_registry_unlock();
     }
@@ -145,14 +145,14 @@ START_TEST(touch_pin_and_eviction_race_without_corruption) {
   for (unsigned k = 0; k < MAX_STORES; k++) {
     pid_filter_t none = {0};
 
-    ck_assert_int_eq(hls_seg_touch(open_ctx(), &none, 0x200 + k, &full, SEG_TARGET, MAX_SEGS, SEG_CONTAINER_TS, 0.0), 1);
+    ck_assert_int_eq(hls_seg_touch(&(stream_key_t){open_ctx(), &none, 0x200 + k, &full, SEG_CONTAINER_TS}, SEG_TARGET, MAX_SEGS, 0.0), 1);
   }
   for (unsigned k = 0; k < MAX_STORES; k++) {
     pid_filter_t none = {0};
     hls_seg_ctx_t *s;
 
     hls_seg_registry_lock();
-    s = find_locked(ctx, &none, 0x200 + k, &full, SEG_CONTAINER_TS);
+    s = find_locked(&(stream_key_t){ctx, &none, 0x200 + k, &full, SEG_CONTAINER_TS});
     if (s) atomic_store(&s->last_request_ms, 0);
     hls_seg_registry_unlock();
   }

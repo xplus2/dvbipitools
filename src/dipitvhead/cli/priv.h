@@ -134,7 +134,5 @@ args_status_t tvh_opt_cas(tvh_opt_t *p, int c);
 void tvh_print_help(void);
 void tvh_finalize(config_t *cfg);
 
-int tvh_id_parse(const char *s, unsigned *out);
-int tvh_org_id_parse(const char *s, unsigned *out);
 
 #endif

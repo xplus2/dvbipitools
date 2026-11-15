@@ -31,8 +31,11 @@ static void capture_cb(void *ctx, unsigned pid, int has_pts, uint64_t pts, int h
 
 START_TEST(pes_build_round_trips_through_lib_demux_pes) {
   pes_t *dec = pes_new(capture_cb, NULL);
-  unsigned char frame[170], pesbuf[8192], pkt[188];
-  size_t peslen, i;
+  unsigned char frame[170];
+  unsigned char pesbuf[8192];
+  unsigned char pkt[188];
+  size_t peslen;
+  size_t i;
 
   for (i = 0; i < sizeof frame; i++)
     frame[i] = (unsigned char)(i & 0xFF);

@@ -6,10 +6,10 @@
 
 #include "lib/demux/psi/psi.h"
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 
 #include "record/priv.h"
 #include "version.h"
+#include "lib/helper/dateutil.h"
 
 int record_run(const config_t *cfg, metrics_exporter_t *mx) {
   unsigned long long bytes = 0;
@@ -22,7 +22,8 @@ int record_run(const config_t *cfg, metrics_exporter_t *mx) {
   rtmp_fanout_t rf;
   int is_mkv_fmt = (cfg->format == FMT_MKV || cfg->format == FMT_MKA || cfg->format == FMT_MP4 || cfg->format == FMT_M4A);
   int rc = 0;
-  unsigned pmt_pid, all_pids[PSI_MAX_PROGRAMS];
+  unsigned pmt_pid;
+  unsigned all_pids[PSI_MAX_PROGRAMS];
   int n_all_pids;
   pace_ctrl_t *pace;
   rec_insp_t ri = {NULL, NULL};

@@ -11,7 +11,7 @@ typedef struct pace_ctrl pace_ctrl_t;
 pace_ctrl_t *pace_new(void);
 void pace_free(pace_ctrl_t *p);
 
-/* RTP-framed source: call once per src_read() chunk, its most recent RTP timestamp (90kHz, 32-bit, RFC2250) */
+/* RTP-framed source: call once per src_read_reason() chunk, its most recent RTP timestamp (90kHz, 32-bit, RFC2250) */
 void pace_feed_rtp_ts(pace_ctrl_t *p, uint32_t rtp_ts_90k);
 
 /* raw (non-RTP) source: call once per 188B packet. pcr_pid 0: no-op, PMT not resolved yet */

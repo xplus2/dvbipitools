@@ -5,13 +5,13 @@
 #include "../../altsvc.h"
 #include "../../core/metrics.h"
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #include <string.h>
 #include <strings.h>
 
 const char RESP_400[] = "400 Bad Request";
-const char RESP_401[] = "401 Unauthorized";
+static const char RESP_401[] = "401 Unauthorized";
 const char RESP_404[] = "404 Not Found";
 const char RESP_405[] = "405 Method Not Allowed";
 const char RESP_412[] = "412 Precondition Failed";

@@ -5,7 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../sys/ioutil.h"
+#include "../helper/strutil.h"
+#include "../helper/growutil.h"
 #include "../helper/log.h"
 #include "../helper/uriparse.h"
 
@@ -48,24 +49,9 @@ void bcg_programme_free_text(bcg_programme_t *pr) {
   free(pr->title);
   free(pr->desc);
   free(pr->category);
-  free(pr->crid);
-  pr->crid = NULL;
   pr->title = NULL;
   pr->desc = NULL;
   pr->category = NULL;
-}
-
-int bcg_programme_copy(bcg_programme_t *dst, const bcg_programme_t *src) {
-  *dst = *src;
-  dst->title = NULL;
-  dst->desc = NULL;
-  dst->category = NULL;
-  dst->crid = NULL;
-  if (bcg_set_text(&dst->title, src->title) || bcg_set_text(&dst->desc, src->desc) || bcg_set_text(&dst->category, src->category)) {
-    bcg_programme_free_text(dst);
-    return -1;
-  }
-  return 0;
 }
 
 void bcg_progtext_free(bcg_progtext_t *pt) {

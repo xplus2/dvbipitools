@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 
 #include "protocol.h"

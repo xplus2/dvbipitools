@@ -9,7 +9,7 @@
 #include "../ws/ws_broadcast.h"
 #include "../httpng/httpng.h"
 #include "http2_int.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -116,8 +116,6 @@ void h2_ws_dispatch(h2_conn_t *conn, conn_t *c, int32_t stream_id) {
   conn->ws[slot].sid = stream_id;
   conn->ws[slot].c = c;
   ws_parser_init(&conn->ws[slot].parser);
-  conn->ws[slot].pending = malloc(4096);
-  conn->ws[slot].pending_cap = conn->ws[slot].pending ? 4096 : 0;
   dp.read_callback = ws_read_cb;
   dp.source.ptr = &conn->ws[slot];
   nghttp2_submit_response(conn->ng, stream_id, nva, nvlen, &dp);
@@ -147,7 +145,8 @@ static void ws_fail(h2_conn_t *conn, h2_ws_stream_t *ws) {
 
 void h2_ws_data_chunk(h2_conn_t *conn, int32_t stream_id, const uint8_t *data, size_t len) {
   h2_ws_stream_t *ws = find_ws(conn, stream_id);
-  int opcode, got;
+  int opcode;
+  int got;
   const uint8_t *payload;
   size_t plen;
 

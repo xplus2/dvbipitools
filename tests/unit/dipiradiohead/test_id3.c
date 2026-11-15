@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "dipiradiohead/input/id3.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 typedef struct {
   char artist[256];

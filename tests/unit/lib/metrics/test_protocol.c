@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/metrics/protocol.h"
 
 static void make_hdr(metrics_hdr_t *hdr, const char *id) {
@@ -21,7 +21,8 @@ static void make_hdr(metrics_hdr_t *hdr, const char *id) {
 START_TEST(roundtrip_basic) {
   metrics_writer_t w;
   metrics_reader_t r;
-  metrics_hdr_t hdr, out_hdr;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out_hdr;
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
   uint64_t value;
@@ -76,7 +77,8 @@ END_TEST
 START_TEST(put_overflow_makes_writer_unusable) {
   metrics_writer_t w;
   metrics_hdr_t hdr;
-  int i, saw_overflow = 0;
+  int i;
+  int saw_overflow = 0;
   make_hdr(&hdr, "x");
   ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
   for (i = 0; i < 3000; i++) {
@@ -95,7 +97,8 @@ END_TEST
 START_TEST(put_truncates_oversized_label) {
   metrics_writer_t w;
   metrics_reader_t r;
-  metrics_hdr_t hdr, out_hdr;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out_hdr;
   metrics_id_t id;
   char oversized[METRICS_LABEL_MAX + 50];
   char label[METRICS_LABEL_MAX + 1];
@@ -153,7 +156,8 @@ END_TEST
 START_TEST(reader_rejects_bad_version) {
   metrics_writer_t w;
   metrics_reader_t r;
-  metrics_hdr_t hdr, out_hdr;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out_hdr;
   make_hdr(&hdr, "x");
   ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
   w.buf[0] = METRICS_PROTO_VERSION + 1;
@@ -164,7 +168,8 @@ END_TEST
 START_TEST(reader_rejects_unknown_component) {
   metrics_writer_t w;
   metrics_reader_t r;
-  metrics_hdr_t hdr, out_hdr;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out_hdr;
   make_hdr(&hdr, "x");
   ck_assert_int_eq(metrics_writer_begin(&w, &hdr), 0);
   w.buf[1] = 99;
@@ -175,7 +180,8 @@ END_TEST
 START_TEST(reader_rejects_truncated_entry) {
   metrics_writer_t w;
   metrics_reader_t r;
-  metrics_hdr_t hdr, out_hdr;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out_hdr;
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
   uint64_t value;
@@ -193,7 +199,8 @@ START_TEST(reader_skips_unknown_ids_by_length) {
      since the entry length is self-describing (append-only wire compat) */
   metrics_writer_t w;
   metrics_reader_t r;
-  metrics_hdr_t hdr, out_hdr;
+  metrics_hdr_t hdr;
+  metrics_hdr_t out_hdr;
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
   uint64_t value;

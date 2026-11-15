@@ -10,7 +10,8 @@
 
 size_t psi_build_pmt(unsigned version, unsigned program_number, unsigned pcr_pid, unsigned stream_type, unsigned es_pid, unsigned aac_profile_level, const unsigned char *prog_desc, size_t prog_desc_len, unsigned char *out, size_t cap) {
   static const unsigned char lang[3] = {'u', 'n', 'd'};
-  size_t n = 0, es_info_pos;
+  size_t n = 0;
+  size_t es_info_pos;
   unsigned esinfo;
 
   if (cap < 32 + prog_desc_len) return 0;
@@ -63,8 +64,16 @@ unsigned char bcd(unsigned v) { return (unsigned char)((((v / 10) % 10) << 4) | 
 #define EIT_MAX_EVENT_NAME 249
 
 size_t psi_build_eit(unsigned version, unsigned service_id, unsigned tsid, unsigned onid, unsigned event_id, const char *artist, const char *title, unsigned duration_s, time_t start, unsigned ca_mode, unsigned char *out, size_t cap) {
-  size_t n = 0, dll_pos, desc_start, dlen_pos, enl_pos, enl;
-  unsigned dll, h, m, sec;
+  size_t n = 0;
+  size_t dll_pos;
+  size_t desc_start;
+  size_t dlen_pos;
+  size_t enl_pos;
+  size_t enl;
+  unsigned dll;
+  unsigned h;
+  unsigned m;
+  unsigned sec;
   char combined[EIT_MAX_EVENT_NAME + 1];
   struct tm tmv;
   size_t alen;

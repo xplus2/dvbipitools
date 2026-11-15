@@ -4,6 +4,7 @@
 #ifdef HAVE_HTTP3
 
 #include "../http3_int.h"
+#include "lib/helper/dateutil.h"
 
 #include <openssl/rand.h>
 #include <string.h>
@@ -23,120 +24,126 @@ static void release_ssl_and_pool(h3_conn_t *c) {
   h3_pool_release(c);
 }
 
-h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr *local, socklen_t locallen, const h3_admit_t *ai) {
-  ngtcp2_pkt_hd hd;
-  if (ngtcp2_accept(&hd, pkt, pktlen) != 0) return NULL;
-  if (!h3_tables_alloc()) return NULL;
-  if (t_h3_active_cnt >= g_h3_max_conns) return NULL;
-  if (t_h3_pool_free_n == 0) return NULL;
-  int slot = t_h3_pool_free[--t_h3_pool_free_n];
-  h3_conn_t *c = &t_h3_pool[slot];
+static const ngtcp2_callbacks g_qcbs = {
+    .recv_client_initial = ngtcp2_crypto_recv_client_initial_cb,
+    .recv_crypto_data = ngtcp2_crypto_recv_crypto_data_cb,
+    .encrypt = ngtcp2_crypto_encrypt_cb,
+    .decrypt = ngtcp2_crypto_decrypt_cb,
+    .hp_mask = ngtcp2_crypto_hp_mask_cb,
+    .update_key = ngtcp2_crypto_update_key_cb,
+    .delete_crypto_aead_ctx = ngtcp2_crypto_delete_crypto_aead_ctx_cb,
+    .delete_crypto_cipher_ctx = ngtcp2_crypto_delete_crypto_cipher_ctx_cb,
+    .get_path_challenge_data = ngtcp2_crypto_get_path_challenge_data_cb,
+    .handshake_completed = cb_handshake_completed,
+    .recv_stream_data = cb_recv_stream_data,
+    .acked_stream_data_offset = cb_acked_stream_data_offset,
+    .extend_max_stream_data = cb_extend_max_stream_data,
+    .stream_open = cb_stream_open,
+    .stream_close = cb_stream_close,
+    .stream_reset = cb_stream_reset,
+    .recv_stop_sending = cb_recv_stop_sending,
+    .rand = cb_rand,
+    .get_new_connection_id2 = cb_get_new_connection_id2,
+    .remove_connection_id = cb_remove_connection_id,
+    .path_validation = cb_path_validation,
+};
+
+static void quic_settings(ngtcp2_settings *settings, const h3_admit_t *ai) {
+  ngtcp2_settings_default_versioned(NGTCP2_SETTINGS_VERSION, settings);
+  settings->initial_ts = now_ns();
+  settings->cc_algo = g_h3_cc;
+  settings->max_tx_udp_payload_size = g_h3_max_udp;
+  if (g_h3_nprobes) {
+    settings->pmtud_probes = g_h3_probes;
+    settings->pmtud_probeslen = g_h3_nprobes;
+  }
+  if (ai && ai->tokenlen) {
+    settings->token = ai->token;
+    settings->tokenlen = ai->tokenlen;
+    settings->token_type = ai->type;
+  }
+}
+
+static int quic_params(ngtcp2_transport_params *tp, const h3_conn_t *c, const ngtcp2_pkt_hd *hd, const h3_admit_t *ai) {
+  ngtcp2_transport_params_default_versioned(NGTCP2_TRANSPORT_PARAMS_VERSION, tp);
+  tp->initial_max_streams_uni = 3;
+  tp->initial_max_streams_bidi = (uint64_t)c->max_reqs;
+  tp->initial_max_data = 4 * g_h3_window;
+  tp->initial_max_stream_data_bidi_local = g_h3_window;
+  tp->initial_max_stream_data_bidi_remote = g_h3_window;
+  tp->initial_max_stream_data_uni = g_h3_window;
+  tp->max_udp_payload_size = g_h3_max_udp;
+  tp->max_idle_timeout = g_h3_idle_ns;
+  tp->original_dcid_present = 1;
+  if (ai && ai->retried) {
+    tp->original_dcid = ai->odcid;
+    tp->retry_scid = hd->dcid;
+    tp->retry_scid_present = 1;
+  } else {
+    tp->original_dcid = hd->dcid;
+  }
+  if (h3_reset_token(tp->stateless_reset_token, &c->scid) != 0) return -1;
+  tp->stateless_reset_token_present = 1;
+  return 0;
+}
+
+static h3_conn_t *conn_slot_new(const ngtcp2_pkt_hd *hd, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr *local, socklen_t locallen) {
+  int slot;
+  h3_conn_t *c;
+  if (t_h3_active_cnt >= g_h3_max_conns || t_h3_pool_free_n == 0) return NULL;
+  slot = t_h3_pool_free[--t_h3_pool_free_n];
+  c = &t_h3_pool[slot];
   memset(c, 0, sizeof *c);
   c->pool_slot = slot;
   c->max_reqs = g_h3_max_reqs;
   c->reqs = calloc((size_t)c->max_reqs, sizeof *c->reqs);
-  if (!c->reqs) {
-    h3_pool_release(c);
-    return NULL;
-  }
-
-  if (RAND_bytes(c->scid_data, H3_SCID_LEN) != 1) {
+  if (!c->reqs || RAND_bytes(c->scid_data, H3_SCID_LEN) != 1) {
     h3_pool_release(c);
     return NULL;
   }
   h3_steer_tag_cid(c->scid_data);
   ngtcp2_cid_init(&c->scid, c->scid_data, H3_SCID_LEN);
-  memcpy(c->odcid_data, hd.dcid.data, hd.dcid.datalen);
-  ngtcp2_cid_init(&c->odcid, c->odcid_data, hd.dcid.datalen);
-
+  memcpy(c->odcid_data, hd->dcid.data, hd->dcid.datalen);
+  ngtcp2_cid_init(&c->odcid, c->odcid_data, hd->dcid.datalen);
   memcpy(&c->peer_addr, peer, peerlen);
   c->peer_addrlen = peerlen;
   memcpy(&c->local_addr, local, locallen);
   c->local_addrlen = locallen;
-
   c->ssl = SSL_new(g_h3_ssl_ctx);
   if (!c->ssl) {
     h3_pool_release(c);
     return NULL;
   }
-
   c->conn_ref.get_conn = get_ngtcp2_conn;
   c->conn_ref.user_data = c;
   SSL_set_app_data(c->ssl, &c->conn_ref);
   ngtcp2_crypto_ossl_configure_server_session(c->ssl);
   SSL_set_accept_state(c->ssl);
-  ngtcp2_callbacks qcbs = {0};
-  qcbs.recv_client_initial = ngtcp2_crypto_recv_client_initial_cb;
-  qcbs.recv_crypto_data = ngtcp2_crypto_recv_crypto_data_cb;
-  qcbs.encrypt = ngtcp2_crypto_encrypt_cb;
-  qcbs.decrypt = ngtcp2_crypto_decrypt_cb;
-  qcbs.hp_mask = ngtcp2_crypto_hp_mask_cb;
-  qcbs.update_key = ngtcp2_crypto_update_key_cb;
-  qcbs.delete_crypto_aead_ctx = ngtcp2_crypto_delete_crypto_aead_ctx_cb;
-  qcbs.delete_crypto_cipher_ctx = ngtcp2_crypto_delete_crypto_cipher_ctx_cb;
-  qcbs.get_path_challenge_data = ngtcp2_crypto_get_path_challenge_data_cb;
-  qcbs.handshake_completed = cb_handshake_completed;
-  qcbs.recv_stream_data = cb_recv_stream_data;
-  qcbs.acked_stream_data_offset = cb_acked_stream_data_offset;
-  qcbs.extend_max_stream_data = cb_extend_max_stream_data;
-  qcbs.stream_open = cb_stream_open;
-  qcbs.stream_close = cb_stream_close;
-  qcbs.stream_reset = cb_stream_reset;
-  qcbs.recv_stop_sending = cb_recv_stop_sending;
-  qcbs.rand = cb_rand;
-  qcbs.get_new_connection_id2 = cb_get_new_connection_id2;
-  qcbs.remove_connection_id = cb_remove_connection_id;
-  qcbs.path_validation = cb_path_validation;
+  return c;
+}
 
+h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *peer, socklen_t peerlen, const struct sockaddr *local, socklen_t locallen, const h3_admit_t *ai) {
+  ngtcp2_pkt_hd hd;
   ngtcp2_settings settings;
-  ngtcp2_settings_default_versioned(NGTCP2_SETTINGS_VERSION, &settings);
-  settings.initial_ts = h3_ts();
-  settings.cc_algo = g_h3_cc;
-  settings.max_tx_udp_payload_size = g_h3_max_udp;
-  if (g_h3_nprobes) {
-    settings.pmtud_probes = g_h3_probes;
-    settings.pmtud_probeslen = g_h3_nprobes;
-  }
-  if (ai && ai->tokenlen) {
-    settings.token = ai->token;
-    settings.tokenlen = ai->tokenlen;
-    settings.token_type = ai->type;
-  }
-
   ngtcp2_transport_params tp;
-  ngtcp2_transport_params_default_versioned(NGTCP2_TRANSPORT_PARAMS_VERSION, &tp);
-  tp.initial_max_streams_uni = 3;
-  tp.initial_max_streams_bidi = (uint64_t)c->max_reqs;
-  tp.initial_max_data = 4 * g_h3_window;
-  tp.initial_max_stream_data_bidi_local = g_h3_window;
-  tp.initial_max_stream_data_bidi_remote = g_h3_window;
-  tp.initial_max_stream_data_uni = g_h3_window;
-  tp.max_udp_payload_size = g_h3_max_udp;
-  tp.max_idle_timeout = g_h3_idle_ns;
-  tp.original_dcid_present = 1;
-  if (ai && ai->retried) {
-    tp.original_dcid = ai->odcid;
-    tp.retry_scid = hd.dcid;
-    tp.retry_scid_present = 1;
-  } else {
-    tp.original_dcid = hd.dcid;
-  }
-  if (h3_reset_token(tp.stateless_reset_token, &c->scid) != 0) {
+  ngtcp2_path_storage ps;
+  h3_conn_t *c;
+  if (ngtcp2_accept(&hd, pkt, pktlen) != 0) return NULL;
+  if (!h3_tables_alloc()) return NULL;
+  c = conn_slot_new(&hd, peer, peerlen, local, locallen);
+  if (!c) return NULL;
+  quic_settings(&settings, ai);
+  if (quic_params(&tp, c, &hd, ai) != 0) {
     release_ssl_and_pool(c);
     return NULL;
   }
-  tp.stateless_reset_token_present = 1;
-
-  ngtcp2_path_storage ps;
   ngtcp2_path_storage_zero(&ps);
   ngtcp2_addr_init(&ps.path.local, local, locallen);
   ngtcp2_addr_init(&ps.path.remote, peer, peerlen);
-
-  if (ngtcp2_conn_server_new_versioned(&c->qconn, &hd.scid, &c->scid, &ps.path, hd.version, NGTCP2_CALLBACKS_VERSION, &qcbs, NGTCP2_SETTINGS_VERSION, &settings, NGTCP2_TRANSPORT_PARAMS_VERSION, &tp, NULL, c) != 0) {
+  if (ngtcp2_conn_server_new_versioned(&c->qconn, &hd.scid, &c->scid, &ps.path, hd.version, NGTCP2_CALLBACKS_VERSION, &g_qcbs, NGTCP2_SETTINGS_VERSION, &settings, NGTCP2_TRANSPORT_PARAMS_VERSION, &tp, NULL, c) != 0) {
     release_ssl_and_pool(c);
     return NULL;
   }
-
   if (ngtcp2_crypto_ossl_ctx_new(&c->ossl_ctx, c->ssl) != 0) {
     ngtcp2_conn_del(c->qconn);
     release_ssl_and_pool(c);
@@ -146,7 +153,7 @@ h3_conn_t *h3conn_new(const uint8_t *pkt, size_t pktlen, const struct sockaddr *
   c->h3_ctrl = -1;
   c->h3_qenc = -1;
   c->h3_qdec = -1;
-  c->last_rx = h3_ts();
+  c->last_rx = now_ns();
   c->active_idx = t_h3_active_cnt;
   t_h3_active[t_h3_active_cnt++] = c;
   if (h3_cid_add(c, &c->scid) != 0 || h3_hash_insert(&c->odcid, c) != 0) {
@@ -167,7 +174,7 @@ void h3conn_send_close(h3_conn_t *c, int udp_fd, int liberr) {
   ngtcp2_ccerr_default(&ccerr);
   if (liberr) ngtcp2_ccerr_set_liberr(&ccerr, liberr, NULL, 0);
   ngtcp2_path_storage_zero(&ps);
-  n = ngtcp2_conn_write_connection_close_versioned(c->qconn, &ps.path, NGTCP2_PKT_INFO_VERSION, &pi, buf, sizeof buf, &ccerr, h3_ts());
+  n = ngtcp2_conn_write_connection_close_versioned(c->qconn, &ps.path, NGTCP2_PKT_INFO_VERSION, &pi, buf, sizeof buf, &ccerr, now_ns());
   if (n > 0) h3_udp_send(udp_fd, &c->peer_addr, c->peer_addrlen, &c->local_addr, buf, (size_t)n, (size_t)n, 0);
 }
 

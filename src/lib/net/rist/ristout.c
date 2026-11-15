@@ -11,11 +11,12 @@
 #include <librist/librist.h>
 
 #include "lib/helper/log.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/sys/signal.h"
 #include "ristlog.h"
 #include "ristout.h"
 #include "ristpeer.h"
+#include "lib/helper/dateutil.h"
 
 #define RIST_CHUNK (7 * 188) /* librist caps a single data_block well under 64K (observed max ~9968B) */
 #define RIST_STATS_INTERVAL_MS 1000 /* metrics_exporter_due() gates actual push cadence */
@@ -68,7 +69,7 @@ static void sender_conn_cb(void *arg, struct rist_peer *peer, enum rist_connecti
     }
     if (r->up[i]) n++;
   }
-  atomic_store(&r->connected, n);
+  atomic_store_explicit(&r->connected, n, memory_order_release);
   pthread_mutex_unlock(&r->push_lock);
 }
 
@@ -130,7 +131,7 @@ static int sender_stats_cb(void *arg, const struct rist_stats *stats) {
 
 ristout_t *ristout_open(const ristout_cfg_t *cfg) {
   ristout_t *r;
-  enum rist_profile profile = cfg->profile == RISTOUT_PROFILE_MAIN ? RIST_PROFILE_MAIN : RIST_PROFILE_SIMPLE;
+  enum rist_profile profile = cfg->profile == RIST_PROF_MAIN ? RIST_PROFILE_MAIN : RIST_PROFILE_SIMPLE;
   if (cfg->npeers <= 0 || cfg->npeers > RISTOUT_MAX_PEERS) {
     log_code("LE000318", "rist: invalid peer count %d", cfg->npeers);
     return NULL;
@@ -161,7 +162,7 @@ ristout_t *ristout_open(const ristout_cfg_t *cfg) {
 }
 
 int ristout_write(ristout_t *r, const unsigned char *buf, size_t n) {
-  if (atomic_load(&r->connected) > 0) {
+  if (atomic_load_explicit(&r->connected, memory_order_acquire) > 0) {
     r->warned = 0;
   } else if (!r->warned) {
     r->warned = 1;

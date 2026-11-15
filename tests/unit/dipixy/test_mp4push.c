@@ -8,6 +8,7 @@
 
 #include "dipixy/hls/hls.h"
 #include "dipixy/segment/priv.h"
+#include "dipixy/reactor/wake.h"
 #include "dipixy/segment/mp4push.h"
 
 /* fakes: mp4push.c's own external references, none of them linked here */
@@ -23,21 +24,20 @@ static size_t g_fake_init_len;
 void hls_seg_registry_lock(void) { pthread_mutex_lock(&g_fake_lock); }
 void hls_seg_registry_unlock(void) { pthread_mutex_unlock(&g_fake_lock); }
 
-hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
-  (void)filter;
-  (void)lcevc;
-  if (!g_fake_seg_present || ctx != g_fake_ctx || pmt_pid != g_fake_pmt || container != SEG_CONTAINER_FMP4) return NULL;
+hls_store_t *hls_store_find(const stream_key_t *k) {
+  (void)k;
+  return NULL;
+}
+
+hls_seg_ctx_t *hls_seg_find_locked(const stream_key_t *k) {
+  if (!g_fake_seg_present || k->ctx != g_fake_ctx || k->pmt_pid != g_fake_pmt || k->container != SEG_CONTAINER_FMP4) return NULL;
   return &g_fake_seg;
 }
 
-int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
-               const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
-  (void)ctx;
-  (void)filter;
-  (void)pmt_pid;
-  (void)lcevc;
-  (void)container;
-  (void)filename;
+int hls_render(const stream_key_t *k, const hls_store_t *st, const route_file_t *f, int is_head, const char *if_none_match, hls_resp_t *out) {
+  (void)k;
+  (void)st;
+  (void)f;
   (void)is_head;
   (void)if_none_match;
   memset(out, 0, sizeof *out);
@@ -108,12 +108,12 @@ static void setup(void) {
 START_TEST(subscribe_fails_without_a_registered_segmenter) {
   g_fake_seg_present = 0;
   for (int i = 0; i < 200; i++)
-    ck_assert_int_eq(mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 1), -1);
+    ck_assert_int_eq(mp4push_subscribe(&(stream_key_t){g_fake_ctx, &(pid_filter_t){{0}, 0}, 0, &full, SEG_CONTAINER_FMP4}, 1), -1);
 }
 END_TEST
 
 START_TEST(subscribe_links_onto_the_segmenter_chain) {
-  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 1);
+  int idx = mp4push_subscribe(&(stream_key_t){g_fake_ctx, &(pid_filter_t){{0}, 0}, 0, &full, SEG_CONTAINER_FMP4}, 1);
   ck_assert_int_ge(idx, 0);
   ck_assert_int_eq(g_fake_seg.mp4push_sub_head, idx);
   mp4push_sub_close(idx);
@@ -123,14 +123,14 @@ END_TEST
 
 START_TEST(subscribe_wrong_key_does_not_match) {
   g_fake_pmt = 7;
-  ck_assert_int_eq(mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 3, &full, 1), -1);
+  ck_assert_int_eq(mp4push_subscribe(&(stream_key_t){g_fake_ctx, &(pid_filter_t){{0}, 0}, 3, &full, SEG_CONTAINER_FMP4}, 1), -1);
 }
 END_TEST
 
 START_TEST(proto2_subscribe_preseeds_ring_with_init_segment) {
   memcpy(g_fake_init_data, "ftypISOM", 8);
   g_fake_init_len = 8;
-  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 2);
+  int idx = mp4push_subscribe(&(stream_key_t){g_fake_ctx, &(pid_filter_t){{0}, 0}, 0, &full, SEG_CONTAINER_FMP4}, 2);
   ck_assert_int_ge(idx, 0);
   ck_assert_int_eq(mp4push_ring_pending(idx), 1);
   unsigned char buf[64];
@@ -143,7 +143,7 @@ START_TEST(proto2_subscribe_preseeds_ring_with_init_segment) {
 END_TEST
 
 START_TEST(proto2_subscribe_without_init_segment_ready_still_succeeds) {
-  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 2);
+  int idx = mp4push_subscribe(&(stream_key_t){g_fake_ctx, &(pid_filter_t){{0}, 0}, 0, &full, SEG_CONTAINER_FMP4}, 2);
   ck_assert_int_ge(idx, 0);
   ck_assert_int_eq(mp4push_ring_pending(idx), 0);
   mp4push_sub_close(idx);
@@ -151,8 +151,8 @@ START_TEST(proto2_subscribe_without_init_segment_ready_still_succeeds) {
 END_TEST
 
 START_TEST(deliver_fans_out_to_every_live_subscriber) {
-  int a = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 2);
-  int b = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 3);
+  int a = mp4push_subscribe(&(stream_key_t){g_fake_ctx, &(pid_filter_t){{0}, 0}, 0, &full, SEG_CONTAINER_FMP4}, 2);
+  int b = mp4push_subscribe(&(stream_key_t){g_fake_ctx, &(pid_filter_t){{0}, 0}, 0, &full, SEG_CONTAINER_FMP4}, 3);
   ck_assert_int_ge(a, 0);
   ck_assert_int_ge(b, 0);
 
@@ -175,7 +175,7 @@ START_TEST(deliver_fans_out_to_every_live_subscriber) {
 END_TEST
 
 START_TEST(deliver_overflow_marks_ring_errored) {
-  int idx = mp4push_subscribe(g_fake_ctx, &(pid_filter_t){0}, 0, &full, 2);
+  int idx = mp4push_subscribe(&(stream_key_t){g_fake_ctx, &(pid_filter_t){{0}, 0}, 0, &full, SEG_CONTAINER_FMP4}, 2);
   ck_assert_int_ge(idx, 0);
   unsigned char *big = malloc(9u << 20);
   ck_assert_ptr_nonnull(big);
@@ -215,8 +215,8 @@ START_TEST(ring_and_bind_queries_on_invalid_slot_return_safe_defaults) {
 END_TEST
 
 START_TEST(register_and_flush_ready_on_out_of_range_tid_is_a_safe_noop) {
-  mp4push_register_reactor_efd(-1, 5);
-  mp4push_register_reactor_efd(9999, 5);
+  reactor_wake_register(-1, 5);
+  reactor_wake_register(9999, 5);
   mp4push_flush_ready(-1);
   mp4push_flush_ready(9999);
 }

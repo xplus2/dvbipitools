@@ -7,11 +7,15 @@
 #include <stddef.h>
 
 #include "cli/args.h"
+#include "lib/config/yamlcfg.h"
 
 #define DEFAULT_LISTEN_ADDR "127.0.0.1"
 #define DEFAULT_LISTEN_PORT 9109
 #define DEFAULT_EXPIRY_S 30
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipimetrics.yaml"
+
+extern const yamlcfg_key_t metrics_cfg_keys[];
+extern const size_t metrics_cfg_nkeys;
 
 void metrics_cfg_defaults(config_t *cfg);
 

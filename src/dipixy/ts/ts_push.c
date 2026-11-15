@@ -6,81 +6,36 @@
 
 #include "ts_push_int.h"
 #include "../reactor/conn.h"
+#include "../reactor/subtab.h"
+#include "../reactor/wake.h"
 #include "../version.h"
 
 #include "lib/helper/log.h"
 
 #include <pthread.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-static int ts_push_pid_excluded(const void *ctx, unsigned pid) { return pid_filter_excludes((const pid_filter_t *)ctx, pid); }
+static int ts_push_pid_excluded(const void *ctx, unsigned pid) { return pid_mask_has((const pid_mask_t *)ctx, pid); }
 
 ts_sub_t *g_ts_subs;
 int g_ts_subs_n;
 _Atomic int g_ts_active_count;
 
-static int g_ts_push_reactor_efds[TS_PUSH_MAX_REACTOR_THREADS];
-
 /* serialize per-ctx chain link/unlink. pump readers lock-free */
 static pthread_mutex_t g_chain_mtx = PTHREAD_MUTEX_INITIALIZER;
 
-/* flush_ready(tid)'s subscriber chain. slot T touched only by thread T:
-   every begin/close path for subscription runs on its own owning thread (H1/H2/H3 don't migrate threads) */
-int g_tid_head[TS_PUSH_MAX_REACTOR_THREADS];
-
-#define WAKE_BATCH_WORDS ((TS_PUSH_MAX_REACTOR_THREADS + 63) / 64)
-
-static _Thread_local uint64_t *t_wake_batch;
-
-static void ts_push_wake_reactor_now(int tid) {
-  int efd = __atomic_load_n(&g_ts_push_reactor_efds[tid], __ATOMIC_RELAXED);
-  if (efd >= 0) {
-    uint64_t one = 1;
-    ssize_t r = write(efd, &one, sizeof one);
-    (void)r;
-  }
-}
-
-void ts_push_wake_reactor(int tid) {
-  if (tid < 0 || tid >= TS_PUSH_MAX_REACTOR_THREADS) return;
-  if (t_wake_batch) {
-    t_wake_batch[tid / 64] |= 1ULL << (tid % 64);
-    return;
-  }
-  ts_push_wake_reactor_now(tid);
-}
-
-void ts_push_wake_batch_begin(void) {
-  static _Thread_local uint64_t batch[WAKE_BATCH_WORDS];
-  memset(batch, 0, sizeof batch);
-  t_wake_batch = batch;
-}
-
-void ts_push_wake_batch_end(void) {
-  const uint64_t *b = t_wake_batch;
-  t_wake_batch = NULL;
-  if (!b) return;
-  for (int w = 0; w < WAKE_BATCH_WORDS; w++) {
-    uint64_t m = b[w];
-    while (m) {
-      int tid = w * 64 + __builtin_ctzll(m);
-      m &= m - 1;
-      ts_push_wake_reactor_now(tid);
-    }
-  }
-}
+/* chain T touched only by thread T: every begin/close path for subscription runs on its own owning thread (H1/H2/H3 don't migrate threads) */
+subtab_t g_ts_tab;
 
 static _Atomic uint64_t g_queue_hwm;
 static _Atomic uint64_t g_queue_dropped;
 
-static void note_enqueue_off(const byte_ring_t *r, int wrote) {
-  (void)r;
-  (void)wrote;
-}
+int g_ts_queue_metrics;
 
-static void note_enqueue_on(const byte_ring_t *r, int wrote) {
+void ts_push_note_enqueue_slow(const byte_ring_t *r, int wrote) {
   uint64_t used;
   uint64_t cur;
   if (!wrote) {
@@ -94,10 +49,9 @@ static void note_enqueue_on(const byte_ring_t *r, int wrote) {
   }
 }
 
-void (*ts_push_note_enqueue)(const byte_ring_t *, int) = note_enqueue_off;
 
 void ts_push_set_queue_metrics(int level) {
-  ts_push_note_enqueue = level > 1 ? &note_enqueue_on : &note_enqueue_off;
+  g_ts_queue_metrics = level > 1;
 }
 
 uint64_t ts_push_queue_high_watermark(void) {
@@ -123,6 +77,12 @@ static int64_t queue_ms(rate_mark_t *m, uint32_t wpos, uint64_t used, double now
   return ms;
 }
 
+static const byte_ring_t *sub_ring(const ts_sub_t *s) {
+  if (s->h.proto == CONN_PROTO_H2) return &s->h2_ring;
+  if (s->h.proto == CONN_PROTO_H3) return &s->h3_ring;
+  return &s->pkt_ring;
+}
+
 void ts_push_queue_stats(ts_push_queue_stats_t *out, double now) {
   out->bytes = 0;
   out->max_bytes = 0;
@@ -134,13 +94,11 @@ void ts_push_queue_stats(ts_push_queue_stats_t *out, double now) {
     uint64_t used;
     uint32_t wpos;
     int64_t ms;
-    if (atomic_load_explicit(&s->alive, memory_order_relaxed) != TS_SUB_ALIVE) {
+    if (atomic_load_explicit(&s->h.alive, memory_order_relaxed) != TS_SUB_ALIVE) {
       g_rate_marks[i].at = 0.0;
       continue;
     }
-    r = &s->pkt_ring;
-    if (s->proto == CONN_PROTO_H2) r = &s->h2_ring;
-    else if (s->proto == CONN_PROTO_H3) r = &s->h3_ring;
+    r = sub_ring(s);
     wpos = atomic_load_explicit(&r->wpos, memory_order_relaxed);
     used = wpos - atomic_load_explicit(&r->rpos, memory_order_relaxed);
     out->bytes += used;
@@ -157,12 +115,18 @@ void ts_push_ring_enqueue(ts_sub_t *s, const uint8_t *data, size_t len) {
   if (!byte_ring_write(&s->pkt_ring, data, len)) {
     ts_push_note_enqueue(&s->pkt_ring, 0);
     atomic_store_explicit(&s->pkt_overrun, 1, memory_order_release);
-    ts_push_wake_reactor(s->reactor_tid);
+    reactor_wake(s->h.reactor_tid, WAKE_TSPUSH);
     return;
   }
   ts_push_note_enqueue(&s->pkt_ring, 1);
-  ws_clients_add_bytes(s->ws_handle, len);
-  ts_push_wake_reactor(s->reactor_tid);
+  reactor_wake(s->h.reactor_tid, WAKE_TSPUSH);
+}
+
+void ts_push_account_bytes(ts_sub_t *s) {
+  uint32_t w = atomic_load_explicit(&sub_ring(s)->wpos, memory_order_relaxed);
+  if (w == s->acct_wpos) return;
+  ws_clients_add_bytes(s->h.ws_handle, w - s->acct_wpos);
+  s->acct_wpos = w;
 }
 
 /* first N slots pre-alloc, rest malloc on subscribe */
@@ -182,9 +146,9 @@ void ts_push_init(int prealloc, int max_clients) {
     return;
   }
   g_ts_subs_n = n;
-  for (i = 0; i < TS_PUSH_MAX_REACTOR_THREADS; i++) {
-    g_ts_push_reactor_efds[i] = -1;
-    g_tid_head[i] = -1;
+  if (subtab_init(&g_ts_tab, n, g_ts_subs, sizeof *g_ts_subs)) {
+    log_code("YS500224", TOOL_NAME ": out of memory sizing ts_push subscriber table (%d entries)", n);
+    return;
   }
   if (!prealloc) return;
   for (i = 0; i < TS_PUSH_PREALLOC_SUBS && i < g_ts_subs_n; i++) {
@@ -194,24 +158,7 @@ void ts_push_init(int prealloc, int max_clients) {
   }
 }
 
-void ts_push_set_reactor_tid(int idx, int tid) {
-  ts_sub_t *s = &g_ts_subs[idx];
-  if (tid < 0 || tid >= TS_PUSH_MAX_REACTOR_THREADS) return;
-  s->reactor_tid = tid;
-  s->tid_next = g_tid_head[tid];
-  g_tid_head[tid] = idx;
-}
-
-void ts_push_register_reactor_efd(int tid, int efd) {
-  if (tid >= 0 && tid < TS_PUSH_MAX_REACTOR_THREADS) __atomic_store_n(&g_ts_push_reactor_efds[tid], efd, __ATOMIC_RELAXED);
-}
-
-void ts_push_close_reactor_efds(void) {
-  for (int i = 0; i < TS_PUSH_MAX_REACTOR_THREADS; i++) {
-    int efd = __atomic_exchange_n(&g_ts_push_reactor_efds[i], -1, __ATOMIC_RELAXED);
-    if (efd >= 0) close(efd);
-  }
-}
+void ts_push_set_reactor_tid(int idx, int tid) { subtab_link(&g_ts_tab, idx, tid); }
 
 int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto_t proto, int fd,
   unsigned pmt_pid, int spts, int rawaudio, const client_info_t *info, const lcevc_select_t *lcevc) {
@@ -221,10 +168,7 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto
   ts_sub_t *s;
   int i;
   int ws_handle;
-  int expected;
   int lcevc_may_exclude = lcevc->mode == LCEVC_SEL_BASE || lcevc->mode == LCEVC_SEL_N;
-  _Atomic int *head;
-  int old_head;
   if (spts) {
     spts_psi = psi_new();
     if (!spts_psi) return -1;
@@ -234,14 +178,10 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto
     if (!filter_psi) return -1;
   }
 
-  for (i = 0; i < g_ts_subs_n; i++) {
-    if (atomic_load_explicit(&g_ts_subs[i].alive, memory_order_relaxed) != TS_SUB_FREE) continue;
-    expected = TS_SUB_FREE;
-    if (atomic_compare_exchange_strong_explicit(&g_ts_subs[i].alive, &expected, TS_SUB_ALIVE, memory_order_acquire, memory_order_relaxed))
-      break;
-  }
-  if (i == g_ts_subs_n) goto fail; /* table full */
+  i = subtab_alloc(&g_ts_tab);
+  if (i < 0) goto fail;
   s = &g_ts_subs[i];
+  atomic_store_explicit(&s->h.alive, TS_SUB_ALIVE, memory_order_relaxed);
 
   /* rings never freed: pump reads s->*_ring unlocked off alive,
      free-on-unsubscribe race (UAF). reuse prior occupant's ring if sized for proto, else allocate */
@@ -257,22 +197,22 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto
   }
 
   if (rawaudio) {
-    rawaudio_demux = rawaudio_demux_new(pmt_pid, ts_push_pid_excluded, &s->filter, ts_push_rawaudio_emit, s);
+    rawaudio_demux = rawaudio_demux_new(pmt_pid, ts_push_pid_excluded, &s->filter_mask, ts_push_rawaudio_emit, s);
     if (!rawaudio_demux) goto fail_slot;
   }
   ws_handle = ws_clients_add_persistent(info);
   if (ws_handle < 0) goto fail_slot;
-  s->ws_handle = ws_handle;
-  atomic_store_explicit(&s->ctx, ctx, memory_order_relaxed);
+  s->h.ws_handle = ws_handle;
+  s->acct_wpos = 0;
+  atomic_store_explicit(&s->h.cap_ctx, ctx, memory_order_relaxed);
   s->filter = *filter;
-  s->proto = proto;
-  s->fd = fd;
-  s->conn_gen = proto == CONN_PROTO_H1 ? conn_gen_for_fd(fd) : 0;
+  pid_mask_from_filter(&s->filter_mask, &s->filter);
+  s->h.proto = proto;
+  s->h.fd = fd;
+  s->h.conn_gen = proto == CONN_PROTO_H1 ? conn_gen_for_fd(fd) : 0;
   atomic_store_explicit(&s->ready, 0, memory_order_relaxed);
   s->h2c = NULL;
   s->h2_slot = NULL;
-  s->reactor_tid = -1;
-  s->tid_next = -1;
   s->h3c = NULL;
   s->h3_sid = -1;
   atomic_store_explicit(&s->pkt_overrun, 0, memory_order_relaxed);
@@ -292,17 +232,15 @@ int ts_push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, conn_proto
   atomic_store_explicit(&s->ctype_ready, 0, memory_order_relaxed);
   s->audio_codec = CODEC_NONE;
   s->head_sent = 0;
-  head = capture_ts_push_head_ptr(ctx);
   pthread_mutex_lock(&g_chain_mtx);
-  old_head = atomic_load_explicit(head, memory_order_relaxed);
-  atomic_store_explicit(&s->ctx_next, old_head, memory_order_relaxed);
-  atomic_store_explicit(head, i, memory_order_release);
+  subtab_chain_link(&g_ts_tab, capture_ts_push_head_ptr(ctx), i);
   pthread_mutex_unlock(&g_chain_mtx);
   atomic_fetch_add_explicit(&g_ts_active_count, 1, memory_order_relaxed);
   return i;
 
 fail_slot:
-  atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
+  atomic_store_explicit(&s->h.alive, TS_SUB_FREE, memory_order_release);
+  subtab_free(&g_ts_tab, i);
 fail:
   psi_free(spts_psi);
   psi_free(filter_psi);
@@ -310,52 +248,10 @@ fail:
   return -1;
 }
 
-/* removes idx from g_tid_head[s->reactor_tid]'s chain. owning thread only,
-   no-op if idx was never linked (reactor_tid still -1) */
-static void ts_push_unlink_tid(int idx) {
-  const ts_sub_t *s = &g_ts_subs[idx];
-  int tid = s->reactor_tid;
-  int cur;
-  if (tid < 0 || tid >= TS_PUSH_MAX_REACTOR_THREADS) return;
-  if (g_tid_head[tid] == idx) {
-    g_tid_head[tid] = s->tid_next;
-    return;
-  }
-  cur = g_tid_head[tid];
-  while (cur != -1) {
-    ts_sub_t *cs = &g_ts_subs[cur];
-    if (cs->tid_next == idx) {
-      cs->tid_next = s->tid_next;
-      return;
-    }
-    cur = cs->tid_next;
-  }
-}
-
-/* removes idx from ctx's feed_pkt chain. idx's ctx_next stays intact for pumps standing on it.
-   ctx not yet capture_close()'d (might free) */
+/* ctx not yet capture_close()'d (might free) */
 static void ts_push_unlink_ctx(capture_ctx_t *ctx, int idx) {
-  _Atomic int *head = capture_ts_push_head_ptr(ctx);
-  const ts_sub_t *s = &g_ts_subs[idx];
-  int next;
-  int cur;
   pthread_mutex_lock(&g_chain_mtx);
-  next = atomic_load_explicit(&s->ctx_next, memory_order_relaxed);
-  cur = atomic_load_explicit(head, memory_order_relaxed);
-  if (cur == idx) {
-    atomic_store_explicit(head, next, memory_order_release);
-    pthread_mutex_unlock(&g_chain_mtx);
-    return;
-  }
-  while (cur != -1) {
-    ts_sub_t *cs = &g_ts_subs[cur];
-    int cs_next = atomic_load_explicit(&cs->ctx_next, memory_order_relaxed);
-    if (cs_next == idx) {
-      atomic_store_explicit(&cs->ctx_next, next, memory_order_release);
-      break;
-    }
-    cur = cs_next;
-  }
+  subtab_chain_unlink(&g_ts_tab, capture_ts_push_head_ptr(ctx), idx);
   pthread_mutex_unlock(&g_chain_mtx);
 }
 
@@ -363,11 +259,11 @@ static void ts_push_finish_unsub(void *arg) {
   int idx = (int)(intptr_t)arg;
   ts_sub_t *s = &g_ts_subs[idx];
   capture_ctx_t *ctx;
-  ts_push_unlink_tid(idx);
-  ws_clients_remove(s->ws_handle);
-  ctx = atomic_load_explicit(&s->ctx, memory_order_relaxed);
+  subtab_unlink(&g_ts_tab, idx);
+  ws_clients_remove(s->h.ws_handle);
+  ctx = atomic_load_explicit(&s->h.cap_ctx, memory_order_relaxed);
   capture_close(ctx);
-  atomic_store_explicit(&s->ctx, NULL, memory_order_relaxed);
+  atomic_store_explicit(&s->h.cap_ctx, NULL, memory_order_relaxed);
   /* h3_ring/h2_ring/pkt_ring kept, not freed: pump reads unlocked. reused by next occupant in ts_push_subscribe() */
   psi_free(s->spts_psi);
   s->spts_psi = NULL;
@@ -375,7 +271,8 @@ static void ts_push_finish_unsub(void *arg) {
   s->filter_psi = NULL;
   rawaudio_demux_free(s->rawaudio);
   s->rawaudio = NULL;
-  atomic_store_explicit(&s->alive, TS_SUB_FREE, memory_order_release);
+  atomic_store_explicit(&s->h.alive, TS_SUB_FREE, memory_order_release);
+  subtab_free(&g_ts_tab, idx);
 }
 
 void ts_push_unsubscribe_by_idx(int idx) {
@@ -384,10 +281,10 @@ void ts_push_unsubscribe_by_idx(int idx) {
   if (idx < 0 || idx >= g_ts_subs_n) return;
   s = &g_ts_subs[idx];
   expected = TS_SUB_ALIVE;
-  if (!atomic_compare_exchange_strong_explicit(&s->alive, &expected, TS_SUB_CLOSING, memory_order_acquire, memory_order_relaxed))
+  if (!atomic_compare_exchange_strong_explicit(&s->h.alive, &expected, TS_SUB_CLOSING, memory_order_acquire, memory_order_relaxed))
     return; /* already closing or already closed */
   atomic_fetch_sub_explicit(&g_ts_active_count, 1, memory_order_relaxed);
-  ts_push_unlink_ctx(atomic_load_explicit(&s->ctx, memory_order_relaxed), idx);
+  ts_push_unlink_ctx(atomic_load_explicit(&s->h.cap_ctx, memory_order_relaxed), idx);
   if (!capture_defer_after_quiescent(ts_push_finish_unsub, (void *)(intptr_t)idx)) {
     capture_wait_pumps_quiescent();
     ts_push_finish_unsub((void *)(intptr_t)idx);

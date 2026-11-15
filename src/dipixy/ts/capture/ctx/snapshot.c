@@ -18,11 +18,9 @@ capture_snapshot_t *snapshot_alloc(int need) {
   return snap;
 }
 
-int open_count(void) {
-  int n = 0;
-  for (capture_ctx_t *c = g_open; c; c = c->next) n++;
-  return n;
-}
+_Atomic int g_open_n;
+
+int open_count(void) { return atomic_load_explicit(&g_open_n, memory_order_relaxed); }
 
 /* caller holds g_lock. snap->cap >= open_count(). consumes snap */
 void publish_snapshot(capture_snapshot_t *snap) {

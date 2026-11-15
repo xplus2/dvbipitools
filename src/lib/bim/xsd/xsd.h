@@ -16,10 +16,6 @@
 #define XSD_NS "http://www.w3.org/2001/XMLSchema"
 #define XSD_UNBOUNDED UINT64_MAX
 
-/* ISO 23001-1 6.7.8.3 schema for encoding schema components */
-#define XSD_ENCODING_NS "urn:mpeg:mpeg7:systems:encodingschema:amd1:2004"
-extern const char xsd_encoding_schema[];
-
 typedef struct xsd_type xsd_type_t;
 typedef struct xsd_elem xsd_elem_t;
 typedef struct xsd_attr xsd_attr_t;
@@ -271,6 +267,12 @@ typedef struct {
   const bim_elem_t *const *elems;
   int nelems;
   bim_schema_t schema;
+  uint64_t id;
+  const int *type_ix;
+  const int *elem_ix;
+  int ix_cap;
+  const char *const *nss;
+  int nnss;
 } xsd_compiled_t;
 
 /* resolved set to BiM coding structures, ISO 23001-1 6.6.5, 7.5.2 .. 7.5.4, ISO 15938-1:2002 8.5.
@@ -284,43 +286,5 @@ int xsd_compiled_has_ns(const xsd_compiled_t *c, const char *ns);
 int xsd_tree_extra_ns(const xsd_compiled_t *c, const bim_node_t *root, const char **ns, size_t cap);
 /* resolves xsi:type in cs[0..n-1], first hit wins, sets cast. -1 unknown type (*bad: QName) or unbound prefix */
 int xsd_cast_bind(const xsd_compiled_t *const *cs, size_t n, bim_node_t *root, const char **bad);
-
-/* encoding schema in s. 0 ok, -1 error (xsd_set_error), -2 out of memory */
-int xsd_encoding_compile(xsd_set_t **s, const xsd_compiled_t **c);
-
-/* BinaryEncodedSchema (6.7.8.2) to encoding schema tree, casts in bim_node_t.cast */
-int xsd_suu_decode(const xsd_compiled_t *enc, const unsigned char *bits, uint64_t nbits, bim_node_t **tree, bim_err_t *err);
-
-/* type_codes, elem_codes: TransmittedType/TransmittedElement of partial tables, NULL: position.
-   known: compiled imported namespaces and earlier SUUs */
-typedef struct {
-  const bim_node_t *tree;
-  const char *tns;
-  const char *const *imported;
-  int nimported;
-  const xsd_compiled_t *known;
-  const uint64_t *type_codes;
-  size_t ntype_codes;
-  const uint64_t *elem_codes;
-  size_t nelem_codes;
-} xsd_suu_t;
-
-/* additional schema source: global components of tns in set, imported in NamespaceID order,
-   known: compiled imported namespaces (IDs by their order) */
-typedef struct {
-  const xsd_set_t *set;
-  const char *tns;
-  const char *const *imported;
-  int nimported;
-  const xsd_compiled_t *known;
-} xsd_suu_src_t;
-
-/* encoding schema tree (6.7.8.3) of tns schema, own component IDs by list position. *tree mallocd */
-int xsd_suu_from_set(const xsd_compiled_t *enc, const xsd_suu_src_t *in, bim_node_t **tree, bim_err_t *err);
-/* BinaryEncodedSchema (6.7.8.2) of tree, one AddContent FUU */
-int xsd_suu_encode(const xsd_compiled_t *enc, const bim_node_t *tree, bitwriter_t *bw, bim_err_t *err);
-
-/* XML Schema document for xsd_set_add_doc, *text mallocd */
-int xsd_suu_to_xsd(const xsd_suu_t *in, char **text, bim_err_t *err);
 
 #endif

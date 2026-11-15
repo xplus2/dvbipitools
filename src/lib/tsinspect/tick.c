@@ -111,7 +111,7 @@ static void note_ref_pids(tsinspect_t *t, const psi_es_t *es, int n, unsigned pc
   int cn = 0;
   for (int i = 0; i <= n && cn <= PSI_MAX_ES; i++) {
     unsigned pid = i < n ? es[i].pid : pcr;
-    if (pid == 0 || pid >= 8192) continue;
+    if (pid == 0 || pid >= TS_PID_COUNT) continue;
     if (!u16_contains(cur, cn, (unsigned short)pid)) cur[cn++] = (unsigned short)pid;
   }
   if (t->ref_valid) {
@@ -124,7 +124,7 @@ static void note_ref_pids(tsinspect_t *t, const psi_es_t *es, int n, unsigned pc
 }
 
 static void check_unreferenced(tsinspect_t *t) {
-  for (unsigned pid = 0; pid < 8192; pid++) {
+  for (unsigned pid = 0; pid < TS_PID_COUNT; pid++) {
     int unref = (t->cc[pid] & CC_WIN) && psi_classify(t->psi, pid) == PID_UNKNOWN;
     int unlisted = unref && !(t->x->known[pid >> 3] & (1u << (pid & 7)));
     if (unref && !t->x->unref_flag[pid]) t->counters.unreferenced_pids++;
@@ -147,7 +147,7 @@ static void check_referenced_pids(tsinspect_t *t) {
   for (int i = 0; i <= n; i++) {
     unsigned pid = i < n ? es[i].pid : pcr;
     int dup = 0;
-    if (pid == 0 || pid >= 8192) continue;
+    if (pid == 0 || pid >= TS_PID_COUNT) continue;
     for (int k = 0; k < i && k < n; k++) {
       if (es[k].pid == pid) {
         dup = 1;
@@ -162,7 +162,7 @@ static void check_referenced_pids(tsinspect_t *t) {
     }
   }
   if (t->level >= METRICS_INSPECT_TS_FULL) check_unreferenced(t);
-  for (unsigned i = 0; i < 8192; i++) t->cc[i] &= (unsigned char)~CC_WIN;
+  for (unsigned i = 0; i < TS_PID_COUNT; i++) t->cc[i] &= (unsigned char)~CC_WIN;
 }
 
 static void rebuild_pts_slots(tsinspect_t *t) {
@@ -175,7 +175,7 @@ static void rebuild_pts_slots(tsinspect_t *t) {
   t->pts_n = 0;
   es = psi_es(t->psi, &n);
   for (int i = 0; i < n && t->pts_n < PSI_MAX_ES; i++) {
-    if ((es[i].cls != PID_VIDEO && es[i].cls != PID_AUDIO) || es[i].pid >= 8192 || t->x->pts_idx[es[i].pid]) continue;
+    if ((es[i].cls != PID_VIDEO && es[i].cls != PID_AUDIO) || es[i].pid >= TS_PID_COUNT || t->x->pts_idx[es[i].pid]) continue;
     t->x->pts[t->pts_n].pid = es[i].pid;
     t->x->pts[t->pts_n].last = t->now;
     t->x->pts[t->pts_n].flag = 0;

@@ -115,7 +115,8 @@ static int bind_dgram(int fd, int family, const char *addr, unsigned port) {
 }
 
 static int open_reuseport_socket(int family, const char *addr, unsigned port) {
-  int fd, on = 1;
+  int fd;
+  int on = 1;
 
   fd = socket(family, SOCK_DGRAM, 0);
   if (fd < 0) {
@@ -142,7 +143,9 @@ static int open_reuseport_socket(int family, const char *addr, unsigned port) {
 
 listen_pool_t *listen_pool_start(int family, const char *addr, unsigned port, unsigned workers, listen_rtcp_cb cb, void *user) {
   listen_pool_t *p;
-  int fd, epfd, rc;
+  int fd;
+  int epfd;
+  int rc;
 
   if (workers == 0) workers = 1;
   p = calloc(1, sizeof *p);

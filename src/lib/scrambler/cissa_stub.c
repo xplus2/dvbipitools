@@ -29,3 +29,11 @@ int cissa_decrypt_block(cissa_key_t *k, unsigned char *data, size_t len) {
   (void)len;
   return -1;
 }
+
+int cissa_crypt_batch(cissa_key_t *k, int encrypt, cissa_batch_entry_t *entries, unsigned n) {
+  (void)k;
+  (void)encrypt;
+  (void)entries;
+  (void)n;
+  return -1;
+}

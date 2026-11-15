@@ -9,6 +9,7 @@
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
 #include "priv.h"
+#include "lib/helper/growutil.h"
 
 static const char *const shortopts = "k:s:b:p:a:c:vdh";
 
@@ -32,11 +33,18 @@ static const struct option longopts[] = {
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
+static const yamlcfg_opt_t opts[] = {
+    {'p', "port", "3S000125", "invalid -p port: %s", 0},
+    {OPT_CAID, "caid", "3S000126", "invalid --caid: %s", 0},
+    {OPT_ALGO, "algo", "3S000127", "invalid --algo: %s (cissa|csa2)", 0},
+};
+
 static args_status_t parse_inner(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
   int strict = 0;
   int c;
+  int r;
 
   if (argutil_prescan(argc, argv, shortopts, longopts, OPT_CONFIGTEST, OPT_CONFIG_STRICT, &cfg_path, &configtest, &strict)) {
     cam378_print_help();
@@ -49,6 +57,9 @@ static args_status_t parse_inner(int argc, char **argv, config_t *cfg) {
 
   optind = 1;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    r = yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), cam378_cfg_keys, cam378_cfg_nkeys, cfg, c, optarg);
+    if (r < 0) return ARGS_ERR;
+    if (r > 0) continue;
     switch (c) {
       case 'k':
         cfg->key_path = optarg;
@@ -58,12 +69,6 @@ static args_status_t parse_inner(int argc, char **argv, config_t *cfg) {
         break;
       case 'b':
         cfg->bind = optarg;
-        break;
-      case 'p':
-        if (argutil_port_parse(optarg, &cfg->port)) {
-          argerr("3S000125", "invalid -p port: %s", optarg);
-          return ARGS_ERR;
-        }
         break;
       case 'a': {
         char *colon = strchr(optarg, ':');
@@ -76,22 +81,6 @@ static args_status_t parse_inner(int argc, char **argv, config_t *cfg) {
         }
         break;
       }
-      case OPT_CAID:
-        if (cam378_cfg_caid(optarg, &cfg->caid)) {
-          argerr("3S000126", "invalid --caid: %s", optarg);
-          return ARGS_ERR;
-        }
-        break;
-      case OPT_ALGO:
-        if (!strcmp(optarg, "csa2"))
-          cfg->cw_len = 8;
-        else if (!strcmp(optarg, "cissa"))
-          cfg->cw_len = 16;
-        else {
-          argerr("3S000127", "invalid --algo: %s (cissa|csa2)", optarg);
-          return ARGS_ERR;
-        }
-        break;
       case 'v':
         cfg->verbose = 1;
         break;

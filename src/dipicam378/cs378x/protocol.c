@@ -7,10 +7,12 @@
 #include <sys/socket.h>
 
 #include "lib/helper/log.h"
+#include "lib/demux/crc32.h"
 #include "lib/sys/signal.h"
 
 #include "../version.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
@@ -62,7 +64,7 @@ static int send_all(int fd, const unsigned char *buf, size_t n, atomic_int *stop
    frames as conn_ucrc+body, sends. what_for names it in error logs */
 static void finalize_and_send(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4],
   unsigned char *body, size_t total, size_t crc_len, const char *what_for) {
-  uint32_t crc = cs378x_crc32(body + 20, crc_len);
+  uint32_t crc = crc32_zlib(0, body + 20, crc_len);
   unsigned char frame[4 + CS378X_BUF_CAP];
   body[4] = (unsigned char)(crc >> 24);
   body[5] = (unsigned char)(crc >> 16);
@@ -115,7 +117,9 @@ void send_keepalive_answer(cs378x_server_t *s, int fd, const unsigned char conn_
 }
 
 void handle_ecm(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], unsigned char *body, size_t buflen) {
-  unsigned srvid, caid, prid;
+  unsigned srvid;
+  unsigned caid;
+  unsigned prid;
   unsigned char cw[16];
   int rc;
 
@@ -144,7 +148,8 @@ void handle_ecm(cs378x_server_t *s, int fd, const unsigned char conn_ucrc[4], un
 }
 
 void handle_emm(cs378x_server_t *s, unsigned char *body, size_t buflen) {
-  unsigned caid, provid;
+  unsigned caid;
+  unsigned provid;
 
   caid = ((unsigned)body[10] << 8) | body[11];
   provid = ((unsigned)body[12] << 24) | ((unsigned)body[13] << 16) | ((unsigned)body[14] << 8) | body[15];

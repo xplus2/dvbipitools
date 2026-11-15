@@ -18,7 +18,7 @@
 
 /* fd->conn table: atomic ptr slots, owner reactor writes, others read.
    racer: old or new value, recheck under out_lock. TLS GC delays fd reuse past close window: no stale hit */
-static conn_t **g_fd_conn;
+static _Atomic(conn_t *) *g_fd_conn;
 static int g_fd_conn_max = 0;
 static atomic_int g_fd_conn_overflow_logged = 0;
 
@@ -65,12 +65,12 @@ void conn_publish(conn_t *c) {
     conn_table_overflow_log(c->fd);
     return;
   }
-  __atomic_store_n(&g_fd_conn[c->fd], c, __ATOMIC_RELEASE);
+  atomic_store_explicit(&g_fd_conn[c->fd], c, memory_order_release);
 }
 
 void conn_unpublish(const conn_t *c) {
   if (g_fd_conn_max && c->fd >= 0 && c->fd < g_fd_conn_max)
-    __atomic_store_n(&g_fd_conn[c->fd], (conn_t *)NULL, __ATOMIC_RELEASE);
+    atomic_store_explicit(&g_fd_conn[c->fd], (conn_t *)NULL, memory_order_release);
 }
 
 conn_t *conn_for_fd(int fd) {
@@ -79,7 +79,7 @@ conn_t *conn_for_fd(int fd) {
     conn_table_overflow_log(fd);
     return NULL;
   }
-  return __atomic_load_n(&g_fd_conn[fd], __ATOMIC_ACQUIRE);
+  return atomic_load_explicit(&g_fd_conn[fd], memory_order_acquire);
 }
 
 conn_t *conn_for_fd_gen(int fd, uint64_t gen) {
@@ -124,7 +124,7 @@ void conn_sweep_idle(unsigned idle_timeout_s) {
   if (now == prev) return; /* called on every epoll wake, cap scan rate to 1/s */
   if (!atomic_compare_exchange_strong_explicit(&last_sweep, &prev, now, memory_order_relaxed, memory_order_relaxed)) return; /* another thread won */
   for (int fd = 0; fd < g_fd_conn_max; fd++) {
-    conn_t *c = __atomic_load_n(&g_fd_conn[fd], __ATOMIC_ACQUIRE);
+    conn_t *c = atomic_load_explicit(&g_fd_conn[fd], memory_order_acquire);
     if (c && (unsigned)(now - atomic_load_explicit(&c->last_active, memory_order_relaxed)) > idle_timeout_s) conn_idle_close(c);
   }
 }

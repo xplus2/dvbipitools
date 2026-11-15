@@ -29,7 +29,9 @@ typedef struct {
   int rtp_wrapped; /* -1 unknown (no data), 0 udp, 1 rtp */
   char name[PSI_NAME];
   unsigned pkts;
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
   scan_program_t programs[PSI_MAX_PROGRAMS]; /* -M only */
   int program_count;                         /* -M only */
 } probe_result_t;

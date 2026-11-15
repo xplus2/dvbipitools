@@ -2,30 +2,30 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <netinet/in.h>
-#include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
 #include <time.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 
 #include "ratelimit.h"
+#include "lib/helper/dateutil.h"
 
-#define RATELIMIT_LOCKS 16
+#define TOKEN_Q 10
+#define TOKEN_MAX ((1u << (32 - TOKEN_Q)) - 1)
 
+/* st: tokens Q10 << 32 | last_ms low 32 bits */
 typedef struct {
-  int family; /* 0 = empty */
-  unsigned char key[8]; /* v4: 4 bytes, v6: /64 prefix */
-  double tokens;
-  int64_t last_ms;
+  _Atomic uint64_t id;
+  _Atomic uint64_t st;
 } bucket_t;
 
 struct ratelimit {
   bucket_t *slots;
   size_t mask;
   uint64_t seed;
-  pthread_mutex_t locks[RATELIMIT_LOCKS];
 };
 
 ratelimit_t *ratelimit_new(size_t slots) {
@@ -39,80 +39,63 @@ ratelimit_t *ratelimit_new(size_t slots) {
   }
   rl->mask = n - 1;
   if (getrandom(&rl->seed, sizeof rl->seed, 0) != (ssize_t)sizeof rl->seed) {
-    struct timespec t;
-    clock_gettime(CLOCK_MONOTONIC, &t);
-    rl->seed = (uint64_t)t.tv_nsec ^ ((uint64_t)t.tv_sec << 32) ^ (uint64_t)(uintptr_t)rl;
+    rl->seed = now_ns() ^ (uint64_t)(uintptr_t)rl;
   }
-  for (size_t i = 0; i < RATELIMIT_LOCKS; i++)
-    pthread_mutex_init(&rl->locks[i], NULL);
   return rl;
 }
 
 void ratelimit_free(ratelimit_t *rl) {
   if (!rl) return;
-  for (size_t i = 0; i < RATELIMIT_LOCKS; i++)
-    pthread_mutex_destroy(&rl->locks[i]);
   free(rl->slots);
   free(rl);
 }
 
-static int key_of(const struct sockaddr *addr, int *family, unsigned char key[8]) {
-  memset(key, 0, 8);
-  if (addr->sa_family == AF_INET) {
-    memcpy(key, &((const struct sockaddr_in *)addr)->sin_addr, 4);
-    *family = AF_INET;
-    return 1;
-  }
-  if (addr->sa_family == AF_INET6) {
-    memcpy(key, &((const struct sockaddr_in6 *)addr)->sin6_addr, 8);
-    *family = AF_INET6;
-    return 1;
-  }
-  return 0;
+static uint64_t key_id(const ratelimit_t *rl, const struct sockaddr *addr) {
+  uint64_t k = 0;
+  uint64_t h;
+  if (addr->sa_family == AF_INET) memcpy(&k, &((const struct sockaddr_in *)addr)->sin_addr, 4);
+  else if (addr->sa_family == AF_INET6) memcpy(&k, &((const struct sockaddr_in6 *)addr)->sin6_addr, 8);
+  else return 0;
+  h = (k ^ rl->seed ^ (uint64_t)addr->sa_family << 56) * 0x9E3779B97F4A7C15ull;
+  h ^= h >> 29;
+  return h | 1;
 }
 
-static size_t hash_key(const ratelimit_t *rl, int family, const unsigned char key[8]) {
-  uint64_t h = rl->seed ^ 1469598103934665603ULL;
-  h ^= (uint64_t)family;
-  h *= 1099511628211ULL;
-  for (size_t i = 0; i < 8; i++) {
-    h ^= key[i];
-    h *= 1099511628211ULL;
-  }
-  h ^= h >> 32;
-  return (size_t)h;
+static uint64_t refill(uint64_t tok, uint32_t dt_ms, unsigned rate, uint64_t full) {
+  uint64_t r = (uint64_t)(dt_ms > 86400000u ? 86400000u : dt_ms) * rate;
+  tok += (r / 1000) << TOKEN_Q | ((r % 1000) << TOKEN_Q) / 1000;
+  return tok > full ? full : tok;
 }
 
 unsigned ratelimit_take(ratelimit_t *rl, const struct sockaddr *addr, unsigned rate, unsigned burst, unsigned want, int64_t now_ms) {
-  unsigned char key[8];
-  int family;
-  size_t idx;
+  uint64_t id;
+  uint64_t cur_id;
+  uint64_t full;
+  uint64_t s;
+  uint32_t now32 = (uint32_t)now_ms;
   bucket_t *b;
-  pthread_mutex_t *lock;
-  unsigned granted;
 
   if (rate == 0 || !rl) return want;
-  if (!addr || !key_of(addr, &family, key)) return 0;
+  if (!addr || !(id = key_id(rl, addr))) return 0;
   if (burst < 1) burst = 1;
-
-  idx = hash_key(rl, family, key) & rl->mask;
-  b = &rl->slots[idx];
-  lock = &rl->locks[idx % RATELIMIT_LOCKS];
-
-  pthread_mutex_lock(lock);
-  if (b->family != family || memcmp(b->key, key, 8) != 0) {
-    b->family = family;
-    memcpy(b->key, key, 8);
-    b->tokens = (double)burst;
-    b->last_ms = now_ms;
-  } else if (now_ms > b->last_ms) {
-    b->tokens += (double)(now_ms - b->last_ms) * (double)rate / 1000.0;
-    if (b->tokens > (double)burst) b->tokens = (double)burst;
-    b->last_ms = now_ms;
+  if (burst > TOKEN_MAX) burst = TOKEN_MAX;
+  full = (uint64_t)burst << TOKEN_Q;
+  b = &rl->slots[id & rl->mask];
+  cur_id = atomic_load_explicit(&b->id, memory_order_acquire);
+  if (cur_id != id && atomic_compare_exchange_strong_explicit(&b->id, &cur_id, id, memory_order_acq_rel, memory_order_acquire))
+    atomic_store_explicit(&b->st, full << 32 | now32, memory_order_release);
+  s = atomic_load_explicit(&b->st, memory_order_acquire);
+  for (;;) {
+    uint64_t tok = s >> 32;
+    uint32_t last = (uint32_t)s;
+    unsigned granted;
+    if ((int32_t)(now32 - last) > 0) {
+      tok = refill(tok, now32 - last, rate, full);
+      last = now32;
+    }
+    granted = (unsigned)(tok >> TOKEN_Q);
+    if (granted > want) granted = want;
+    tok -= (uint64_t)granted << TOKEN_Q;
+    if (atomic_compare_exchange_weak_explicit(&b->st, &s, tok << 32 | last, memory_order_acq_rel, memory_order_acquire)) return granted;
   }
-  granted = (unsigned)b->tokens;
-  if (granted > want) granted = want;
-  b->tokens -= (double)granted;
-  pthread_mutex_unlock(lock);
-  return granted;
 }

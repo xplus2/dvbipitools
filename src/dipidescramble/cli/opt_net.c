@@ -2,92 +2,32 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
-#include <stdlib.h>
 
 #include "lib/helper/argutil.h"
 #include "priv.h"
+#include "lib/net/rist/ristpeer.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+
+static const yamlcfg_opt_t opts[] = {
+    {OPT_PROFILE, "rist.profile", "DS000357", "invalid --rist-profile: %s (" RIST_PROF_HINT ")", 0},
+    {OPT_ENCRYPTION_TYPE, "rist.encryption-type", "DS000358", "invalid --rist-encryption-type: %s (" ARGUTIL_RIST_KEY_SIZE_HINT ")", 0},
+    {OPT_SRT_PASSPHRASE_IN, "srt.passphrase-in", "LS000685", "--srt-passphrase-in too long", 0},
+    {OPT_SRT_PBKEYLEN_IN, "srt.pbkeylen-in", "DS000359", "invalid --srt-pbkeylen-in: %s (" ARGUTIL_SRT_PBKEYLEN_HINT ")", 0},
+    {OPT_SRT_STREAMID_IN, "srt.streamid-in", "LS000685", "--srt-streamid-in too long", 0},
+    {OPT_SRT_PACKETFILTER_IN, "srt.packetfilter-in", "LS000685", "--srt-packetfilter-in too long", 0},
+    {OPT_SRT_LATENCY_IN, "srt.latency-in", "DS000360", "invalid --srt-latency-in: %s (1..60000 ms)", 0},
+    {OPT_SRT_PASSPHRASE, "srt.passphrase", "LS000685", "--srt-passphrase too long", 0},
+    {OPT_SRT_PBKEYLEN, "srt.pbkeylen", "DS000361", "invalid --srt-pbkeylen: %s (" ARGUTIL_SRT_PBKEYLEN_HINT ")", 0},
+    {OPT_SRT_STREAMID, "srt.streamid", "LS000685", "--srt-streamid too long", 0},
+    {OPT_SRT_PACKETFILTER, "srt.packetfilter", "LS000685", "--srt-packetfilter too long", 0},
+    {OPT_SRT_LATENCY, "srt.latency", "DS000362", "invalid --srt-latency: %s (1..60000 ms)", 0},
+};
 
 args_status_t dscr_opt_net(dscr_opt_t *p, int c) {
-  config_t *cfg = p->cfg;
-
-  switch (c) {
-    case OPT_PROFILE:
-      if (dscr_cfg_profile(cfg, optarg)) {
-        argerr("DS000357", "invalid --rist-profile: %s (simple|main)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_ENCRYPTION_TYPE:
-      if (argutil_rist_key_size(optarg, &cfg->rist_key_size)) {
-        argerr("DS000358", "invalid --rist-encryption-type: %s (128|256)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_SRT_PASSPHRASE_IN:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, optarg, "--srt-passphrase-in"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_PBKEYLEN_IN: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
-        argerr("DS000359", "invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->srt_pbkeylen_in = (int)v;
-      break;
-    }
-    case OPT_SRT_STREAMID_IN:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, optarg, "--srt-streamid-in"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_PACKETFILTER_IN:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, optarg, "--srt-packetfilter-in"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_LATENCY_IN: {
-      unsigned v;
-      if (argutil_uint_range(optarg, 1, 60000, &v)) {
-        argerr("DS000360", "invalid --srt-latency-in: %s (1..60000 ms)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->srt_latency_in_ms = v;
-      break;
-    }
-    case OPT_SRT_PASSPHRASE:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg, "--srt-passphrase"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_PBKEYLEN: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
-        argerr("DS000361", "invalid --srt-pbkeylen: %s (16|24|32)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->srt_pbkeylen = (int)v;
-      break;
-    }
-    case OPT_SRT_STREAMID:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid, sizeof cfg->srt_streamid, optarg, "--srt-streamid"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_PACKETFILTER:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg, "--srt-packetfilter"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_LATENCY: {
-      unsigned v;
-      if (argutil_uint_range(optarg, 1, 60000, &v)) {
-        argerr("DS000362", "invalid --srt-latency: %s (1..60000 ms)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->srt_latency_ms = v;
-      break;
-    }
-    default:
-      return OPT_UNHANDLED;
+  switch (yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), dscr_cfg_keys, dscr_cfg_nkeys, p->cfg, c, optarg)) {
+    case 1: return ARGS_OK;
+    case -1: return ARGS_ERR;
+    default: return OPT_UNHANDLED;
   }
-  return ARGS_OK;
 }

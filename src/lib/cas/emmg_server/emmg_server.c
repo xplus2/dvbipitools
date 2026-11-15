@@ -13,17 +13,13 @@
 #include <unistd.h>
 
 #include "lib/helper/log.h"
+#include "lib/helper/strutil.h"
 
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 static int is_one_section(const unsigned char *data, unsigned short len) {
   return len >= EMMG_SECTION_HDR_LEN && len == EMMG_SECTION_HDR_LEN + (((data[1] & 0x0F) << 8) | data[2]);
-}
-
-static double mono_s(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
 }
 
 void publish_datagram_cb(const unsigned char *data, unsigned short len, void *user) {
@@ -55,7 +51,7 @@ void publish_datagram_cb(const unsigned char *data, unsigned short len, void *us
 }
 
 static void refill_tokens(emmg_server_t *s, double rate) {
-  double now = mono_s();
+  double now = mono_seconds();
   double burst = rate / 4;
   if (burst < EMMG_MAX_DATAGRAM_LEN) burst = EMMG_MAX_DATAGRAM_LEN;
   s->tokens = s->tokens_ts > 0.0 ? s->tokens + (now - s->tokens_ts) * rate : burst;
@@ -143,14 +139,14 @@ static int socket_wildcard(unsigned port, struct sockaddr_storage *ss, socklen_t
 static int socket_host(const char *host, unsigned port, struct sockaddr_storage *ss, socklen_t *sslen) {
   struct addrinfo hints;
   struct addrinfo *res;
-  char portstr[8];
+  char portstr[12];
   int rc;
   int fd;
 
   memset(&hints, 0, sizeof hints);
   hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV | AI_PASSIVE;
   hints.ai_socktype = SOCK_STREAM;
-  snprintf(portstr, sizeof portstr, "%u", port);
+  uint_to_str(portstr, port);
   rc = getaddrinfo(host, portstr, &hints, &res);
   if (rc != 0) {
     log_code("LS000293", "emmg: listen address %s: %s", host, gai_strerror(rc));

@@ -6,11 +6,11 @@
 #include <string.h>
 
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 
 #include "../../framer/aac_adts.h"
 #include "../../framer/mpegaudio.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 unsigned long long source_bytes_total(const source_t *s) { return s->bytes_total; }
 

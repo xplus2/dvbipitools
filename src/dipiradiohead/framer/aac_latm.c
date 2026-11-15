@@ -87,7 +87,9 @@ static int audio_specific_config(br_t *b, unsigned *sample_rate, unsigned *chann
 
 /* StreamMuxConfig, audioMuxVersion 0/1 non-"A" path, single program/layer only */
 static int stream_mux_config(br_t *b, unsigned *sample_rate, unsigned *channels, unsigned *aac_profile_level, unsigned *num_sub_frames) {
-  unsigned version, num_program, num_layer;
+  unsigned version;
+  unsigned num_program;
+  unsigned num_layer;
   version = br_u(b, 1);
   if (version == 1) return -1; /* audioMuxVersionA / LATM v1 extensions not supported */
   br_u(b, 1);   /* allStreamsSameTimeFraming */

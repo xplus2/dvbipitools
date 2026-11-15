@@ -25,4 +25,14 @@ int cissa_encrypt_block(cissa_key_t *k, unsigned char *data, size_t len);
 /* inverse of cissa_encrypt_block. len must be a nonzero multiple of 16. 0 on success, -1 on error. */
 int cissa_decrypt_block(cissa_key_t *k, unsigned char *data, size_t len);
 
+#define CISSA_BATCH_MAX 64
+
+typedef struct {
+  unsigned char *data;
+  size_t len; /* nonzero multiple of 16, at most 192 */
+} cissa_batch_entry_t;
+
+/* n entries in place under k, each its own CBC chain. 0 ok, -1 error, entries undefined */
+int cissa_crypt_batch(cissa_key_t *k, int encrypt, cissa_batch_entry_t *entries, unsigned n);
+
 #endif

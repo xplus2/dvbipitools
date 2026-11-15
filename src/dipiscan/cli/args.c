@@ -7,6 +7,9 @@
 #include "lib/helper/log.h"
 
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+#include "lib/helper/strutil.h"
 
 static const char *const shortopts = "m:p:f:P:o:t:j:Mu:x:I:c:vh";
 
@@ -30,11 +33,21 @@ static const struct option longopts[] = {
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
+static const yamlcfg_opt_t opts[] = {
+    {'p', "port", "SS000165", "invalid -p port range: %s", 0},
+    {'f', "format", "SS000166", "invalid -f format: %s (m3u|csv|xspf|xml|null)", 0},
+    {'t', "timeout", "SS000167", "invalid -t timeout: %s (1..3600 seconds)", 0},
+    {'j', "jets", "SS000168", "invalid -j jets: %s (1.." STRINGIFY(DIPISCAN_MAX_JETS) ")", 0},
+    {'u', "http-proxy", "SS000169", "invalid -u http-proxy address: %s", 0},
+    {'x', "http-path", "SS000170", "invalid -x path template: %s (%%g, %%p, %%%% only)", 0},
+};
+
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
   int strict = 0;
   int c;
+  int r;
   int rc;
 
   if (argc == 1 && !scan_cfg_default_exists()) return ARGS_NOARGS;
@@ -49,6 +62,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
 
   optind = 1;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    r = yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), scan_cfg_keys, scan_cfg_nkeys, cfg, c, optarg);
+    if (r < 0) return ARGS_ERR;
+    if (r > 0) continue;
     switch (c) {
       case 'm':
         rc = scan_mcast_range_parse(optarg, &cfg->family, cfg->start, cfg->end, &cfg->total);
@@ -61,58 +77,14 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
           return ARGS_ERR;
         }
         break;
-      case 'p':
-        if (scan_port_range_parse(optarg, &cfg->port_lo, &cfg->port_hi)) {
-          argerr("SS000165", "invalid -p port range: %s", optarg);
-          return ARGS_ERR;
-        }
-        break;
-      case 'f':
-        if (scan_fmt_from_name(optarg, &cfg->format)) {
-          argerr("SS000166", "invalid -f format: %s (m3u|csv|xspf|xml|null)", optarg);
-          return ARGS_ERR;
-        }
-        break;
       case 'P':
         cfg->provider = optarg;
         break;
       case 'o':
         cfg->out_path = optarg;
         break;
-      case 't': {
-        unsigned v;
-        if (argutil_uint_range(optarg, 1, 3600, &v)) {
-          argerr("SS000167", "invalid -t timeout: %s (1..3600 seconds)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->timeout_ms = (int)(v * 1000);
-        break;
-      }
-      case 'j': {
-        unsigned v;
-        if (argutil_uint_range(optarg, 1, DIPISCAN_MAX_JETS, &v)) {
-          argerr("SS000168", "invalid -j jets: %s (1..%d)", optarg, DIPISCAN_MAX_JETS);
-          return ARGS_ERR;
-        }
-        cfg->jets = v;
-        break;
-      }
       case 'M':
         cfg->mpts = 1;
-        break;
-      case 'u':
-        if (scan_http_proxy_parse(optarg, cfg)) {
-          argerr("SS000169", "invalid -u http-proxy address: %s", optarg);
-          return ARGS_ERR;
-        }
-        cfg->http_proxy = 1;
-        break;
-      case 'x':
-        if (scan_http_path_tmpl_valid(optarg)) {
-          argerr("SS000170", "invalid -x path template: %s (%%g, %%p, %%%% only)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->http_path_tmpl = optarg;
         break;
       case 'I':
         cfg->iface = optarg;

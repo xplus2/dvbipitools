@@ -4,9 +4,9 @@
 #include <string.h>
 
 #include "lib/demux/escodec/aubuild.h"
-#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 static void video_emit(mp4_t *m, track_t *t, int64_t pts_ms, int64_t dts_ms, const unsigned char *d, size_t n, int key) {
   if (t->prev_dur_slot) {

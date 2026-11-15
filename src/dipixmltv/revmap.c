@@ -6,9 +6,11 @@
 #include <string.h>
 
 #include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #include "revmap.h"
 #include "version.h"
+#include "lib/helper/growutil.h"
 
 static int split_first1(char *line, char **uri, char **id) {
   char *p1 = strchr(line, ',');
@@ -39,7 +41,8 @@ int revmap_load(const char *path, revmap_t *m) {
     return -1;
   }
   while ((rc = read_line(f, line, sizeof line)) != 0) {
-    char *uri, *id;
+    char *uri;
+    char *id;
     revmap_entry_t *e;
     lineno++;
     if (rc < 0) {
@@ -62,16 +65,10 @@ int revmap_load(const char *path, revmap_t *m) {
       revmap_free(m);
       return -1;
     }
-    if (m->count >= m->cap) {
-      int newcap = m->cap ? m->cap * 2 : 64;
-      void *p = realloc(m->entries, (size_t)newcap * sizeof *m->entries);
-      if (!p) {
-        fclose(f);
-        revmap_free(m);
-        return -1;
-      }
-      m->entries = p;
-      m->cap = newcap;
+    if (array_reserve((void **)&m->entries, &m->cap, m->count + 1, sizeof *m->entries)) {
+      fclose(f);
+      revmap_free(m);
+      return -1;
     }
     e = &m->entries[m->count++];
     bufcpy(e->uri, sizeof e->uri, uri);

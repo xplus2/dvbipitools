@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "lib/helper/dateutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/bim/codec.h"
 #include "lib/bim/codec/codec_int.h"
 
@@ -35,19 +35,7 @@ static int copy_out(dstrbuf_t *b, int rc, char *out, size_t outcap) {
   return rc;
 }
 
-int dvb_string_decode_dup(strrepo_reader_t *sr, char **out) {
-  char *s;
-  if (!sr || strrepo_reader_next_dup(sr, &s)) return -1;
-  if (!s[0]) {
-    free(s);
-    s = NULL;
-  }
-  free(*out);
-  *out = s;
-  return 0;
-}
-
-int dvb_flagged_string_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char *s) {
+static int dvb_flagged_string_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char *s) {
   if (bitwriter_put(bw, 0, 1)) return -1;
   return dvb_string_encode(sw, s);
 }
@@ -208,7 +196,10 @@ static long mjd16_full(uint64_t v);
 
 static void add_hex(dstrbuf_t *b, const char *pre, unsigned v) {
   char tmp[16];
-  snprintf(tmp, sizeof tmp, "%s%x", pre, v);
+  sbuf_t s;
+  sbuf_init(&s, tmp, sizeof tmp);
+  sbuf_add(&s, pre);
+  sbuf_add_hex(&s, v);
   dstrbuf_add(b, tmp);
 }
 
@@ -219,6 +210,7 @@ static int locator_decode_optimized(bitreader_t *br, strrepo_reader_t *sr, dvb_c
   uint64_t event_or_tva;
   int nctag = 0;
   char tmp[64];
+  sbuf_t s;
 
   if (bitreader_get(br, 1, &v)) return -1;
   if (v) {
@@ -270,8 +262,17 @@ static int locator_decode_optimized(bitreader_t *br, strrepo_reader_t *sr, dvb_c
     }
     if (bitreader_get(br, 17, &tm) || bitreader_get(br, 17, &dur) || tm >= 86400) return -1;
     mjd_to_date(mjd16_full(st->day), &y, &mo, &d);
-    snprintf(tmp, sizeof tmp, "~%04d%02d%02dT%02u%02u%02uZ--PT%02uH%02uM%02uS", y, mo, d, (unsigned)(tm / 3600), (unsigned)(tm / 60 % 60), (unsigned)(tm % 60),
-             (unsigned)(dur / 3600), (unsigned)(dur / 60 % 60), (unsigned)(dur % 60));
+    sbuf_init(&s, tmp, sizeof tmp);
+    sbuf_add_upad(&s, "~", (unsigned)y, 4);
+    sbuf_add_upad(&s, "", (unsigned)mo, 2);
+    sbuf_add_upad(&s, "", (unsigned)d, 2);
+    sbuf_add_upad(&s, "T", (unsigned)(tm / 3600), 2);
+    sbuf_add_upad(&s, "", (unsigned)(tm / 60 % 60), 2);
+    sbuf_add_upad(&s, "", (unsigned)(tm % 60), 2);
+    sbuf_add_upad(&s, "Z--PT", (unsigned)(dur / 3600), 2);
+    sbuf_add_upad(&s, "H", (unsigned)(dur / 60 % 60), 2);
+    sbuf_add_upad(&s, "M", (unsigned)(dur % 60), 2);
+    sbuf_add(&s, "S");
     dstrbuf_add(b, tmp);
   }
   if (bitreader_get(br, 1, &v)) return -1;
@@ -292,12 +293,6 @@ int dvb_locator_decode_st(bitreader_t *br, strrepo_reader_t *sr, dvb_codec_state
   dstrbuf_t b;
   dstrbuf_init(&b);
   return copy_out(&b, b.buf ? dvb_locator_decode_buf(br, sr, st, &b) : -1, out, outcap);
-}
-
-int dvb_locator_decode(bitreader_t *br, strrepo_reader_t *sr, char *out, size_t outcap) {
-  dvb_codec_state_t st;
-  memset(&st, 0, sizeof st);
-  return dvb_locator_decode_st(br, sr, &st, out, outcap);
 }
 
 #define MJD_MIN 15079L /* 1900-03-01 */
@@ -347,18 +342,19 @@ int dvb_datetime_encode(bitwriter_t *bw, const char *iso8601) { return dvb_datet
 /* ms: fraction, trailing zeros dropped */
 static int fmt_iso(long mjd, long minute_of_day, int sec, unsigned ms, char *out, size_t outcap) {
   int n = iso8601_format(out, outcap, mjd - MJD_UNIX_EPOCH, minute_of_day * 60 + sec);
-  char frac[16] = "";
-  int m;
+  char frac[8] = "";
+  sbuf_t s;
   if (n < 0) return -1;
   if (ms) {
-    size_t k;
-    snprintf(frac, sizeof frac, ".%03u", ms);
-    k = strlen(frac);
+    size_t k = uint_to_str_pad(frac, ms, 3);
     while (frac[k - 1] == '0') k--;
     frac[k] = '\0';
   }
-  m = snprintf(out + n, outcap - (size_t)n, "%sZ", frac);
-  return m < 0 || (size_t)m >= outcap - (size_t)n ? -1 : 0;
+  sbuf_init(&s, out + n, outcap - (size_t)n);
+  if (ms) sbuf_add(&s, ".");
+  sbuf_add(&s, frac);
+  sbuf_add(&s, "Z");
+  return s.truncated ? -1 : 0;
 }
 
 int dvb_datetime_decode_st(bitreader_t *br, dvb_codec_state_t *st, char *out, size_t outcap) {
@@ -389,12 +385,6 @@ int dvb_datetime_decode_st(bitreader_t *br, dvb_codec_state_t *st, char *out, si
   return fmt_iso((long)mjd_v, (long)(ms_v / 60000ULL), (int)((ms_v / 1000ULL) % 60ULL), (unsigned)(ms_v % 1000ULL), out, outcap);
 }
 
-int dvb_datetime_decode(bitreader_t *br, char *out, size_t outcap) {
-  dvb_codec_state_t st;
-  memset(&st, 0, sizeof st);
-  return dvb_datetime_decode_st(br, &st, out, outcap);
-}
-
 /* tables 70, 72 to 75: ClassificationSchemeID, then indexes of groups 2 to 5 */
 static const char *const cs_id[] = {NULL, "urn:tva:metadata:cs:ActionTypeCS:2004", "urn:tva:metadata:cs:AtmosphereCS:2004", "urn:tva:metadata:cs:ContentAlertCS:2004", "urn:tva:metadata:cs:ContentCommercialCS:2004", "urn:tva:metadata:cs:ContentCS:2004", "urn:tva:metadata:cs:FormatCS:2004", "urn:tva:metadata:cs:HowRelatedCS:2004", "urn:tva:metadata:cs:IntendedAudienceCS:2004", "urn:tva:metadata:cs:IntentionCS:2004", "urn:tva:metadata:cs:LanguageCS:2004", "urn:tva:metadata:cs:MediaTypeCS:2004", "urn:tva:metadata:cs:OriginationCS:2004", "urn:mpeg:mpeg7:cs:RoleCS:2001", "urn:tva:metadata:cs:TVARoleCS:2004", "urn:tva:metadata:cs:AudioPurposeCS:2004", "urn:tva:metadata:cs:PurchaseTypeCS:2004", "urn:tva:metadata:cs:UnitTypeCS:2004"};
 static const char *const cs_g2[] = {NULL, "urn:tva:metadata:cs:AtmosphereCS:2005", "urn:tva:metadata:cs:ContentAlertCS:2005", "urn:tva:metadata:cs:ContentCommercialCS:2005", "urn:tva:metadata:cs:ContentCS:2005", "urn:tva:metadata:cs:FormatCS:2005", "urn:tva:metadata:cs:HowRelatedCS:2005", "urn:tva:metadata:cs:IntendedAudienceCS:2005", "urn:tva:metadata:cs:IntentionCS:2005", "urn:tva:metadata:cs:MediaType:2005", "urn:tva:metadata:cs:OriginationCS:2005", "urn:tva:metadata:cs:TVARoleCS:2005"};
@@ -403,8 +393,6 @@ static const char *const cs_g4[] = {NULL, "urn:dvb:metadata:cs:AudioCodecCS:2007
 static const char *const cs_g5[] = {NULL, "urn:tva:metadata:cs:AudioPurposeCS:2007", "urn:tva:metadata:cs:CaptionCodingFormatCS:2007", "urn:tva:metadata:cs:ContentCS:2007", "urn:tva:metadata:cs:DerivationReasonTypeCS:2007", "urn:tva:metadata:cs:FormatCS:2007", "urn:tva:metadata:cs:HowRelatedCS:2007", "urn:tva:metadata:cs:UnitTypeCS:2007"};
 
 #define NTAB(a) (sizeof(a) / sizeof *(a))
-
-int dvb_controlledterm_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char *href) { return dvb_controlledterm_encode_cs(bw, sw, NULL, href); }
 
 int dvb_controlledterm_encode_cs(bitwriter_t *bw, strrepo_writer_t *sw, const dvb_cs_t *cs, const char *href) {
   const char *colon = cs && cs->compact && cs->rank ? strrchr(href, ':') : NULL;
@@ -420,8 +408,6 @@ int dvb_controlledterm_encode_cs(bitwriter_t *bw, strrepo_writer_t *sw, const dv
   }
   return dvb_flagged_string_encode(bw, sw, href); /* encoding_flag = 0, string form */
 }
-
-int dvb_controlledterm_decode(bitreader_t *br, strrepo_reader_t *sr, char *out, size_t outcap) { return dvb_controlledterm_decode_cs(br, sr, NULL, out, outcap); }
 
 /* ClassificationSchemeURI of group and index, NULL unknown. group 0: codec parameter list */
 static const char *cs_uri(const dvb_cs_t *cs, uint64_t group, uint64_t idx) {
@@ -486,7 +472,11 @@ int dvb_duration_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char *s, in
   int used = 0;
   char back[32];
   if (compact && sscanf(s, "PT%uH%uM%n", &h, &m, &used) == 2 && !s[used] && m < 60 && h < 35 && h * 60 + m < 2048) {
-    snprintf(back, sizeof back, "PT%uH%uM", h, m);
+    sbuf_t b;
+    sbuf_init(&b, back, sizeof back);
+    sbuf_add_upad(&b, "PT", h, 0);
+    sbuf_add_upad(&b, "H", m, 0);
+    sbuf_add(&b, "M");
     if (!strcmp(back, s)) return bitwriter_put(bw, 1, 1) || bitwriter_put(bw, h * 60 + m, 11) ? -1 : 0;
   }
   return dvb_flagged_string_encode(bw, sw, s);

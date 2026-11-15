@@ -9,7 +9,11 @@ static uint32_t rol32(uint32_t v, int bits) { return (v << bits) | (v >> (32 - b
 
 static void sha1_block(uint32_t h[5], const uint8_t block[64]) {
   uint32_t w[80];
-  uint32_t a, b, c, d, e;
+  uint32_t a;
+  uint32_t b;
+  uint32_t c;
+  uint32_t d;
+  uint32_t e;
   int i;
   for (i = 0; i < 16; i++)
     w[i] = ((uint32_t)block[i * 4] << 24) | ((uint32_t)block[i * 4 + 1] << 16) | ((uint32_t)block[i * 4 + 2] << 8) |
@@ -24,7 +28,9 @@ static void sha1_block(uint32_t h[5], const uint8_t block[64]) {
   e = h[4];
 
   for (i = 0; i < 80; i++) {
-    uint32_t f, k, tmp;
+    uint32_t f;
+    uint32_t k;
+    uint32_t tmp;
     if (i < 20) {
       f = (b & c) | (~b & d);
       k = 0x5A827999u;

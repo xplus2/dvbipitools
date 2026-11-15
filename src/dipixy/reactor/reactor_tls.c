@@ -11,7 +11,7 @@
 #include <nghttp2/nghttp2.h>
 #endif
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 
 #include "internal.h"
@@ -188,7 +188,8 @@ void tls_ctx_retire(SSL_CTX *old) {
 /* builds fresh SSL_CTX, swaps it in. never mutates live ctx's cert store in place:
    concurrent SSL_new() calls need to see whole old/new ctx */
 int reload_tls(void) {
-  SSL_CTX *fresh, *old;
+  SSL_CTX *fresh;
+  SSL_CTX *old;
   if (!atomic_load_explicit(&g_ssl_ctx, memory_order_acquire)) return -1;
   fresh = build_ssl_ctx(g_tls_cert, g_tls_key);
   if (!fresh) return -1;

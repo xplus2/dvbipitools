@@ -2,15 +2,27 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
-#include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+
+static const yamlcfg_opt_t opts[] = {
+    {OPT_RMS_LANG, "rms.lang", "AS000207", "invalid --rms-lang: %s (3-letter ISO 639-2 code)", 0},
+    {OPT_FUS_LANG, "fus.lang", "AS000208", "invalid --fus-lang: %s (3-letter ISO 639-2 code)", 0},
+    {OPT_FUS_ID, "fus.id", "AS000209", "invalid --fus-id: %s", 0},
+    {OPT_FUS_ANNOUNCE, "fus.announce", "AS000210", "invalid --fus-announce: %s", 0},
+    {OPT_BCG_MCAST, "bcg.mcast", "AS000734", "invalid --bcg-mcast: %s", 0},
+};
 
 args_status_t sds_opt_rms(sds_opt_t *p, int c) {
   config_t *cfg = p->cfg;
+  switch (yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), sds_cfg_keys, sds_cfg_nkeys, cfg, c, optarg)) {
+    case 1: return ARGS_OK;
+    case -1: return ARGS_ERR;
+    default: break;
+  }
   switch (c) {
     case OPT_METRICS:
       cfg->metrics_sock = optarg;
@@ -31,14 +43,6 @@ args_status_t sds_opt_rms(sds_opt_t *p, int c) {
       cfg->rms_name = optarg;
       cfg->rms_enabled = 1;
       break;
-    case OPT_RMS_LANG:
-      if (strlen(optarg) != 3) {
-        argerr("AS000207", "invalid --rms-lang: %s (3-letter ISO 639-2 code)", optarg);
-        return ARGS_ERR;
-      }
-      memcpy(cfg->rms_lang, optarg, 3);
-      cfg->fl.have_rms_lang = 1;
-      break;
     case OPT_RMS_LOCATION:
       cfg->rms_location = optarg;
       break;
@@ -48,30 +52,6 @@ args_status_t sds_opt_rms(sds_opt_t *p, int c) {
     case OPT_FUS_NAME:
       cfg->fus_name = optarg;
       cfg->fus_enabled = 1;
-      break;
-    case OPT_FUS_LANG:
-      if (strlen(optarg) != 3) {
-        argerr("AS000208", "invalid --fus-lang: %s (3-letter ISO 639-2 code)", optarg);
-        return ARGS_ERR;
-      }
-      memcpy(cfg->fus_lang, optarg, 3);
-      cfg->fl.have_fus_lang = 1;
-      break;
-    case OPT_FUS_ID: {
-      unsigned long v;
-      if (parse_ulong(optarg, ULONG_MAX, &v)) {
-        argerr("AS000209", "invalid --fus-id: %s", optarg);
-        return ARGS_ERR;
-      }
-      cfg->fus_id = v;
-      cfg->fl.have_fus_id = 1;
-      break;
-    }
-    case OPT_FUS_ANNOUNCE:
-      if (sds_mcast_addr_parse(optarg, cfg->fus_announce_addr, sizeof cfg->fus_announce_addr, &cfg->fus_announce_port)) {
-        argerr("AS000210", "invalid --fus-announce: %s", optarg);
-        return ARGS_ERR;
-      }
       break;
     case OPT_FUS_LOGO:
       cfg->fus_logo = optarg;
@@ -88,12 +68,6 @@ args_status_t sds_opt_rms(sds_opt_t *p, int c) {
       break;
     case OPT_BCG_PROVIDER_NAME:
       cfg->bcg_provider_name = optarg;
-      break;
-    case OPT_BCG_MCAST:
-      if (sds_mcast_addr_parse(optarg, cfg->bcg_mcast_addr, sizeof cfg->bcg_mcast_addr, &cfg->bcg_mcast_port)) {
-        argerr("AS000734", "invalid --bcg-mcast: %s", optarg);
-        return ARGS_ERR;
-      }
       break;
     case OPT_BIM_NAMESPACE:
       cfg->sdns_ns = optarg;

@@ -4,14 +4,17 @@
 #include "priv.h"
 #include "../version.h"
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
+#include "lib/helper/dateutil.h"
 
 #include <sched.h>
 #include <stdlib.h>
 
 static _Atomic(hls_seg_ctx_t *) *g_stores;
 static int g_stores_n;
+static stream_key_index_t g_index;
 static pthread_mutex_t g_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_closing_cv = PTHREAD_COND_INITIALIZER;
 static hls_seg_ctx_t *g_closing[HLS_MAX_STORES]; /* swept, store close pending. g_mtx */
 static int g_closing_n;
 static qsbr_domain_t *g_seg_qsbr;
@@ -29,7 +32,9 @@ void hls_seg_init(int max_channels) {
   int n = max_channels > 0 ? max_channels : 1;
   if (n > HLS_MAX_STORES) n = HLS_MAX_STORES;
   g_stores = calloc((size_t)n, sizeof *g_stores);
-  if (!g_stores) {
+  if (!g_stores || stream_key_index_init(&g_index, n)) {
+    free(g_stores);
+    g_stores = NULL;
     log_code("YS500218", TOOL_NAME ": out of memory sizing segmenter table (%d entries)", n);
     return;
   }
@@ -48,8 +53,21 @@ void seg_unpin(hls_seg_ctx_t *s) {
   atomic_fetch_sub_explicit(&s->refcount, 1, memory_order_release);
 }
 
-static int seg_key_equal(const hls_seg_ctx_t *s, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
-  return s->cap_ctx == ctx && s->pmt_pid == pmt_pid && s->container == container && pid_filter_equal(&s->filter, filter) && lcevc_select_equal(&s->lcevc, lcevc);
+static int seg_key_equal(const hls_seg_ctx_t *s, const stream_key_t *k) {
+  return s->cap_ctx == k->ctx && s->pmt_pid == k->pmt_pid && s->container == k->container && pid_filter_equal(&s->filter, k->filter) && lcevc_select_equal(&s->lcevc, k->lcevc);
+}
+
+static uint32_t seg_hash(const hls_seg_ctx_t *s) {
+  stream_key_t k = {s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, s->container};
+  return stream_key_hash(&k);
+}
+
+static hls_seg_ctx_t *index_find(const stream_key_t *k, memory_order mo) {
+  for (int i = stream_key_index_first(&g_index, stream_key_hash(k)); i >= 0; i = stream_key_index_next(&g_index, i)) {
+    hls_seg_ctx_t *s = atomic_load_explicit(&g_stores[i], mo);
+    if (s && seg_key_equal(s, k)) return s;
+  }
+  return NULL;
 }
 
 int buf_reserve(unsigned char **buf, size_t *cap, size_t need) {
@@ -64,17 +82,11 @@ int buf_reserve(unsigned char **buf, size_t *cap, size_t need) {
 #define HLS_SEG_BUF_MAX_FACTOR 4
 
 /* caller must hold g_mtx. container in key: ts, fmp4 segmenters coexist per channel */
-hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
-  for (int i = 0; i < g_stores_n; i++) {
-    hls_seg_ctx_t *s = atomic_load_explicit(&g_stores[i], memory_order_relaxed);
-    if (s && seg_key_equal(s, ctx, filter, pmt_pid, lcevc, container)) return s;
-  }
-  return NULL;
-}
+hls_seg_ctx_t *find_locked(const stream_key_t *k) { return index_find(k, memory_order_relaxed); }
 
-static int closing_pending_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
+static int closing_pending_locked(const stream_key_t *k) {
   for (int i = 0; i < g_closing_n; i++) {
-    if (seg_key_equal(g_closing[i], ctx, filter, pmt_pid, lcevc, container)) return 1;
+    if (seg_key_equal(g_closing[i], k)) return 1;
   }
   return 0;
 }
@@ -87,14 +99,15 @@ static void closing_remove(const hls_seg_ctx_t *s) {
       break;
     }
   }
+  pthread_cond_broadcast(&g_closing_cv);
   pthread_mutex_unlock(&g_mtx);
 }
 
 void hls_seg_registry_lock(void) { pthread_mutex_lock(&g_mtx); }
 void hls_seg_registry_unlock(void) { pthread_mutex_unlock(&g_mtx); }
 
-hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
-  return find_locked(ctx, filter, pmt_pid, lcevc, container);
+hls_seg_ctx_t *hls_seg_find_locked(const stream_key_t *k) {
+  return find_locked(k);
 }
 
 /* lock free touch, somewhat. fails if s mid removal by sweep_idle, caller retries under g_mtx */
@@ -124,70 +137,56 @@ static void warn_variant_cap(void) {
   log_code("YW500229", TOOL_NAME ": segmenter variant cap (%d per source) reached, rejecting new variants", g_max_variants);
 }
 
-static _Thread_local int t_touch_hint = -1;
-
-int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, double seg_target, int max_segs, seg_container_t container, double part_target) {
+int hls_seg_touch(const stream_key_t *k, double seg_target, int max_segs, double part_target) {
   hls_seg_ctx_t *s;
   int i;
   int llhls_newly_on = 0;
   _Atomic(void *) *head;
   void *old_head;
-  s = t_touch_hint >= 0 && t_touch_hint < g_stores_n ? atomic_load_explicit(&g_stores[t_touch_hint], memory_order_acquire) : NULL;
-  if (s && seg_key_equal(s, ctx, filter, pmt_pid, lcevc, container) && touch_pinned(s, part_target, &llhls_newly_on)) {
-    capture_close(ctx);
-    if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
+  s = index_find(k, memory_order_acquire);
+  if (s && touch_pinned(s, part_target, &llhls_newly_on)) {
+    capture_close(k->ctx); /* redundant ref: existing segmenter already holds its own */
+    if (llhls_newly_on) hls_llhls_enable(k, part_target);
     return 1;
   }
-  for (i = 0; i < g_stores_n; i++) {
-    s = atomic_load_explicit(&g_stores[i], memory_order_acquire);
-    if (s && seg_key_equal(s, ctx, filter, pmt_pid, lcevc, container) && touch_pinned(s, part_target, &llhls_newly_on)) {
-      t_touch_hint = i;
-      capture_close(ctx); /* redundant ref: existing segmenter already holds its own */
-      if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
-      return 1;
-    }
-  }
 
-  for (;;) {
-    pthread_mutex_lock(&g_mtx);
-    if (!closing_pending_locked(ctx, filter, pmt_pid, lcevc, container)) break;
-    pthread_mutex_unlock(&g_mtx); /* old store still open: reuse would be closed under us */
-    sched_yield();
-  }
-  s = find_locked(ctx, filter, pmt_pid, lcevc, container);
+  pthread_mutex_lock(&g_mtx);
+  while (closing_pending_locked(k)) pthread_cond_wait(&g_closing_cv, &g_mtx); /* old store still open: reuse would be closed under us */
+  s = find_locked(k);
   if (s) {
     /* g_mtx excludes sweep removal: pin here cannot fail */
     touch_pinned(s, part_target, &llhls_newly_on);
     pthread_mutex_unlock(&g_mtx);
-    capture_close(ctx);
-    if (llhls_newly_on) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
+    capture_close(k->ctx);
+    if (llhls_newly_on) hls_llhls_enable(k, part_target);
     return 1;
   }
-  if (g_max_variants > 0 && ctx_variant_count(ctx) >= g_max_variants) {
+  if (g_max_variants > 0 && ctx_variant_count(k->ctx) >= g_max_variants) {
     pthread_mutex_unlock(&g_mtx);
     warn_variant_cap();
-    capture_close(ctx);
+    capture_close(k->ctx);
     return 0;
   }
   s = calloc(1, sizeof *s);
   if (!s) {
     pthread_mutex_unlock(&g_mtx);
-    capture_close(ctx);
+    capture_close(k->ctx);
     return 0;
   }
-  s->cap_ctx = ctx;
-  s->filter = *filter;
-  s->drop = *filter;
-  s->pmt_pid = pmt_pid;
-  s->lcevc = *lcevc;
+  s->cap_ctx = k->ctx;
+  s->filter = *k->filter;
+  s->drop = *k->filter;
+  pid_mask_from_filter(&s->drop_mask, &s->drop);
+  s->pmt_pid = k->pmt_pid;
+  s->lcevc = *k->lcevc;
   s->video.seg_target = seg_target;
-  if (container == SEG_CONTAINER_TS) {
+  if (k->container == SEG_CONTAINER_TS) {
     buf_reserve(&s->buf, &s->cap, (size_t)(seg_target * HLS_SEG_BUF_ASSUMED_BPS));
     s->buf_max = (size_t)((seg_target > 2.0 ? seg_target : 2.0) * HLS_SEG_BUF_CAP_BPS) * HLS_SEG_BUF_MAX_FACTOR;
   }
   s->video.max_segs = max_segs;
   s->video.boot_left = max_segs;
-  s->container = container;
+  s->container = k->container;
   atomic_store_explicit(&s->part.part_target, part_target, memory_order_relaxed);
   s->video.first_ts = -1;
   s->fmp4.fmp4_audio_track_idx = -1;
@@ -195,7 +194,7 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
   atomic_store_explicit(&s->last_request_ms, now_ms(), memory_order_relaxed);
   atomic_store_explicit(&s->refcount, 1, memory_order_relaxed);
   s->demux.psi = psi_new();
-  if (s->demux.psi && pmt_pid) psi_select_pmt_pid(s->demux.psi, pmt_pid);
+  if (s->demux.psi && k->pmt_pid) psi_select_pmt_pid(s->demux.psi, k->pmt_pid);
   s->demux.pes = s->demux.psi ? pes_new(hls_seg_on_pes, s) : NULL;
   if (!s->demux.psi || !s->demux.pes) goto fail;
 
@@ -203,22 +202,23 @@ int hls_seg_touch(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_p
     if (!atomic_load_explicit(&g_stores[i], memory_order_relaxed)) break;
   }
   if (i == g_stores_n) goto fail; /* registry full */
-  hls_store_open(ctx, filter, pmt_pid, lcevc, seg_target, max_segs, container);
-  s->store = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+  hls_store_open(k, seg_target, max_segs);
+  s->store = hls_store_find(k);
   if (!s->store) {
     hls_store_slot_reclaim_sweep(); /* closed slots may have passed qsbr since maint ran */
-    hls_store_open(ctx, filter, pmt_pid, lcevc, seg_target, max_segs, container);
-    s->store = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+    hls_store_open(k, seg_target, max_segs);
+    s->store = hls_store_find(k);
   }
   if (!s->store) goto fail; /* store table full */
-  head = capture_hls_seg_head_ptr(ctx);
+  head = capture_hls_seg_head_ptr(k->ctx);
   old_head = atomic_load_explicit(head, memory_order_acquire);
   atomic_store_explicit(&s->chain_next, old_head, memory_order_relaxed);
   atomic_store_explicit(head, s, memory_order_release);
   atomic_store_explicit(&g_stores[i], s, memory_order_release);
+  stream_key_index_insert(&g_index, i, stream_key_hash(k));
   pthread_mutex_unlock(&g_mtx);
 
-  if (part_target > 0.0) hls_llhls_enable(ctx, filter, pmt_pid, lcevc, container, part_target);
+  if (part_target > 0.0) hls_llhls_enable(k, part_target);
   return 1;
 
 fail:
@@ -227,7 +227,7 @@ fail:
   free(s->buf);
   free(s);
   pthread_mutex_unlock(&g_mtx);
-  capture_close(ctx);
+  capture_close(k->ctx);
   return 0;
 }
 
@@ -306,6 +306,7 @@ void hls_seg_sweep_idle(void) {
       victims[nvictims++] = s;
       g_closing[g_closing_n++] = s;
       atomic_store_explicit(&g_stores[i], NULL, memory_order_release);
+      stream_key_index_remove(&g_index, i, seg_hash(s));
       unlink_from_ctx_chain(s);
     }
   }
@@ -319,9 +320,9 @@ void hls_seg_sweep_idle(void) {
   if (nvictims) capture_wait_pumps_quiescent(); /* victim's owning pump thread may still be mid feed_one() unlocked */
   for (i = 0; i < nvictims; i++) {
     hls_seg_ctx_t *s = victims[i];
-    hls_store_close(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, s->container);
-    if (s->store_v) hls_store_close(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, SEG_CONTAINER_FMP4_VIDEO);
-    if (s->store_a) hls_store_close(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, SEG_CONTAINER_FMP4_AUDIO);
+    hls_store_close(&(stream_key_t){s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, s->container});
+    if (s->store_v) hls_store_close(&(stream_key_t){s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, SEG_CONTAINER_FMP4_VIDEO});
+    if (s->store_a) hls_store_close(&(stream_key_t){s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, SEG_CONTAINER_FMP4_AUDIO});
     closing_remove(s);
     capture_close(s->cap_ctx);
     psi_free(s->demux.psi);

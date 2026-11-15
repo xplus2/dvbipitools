@@ -82,35 +82,48 @@ static tssrc_open_state_t drive_open(tssrc_open_t *o, int max_iters) {
 }
 
 START_TEST(tssrc_http_dispatches_dash_fmp4_and_remuxes_to_ts) {
-  unsigned mpd_port, init_port, seg_port;
+  unsigned mpd_port;
+  unsigned init_port;
+  unsigned seg_port;
   int mpd_fd = make_listener(&mpd_port);
   int init_fd = make_listener(&init_port);
   int seg_fd = make_listener(&seg_port);
-  pthread_t mpd_th, init_th, seg_th;
+  pthread_t mpd_th;
+  pthread_t init_th;
+  pthread_t seg_th;
   fmp4_track_cfg_t tcfg;
   fmp4_mux_t *m;
-  unsigned char *initbuf, *segbuf;
+  unsigned char *initbuf;
+  unsigned char *segbuf;
   unsigned char init_saved[2048];
-  size_t initlen, seglen;
+  size_t initlen;
+  size_t seglen;
   static const unsigned char avcc[] = {0x01, 0x64, 0x00, 0x1F, 0xFF, 0xE1, 0x00, 0x00, 0x01, 0x00, 0x00};
   static const unsigned char frame[] = {0x00, 0x00, 0x00, 0x03, 0x65, 0x11, 0x22};
   fmp4_sample_t sample;
   char mpd_body[1024];
-  char mpd_resp[1200], init_resp[2304], seg_resp[2304];
-  size_t mpd_resp_len, init_resp_len, seg_resp_len;
+  char mpd_resp[1200];
+  char init_resp[2304];
+  char seg_resp[2304];
+  size_t mpd_resp_len;
+  size_t init_resp_len;
+  size_t seg_resp_len;
   const char *mpd_responses[2];
   size_t mpd_lens[2];
   const char *init_responses[1];
   size_t init_lens[1];
   const char *seg_responses[1];
   size_t seg_lens[1];
-  scripted_server_t mpd_srv, init_srv, seg_srv;
+  scripted_server_t mpd_srv;
+  scripted_server_t init_srv;
+  scripted_server_t seg_srv;
   tssrc_cfg_t cfg;
   tssrc_open_t *o;
   tssrc_t *s;
   unsigned char out[4096];
   size_t got;
-  int i, saw_pat;
+  int i;
+  int saw_pat;
   char uri[64];
 
   memset(&tcfg, 0, sizeof tcfg);

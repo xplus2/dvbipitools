@@ -64,10 +64,7 @@ struct flv {
 /* feed.c */
 void flv_setup(flv_t *f);
 void flv_on_pes(void *ctx, unsigned pid, int has_pts, uint64_t pts, int has_dts, uint64_t dts, const unsigned char *data, size_t len);
-void flv_all_ready(flv_t *f);
 
-/* write.c */
-void flv_send_tag(flv_t *f, flv_tag_type_t type, uint32_t ts, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn);
 void flv_emit_metadata(flv_t *f);
 void flv_emit_video(flv_t *f, flv_track_t *t, const unsigned char *d, size_t n, int key);
 void flv_emit_audio(flv_t *f, flv_track_t *t, const unsigned char *d, size_t n);

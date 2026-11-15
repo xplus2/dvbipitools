@@ -31,8 +31,6 @@ extern const int sdns_nsets;
 
 /* NULL if ns unsupported */
 const sdns_set_t *sdns_set_find(const char *ns);
-/* prefixes of set as bim_nsdecl_t, at most cap. returns count */
-int sdns_prefixes(const sdns_set_t *set, bim_nsdecl_t *out, int cap);
 
 /* compr 001 seg to XML, *xml mallocd. ns NULL: try newest first, exact payload use wins. -1 not decodable, also w/o zlib */
 int sdns_bim_to_xml(const unsigned char *au, size_t len, const char *ns, char **xml, size_t *xml_len);

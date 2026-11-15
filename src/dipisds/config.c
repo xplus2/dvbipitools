@@ -9,7 +9,7 @@
 #include "lib/bim/sdns.h"
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/playlist_out.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/uriparse.h"
 #include "lib/net/netconnect.h"
 #include "config.h"
@@ -104,10 +104,7 @@ static int apply_output(void *c, const char *v, char *e, size_t n) {
 
 static int apply_format(void *c, const char *v, char *e, size_t n) {
   int r;
-  if (playlist_out_fmt_parse(v, &r)) {
-    snprintf(e, n, "invalid '%s' (m3u|csv|xspf|xml|null)", v);
-    return -1;
-  }
+  if (playlist_out_fmt_parse(v, &r)) return yamlcfg_bad(e, n, v, "m3u|csv|xspf|xml|null");
   ((config_t *)c)->format = (out_fmt_t)r;
   ((config_t *)c)->fl.have_format = 1;
   return 0;
@@ -325,7 +322,7 @@ static int apply_fus_logo(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_str(&cfg->str_pool, &cfg->fus_logo, v, e, n);
 }
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t sds_cfg_keys[] = {
     {"announce", apply_announce, 0, 0},
     {"listen", apply_listen, 0, 0},
     {"input", apply_input, 1, 0},
@@ -379,11 +376,12 @@ static const yamlcfg_key_t keys[] = {
     {"bcg.provider-name", apply_bcg_provider_name, 0, 0},
     {"bcg.mcast", apply_bcg_mcast, 0, 0},
 };
+const size_t sds_cfg_nkeys = sizeof sds_cfg_keys / sizeof sds_cfg_keys[0];
 
 int sds_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
+  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, sds_cfg_keys, sds_cfg_nkeys, cfg);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -427,7 +425,7 @@ int sds_cfg_test(const char *path, int strict) {
   int rc;
   config_t cfg;
   sds_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, sds_cfg_keys, sds_cfg_nkeys, &cfg) != YAMLCFG_LOADED) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }

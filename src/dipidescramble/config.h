@@ -5,8 +5,12 @@
 #define DIPIDESCRAMBLE_CONFIG_H
 
 #include "cli/args.h"
+#include "lib/config/yamlcfg.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipidescramble.yaml"
+
+extern const yamlcfg_key_t dscr_cfg_keys[];
+extern const size_t dscr_cfg_nkeys;
 
 void dscr_cfg_defaults(config_t *cfg);
 

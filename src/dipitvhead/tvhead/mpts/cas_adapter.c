@@ -4,9 +4,9 @@
 #include "lib/helper/log.h"
 #include "lib/mux/psi_build.h"
 #include "lib/mux/tspacket_write.h"
-#include "lib/sys/signal.h"
 
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 /* EIT: real passthrough via remux_emit_eit(), never through mpts_t.
    build_eit/eit_pending stay no-ops. */

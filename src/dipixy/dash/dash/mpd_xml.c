@@ -43,7 +43,7 @@ size_t xml_escaped_len(const char *s) {
 }
 
 /* no bounds check, caller reserves xml_escaped_len() */
-char *write_xml_escaped(char *dst, const char *s) {
+static char *write_xml_escaped(char *dst, const char *s) {
   for (; *s; s++) switch (*s) {
     case '&': dst = write_lit(dst, "&amp;", 5); break;
     case '<': dst = write_lit(dst, "&lt;", 4); break;

@@ -8,8 +8,6 @@
 
 #include "../config.h"
 
-int tvh_set_buf(char *dst, size_t sz, const char *v, char *e, size_t n);
-int tvh_set_key_size(int *dst, const char *v, char *e, size_t n);
 int tvh_set_table(table_mode_t *mode, char *text, size_t sz, const char *v, char *e, size_t n);
 int tvh_item_hook(void *c, const char *list, int begin, char *e, size_t n);
 dipitvhead_input_t *tvh_cur_input(config_t *cfg, char *e, size_t n);

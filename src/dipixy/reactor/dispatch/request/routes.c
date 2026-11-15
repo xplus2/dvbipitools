@@ -66,130 +66,79 @@ route_result_t dispatch_route_ts(conn_t *c, const route_t *rt, const pid_filter_
   return ROUTE_RESULT_FINISH;
 }
 
-route_result_t dispatch_route_hls(conn_t *c, const route_t *rt, const pid_filter_t *filter, unsigned pmt_pid,
-  const lcevc_select_t *lcevc, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr) {
-  unsigned list_num;
-  client_info_t cinfo;
-  route_item_bufs_t item_bufs;
-  seg_container_t container = rt->fmt == ROUTE_FMT_HLS_FMP4 ? SEG_CONTAINER_FMP4 : SEG_CONTAINER_TS;
-  route_setup_t rs;
-  route_setup_status_t st;
-  size_t bytes = 0;
-  st = route_setup(rt, &list_num, filter, pmt_pid, lcevc, c->client_ip, 1, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
-    container, container == SEG_CONTAINER_FMP4 ? 0.0 : reactor_cfg()->hls_part_size, &rs);
-  if (st == ROUTE_SETUP_PENDING) return park_open(c, rs.job, keep_alive);
-  if (st == ROUTE_SETUP_404) {
-    respond_status(c, RESP_404, keep_alive);
-    return ROUTE_RESULT_FINISH;
-  }
-  if (st == ROUTE_SETUP_503) {
-    respond_status(c, RESP_503, keep_alive);
-    return ROUTE_RESULT_FINISH;
-  }
-  if (!strcmp(rt->hls_file, "index.m3u8") && !hls_store_ready(rs.ctx, filter, pmt_pid, lcevc, container) &&
-      hls_cold_try_park(c, &(hls_cold_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, HLS_COLD_HLS, container, 0, is_head, keep_alive, origin_hdr,
-        hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle, NULL})) {
-    c->state = CONN_DISPATCH;
-    return ROUTE_RESULT_PARKED;
-  }
-  if (hls_serve(c, rs.ctx, filter, pmt_pid, lcevc, container, rt->hls_file, is_head, keep_alive, if_none_match, origin_hdr, &bytes))
-    ws_clients_add_bytes(rs.ws_handle, bytes);
-  else
-    respond_status(c, RESP_404, keep_alive);
-  return ROUTE_RESULT_FINISH;
+typedef struct {
+  conn_t *c;
+  int is_head;
+  int keep_alive;
+  const char *inm;
+  const char *origin;
+} h1_route_t;
+
+static void h1_status(void *t, int code) {
+  const h1_route_t *h = t;
+  respond_status(h->c, code == 503 ? RESP_503 : RESP_404, h->keep_alive);
 }
 
-route_result_t dispatch_route_llhls(conn_t *c, const route_t *rt, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int is_head, int keep_alive,
-  const char *if_none_match, const char *origin_hdr, const char *query) {
-  unsigned list_num;
-  client_info_t cinfo;
-  route_item_bufs_t item_bufs;
-  seg_container_t container = rt->fmt == ROUTE_FMT_LLHLS_FMP4 ? SEG_CONTAINER_FMP4 : SEG_CONTAINER_TS;
-  uint32_t want_seg;
-  int want_part;
-  route_setup_t rs;
-  route_setup_status_t st;
-  size_t bytes = 0;
-  st = route_setup(rt, &list_num, filter, pmt_pid, lcevc, c->client_ip, 1, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
-    container, reactor_cfg()->hls_part_size, &rs);
-  if (st == ROUTE_SETUP_PENDING) return park_open(c, rs.job, keep_alive);
-  if (st == ROUTE_SETUP_404) {
-    respond_status(c, RESP_404, keep_alive);
-    return ROUTE_RESULT_FINISH;
-  }
-  if (st == ROUTE_SETUP_503) {
-    respond_status(c, RESP_503, keep_alive);
-    return ROUTE_RESULT_FINISH;
-  }
-  if (!strcmp(rt->hls_file, "index_ll.m3u8") && !hls_ll_store_ready(rs.ctx, filter, pmt_pid, lcevc, container) && hls_cold_try_park(c, &(hls_cold_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, HLS_COLD_LLHLS, container, 0, is_head, keep_alive, origin_hdr,
-      hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle, NULL})) {
-    c->state = CONN_DISPATCH;
-    return ROUTE_RESULT_PARKED;
-  }
-  if (!strcmp(rt->hls_file, "index_ll.m3u8") && parse_blocking_reload(query, &want_seg, &want_part) &&
-      !hls_part_available(rs.ctx, filter, pmt_pid, lcevc, container, want_seg, want_part) &&
-      llhls_try_park(c, &(llhls_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, is_head, keep_alive, NULL, origin_hdr, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), rs.ws_handle, container})) {
-    c->state = CONN_DISPATCH;
-    return ROUTE_RESULT_PARKED;
-  }
-  if (hls_serve_ll(c, rs.ctx, filter, pmt_pid, lcevc, container, rt->hls_file, is_head, keep_alive, if_none_match, origin_hdr, &bytes)) {
-    ws_clients_add_bytes(rs.ws_handle, bytes);
-  } else {
-    respond_status(c, RESP_404, keep_alive);
-  }
-  return ROUTE_RESULT_FINISH;
+static int h1_park_open(void *t, capture_open_job_t *job) {
+  const h1_route_t *h = t;
+  if (!open_try_park(h->c, job)) return 0;
+  h->c->state = CONN_DISPATCH;
+  return 1;
 }
 
-route_result_t dispatch_route_dash(conn_t *c, const route_t *rt, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int is_head, int keep_alive, const char *origin_hdr,
-                                          const char *host_hdr) {
-  char utc_url[TIME_EP_URL_MAX];
-  unsigned list_num;
-  client_info_t cinfo;
-  route_item_bufs_t item_bufs;
-  int want_ll = rt->fmt == ROUTE_FMT_LLDASH;
-  route_setup_t rs;
-  route_setup_status_t st;
-  size_t bytes = 0;
-  time_ep_utc_url(utc_url, sizeof utc_url, reactor_cfg()->dash_utc_url, c->ssl != NULL, host_hdr);
-  st = route_setup(rt, &list_num, filter, pmt_pid, lcevc, c->client_ip, 1, &item_bufs, &cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
-                   SEG_CONTAINER_FMP4, want_ll ? reactor_cfg()->dash_part_size : 0.0, &rs);
-  if (st == ROUTE_SETUP_PENDING) return park_open(c, rs.job, keep_alive);
-  if (st == ROUTE_SETUP_404) {
-    respond_status(c, RESP_404, keep_alive);
-    return ROUTE_RESULT_FINISH;
-  }
-  if (st == ROUTE_SETUP_503) {
-    respond_status(c, RESP_503, keep_alive);
-    return ROUTE_RESULT_FINISH;
-  }
-  if (strcmp(rt->hls_file, "manifest.mpd") != 0) {
-    if (!reactor_cfg()->no_lldash && !is_head && dash_lldash_try_attach(c, rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, keep_alive, origin_hdr, rs.ws_handle))
-      return ROUTE_RESULT_FINISH;
-    if (dash_serve_seg(c, rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, is_head, keep_alive, origin_hdr, &bytes))
-      ws_clients_add_bytes(rs.ws_handle, bytes);
-    else
-      respond_status(c, RESP_404, keep_alive);
-    return ROUTE_RESULT_FINISH;
-  }
-  if (!hls_store_ready(rs.ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4) &&
-      hls_cold_try_park(c, &(hls_cold_park_req_t){rs.ctx, filter, pmt_pid, lcevc, rt->hls_file, HLS_COLD_DASH, SEG_CONTAINER_FMP4, want_ll, is_head, keep_alive, origin_hdr, hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle, utc_url})) {
-    c->state = CONN_DISPATCH;
-    return ROUTE_RESULT_PARKED;
-  }
-  if (dash_serve(c, rs.ctx, filter, pmt_pid, lcevc, want_ll, utc_url, is_head, keep_alive, origin_hdr, &bytes))
-    ws_clients_add_bytes(rs.ws_handle, bytes);
-  else
-    respond_status(c, RESP_404, keep_alive);
-  return ROUTE_RESULT_FINISH;
+static int h1_cold_park(void *t, const hls_cold_park_req_t *pr) {
+  const h1_route_t *h = t;
+  if (!hls_cold_try_park(h->c, pr)) return 0;
+  h->c->state = CONN_DISPATCH;
+  return 1;
 }
 
-route_result_t dispatch_route_mp4(conn_t *c, const route_t *rt, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int is_head, int keep_alive, const char *origin_hdr) {
+static int h1_ll_park(void *t, const llhls_park_req_t *pr) {
+  const h1_route_t *h = t;
+  if (!llhls_try_park(h->c, pr)) return 0;
+  h->c->state = CONN_DISPATCH;
+  return 1;
+}
+
+static size_t h1_served(const h1_route_t *h, int ok, size_t bytes) {
+  if (ok) return bytes;
+  respond_status(h->c, RESP_404, h->keep_alive);
+  return 0;
+}
+
+static size_t h1_hls(void *t, const stream_key_t *k, const hls_store_t *st, const route_file_t *f, int ll) {
+  const h1_route_t *h = t;
+  size_t bytes = 0;
+  int ok = ll ? hls_serve_ll(h->c, k, st, f, h->is_head, h->keep_alive, h->inm, h->origin, &bytes) : hls_serve(h->c, k, st, f, h->is_head, h->keep_alive, h->inm, h->origin, &bytes);
+  return h1_served(h, ok, bytes);
+}
+
+static size_t h1_dash(void *t, const stream_key_t *k, const hls_store_t *st, int want_ll, const char *utc_url) {
+  const h1_route_t *h = t;
+  size_t bytes = 0;
+  return h1_served(h, dash_serve(h->c, k, st, want_ll, utc_url, h->is_head, h->keep_alive, h->origin, &bytes), bytes);
+}
+
+static size_t h1_dash_seg(void *t, const stream_key_t *k, const route_file_t *f) {
+  const h1_route_t *h = t;
+  size_t bytes = 0;
+  return h1_served(h, dash_serve_seg(h->c, k, f, h->is_head, h->keep_alive, h->origin, &bytes), bytes);
+}
+
+static int h1_lldash(void *t, const stream_key_t *k, const route_file_t *f, int ws_handle) {
+  const h1_route_t *h = t;
+  return dash_lldash_try_attach(h->c, k, f, h->keep_alive, h->origin, ws_handle);
+}
+
+static void h1_mp4(void *t, const stream_key_t *k, int ws_handle) {
+  const h1_route_t *h = t;
+  if (!mp4push_try_attach(h->c, k, ws_handle)) respond_status(h->c, RESP_503, h->keep_alive);
+}
+
+static route_result_t h1_mp4_head(conn_t *c, const route_t *rt, int keep_alive) {
+  char header[160];
+  size_t header_len = build_stream_header(header, sizeof header, "video/mp4", c->ssl != NULL);
   unsigned list_num;
-  client_info_t cinfo;
-  route_item_bufs_t item_bufs;
-  char mp4_head_header[160];
-  size_t mp4_head_len = build_stream_header(mp4_head_header, sizeof mp4_head_header, "video/mp4", c->ssl != NULL);
-  int wsh;
   capture_ctx_t *ctx;
   capture_open_job_t *job;
   open_res_t res = open_source_try(rt, &list_num, &ctx, &job);
@@ -198,29 +147,17 @@ route_result_t dispatch_route_mp4(conn_t *c, const route_t *rt, const pid_filter
     respond_status(c, RESP_404, keep_alive);
     return ROUTE_RESULT_FINISH;
   }
-  if (is_head) {
-    capture_close(ctx);
-    conn_queue(c, mp4_head_header, mp4_head_len);
-    return ROUTE_RESULT_FINISH;
-  }
-  route_client_info(rt, list_num, filter, pmt_pid, c->client_ip, 1, &item_bufs, &cinfo);
-  wsh = ws_clients_touch(&cinfo);
-  if (wsh < 0) {
-    capture_close(ctx);
-    respond_status(c, RESP_503, keep_alive);
-    return ROUTE_RESULT_FINISH;
-  }
-  if (!hls_seg_touch(ctx, filter, pmt_pid, lcevc, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_FMP4, 0.0)) {
-    respond_status(c, RESP_503, keep_alive);
-    return ROUTE_RESULT_FINISH;
-  }
-  if (!hls_store_ready(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4) &&
-      hls_cold_try_park(c, &(hls_cold_park_req_t){ctx, filter, pmt_pid, lcevc, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, is_head, keep_alive, origin_hdr, hls_cold_timeout_ms(reactor_cfg()->segment_size), wsh, NULL})) {
-    c->state = CONN_DISPATCH;
-    return ROUTE_RESULT_PARKED;
-  }
-  if (!mp4push_try_attach(c, ctx, filter, pmt_pid, lcevc, wsh)) {
-    respond_status(c, RESP_503, keep_alive);
-  }
+  capture_close(ctx);
+  conn_queue(c, header, header_len);
   return ROUTE_RESULT_FINISH;
+}
+
+route_result_t dispatch_route_store(conn_t *c, const route_t *rt, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int is_head, int keep_alive, const char *if_none_match,
+                                    const char *origin_hdr, const char *query, const char *host_hdr) {
+  const route_io_ops_t ops = {h1_status, h1_park_open, h1_cold_park, h1_ll_park, h1_hls, h1_dash, h1_dash_seg, h1_lldash, h1_mp4};
+  h1_route_t h = {c, is_head, keep_alive, if_none_match, origin_hdr};
+  route_item_bufs_t item_bufs;
+  client_info_t cinfo;
+  if (rt->fmt == ROUTE_FMT_MP4 && is_head) return h1_mp4_head(c, rt, keep_alive);
+  return route_dispatch_store(&(route_io_t){&ops, &h, rt, filter, pmt_pid, lcevc, c->client_ip, 1, is_head, keep_alive, origin_hdr, NULL, query, host_hdr, c->ssl != NULL, &item_bufs, &cinfo});
 }

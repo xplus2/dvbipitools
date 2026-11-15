@@ -138,7 +138,8 @@ START_TEST(iso8601_to_xmltv_time_accepts_fractional_seconds) {
 END_TEST
 
 START_TEST(timefmt_round_trips_utc) {
-  char mid[32], back[32];
+  char mid[32];
+  char back[32];
   ck_assert_int_eq(xmltv_time_to_iso8601("20201215123045 +0000", mid, sizeof mid), 0);
   ck_assert_int_eq(iso8601_to_xmltv_time(mid, back, sizeof back), 0);
   ck_assert_str_eq(back, "20201215123045 +0000");

@@ -55,7 +55,8 @@ END_TEST
 START_TEST(esw_round_trips_with_arbitrary_key) {
   unsigned char id[BISS_KEY_LEN] = {0xde, 0xad, 0xbe, 0xef, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
   unsigned char sw[BISS_KEY_LEN] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-  unsigned char esw[BISS_KEY_LEN], back[BISS_KEY_LEN];
+  unsigned char esw[BISS_KEY_LEN];
+  unsigned char back[BISS_KEY_LEN];
   ck_assert_int_eq(biss_esw_encrypt(id, sw, esw), 0);
   ck_assert_mem_ne(esw, sw, BISS_KEY_LEN);
   ck_assert_int_eq(biss_esw_decrypt(id, esw, back), 0);
@@ -117,7 +118,10 @@ static const biss1_vector_t biss1_vectors[] = {
 
 START_TEST(biss1_esw_decrypt_matches_ebu_appendix_a_vector) {
   const biss1_vector_t *v = &biss1_vectors[_i];
-  unsigned char esw[BISS1_ESW_LEN], id[BISS1_ID_LEN], want[BISS1_KEY_LEN], got[BISS1_KEY_LEN];
+  unsigned char esw[BISS1_ESW_LEN];
+  unsigned char id[BISS1_ID_LEN];
+  unsigned char want[BISS1_KEY_LEN];
+  unsigned char got[BISS1_KEY_LEN];
   ck_assert_int_eq(biss1_parse_esw(v->esw, esw), 0);
   ck_assert_int_eq(biss1_parse_id(v->id, id), 0);
   ck_assert_int_eq(biss1_parse_sw(v->sw, want), 0);

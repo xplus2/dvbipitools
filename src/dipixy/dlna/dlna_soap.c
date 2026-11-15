@@ -5,7 +5,7 @@
 
 #include "dlna_int.h"
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 #include "lib/helper/xml_util.h"
 
 #include <pthread.h>
@@ -14,7 +14,9 @@
 #include <string.h>
 
 int dlna_soap_action_name(const char *soapaction_header, char *out, size_t outsz) {
-  const char *h, *q2, *hash;
+  const char *h;
+  const char *q2;
+  const char *hash;
   size_t len;
 
   if (!soapaction_header) return -1;
@@ -43,7 +45,7 @@ static ssize_t gbuf_write(void *cookie, const char *data, size_t size) {
 
 #define GBUF_SHRINK_RATIO 2
 
-FILE *gbuf_open(gbuf_t *g) {
+static FILE *gbuf_open(gbuf_t *g) {
   cookie_io_functions_t io = {.read = NULL, .write = gbuf_write, .seek = NULL, .close = NULL};
   size_t need = g->len + 1;
   if (g->buf && g->cap > need * GBUF_SHRINK_RATIO) {

@@ -12,7 +12,6 @@
 
 typedef enum { INPUT_RTP, INPUT_UDP, INPUT_STDIN, INPUT_RIST, INPUT_SRT } input_kind_t;
 typedef enum { FMT_TS, FMT_MKV, FMT_MKA } out_fmt_t;
-typedef enum { PMT_SEL_AUTO, PMT_SEL_PID, PMT_SEL_ALL } pmt_sel_t;
 typedef enum { OUT_FILE, OUT_RTMP, OUT_RTMPS, OUT_SRT } out_kind_t;
 
 #define DIPIDESCRAMBLE_MAX_OUT 8

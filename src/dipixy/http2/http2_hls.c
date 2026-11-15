@@ -171,8 +171,9 @@ void h2_llhls_on_conn_close(const h2_conn_t *conn) {
 
 static void h2_llhls_finish(hls_waiter_t *w) {
   h2_conn_t *conn = w->owner;
+  const stream_key_t *k = WAITER_KEY(w);
   hls_resp_t resp;
-  if (!hls_render_ll(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container, w->filename, w->is_head, w->inm[0] ? w->inm : NULL, &resp)) {
+  if (!hls_render_ll(k, hls_store_find(k), &w->file, w->is_head, w->inm[0] ? w->inm : NULL, &resp)) {
     h2_submit_resp(conn, (int32_t)w->stream_id, 404, NULL, NULL, 0, NULL, NULL, 0, w->origin[0] ? w->origin : NULL);
   } else {
     h2_submit_resp(conn, (int32_t)w->stream_id, resp.status, resp.content_type, resp.etag, resp.body_len, resp.body, resp.owner, resp.zc, w->origin[0] ? w->origin : NULL);
@@ -209,7 +210,7 @@ static void h2_hls_cold_finish(hls_waiter_t *w) {
   int handled;
   hls_resp_t resp;
   if (w->kind == HLS_COLD_MP4) {
-    int sub = mp4push_subscribe(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, CONN_PROTO_H2);
+    int sub = mp4push_subscribe(STREAM_KEY_AS(WAITER_KEY(w), SEG_CONTAINER_FMP4), CONN_PROTO_H2);
     if (sub < 0 || !h2_mp4push_dispatch(conn, conn->c, (int32_t)w->stream_id, sub, w->ws_handle)) {
       if (sub >= 0) mp4push_sub_close(sub);
       h2_submit_resp(conn, (int32_t)w->stream_id, 503, NULL, NULL, 0, NULL, NULL, 0, w->origin[0] ? w->origin : NULL);
@@ -217,7 +218,7 @@ static void h2_hls_cold_finish(hls_waiter_t *w) {
   } else if (!hls_cold_ready(w)) {
     h2_submit_resp(conn, (int32_t)w->stream_id, hls_cold_expired_status(w), NULL, NULL, 0, NULL, NULL, 0, w->origin[0] ? w->origin : NULL);
   } else {
-    handled = httpng_hls_cold_render(w->kind, w->container, w->want_ll, w->utc_url, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, &resp);
+    handled = httpng_hls_cold_render(w->kind, WAITER_KEY(w), w->want_ll, w->utc_url, &w->file, w->is_head, &resp);
     if (!handled) {
       h2_submit_resp(conn, (int32_t)w->stream_id, 404, NULL, NULL, 0, NULL, NULL, 0, w->origin[0] ? w->origin : NULL);
     } else {

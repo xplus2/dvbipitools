@@ -19,8 +19,11 @@ static source_frame_t frame_of(const unsigned char *data, size_t len) {
 
 START_TEST(orders_frames_and_sums_duration) {
   framequeue_t *q = framequeue_new();
-  unsigned char d1[4] = {1, 2, 3, 4}, d2[2] = {9, 8};
-  source_frame_t a = frame_of(d1, sizeof d1), b = frame_of(d2, sizeof d2), out;
+  unsigned char d1[4] = {1, 2, 3, 4};
+  unsigned char d2[2] = {9, 8};
+  source_frame_t a = frame_of(d1, sizeof d1);
+  source_frame_t b = frame_of(d2, sizeof d2);
+  source_frame_t out;
 
   ck_assert_ptr_nonnull(q);
   ck_assert_int_eq(framequeue_push(q, &a), 0);

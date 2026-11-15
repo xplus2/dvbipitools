@@ -6,13 +6,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
+#include "lib/helper/growutil.h"
 
 ws_client_t *g_clients;
 int g_clients_cap;
 pthread_mutex_t g_clients_mtx = PTHREAD_MUTEX_INITIALIZER;
-int *g_free_slots;
-int g_free_slots_n;
+idxstack_t g_free_slots;
 
 /* g_clients index for touch()'s match. persistent entries excluded.
    speaking of tombstones, Béla Lugosi was Dracula's best acting credit. */
@@ -155,11 +155,8 @@ void ws_clients_init(int max_clients) {
   g_stripe_count = n;
   g_expired_scratch = malloc(sizeof(int) * (size_t)g_clients_cap);
   g_tick_rate_scratch = malloc(sizeof(tick_rate_t) * (size_t)g_clients_cap);
-  g_free_slots = malloc(sizeof(int) * (size_t)g_clients_cap);
-  if (g_free_slots) {
-    for (int i = 0; i < g_clients_cap; i++) g_free_slots[i] = i;
-    g_free_slots_n = g_clients_cap;
-  }
+  if (!idxstack_init(&g_free_slots, g_clients_cap))
+    for (int i = g_clients_cap - 1; i >= 0; i--) idxstack_push(&g_free_slots, i);
 }
 
 static void fill_entry(ws_client_t *e, const client_info_t *info, const char *filt) {
@@ -186,11 +183,11 @@ int ws_clients_add_persistent(const client_info_t *info) {
   else
     filt[0] = '\0';
   pthread_mutex_lock(&g_clients_mtx);
-  if (g_free_slots_n == 0) {
+  i = idxstack_pop(&g_free_slots);
+  if (i < 0) {
     pthread_mutex_unlock(&g_clients_mtx);
     return -1;
   }
-  i = g_free_slots[--g_free_slots_n];
   gen = claim_slot(i);
   fill_entry(&g_clients[i], info, filt);
   g_clients[i].persistent = 1;
@@ -198,7 +195,7 @@ int ws_clients_add_persistent(const client_info_t *info) {
   g_clients[i].used = 1;
   snapshot_client(&snap, &g_clients[i]);
   pthread_mutex_unlock(&g_clients_mtx);
-  publish_client_event_snap("clients.add", i, &snap);
+  publish_client_add(i, &snap);
   return pack_handle(i, gen);
 }
 
@@ -217,10 +214,10 @@ void ws_clients_remove(int handle) {
     }
     g_clients[idx].used = 0;
     atomic_fetch_add_explicit(&g_clients[idx].gen, 1, memory_order_release);
-    if (g_free_slots) g_free_slots[g_free_slots_n++] = idx;
+    idxstack_push(&g_free_slots, idx);
   }
   pthread_mutex_unlock(&g_clients_mtx);
-  if (removed) publish_client_event("clients.remove", idx);
+  if (removed) publish_client_remove(idx);
 }
 
 static int try_match(const ws_stripe_t *stripe, uint32_t h, const client_info_t *info, const char *filt, time_t now) {
@@ -238,7 +235,7 @@ static int try_match(const ws_stripe_t *stripe, uint32_t h, const client_info_t 
     if (strcmp(e->src_addr, nz(info->src_addr))) continue;
     if (strcmp(e->src_name, nz(info->src_name)) || e->item_num != info->item_num) continue;
     if (strcmp(e->item_name, nz(info->item_name))) continue;
-    e->last_seen = now;
+    atomic_store_explicit(&e->last_seen, now, memory_order_relaxed);
     return idx;
   }
   return -1;
@@ -280,23 +277,23 @@ int ws_clients_touch(const client_info_t *info) {
     pthread_mutex_unlock(&g_clients_mtx);
     return pack_handle(idx, gen);
   }
-  if (g_free_slots_n == 0) {
+  free_slot = idxstack_pop(&g_free_slots);
+  if (free_slot < 0) {
     pthread_mutex_unlock(&stripe->lock);
     pthread_mutex_unlock(&g_clients_mtx);
     return -1;
   }
-  free_slot = g_free_slots[--g_free_slots_n];
   unsigned gen = claim_slot(free_slot);
   fill_entry(&g_clients[free_slot], info, filt);
   g_clients[free_slot].hash = h;
   g_clients[free_slot].connect_time = now;
-  g_clients[free_slot].last_seen = now;
+  atomic_store_explicit(&g_clients[free_slot].last_seen, now, memory_order_relaxed);
   g_clients[free_slot].used = 1;
   hash_insert(stripe, h, free_slot);
   snapshot_client(&snap, &g_clients[free_slot]);
   pthread_mutex_unlock(&stripe->lock);
   pthread_mutex_unlock(&g_clients_mtx);
-  publish_client_event_snap("clients.add", free_slot, &snap);
+  publish_client_add(free_slot, &snap);
   return pack_handle(free_slot, gen);
 }
 

@@ -9,6 +9,13 @@
 
 #include "dipixy/core/route.h"
 
+static void assert_file(const route_file_t *f, route_file_kind_t kind, int fmp4, uint32_t seq, int part) {
+  ck_assert_int_eq(f->kind, kind);
+  ck_assert_int_eq(f->fmp4, fmp4);
+  ck_assert_uint_eq(f->seq, seq);
+  ck_assert_int_eq(f->part, part);
+}
+
 START_TEST(rtp_ts_direct_route_parses) {
   route_t r;
   ck_assert_int_eq(route_parse("/rtp/239.0.0.1:8000/ts", &r), 0);
@@ -64,7 +71,7 @@ START_TEST(udp_hls_direct_route_parses) {
   ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/hls", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_UDP);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_HLS);
-  ck_assert_str_eq(r.hls_file, "index.m3u8");
+  assert_file(&r.file, ROUTE_FILE_INDEX, 0, 0, 0);
 }
 END_TEST
 
@@ -73,7 +80,7 @@ START_TEST(hls_segment_filename_route_parses) {
   ck_assert_int_eq(route_parse("/rtp/239.0.0.1:8000/seg00042.ts", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_RTP);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_HLS);
-  ck_assert_str_eq(r.hls_file, "seg00042.ts");
+  assert_file(&r.file, ROUTE_FILE_SEG, 0, 42, 0);
 }
 END_TEST
 
@@ -82,7 +89,7 @@ START_TEST(hls_segment_filename_route_parses_for_list) {
   ck_assert_int_eq(route_parse("/list/1/item/3/seg7.ts", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_LIST_ITEM);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_HLS);
-  ck_assert_str_eq(r.hls_file, "seg7.ts");
+  assert_file(&r.file, ROUTE_FILE_SEG, 0, 7, 0);
 }
 END_TEST
 
@@ -98,7 +105,7 @@ START_TEST(udp_hls_fmp4_direct_route_parses) {
   ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/hls-fmp4", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_UDP);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_HLS_FMP4);
-  ck_assert_str_eq(r.hls_file, "index.m3u8");
+  assert_file(&r.file, ROUTE_FILE_INDEX, 0, 0, 0);
 }
 END_TEST
 
@@ -115,7 +122,7 @@ START_TEST(hls_fmp4_init_filename_route_parses) {
   ck_assert_int_eq(route_parse("/rtp/239.0.0.1:8000/init.mp4", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_RTP);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_HLS_FMP4);
-  ck_assert_str_eq(r.hls_file, "init.mp4");
+  assert_file(&r.file, ROUTE_FILE_INIT, 0, 0, 0);
 }
 END_TEST
 
@@ -124,7 +131,7 @@ START_TEST(hls_fmp4_segment_filename_route_parses) {
   ck_assert_int_eq(route_parse("/list/1/item/3/seg7.m4s", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_LIST_ITEM);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_HLS_FMP4);
-  ck_assert_str_eq(r.hls_file, "seg7.m4s");
+  assert_file(&r.file, ROUTE_FILE_SEG, 1, 7, 0);
 }
 END_TEST
 
@@ -140,7 +147,7 @@ START_TEST(udp_llhls_direct_route_parses) {
   ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/llhls", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_UDP);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_LLHLS);
-  ck_assert_str_eq(r.hls_file, "index_ll.m3u8");
+  assert_file(&r.file, ROUTE_FILE_INDEX_LL, 0, 0, 0);
 }
 END_TEST
 
@@ -149,7 +156,7 @@ START_TEST(udp_llhls_fmp4_direct_route_parses) {
   ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/llhls-fmp4", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_UDP);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_LLHLS_FMP4);
-  ck_assert_str_eq(r.hls_file, "index_ll.m3u8");
+  assert_file(&r.file, ROUTE_FILE_INDEX_LL, 0, 0, 0);
 }
 END_TEST
 
@@ -158,7 +165,7 @@ START_TEST(llhls_fmp4_part_filename_route_parses) {
   ck_assert_int_eq(route_parse("/rtp/239.0.0.1:8000/seg00042.3.m4s", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_RTP);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_LLHLS_FMP4);
-  ck_assert_str_eq(r.hls_file, "seg00042.3.m4s");
+  assert_file(&r.file, ROUTE_FILE_PART, 1, 42, 3);
   ck_assert_int_eq(route_parse("/rtp/239.0.0.1:8000/seg00042.m4s", &r), 0);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_HLS_FMP4);
   ck_assert_int_ne(route_parse("/rtp/239.0.0.1:8000/seg00042.3.mp4", &r), 0);
@@ -170,7 +177,7 @@ START_TEST(llhls_part_filename_route_parses) {
   ck_assert_int_eq(route_parse("/rtp/239.0.0.1:8000/seg00042.3.ts", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_RTP);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_LLHLS);
-  ck_assert_str_eq(r.hls_file, "seg00042.3.ts");
+  assert_file(&r.file, ROUTE_FILE_PART, 0, 42, 3);
 }
 END_TEST
 
@@ -186,7 +193,7 @@ START_TEST(udp_dash_direct_route_parses) {
   ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/dash", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_UDP);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_DASH);
-  ck_assert_str_eq(r.hls_file, "manifest.mpd");
+  assert_file(&r.file, ROUTE_FILE_MPD, 0, 0, 0);
 }
 END_TEST
 
@@ -195,7 +202,7 @@ START_TEST(udp_lldash_direct_route_parses) {
   ck_assert_int_eq(route_parse("/udp/239.0.0.1:8000/lldash", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_UDP);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_LLDASH);
-  ck_assert_str_eq(r.hls_file, "manifest.mpd");
+  assert_file(&r.file, ROUTE_FILE_MPD, 0, 0, 0);
 }
 END_TEST
 
@@ -204,7 +211,9 @@ START_TEST(dash_seg_filename_route_parses) {
   ck_assert_int_eq(route_parse("/list/1/item/3/dseg12000.m4s", &r), 0);
   ck_assert_int_eq(r.kind, ROUTE_LIST_ITEM);
   ck_assert_int_eq(r.fmt, ROUTE_FMT_DASH);
-  ck_assert_str_eq(r.hls_file, "dseg12000.m4s");
+  assert_file(&r.file, ROUTE_FILE_DSEG, 0, 0, 0);
+  ck_assert_uint_eq(r.file.t_ms, 12000);
+  ck_assert_int_eq(r.file.track, ROUTE_TRACK_MUXED);
 }
 END_TEST
 
@@ -221,6 +230,8 @@ END_TEST
 
 START_TEST(dash_track_filenames_route_to_dash) {
   static const char *const names[] = {"dsegv500.m4s", "dsega500.m4s", "dinitv.mp4", "dinita.mp4"};
+  static const route_file_kind_t kinds[] = {ROUTE_FILE_DSEG, ROUTE_FILE_DSEG, ROUTE_FILE_DINIT, ROUTE_FILE_DINIT};
+  static const route_track_t tracks[] = {ROUTE_TRACK_VIDEO, ROUTE_TRACK_AUDIO, ROUTE_TRACK_VIDEO, ROUTE_TRACK_AUDIO};
   for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
     char path[96];
     route_t r;
@@ -228,7 +239,9 @@ START_TEST(dash_track_filenames_route_to_dash) {
     ck_assert_int_eq(route_parse(path, &r), 0);
     ck_assert_int_eq(r.kind, ROUTE_LIST_ITEM);
     ck_assert_int_eq(r.fmt, ROUTE_FMT_DASH);
-    ck_assert_str_eq(r.hls_file, names[i]);
+    ck_assert_int_eq(r.file.kind, kinds[i]);
+    ck_assert_int_eq(r.file.track, tracks[i]);
+    ck_assert_uint_eq(r.file.t_ms, i < 2 ? 500 : 0);
   }
 }
 END_TEST

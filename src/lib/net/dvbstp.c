@@ -12,6 +12,7 @@
 #include "../helper/beutil.h"
 #include "../sys/signal.h"
 #include "dvbstp.h"
+#include "lib/helper/dateutil.h"
 
 /* gap between sections of one segment, keeps receivers' socket buffers from overflowing */
 #define SECTION_GAP_NS 1000000L

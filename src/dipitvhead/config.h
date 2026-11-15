@@ -7,10 +7,14 @@
 #include <stddef.h>
 
 #include "cli/args.h"
+#include "lib/config/yamlcfg.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipitvhead.yaml"
 
 typedef void (*tvh_report_fn)(void *ud, int fatal, const char *code, const char *msg);
+
+extern const yamlcfg_key_t tvh_cfg_keys[];
+extern const size_t tvh_cfg_nkeys;
 
 void tvh_cfg_defaults(config_t *cfg);
 
@@ -19,14 +23,11 @@ int tvh_cfg_load(config_t *cfg, const char *path, int strict);
 int tvh_cfg_test(const char *path, int strict);
 
 int tvh_cfg_mcast(config_t *cfg, const char *s);
-int tvh_cfg_pid(const char *s, unsigned *out);
-int tvh_cfg_source(source_t *dst, const char *uri, char *err, size_t errsz);
 int tvh_cfg_add_input(config_t *cfg, const char *uri, char *err, size_t errsz);
 int tvh_cfg_cas_pids(config_t *cfg, const char *s);
 int tvh_cfg_strip(unsigned *mask, const char *s);
 int tvh_cfg_add_peer(config_t *cfg, const char *uri, char *err, size_t errsz);
 int tvh_cfg_profile(config_t *cfg, const char *val, char *err, size_t errsz);
-int tvh_set_pbkeylen(int *dst, const char *v, char *e, size_t n);
 int tvh_cfg_group_mode(config_t *cfg, const char *val, char *err, size_t errsz);
 int tvh_cfg_pcr_mode(config_t *cfg, const char *val, char *err, size_t errsz);
 int tvh_cfg_pcr_lead_ms(config_t *cfg, const char *val, char *err, size_t errsz);

@@ -1,10 +1,9 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include "lib/sys/ioutil.h"
-
 #include <stdatomic.h>
 #include <stdlib.h>
+#include "lib/helper/dateutil.h"
 
 /* ring holds 1 ref, each zc send adds 1 more, free (or pool-return) on last drop */
 typedef struct {
@@ -27,9 +26,11 @@ static int g_seg_pool_cap = 8;
 
 /* call once at startup, before any HLS traffic */
 void hls_set_seg_pool_cap(int n) {
-  if (n < 1) n = 1;
-  g_seg_pool_cap = n;
-  for (int i = 0; i < SEG_POOL_CLASSES; i++) seg_pool[i].slots = calloc((size_t)n, sizeof *seg_pool[i].slots);
+  static int done;
+  if (done) return;
+  done = 1;
+  g_seg_pool_cap = n < 1 ? 1 : n;
+  for (int i = 0; i < SEG_POOL_CLASSES; i++) seg_pool[i].slots = calloc((size_t)g_seg_pool_cap, sizeof *seg_pool[i].slots);
 }
 
 /* -1: larger than biggest class, malloc'd unpooled */
@@ -77,7 +78,7 @@ uint8_t *seg_buf_alloc(size_t size) {
   return (uint8_t *)(h + 1);
 }
 
-/* NULL-safe like free(): a zero-size push (hls_push_segment_ll with live_len==0) stores NULL */
+/* NULL-safe like free(): a zero-size push (hls_push_segment_ll_at with live_len==0) stores NULL */
 void seg_buf_ref(uint8_t *data) {
   if (!data) return;
   seg_buf_hdr_t *h = (seg_buf_hdr_t *)data - 1;
@@ -114,7 +115,8 @@ void hls_seg_pool_trim_idle(void) {
   for (int i = 0; i < SEG_POOL_CLASSES; i++) {
     seg_pool_class_t *c = &seg_pool[i];
     int64_t last = atomic_load_explicit(&c->last_used_ms, memory_order_relaxed);
-    if (!last || now - last < (int64_t)SEG_POOL_IDLE_MS) continue;
+    if (!c->slots || !last || now - last < (int64_t)SEG_POOL_IDLE_MS) continue;
+    if (!atomic_compare_exchange_strong_explicit(&c->last_used_ms, &last, 0, memory_order_relaxed, memory_order_relaxed)) continue;
     for (int j = 0; j < g_seg_pool_cap; j++) {
       seg_buf_hdr_t *h = atomic_exchange_explicit(&c->slots[j], NULL, memory_order_acquire);
       free(h);

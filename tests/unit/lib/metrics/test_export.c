@@ -11,7 +11,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/metrics/export.h"
 
 START_TEST(disabled_without_metrics_id) {
@@ -114,7 +114,8 @@ START_TEST(errors_total_reflects_note_error_by_reason) {
   metrics_id_t id;
   char label[METRICS_LABEL_MAX + 1];
   uint64_t value;
-  int seen_dns = 0, seen_timeout = 0;
+  int seen_dns = 0;
+  int seen_timeout = 0;
 
   metrics_exporter_init(&mx, METRICS_COMPONENT_SDS, "inst1", "/tmp/dvbipitools-test-no-such-collector.sock", 5.0);
   metrics_exporter_note_error(&mx, NET_ERR_DNS);

@@ -72,7 +72,8 @@ START_TEST(registered_sink_receives_publish) {
 END_TEST
 
 START_TEST(multiple_sinks_all_receive_publish) {
-  int ctx_a = 1, ctx_b = 2;
+  int ctx_a = 1;
+  int ctx_b = 2;
   g_calls = 0;
   ws_broadcast_register(record_sink, &ctx_a);
   ws_broadcast_register(other_sink, &ctx_b);
@@ -93,7 +94,8 @@ START_TEST(unregister_removes_sink) {
 END_TEST
 
 START_TEST(unregister_nonmatching_pair_is_noop) {
-  int ctx_val = 9, other_ctx = 10;
+  int ctx_val = 9;
+  int other_ctx = 10;
   g_calls = 0;
   ws_broadcast_register(record_sink, &ctx_val);
   ws_broadcast_unregister(record_sink, &other_ctx); /* same fn, different ctx: no match */

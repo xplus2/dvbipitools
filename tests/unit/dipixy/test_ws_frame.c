@@ -11,7 +11,8 @@
 /* builds a masked client->server frame, mirrors what a real client sends */
 static uint8_t *build_client_frame(int fin, int opcode, const void *payload, size_t payload_len, uint32_t mask_key,
                                     size_t *out_len) {
-  size_t hdr, i;
+  size_t hdr;
+  size_t i;
   uint8_t *out;
   const uint8_t *p = payload;
   uint8_t mask[4];
@@ -153,7 +154,8 @@ END_TEST
 
 START_TEST(medium_length_payload_round_trips) {
   ws_parser_t p;
-  size_t flen, plen = 300;
+  size_t flen;
+  size_t plen = 300;
   char *payload_in = malloc(plen);
   ck_assert_ptr_nonnull(payload_in);
   uint8_t *frame;
@@ -178,7 +180,9 @@ END_TEST
 
 START_TEST(fragmented_message_reassembles) {
   ws_parser_t p;
-  size_t f1len, f2len, f3len;
+  size_t f1len;
+  size_t f2len;
+  size_t f3len;
   uint8_t *f1 = build_client_frame(0, WS_OP_TEXT, "foo", 3, 0x1, &f1len);
   uint8_t *f2 = build_client_frame(0, WS_OP_CONTINUATION, "bar", 3, 0x2, &f2len);
   uint8_t *f3 = build_client_frame(1, WS_OP_CONTINUATION, "baz", 3, 0x3, &f3len);
@@ -206,7 +210,8 @@ END_TEST
 
 START_TEST(two_frames_in_one_feed_drain_in_order) {
   ws_parser_t p;
-  size_t f1len, f2len;
+  size_t f1len;
+  size_t f2len;
   uint8_t *f1 = build_client_frame(1, WS_OP_TEXT, "one", 3, 0x11, &f1len);
   uint8_t *f2 = build_client_frame(1, WS_OP_TEXT, "two", 3, 0x22, &f2len);
   uint8_t *both = malloc(f1len + f2len);
@@ -402,7 +407,9 @@ END_TEST
 
 START_TEST(ping_interleaved_between_fragments) {
   ws_parser_t p;
-  size_t f1len, pingflen, f2len;
+  size_t f1len;
+  size_t pingflen;
+  size_t f2len;
   uint8_t *f1 = build_client_frame(0, WS_OP_TEXT, "AB", 2, 0xa1, &f1len);
   uint8_t *pingf = build_client_frame(1, WS_OP_PING, "hi", 2, 0xa2, &pingflen);
   uint8_t *f2 = build_client_frame(1, WS_OP_CONTINUATION, "CD", 2, 0xa3, &f2len);

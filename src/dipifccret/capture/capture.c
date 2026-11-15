@@ -20,7 +20,7 @@
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/sys/signal.h"
 #include "capture.h"
 
@@ -221,7 +221,8 @@ void capture_close(capture_t *cap) {
 }
 
 int capture_drop_privileges(const char *user) {
-  struct passwd pwbuf, *pw;
+  struct passwd pwbuf;
+  struct passwd *pw;
   char *buf;
   long bufsize;
   int rc;

@@ -73,8 +73,6 @@ uint64_t timemap_pcr_flagged(timemap_t *t, uint64_t src27, double now_s, int dis
   return out;
 }
 
-uint64_t timemap_pcr(timemap_t *t, uint64_t src27, double now_s) { return timemap_pcr_flagged(t, src27, now_s, 0); }
-
 #define STAMP_MODULUS ((uint64_t)1 << 33)
 #define JUMP_MAX90 (2 * 90000)
 #define BUCKET90 90000

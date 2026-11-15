@@ -15,7 +15,11 @@ int main(int argc, char **argv) {
   unsigned char *buf;
   long len;
   size_t n;
-  unsigned lead_cw, cw_per_msg, max_comp_time_ms, min_cp_100ms, ecm_rep_period_ms;
+  unsigned lead_cw;
+  unsigned cw_per_msg;
+  unsigned max_comp_time_ms;
+  unsigned min_cp_100ms;
+  unsigned ecm_rep_period_ms;
 
   if (argc != 2) {
     fprintf(stderr, "usage: %s <input-file>\n", argv[0]);

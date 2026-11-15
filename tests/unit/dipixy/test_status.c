@@ -10,6 +10,7 @@
 
 #include "dipixy/core/status.h"
 #include "dipixy/reactor/reactor_tls.h"
+#include "lib/helper/dateutil.h"
 
 static uint64_t g_in_bytes;
 static uint64_t g_out_bytes;

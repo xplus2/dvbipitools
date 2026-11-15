@@ -20,8 +20,6 @@ typedef struct {
 
 static int range(bim_err_t *err, const char *what) { return bim_fail(err, E_RANGE, "bim: access unit %s out of range", what); }
 
-static void *alloc_n(size_t n, size_t sz) { return n ? calloc(n, sz) : NULL; }
-
 static int rd_str(rd_t *r, char **out) {
   uint64_t n;
   if (bim_rd_v8(&r->r, &n)) return -1;
@@ -43,7 +41,7 @@ static int rd_table(rd_t *r, table_kind_t k, int first, uint64_t known, bim_suu_
     if (bim_rd_v5(&r->r, &v)) return -1;
     if (v > bitreader_bits_left(&r->r.br) / (uint64_t)(aw ? aw : 1)) return bim_rd_trunc(&r->r);
     t->n = (size_t)v;
-    if (t->n) t->codes = alloc_n(t->n, sizeof *t->codes);
+    if (t->n) t->codes = calloc(t->n, sizeof *t->codes);
     if (t->n && !t->codes) return bim_oom(r->r.err);
     for (size_t i = 0; i < t->n; i++) {
       if (bim_rd_bits(&r->r, aw, &t->codes[i])) return -1;
@@ -55,9 +53,9 @@ static int rd_table(rd_t *r, table_kind_t k, int first, uint64_t known, bim_suu_
   if (v > bitreader_bits_left(&r->r.br) / (t->partial ? 10 : 5)) return bim_rd_trunc(&r->r);
   t->n = (size_t)v;
   if (t->n) {
-    t->counts = alloc_n(t->n, sizeof *t->counts);
+    t->counts = calloc(t->n, sizeof *t->counts);
     if (!t->counts) return bim_oom(r->r.err);
-    if (t->partial) t->codes = alloc_n(t->n, sizeof *t->codes);
+    if (t->partial) t->codes = calloc(t->n, sizeof *t->codes);
     if (t->partial && !t->codes) return bim_oom(r->r.err);
   }
   for (size_t i = 0; i < t->n; i++) {
@@ -129,7 +127,7 @@ static int rd_suu(rd_t *r, bim_suu_t *s) {
     if (bim_rd_v8(&r->r, &v)) return -1;
     if (v > bitreader_bits_left(&r->r.br) / 16) return bim_rd_trunc(&r->r);
     s->nimported = (size_t)v;
-    if (s->nimported) s->imported = alloc_n(s->nimported, sizeof *s->imported);
+    if (s->nimported) s->imported = calloc(s->nimported, sizeof *s->imported);
     if (s->nimported && !s->imported) {
       s->nimported = 0;
       return bim_oom(r->r.err);
@@ -149,7 +147,7 @@ static int rd_au(rd_t *r, bim_au_t *au) {
   const bim_decoderinit_t *di = r->st->di;
   if (di->add_schema) {
     if (bim_rd_count(&r->r, 8, &au->nsuus)) return -1;
-    if (au->nsuus) au->suus = alloc_n(au->nsuus, sizeof *au->suus);
+    if (au->nsuus) au->suus = calloc(au->nsuus, sizeof *au->suus);
     if (au->nsuus && !au->suus) {
       au->nsuus = 0;
       return bim_oom(r->r.err);
@@ -159,7 +157,7 @@ static int rd_au(rd_t *r, bim_au_t *au) {
   }
   if (di->add_schema_only) return 0;
   if (bim_rd_count(&r->r, 8, &au->nfuus)) return -1;
-  if (au->nfuus) au->fuus = alloc_n(au->nfuus, sizeof *au->fuus);
+  if (au->nfuus) au->fuus = calloc(au->nfuus, sizeof *au->fuus);
   if (au->nfuus && !au->fuus) {
     au->nfuus = 0;
     return bim_oom(r->r.err);
@@ -176,7 +174,7 @@ static int rd_au(rd_t *r, bim_au_t *au) {
 int bim_au_state_init(bim_au_state_t *st, const bim_decoderinit_t *di) {
   st->di = di;
   st->nadd = di->add_schema ? (size_t)di->nadditional : 0;
-  st->add = alloc_n(st->nadd, sizeof *st->add);
+  st->add = st->nadd ? calloc(st->nadd, sizeof *st->add) : NULL;
   if (st->nadd && !st->add) {
     st->nadd = 0;
     return -1;

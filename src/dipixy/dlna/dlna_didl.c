@@ -4,7 +4,7 @@
 #define _GNU_SOURCE /* fopencookie */
 
 #include "dlna_int.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/uriparse.h"
 #include "lib/helper/xml_util.h"
 #include "../core/input_walk.h"
@@ -37,8 +37,11 @@ static void didl_container_close(FILE *f) {
 }
 
 static int didl_mcast_res(FILE *f, const config_t *cfg, const char *src_uri, unsigned bitrate_bps) {
-  int family, rtp;
-  char addr[64], src[64], hostport[80];
+  int family;
+  int rtp;
+  char addr[64];
+  char src[64];
+  char hostport[80];
   unsigned port;
   if (!cfg->dlna_keep_multicast || !src_uri) return -1;
   if (route_resolve_channel_uri(src_uri, &family, addr, sizeof addr, src, sizeof src, &port, &rtp)) return -1;
@@ -59,7 +62,9 @@ static int didl_mcast_res(FILE *f, const config_t *cfg, const char *src_uri, uns
 typedef struct {
   const char *src_uri;
   const char *name;
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
   unsigned max_bitrate_kbps;
   int has_bitrate;
   unsigned content_nibble;
@@ -103,9 +108,14 @@ static void capture_first_name(void *vctx, const channel_item_t *item) {
 }
 
 typedef struct {
-  unsigned target, idx;
-  char name[192], uri[256], icon[512];
-  unsigned tsid, onid, sid;
+  unsigned target;
+  unsigned idx;
+  char name[192];
+  char uri[256];
+  char icon[512];
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
   unsigned max_bitrate_kbps;
   int has_bitrate;
   unsigned content_nibble;
@@ -160,9 +170,11 @@ typedef struct {
   FILE *f;
   const config_t *cfg;
   unsigned ord;
-  unsigned skip, take;
+  unsigned skip;
+  unsigned take;
   char parent[24];
-  unsigned idx, emitted;
+  unsigned idx;
+  unsigned emitted;
   media_type_t media_type;
 } list_walk_t;
 
@@ -196,8 +208,10 @@ typedef struct {
   FILE *f;
   const config_t *cfg;
   const channels_t *channels;
-  unsigned skip, take;
-  unsigned idx, emitted;
+  unsigned skip;
+  unsigned take;
+  unsigned idx;
+  unsigned emitted;
 } root_walk_t;
 
 static int root_walk_should_emit(const root_walk_t *w) {
@@ -213,7 +227,9 @@ static void emit_stdin_rist_item(FILE *f, const config_t *cfg, oid_kind_t kind, 
 }
 
 static void emit_http_source_item(FILE *f, const config_t *cfg, const channels_t *channels, const source_def_t *src) {
-  char id[24], path[224], title[192];
+  char id[24];
+  char path[224];
+  char title[192];
   sbuf_t b;
   sbuf_init(&b, id, sizeof id);
   sbuf_add(&b, "H");
@@ -235,7 +251,8 @@ static void emit_http_source_item(FILE *f, const config_t *cfg, const channels_t
 }
 
 static void emit_playlist_container(FILE *f, const channels_t *channels, const source_def_t *src) {
-  char id[24], title[192];
+  char id[24];
+  char title[192];
   unsigned count = (unsigned)channels_list_for_each(channels, (unsigned)src->ordinal, NULL, NULL);
   sbuf_t b;
   sbuf_init(&b, id, sizeof id);

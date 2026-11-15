@@ -8,7 +8,7 @@
 
 #include "../../alloc_fail.h"
 #include "lib/tva/bcg_doc.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 START_TEST(bcg_add_channel_grows_past_initial_capacity) {
   bcg_doc_t d;
@@ -93,23 +93,6 @@ START_TEST(bcg_set_text_copies_replaces_and_maps_empty_to_null) {
   ck_assert_ptr_null(t);
   ck_assert_int_eq(bcg_set_text(&t, NULL), 0);
   ck_assert_ptr_null(t);
-}
-END_TEST
-
-START_TEST(bcg_programme_copy_is_deep) {
-  bcg_programme_t a;
-  bcg_programme_t b;
-  memset(&a, 0, sizeof a);
-  ck_assert_int_eq(bcg_set_text(&a.title, "T"), 0);
-  ck_assert_int_eq(bcg_set_text(&a.desc, "D"), 0);
-  ck_assert_int_eq(bcg_programme_copy(&b, &a), 0);
-  ck_assert_ptr_ne(a.title, b.title);
-  ck_assert_str_eq(b.title, "T");
-  ck_assert_str_eq(b.desc, "D");
-  ck_assert_ptr_null(b.category);
-  bcg_programme_free_text(&a);
-  ck_assert_str_eq(b.title, "T");
-  bcg_programme_free_text(&b);
 }
 END_TEST
 
@@ -230,9 +213,7 @@ START_TEST(bcg_progtext_apply_and_free) {
     ck_assert_int_eq(rc, field < 2 ? -1 : 0);
     bcg_programme_free_text(&q);
   }
-  pr.crid = strdup("c");
   bcg_programme_free_text(&pr);
-  ck_assert_ptr_null(pr.crid);
   bcg_progtext_free(&pt);
   ck_assert_ptr_null(pt.crid);
 }
@@ -263,10 +244,8 @@ START_TEST(bcg_channel_dtt_round_trips) {
 }
 END_TEST
 
-START_TEST(bcg_adders_and_copy_survive_allocation_failure) {
+START_TEST(bcg_adders_survive_allocation_failure) {
   bcg_doc_t d;
-  bcg_programme_t a;
-  bcg_programme_t b;
   char *t = NULL;
   bcg_channel_t *ch;
   bcg_programme_t *pg;
@@ -284,19 +263,6 @@ START_TEST(bcg_adders_and_copy_survive_allocation_failure) {
   rc1 = bcg_set_text(&t, "x");
   alloc_fail_end();
   ck_assert_int_eq(rc1, -1);
-  memset(&a, 0, sizeof a);
-  a.title = strdup("T");
-  a.desc = strdup("D");
-  a.category = strdup("C");
-  for (int k = 0; k < 3; k++) {
-    int rc;
-    alloc_fail_at(k);
-    rc = bcg_programme_copy(&b, &a);
-    alloc_fail_end();
-    ck_assert_int_eq(rc, -1);
-    ck_assert_ptr_null(b.title);
-  }
-  bcg_programme_free_text(&a);
   bcg_doc_free(&d);
 }
 END_TEST
@@ -309,13 +275,12 @@ static Suite *bcg_doc_suite(void) {
   tcase_add_test(tc, bcg_channel_add_name_caps_at_max_and_reports_drop);
   tcase_add_test(tc, bcg_add_programme_zeroes_new_entries);
   tcase_add_test(tc, bcg_set_text_copies_replaces_and_maps_empty_to_null);
-  tcase_add_test(tc, bcg_programme_copy_is_deep);
   tcase_add_test(tc, bcg_elem_text_extracts_or_clears);
   tcase_add_test(tc, bcg_publisher_and_lang_validation);
   tcase_add_test(tc, bcg_index_groups_programmes_by_channel);
   tcase_add_test(tc, bcg_progtext_apply_and_free);
   tcase_add_test(tc, bcg_channel_dtt_round_trips);
-  tcase_add_test(tc, bcg_adders_and_copy_survive_allocation_failure);
+  tcase_add_test(tc, bcg_adders_survive_allocation_failure);
   suite_add_tcase(s, tc);
   return s;
 }

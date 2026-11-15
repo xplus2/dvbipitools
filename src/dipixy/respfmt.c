@@ -5,7 +5,7 @@
 #include "altsvc.h"
 #include "reactor/internal.h"
 #include "version.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -127,20 +127,6 @@ void init_etag(int gen, size_t size, char *out, size_t outsz) {
   sbuf_add_u64(&b, (uint64_t)gen);
   sbuf_add(&b, "-");
   sbuf_add_u64(&b, (uint64_t)size);
-}
-
-/* returns a type tag: "index"/"init"/"ts"/"m4s". NULL if fn matches none */
-const char *hls_filename_ext(const char *fn) {
-  const char *p;
-  if (strcmp(fn, "index.m3u8") == 0)        return "index";
-  if (strcmp(fn, "init.mp4") == 0)          return "init";
-  if (strncmp(fn, "seg", 3) != 0)  return NULL;
-  p = fn + 3;
-  if (!*p) return NULL;
-  while (*p >= '0' && *p <= '9') p++;
-  if (!strcmp(p, ".ts"))                    return "ts";
-  if (!strcmp(p, ".m4s"))                   return "m4s";
-  return NULL;
 }
 
 char *write_lit(char *dst, const char *lit, size_t len) {

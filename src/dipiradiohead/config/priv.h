@@ -8,8 +8,6 @@
 
 #include "../config.h"
 
-int rdh_set_buf(char *dst, size_t sz, const char *v, char *e, size_t n);
-int rdh_set_pbkeylen(int *dst, const char *v, char *e, size_t n);
 int rdh_add_input(config_t *cfg, const char *uri, char *e, size_t n);
 int rdh_add_peer(config_t *cfg, const char *uri, char *e, size_t n);
 int rdh_item_hook(void *c, const char *list, int begin, char *e, size_t n);

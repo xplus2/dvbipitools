@@ -5,7 +5,27 @@ dvbipitools (2.6.1-1) unstable; urgency=low
     + fixed stall check for inputs that never really come up (multi-input mode)
   * dipisds
     + passthrough for CoDDiscovery and ServicesFromOtherSP
--- dvbipitools authors <unspecified@example.com>  tbd
+  * libs
+    + multicast: batched receive (recvmmsg), batched send (UDP GSO, sendmmsg fallback)
+    + logging: one write per line, async writer in all tools
+      - lines dropped and counted when the writer falls behind
+    + cissa: AES key schedule kept per key, batched scrambling
+    + CLI options validated by the same code as their YAML keys
+    + BiM: hashed schema lookups, cached fragment paths, linear positioning
+  * dipixy
+    + event-driven capture pumps, maintenance off the pump threads
+    + hashed stream lookup, fewer locks and allocations in the segment store
+    + one wakeup eventfd per worker
+    + LL-HLS blocking reloads answered on part push, not on the next poll tick
+    + HTTP/1.1 and HTTP/2/3 share one route dispatcher
+    + ts.startup-timeout accepts 0
+    + removed --capture-ring-size / capture-ring-size
+  * dipifccret
+    + lock-free per-source rate limiter
+  * dipisrt
+    + file input: queued data no longer dropped when a restarted sender is
+      refused while recv holds an old peer
+ -- dvbipitools authors <unspecified@example.com>  tbd
 
 dvbipitools (2.6.0-1) unstable; urgency=low
   * libs

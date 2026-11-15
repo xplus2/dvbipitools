@@ -29,7 +29,8 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
   log_throttled(&s->rx_msg_throttle, LOG_THROTTLE_WINDOW_S, "LD700115", "emmg: rx version=0x%02x type=0x%04x body_len=%zu", version, type, body_len);
   switch (type) {
     case EMMG_MSG_CHANNEL_SETUP: {
-      unsigned client_id, data_channel_id;
+      unsigned client_id;
+      unsigned data_channel_id;
       if (!simulcrypt_find_u32(body, body_len, EMMG_P_CLIENT_ID, &client_id) || !simulcrypt_find_u16(body, body_len, EMMG_P_DATA_CHANNEL_ID, &data_channel_id)) {
         *should_close = 1;
         return;
@@ -53,7 +54,9 @@ static void handle_message(emmg_server_t *s, emmg_conn_state_t *cs, unsigned cha
       *reply_len = emmg_build_channel_status(reply, SIMULCRYPT_MAX_FRAME, version, cs->client_id, cs->data_channel_id);
       break;
     case EMMG_MSG_STREAM_SETUP: {
-      unsigned data_stream_id, data_id, data_type;
+      unsigned data_stream_id;
+      unsigned data_id;
+      unsigned data_type;
       if (!cs->have_channel) {
         *should_close = 1;
         return;

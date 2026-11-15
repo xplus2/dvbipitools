@@ -7,11 +7,12 @@
 
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/mux/fec2022.h"
 #include "lib/net/netconnect.h"
 #include "config.h"
 #include "version.h"
+#include "lib/net/rist/ristpeer.h"
 
 void dipirist_cfg_defaults(config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
@@ -44,10 +45,7 @@ static int apply_dscp(void *c, const char *v, char *e, size_t n) {
 
 static int apply_al_fec(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) {
-    snprintf(e, n, "invalid '%s' (want L:D, L*D<=400, L<=40)", v);
-    return -1;
-  }
+  if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) return yamlcfg_bad(e, n, v, "want L:D, L*D<=400, L<=40");
   return 0;
 }
 
@@ -89,15 +87,6 @@ static int apply_metrics_inspect_ts(void *c, const char *v, char *e, size_t n) {
   return 0;
 }
 
-static int set_buf(char *dst, size_t sz, const char *v, char *e, size_t n) {
-  if (strlen(v) >= sz) {
-    snprintf(e, n, "too long (max %zu)", sz - 1);
-    return -1;
-  }
-  bufcpy(dst, sz, v);
-  return 0;
-}
-
 static int apply_in(void *c, const char *v, char *e, size_t n) {
   if (dipirist_cfg_add_endpoint(c, 0, v)) {
     snprintf(e, n, "invalid endpoint '%s'", v);
@@ -115,39 +104,31 @@ static int apply_out(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_profile(void *c, const char *v, char *e, size_t n) {
-  static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
   int r;
-  if (map_lookup(map, sizeof map / sizeof map[0], v, &r)) {
-    snprintf(e, n, "invalid '%s' (simple|main)", v);
-    return -1;
-  }
-  ((config_t *)c)->profile = (rist_profile_sel_t)r;
+  if (rist_prof_parse(v, &r)) return yamlcfg_bad(e, n, v, RIST_PROF_HINT);
+  ((config_t *)c)->profile = (rist_prof_t)r;
   return 0;
 }
 
 static int apply_secret(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return set_buf(cfg->secret, sizeof cfg->secret, v, e, n);
+  return yamlcfg_set_buf(cfg->secret, sizeof cfg->secret, v, e, n);
 }
 
 static int apply_encryption_type(void *c, const char *v, char *e, size_t n) {
-  if (argutil_rist_key_size(v, &((config_t *)c)->key_size)) {
-    bufcpy(e, n, "must be 128|256");
-    return -1;
-  }
-  return 0;
+  return yamlcfg_set_int_by(&((config_t *)c)->key_size, v, argutil_rist_key_size, ARGUTIL_RIST_KEY_SIZE_HINT, e, n);
 }
 
 static int apply_cname(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return set_buf(cfg->cname, sizeof cfg->cname, v, e, n);
+  return yamlcfg_set_buf(cfg->cname, sizeof cfg->cname, v, e, n);
 }
 
 static int apply_buffer(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->buffer_ms, v, 1, 60000, e, n);
 }
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t dipirist_cfg_keys[] = {
     {"in", apply_in, 0, 1},
     {"out", apply_out, 0, 1},
     {"iface", apply_iface, 0, 0},
@@ -170,11 +151,12 @@ static const yamlcfg_key_t keys[] = {
     {"verbose", apply_verbose, 0, 0},
     {"daemonize", apply_daemonize, 0, 0},
 };
+const size_t dipirist_cfg_nkeys = sizeof dipirist_cfg_keys / sizeof dipirist_cfg_keys[0];
 
 int dipirist_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
+  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, dipirist_cfg_keys, dipirist_cfg_nkeys, cfg);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -184,7 +166,7 @@ int dipirist_cfg_test(const char *path, int strict) {
   config_t cfg;
 
   dipirist_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, dipirist_cfg_keys, dipirist_cfg_nkeys, &cfg) != YAMLCFG_LOADED) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }

@@ -15,6 +15,7 @@
 #include <stdint.h>
 
 #include "capture/capture.h"
+#include "../reactor/subtab.h"
 #include "lcevcselect.h"
 #include "pidfilter.h"
 #include "lib/demux/psi/psi.h"
@@ -37,24 +38,19 @@
 #define TS_SUB_CLOSING 2
 
 typedef struct {
-  _Atomic(capture_ctx_t *) ctx; /* pump reads unlocked past alive gate: must be atomic */
-  _Atomic int ctx_next; /* feed_pkt's per-ctx chain (capture_ts_push_head_ptr) */
+  push_sub_t h; /* chain_next: feed_pkt's per-ctx chain (capture_ts_push_head_ptr) */
   pid_filter_t filter;
-  conn_proto_t proto;
-  _Atomic int alive;
+  pid_mask_t filter_mask;
   _Atomic int ready;
-  int fd;
-  uint64_t conn_gen; /* H1: conn identity, fd may be reused after teardown */
   void *h2c;
   void *h2_slot;
-  int reactor_tid; /* H3: owning reactor thread id */
-  int tid_next; /* ts_push_set_reactor_tid()'s per-tid chain. owning thread only */
   void *h3c;
   int64_t h3_sid;
   byte_ring_t h3_ring;
   byte_ring_t h2_ring;
   byte_ring_t pkt_ring; /* H1 only */
   _Atomic int pkt_overrun;
+  uint32_t acct_wpos;
   int spts;              /* 1 = /spts: filter to spts_allowed, not just filter's excludes */
   unsigned spts_pmt_pid; /* 0 = auto (first PMT that resolves) */
   psi_t *spts_psi;
@@ -72,7 +68,6 @@ typedef struct {
   _Atomic int ctype_ready;    /* pump sets, audio_codec valid after */
   codec_t audio_codec;
   int head_sent;              /* reactor thread only */
-  int ws_handle;              /* ws_clients.c registry handle, -1 none */
   log_throttle_t ring_drop_throttle;
 } ts_sub_t;
 
@@ -96,20 +91,12 @@ extern _Atomic int g_ts_active_count;
 /* prealloc: 0 skips the 32-slot ring prealloc (~36MiB), for when ts/spts/rawaudio are all disabled */
 void ts_push_init(int prealloc, int max_clients);
 
-void ts_push_register_reactor_efd(int tid, int efd);
-/* after all pump + reactor threads joined. efds outlive reactor threads, pumps still wake em */
-void ts_push_close_reactor_efds(void);
 void ts_push_flush_ready(int tid);
-
-void ts_push_wake_batch_begin(void);
-void ts_push_wake_batch_end(void);
 
 /* records idx's tid, links into flush_ready(tid) chain.
    call once, from tid's own thread, when ready to send */
 void ts_push_set_reactor_tid(int idx, int tid);
 
-/* wakes tid's epoll loop. any thread */
-void ts_push_wake_reactor(int tid);
 
 /* allocs slot for ctx, ref freed in ts_push_unsubscribe_by_idx.
    filter: PID excludes.

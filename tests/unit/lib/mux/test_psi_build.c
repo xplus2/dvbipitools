@@ -90,10 +90,12 @@ START_TEST(psi_build_pat_rejects_small_cap) {
 END_TEST
 
 START_TEST(psi_build_pat_multi_round_trips_through_psi_feed) {
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
   psi_t *p;
-  int count, i;
+  int count;
+  int i;
   const psi_program_t *progs;
   psi_pat_entry_t entries[3] = {
       {101, 0x0100},
@@ -130,7 +132,8 @@ START_TEST(psi_build_pat_multi_rejects_small_cap) {
 END_TEST
 
 START_TEST(psi_build_pat_multi_with_zero_programs_is_still_a_valid_empty_pat) {
-  unsigned char section[16], pkt[188];
+  unsigned char section[16];
+  unsigned char pkt[188];
   size_t slen;
   psi_t *p;
   int count;
@@ -152,7 +155,8 @@ START_TEST(psi_build_pat_multi_with_zero_programs_is_still_a_valid_empty_pat) {
 END_TEST
 
 START_TEST(psi_build_nit_round_trips_through_psi_feed) {
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
   psi_t *p;
 
@@ -208,7 +212,8 @@ START_TEST(psi_build_sdt_entry_clears_eit_pf_flag_on_request) {
 END_TEST
 
 START_TEST(psi_build_sdt_round_trips_through_psi_feed) {
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
   psi_t *p;
 
@@ -229,10 +234,14 @@ START_TEST(psi_build_sdt_round_trips_through_psi_feed) {
 END_TEST
 
 START_TEST(psi_build_sdt_multi_round_trips_through_psi_feed) {
-  unsigned char sdtsec[128], patsec[64], sdtpkt[188], patpkt[188];
+  unsigned char sdtsec[128];
+  unsigned char patsec[64];
+  unsigned char sdtpkt[188];
+  unsigned char patpkt[188];
   size_t slen;
   psi_t *p;
-  int count, i;
+  int count;
+  int i;
   const psi_multi_program_t *progs;
   psi_pat_entry_t entries[2] = {{101, 0x1000}, {102, 0x1001}};
   psi_sdt_entry_t services[2] = {

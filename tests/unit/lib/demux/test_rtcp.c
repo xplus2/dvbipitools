@@ -64,7 +64,8 @@ static void rams_t_cb(const rtcp_rams_t_t *t, void *user) {
 }
 
 static unsigned g_malformed_sfmt;
-static uint32_t g_malformed_sender_ssrc, g_malformed_media_ssrc;
+static uint32_t g_malformed_sender_ssrc;
+static uint32_t g_malformed_media_ssrc;
 static int g_malformed_calls;
 static void malformed_cb(unsigned sfmt, uint32_t sender_ssrc, uint32_t media_ssrc, void *user) {
   (void)user;

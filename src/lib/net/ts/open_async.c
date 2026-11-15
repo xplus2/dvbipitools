@@ -8,11 +8,12 @@
 #include <string.h>
 
 #include "../../dash/mpd.h"
-#include "../../sys/ioutil.h"
+#include "../../helper/strutil.h"
 #include "../../sys/signal.h"
 #include "../../hls/playlist.h"
 
 #include "source_priv.h"
+#include "lib/helper/dateutil.h"
 
 typedef enum {
   HOPEN_SNIFF_CLASSIFY,

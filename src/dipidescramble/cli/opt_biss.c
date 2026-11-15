@@ -2,57 +2,30 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
 
 #include "lib/cas/biss/biss.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+
+static const yamlcfg_opt_t opts[] = {
+    {OPT_BISS2_SW, "biss2.sw", "DS000344", "invalid --biss2-sw: %s (32 hex chars)", 0},
+    {OPT_BISS2_ESW, "biss2.esw", "DS000345", "invalid --biss2-esw: %s (32 hex chars)", 0},
+    {OPT_BISS2_ID, "biss2.id", "DS000346", "invalid --biss2-id: %s (32 hex chars)", 0},
+    {OPT_BISS1_SW, "biss1.sw", "DS000347", "invalid --biss1-sw: %s (12 hex chars)", 0},
+    {OPT_BISS1_ESW, "biss1.esw", "DS000784", "invalid --biss1-esw: %s (16 hex chars)", 0},
+    {OPT_BISS1_ID, "biss1.id", "DS000785", "invalid --biss1-id: %s (14 hex chars)", 0},
+};
 
 args_status_t dscr_opt_biss(dscr_opt_t *p, int c) {
   config_t *cfg = p->cfg;
 
+  switch (yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), dscr_cfg_keys, dscr_cfg_nkeys, cfg, c, optarg)) {
+    case 1: return ARGS_OK;
+    case -1: return ARGS_ERR;
+    default: break;
+  }
   switch (c) {
-    case OPT_BISS2_SW:
-      if (biss_parse_hex16(optarg, cfg->biss2_sw)) {
-        argerr("DS000344", "invalid --biss2-sw: %s (32 hex chars)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->biss2_sw_given = 1;
-      break;
-    case OPT_BISS2_ESW:
-      if (biss_parse_hex16(optarg, cfg->biss2_esw)) {
-        argerr("DS000345", "invalid --biss2-esw: %s (32 hex chars)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->biss2_esw_given = 1;
-      break;
-    case OPT_BISS2_ID:
-      if (biss_parse_hex16(optarg, cfg->biss2_id)) {
-        argerr("DS000346", "invalid --biss2-id: %s (32 hex chars)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->biss2_id_given = 1;
-      break;
-    case OPT_BISS1_SW:
-      if (biss1_parse_sw(optarg, cfg->biss1_sw)) {
-        argerr("DS000347", "invalid --biss1-sw: %s (12 hex chars)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->biss1_sw_given = 1;
-      break;
-    case OPT_BISS1_ESW:
-      if (biss1_parse_esw(optarg, cfg->biss1_esw)) {
-        argerr("DS000784", "invalid --biss1-esw: %s (16 hex chars)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->biss1_esw_given = 1;
-      break;
-    case OPT_BISS1_ID:
-      if (biss1_parse_id(optarg, cfg->biss1_id)) {
-        argerr("DS000785", "invalid --biss1-id: %s (14 hex chars)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->biss1_id_given = 1;
-      break;
     case OPT_BISS1_ID_BURIED:
       cfg->biss1_id_buried = 1;
       break;

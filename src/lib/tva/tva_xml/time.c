@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "lib/helper/dateutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/tva/tva_xml.h"
 #include "lib/tva/tva_xml/tva_xml_int.h"
 
@@ -35,11 +36,18 @@ int iso8601_utc_compact(const char *iso, char *out, size_t outcap) {
   int mo;
   int d;
   long rem;
+  sbuf_t s;
   if (iso8601_utc_secs(iso, &secs) != 0) return -1;
   days = floor_div((long)secs, 86400);
   rem = (long)(secs - days * 86400);
   mjd_to_date((long)days + MJD_UNIX_EPOCH, &y, &mo, &d);
-  snprintf(out, outcap, "%04d%02d%02d%02ld%02ld%02ld", y, mo, d, rem / 3600, rem % 3600 / 60, rem % 60);
+  sbuf_init(&s, out, outcap);
+  sbuf_add_upad(&s, "", (unsigned)y, 4);
+  sbuf_add_upad(&s, "", (unsigned)mo, 2);
+  sbuf_add_upad(&s, "", (unsigned)d, 2);
+  sbuf_add_upad(&s, "", (unsigned)(rem / 3600), 2);
+  sbuf_add_upad(&s, "", (unsigned)(rem % 3600 / 60), 2);
+  sbuf_add_upad(&s, "", (unsigned)(rem % 60), 2);
   return 0;
 }
 
@@ -98,10 +106,13 @@ int iso8601_add_secs(const char *start_iso, long secs, char *out, size_t outcap)
   n = iso8601_format(out, outcap, days, tot - days * 86400);
   if (n < 0) return -1;
   if (t.offset_kind == ISO8601_OFF_Z) {
-    snprintf(out + n, outcap - (size_t)n, "Z");
+    bufcpy(out + n, outcap - (size_t)n, "Z");
   } else if (t.offset_kind == ISO8601_OFF_NUMERIC) {
-    int a = t.off_min < 0 ? -t.off_min : t.off_min;
-    snprintf(out + n, outcap - (size_t)n, "%c%02d:%02d", t.off_min < 0 ? '-' : '+', a / 60, a % 60);
+    unsigned a = (unsigned)(t.off_min < 0 ? -t.off_min : t.off_min);
+    sbuf_t s;
+    sbuf_init(&s, out + n, outcap - (size_t)n);
+    sbuf_add_upad(&s, t.off_min < 0 ? "-" : "+", a / 60, 2);
+    sbuf_add_upad(&s, ":", a % 60, 2);
   }
   return 0;
 }
@@ -115,8 +126,13 @@ int iso8601_diff_secs(const char *a, const char *b, long *out) {
 }
 
 int secs_to_duration(long secs, char *out, size_t outcap) {
-  int n;
+  sbuf_t s;
   if (secs < 0) return -1;
-  n = snprintf(out, outcap, "PT%ldH%ldM%ldS", secs / 3600, secs % 3600 / 60, secs % 60);
-  return n < 0 || (size_t)n >= outcap ? -1 : 0;
+  sbuf_init(&s, out, outcap);
+  sbuf_add(&s, "PT");
+  sbuf_add_u64(&s, (uint64_t)(secs / 3600));
+  sbuf_add_upad(&s, "H", (unsigned)(secs % 3600 / 60), 0);
+  sbuf_add_upad(&s, "M", (unsigned)(secs % 60), 0);
+  sbuf_add(&s, "S");
+  return s.truncated ? -1 : 0;
 }

@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "lib/demux/psi/section_asm.h"
+#include "lib/demux/tspack.h"
 #include "lib/helper/log.h"
 
 #include "../../cas/cas.h"
@@ -93,7 +94,7 @@ struct remux {
   unsigned char cc_ecm[ARGS_MAX_CAS_VENDORS];
   unsigned char cc_emm[ARGS_MAX_CAS_VENDORS];
   cc_offsets_t *ccm;
-  int last_es_idx; /* MRU 1-entry cache: consecutive packets usually share a pid */
+  ts_pidmap_t es_map;
 
   double last_pat;
   double last_sdt;
@@ -104,7 +105,7 @@ struct remux {
   double last_tot;
 
   /* per-pid TS-integrity, source-side: resets on reconnect, unlike caller-owned cumulative ts_metrics_t */
-  unsigned char cc_state[8192]; /* 0x10=seen, 0x20=dup used, low nibble=last cc */
+  unsigned char cc_state[TS_PID_COUNT]; /* 0x10=seen, 0x20=dup used, low nibble=last cc */
   unsigned pcr_pid_in;          /* source's PCR pid at discovery, 0=none */
   int have_last_pcr;
   uint64_t last_pcr27;
@@ -123,6 +124,7 @@ const out_es_t *find_ca_passthrough(const remux_t *r, ca_pass_t is_ca);
 
 /* reassemble source EIT, filter to own service_id, enqueue */
 void capture_eit_section(remux_t *r, const unsigned char *pkt188, ts_metrics_t *tsm);
+
 
 /* source PAT/PMT packets to watch psi, remaps es[] at src PMT change */
 void watch_source_pmt(remux_t *r, double now, const unsigned char *pkt188, remux_packet_cb cb, void *ctx, ts_metrics_t *tsm);

@@ -149,7 +149,8 @@ END_TEST
 START_TEST(epoll_mod_arms_requested_events) {
   int epfd = epoll_create1(0);
   int fds[2];
-  struct epoll_event ev, out_ev;
+  struct epoll_event ev;
+  struct epoll_event out_ev;
   conn_t *c;
 
   nonblocking_socketpair(fds);
@@ -319,7 +320,8 @@ START_TEST(request_close_with_epfd_arms_epollout) {
   int epfd = epoll_create1(0);
   int fds[2];
   conn_t *c;
-  struct epoll_event ev, out_ev;
+  struct epoll_event ev;
+  struct epoll_event out_ev;
 
   nonblocking_socketpair(fds);
   c = conn_new(fds[0], NULL);

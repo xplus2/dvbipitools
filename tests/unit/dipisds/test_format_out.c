@@ -8,7 +8,7 @@
 #include <sys/socket.h>
 
 #include "dipisds/format_out.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 static sds_service_t make_service(const char *name, const char *addr, int family, unsigned port, int rtp) {
   sds_service_t s;

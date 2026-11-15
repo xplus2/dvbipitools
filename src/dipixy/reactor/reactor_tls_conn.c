@@ -2,6 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "reactor_tls_int.h"
+#include "lib/helper/dateutil.h"
 
 #include <errno.h>
 #include <openssl/err.h>
@@ -16,7 +17,7 @@
 #define SSL_get1_peer_certificate SSL_get_peer_certificate
 #endif
 
-SSL **fd_ssl;
+_Atomic(SSL *) *fd_ssl;
 tls_gc_shard_t *tls_gc_shards = NULL;
 int tls_gc_nshards = 0;
 
@@ -40,19 +41,13 @@ static tls_gc_shard_t *tls_gc_shard_for_tid(void) {
   return &tls_gc_shards[tid];
 }
 
-static long long tls_now_ms(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-}
-
 int tls_is_tls(int fd) {
-  return (fd >= 0 && fd < g_tls_fd_max && __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE) != NULL);
+  return (fd >= 0 && fd < g_tls_fd_max && atomic_load_explicit(&fd_ssl[fd], memory_order_acquire) != NULL);
 }
 
 int tls_client_cert_verified(int fd) {
   if (fd < 0 || fd >= g_tls_fd_max) return 0;
-  const SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  const SSL *ssl = atomic_load_explicit(&fd_ssl[fd], memory_order_acquire);
   if (!ssl) return 0;
   if (SSL_get_verify_result(ssl) != X509_V_OK) return 0;
   X509 *cert = SSL_get1_peer_certificate(ssl);
@@ -65,7 +60,7 @@ void tls_get_client_cert_cn(int fd, char *buf, size_t bufsz) {
   if (!buf || !bufsz) return;
   buf[0] = '\0';
   if (fd < 0 || fd >= g_tls_fd_max) return;
-  const SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  const SSL *ssl = atomic_load_explicit(&fd_ssl[fd], memory_order_acquire);
   if (!ssl) return;
   X509 *cert = SSL_get1_peer_certificate(ssl);
   if (!cert) return;
@@ -82,7 +77,7 @@ int tls_accept(int fd) {
   if (!ssl) return -1;
   SSL_set_fd(ssl, fd);
   SSL_set_accept_state(ssl);
-  __atomic_store_n(&fd_ssl[fd], ssl, __ATOMIC_RELEASE);
+  atomic_store_explicit(&fd_ssl[fd], ssl, memory_order_release);
   return 0;
 }
 
@@ -90,7 +85,7 @@ int tls_accept(int fd) {
    block sock: block until done (bound by SO_RCVTIMEO) */
 int tls_handshake(int fd) {
   if (fd < 0 || fd >= g_tls_fd_max) return -1;
-  SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  SSL *ssl = atomic_load_explicit(&fd_ssl[fd], memory_order_acquire);
   if (!ssl) return -1;
   ERR_clear_error();
   int r = SSL_do_handshake(ssl);
@@ -118,7 +113,7 @@ void tls_close_fd(int fd) {
     return;
   }
 
-  SSL *ssl = __atomic_exchange_n(&fd_ssl[fd], (SSL *)NULL, __ATOMIC_ACQ_REL);
+  SSL *ssl = atomic_exchange_explicit(&fd_ssl[fd], (SSL *)NULL, memory_order_acq_rel);
   if (!ssl) {
     close(fd);
     return;
@@ -152,7 +147,7 @@ void tls_close_fd(int fd) {
   }
   node->ssl = ssl;
   node->fd = fd;
-  node->ts_ms = tls_now_ms();
+  node->ts_ms = now_ms();
   old_head = atomic_load_explicit(&shard->head, memory_order_relaxed);
   for (;;) {
     atomic_store_explicit(&node->next, old_head, memory_order_relaxed);
@@ -161,11 +156,12 @@ void tls_close_fd(int fd) {
 }
 
 void tls_gc_sweep(void) {
-  long long now = tls_now_ms();
+  int64_t now = now_ms();
   for (int s = 0; s < tls_gc_nshards; s++) {
     tls_gc_shard_t *shard = &tls_gc_shards[s];
     tls_gc_node_t *chain = atomic_exchange_explicit(&shard->head, NULL, memory_order_acquire);
-    tls_gc_node_t *keep_head = NULL, *keep_tail = NULL;
+    tls_gc_node_t *keep_head = NULL;
+    tls_gc_node_t *keep_tail = NULL;
     int reclaimed = 0;
     while (chain) {
       tls_gc_node_t *next = atomic_load_explicit(&chain->next, memory_order_relaxed);
@@ -197,14 +193,14 @@ void tls_gc_sweep(void) {
 
 int tls_has_pending(int fd) {
   if (fd < 0 || fd >= g_tls_fd_max) return 0;
-  const SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  const SSL *ssl = atomic_load_explicit(&fd_ssl[fd], memory_order_acquire);
   return ssl ? SSL_pending(ssl) > 0 : 0;
 }
 
 int tls_alpn_is_h2(int fd) {
 #ifdef HAVE_HTTP2
   if (fd < 0 || fd >= g_tls_fd_max) return 0;
-  const SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  const SSL *ssl = atomic_load_explicit(&fd_ssl[fd], memory_order_acquire);
   if (!ssl) return 0;
   const unsigned char *proto = NULL;
   unsigned int protolen = 0;

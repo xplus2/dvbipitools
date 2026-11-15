@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "lib/bim/xsd/model/priv.h"
+#include "lib/helper/growutil.h"
 
 static int parse_particle(ctx_t *c, const bim_node_t *n, xsd_particle_t *p);
 

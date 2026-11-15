@@ -14,7 +14,9 @@
 /* builds a one-program PAT section (table_id 0x00), CRC included, returns length */
 static size_t build_pat(unsigned char *out, unsigned tsid, unsigned prog_num, unsigned pmt_pid) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = (unsigned char)(tsid >> 8);
@@ -45,7 +47,9 @@ static size_t build_pat(unsigned char *out, unsigned tsid, unsigned prog_num, un
 /* builds a two-program PAT section, CRC included, returns length */
 static size_t build_pat2(unsigned char *out, unsigned tsid, unsigned prog1, unsigned pmt1, unsigned prog2, unsigned pmt2) {
   unsigned char body[24];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = (unsigned char)(tsid >> 8);
@@ -81,7 +85,9 @@ static size_t build_pat2(unsigned char *out, unsigned tsid, unsigned prog1, unsi
  * a service_descriptor (0x48), CRC included, returns length */
 static size_t build_sdt2(unsigned char *out, unsigned onid, unsigned sid1, const char *name1, unsigned sid2, const char *name2) {
   unsigned char body[96];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = 0x00; /* transport_stream_id, unused by parse_sdt() */
@@ -134,7 +140,9 @@ static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid,
                          unsigned video_pid, unsigned video_type,
                          unsigned audio_pid, unsigned audio_type) {
   unsigned char body[32];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = (unsigned char)(prog_num >> 8);
@@ -177,7 +185,9 @@ static size_t build_pmt(unsigned char *out, unsigned prog_num, unsigned pcr_pid,
  * descriptor entirely (program_info_length = 0) */
 static size_t build_pmt_with_scrambling(unsigned char *out, unsigned prog_num, unsigned pcr_pid, unsigned char mode) {
   unsigned char body[32];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = (unsigned char)(prog_num >> 8);
@@ -260,7 +270,9 @@ static size_t build_pmt_with_audio_registration(unsigned char *out, unsigned pro
  * scrambling_descriptor, CRC included, returns length */
 static size_t build_pmt_with_ca(unsigned char *out, unsigned prog_num, unsigned pcr_pid, unsigned ca_system_id, unsigned ca_pid) {
   unsigned char body[32];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
   body[n++] = (unsigned char)(prog_num >> 8);
   body[n++] = (unsigned char)prog_num;
@@ -436,7 +448,9 @@ static size_t build_dts_hd_descriptor(unsigned char *out, unsigned asset_constru
  * ca_system_id + ca_pid, no private data), CRC included, returns length */
 static size_t build_cat(unsigned char *out, unsigned ca_system_id, unsigned emm_pid) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = 0xFF; /* reserved */
@@ -469,7 +483,9 @@ static size_t build_cat(unsigned char *out, unsigned ca_system_id, unsigned emm_
 /* builds a CAT section with no descriptors at all, CRC included, returns length */
 static size_t build_cat_empty(unsigned char *out) {
   unsigned char body[8];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = 0xFF;

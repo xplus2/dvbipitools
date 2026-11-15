@@ -32,22 +32,22 @@ static void use_domain(void) {
 }
 
 static void open_store(unsigned pmt) {
-  hls_store_open(CTX, &g_filter, pmt, &full, 0.01, 6, SEG_CONTAINER_FMP4);
+  hls_store_open(&(stream_key_t){CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4}, 0.01, 6);
 }
 
 static void close_store(unsigned pmt) {
-  hls_store_close(CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4);
+  hls_store_close(&(stream_key_t){CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4});
 }
 
 static const hls_store_t *find_store(unsigned pmt) {
-  return hls_store_find(CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4);
+  return hls_store_find(&(stream_key_t){CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4});
 }
 
 static void put_init(unsigned pmt, uint8_t v) {
   uint8_t init[64];
 
   memset(init, v, sizeof init);
-  ck_assert_int_eq(hls_set_init_segment(CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init), 0);
+  ck_assert_int_eq(hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init), 0);
 }
 
 static const uint8_t *init_buf(unsigned pmt) {
@@ -89,8 +89,8 @@ static void put_segment(unsigned pmt, uint8_t v) {
   uint8_t part[512];
 
   memset(part, v, sizeof part);
-  ck_assert_int_eq(hls_push_part(CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.005, 1), 0);
-  ck_assert_int_eq(hls_push_segment_ll(CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4, 0.02), 0);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4}), part, sizeof part, 0.005, 1), 0);
+  ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX, &g_filter, pmt, &full, SEG_CONTAINER_FMP4}), 0.02), 0);
 }
 
 static const uint8_t *segment_buf(unsigned pmt, int idx) {
@@ -321,7 +321,7 @@ START_TEST(llhls_enable_defers_release_of_the_replaced_snapshot) {
   open_store(1);
   put_init(1, 0x91);
   held = init_buf(1);
-  hls_llhls_enable(CTX, &g_filter, 1, &full, SEG_CONTAINER_FMP4, 0.005);
+  hls_llhls_enable(&(stream_key_t){CTX, &g_filter, 1, &full, SEG_CONTAINER_FMP4}, 0.005);
   put_init(1, 0x92);
   hls_store_slot_reclaim_sweep();
   ck_assert(!released(held));

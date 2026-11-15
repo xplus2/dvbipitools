@@ -8,16 +8,17 @@
 #include <stdint.h>
 
 #include "lib/demux/psi/section_asm.h"
+#include "lib/demux/tspack.h"
 #include "inspect.h"
 
-#define PID_NONE 0x2000
+#define PID_NONE TS_PID_COUNT
 #define CC_WIN 0x40
 #define MGB2_SLICES 10
 #define PID_DETAIL_MAX 32
 #define SVC_DETAIL_MAX PSI_MAX_PROGRAMS
 
 typedef struct {
-  unsigned char pid_slot[8192];
+  unsigned char pid_slot[TS_PID_COUNT];
   unsigned char svc_slot[65536];
   unsigned n_pid;
   unsigned n_svc;
@@ -88,11 +89,11 @@ typedef struct {
   eit_slot_t eit[PSI_MAX_PROGRAMS];
   eit_slot_t eit_other[PSI_MAX_PROGRAMS];
   pts_slot_t pts[PSI_MAX_ES];
-  unsigned char pts_idx[8192];
-  unsigned char miss_run[8192];
-  unsigned char unref_flag[8192];
-  unsigned char unlisted_flag[8192];
-  unsigned char known[8192 / 8];
+  unsigned char pts_idx[TS_PID_COUNT];
+  unsigned char miss_run[TS_PID_COUNT];
+  unsigned char unref_flag[TS_PID_COUNT];
+  unsigned char unlisted_flag[TS_PID_COUNT];
+  unsigned char known[TS_PID_COUNT / 8];
   int known_set;
   detail_t *d;
 } ext_t;
@@ -167,7 +168,7 @@ struct tsinspect {
   int pts_n;
   int pts_built;
   unsigned last_pts_changes;
-  unsigned char cc[8192];
+  unsigned char cc[TS_PID_COUNT];
 };
 
 void packet_base(tsinspect_t *t, const unsigned char *pkt);

@@ -15,7 +15,8 @@
 static const unsigned char cw[CSA2_CW_LEN] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef};
 
 START_TEST(csa2_encrypt_block_round_trips_with_library_decrypt) {
-  unsigned char plain[64], buf[64];
+  unsigned char plain[64];
+  unsigned char buf[64];
   struct dvbcsa_key_s *dk;
   csa2_key_t *k;
 
@@ -39,7 +40,8 @@ START_TEST(csa2_encrypt_block_round_trips_with_library_decrypt) {
 END_TEST
 
 START_TEST(scrambler_csa2_packet_rounds_to_8byte_blocks_and_round_trips) {
-  unsigned char clear[188], pkt[188];
+  unsigned char clear[188];
+  unsigned char pkt[188];
   struct dvbcsa_key_s *dk;
   scrambler_t *s;
 
@@ -75,7 +77,8 @@ START_TEST(scrambler_csa2_packet_rounds_to_8byte_blocks_and_round_trips) {
 END_TEST
 
 START_TEST(scrambler_csa2_packet_encrypts_full_payload_including_residual) {
-  unsigned char clear[188], pkt[188];
+  unsigned char clear[188];
+  unsigned char pkt[188];
   struct dvbcsa_key_s *dk;
   scrambler_t *s;
 
@@ -121,7 +124,8 @@ START_TEST(scrambler_set_key_rejects_wrong_cw_len_for_csa2) {
 END_TEST
 
 START_TEST(csa2_decrypt_block_round_trips_with_library_encrypt) {
-  unsigned char plain[64], buf[64];
+  unsigned char plain[64];
+  unsigned char buf[64];
   struct dvbcsa_key_s *dk;
   csa2_key_t *k;
 
@@ -145,8 +149,10 @@ START_TEST(csa2_decrypt_block_round_trips_with_library_encrypt) {
 END_TEST
 
 START_TEST(scrambler_csa2_packet_descrambles_full_payload_round_trip) {
-  unsigned char clear[188], pkt[188];
-  scrambler_t *senc, *sdec;
+  unsigned char clear[188];
+  unsigned char pkt[188];
+  scrambler_t *senc;
+  scrambler_t *sdec;
 
   /* same 5-byte adaptation field / non-8-aligned tail shape as the encrypt-side test */
   clear[0] = 0x47;
@@ -178,7 +184,8 @@ START_TEST(scrambler_csa2_packet_descrambles_full_payload_round_trip) {
 END_TEST
 
 START_TEST(scrambler_decrypt_packet_passes_through_unscrambled_csa2) {
-  unsigned char pkt[188], orig[188];
+  unsigned char pkt[188];
+  unsigned char orig[188];
   scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CSA2);
 
   memset(pkt, 0x55, 188);
@@ -207,10 +214,13 @@ START_TEST(csa2_batch_matches_single_packet_api_mixed_lengths) {
   /* mixed non-8-aligned lengths, like real TS payloads with varying
      adaptation field sizes - single-packet API is the trusted oracle */
   size_t lens[5] = {184, 179, 171, 8, 184};
-  unsigned char single[5][188], batch_bufs[5][188];
+  unsigned char single[5][188];
+  unsigned char batch_bufs[5][188];
   csa2_batch_entry_t entries[5];
   csa2_key_t *k;
-  unsigned bs, n, i;
+  unsigned bs;
+  unsigned n;
+  unsigned i;
 
   k = csa2_key_new(cw);
   ck_assert_ptr_nonnull(k);
@@ -259,7 +269,8 @@ static void capture_emit(void *ctx, const unsigned char pkt[188]) {
 START_TEST(scrambler_encrypt_queued_flushes_on_batch_full) {
   scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CSA2);
   unsigned bs = csa2_batch_size();
-  unsigned char pkt[188], ref[188];
+  unsigned char pkt[188];
+  unsigned char ref[188];
   unsigned i;
 
   ck_assert_ptr_nonnull(s);
@@ -324,8 +335,11 @@ END_TEST
 START_TEST(scrambler_decrypt_queued_preserves_order_with_passthrough) {
   scrambler_t *senc = scrambler_new(SCRAMBLE_ALGO_CSA2);
   scrambler_t *sdec = scrambler_new(SCRAMBLE_ALGO_CSA2);
-  unsigned char clear_a[188], clear_b[188], unscr[188];
-  unsigned char pkt_a[188], pkt_b[188];
+  unsigned char clear_a[188];
+  unsigned char clear_b[188];
+  unsigned char unscr[188];
+  unsigned char pkt_a[188];
+  unsigned char pkt_b[188];
 
   ck_assert_ptr_nonnull(senc);
   ck_assert_ptr_nonnull(sdec);
@@ -371,8 +385,12 @@ END_TEST
 
 START_TEST(scrambler_set_key_flushes_pending_batch_under_old_key) {
   static const unsigned char cw2[CSA2_CW_LEN] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
-  scrambler_t *senc, *sdec;
-  unsigned char clear_a[188], clear_b[188], pkt_a[188], pkt_b[188];
+  scrambler_t *senc;
+  scrambler_t *sdec;
+  unsigned char clear_a[188];
+  unsigned char clear_b[188];
+  unsigned char pkt_a[188];
+  unsigned char pkt_b[188];
 
   senc = scrambler_new(SCRAMBLE_ALGO_CSA2);
   sdec = scrambler_new(SCRAMBLE_ALGO_CSA2);
@@ -419,7 +437,9 @@ END_TEST
 
 START_TEST(scrambler_encrypt_queued_survives_flush_at_queue_capacity) {
   scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CSA2);
-  unsigned char pkt[188], ref_a[188], ref_b[188];
+  unsigned char pkt[188];
+  unsigned char ref_a[188];
+  unsigned char ref_b[188];
   struct dvbcsa_key_s *dk;
   unsigned bs = csa2_batch_size();
   unsigned cap = bs * 16; /* SCRAMBLER_QUEUE_CAP_MULTIPLIER in scrambler.c */
@@ -475,7 +495,8 @@ END_TEST
 
 START_TEST(scrambler_passthrough_queued_preserves_order) {
   scrambler_t *s = scrambler_new(SCRAMBLE_ALGO_CSA2);
-  unsigned char pkt[188], side[188];
+  unsigned char pkt[188];
+  unsigned char side[188];
 
   ck_assert_ptr_nonnull(s);
   ck_assert_int_eq(scrambler_set_key(s, SCRAMBLE_PARITY_EVEN, cw, sizeof cw, NULL, NULL), 0);

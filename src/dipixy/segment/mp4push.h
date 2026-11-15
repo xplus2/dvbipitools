@@ -12,13 +12,14 @@
 #include "../ts/lcevcselect.h"
 #include "../ts/pidfilter.h"
 #include "../reactor/conn.h"
+#include "dipixy/ts/streamkey.h"
 
 void mp4push_init(int max_clients);
 
-int mp4push_subscribe(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, conn_proto_t proto);
+int mp4push_subscribe(const stream_key_t *k, conn_proto_t proto);
 void mp4push_sub_close(int slot);
 
-int mp4push_try_attach(conn_t *c, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int ws_handle);
+int mp4push_try_attach(conn_t *c, const stream_key_t *k, int ws_handle);
 
 void mp4push_h2_bind(int slot, void *h2c, void *h2_slot, int reactor_tid, int ws_handle);
 void *mp4push_sub_h2c(int slot);
@@ -36,8 +37,6 @@ void mp4push_ring_ack(int slot, size_t n);
 int mp4push_ring_pending(int slot);
 int mp4push_ring_errored(int slot);
 
-void mp4push_register_reactor_efd(int tid, int efd);
-void mp4push_close_reactor_efds(void);
 void mp4push_flush_ready(int tid);
 
 void h2_mp4push_wake(int sub_idx);

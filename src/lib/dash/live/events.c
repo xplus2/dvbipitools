@@ -5,11 +5,11 @@
 #include <string.h>
 
 #include "lib/dash/live.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 #include "lib/dash/mpd.h"
 #include "lib/dash/live/live_int.h"
+#include "lib/helper/dateutil.h"
 
 int start_mpd_fetch(dash_live_t *h) {
   http_t *reuse = http_take_reuse(&h->reuse, &h->reuse_established_at, DASH_MAX_REUSE_AGE_S);

@@ -6,6 +6,7 @@
 #include "lib/helper/log.h"
 #include "lib/sys/signal.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 typedef struct {
   psi_t *psi;
@@ -32,7 +33,8 @@ static void print_program_list(const psi_t *psi, unsigned idx) {
 }
 
 void print_discovered(const psi_t *psi, unsigned idx) {
-  int n, i;
+  int n;
+  int i;
   const psi_es_t *es = psi_es(psi, &n);
   log_line_ansi("input \e[1;30m%u\e[0m: \e[1;32mlocked\e[0m: program \e[0;33m%u\e[0m (PMT \e[0;36m0x%x\e[0m, PCR \e[0;36m0x%x\e[0m)", idx, psi_program_number(psi), psi_pmt_pid(psi), psi_pcr_pid(psi));
   for (i = 0; i < n; i++) {
@@ -65,7 +67,9 @@ int discover_step(discover_state_t *ds, tvsrc_t *src, const dipitvhead_input_t *
     ds->listed = 1;
   }
   if (input->pmt_pid && ds->listed && !ds->checked_pmt_pid) {
-    int cnt, k, found = 0;
+    int cnt;
+    int k;
+    int found = 0;
     const psi_program_t *p = psi_pat_programs(psi, &cnt);
     for (k = 0; k < cnt; k++)
       if (p[k].pmt_pid == input->pmt_pid) {

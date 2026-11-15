@@ -37,7 +37,7 @@ int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]);
 
 /* pkt copied, caller's buffer reusable on return. CSA2+SIMD backend: queued, emitted with
    its batch on fill / parity change / scrambler_flush() - not necessarily before this
-   returns. CISSA, or CSA2 w/o libdvbcsa: emitted immediately, no batching benefit.
+   returns. CSA2 w/o libdvbcsa, CISSA w/o OpenSSL: emitted immediately, no batching benefit.
    -1: no key loaded, not queued/emitted. 0 otherwise */
 int scrambler_encrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], int parity, scrambler_emit_cb emit, void *ctx);
 

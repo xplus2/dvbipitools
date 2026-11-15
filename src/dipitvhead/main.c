@@ -3,7 +3,7 @@
 
 #include "cli/args.h"
 #include "lib/sys/antidebug.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/export.h"
 #include "lib/sys/signal.h"
@@ -14,7 +14,8 @@
 /* banner prints before parsing: --color read early */
 int main(int argc, char **argv) {
   config_t cfg = {0};
-  char src[600], mcast[80];
+  char src[600];
+  char mcast[80];
   metrics_exporter_t mx;
   int rc;
   antidebug_install();

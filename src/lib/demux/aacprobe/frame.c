@@ -119,7 +119,7 @@ static void program_config(br_t *b) {
   br_skip(b, (size_t)br_u(b, 8) * 8);
 }
 
-int aacprobe_frame(aacprobe_t *p, br_t *b) {
+static int aacprobe_frame(aacprobe_t *p, br_t *b) {
   aacprobe_ics_t ics;
   int prev = AACPROBE_ID_END;
   int has_channel = 0;

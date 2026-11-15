@@ -24,7 +24,10 @@
 #define TVSTRIP_ECM 0x02  /* source CAT/ECM/EMM passthrough */
 
 typedef struct {
-  unsigned pmt_pid, video_pid, es_pid_base, ait_pid;
+  unsigned pmt_pid;
+  unsigned video_pid;
+  unsigned es_pid_base;
+  unsigned ait_pid;
 } out_program_pids_t;
 
 /* fixed pid block from 0-based program index (always 0 for standalone).

@@ -30,13 +30,11 @@ typedef struct {
 } src_t;
 
 int src_open(const config_t *cfg, src_t *s);
-/* TS bytes, RTP stripped. >0 len, 0 timeout, -1 end */
-ssize_t src_read(src_t *s, unsigned char *buf, size_t cap);
-/* as src_read(). reason set on -1: NET_ERR_EOF is a clean end */
+/* TS bytes, RTP stripped. >0 len, 0 timeout, -1 end, reason set: NET_ERR_EOF is a clean end */
 ssize_t src_read_reason(src_t *s, unsigned char *buf, size_t cap, net_err_reason_t *reason);
 void src_close(src_t *s);
 
-/* 1: src_read() likely has data. 0: nothing this tick. -1: fatal poll
+/* 1: src_read_reason() likely has data. 0: nothing this tick. -1: fatal poll
    error. --ret sources: always 1, they bound their own poll already */
 int src_wait_readable(src_t *s, int timeout_ms);
 

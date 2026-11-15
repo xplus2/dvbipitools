@@ -17,8 +17,6 @@ typedef struct {
 
 static int bad(fw_t *x, const char *what) { return bim_fail(x->w.err, BIM_FUU_RANGE, "bim: FUU %s out of range", what); }
 
-static int same(const char *a, const char *b) { return (!a || !*a) && (!b || !*b) ? 1 : a && b && !strcmp(a, b); }
-
 static int put(fw_t *x, uint64_t v, int n) { return bim_wr_put(&x->w, v, n); }
 
 static int nall_bits(const fw_t *x) { return bim_width(bim_di_nall(x->st->di)); }
@@ -46,12 +44,12 @@ static const bim_elem_t *find_elem(const fw_t *x, const char *name, const char *
   for (size_t i = 0; i < x->st->nschemas; i++) {
     const bim_schema_t *sc = &x->st->schemas[i];
     if (!sc->known || (int)i == x->st->opts.lax_schema) continue;
-    for (int c = 0; c < sc->nelems; c++)
-      if (name && !strcmp(sc->elems[c]->name, name) && same(sc->elems[c]->ns, ns)) {
-        if (sid) *sid = i;
-        if (code) *code = (uint64_t)c;
-        return sc->elems[c];
-      }
+    int c = name ? bim_schema_elem(sc, ns, name) : -1;
+    if (c >= 0) {
+      if (sid) *sid = i;
+      if (code) *code = (uint64_t)c;
+      return sc->elems[c];
+    }
   }
   return NULL;
 }
@@ -77,10 +75,10 @@ static int wr_subst(fw_t *x, const bim_part_t *p, const bim_tbc_t *t, const char
   int idx = -1;
   const bim_elem_t *g;
   *sub = NULL;
-  if (!(h && h->nsubsts) && !ext) return !strcmp(t->name, name) && same(t->ns, ns) ? 0 : bad(x, "SubstitutionSelect");
-  if (!strcmp(t->name, name) && same(t->ns, ns)) return put(x, 0, 1);
+  if (!(h && h->nsubsts) && !ext) return !strcmp(t->name, name) && bim_ns_same(t->ns, ns) ? 0 : bad(x, "SubstitutionSelect");
+  if (!strcmp(t->name, name) && bim_ns_same(t->ns, ns)) return put(x, 0, 1);
   for (int i = 0; h && i < h->nsubsts; i++)
-    if (!strcmp(h->substs[i]->name, t->name) && same(h->substs[i]->ns, t->ns)) idx = i;
+    if (!strcmp(h->substs[i]->name, t->name) && bim_ns_same(h->substs[i]->ns, t->ns)) idx = i;
   if (put(x, 1, 1)) return -1;
   if (idx >= 0) {
     *sub = h->substs[idx];
@@ -123,12 +121,7 @@ static int wr_any_attr(fw_t *x, const bim_tbc_t *t) {
     int c = -1;
     for (size_t i = 0; i < x->st->nschemas && c < 0; i++) {
       const bim_schema_t *sc = &x->st->schemas[i];
-      for (int k = 0; sc->known && (int)i != x->st->opts.lax_schema && k < sc->nattrs; k++)
-        if (!strcmp(sc->attrs[k].name, t->name) && same(sc->attrs[k].ns, t->ns)) {
-          id = i;
-          c = k;
-          break;
-        }
+      if (sc->known && (int)i != x->st->opts.lax_schema && (c = bim_schema_attr(sc, t->ns, t->name)) >= 0) id = i;
     }
     if (c < 0) {
       bitwriter_free(&tmp);
@@ -158,11 +151,11 @@ static int wr_selector(fw_t *x, size_t i, int operand, const bim_type_t **cur) {
   int w;
   if (t->kind != BIM_TBC_END) {
     const bim_schema_t *sc = &x->st->schemas[sid];
-    for (int c = 0; c < sc->nelems && !e; c++)
-      if (!strcmp(sc->elems[c]->name, t->name) && same(sc->elems[c]->ns, t->ns)) {
-        e = sc->elems[c];
-        k = (uint64_t)c;
-      }
+    int c = bim_schema_elem(sc, t->ns, t->name);
+    if (c >= 0) {
+      e = sc->elems[c];
+      k = (uint64_t)c;
+    }
     if (!e) e = find_elem(x, t->name, t->ns, &sid, &k);
     if (!e) return bad(x, "SBC_Selector");
     if (!di->add_schema && sid != x->f->schema) return bad(x, "SchemaIDOfSBC_Selector");
@@ -184,9 +177,9 @@ static int sbc_match(const fw_t *x, const bim_type_t *cur, int k, const bim_tbc_
   const bim_elem_t *h = p ? p->elem : NULL;
   if (s->kind == BIM_SBC_ANY) return find_elem(x, t->name, t->ns, NULL, NULL) != NULL;
   if (s->kind != BIM_SBC_ELEM) return 0;
-  if (!strcmp(s->name, t->name) && same(s->ns, t->ns)) return 1;
+  if (!strcmp(s->name, t->name) && bim_ns_same(s->ns, t->ns)) return 1;
   for (int i = 0; h && i < h->nsubsts; i++)
-    if (!strcmp(h->substs[i]->name, t->name) && same(h->substs[i]->ns, t->ns)) return 1;
+    if (!strcmp(h->substs[i]->name, t->name) && bim_ns_same(h->substs[i]->ns, t->ns)) return 1;
   return h && fuu_external(x->st, h, 1) && find_elem(x, t->name, t->ns, NULL, NULL);
 }
 
@@ -257,7 +250,7 @@ static int wr_operand(fw_t *x, size_t i, const bim_type_t *cur) {
     int hit;
     if (t->kind == BIM_TBC_ELEM) hit = sbc_match(x, cur, j, t);
     else if (t->kind == BIM_TBC_SIMPLE) hit = s->kind == BIM_SBC_SIMPLE;
-    else hit = s->kind == BIM_SBC_ATTR && !t->owned && !strcmp(s->name, t->name) && same(s->ns, t->ns);
+    else hit = s->kind == BIM_SBC_ATTR && !t->owned && !strcmp(s->name, t->name) && bim_ns_same(s->ns, t->ns);
     if (hit) k = j;
   }
   for (int j = 0; j < cur->nsbc && k < 0 && t->kind == BIM_TBC_ATTR; j++)

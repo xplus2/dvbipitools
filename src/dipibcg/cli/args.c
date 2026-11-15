@@ -15,10 +15,8 @@
 #include "lib/net/netconnect.h"
 
 #include "priv.h"
-
-static int mcast_parse(const char *s, config_t *cfg) {
-  return uriparse_mcast_addrport(s, &cfg->family, cfg->mcast_group, sizeof cfg->mcast_group, &cfg->mcast_port);
-}
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
 
 void mcast_describe(const config_t *cfg, char *buf, size_t n) {
   uriparse_mcast_describe(cfg->family, cfg->mcast_group, cfg->mcast_port, buf, n);
@@ -63,6 +61,18 @@ static const struct option longopts[] = {
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
+static const yamlcfg_opt_t opts[] = {
+    {'w', "window", "GS000102", "invalid -w window hours: %s", 0},
+    {'m', "mcast", "GS000103", "invalid -m group:port: %s", 0},
+    {'T', "ttl", "GS000775", "invalid -T ttl: %s (1..255)", 0},
+    {OPT_REFRESH, "refresh", "GS000693", "invalid --refresh cycles: %s", 0},
+    {OPT_PUBLISHER, "publisher", "GS000737", "invalid --publisher: %s (<domain>/<readable name>, RFC 3986 encoded)", 0},
+    {OPT_LANG, "lang", "GS000738", "invalid --lang: %s (xs:language, e.g. en or de-AT)", 0},
+    {OPT_INDEX, "index", "GS000740", "invalid --index: %s (comma list of " BCG_INDEX_NAMES ")", 0},
+    {'f', "format", "GS000763", "invalid -f format: %s (xmltv|tva|bim)", 0},
+    {OPT_ENCODING, "encoding", "GS000764", "invalid --encoding: %s (bim|plain)", 0},
+};
+
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   int configtest = 0;
@@ -70,6 +80,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int cli_mode = 0;
   int schema_cli = 0;
   int c;
+  int r;
 
   if (argutil_prescan(argc, argv, shortopts, longopts, OPT_CONFIGTEST, OPT_CONFIG_STRICT, &cfg_path, &configtest, &strict)) {
     bcg_print_help();
@@ -81,6 +92,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
 
   optind = 1;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    r = yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), bcg_cfg_keys, bcg_cfg_nkeys, cfg, c, optarg);
+    if (r < 0) return ARGS_ERR;
+    if (r > 0) continue;
     switch (c) {
       case 'a':
       case 'l':
@@ -102,31 +116,8 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'M':
         cfg->map_path = optarg;
         break;
-      case 'w': {
-        unsigned v;
-        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-          argerr("GS000102", "invalid -w window hours: %s", optarg);
-          return ARGS_ERR;
-        }
-        cfg->window_hours = v;
-        break;
-      }
-      case 'm':
-        if (mcast_parse(optarg, cfg)) {
-          argerr("GS000103", "invalid -m group:port: %s", optarg);
-          return ARGS_ERR;
-        }
-        cfg->fl.have_mcast = 1;
-        break;
       case 'I':
         cfg->iface = optarg;
-        break;
-      case 'T':
-        if (argutil_uint_range(optarg, 1, 255, &cfg->ttl)) {
-          argerr("GS000775", "invalid -T ttl: %s (1..255)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->fl.have_ttl = 1;
         break;
       case 't':
       case OPT_INTERVAL:
@@ -141,15 +132,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         cfg->fl.t_opt = c == 't' ? 0 : c;
         break;
       }
-      case OPT_REFRESH: {
-        unsigned v;
-        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-          argerr("GS000693", "invalid --refresh cycles: %s", optarg);
-          return ARGS_ERR;
-        }
-        cfg->refresh_cycles = v;
-        break;
-      }
       case 'o':
         cfg->output_path = optarg;
         break;
@@ -159,48 +141,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
       case 'Z':
         cfg->compress = 1;
         break;
-      case OPT_PUBLISHER:
-        if (!bcg_publisher_valid(optarg)) {
-          argerr("GS000737", "invalid --publisher: %s (<domain>/<readable name>, RFC 3986 encoded)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->publisher = optarg;
-        break;
-      case OPT_LANG:
-        if (!bcg_lang_valid(optarg)) {
-          argerr("GS000738", "invalid --lang: %s (xs:language, e.g. en or de-AT)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->lang = optarg;
-        break;
-      case OPT_INDEX:
-        if (bcg_index_names(optarg, &cfg->index_mask)) {
-          argerr("GS000740", "invalid --index: %s (comma list of " BCG_INDEX_NAMES ")", optarg);
-          return ARGS_ERR;
-        }
-        break;
-      case 'f': {
-        static const enum_map_t map[] = {{"xmltv", FMT_XMLTV}, {"tva", FMT_TVA}, {"bim", FMT_BIM}};
-        int v;
-        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-          argerr("GS000763", "invalid -f format: %s (xmltv|tva|bim)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->format = (bcg_fmt_t)v;
-        cfg->fl.have_format = 1;
-        break;
-      }
-      case OPT_ENCODING: {
-        static const enum_map_t map[] = {{"bim", ENC_BIM}, {"plain", ENC_PLAIN}};
-        int v;
-        if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-          argerr("GS000764", "invalid --encoding: %s (bim|plain)", optarg);
-          return ARGS_ERR;
-        }
-        cfg->encoding = (bcg_enc_t)v;
-        cfg->fl.have_encoding = 1;
-        break;
-      }
       case 's':
         if (!schema_cli) cfg->nschemas = 0;
         schema_cli = 1;
@@ -252,86 +192,5 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
     argerr("GS000107", "unexpected argument: %s", argv[optind]);
     return ARGS_ERR;
   }
-  cfg->mode = cfg->fl.have_l ? MODE_LISTEN : MODE_ANNOUNCE;
-  if (cfg->fl.have_a == cfg->fl.have_l) {
-    argerr("GS000108", "exactly one of -a/--announce or -l/--listen is required");
-    return ARGS_ERR;
-  }
-  if (!cfg->fl.have_mcast) {
-    argerr("GS000109", "missing -m multicast group:port");
-    return ARGS_ERR;
-  }
-  if (!cfg->nschemas) {
-    argerr("GS000759", "missing -s schema");
-    return ARGS_ERR;
-  }
-  if (argutil_metrics_opts_validate(TOOL_NAME, cfg->metrics_sock, cfg->metrics_id, cfg->metrics_interval_s)) return ARGS_ERR;
-
-  if (cfg->mode == MODE_ANNOUNCE) {
-    if (!cfg->input_path) {
-      argerr("GS000110", "missing -i input");
-      return ARGS_ERR;
-    }
-    if (!cfg->map_path && cfg->format == FMT_XMLTV) {
-      argerr("GS000111", "missing -M map");
-      return ARGS_ERR;
-    }
-    if (cfg->index_mask && (cfg->format != FMT_XMLTV || cfg->encoding != ENC_BIM)) {
-      argerr("GS000765", "--index needs -f xmltv and --encoding bim");
-      return ARGS_ERR;
-    }
-    if (cfg->lang && !cfg->publisher) {
-      argerr("GS000739", "--lang requires --publisher");
-      return ARGS_ERR;
-    }
-    if (cfg->fl.have_t) {
-      if (cfg->fl.t_opt == OPT_TIMEOUT) {
-        argerr("GS000690", "--timeout is listen-only (use -t/--interval)");
-        return ARGS_ERR;
-      }
-      if (cfg->fl.t_value < 1) {
-        argerr("GS000124", "invalid -t interval: must be >= 1");
-        return ARGS_ERR;
-      }
-      cfg->interval_s = cfg->fl.t_value;
-    }
-  } else {
-    if (cfg->metrics_id) {
-      argerr("GS000112", "--metrics-id is announce-only");
-      return ARGS_ERR;
-    }
-    if (cfg->compress) {
-      argerr("GS000113", "-Z/--compress is announce-only");
-      return ARGS_ERR;
-    }
-    if (cfg->refresh_cycles != 1) {
-      argerr("GS000692", "--refresh is announce-only");
-      return ARGS_ERR;
-    }
-    if (cfg->fl.have_encoding) {
-      argerr("GS000766", "--encoding is announce-only");
-      return ARGS_ERR;
-    }
-    if (cfg->publisher || cfg->lang || cfg->index_mask) {
-      argerr("GS000741", "--publisher, --lang and --index are announce-only");
-      return ARGS_ERR;
-    }
-    if (cfg->fl.have_ttl) {
-      argerr("GS000776", "-T/--ttl is announce-only");
-      return ARGS_ERR;
-    }
-    if (cfg->dvb_locator || cfg->dvb_duration || cfg->dvb_pubtime) {
-      argerr("GS000760", "--dvb-locator, --dvb-duration and --dvb-pubtime are announce-only");
-      return ARGS_ERR;
-    }
-    if (!cfg->output_path) cfg->output_path = "-";
-    if (cfg->fl.have_t) {
-      if (cfg->fl.t_opt == OPT_INTERVAL) {
-        argerr("GS000691", "--interval is announce-only (use -t/--timeout)");
-        return ARGS_ERR;
-      }
-      cfg->timeout_s = cfg->fl.t_value;
-    }
-  }
-  return ARGS_OK;
+  return bcg_cli_check(cfg);
 }

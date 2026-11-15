@@ -207,7 +207,8 @@ START_TEST(state_load_applies_ret_and_fcc_to_broadcast_doc) {
 END_TEST
 
 START_TEST(state_load_builds_package_doc_and_lists_it_in_sp_doc) {
-  char csv_path[160], pkg_path[160];
+  char csv_path[160];
+  char pkg_path[160];
   config_t cfg;
   sds_state_t st;
 
@@ -246,7 +247,8 @@ START_TEST(state_load_builds_package_doc_and_lists_it_in_sp_doc) {
 END_TEST
 
 START_TEST(state_load_builds_cell_doc) {
-  char csv_path[160], cells_path[160];
+  char csv_path[160];
+  char cells_path[160];
   config_t cfg;
   sds_state_t st;
 
@@ -332,7 +334,8 @@ START_TEST(state_load_builds_rmsfus_doc_for_fus) {
 END_TEST
 
 START_TEST(state_load_rejects_bad_packages_file) {
-  char csv_path[160], pkg_path[160];
+  char csv_path[160];
+  char pkg_path[160];
   config_t cfg;
   sds_state_t st;
 

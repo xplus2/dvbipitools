@@ -34,22 +34,25 @@ static void *writer_thread(void *arg) {
   uint8_t seg[SEG_LEN];
   uint8_t part[PART_LEN];
   uint8_t init[64];
+  hls_store_t *st;
   (void)arg;
   memset(&f, 0, sizeof f);
-  hls_store_open(CTX, &f, 0, &full, 0.01, 6, SEG_CONTAINER_FMP4);
+  hls_store_open(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4}, 0.01, 6);
+  st = hls_store_find(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4});
+  if (!st) return NULL;
   while (!atomic_load_explicit(&g_stop, memory_order_relaxed)) {
     uint32_t n = atomic_fetch_add_explicit(&g_fill_counter, 1, memory_order_relaxed);
     uint8_t v = (uint8_t)(n / 4); /* constant across one live-segment cycle (4 parts) */
     fill(init, sizeof init, v);
-    hls_set_init_segment(CTX, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
+    hls_set_init_segment_at(st, CODEC_H264, init, sizeof init);
     fill(part, sizeof part, v);
-    hls_push_part(CTX, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.005, 1);
+    hls_push_part_at(st, part, sizeof part, 0.005, 1);
     if (n % 4 == 3) {
       fill(seg, sizeof seg, v);
-      hls_push_segment_ll(CTX, &f, 0, &full, SEG_CONTAINER_FMP4, 0.02);
+      hls_push_segment_ll_at(st, 0.02);
     }
   }
-  hls_store_close(CTX, &f, 0, &full, SEG_CONTAINER_FMP4);
+  hls_store_close(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4});
   return NULL;
 }
 
@@ -62,7 +65,7 @@ static void *reader_thread(void *arg) {
   pid_filter_t f;
   memset(&f, 0, sizeof f);
   while (!atomic_load_explicit(&g_stop, memory_order_relaxed)) {
-    const hls_store_t *s = hls_store_find(CTX, &f, 0, &full, SEG_CONTAINER_FMP4);
+    const hls_store_t *s = hls_store_find(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4});
     if (s) {
       const hls_snapshot_t *snap = atomic_load_explicit(&s->snap, memory_order_acquire);
       if (snap) {
@@ -77,7 +80,7 @@ static void *reader_thread(void *arg) {
           atomic_store_explicit(&g_bad, 1, memory_order_relaxed);
       }
     }
-    if (ra->tid == 0) hls_llhls_enable(CTX, &f, 0, &full, SEG_CONTAINER_FMP4, 0.005);
+    if (ra->tid == 0) hls_llhls_enable(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4}, 0.005);
     qsbr_worker_quiescent(g_test_qsbr, ra->tid);
   }
   return NULL;
@@ -128,7 +131,7 @@ static void *churn_reader(void *arg) {
   memset(&f, 0, sizeof f);
   while (!atomic_load_explicit(&g_churn_done, memory_order_acquire)) {
     for (unsigned pmt = 0; pmt < CHURN_KEYS; pmt++) {
-      const hls_store_t *st = hls_store_find(CTX, &f, pmt, &full, SEG_CONTAINER_FMP4);
+      const hls_store_t *st = hls_store_find(&(stream_key_t){CTX, &f, pmt, &full, SEG_CONTAINER_FMP4});
       const hls_snapshot_t *snap = st ? atomic_load_explicit(&st->snap, memory_order_acquire) : NULL;
       if (snap) check_snapshot(snap);
     }
@@ -149,13 +152,19 @@ static void churn_cycle(const pid_filter_t *f, int cycle) {
   uint8_t init[64];
   uint8_t part[PART_LEN];
 
+  const stream_key_t k = {CTX, f, pmt, &full, SEG_CONTAINER_FMP4};
+  hls_store_t *st;
+
   fill(init, sizeof init, v);
   fill(part, sizeof part, v);
-  hls_store_open(CTX, f, pmt, &full, 0.01, 6, SEG_CONTAINER_FMP4);
-  hls_set_init_segment(CTX, f, pmt, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
-  for (int i = 0; i < 4; i++) hls_push_part(CTX, f, pmt, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.005, 1);
-  hls_push_segment_ll(CTX, f, pmt, &full, SEG_CONTAINER_FMP4, 0.02);
-  hls_store_close(CTX, f, pmt, &full, SEG_CONTAINER_FMP4);
+  hls_store_open(&k, 0.01, 6);
+  st = hls_store_find(&k);
+  if (st) {
+    hls_set_init_segment_at(st, CODEC_H264, init, sizeof init);
+    for (int i = 0; i < 4; i++) hls_push_part_at(st, part, sizeof part, 0.005, 1);
+    hls_push_segment_ll_at(st, 0.02);
+  }
+  hls_store_close(&k);
 }
 
 START_TEST(open_close_churn_with_concurrent_readers) {
@@ -183,7 +192,7 @@ START_TEST(open_close_churn_with_concurrent_readers) {
     for (int i = 0; i < CHURN_READERS; i++) qsbr_worker_quiescent(g_test_qsbr, i);
     hls_store_slot_reclaim_sweep();
   }
-  for (unsigned pmt = 0; pmt < CHURN_KEYS; pmt++) ck_assert_ptr_null(hls_store_find(CTX, &f, pmt, &full, SEG_CONTAINER_FMP4));
+  for (unsigned pmt = 0; pmt < CHURN_KEYS; pmt++) ck_assert_ptr_null(hls_store_find(&(stream_key_t){CTX, &f, pmt, &full, SEG_CONTAINER_FMP4}));
 }
 END_TEST
 

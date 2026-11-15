@@ -704,9 +704,8 @@ START_TEST(bcg_compression_wrapper) {
 }
 END_TEST
 
-/* TS 102 539 7.3, 7.4: payload 0xA1 DVB-TVA-init and DecoderInit, payload 0xA2 TVAMain container */
-START_TEST(bcg_payloads_0xa1_and_0xa2) {
-  tv_t t;
+/* TS 102 539 7.3: payload 0xA1 DVB-TVA-init and DecoderInit */
+START_TEST(bcg_payload_0xa1) {
   bim_tvainit_t ti = {.encoding_version = BIM_TVAINIT_DVB, .char_encoding = 1};
   bim_tvainit_t gi;
   bim_decoderinit_t di;
@@ -715,15 +714,6 @@ START_TEST(bcg_payloads_0xa1_and_0xa2) {
   bim_err_t err;
   const unsigned char *p;
   size_t n;
-  bim_encode_opts_t eo;
-  bim_decode_opts_t dopts;
-  dvbtva_roots_t roots;
-  bim_node_t *main = tnode(NULL, "TVAMain", NULL);
-  bim_node_t *got = NULL;
-  unsigned char *pay;
-  size_t pl;
-  tv_init(&t);
-  roots = (dvbtva_roots_t){t.c, &t.ns};
   ck_assert_int_eq(bim_tvainit_decoderinit(TVA, NULL, 0, &di), 0);
   bitwriter_init(&bw);
   ck_assert_int_eq(bim_bcg_tvainit_write(&ti, &di, &bw, &err), 0);
@@ -738,49 +728,7 @@ START_TEST(bcg_payloads_0xa1_and_0xa2) {
   ck_assert_int_eq(bim_bcg_tvainit_write(&ti, &di, &bw, &err), -1);
   ck_assert_str_eq(err.code, BIM_BCG_ERR);
   bitwriter_free(&bw);
-
-  tattr(main, "publisher", "tvlistings.tv/TV%20Listings");
-  memset(&eo, 0, sizeof eo);
-  eo.schemas = &t.c->schema;
-  eo.nschemas = 1;
-  eo.lax_schema = -1;
-  eo.frag_format = 1;
-  memset(&dopts, 0, sizeof dopts);
-  dopts.schemas = &t.c->schema;
-  dopts.nschemas = 1;
-  dopts.lax_schema = -1;
-  dopts.inflate = bident;
-  eo.deflate = bident;
-  ck_assert_int_eq(bim_bcg_tvamain_write(&roots, &eo, main, 7, bident, &pay, &pl, &err), 0);
-  ck_assert_uint_eq(pay[0], 1);
-  ck_assert_int_eq(bim_bcg_tvamain_parse(&roots, &dopts, pay, pl, &got, &err), 0);
-  ck_assert_str_eq(bim_node_attr(got, "publisher"), "tvlistings.tv/TV%20Listings");
-  bim_node_free(got);
-  free(pay);
-  ck_assert_int_eq(bim_bcg_tvamain_write(&roots, &eo, main, 7, NULL, &pay, &pl, &err), 0);
-  ck_assert_uint_eq(pay[0], 0);
-  {
-    bim_fragref_t *refs;
-    unsigned fmt;
-    int nrefs;
-    ck_assert_int_eq(bim_container_parse_refs(pay + 1, pl - 1, &fmt, &refs, &nrefs), 0);
-    ck_assert_int_eq(nrefs, 1);
-    ck_assert_uint_eq(refs[0].frag_id, 7);
-    free(refs);
-  }
-  ck_assert_int_eq(bim_bcg_tvamain_parse(&roots, &dopts, pay, pl, &got, &err), 0);
-  bim_node_free(got);
-  pay[pl / 2] ^= 0xFF;
-  pay[pl - 1] ^= 0xFF;
-  got = NULL;
-  (void)bim_bcg_tvamain_parse(&roots, &dopts, pay, pl, &got, &err);
-  bim_node_free(got);
-  free(pay);
-  ck_assert_int_eq(bim_bcg_tvamain_parse(&roots, &dopts, (const unsigned char *)"\x00\x00", 2, &got, &err), -1);
-  ck_assert_str_eq(err.code, BIM_BCG_ERR);
-  bim_node_free(main);
   bim_tvainit_decoderinit_free(&di);
-  xsd_set_free(t.set);
 }
 END_TEST
 
@@ -832,8 +780,7 @@ START_TEST(bcg_wrapper_edge_cases) {
 }
 END_TEST
 
-START_TEST(bcg_payloads_survive_damage_and_allocation_failure) {
-  tv_t t;
+START_TEST(bcg_payload_0xa1_survives_damage_and_allocation_failure) {
   bim_tvainit_t ti = {.encoding_version = BIM_TVAINIT_DVB, .char_encoding = 1};
   bim_tvainit_t gi;
   bim_decoderinit_t di;
@@ -843,15 +790,6 @@ START_TEST(bcg_payloads_survive_damage_and_allocation_failure) {
   const unsigned char *p;
   unsigned char *copy;
   size_t n;
-  bim_encode_opts_t eo;
-  bim_decode_opts_t dopts;
-  dvbtva_roots_t roots;
-  bim_node_t *main = tnode(NULL, "TVAMain", NULL);
-  bim_node_t *got = NULL;
-  unsigned char *pay;
-  size_t pl;
-  tv_init(&t);
-  roots = (dvbtva_roots_t){t.c, &t.ns};
   ck_assert_int_eq(bim_tvainit_decoderinit(TVA, NULL, 0, &di), 0);
   bitwriter_init(&bw);
   ck_assert_int_eq(bim_bcg_tvainit_write(&ti, &di, &bw, &err), 0);
@@ -889,52 +827,7 @@ START_TEST(bcg_payloads_survive_damage_and_allocation_failure) {
     bitwriter_free(&bw);
     if (!hit) break;
   }
-
-  tattr(main, "publisher", "tvlistings.tv/TV%20Listings");
-  memset(&eo, 0, sizeof eo);
-  eo.schemas = &t.c->schema;
-  eo.nschemas = 1;
-  eo.lax_schema = -1;
-  eo.frag_format = 1;
-  eo.deflate = bident;
-  memset(&dopts, 0, sizeof dopts);
-  dopts.schemas = &t.c->schema;
-  dopts.nschemas = 1;
-  dopts.lax_schema = -1;
-  dopts.inflate = bident;
-  for (int zl = 0; zl < 2; zl++) {
-    ck_assert_int_eq(bim_bcg_tvamain_write(&roots, &eo, main, 7, zl ? &bident : NULL, &pay, &pl, &err), 0);
-    for (size_t cut = 0; cut < pl; cut++)
-      if (!bim_bcg_tvamain_parse(&roots, &dopts, pay, cut, &got, &err)) bim_node_free(got);
-    for (size_t bit = 0; bit < pl * 8; bit++) {
-      pay[bit / 8] ^= (unsigned char)(0x80u >> (bit % 8));
-      if (!bim_bcg_tvamain_parse(&roots, &dopts, pay, pl, &got, &err)) bim_node_free(got);
-      pay[bit / 8] ^= (unsigned char)(0x80u >> (bit % 8));
-    }
-    for (long k = 0;; k++) {
-      int hit;
-      int rc;
-      got = NULL;
-      alloc_fail_at(k);
-      rc = bim_bcg_tvamain_parse(&roots, &dopts, pay, pl, &got, &err);
-      hit = alloc_fail_end();
-      if (!rc) bim_node_free(got);
-      if (!hit) break;
-    }
-    free(pay);
-    for (long k = 0;; k++) {
-      int hit;
-      int rc;
-      alloc_fail_at(k);
-      rc = bim_bcg_tvamain_write(&roots, &eo, main, 7, zl ? &bident : NULL, &pay, &pl, &err);
-      hit = alloc_fail_end();
-      if (!rc) free(pay);
-      if (!hit) break;
-    }
-  }
-  bim_node_free(main);
   bim_tvainit_decoderinit_free(&di);
-  xsd_set_free(t.set);
 }
 END_TEST
 
@@ -1329,9 +1222,9 @@ static Suite *dvbtva_suite(void) {
   tcase_add_test(tc, dvbtva_rules_per_fragment);
   tcase_add_test(tc, dvbtva_rules_across_fragments);
   tcase_add_test(tc, bcg_compression_wrapper);
-  tcase_add_test(tc, bcg_payloads_0xa1_and_0xa2);
+  tcase_add_test(tc, bcg_payload_0xa1);
   tcase_add_test(tc, bcg_wrapper_edge_cases);
-  tcase_add_test(tc, bcg_payloads_survive_damage_and_allocation_failure);
+  tcase_add_test(tc, bcg_payload_0xa1_survives_damage_and_allocation_failure);
   tcase_add_test(tc, dvbtva_parse_reports_string_offsets_post_failures_and_oom);
   tcase_add_test(tc, dvbtva_extras_load_reports_each_outcome);
   tcase_add_test(tc, container_build_and_parse_cover_every_limit);

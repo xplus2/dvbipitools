@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #include "priv.h"
 

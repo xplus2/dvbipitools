@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "lib/bim/bimio.h"
+#include "lib/helper/strutil.h"
 
 int bim_width(uint64_t n) {
   int b = 0;
@@ -15,7 +16,7 @@ int bim_width(uint64_t n) {
 
 int bim_fail_str(bim_err_t *err, const char *code, const char *msg) {
   err->code = code;
-  snprintf(err->msg, sizeof err->msg, "%s", msg);
+  bufcpy(err->msg, sizeof err->msg, msg);
   return -1;
 }
 
@@ -79,11 +80,12 @@ int bim_rd_raw(bim_rd_t *r, uint64_t nbits, bim_bits_t *b) {
   if (!b->heap_bits) return bim_oom(r->err);
   b->bits = b->heap_bits;
   b->nbits = nbits;
-  for (uint64_t k = 0; k < nbits; k += 8) {
+  if (bitreader_get_bytes(&r->br, b->heap_bits, (size_t)(nbits / 8))) return bim_rd_trunc(r);
+  if (nbits % 8) {
     uint64_t v;
-    int n = nbits - k < 8 ? (int)(nbits - k) : 8;
+    int n = (int)(nbits % 8);
     if (bim_rd_bits(r, n, &v)) return -1;
-    b->heap_bits[k / 8] = (unsigned char)(v << (8 - n));
+    b->heap_bits[nbits / 8] = (unsigned char)(v << (8 - n));
   }
   return 0;
 }
@@ -134,11 +136,7 @@ int bim_wr_v8(bim_wr_t *w, uint64_t v) { return bitwriter_put_vluimsbf8(w->bw, v
 
 int bim_wr_v5(bim_wr_t *w, uint64_t v) { return bitwriter_put_vluimsbf5(w->bw, v) ? bim_oom(w->err) : 0; }
 
-int bim_wr_bytes(bim_wr_t *w, const unsigned char *p, size_t n) {
-  for (size_t i = 0; i < n; i++)
-    if (bim_wr_put(w, p[i], 8)) return -1;
-  return 0;
-}
+int bim_wr_bytes(bim_wr_t *w, const unsigned char *p, size_t n) { return bitwriter_put_bytes(w->bw, p, n) ? bim_oom(w->err) : 0; }
 
 int bim_wr_str(bim_wr_t *w, const char *zero, const char *name, const char *s) {
   size_t n = s ? strlen(s) : 0;
@@ -147,11 +145,9 @@ int bim_wr_str(bim_wr_t *w, const char *zero, const char *name, const char *s) {
 }
 
 int bim_wr_bits(bim_wr_t *w, const bim_bits_t *b) {
-  for (uint64_t k = 0; k < b->nbits; k += 8) {
-    int n = b->nbits - k < 8 ? (int)(b->nbits - k) : 8;
-    if (bim_wr_put(w, (uint64_t)(b->bits[k / 8] >> (8 - n)), n)) return -1;
-  }
-  return 0;
+  int n = (int)(b->nbits % 8);
+  if (bim_wr_bytes(w, b->bits, (size_t)(b->nbits / 8))) return -1;
+  return n ? bim_wr_put(w, (uint64_t)(b->bits[b->nbits / 8] >> (8 - n)), n) : 0;
 }
 
 int bim_wr_rational(bim_wr_t *w, uint64_t v) {

@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 #include "lib/metrics/export.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #define MAX_VALUES 256
 

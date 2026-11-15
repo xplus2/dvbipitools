@@ -8,10 +8,10 @@
 #include <time.h>
 #include <srt/srt.h>
 
-#include "lib/sys/signal.h"
 #include "lib/net/srt/srtcommon.h"
 #include "lib/net/srt/srtout.h"
 #include "lib/net/srt/srtout/srtout_int.h"
+#include "lib/helper/dateutil.h"
 
 static uint64_t queue_ms(const srtout_t *r) {
   if (r->bitrate_ema_bps <= 0) return 0;

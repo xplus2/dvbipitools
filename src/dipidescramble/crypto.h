@@ -31,7 +31,4 @@ int crypto_hmac_sha256(const unsigned char key[CRYPTO_KEY_LEN], const unsigned c
 /* ecm_profile: RFC 5869 HKDF-SHA256, zero salt, single expand round (32B out == one SHA256 block, no T(2) needed). 0 ok, -1 fail */
 int crypto_hkdf_sha256(const unsigned char key[CRYPTO_KEY_LEN], const char *info, unsigned char out[CRYPTO_HMAC_SHA256_LEN]);
 
-/* ecm_profile: CRC-32, ieee (0xEDB88320, zlib/png/gzip/ethernet) or castagnoli (0x82F63B78, CRC-32C) polynomial. both: init 0xFFFFFFFF, reflected in/out, final xor 0xFFFFFFFF */
-uint32_t crypto_crc32(int castagnoli, const unsigned char *data, size_t len);
-
 #endif

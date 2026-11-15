@@ -8,7 +8,7 @@
 #include "lib/cas/device_state_core.h"
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/secure_zero.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "config.h"
 #include "version.h"
 
@@ -77,10 +77,7 @@ static int apply_auth(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_caid(void *c, const char *v, char *e, size_t n) {
-  if (cam378_cfg_caid(v, &((config_t *)c)->caid)) {
-    snprintf(e, n, "invalid '%s' (hex, 1..FFFF)", v);
-    return -1;
-  }
+  if (cam378_cfg_caid(v, &((config_t *)c)->caid)) return yamlcfg_bad(e, n, v, "hex, 1..FFFF");
   return 0;
 }
 
@@ -89,8 +86,7 @@ static int apply_algo(void *c, const char *v, char *e, size_t n) {
   if (!strcmp(v, "csa2"))       cfg->cw_len = 8;
   else if (!strcmp(v, "cissa")) cfg->cw_len = 16;
   else {
-    snprintf(e, n, "invalid '%s' (cissa|csa2)", v);
-    return -1;
+    return yamlcfg_bad(e, n, v, "cissa|csa2");
   }
   return 0;
 }
@@ -121,7 +117,7 @@ static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->metrics_interval_s, v, 1, 86400, e, n);
 }
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t cam378_cfg_keys[] = {
     {"key", apply_key, 1, 0},
     {"serial", apply_serial, 0, 0},
     {"bind", apply_bind, 0, 0},
@@ -136,11 +132,12 @@ static const yamlcfg_key_t keys[] = {
     {"metrics.interval", apply_metrics_interval, 0, 0},
     {"daemonize", apply_daemonize, 0, 0},
 };
+const size_t cam378_cfg_nkeys = sizeof cam378_cfg_keys / sizeof cam378_cfg_keys[0];
 
 int cam378_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
+  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, cam378_cfg_keys, cam378_cfg_nkeys, cfg);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -149,7 +146,7 @@ int cam378_cfg_test(const char *path, int strict) {
   int rc;
   config_t cfg;
   cam378_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, cam378_cfg_keys, cam378_cfg_nkeys, &cfg) != YAMLCFG_LOADED) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }

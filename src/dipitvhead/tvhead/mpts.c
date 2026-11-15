@@ -12,6 +12,7 @@
 #include "lib/sys/signal.h"
 
 #include "mpts/priv.h"
+#include "lib/helper/dateutil.h"
 
 #define INTERVAL_CAT_S 0.1 /* matches remux.c's own INTERVAL_PAT_PMT_S cadence */
 #define MPTS_POLL_MAX_MS 100
@@ -175,7 +176,8 @@ static void mpts_run_loop(const config_t *cfg, metrics_exporter_t *mx, mpts_run_
     unsigned pfd_slot[ARGS_MAX_INPUTS];
     nfds_t npfd = 0;
     double now;
-    time_t now_t, deadline;
+    time_t now_t;
+    time_t deadline;
     int timeout_ms = MPTS_POLL_MAX_MS;
     mpts_tick_t tk;
     uint32_t ready_mask;

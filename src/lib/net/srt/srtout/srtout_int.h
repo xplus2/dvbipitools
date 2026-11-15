@@ -11,9 +11,7 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <srt/srt.h>
-#include "lib/sys/ioutil.h"
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 #include "lib/net/srt/srtcommon.h"
 #include "lib/net/srt/srtout.h"
 

@@ -149,9 +149,7 @@ void channel_hned_seen(channel_t *c, uint32_t ssrc, const struct sockaddr *from,
 /* pending collisions on c within max_age_s, up to cap ssrcs into out. returns count, locks c->hned_lock. */
 size_t channel_hned_collisions(channel_t *c, uint32_t *out, size_t cap, time_t max_age_s);
 
-void channel_table_reap(channel_table_t *t, time_t max_age_s);
-
-/* bounded slice of channel_table_reap, see channel.c */
+/* bounded reap slice, see channel.c */
 void channel_table_reap_step(channel_table_t *t, time_t max_age_s, size_t max_scan);
 
 #endif

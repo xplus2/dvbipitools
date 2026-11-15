@@ -6,7 +6,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
-#include "../sys/ioutil.h"
+#include "../helper/strutil.h"
 #include "../helper/log.h"
 #include "tls_priv.h"
 #include "tls_server.h"

@@ -7,7 +7,7 @@
 #include <time.h>
 
 #include "lib/helper/log.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/mux/psi_build.h"
 
 #include "../version.h"
@@ -121,7 +121,8 @@ tspacketizer_t *tspacketizer_new(const tspacketizer_cfg_t *cfg) {
 void tspacketizer_free(tspacketizer_t *t) { free(t); }
 
 int tspacketizer_set_metadata(tspacketizer_t *t, const char *artist, const char *title) {
-  char a[sizeof t->artist], ti[sizeof t->title];
+  char a[sizeof t->artist];
+  char ti[sizeof t->title];
 
   bufcpy(a, sizeof a, artist);
   bufcpy(ti, sizeof ti, title);
@@ -182,7 +183,8 @@ static int due_s(double now, double *last, double interval) {
 }
 
 static size_t emit_cas_ecm_emm(tspacketizer_t *t, size_t vi, double now, unsigned char *sec, size_t seccap, unsigned char *ptr0, ts_packet_cb cb, void *ctx) {
-  size_t len, count = 0;
+  size_t len;
+  size_t count = 0;
   if (cas_vendor_ecm_due(t->cas, vi, now, sec, seccap, &len) == 0)
     count += ts_packet_emit(cas_vendor_ecm_pid(t->cas, vi), &t->cc_ecm[vi], ptr0, sec, len, 0, 0, cb, ctx);
   while (cas_vendor_next_emm(t->cas, vi, sec, seccap, &len) == 0)

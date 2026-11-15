@@ -4,9 +4,10 @@
 #include <string.h>
 
 #include "lib/demux/escodec/aubuild.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 static int64_t cue_shift(const mkv_t *m, int64_t start_ms) {
   int64_t ref = PTS_DISC_NONE;
@@ -256,7 +257,8 @@ static void add_track(mkv_t *m, const psi_es_t *es, int psi_idx) {
 
 void setup(mkv_t *m) {
   const psi_es_t *es;
-  int c, k;
+  int c;
+  int k;
   if (m->video_ok) {
     es = psi_es(m->psi[0], &c);
     for (k = 0; k < c && m->ntrk < MKV_MAX_TRACKS; k++) {

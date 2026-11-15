@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "lib/bim/bcgfrag.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/tva/tva_xml.h"
 
 #define XML_NS "http://www.w3.org/XML/1998/namespace"

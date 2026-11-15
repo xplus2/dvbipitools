@@ -131,7 +131,8 @@ size_t rtcp_build_rsi_srbt_bandwidth(double kbps, unsigned char *out, size_t cap
 }
 
 size_t rtcp_build_rsi_srbt_collision(const uint32_t *ssrcs, size_t count, unsigned char *out, size_t cap) {
-  size_t total, i;
+  size_t total;
+  size_t i;
 
   if (count == 0 || count > 254) /* length byte = count + 1 words, max 255 */
     return 0;

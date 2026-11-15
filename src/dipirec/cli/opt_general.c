@@ -2,14 +2,30 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
 
 #include "lib/helper/argutil.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+
+static const yamlcfg_opt_t opts[] = {
+    {'i', "in", "CS000546", "invalid -i uri: %s", 0},
+    {'a', "audio", "CS000547", "invalid -a track: %s (1..N or \"all\")", 0},
+    {'f', "format", "CS000548", "invalid -f format: %s (raw|ts|mkv|mka|mp4|m4a)", 0},
+    {'p', "pmt-pid", "CS000354", "invalid -p pmt-pid: %s (0x0010..0x1FFE, or \"all\")", 0},
+    {'s', "subtitles", "CS000549", "invalid -s: %s (strip|keep|srt)", 0},
+    {'t', "time", "CS000550", "invalid -t duration: %s", 0},
+    {OPT_SUB_LEAD, "sub-lead", "CS000551", "invalid --sub-lead: %s (0..10000 ms)", 0},
+};
 
 args_status_t rec_opt_general(rec_opt_t *p, int c) {
   config_t *cfg = p->cfg;
 
+  switch (yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), rec_cfg_keys, rec_cfg_nkeys, cfg, c, optarg)) {
+    case 1: return ARGS_OK;
+    case -1: return ARGS_ERR;
+    default: break;
+  }
   switch (c) {
     case 'o':
       if (!p->cli_out) {
@@ -25,56 +41,11 @@ args_status_t rec_opt_general(rec_opt_t *p, int c) {
         return ARGS_ERR;
       }
       break;
-    case 'i':
-      if (rec_cfg_set_in(cfg, optarg)) {
-        argerr("CS000546", "invalid -i uri: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 'a':
-      if (rec_cfg_audio(cfg, optarg)) {
-        argerr("CS000547", "invalid -a track: %s (1..N or \"all\")", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 'f':
-      if (rec_cfg_format(cfg, optarg)) {
-        argerr("CS000548", "invalid -f format: %s (raw|ts|mkv|mka|mp4|m4a)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 'p':
-      if (rec_cfg_pmt(cfg, optarg)) {
-        argerr("CS000354", "invalid -p pmt-pid: %s (0x0010..0x1FFE, or \"all\")", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 's':
-      if (rec_cfg_subs(cfg, optarg)) {
-        argerr("CS000549", "invalid -s: %s (strip|keep|srt)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 't':
-      if (rec_cfg_time(cfg, optarg)) {
-        argerr("CS000550", "invalid -t duration: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
     case 'I':
       cfg->iface_in = optarg;
       break;
     case OPT_COLOR: {
       if (argutil_color_opt(TOOL_NAME, "CS000105", optarg, &cfg->color_mode)) return ARGS_ERR;
-      break;
-    }
-    case OPT_SUB_LEAD: {
-      unsigned v;
-      if (argutil_uint_range(optarg, 0, 10000, &v)) {
-        argerr("CS000551", "invalid --sub-lead: %s (0..10000 ms)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->sub_lead_ms = (long)v;
       break;
     }
     case 'v':

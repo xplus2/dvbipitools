@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/xml_util.h"
 #include "lib/hls/m3u_lines.h"
@@ -300,7 +300,7 @@ static void expand_open_ended(const dash_mpd_t *m, unsigned period_idx, dash_rep
   if (p->duration_ms) period_end_ms = p->duration_ms;
   else if (!m->is_dynamic && m->media_presentation_duration_ms > p->start_ms) period_end_ms = m->media_presentation_duration_ms - p->start_ms;
   if (m->is_dynamic && m->has_availability_start) {
-    unsigned long long now = dash_wall_ms();
+    unsigned long long now = wall_ms();
     unsigned long long el = now > m->availability_start_ms ? now - m->availability_start_ms : 0;
     end_ms = el > p->start_ms ? el - p->start_ms : 0;
     if (period_end_ms && end_ms > period_end_ms) end_ms = period_end_ms;
@@ -460,24 +460,14 @@ int dash_timeline_find(const dash_representation_t *r, unsigned long long time, 
 
 unsigned long long dash_timeline_first(const dash_representation_t *r) { return r->n_timeline ? r->timeline[0].t : 0; }
 
-unsigned long long dash_wall_ms(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);
-  return (unsigned long long)ts.tv_sec * 1000ULL + (unsigned long long)ts.tv_nsec / 1000000ULL;
-}
-
 unsigned dash_mpd_live_period(const dash_mpd_t *m) {
   unsigned long long now;
   unsigned p = 0;
   if (!m->is_dynamic || !m->n_periods) return 0;
   if (!m->has_availability_start) return m->n_periods - 1;
-  now = dash_wall_ms();
+  now = wall_ms();
   now = now > m->availability_start_ms ? now - m->availability_start_ms : 0;
   for (unsigned i = 1; i < m->n_periods; i++)
     if (m->periods[i].start_ms <= now) p = i;
   return p;
-}
-
-unsigned long long dash_effective_availability_ms(unsigned long long nominal_availability_ms, unsigned long long availability_time_offset_ms) {
-  return nominal_availability_ms > availability_time_offset_ms ? nominal_availability_ms - availability_time_offset_ms : 0;
 }

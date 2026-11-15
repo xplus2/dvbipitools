@@ -2,17 +2,18 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "priv.h"
+#include "lib/helper/strutil.h"
 
 #include <math.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
-void ring_ref(hls_seg_ring_t *r) {
+static void ring_ref(hls_seg_ring_t *r) {
   atomic_fetch_add_explicit(&r->refcount, 1, memory_order_relaxed);
 }
 
-void ring_unref(hls_seg_ring_t *r) {
+static void ring_unref(hls_seg_ring_t *r) {
   if (!r) return;
   if (atomic_fetch_sub_explicit(&r->refcount, 1, memory_order_acq_rel) == 1) {
     for (int i = 0; i < HLS_MAX_SEGS; i++) seg_buf_unref(r->segs[i].data);
@@ -42,14 +43,14 @@ void seq_floor_note(uint32_t next_seq) {
   while (next_seq > cur && !atomic_compare_exchange_weak_explicit(&g_seq_floor, &cur, next_seq, memory_order_relaxed, memory_order_relaxed)) {}
 }
 
-hls_snapshot_t *snap_clone(const hls_snapshot_t *base) {
-  hls_snapshot_t *ns = malloc(sizeof *ns);
+hls_snapshot_t *snap_clone_into(hls_snapshot_t *mem, const hls_snapshot_t *base) {
+  hls_snapshot_t *ns = mem ? mem : malloc(sizeof *ns);
   if (!ns) return NULL;
   if (!base) {
     memset(ns, 0, sizeof *ns);
     ns->ring = malloc(sizeof *ns->ring);
     if (!ns->ring) {
-      free(ns);
+      if (!mem) free(ns);
       return NULL;
     }
     memset(ns->ring, 0, sizeof *ns->ring);
@@ -63,14 +64,7 @@ hls_snapshot_t *snap_clone(const hls_snapshot_t *base) {
   ring_ref(ns->ring);
   seg_buf_ref(ns->live_data);
   seg_buf_ref(ns->init_data);
-  atomic_store_explicit(&ns->cache_plain, NULL, memory_order_relaxed);
-  atomic_store_explicit(&ns->cache_ll, NULL, memory_order_relaxed);
-  atomic_store_explicit(&ns->cache_lcevc[0], NULL, memory_order_relaxed);
-  atomic_store_explicit(&ns->cache_lcevc[1], NULL, memory_order_relaxed);
-  for (int i = 0; i < MPD_VARIANTS; i++) {
-    atomic_store_explicit(&ns->cache_mpd[i], NULL, memory_order_relaxed);
-    atomic_store_explicit(&ns->cache_mpd_ll[i], NULL, memory_order_relaxed);
-  }
+  for (int i = 0; i < SNAP_CACHE_N; i++) atomic_store_explicit(&ns->cache[i], NULL, memory_order_relaxed);
   return ns;
 }
 
@@ -96,20 +90,26 @@ static void cached_text_free(cached_text_t *t) {
   free(t);
 }
 
-void snap_free(hls_snapshot_t *ns) {
-  if (!ns) return;
+hls_snapshot_t *snap_clone(const hls_snapshot_t *base) { return snap_clone_into(NULL, base); }
+
+static void snap_release(hls_snapshot_t *ns) {
   ring_unref(ns->ring);
   seg_buf_unref(ns->live_data);
   seg_buf_unref(ns->init_data);
-  cached_text_free(atomic_load_explicit(&ns->cache_plain, memory_order_relaxed));
-  cached_text_free(atomic_load_explicit(&ns->cache_ll, memory_order_relaxed));
-  cached_text_free(atomic_load_explicit(&ns->cache_lcevc[0], memory_order_relaxed));
-  cached_text_free(atomic_load_explicit(&ns->cache_lcevc[1], memory_order_relaxed));
-  for (int i = 0; i < MPD_VARIANTS; i++) {
-    cached_text_free(atomic_load_explicit(&ns->cache_mpd[i], memory_order_relaxed));
-    cached_text_free(atomic_load_explicit(&ns->cache_mpd_ll[i], memory_order_relaxed));
-  }
+  for (int i = 0; i < SNAP_CACHE_N; i++) cached_text_free(atomic_load_explicit(&ns->cache[i], memory_order_relaxed));
+}
+
+void snap_free(hls_snapshot_t *ns) {
+  if (!ns) return;
+  snap_release(ns);
   free(ns);
+}
+
+void snap_recycle(hls_store_t *s, hls_snapshot_t *ns) {
+  if (!ns) return;
+  snap_release(ns);
+  if (s->spare) free(ns);
+  else s->spare = ns;
 }
 
 static cached_text_t *cached_text_build(const char *key, text_fmt_fn fmt, void *ctx, size_t buf_cap) {

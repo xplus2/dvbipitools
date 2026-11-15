@@ -9,7 +9,7 @@
 #include "dipixy/dash/dash.h"
 #include "dipixy/dash/dash_int.h"
 #include "lib/demux/escodec/escodec.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 static void hevc_codecs_string(const uint8_t *p, char *out, size_t outsz) {
   static const char *const space_name[4] = {"", "A", "B", "C"};

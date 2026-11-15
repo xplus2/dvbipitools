@@ -112,7 +112,8 @@ START_TEST(tssrc_rx_timestamps_only_after_enable_and_advance) {
   tssrc_t *s;
   struct sockaddr_in dst;
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
-  uint64_t first, second;
+  uint64_t first;
+  uint64_t second;
   char group[32];
   unsigned port = free_udp_port();
 
@@ -259,7 +260,8 @@ START_TEST(tssrc_open_async_completes_for_http_and_reads_body) {
   unsigned char ts_payload[3 * 188];
   char head[128];
   char resp[sizeof head + sizeof ts_payload];
-  size_t head_len, resp_len;
+  size_t head_len;
+  size_t resp_len;
   tssrc_cfg_t cfg;
   tssrc_open_t *o;
   tssrc_t *s;

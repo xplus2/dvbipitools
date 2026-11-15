@@ -137,7 +137,8 @@ static const mpts_cas_ops_t mock_cas_ops = {mock_build_cat, mock_ecm_due, mock_n
 START_TEST(mpts_tick_emits_multi_program_pat) {
   psi_pat_entry_t entries[2] = {{101, 0x1000}, {102, 0x1001}};
   mpts_t *m = mpts_new(0x1234, 1, "", entries, 2, &mock_program_ops);
-  unsigned char pkt[188], sec[64];
+  unsigned char pkt[188];
+  unsigned char sec[64];
   psi_t *p;
   int count;
   const psi_program_t *progs;
@@ -263,8 +264,10 @@ END_TEST
 START_TEST(mpts_tick_emits_one_composite_sdt_section_for_all_active_programs) {
   psi_pat_entry_t entries[2] = {{101, 0x1000}, {102, 0x1001}};
   mpts_t *m = mpts_new(1, 1, "", entries, 2, &mock_program_ops);
-  mock_program_t prog0 = {101, 0}, prog1 = {102, 0};
-  unsigned char patpkt[188], sec[64];
+  mock_program_t prog0 = {101, 0};
+  mock_program_t prog1 = {102, 0};
+  unsigned char patpkt[188];
+  unsigned char sec[64];
   size_t slen;
   const unsigned char *pkt;
   psi_t *p;
@@ -305,8 +308,11 @@ END_TEST
 START_TEST(mpts_tick_bumps_sdt_version_only_when_active_set_changes) {
   psi_pat_entry_t entries[2] = {{101, 0x1000}, {102, 0x1001}};
   mpts_t *m = mpts_new(1, 1, "", entries, 2, &mock_program_ops);
-  mock_program_t prog0 = {101, 0}, prog1 = {102, 0};
-  unsigned v1, v2, v3;
+  mock_program_t prog0 = {101, 0};
+  mock_program_t prog1 = {102, 0};
+  unsigned v1;
+  unsigned v2;
+  unsigned v3;
 
   mpts_set_program(m, 0, &prog0);
   g_count = 0;

@@ -47,7 +47,8 @@ static void crc32_backends_check(const unsigned char *data, size_t len) {
 
 START_TEST(crc32_backends_agree) {
   unsigned char buf[4099] = {0};
-  size_t len, i;
+  size_t len;
+  size_t i;
   int trial;
 
   /* pclmul backend chunks 8 bytes at a time. exhaustive lengths 0..64 hit

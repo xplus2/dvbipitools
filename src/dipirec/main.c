@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 #include "cli/args.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/export.h"
 #include "lib/sys/signal.h"
@@ -43,6 +43,7 @@ int main(int argc, char **argv) {
   int rc;
 
   TOOLMAIN_STARTUP(argc, argv, &cfg, args_parse);
+  log_async_start();
   dstrbuf_init(&sb_out);
   for (int i = 0; i < cfg.n_out; i++) {
     char one[600];

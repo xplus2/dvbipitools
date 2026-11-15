@@ -12,6 +12,10 @@ void log_line(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 void log_code(const char *code, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
+/* every tool, after daemonize: lines queue to writer thread, dropped + counted when full. stop flushes, also atexit */
+void log_async_start(void);
+void log_async_stop(void);
+
 /* same; ANSI stripped unless terminal wants colour */
 void log_line_ansi(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 void log_code_ansi(const char *code, const char *fmt, ...) __attribute__((format(printf, 2, 3)));

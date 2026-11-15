@@ -4,20 +4,16 @@
 #include <stdlib.h>
 
 #include "burst.h"
+#include "lib/helper/dateutil.h"
 
 #define BURST_PKT_MAX (CHANNEL_MAX_PAYLOAD + 16) /* rtx header (14) + payload */
-
-static double elapsed_seconds(const struct timespec *start) {
-  struct timespec now;
-  clock_gettime(CLOCK_MONOTONIC, &now);
-  return (double)(now.tv_sec - start->tv_sec) + (double)(now.tv_nsec - start->tv_nsec) / 1e9;
-}
 
 #define BURST_RTP_CLOCK_HZ 90000.0 /* MP2T-over-RTP fixed rate, RFC 2250 */
 
 /* ms spanned by cached RAP-anchored run. 0 if fewer than 2 entries. */
 static unsigned cache_depth_ms(const channel_t *c) {
-  rap_cache_meta_t first, last;
+  rap_cache_meta_t first;
+  rap_cache_meta_t last;
   size_t count = channel_cache_count(c);
   uint32_t diff;
 
@@ -71,7 +67,7 @@ burst_t *burst_new(const channel_t *c, double multiplier, double client_max_bps,
   atomic_init(&b->refs, 1u);
   b->rtx_pt = rtx_pt;
   atomic_store_explicit(&b->target_bps, target, memory_order_relaxed);
-  clock_gettime(CLOCK_MONOTONIC, &b->start_time);
+  b->start_time = mono_seconds();
   return b;
 }
 
@@ -89,7 +85,8 @@ void burst_release(burst_t *b) {
 }
 
 burst_tick_result_t burst_tick(burst_t *b, unsigned duration_cap_ms, burst_send_fn send_cb, void *user) {
-  double elapsed_s, budget_bytes;
+  double elapsed_s;
+  double budget_bytes;
   uint64_t end;
 
   if (atomic_load_explicit(&b->done, memory_order_acquire))
@@ -100,7 +97,7 @@ burst_tick_result_t burst_tick(burst_t *b, unsigned duration_cap_ms, burst_send_
     return BURST_TICK_DONE; /* slot recycled under us: channel identity no longer ours */
   }
 
-  elapsed_s = elapsed_seconds(&b->start_time);
+  elapsed_s = mono_seconds() - b->start_time;
   if (elapsed_s * 1000.0 >= (double)duration_cap_ms) {
     atomic_store_explicit(&b->done, 1, memory_order_release);
     return BURST_TICK_DONE;

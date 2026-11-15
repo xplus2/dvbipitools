@@ -154,7 +154,8 @@ START_TEST(rsa_encrypt_rejects_oversized_input) {
 END_TEST
 
 START_TEST(aes_cbc_encrypt_matches_annex_c_vector) {
-  unsigned char esw0[BISS_CA_SW_LEN], esw1[BISS_CA_SW_LEN];
+  unsigned char esw0[BISS_CA_SW_LEN];
+  unsigned char esw1[BISS_CA_SW_LEN];
   ck_assert_int_eq(biss_ca_aes_cbc_encrypt(annex_c_sk, annex_c_iv, annex_c_sw0, esw0), 0);
   ck_assert_mem_eq(esw0, annex_c_esw0, BISS_CA_SW_LEN);
   ck_assert_int_eq(biss_ca_aes_cbc_encrypt(annex_c_sk, annex_c_iv, annex_c_sw1, esw1), 0);
@@ -163,7 +164,8 @@ START_TEST(aes_cbc_encrypt_matches_annex_c_vector) {
 END_TEST
 
 START_TEST(aes_cbc_decrypt_matches_annex_c_vector) {
-  unsigned char sw0[BISS_CA_SW_LEN], sw1[BISS_CA_SW_LEN];
+  unsigned char sw0[BISS_CA_SW_LEN];
+  unsigned char sw1[BISS_CA_SW_LEN];
   ck_assert_int_eq(biss_ca_aes_cbc_decrypt(annex_c_sk, annex_c_iv, annex_c_esw0, sw0), 0);
   ck_assert_mem_eq(sw0, annex_c_sw0, BISS_CA_SW_LEN);
   ck_assert_int_eq(biss_ca_aes_cbc_decrypt(annex_c_sk, annex_c_iv, annex_c_esw1, sw1), 0);

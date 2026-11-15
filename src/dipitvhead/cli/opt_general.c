@@ -3,36 +3,31 @@
 
 
 #include <getopt.h>
-#include <limits.h>
-#include <string.h>
 
 #include "lib/helper/argutil.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+
+static const yamlcfg_opt_t opts[] = {
+    {'n', "nit", "LS000685", "-n nit-text too long", 0},
+    {OPT_DEFAULT_PROVIDER, "default-provider", "LS000685", "--default-provider text too long", 0},
+    {'b', "bitrate", "TS000603", "invalid -b bitrate: %s (kbps)", 0},
+    {'e', "error", "TS000498", "invalid -e seconds: %s", 0},
+    {OPT_TSID, "tsid", "TS000499", "invalid --tsid: %s (1..65535)", 0},
+    {OPT_ONID, "onid", "TS000500", "invalid --onid: %s (1..65535)", 0},
+};
 
 args_status_t tvh_opt_general(tvh_opt_t *p, int c) {
   config_t *cfg = p->cfg;
   char err[192];
 
+  switch (yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), tvh_cfg_keys, tvh_cfg_nkeys, cfg, c, optarg)) {
+    case 1: return ARGS_OK;
+    case -1: return ARGS_ERR;
+    default: break;
+  }
   switch (c) {
-    case 'n':
-      if (strcmp(optarg, "-") == 0) {
-        cfg->nit_mode = TABLE_DROP;
-      } else {
-        cfg->nit_mode = TABLE_OVERRIDE;
-        if (argutil_bufcpy_opt(TOOL_NAME, cfg->nit_text, sizeof cfg->nit_text, optarg, "-n nit-text"))
-          return ARGS_ERR;
-      }
-      break;
-    case OPT_DEFAULT_PROVIDER:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->default_provider_text, sizeof cfg->default_provider_text, optarg, "--default-provider text"))
-        return ARGS_ERR;
-      break;
-    case 'b':
-      if (argutil_uint_range(optarg, 1, 1000000, &cfg->bitrate_kbps)) {
-        argerr("TS000603", "invalid -b bitrate: %s (kbps)", optarg);
-        return ARGS_ERR;
-      }
-      break;
     case 'S':
       cfg->stuff = 1;
       break;
@@ -45,29 +40,8 @@ args_status_t tvh_opt_general(tvh_opt_t *p, int c) {
     case OPT_PCR_LEAD_MS:
       CHECK(tvh_cfg_pcr_lead_ms(cfg, optarg, err, sizeof err), "--pcr-lead-ms");
       break;
-    case 'e': {
-      unsigned v;
-      if (argutil_uint_range(optarg, 0, UINT_MAX, &v)) {
-        argerr("TS000498", "invalid -e seconds: %s", optarg);
-        return ARGS_ERR;
-      }
-      cfg->error_retry_s = (long)v;
-      break;
-    }
     case 'k':
       cfg->insecure_tls = 1;
-      break;
-    case OPT_TSID:
-      if (tvh_id_parse(optarg, &cfg->tsid)) {
-        argerr("TS000499", "invalid --tsid: %s (1..65535)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_ONID:
-      if (tvh_id_parse(optarg, &cfg->onid)) {
-        argerr("TS000500", "invalid --onid: %s (1..65535)", optarg);
-        return ARGS_ERR;
-      }
       break;
     case OPT_COLOR: {
       if (argutil_color_opt(TOOL_NAME, "TS000105", optarg, &cfg->color_mode)) return ARGS_ERR;

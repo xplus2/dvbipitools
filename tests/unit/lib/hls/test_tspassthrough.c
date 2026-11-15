@@ -204,7 +204,9 @@ START_TEST(hls_ts_passthrough_converts_packed_aac) {
   unsigned char seg_raw[256];
   unsigned char seg_resp[512];
   unsigned char pl_resp[512];
-  size_t seg_resp_len, pl_resp_len, off;
+  size_t seg_resp_len;
+  size_t pl_resp_len;
+  size_t off;
   const char *pl_responses[1];
   size_t pl_lens[1];
   const char *seg_responses[1];

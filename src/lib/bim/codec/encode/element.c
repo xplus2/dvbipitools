@@ -6,32 +6,97 @@
 #include <string.h>
 
 #include "lib/bim/codec/encode/priv.h"
+#include "lib/helper/growutil.h"
+
+static int enc_fragment_reference(enc_t *e, const bim_node_t *k);
+
+typedef struct {
+  size_t pos;
+  uint64_t len;
+  uint64_t extra;
+  int parent;
+} hole_t;
+
+struct enc_cnt {
+  bitwriter_t raw;
+  hole_t *v;
+  size_t n;
+  size_t cap;
+  int open;
+  uint64_t top_extra;
+};
+
+static int v5_width(uint64_t v) {
+  int n = 1;
+  while (n < VLUIMSBF5_MAX_GROUPS && (v >> (4 * n)) != 0) n++;
+  return 5 * n;
+}
+
+static int counted_nested(enc_t *e, struct enc_cnt *c, int (*fn)(enc_t *e, void *arg), void *arg) {
+  size_t me = c->n;
+  int parent = c->open;
+  hole_t *h;
+  int rc;
+  if (growbuf_reserve((void **)&c->v, &c->cap, sizeof *c->v, c->n + 1, 16)) return -1;
+  c->v[c->n++] = (hole_t){bitwriter_bits(&c->raw), 0, 0, parent};
+  c->open = (int)me;
+  rc = fn(e, arg);
+  c->open = parent;
+  h = &c->v[me];
+  if (rc) {
+    bitwriter_truncate(&c->raw, h->pos);
+    c->n = me;
+    return rc;
+  }
+  h->len = bitwriter_bits(&c->raw) - h->pos + h->extra;
+  if (parent < 0) c->top_extra += h->extra + (uint64_t)v5_width(h->len);
+  else c->v[parent].extra += h->extra + (uint64_t)v5_width(h->len);
+  return 0;
+}
+
+static int counted_emit(bitwriter_t *out, const struct enc_cnt *c) {
+  size_t at = 0;
+  size_t end = bitwriter_bits(&c->raw);
+  if (bitwriter_put_vluimsbf5(out, (uint64_t)end + c->top_extra)) return -1;
+  for (size_t i = 0; i < c->n; i++) {
+    if (bitwriter_append_range(out, &c->raw, at, c->v[i].pos - at) || bitwriter_put_vluimsbf5(out, c->v[i].len)) return -1;
+    at = c->v[i].pos;
+  }
+  return bitwriter_append_range(out, &c->raw, at, end - at);
+}
 
 int enc_counted(enc_t *e, int (*fn)(enc_t *e, void *arg), void *arg) {
-  bitwriter_t tmp;
+  struct enc_cnt c;
+  struct enc_cnt *outer = e->cnt;
   bitwriter_t *keep = e->bw;
   int rc;
-  bitwriter_init(&tmp);
-  e->bw = &tmp;
+  if (outer && keep == &outer->raw) return counted_nested(e, outer, fn, arg);
+  memset(&c, 0, sizeof c);
+  bitwriter_init(&c.raw);
+  c.open = -1;
+  e->bw = &c.raw;
+  e->cnt = &c;
   rc = fn(e, arg);
   e->bw = keep;
-  if (!rc) rc = bitwriter_put_vluimsbf5(keep, (uint64_t)tmp.len * 8 + (uint64_t)tmp.cur_bits) || bitwriter_append(keep, &tmp);
-  bitwriter_free(&tmp);
+  e->cnt = outer;
+  if (!rc) rc = counted_emit(keep, &c);
+  bitwriter_free(&c.raw);
+  free(c.v);
   return rc;
 }
 
-int enc_is_nil(const bim_node_t *k) {
+size_t enc_counted_progress(const enc_t *e) { return e->cnt && e->bw == &e->cnt->raw ? e->cnt->n : 0; }
+
+static int enc_is_nil(const bim_node_t *k) {
   const char *v = bim_node_attr_ns(k, XSI_NS, "nil");
   return v && (!strcmp(v, "true") || !strcmp(v, "1"));
 }
 
-static int same_ns(const char *a, const char *b) { return (!a || !*a) && (!b || !*b) ? 1 : a && b && !strcmp(a, b); }
-
-int enc_wildcard_allows(const bim_wildcard_t *w, const char *ns) {
+static int enc_wildcard_allows(const bim_wildcard_t *w, const char *ns) {
   if (!w || w->kind == BIM_WC_ANY) return 1;
-  if (w->kind == BIM_WC_NOT) return !same_ns(w->ns[0], ns);
+  if (w->kind == BIM_WC_NOT) return !bim_ns_same(w->ns[0], ns);
   for (int i = 0; i < w->nns; i++)
-    if (same_ns(w->ns[i], ns)) return 1;
+    if (bim_ns_same(w->ns[i], ns)) return 1;
   return 0;
 }
 
@@ -39,7 +104,7 @@ int enc_extra_attr(const bim_type_t *t, const bim_node_t *node, int i) {
   const char *ns = node->attrs[i].ns;
   if (ns && !strcmp(ns, XSI_NS)) return 0;
   for (int j = 0; j < t->nattrs; j++)
-    if (same_ns(t->attrs[j].ns, ns) && !strcmp(t->attrs[j].name, node->attrs[i].name)) return 0;
+    if (bim_ns_same(t->attrs[j].ns, ns) && !strcmp(t->attrs[j].name, node->attrs[i].name)) return 0;
   return 1;
 }
 
@@ -47,7 +112,7 @@ int enc_extra_attr(const bim_type_t *t, const bim_node_t *node, int i) {
 static int attr_known(const bim_type_t *t, const bim_node_t *node, int i) {
   if (!enc_extra_attr(t, node, i)) return 1;
   for (int j = 0; j < t->nfixed; j++)
-    if (same_ns(t->fixed[j].ns, node->attrs[i].ns) && !strcmp(t->fixed[j].name, node->attrs[i].name)) return 1;
+    if (bim_ns_same(t->fixed[j].ns, node->attrs[i].ns) && !strcmp(t->fixed[j].name, node->attrs[i].name)) return 1;
   return 0;
 }
 
@@ -231,7 +296,7 @@ static int walk_one(enc_t *e, const bim_part_t *p, const bim_node_t *node, int *
   return p->kind == BIM_PART_ALL ? walk_all(e, p, node, ci, mixed) : -1;
 }
 
-static size_t out_mark(const enc_t *e) { return e->bw->len * 8 + (size_t)e->bw->cur_bits + (e->sw ? e->sw->len : 0) + enc_zprogress(e); }
+static size_t out_mark(const enc_t *e) { return e->bw->len * 8 + (size_t)e->bw->cur_bits + (e->sw ? e->sw->len : 0) + enc_zprogress(e) + enc_counted_progress(e); }
 
 static int walk_part(enc_t *e, const bim_part_t *p, const bim_node_t *node, int *ci, int mixed) {
   enc_t dry = *e;
@@ -443,7 +508,7 @@ int enc_element(enc_t *e, const bim_part_t *p, const bim_type_t *t, const bim_no
 }
 
 /* ISO 23001-1 7.4.8, 7.4.9 */
-int enc_fragment_reference(enc_t *e, const bim_node_t *k) {
+static int enc_fragment_reference(enc_t *e, const bim_node_t *k) {
   size_t n = k->href && e->o->frag_format == 1 ? strlen(k->href) : 0;
   if (!k->href && e->o->frag_format == 1) return -1;
   if (bitwriter_put(e->bw, (uint64_t)!!k->deferred, 1) || bitwriter_put(e->bw, 1, 1) || bitwriter_put(e->bw, 0, 6) || bitwriter_put(e->bw, e->o->frag_format, 8)) return -1;

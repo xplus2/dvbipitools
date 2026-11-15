@@ -12,10 +12,10 @@
 #include <time.h>
 
 #include "lib/net/httpclient/httpclient.h"
-#include "lib/sys/ioutil.h"
-#include "lib/sys/signal.h"
+#include "lib/helper/strutil.h"
 
 #include "dlna_int.h"
+#include "lib/helper/dateutil.h"
 
 #define GENA_MAX_SUBS 32
 #define GENA_MAX_PER_PEER 4
@@ -44,7 +44,9 @@ static _Atomic unsigned g_update_id;
 
 static size_t hex_min(char *dst, unsigned long v, size_t min_width) {
   char tmp[2 * sizeof(unsigned long)];
-  size_t n = 0, pad, i;
+  size_t n = 0;
+  size_t pad;
+  size_t i;
   if (!v) {
     tmp[n++] = '0';
   } else {
@@ -63,7 +65,7 @@ static size_t hex_min(char *dst, unsigned long v, size_t min_width) {
 }
 
 static void make_sid(char out[64]) {
-  unsigned n = atomic_fetch_add(&g_sid_counter, 1u);
+  unsigned n = atomic_fetch_add_explicit(&g_sid_counter, 1u, memory_order_relaxed);
   size_t off = bufcpy(out, 64, "uuid:dipixy-sub-");
   off += hex_min(out + off, (unsigned long)time(NULL), 8);
   out[off++] = '-';
@@ -72,11 +74,11 @@ static void make_sid(char out[64]) {
 }
 
 unsigned gena_system_update_id(void) {
-  unsigned v = atomic_load(&g_update_id);
+  unsigned v = atomic_load_explicit(&g_update_id, memory_order_relaxed);
   if (!v) {
     unsigned want = (unsigned)time(NULL);
     if (!want) want = 1;
-    if (atomic_compare_exchange_strong(&g_update_id, &v, want)) v = want;
+    if (atomic_compare_exchange_strong_explicit(&g_update_id, &v, want, memory_order_relaxed, memory_order_relaxed)) v = want;
   }
   return v;
 }
@@ -271,7 +273,7 @@ int gena_unsubscribe(gena_svc_t svc, const char *peer_ip, const char *sid, const
 void gena_notify_system_update(void) {
   char body[EVENT_BODY_MAX];
   gena_system_update_id();
-  atomic_fetch_add(&g_update_id, 1u);
+  atomic_fetch_add_explicit(&g_update_id, 1u, memory_order_relaxed);
   build_cd_body(body);
   pthread_mutex_lock(&g_mtx);
   purge_expired(mono_seconds());

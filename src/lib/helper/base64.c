@@ -10,7 +10,8 @@ size_t base64_encoded_len(size_t len) { return ((len + 2) / 3) * 4; }
 
 void base64_encode(const void *data, size_t len, char *out) {
   const unsigned char *p = data;
-  size_t i, o = 0;
+  size_t i;
+  size_t o = 0;
 
   for (i = 0; i + 3 <= len; i += 3) {
     uint_least32_t v = ((uint_least32_t)p[i] << 16) | ((uint_least32_t)p[i + 1] << 8) | p[i + 2];

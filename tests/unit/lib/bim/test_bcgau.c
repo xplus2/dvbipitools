@@ -10,7 +10,7 @@
 #include "../../bcg_schema_fixture.h"
 #include "lib/bim/bcgau.h"
 #include "lib/bim/bcgfrag.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/tva/tva_xml.h"
 
 typedef struct {

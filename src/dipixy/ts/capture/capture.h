@@ -12,15 +12,11 @@
 #include "lib/tsinspect/inspect.h"
 
 typedef struct capture_ctx capture_ctx_t;
-typedef struct capture_reader capture_reader_t;
 
 #define CAPTURE_PUMP_MAX_THREADS 32
 
 /* main() only, before any capture_open/capture_rist_init/capture_stdin_init call. NULL: inspect-ts off */
 void capture_set_inspect(tsinspect_agg_t *agg);
-
-/* main() only, before any capture_open/capture_rist_init/capture_stdin_init call */
-void capture_set_ring_cap(size_t bytes);
 
 /* 1 join per unique (family, group, source, port, iface). repeat calls share it (refcount).
    source: SSM source, NULL or "" = ASM. rtp: nonzero unwraps RTP before buffer. ret/fcc: NULL = none */
@@ -63,28 +59,17 @@ void capture_open_job_cancel(capture_open_job_t *job);
 
 extern _Thread_local int t_pump_tid;
 
-/* drain pending into ring. 0 ok, -1 fatal read error */
-int capture_service(capture_ctx_t *ctx);
+typedef void (*capture_sink_fn)(capture_ctx_t *ctx, void *user, const unsigned char *pkts, size_t n);
 
-/* drain pending, calling sink(user, pkt, 188) once per whole 188 B. 0 ok, -1 fatal read error */
-int capture_drain(capture_ctx_t *ctx, void (*sink)(void *user, const unsigned char *pkt), void *user);
-
-/* independent read cursor, starting from ctx's current write position.
-   many readers can watch one ctx concurrently, each at their own pace. */
-capture_reader_t *capture_reader_open(capture_ctx_t *ctx);
-
-void capture_reader_close(capture_reader_t *r);
-
-/* pulls up to cap bytes not yet seen by this reader, oldest first. returns bytes copied */
-size_t capture_reader_read(capture_reader_t *r, unsigned char *buf, size_t cap);
-
-/* cumulative bytes this reader lost by falling more than ring capacity behind */
-size_t capture_reader_dropped(const capture_reader_t *r);
+/* drain pending 2 sink. packets delivered, -1 fatal read error */
+int capture_drain(capture_ctx_t *ctx, capture_sink_fn sink, void *user);
 
 /* reactor_run() only, before spawning any pump/worker threads. clamps to
    [1, CAPTURE_PUMP_MAX_THREADS] */
 void capture_pump_set_thread_count(int n);
 int capture_pump_thread_count(void);
+
+void capture_pump_wait(int pid, int max_ms);
 
 /* CAPTURE_PUMP_MAX_THREADS entries */
 void capture_pump_mark(uint64_t *mark);
@@ -92,9 +77,8 @@ void capture_pump_mark(uint64_t *mark);
 /* all pumps quiescent since mark */
 int capture_pump_mark_passed(const uint64_t *mark);
 
-/* drains pid's shard once, sink(source, user, pkt) per packet.
-   0 return: shard idle, caller can sleep */
-int capture_pump_tick(int pid, void (*sink)(capture_ctx_t *ctx, void *user, const unsigned char *pkt), void *user);
+/* drains pid's shard once. 0 return: shard idle, caller can sleep */
+int capture_pump_tick(int pid, capture_sink_fn sink, void *user);
 
 /* ts_push.c/hls: blocks (yields, not spins) until no pump thread mid-feed.
    safe to free memread unlocked mid-feed */
@@ -109,7 +93,7 @@ void capture_flush_deferred_quiescent(void);
 /* count of distinct (family, group, source, port, iface) joins currently open */
 int capture_active_count(void);
 
-/* sum of bytes ever written across every currently open source */
+/* monotonic B read across all sources */
 uint64_t capture_bytes_total(void);
 
 /* B written. 0: igmp ok, but nothing arrives */

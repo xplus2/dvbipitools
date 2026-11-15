@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../sys/ioutil.h"
+#include "../../helper/strutil.h"
 #include "../../helper/log.h"
 #include "../../mux/cadescbuild.h"
 #include "../../mux/psi_build.h"
@@ -15,6 +15,7 @@
 #include "ca.h"
 #include "ca_engine.h"
 #include "ca_sections.h"
+#include "lib/helper/growutil.h"
 
 #define BISS_CA_MODE_CA_SYSTEM_ID 0x2610
 #define BISS_CA_ENGINE_ENTRIES_PER_SECTION 15
@@ -128,15 +129,9 @@ static int load_visit(biss_ca_key_t *k, void *p) {
     biss_ca_key_free(k);
     return 0;
   }
-  if (s->n == s->cap) {
-    size_t cap = s->cap ? s->cap * 2 : 16;
-    biss_ca_receiver_t *v = realloc(s->v, cap * sizeof *v);
-    if (!v) {
-      biss_ca_key_free(k);
-      return 1;
-    }
-    s->v = v;
-    s->cap = cap;
+  if (growbuf_reserve((void **)&s->v, &s->cap, sizeof *s->v, s->n + 1, 16)) {
+    biss_ca_key_free(k);
+    return 1;
   }
   memcpy(s->v[s->n].ekid, ekid, BISS_CA_EKID_LEN);
   s->v[s->n].pub = k;

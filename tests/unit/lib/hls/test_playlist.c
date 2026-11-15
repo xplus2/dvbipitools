@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/hls/playlist.h"
 static http_url_t make_base(const char *host, unsigned port, const char *path) {
   http_url_t u;

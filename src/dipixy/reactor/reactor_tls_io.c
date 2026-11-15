@@ -3,6 +3,7 @@
 
 #include "reactor_tls_int.h"
 
+#include <stdatomic.h>
 #include <errno.h>
 #include <linux/errqueue.h>
 #include <netinet/in.h>
@@ -16,7 +17,7 @@ ssize_t tls_net_send(int fd, const void *buf, size_t len) {
     return send(fd, buf, len, MSG_NOSIGNAL);
   }
 
-  SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  SSL *ssl = atomic_load_explicit(&fd_ssl[fd], memory_order_acquire);
   if (!ssl) {
     t_tls_want_write = 0;
     return send(fd, buf, len, MSG_NOSIGNAL);
@@ -38,7 +39,7 @@ ssize_t tls_net_send(int fd, const void *buf, size_t len) {
 
 ssize_t tls_net_send_zc(int fd, const void *buf, size_t len, int *used_zc) {
   *used_zc = 0;
-  if (fd >= 0 && fd < g_tls_fd_max && __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE))
+  if (fd >= 0 && fd < g_tls_fd_max && atomic_load_explicit(&fd_ssl[fd], memory_order_acquire))
     return tls_net_send(fd, buf, len); /* defensive: callers gate TLS out already */
 
   ssize_t r = send(fd, buf, len, MSG_NOSIGNAL | MSG_ZEROCOPY);
@@ -78,7 +79,7 @@ int tls_zc_drain(int fd, void (*cb)(uint32_t lo, uint32_t hi, void *arg), void *
 ssize_t tls_net_recv(int fd, void *buf, size_t len) {
   t_tls_want_write = 0;
   if (fd < 0 || fd >= g_tls_fd_max) return recv(fd, buf, len, 0);
-  SSL *ssl = __atomic_load_n(&fd_ssl[fd], __ATOMIC_ACQUIRE);
+  SSL *ssl = atomic_load_explicit(&fd_ssl[fd], memory_order_acquire);
   if (!ssl) return recv(fd, buf, len, 0);
   ERR_clear_error();
   int n = SSL_read(ssl, buf, (int)len);

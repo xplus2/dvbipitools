@@ -23,6 +23,8 @@ TOOLS := dipibim dipibcg dipirec dipiscan dipiradiohead dipisds dipixmltv dipitv
 # schema loader and compiler
 BIM_XSD_SRCS := \
 	src/lib/bim/xsd/model/core.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/bim/xsd/model/parse.c \
 	src/lib/bim/xsd/model/doc.c \
 	src/lib/bim/xsd/model/resolve.c \
@@ -34,10 +36,7 @@ BIM_XSD_SRCS := \
 	src/lib/bim/xsd/compile/sbc.c \
 	src/lib/bim/xsd/compile/codes.c \
 	src/lib/bim/xsd/compile/compile.c \
-	src/lib/bim/xsd/pattern.c \
-	src/lib/bim/xsd/encschema.c \
-	src/lib/bim/xsd/schemaupdate.c \
-	src/lib/bim/xsd/schemagen.c
+	src/lib/bim/xsd/pattern.c
 
 HAVE_OPENSSL := $(shell pkg-config --exists openssl && echo yes)
 
@@ -87,7 +86,10 @@ dipimetrics_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/base64.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/metrics/protocol.c \
 	$(dipimetrics_TLS_SRC) \
 	$(dipimetrics_TLSSERVER_SRC)
@@ -112,6 +114,7 @@ dipiscan_SRCS := \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/sds_xml.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
@@ -119,6 +122,8 @@ dipiscan_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/httpclient/httpclient.c \
@@ -183,6 +188,8 @@ dipisds_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -239,6 +246,8 @@ dipixmltv_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/tva/bcg_doc.c \
@@ -308,6 +317,8 @@ dipibim_SRCS := \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/bim/nodexml.c \
 	src/lib/vendor/libyaml/api.c \
 	src/lib/vendor/libyaml/reader.c \
@@ -363,6 +374,7 @@ endif
 
 dipibcg_SRCS := \
 	src/dipibcg/main.c \
+	src/dipibcg/cli/check.c \
 	src/dipibcg/cli/args.c \
 	src/dipibcg/cli/help.c \
 	src/dipibcg/config.c \
@@ -395,6 +407,8 @@ dipibcg_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -632,6 +646,8 @@ dipirec_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/rtx.c \
@@ -813,6 +829,8 @@ dipiradiohead_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/bitreader.c \
@@ -1077,6 +1095,8 @@ dipitvhead_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/demux/psi/psi.c \
@@ -1150,8 +1170,11 @@ dipifccret_SRCS := \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/cpuaffinity.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/sockaddr_index.c \
 	src/lib/net/multicast.c \
 	src/lib/net/netconnect.c \
@@ -1202,7 +1225,10 @@ dipicam378_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/toolmain.c \
 	src/lib/helper/secure_zero.c
 else
@@ -1345,6 +1371,8 @@ dipidescramble_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
@@ -1473,6 +1501,8 @@ dipirist_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/sys/signal.c \
 	src/lib/net/multicast.c \
@@ -1611,6 +1641,8 @@ dipisrt_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/sys/signal.c \
 	src/lib/net/multicast.c \
@@ -1782,6 +1814,9 @@ src/dipixy/htdocs_index.gen.c: src/dipixy/htdocs/index.html $(GEN_HTDOCS_BIN)
 
 dipixy_SRCS := \
 	src/dipixy/main.c \
+	src/dipixy/reactor/subtab.c \
+	src/dipixy/reactor/wake.c \
+	src/lib/helper/idxstack.c \
 	src/lib/tsinspect/core.c \
 	src/lib/tsinspect/tick.c \
 	src/lib/tsinspect/packet.c \
@@ -1821,7 +1856,6 @@ dipixy_SRCS := \
 	src/dipixy/ts/capture/ctx/open.c \
 	src/dipixy/ts/capture/ctx/lifecycle.c \
 	src/dipixy/ts/capture/pump.c \
-	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/lib/hls/m3u_lines.c \
 	src/lib/hls/playlist.c \
@@ -1948,6 +1982,8 @@ dipixy_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/sys/cpuaffinity.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/byte_ring.c \
 	src/lib/helper/uriparse.c \
@@ -2145,7 +2181,7 @@ build/dvbipitools/src/%.o: src/%.c config.mk
 dvbipitools: $(DVBIPITOOLS_OBJS)
 	$(CC) $^ $(LDFLAGS) $(DVBIPITOOLS_EXTRA_LDFLAGS) $(SBOM_LDFLAGS) -o $@
 
-UNIT_TESTS := lib_demux_crc32 lib_demux_aacprobe lib_mux_amf lib_helper_describe lib_net_tls_stub_lib lib_cas_biss_ca_stub lib_cas_des lib_cas_cw_encryption_stub lib_net_rist_stubs lib_net_srt_stubs lib_sys_ioutil lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_fileutil lib_helper_playlist_out lib_helper_argutil lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_ac4 lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
+UNIT_TESTS := lib_demux_crc32 lib_demux_aacprobe lib_mux_amf lib_helper_describe lib_net_tls_stub_lib lib_cas_biss_ca_stub lib_cas_des lib_cas_cw_encryption_stub lib_net_rist_stubs lib_net_srt_stubs lib_sys_ioutil lib_helper_strutil lib_helper_idxstack lib_helper_growutil lib_helper_dateutil lib_sys_signal lib_sys_cpuaffinity lib_helper_sha1 lib_helper_base64 lib_helper_uriparse lib_helper_jsonbuf lib_helper_byte_ring lib_helper_toolmain lib_helper_fileutil lib_helper_playlist_out lib_helper_argutil lib_helper_log lib_demux_rtcp lib_demux_psi lib_demux_psi_section_asm lib_demux_bitreader lib_demux_escodec_aubuild lib_demux_escodec_audio lib_demux_escodec_ac4 lib_demux_escodec_video lib_demux_descriptors lib_demux_rtp lib_net_jitbuf lib_demux_rtx lib_demux_tspack lib_demux_pes lib_tsinspect_inspect \
 	lib_demux_mpts_probe \
 	lib_mux_psi_build lib_mux_pmt_filter lib_mux_rtpheader lib_mux_fec2022 lib_mux_rtx lib_mux_rtcp_build lib_mux_tspacket_write \
 	lib_mux_ebml lib_mux_teletext lib_mux_mkv lib_mux_mkv_feed lib_mux_mp4 lib_mux_mp4_feed lib_mux_flv lib_mux_flv_feed lib_mux_fmp4 lib_mux_cadescbuild lib_demux_fmp4_box lib_demux_fmp4_track lib_demux_fmp4_sample lib_mux_esbuild lib_mux_esbuild_pes lib_mux_esbuild_pmtbuild lib_mux_esbuild_remux \
@@ -2169,7 +2205,7 @@ UNIT_TESTS := lib_demux_crc32 lib_demux_aacprobe lib_mux_amf lib_helper_describe
 	dipisds_args dipisds_input dipisds_format_out dipisds_announce dipisds_listen \
 	dipirist_args dipisrt_args
 
-UNIT_TESTS += lib_bim_index lib_bim_xsd lib_bim_xsd_load lib_bim_xsd_pattern lib_bim_xsd_content lib_bim_xsd_simple lib_bim_xsd_parse lib_bim_xsd_attrs lib_bim_xsd_schemagen lib_bim_fuu lib_bim_fuu_paths lib_bim_encode lib_bim_encode_element lib_bim_decoderinit lib_bim_bimau lib_bim_dvbtva lib_bim_dvbtva_rules lib_bim_tvabim lib_bim_nodexml lib_bim_bcgau
+UNIT_TESTS += lib_bim_index lib_bim_xsd lib_bim_xsd_load lib_bim_xsd_pattern lib_bim_xsd_content lib_bim_xsd_simple lib_bim_xsd_parse lib_bim_xsd_attrs lib_bim_fuu lib_bim_fuu_paths lib_bim_encode lib_bim_encode_element lib_bim_decoderinit lib_bim_bimau lib_bim_dvbtva lib_bim_dvbtva_rules lib_bim_tvabim lib_bim_nodexml lib_bim_bcgau
 UNIT_TESTS += dipibcg_announce dipibcg_announce_segment dipibcg_listen
 
 ifeq ($(HAVE_ZLIB),yes)
@@ -2239,6 +2275,8 @@ lib_cas_biss_ca_engine_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 lib_cas_biss_ca_engine_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_cas_biss_ca_engine_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2262,6 +2300,8 @@ lib_net_tls_SRCS := \
 	src/lib/net/tls.c \
 	src/lib/net/tls_server.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 lib_net_tls_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_net_tls_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2280,6 +2320,8 @@ lib_net_rtmp_auth_SRCS := \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/log.c
@@ -2296,11 +2338,14 @@ lib_net_httpclient_async_tls_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls.c \
 	src/lib/net/tls_server.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 lib_net_httpclient_async_tls_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 lib_net_httpclient_async_tls_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2321,7 +2366,9 @@ lib_net_sockaddr_index_BIN := tests/unit/lib/net/test_sockaddr_index
 lib_net_sockaddr_index_SRCS := \
 	tests/unit/lib/net/test_sockaddr_index.c \
 	src/lib/net/sockaddr_index.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 UNIT_TESTS += lib_net_multicast
 lib_net_multicast_BIN := tests/unit/lib/net/test_multicast
@@ -2331,8 +2378,11 @@ lib_net_multicast_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/helper/log.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/argutil.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c
 lib_net_multicast_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=setsockopt -Wl,--wrap=__setsockopt64 -Wl,--wrap=getsockopt -Wl,--wrap=__getsockopt64 -Wl,--wrap=socket
 
 UNIT_TESTS += dipifccret_dispatch
@@ -2377,6 +2427,8 @@ dipifccret_dispatch_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -2424,6 +2476,8 @@ dipifccret_metrics_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -2470,6 +2524,8 @@ dipifccret_rsi_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -2492,11 +2548,14 @@ dipifccret_config_SRCS := \
 	src/dipifccret/capture/ranges.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/cpuaffinity.c \
 	src/lib/helper/log.c \
 	src/dipifccret/listen.c \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 
 UNIT_TESTS += dipidescramble_pmt_select
 dipidescramble_pmt_select_BIN := tests/unit/dipidescramble/test_pmt_select
@@ -2560,6 +2619,8 @@ dipidescramble_pmt_select_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -2588,8 +2649,11 @@ dipidescramble_outputs_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/dipidescramble/outputs.c \
 	src/lib/net/srt/srtsink_stub.c
@@ -2633,6 +2697,8 @@ dipicam378_args_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 UNIT_TESTS += dipicam378_config
@@ -2650,6 +2716,8 @@ dipicam378_config_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 ifeq ($(HAVE_OPENSSL),yes)
@@ -2671,7 +2739,10 @@ dipicam378_device_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/helper/secure_zero.c
 dipicam378_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
@@ -2688,7 +2759,9 @@ dipicam378_cs378x_SRCS := \
 	src/dipicam378/cs378x/worker.c \
 	src/lib/helper/log.c \
 	src/lib/helper/secure_zero.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/strutil.c
 dipicam378_cs378x_EXTRA_CFLAGS := -pthread $(shell pkg-config --cflags openssl)
 dipicam378_cs378x_EXTRA_LDFLAGS := -pthread $(shell pkg-config --libs openssl)
 
@@ -2722,6 +2795,8 @@ dipidescramble_device_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/secure_zero.c
 dipidescramble_device_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_device_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2746,6 +2821,8 @@ dipidescramble_emmcache_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/secure_zero.c
 dipidescramble_emmcache_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_emmcache_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2766,6 +2843,8 @@ dipidescramble_ecm_profile_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/secure_zero.c
 dipidescramble_ecm_profile_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_ecm_profile_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2775,6 +2854,7 @@ dipidescramble_biss_ca_state_BIN := tests/unit/dipidescramble/test_biss_ca_state
 dipidescramble_biss_ca_state_SRCS := \
 	tests/unit/dipidescramble/test_biss_ca_state.c \
 	src/dipidescramble/biss_ca_state.c \
+	src/lib/helper/growutil.c \
 	src/lib/cas/biss/ca.c \
 	src/lib/cas/biss/ca_sections.c \
 	src/lib/mux/psi_build.c \
@@ -2811,6 +2891,8 @@ dipidescramble_pipeline_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/signal.c \
@@ -2894,7 +2976,10 @@ dipidescramble_ipiclient_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/demux/tspack.c \
 	src/lib/net/tls.c \
@@ -2942,6 +3027,8 @@ dipidescramble_args_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/secure_zero.c
 dipidescramble_args_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_args_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2974,6 +3061,8 @@ dipidescramble_config_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/secure_zero.c
 dipidescramble_config_EXTRA_CFLAGS := $(shell pkg-config --cflags openssl)
 dipidescramble_config_EXTRA_LDFLAGS := $(shell pkg-config --libs openssl)
@@ -2986,7 +3075,9 @@ lib_metrics_protocol_SRCS := \
 	tests/unit/lib/metrics/test_protocol.c \
 	src/lib/metrics/protocol.c \
 	src/lib/helper/log.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_metrics_export_BIN := tests/unit/lib/metrics/test_export
 lib_metrics_export_SRCS := \
@@ -2996,8 +3087,11 @@ lib_metrics_export_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipimetrics_args_BIN := tests/unit/dipimetrics/test_args
 dipimetrics_args_SRCS := \
@@ -3013,6 +3107,8 @@ dipimetrics_args_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/base64.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipimetrics_store_BIN := tests/unit/dipimetrics/test_store
@@ -3021,7 +3117,9 @@ dipimetrics_store_SRCS := \
 	src/lib/metrics/store.c \
 	src/lib/metrics/protocol.c \
 	src/lib/helper/log.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipimetrics_render_BIN := tests/unit/dipimetrics/test_render
 dipimetrics_render_SRCS := \
@@ -3033,7 +3131,9 @@ dipimetrics_render_SRCS := \
 	src/lib/metrics/store.c \
 	src/lib/metrics/protocol.c \
 	src/lib/helper/log.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipisds_args_BIN := tests/unit/dipisds/test_args
 dipisds_args_SRCS := \
@@ -3056,6 +3156,8 @@ dipisds_args_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/bim/sdns/types.c \
@@ -3118,6 +3220,8 @@ dipisds_config_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/bim/sdns/types.c \
@@ -3181,7 +3285,10 @@ dipirist_args_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/plain_endpoint.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 UNIT_TESTS += dipirist_config
@@ -3208,7 +3315,10 @@ dipirist_config_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/plain_endpoint.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 ifeq ($(HAVE_RIST),yes)
@@ -3248,6 +3358,8 @@ dipirist_bridge_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
@@ -3340,7 +3452,10 @@ lib_net_rist_ristin_SRCS := \
 	src/lib/net/rist/ristlog.c \
 	src/lib/helper/log.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
@@ -3371,6 +3486,8 @@ dipisrt_args_SRCS := \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/plain_endpoint.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 UNIT_TESTS += dipisrt_config
@@ -3396,6 +3513,8 @@ dipisrt_config_SRCS := \
 	src/lib/net/httpclient/url.c \
 	src/lib/net/plain_endpoint.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 ifeq ($(HAVE_SRT),yes)
@@ -3435,6 +3554,8 @@ dipisrt_bridge_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
@@ -3508,6 +3629,8 @@ lib_net_srt_srtcommon_SRCS := \
 	tests/unit/lib/net/srt/test_srtcommon.c \
 	src/lib/net/srt/srtcommon.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 lib_net_srt_srtsrc_sink_BIN := tests/unit/lib/net/srt/test_srtsrc_sink
@@ -3528,8 +3651,11 @@ lib_net_srt_srtsrc_sink_SRCS := \
 	src/lib/net/srt/srtcommon.c \
 	src/lib/helper/pipereader.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
 	src/lib/net/netconnect.c \
@@ -3550,8 +3676,11 @@ lib_net_srt_srtin_out_SRCS := \
 	src/lib/net/srt/srtout/close.c \
 	src/lib/net/srt/srtcommon.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
 	src/lib/net/netconnect.c \
@@ -3570,6 +3699,8 @@ dipisds_input_SRCS := \
 	src/dipisds/input/load.c \
 	src/dipisds/input/packages.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
 	src/lib/helper/xml_util/entity.c \
@@ -3584,6 +3715,8 @@ dipisds_format_out_SRCS := \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
@@ -3622,6 +3755,8 @@ dipisds_listen_SRCS := \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/demux/crc32.c \
@@ -3680,6 +3815,8 @@ dipisds_announce_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
 	src/lib/net/dvbstp.c \
@@ -3688,6 +3825,7 @@ dipisds_announce_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 dipisds_announce_EXTRA_LDFLAGS := -pthread -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=sendto -Wl,--wrap=sendmsg -Wl,--wrap=__sendmsg64
 
@@ -3703,9 +3841,12 @@ dipimetrics_httpserver_SRCS := \
 	src/lib/metrics/store.c \
 	src/lib/metrics/protocol.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	$(dipimetrics_TLS_SRC) \
 	$(dipimetrics_TLSSERVER_SRC)
 dipimetrics_httpserver_EXTRA_CFLAGS := $(dipimetrics_EXTRA_CFLAGS)
@@ -3715,6 +3856,7 @@ dipibcg_args_BIN := tests/unit/dipibcg/test_args
 dipibcg_args_SRCS := \
 	tests/unit/dipibcg/test_args.c \
 	src/dipibcg/cli/args.c \
+	src/dipibcg/cli/check.c \
 	src/dipibcg/cli/help.c \
 	src/dipibcg/config.c \
 	src/lib/vendor/libyaml/api.c \
@@ -3727,6 +3869,8 @@ dipibcg_args_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/tva/bcg_doc.c \
@@ -3746,6 +3890,7 @@ dipibcg_config_BIN := tests/unit/dipibcg/test_config
 dipibcg_config_SRCS := \
 	tests/unit/dipibcg/test_config.c \
 	src/dipibcg/cli/args.c \
+	src/dipibcg/cli/check.c \
 	src/dipibcg/cli/help.c \
 	src/dipibcg/config.c \
 	src/lib/vendor/libyaml/api.c \
@@ -3758,6 +3903,8 @@ dipibcg_config_SRCS := \
 	src/lib/sys/signal.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/tva/bcg_doc.c \
@@ -3776,6 +3923,7 @@ dipibcg_announce_BIN := tests/unit/dipibcg/test_announce
 dipibcg_announce_SRCS := \
 	tests/unit/dipibcg/test_announce.c \
 	src/dipibcg/announce/time.c \
+	src/dipibcg/cli/check.c \
 	src/dipibcg/announce/programmes.c \
 	src/dipibcg/announce/doc.c \
 	src/dipibcg/announce/tvadoc.c \
@@ -3810,6 +3958,8 @@ dipibcg_announce_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
@@ -3866,6 +4016,7 @@ dipibcg_announce_segment_BIN := tests/unit/dipibcg/test_announce_segment
 dipibcg_announce_segment_SRCS := \
 	tests/unit/dipibcg/test_announce_segment.c \
 	src/dipibcg/announce/time.c \
+	src/dipibcg/cli/check.c \
 	src/dipibcg/announce/programmes.c \
 	src/dipibcg/announce/doc.c \
 	src/dipibcg/announce/tvadoc.c \
@@ -3900,6 +4051,8 @@ dipibcg_announce_segment_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
@@ -3956,6 +4109,7 @@ dipibcg_listen_BIN := tests/unit/dipibcg/test_listen
 dipibcg_listen_SRCS := \
 	tests/unit/dipibcg/test_listen.c \
 	src/dipibcg/listen.c \
+	src/dipibcg/cli/check.c \
 	src/lib/bim/dvbstream.c \
 	src/lib/bim/dvbtva_rules.c \
 	src/lib/tva/mapping.c \
@@ -3979,6 +4133,8 @@ dipibcg_listen_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/bim/bimreader.c \
@@ -4062,13 +4218,17 @@ lib_mux_amf_SRCS := \
 	src/lib/mux/amf.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_helper_describe_BIN := tests/unit/lib/helper/test_describe
 lib_helper_describe_SRCS := \
 	tests/unit/lib/helper/test_describe.c \
 	src/lib/helper/describe.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_net_tls_stub_lib_BIN := tests/unit/lib/net/test_tls_stub
 lib_net_tls_stub_lib_SRCS := \
@@ -4114,14 +4274,37 @@ lib_net_srt_stubs_SRCS := \
 lib_sys_ioutil_BIN := tests/unit/lib/sys/test_ioutil
 lib_sys_ioutil_SRCS := \
 	tests/unit/lib/sys/test_ioutil.c \
-	src/lib/sys/ioutil.c \
-	src/lib/helper/dateutil.c
+	src/lib/sys/ioutil.c
 lib_sys_ioutil_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup -Wl,--wrap=getrandom
+
+lib_helper_strutil_BIN := tests/unit/lib/helper/test_strutil
+lib_helper_strutil_SRCS := \
+	tests/unit/lib/helper/test_strutil.c \
+	src/lib/helper/strutil.c
+lib_helper_strutil_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
+
+lib_helper_idxstack_BIN := tests/unit/lib/helper/test_idxstack
+lib_helper_idxstack_SRCS := \
+	tests/unit/lib/helper/test_idxstack.c \
+	src/lib/helper/idxstack.c
+
+lib_helper_growutil_BIN := tests/unit/lib/helper/test_growutil
+lib_helper_growutil_SRCS := \
+	tests/unit/lib/helper/test_growutil.c \
+	src/lib/helper/growutil.c
+
+lib_helper_dateutil_BIN := tests/unit/lib/helper/test_dateutil
+lib_helper_dateutil_SRCS := \
+	tests/unit/lib/helper/test_dateutil.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/strutil.c
 
 lib_sys_signal_BIN := tests/unit/lib/sys/test_signal
 lib_sys_signal_SRCS := \
 	tests/unit/lib/sys/test_signal.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/strutil.c
 
 lib_sys_cpuaffinity_BIN := tests/unit/lib/sys/test_cpuaffinity
 lib_sys_cpuaffinity_SRCS := \
@@ -4144,14 +4327,18 @@ lib_helper_uriparse_SRCS := \
 	tests/unit/lib/helper/test_uriparse.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/argutil.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 lib_helper_uriparse_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_helper_jsonbuf_BIN := tests/unit/lib/helper/test_jsonbuf
 lib_helper_jsonbuf_SRCS := \
 	tests/unit/lib/helper/test_jsonbuf.c \
 	src/lib/helper/jsonbuf.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_helper_byte_ring_BIN := tests/unit/lib/helper/test_byte_ring
 lib_helper_byte_ring_SRCS := \
@@ -4174,6 +4361,7 @@ lib_helper_playlist_out_BIN := tests/unit/lib/helper/test_playlist_out
 lib_helper_playlist_out_SRCS := \
 	tests/unit/lib/helper/test_playlist_out.c \
 	src/lib/helper/playlist_out.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
 	src/lib/helper/xml_util/entity.c \
@@ -4185,14 +4373,18 @@ lib_helper_argutil_SRCS := \
 	tests/unit/lib/helper/test_argutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/log.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_helper_log_BIN := tests/unit/lib/helper/test_log
 lib_helper_log_SRCS := \
 	tests/unit/lib/helper/test_log.c \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_demux_rtcp_BIN := tests/unit/lib/demux/test_rtcp
 lib_demux_rtcp_SRCS := \
@@ -4220,7 +4412,9 @@ lib_demux_descriptors_SRCS := \
 	src/lib/demux/psi/dvbtext.c \
 	src/lib/demux/bitreader.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_demux_psi_section_asm_BIN := tests/unit/lib/demux/test_psi_section_asm
 lib_demux_psi_section_asm_SRCS := \
@@ -4286,6 +4480,8 @@ lib_demux_mpts_probe_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -4306,6 +4502,8 @@ lib_demux_escodec_aubuild_SRCS := \
 	src/lib/demux/escodec/aubuild.c \
 	src/lib/demux/bitreader.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 lib_demux_escodec_audio_BIN := tests/unit/lib/demux/escodec/test_audio
@@ -4321,7 +4519,9 @@ lib_demux_escodec_audio_SRCS := \
 	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/bitreader.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_demux_escodec_ac4_BIN := tests/unit/lib/demux/escodec/test_ac4
 lib_demux_escodec_ac4_SRCS := \
@@ -4336,7 +4536,9 @@ lib_demux_escodec_ac4_SRCS := \
 	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/bitreader.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_demux_escodec_video_BIN := tests/unit/lib/demux/escodec/test_video
 lib_demux_escodec_video_SRCS := \
@@ -4344,7 +4546,9 @@ lib_demux_escodec_video_SRCS := \
 	src/lib/demux/escodec/video.c \
 	src/lib/demux/bitreader.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_demux_rtp_BIN := tests/unit/lib/demux/test_rtp
 lib_demux_rtp_SRCS := \
@@ -4386,7 +4590,10 @@ lib_tsinspect_inspect_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/metrics/protocol.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 lib_demux_pes_BIN := tests/unit/lib/demux/test_pes
@@ -4395,6 +4602,8 @@ lib_demux_pes_SRCS := \
 	src/lib/demux/pes.c \
 	src/lib/demux/tspack.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 lib_mux_psi_build_BIN := tests/unit/lib/mux/test_psi_build
@@ -4424,7 +4633,9 @@ lib_mux_rtpheader_SRCS := \
 	tests/unit/lib/mux/test_rtpheader.c \
 	src/lib/mux/rtpheader.c \
 	src/lib/demux/rtp.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_mux_fec2022_BIN := tests/unit/lib/mux/test_fec2022
 lib_mux_fec2022_SRCS := \
@@ -4433,7 +4644,9 @@ lib_mux_fec2022_SRCS := \
 	src/lib/mux/rtpheader.c \
 	src/lib/demux/fec2022.c \
 	src/lib/demux/rtp.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_mux_rtx_BIN := tests/unit/lib/mux/test_rtx
 lib_mux_rtx_SRCS := \
@@ -4458,7 +4671,9 @@ lib_mux_ebml_SRCS := \
 	tests/unit/lib/mux/test_ebml.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_mux_teletext_BIN := tests/unit/lib/mux/test_teletext
 lib_mux_teletext_SRCS := \
@@ -4467,6 +4682,8 @@ lib_mux_teletext_SRCS := \
 	src/lib/demux/pes.c \
 	src/lib/demux/tspack.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 lib_mux_mkv_BIN := tests/unit/lib/mux/test_mkv
@@ -4488,6 +4705,8 @@ lib_mux_mkv_SRCS := \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
@@ -4522,6 +4741,8 @@ lib_mux_mkv_feed_SRCS := \
 	src/lib/mux/mkv/write.c \
 	src/lib/mux/mkv/feed.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
@@ -4561,6 +4782,8 @@ lib_mux_mp4_SRCS := \
 	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
@@ -4598,6 +4821,8 @@ lib_mux_mp4_feed_SRCS := \
 	src/lib/demux/escodec/audio/audio.c \
 	src/lib/demux/escodec/video.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/mux/teletext.c \
 	src/lib/mux/psi_build.c \
@@ -4619,7 +4844,9 @@ lib_mux_fmp4_SRCS := \
 	src/lib/mux/fmp4/fmp4.c \
 	src/lib/mux/fmp4/fmp4_moov.c \
 	src/lib/mux/fmp4/fmp4_frag.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_demux_fmp4_box_BIN := tests/unit/lib/demux/fmp4/test_box
 lib_demux_fmp4_box_SRCS := \
@@ -4630,7 +4857,9 @@ lib_demux_fmp4_box_SRCS := \
 	src/lib/mux/fmp4/fmp4.c \
 	src/lib/mux/fmp4/fmp4_moov.c \
 	src/lib/mux/fmp4/fmp4_frag.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_demux_fmp4_track_BIN := tests/unit/lib/demux/fmp4/test_track
 lib_demux_fmp4_track_SRCS := \
@@ -4639,7 +4868,9 @@ lib_demux_fmp4_track_SRCS := \
 	src/lib/demux/fmp4/track.c \
 	src/lib/mux/fmp4/box.c \
 	src/lib/mux/growbuf.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_demux_fmp4_sample_BIN := tests/unit/lib/demux/fmp4/test_sample
 lib_demux_fmp4_sample_SRCS := \
@@ -4651,7 +4882,9 @@ lib_demux_fmp4_sample_SRCS := \
 	src/lib/mux/fmp4/fmp4.c \
 	src/lib/mux/fmp4/fmp4_moov.c \
 	src/lib/mux/fmp4/fmp4_frag.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_mux_esbuild_BIN := tests/unit/lib/mux/esbuild/test_esbuild
 lib_mux_esbuild_SRCS := \
@@ -4693,6 +4926,8 @@ lib_mux_esbuild_remux_SRCS := \
 	src/lib/mux/fmp4/fmp4_frag.c \
 	src/lib/mux/growbuf.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_mux_flv_BIN := tests/unit/lib/mux/test_flv
@@ -4726,6 +4961,8 @@ lib_mux_flv_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_mux_flv_feed_BIN := tests/unit/lib/mux/test_flv_feed
@@ -4759,6 +4996,8 @@ lib_mux_flv_feed_SRCS := \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_bim_bitwriter_BIN := tests/unit/lib/bim/test_bitwriter
@@ -4766,6 +5005,8 @@ lib_bim_bitwriter_SRCS := \
 	tests/unit/lib/bim/test_bitwriter.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/bim/bimreader.c
 lib_bim_bitwriter_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -4780,6 +5021,8 @@ lib_bim_strrepo_SRCS := \
 	src/lib/bim/strrepo.c \
 	src/lib/bim/bitwriter.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/bim/bimreader.c
 lib_bim_strrepo_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -4810,6 +5053,8 @@ lib_bim_codec_SRCS := \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_bim_aod_kinds_BIN := tests/unit/lib/bim/test_aod_kinds
@@ -4839,6 +5084,8 @@ lib_bim_aod_kinds_SRCS := \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_bim_aod_kinds_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
@@ -4870,6 +5117,8 @@ lib_bim_dvbtypes_sweeps_SRCS := \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_bim_dvbtypes_sweeps_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
@@ -4901,6 +5150,8 @@ lib_bim_decode_simple_SRCS := \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_bim_decode_simple_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
@@ -4932,6 +5183,8 @@ lib_bim_lax_events_SRCS := \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_bim_lax_events_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
@@ -4963,6 +5216,8 @@ lib_bim_m7time_SRCS := \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_bim_m7time_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
@@ -4973,7 +5228,9 @@ lib_bim_bimio_SRCS := \
 	src/lib/bim/bimio.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_bimio_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -4986,6 +5243,8 @@ lib_bim_index_SRCS := \
 	src/lib/bim/bimreader.c \
 	src/lib/tva/tva_xml/time.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -5033,7 +5292,9 @@ lib_bim_xsd_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_xsd_load_BIN := tests/unit/lib/bim/test_xsd_load
 lib_bim_xsd_load_SRCS := \
@@ -5077,7 +5338,9 @@ lib_bim_xsd_load_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_xsd_load_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5123,7 +5386,9 @@ lib_bim_xsd_pattern_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_xsd_pattern_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5169,7 +5434,9 @@ lib_bim_xsd_content_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_xsd_content_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5215,7 +5482,9 @@ lib_bim_xsd_simple_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_xsd_simple_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5261,7 +5530,9 @@ lib_bim_xsd_parse_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_xsd_parse_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5307,55 +5578,11 @@ lib_bim_xsd_attrs_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_xsd_attrs_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
-
-lib_bim_xsd_schemagen_BIN := tests/unit/lib/bim/test_xsd_schemagen
-lib_bim_xsd_schemagen_SRCS := \
-	tests/unit/lib/bim/test_xsd_schemagen.c \
-	$(BIM_XSD_SRCS) \
-	src/lib/helper/log.c \
-	src/lib/bim/fuu/parse.c \
-	src/lib/bim/fuu/apply.c \
-	src/lib/bim/fuu/util.c \
-	src/lib/bim/fuu/write.c \
-	src/lib/bim/fuu/position.c \
-	src/lib/bim/bimio.c \
-	src/lib/bim/decoderinit/read.c \
-	src/lib/bim/decoderinit/write.c \
-	src/lib/bim/codec/decode/simple.c \
-	src/lib/bim/codec/decode/element.c \
-	src/lib/bim/codec/decode/any.c \
-	src/lib/bim/codec/decode/lax.c \
-	src/lib/bim/codec/laxsym.c \
-	src/lib/bim/codec/decode/aod.c \
-	src/lib/bim/aod.c \
-	src/lib/bim/codec/encode/simple.c \
-	src/lib/bim/codec/encode/element.c \
-	src/lib/bim/codec/encode/any.c \
-	src/lib/bim/codec/encode/lax.c \
-	src/lib/bim/codec/encode/aod.c \
-	src/lib/bim/codec/encode/zlib.c \
-	src/lib/bim/codec/coding.c \
-	src/lib/bim/codec/m7time.c \
-	src/lib/bim/codec/dvbtypes.c \
-	src/lib/bim/codec/tvatypes.c \
-	src/lib/helper/base64.c \
-	src/lib/bim/bimreader.c \
-	src/lib/bim/bitwriter.c \
-	src/lib/bim/strrepo.c \
-	src/lib/helper/dateutil.c \
-	src/lib/bim/codec/node.c \
-	src/lib/helper/xml_util/escape.c \
-	src/lib/helper/xml_util/encoding.c \
-	src/lib/helper/xml_util/entity.c \
-	src/lib/helper/xml_util/scan.c \
-	src/lib/helper/xml_util/query.c \
-	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
-
-lib_bim_xsd_schemagen_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_bim_fuu_BIN := tests/unit/lib/bim/test_fuu
 lib_bim_fuu_SRCS := \
@@ -5399,7 +5626,9 @@ lib_bim_fuu_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_fuu_paths_BIN := tests/unit/lib/bim/test_fuu_paths
 lib_bim_fuu_paths_SRCS := \
@@ -5443,7 +5672,9 @@ lib_bim_fuu_paths_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_fuu_paths_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5489,7 +5720,9 @@ lib_bim_encode_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_encode_element_BIN := tests/unit/lib/bim/test_encode_element
 lib_bim_encode_element_SRCS := \
@@ -5533,7 +5766,9 @@ lib_bim_encode_element_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_encode_element_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5590,7 +5825,9 @@ lib_bim_tvabim_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_tvabim_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5638,6 +5875,8 @@ lib_bim_bcgau_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/tva/bcg_doc.c \
@@ -5695,7 +5934,9 @@ lib_bim_dvbtva_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 lib_bim_dvbtva_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_bim_dvbtva_rules_BIN := tests/unit/lib/bim/test_dvbtva_rules
@@ -5742,7 +5983,9 @@ lib_bim_dvbtva_rules_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_dvbtva_rules_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5754,7 +5997,9 @@ lib_bim_decoderinit_SRCS := \
 	src/lib/bim/bimio.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_decoderinit_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5765,7 +6010,9 @@ lib_bim_bimau_SRCS := \
 	src/lib/bim/bimio.c \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_bimau_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5781,7 +6028,9 @@ lib_bim_nodexml_SRCS := \
 	src/lib/helper/xml_util/tree.c \
 	src/lib/helper/log.c \
 	src/lib/bim/codec/node.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_bim_nodexml_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5828,6 +6077,8 @@ lib_bim_sdns_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 lib_bim_sdns_EXTRA_LDFLAGS := $(SDNS_ZLIB_LDFLAGS)
 
@@ -5840,6 +6091,8 @@ lib_bim_dvbtypes_SRCS := \
 	src/lib/bim/bimreader.c \
 	src/lib/bim/strrepo.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_xml_util_BIN := tests/unit/lib/test_xml_util
@@ -5853,7 +6106,9 @@ lib_xml_util_SRCS := \
 	src/lib/helper/xml_util/tree.c \
 	src/lib/helper/log.c \
 	src/lib/bim/codec/node.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_xml_util_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5867,6 +6122,8 @@ lib_yamlcfg_SRCS := \
 	src/lib/vendor/libyaml/parser.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 lib_yamlcfg_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5879,7 +6136,9 @@ lib_sds_xml_SRCS := \
 	src/lib/helper/xml_util/entity.c \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 lib_sds_xml_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
 lib_tva_timefmt_BIN := tests/unit/lib/tva/test_timefmt
@@ -5887,6 +6146,8 @@ lib_tva_timefmt_SRCS := \
 	tests/unit/lib/tva/test_timefmt.c \
 	src/lib/tva/timefmt.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_tva_bcg_doc_BIN := tests/unit/lib/tva/test_bcg_doc
@@ -5901,6 +6162,8 @@ lib_tva_bcg_doc_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 lib_tva_bcg_doc_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -5909,6 +6172,8 @@ lib_tva_mapping_SRCS := \
 	tests/unit/lib/tva/test_mapping.c \
 	src/lib/tva/mapping.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c
 lib_tva_mapping_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
@@ -5927,6 +6192,8 @@ lib_tva_xmltv_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 lib_tva_xmltv_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
@@ -5946,6 +6213,8 @@ lib_tva_tva_xml_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/argutil.c \
@@ -5965,6 +6234,8 @@ dipibim_args_SRCS := \
 	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipibim_config_BIN := tests/unit/dipibim/test_config
@@ -5980,6 +6251,8 @@ dipibim_config_SRCS := \
 	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipibim_schema_BIN := tests/unit/dipibim/test_schema
@@ -6035,6 +6308,8 @@ dipibim_schema_SRCS := \
 	src/lib/helper/xml_util/query.c \
 	src/lib/helper/xml_util/tree.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/bim/nodexml.c \
 	src/lib/helper/log.c
 dipibim_schema_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
@@ -6050,7 +6325,9 @@ dipiscan_format_SRCS := \
 	src/lib/helper/xml_util/entity.c \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 UNIT_TESTS += dipiscan_config
 dipiscan_config_BIN := tests/unit/dipiscan/test_config
@@ -6068,7 +6345,9 @@ dipiscan_config_SRCS := \
 	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/log.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 UNIT_TESTS += dipiscan_args
 dipiscan_args_BIN := tests/unit/dipiscan/test_args
@@ -6086,7 +6365,9 @@ dipiscan_args_SRCS := \
 	src/lib/config/yamlcfg.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/log.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipiscan_scan_BIN := tests/unit/dipiscan/test_scan
 dipiscan_scan_SRCS := \
@@ -6131,6 +6412,8 @@ dipiscan_scan_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
@@ -6142,6 +6425,8 @@ dipixmltv_args_SRCS := \
 	src/dipixmltv/cli/help.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipixmltv_revmap_BIN := tests/unit/dipixmltv/test_revmap
@@ -6149,6 +6434,8 @@ dipixmltv_revmap_SRCS := \
 	tests/unit/dipixmltv/test_revmap.c \
 	src/dipixmltv/revmap.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipixmltv_suggest_BIN := tests/unit/dipixmltv/test_suggest
@@ -6167,6 +6454,8 @@ dipixmltv_suggest_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -6186,13 +6475,17 @@ dipiradiohead_aac_latm_SRCS := \
 	src/dipiradiohead/framer/aac_latm.c \
 	src/lib/demux/bitreader.c \
 	src/lib/bim/bitwriter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipiradiohead_psi_BIN := tests/unit/dipiradiohead/test_psi
 dipiradiohead_psi_SRCS := \
 	tests/unit/dipiradiohead/test_psi.c \
 	src/dipiradiohead/mux/psi.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/psi/psi.c \
@@ -6209,7 +6502,9 @@ dipiradiohead_id3_BIN := tests/unit/dipiradiohead/test_id3
 dipiradiohead_id3_SRCS := \
 	tests/unit/dipiradiohead/test_id3.c \
 	src/dipiradiohead/input/id3.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 ifeq ($(HAVE_ZLIB),yes)
 dipiradiohead_id3_EXTRA_CFLAGS := $(shell pkg-config --cflags zlib) -DDIPIRADIOHEAD_ZLIB
 dipiradiohead_id3_EXTRA_LDFLAGS := $(shell pkg-config --libs zlib)
@@ -6225,7 +6520,9 @@ dipiradiohead_icy_BIN := tests/unit/dipiradiohead/test_icy
 dipiradiohead_icy_SRCS := \
 	tests/unit/dipiradiohead/test_icy.c \
 	src/dipiradiohead/input/icy.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipiradiohead_pes_BIN := tests/unit/dipiradiohead/test_pes
 dipiradiohead_pes_SRCS := \
@@ -6234,6 +6531,8 @@ dipiradiohead_pes_SRCS := \
 	src/lib/demux/pes.c \
 	src/lib/demux/tspack.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipiradiohead_tspacketizer_BIN := tests/unit/dipiradiohead/test_tspacketizer
@@ -6241,6 +6540,8 @@ dipiradiohead_tspacketizer_SRCS := \
 	tests/unit/dipiradiohead/test_tspacketizer.c \
 	src/dipiradiohead/mux/tspacketizer.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/dipiradiohead/mux/psi.c \
 	src/dipiradiohead/mux/pes.c \
@@ -6336,6 +6637,8 @@ dipiradiohead_radiohead_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
@@ -6359,6 +6662,8 @@ dipiradiohead_cas_SRCS := \
 	src/dipiradiohead/cas/cas.c \
 	src/lib/mux/cadescbuild.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
@@ -6423,8 +6728,11 @@ dipiradiohead_args_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/cas/cas_args.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -6464,8 +6772,11 @@ dipiradiohead_config_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/cas/cas_args.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -6505,8 +6816,11 @@ dipiradiohead_args_cas_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/cas/cas_args.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -6546,8 +6860,11 @@ dipiradiohead_args_general_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/cas/cas_args.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -6587,8 +6904,11 @@ dipiradiohead_args_net_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/cas/cas_args.c \
 	src/lib/scrambler/scrambler.c \
 	src/lib/scrambler/cissa_stub.c \
@@ -6658,6 +6978,8 @@ dipiradiohead_source_async_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -6714,6 +7036,8 @@ dipiradiohead_source_frame_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -6726,14 +7050,18 @@ dipiradiohead_playlist_SRCS := \
 	tests/unit/dipiradiohead/input/test_playlist.c \
 	src/dipiradiohead/input/playlist.c \
 	src/lib/hls/m3u_lines.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_hls_playlist_BIN := tests/unit/lib/hls/test_playlist
 lib_hls_playlist_SRCS := \
 	tests/unit/lib/hls/test_playlist.c \
 	src/lib/hls/playlist.c \
 	src/lib/hls/m3u_lines.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 lib_hls_live_BIN := tests/unit/lib/hls/test_live
 lib_hls_live_SRCS := \
@@ -6765,8 +7093,11 @@ lib_hls_live_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 lib_hls_tspassthrough_BIN := tests/unit/lib/hls/test_tspassthrough
@@ -6805,6 +7136,8 @@ lib_hls_tspassthrough_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
@@ -6823,6 +7156,8 @@ lib_dash_mpd_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 lib_dash_live_BIN := tests/unit/lib/dash/test_live
@@ -6863,6 +7198,8 @@ lib_dash_live_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
@@ -6918,6 +7255,8 @@ dipiradiohead_source_hls_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -6977,6 +7316,8 @@ dipiradiohead_inputset_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -7066,6 +7407,8 @@ dipitvhead_source_SRCS := \
 	src/lib/net/tls_stub.c \
 	src/lib/demux/rtp.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
@@ -7114,10 +7457,13 @@ dipitvhead_args_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/secure_zero.c
 
 dipitvhead_args_cas_BIN := tests/unit/dipitvhead/test_args_cas
@@ -7164,10 +7510,13 @@ dipitvhead_args_cas_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/secure_zero.c
 
 dipitvhead_args_input_BIN := tests/unit/dipitvhead/test_args_input
@@ -7214,10 +7563,13 @@ dipitvhead_args_input_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/secure_zero.c
 
 dipitvhead_args_net_BIN := tests/unit/dipitvhead/test_args_net
@@ -7264,10 +7616,13 @@ dipitvhead_args_net_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/secure_zero.c
 
 dipitvhead_args_general_BIN := tests/unit/dipitvhead/test_args_general
@@ -7314,10 +7669,13 @@ dipitvhead_args_general_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/net/tls_stub.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/secure_zero.c
 
 dipitvhead_discover_BIN := tests/unit/dipitvhead/test_discover
@@ -7388,6 +7746,8 @@ dipitvhead_discover_SRCS := \
 	src/lib/metrics/export.c \
 	src/lib/metrics/protocol.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/sys/signal.c \
 	src/lib/helper/log.c
@@ -7406,6 +7766,8 @@ dipitvhead_pmtbuild_SRCS := \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -7421,7 +7783,9 @@ dipitvhead_bitrate_SRCS := \
 	tests/unit/dipitvhead/test_bitrate.c \
 	src/dipitvhead/mux/bitrate.c \
 	src/lib/helper/log.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/strutil.c
 
 dipitvhead_pcrclock_BIN := tests/unit/dipitvhead/test_pcrclock
 dipitvhead_pcrclock_SRCS := \
@@ -7463,6 +7827,8 @@ dipitvhead_remux_SRCS := \
 	src/dipitvhead/mux/releaseq.c \
 	src/dipitvhead/mux/scte35stamp.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/dipitvhead/mux/pmtbuild.c \
 	src/dipitvhead/mux/aitbuild.c \
@@ -7616,6 +7982,8 @@ dipitvhead_output_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/metrics/export.c \
@@ -7739,6 +8107,8 @@ dipitvhead_mpts_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/metrics/export.c \
@@ -7857,6 +8227,8 @@ dipitvhead_single_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/argutil.c \
 	src/lib/metrics/export.c \
@@ -7868,6 +8240,8 @@ dipitvhead_ecmg_client_BIN := tests/unit/dipitvhead/test_ecmg_client
 dipitvhead_ecmg_client_SRCS := \
 	tests/unit/dipitvhead/test_ecmg_client.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
@@ -7917,6 +8291,8 @@ dipitvhead_emmg_server_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 
 dipitvhead_simulcrypt_msg_BIN := tests/unit/dipitvhead/test_simulcrypt_msg
@@ -7933,7 +8309,9 @@ dipitvhead_simulcrypt_msg_SRCS := \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/demux/crc32.c \
 	src/lib/helper/log.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/strutil.c
 
 dipitvhead_cas_BIN := tests/unit/dipitvhead/test_cas
 dipitvhead_cas_SRCS := \
@@ -7942,6 +8320,8 @@ dipitvhead_cas_SRCS := \
 	src/dipitvhead/mux/pcrclock.c \
 	src/dipitvhead/mux/timemap.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
@@ -7997,14 +8377,19 @@ lib_net_plain_endpoint_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 lib_net_netconnect_BIN := tests/unit/lib/net/test_netconnect
 lib_net_netconnect_SRCS := \
 	tests/unit/lib/net/test_netconnect.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/helper/argutil.c
 
@@ -8019,7 +8404,10 @@ lib_net_announce_driver_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/ioutil.c \
-	src/lib/sys/signal.c
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c
 
 lib_net_tssink_BIN := tests/unit/lib/net/test_tssink
 lib_net_tssink_SRCS := \
@@ -8031,7 +8419,10 @@ lib_net_tssink_SRCS := \
 	src/lib/mux/rtpheader.c \
 	src/lib/mux/fec2022.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 lib_net_rtmp_BIN := tests/unit/lib/net/test_rtmp
@@ -8047,6 +8438,8 @@ lib_net_rtmp_SRCS := \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/log.c
@@ -8068,8 +8461,11 @@ lib_net_rtmpout_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 lib_net_httpclient_async_BIN := tests/unit/lib/net/test_httpclient_async
@@ -8081,10 +8477,13 @@ lib_net_httpclient_async_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 lib_net_httpclient_headers_BIN := tests/unit/lib/net/test_httpclient_headers
@@ -8096,10 +8495,13 @@ lib_net_httpclient_headers_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 lib_net_httpclient_redirect_BIN := tests/unit/lib/net/test_httpclient_redirect
@@ -8111,10 +8513,13 @@ lib_net_httpclient_redirect_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 lib_net_httpclient_fetch_BIN := tests/unit/lib/net/test_httpclient_fetch
@@ -8127,10 +8532,13 @@ lib_net_httpclient_fetch_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 lib_net_httpclient_BIN := tests/unit/lib/net/test_httpclient
@@ -8143,10 +8551,13 @@ lib_net_httpclient_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/net/tls_stub.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 lib_net_tssource_async_BIN := tests/unit/lib/net/test_tssource_async
@@ -8170,6 +8581,8 @@ lib_net_tssource_async_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -8239,6 +8652,8 @@ lib_net_tssource_http_dispatch_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -8308,6 +8723,8 @@ lib_net_tssource_dash_fmp4_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -8382,6 +8799,8 @@ lib_net_open_async_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -8456,6 +8875,8 @@ lib_net_tssource_file_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -8525,6 +8946,8 @@ lib_net_source_SRCS := \
 	src/lib/net/httpclient/async.c \
 	src/lib/net/httpclient/fetch.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
@@ -8607,10 +9030,13 @@ lib_net_dvbstp_SRCS := \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 lib_net_dvbstp_EXTRA_LDFLAGS := -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=strdup
 
@@ -8619,6 +9045,8 @@ lib_cas_cas_group_SRCS := \
 	tests/unit/lib/cas/test_cas_group.c \
 	src/lib/cas/cas_group.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
@@ -8671,7 +9099,9 @@ dipirec_pace_BIN := tests/unit/dipirec/test_pace
 dipirec_pace_SRCS := \
 	tests/unit/dipirec/test_pace.c \
 	src/lib/net/ts/pace.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/strutil.c
 
 dipirec_record_BIN := tests/unit/dipirec/test_record
 dipirec_record_SRCS := \
@@ -8770,6 +9200,8 @@ dipirec_record_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/rtx.c \
@@ -8928,6 +9360,8 @@ dipirec_record_net_SRCS := \
 	src/lib/vendor/picohttpparser/picohttpparser.c \
 	src/lib/net/httpclient/async.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/demux/rtp.c \
 	src/lib/demux/rtx.c \
@@ -8993,9 +9427,12 @@ dipirec_ret_client_SRCS := \
 	src/lib/mux/rtcp_build.c \
 	src/lib/net/multicast.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 lib_fccret_fcc_client_BIN := tests/unit/lib/fccret/test_fcc_client
@@ -9011,7 +9448,10 @@ lib_fccret_fcc_client_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 dipirec_args_BIN := tests/unit/dipirec/test_args
@@ -9039,6 +9479,8 @@ dipirec_args_SRCS := \
 	src/lib/helper/uriparse.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 UNIT_TESTS += dipirec_config
@@ -9067,6 +9509,8 @@ dipirec_config_SRCS := \
 	src/lib/helper/uriparse.c \
 	src/lib/net/httpclient/url.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipifccret_args_BIN := tests/unit/dipifccret/test_args
@@ -9087,6 +9531,8 @@ dipifccret_args_SRCS := \
 	src/dipifccret/capture/ranges.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/cpuaffinity.c \
 	src/lib/helper/log.c
 
@@ -9095,9 +9541,12 @@ dipifccret_listen_SRCS := \
 	tests/unit/dipifccret/test_listen.c \
 	src/dipifccret/listen.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 dipifccret_listen_EXTRA_LDFLAGS := -pthread
 
@@ -9124,6 +9573,8 @@ dipifccret_channel_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -9133,9 +9584,12 @@ dipifccret_ret_mcsend_SRCS := \
 	src/dipifccret/ret/mcsend.c \
 	src/lib/net/multicast.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 dipifccret_burst_table_BIN := tests/unit/dipifccret/test_burst_table
@@ -9167,6 +9621,8 @@ dipifccret_burst_table_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -9212,6 +9668,8 @@ dipifccret_pacer_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -9242,6 +9700,8 @@ dipifccret_burst_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -9277,6 +9737,8 @@ dipifccret_ret_SRCS := \
 	src/lib/demux/tspack.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -9295,7 +9757,10 @@ dipifccret_capture_SRCS := \
 	src/dipifccret/capture/frame.c \
 	src/lib/demux/rtp.c \
 	src/lib/sys/ioutil.c \
-	src/lib/sys/signal.c
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
+	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c
 
 UNIT_TESTS += dipifccret_serve
 dipifccret_serve_BIN := tests/unit/dipifccret/test_serve
@@ -9342,6 +9807,8 @@ dipixy_args_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/base64.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/sys/cpuaffinity.c \
 	src/lib/helper/log.c \
@@ -9408,6 +9875,8 @@ dipixy_config_SRCS := \
 	src/lib/helper/argutil.c \
 	src/lib/helper/base64.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/sys/cpuaffinity.c \
 	src/lib/helper/log.c \
@@ -9455,6 +9924,8 @@ dipixy_route_SRCS := \
 	src/dipixy/core/route.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/uriparse.c
 
 dipixy_playlist_BIN := tests/unit/dipixy/test_playlist
@@ -9496,7 +9967,6 @@ dipixy_playlist_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
-	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/dipixy/ws/ws_broadcast.c \
 	src/dipixy/ws/ws_frame.c \
@@ -9505,6 +9975,8 @@ dipixy_playlist_SRCS := \
 	src/lib/helper/playlist_out.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
@@ -9622,10 +10094,11 @@ dipixy_capture_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
-	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/lib/helper/uriparse.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
@@ -9718,7 +10191,6 @@ dipixy_channels_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
-	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/dipixy/core/input_walk.c \
 	src/dipixy/core/route.c \
@@ -9728,6 +10200,8 @@ dipixy_channels_SRCS := \
 	src/lib/helper/playlist_in.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
@@ -9826,17 +10300,25 @@ dipixy_pidfilter_BIN := tests/unit/dipixy/test_pidfilter
 dipixy_pidfilter_SRCS := \
 	tests/unit/dipixy/test_pidfilter.c \
 	src/dipixy/ts/pidfilter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipixy_ts_push_queue_BIN := tests/unit/dipixy/test_ts_push_queue
 dipixy_ts_push_queue_SRCS := \
 	tests/unit/dipixy/test_ts_push_queue.c \
 	src/dipixy/ts/ts_push.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/idxstack.c \
+	src/dipixy/reactor/subtab.c \
+	src/dipixy/reactor/wake.c \
 	src/dipixy/ts/ts_push_feed.c \
 	src/dipixy/ts/ts_push_flush.c \
 	src/dipixy/ts/pidfilter.c \
 	src/lib/helper/byte_ring.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c \
 	src/lib/demux/psi/psi.c \
 	src/lib/demux/psi/parse.c \
@@ -9856,14 +10338,18 @@ dipixy_pmtselect_SRCS := \
 	tests/unit/dipixy/test_pmtselect.c \
 	src/dipixy/ts/pmtselect.c \
 	src/dipixy/ts/pidfilter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipixy_lcevcselect_BIN := tests/unit/dipixy/test_lcevcselect
 dipixy_lcevcselect_SRCS := \
 	tests/unit/dipixy/test_lcevcselect.c \
 	src/dipixy/ts/lcevcselect.c \
 	src/dipixy/ts/pidfilter.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipixy_rawaudio_BIN := tests/unit/dipixy/test_rawaudio
 dipixy_rawaudio_SRCS := \
@@ -9880,25 +10366,32 @@ dipixy_rawaudio_SRCS := \
 	src/lib/demux/bitreader.c \
 	src/lib/demux/psi/section_asm.c \
 	src/lib/helper/log.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipixy_ws_frame_BIN := tests/unit/dipixy/test_ws_frame
 dipixy_ws_frame_SRCS := \
 	tests/unit/dipixy/test_ws_frame.c \
-	src/dipixy/ws/ws_frame.c
+	src/dipixy/ws/ws_frame.c \
+	src/lib/helper/growutil.c
 
 dipixy_status_BIN := tests/unit/dipixy/test_status
 dipixy_status_SRCS := \
 	tests/unit/dipixy/test_status.c \
 	src/dipixy/core/status.c \
 	src/lib/helper/jsonbuf.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipixy_time_ep_BIN := tests/unit/dipixy/test_time_ep
 dipixy_time_ep_SRCS := \
 	tests/unit/dipixy/test_time_ep.c \
 	src/dipixy/core/time_ep.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipixy_htdocs_BIN := tests/unit/dipixy/test_htdocs
 dipixy_htdocs_SRCS := \
@@ -9906,33 +10399,43 @@ dipixy_htdocs_SRCS := \
 	src/dipixy/core/htdocs.c \
 	src/dipixy/reactor/qsbr.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipixy_tlscert_BIN := tests/unit/dipixy/test_tlscert
 dipixy_tlscert_SRCS := \
 	tests/unit/dipixy/test_tlscert.c \
 	src/dipixy/core/tlscert.c \
-	src/lib/sys/ioutil.c
+	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c
 
 dipixy_ws_broadcast_BIN := tests/unit/dipixy/test_ws_broadcast
 dipixy_ws_broadcast_SRCS := \
 	tests/unit/dipixy/test_ws_broadcast.c \
 	src/dipixy/ws/ws_broadcast.c \
+	src/lib/helper/growutil.c \
 	src/dipixy/ws/ws_frame.c
 
 dipixy_ws_clients_BIN := tests/unit/dipixy/test_ws_clients
 dipixy_ws_clients_SRCS := \
 	tests/unit/dipixy/test_ws_clients.c \
 	src/dipixy/ws/ws_clients.c \
+	src/lib/helper/idxstack.c \
 	src/dipixy/ws/ws_clients_json.c \
 	src/dipixy/ws/ws_clients_tick.c \
 	src/dipixy/ws/ws_broadcast.c \
 	src/dipixy/ws/ws_frame.c \
 	src/dipixy/ts/pidfilter.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/jsonbuf.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c
 
 dipixy_reactor_BIN := tests/unit/dipixy/test_reactor
 dipixy_reactor_SRCS := \
@@ -9954,6 +10457,8 @@ dipixy_dispatch_SRCS := \
 	src/dipixy/core/time_ep.c \
 	src/lib/helper/secure_zero.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/argutil.c
 dipixy_dispatch_EXTRA_CFLAGS := -ffunction-sections -fdata-sections
@@ -9962,7 +10467,13 @@ dipixy_dispatch_EXTRA_LDFLAGS := -Wl,--gc-sections
 dipixy_hls_BIN := tests/unit/dipixy/test_hls
 dipixy_hls_SRCS := \
 	tests/unit/dipixy/test_hls.c \
+	src/dipixy/core/route.c \
+	src/lib/helper/dateutil.c \
+	src/dipixy/reactor/wake.c \
+	src/lib/helper/argutil.c \
+	src/lib/helper/uriparse.c \
 	src/dipixy/segstore/pool.c \
+	src/lib/helper/idxstack.c \
 	src/dipixy/segstore/store.c \
 	src/dipixy/segstore/retire.c \
 	src/dipixy/segstore/snapshot.c \
@@ -9980,6 +10491,8 @@ dipixy_hls_SRCS := \
 	src/dipixy/ts/pidfilter.c \
 	src/dipixy/ts/lcevcselect.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/demux/escodec/audio/asc.c \
 	src/lib/demux/escodec/audio/aac.c \
 	src/lib/demux/escodec/video.c \
@@ -9992,6 +10505,9 @@ dipixy_segstore_concurrency_BIN := tests/unit/dipixy/test_segstore_concurrency
 dipixy_segstore_concurrency_SRCS := \
 	tests/unit/dipixy/test_segstore_concurrency.c \
 	src/dipixy/segstore/pool.c \
+	src/lib/helper/dateutil.c \
+	src/dipixy/reactor/wake.c \
+	src/lib/helper/idxstack.c \
 	src/dipixy/segstore/store.c \
 	src/dipixy/segstore/retire.c \
 	src/dipixy/segstore/snapshot.c \
@@ -10000,12 +10516,17 @@ dipixy_segstore_concurrency_SRCS := \
 	src/dipixy/ts/pidfilter.c \
 	src/dipixy/ts/lcevcselect.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipixy_segstore_reclaim_BIN := tests/unit/dipixy/test_segstore_reclaim
 dipixy_segstore_reclaim_SRCS := \
 	tests/unit/dipixy/test_segstore_reclaim.c \
 	src/dipixy/segstore/pool.c \
+	src/lib/helper/dateutil.c \
+	src/dipixy/reactor/wake.c \
+	src/lib/helper/idxstack.c \
 	src/dipixy/segstore/store.c \
 	src/dipixy/segstore/retire.c \
 	src/dipixy/segstore/snapshot.c \
@@ -10014,15 +10535,23 @@ dipixy_segstore_reclaim_SRCS := \
 	src/dipixy/ts/pidfilter.c \
 	src/dipixy/ts/lcevcselect.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipixy_mp4push_BIN := tests/unit/dipixy/test_mp4push
 dipixy_mp4push_SRCS := \
 	tests/unit/dipixy/test_mp4push.c \
 	src/dipixy/segment/mp4push.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/idxstack.c \
+	src/dipixy/reactor/subtab.c \
+	src/dipixy/reactor/wake.c \
 	src/dipixy/altsvc.c \
 	src/lib/helper/byte_ring.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipixy_qsbr_BIN := tests/unit/dipixy/test_qsbr
@@ -10119,6 +10648,7 @@ dipixy_h3_quic_tls_BIN := tests/unit/dipixy/test_h3_quic_tls
 dipixy_h3_quic_tls_SRCS := \
 	tests/unit/dipixy/test_h3_quic_tls.c \
 	src/dipixy/http3/quic/tls.c \
+	src/lib/helper/strutil.c \
 	src/dipixy/http3/http3_udp.c \
 	src/dipixy/http3/http3_stateless.c \
 	src/dipixy/reactor/reactor_tls_stub.c \
@@ -10159,12 +10689,15 @@ dipixy_segment_video_SRCS := \
 	src/lib/demux/escodec/audio/truehd.c \
 	src/lib/demux/bitreader.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 dipixy_conn_BIN := tests/unit/dipixy/test_conn
 dipixy_conn_SRCS := \
 	tests/unit/dipixy/test_conn.c \
 	src/dipixy/reactor/conn/pool.c \
+	src/lib/helper/growutil.c \
 	src/dipixy/reactor/conn/table.c \
 	src/dipixy/reactor/conn/queue.c \
 	src/dipixy/reactor/conn/flush.c \
@@ -10182,6 +10715,7 @@ dipixy_conn_concurrency_BIN := tests/unit/dipixy/test_conn_concurrency
 dipixy_conn_concurrency_SRCS := \
 	tests/unit/dipixy/test_conn_concurrency.c \
 	src/dipixy/reactor/conn/pool.c \
+	src/lib/helper/growutil.c \
 	src/dipixy/reactor/conn/table.c \
 	src/dipixy/reactor/conn/queue.c \
 	src/dipixy/reactor/conn/flush.c \
@@ -10224,7 +10758,6 @@ dipixy_ws_sources_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
-	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/dipixy/core/input_walk.c \
 	src/dipixy/core/route.c \
@@ -10233,6 +10766,8 @@ dipixy_ws_sources_SRCS := \
 	src/lib/helper/playlist_in.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
@@ -10361,7 +10896,6 @@ dipixy_gena_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
-	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/dipixy/core/input_walk.c \
 	src/dipixy/core/route.c \
@@ -10371,6 +10905,8 @@ dipixy_gena_SRCS := \
 	src/lib/helper/playlist_in.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
@@ -10473,7 +11009,10 @@ dipixy_ssdp_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 dipixy_dlna_BIN := tests/unit/dipixy/test_dlna
@@ -10510,7 +11049,6 @@ dipixy_dlna_SRCS := \
 	src/lib/metrics/protocol.c \
 	src/dipixy/ts/capture/pump.c \
 	src/dipixy/reactor/qsbr.c \
-	src/dipixy/ts/capture/service.c \
 	src/dipixy/ts/capture/source.c \
 	src/dipixy/core/input_walk.c \
 	src/dipixy/core/route.c \
@@ -10520,6 +11058,8 @@ dipixy_dlna_SRCS := \
 	src/lib/helper/playlist_in.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
@@ -10619,6 +11159,8 @@ lib_playlist_in_SRCS := \
 	tests/unit/lib/test_playlist_in.c \
 	src/lib/helper/playlist_in.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
@@ -10752,6 +11294,8 @@ FUZZ_BCG_NEW := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	$(BIM_XSD_SRCS) \
 	src/lib/helper/log.c \
 
@@ -10785,6 +11329,8 @@ FUZZ_BCG_ENGINE := $(FUZZ_BCG_NEW) \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -10808,6 +11354,7 @@ fuzz_sds_xml_BIN := tests/fuzz/fuzz_sds_xml
 fuzz_sds_xml_SRCS := \
 	tests/fuzz/fuzz_sds_xml.c \
 	src/lib/helper/sds_xml.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/xml_util/escape.c \
 	src/lib/helper/xml_util/encoding.c \
 	src/lib/helper/xml_util/entity.c \
@@ -10841,13 +11388,17 @@ fuzz_simulcrypt_msg_SRCS := \
 	src/lib/cas/simulcrypt_msg.c \
 	src/lib/mux/psi_build.c \
 	src/lib/demux/crc32.c \
-	src/lib/sys/signal.c
+	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
+	src/lib/helper/strutil.c
 
 # ecmg_client.c/emmg_server.c pull in real pthread usage even though fuzzed functions are pure. link pthread on both.
 fuzz_ecmg_channel_status_BIN := tests/fuzz/fuzz_ecmg_channel_status
 fuzz_ecmg_channel_status_SRCS := \
 	tests/fuzz/fuzz_ecmg_channel_status.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/cas/ecmg_client/ecmg_client.c \
 	src/lib/cas/ecmg_client/protocol.c \
@@ -10882,6 +11433,8 @@ fuzz_emmg_datagrams_SRCS := \
 	src/lib/helper/log.c \
 	src/lib/sys/signal.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c
 fuzz_emmg_datagrams_EXTRA_LDFLAGS := -pthread
 
@@ -10891,16 +11444,20 @@ fuzz_dvbstp_SRCS := \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/demux/crc32.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
 fuzz_ws_frame_BIN := tests/fuzz/fuzz_ws_frame
 fuzz_ws_frame_SRCS := \
 	tests/fuzz/fuzz_ws_frame.c \
-	src/dipixy/ws/ws_frame.c
+	src/dipixy/ws/ws_frame.c \
+	src/lib/helper/growutil.c
 
 fuzz_route_BIN := tests/fuzz/fuzz_route
 fuzz_route_SRCS := \
@@ -10908,6 +11465,8 @@ fuzz_route_SRCS := \
 	src/dipixy/core/route.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/uriparse.c
 
 fuzz_ssdp_BIN := tests/fuzz/fuzz_ssdp
@@ -10918,7 +11477,10 @@ fuzz_ssdp_SRCS := \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/sys/signal.c \
+	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 fuzz_ssdp_EXTRA_LDFLAGS := -pthread
 
@@ -10932,6 +11494,8 @@ fuzz_yamlcfg_SRCS := \
 	src/lib/vendor/libyaml/parser.c \
 	src/lib/helper/argutil.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 fuzz_pesstamp_BIN := tests/fuzz/fuzz_pesstamp
@@ -10960,6 +11524,8 @@ fuzz_tva_xml_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/argutil.c \
@@ -10980,6 +11546,8 @@ fuzz_xmltv_SRCS := \
 	src/lib/helper/xml_util/scan.c \
 	src/lib/helper/xml_util/query.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/helper/log.c
 
@@ -10998,6 +11566,8 @@ fuzz_metrics_store_SRCS := \
 	src/lib/metrics/store.c \
 	src/lib/metrics/protocol.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/log.c
 
 fuzz_rtmp_BIN := tests/fuzz/fuzz_rtmp
@@ -11013,6 +11583,8 @@ fuzz_rtmp_SRCS := \
 	src/lib/mux/ebml.c \
 	src/lib/mux/growbuf.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/uriparse.c \
 	src/lib/helper/argutil.c \
 	src/lib/helper/log.c
@@ -11036,6 +11608,8 @@ fuzz_gen_seeds_SRCS := \
 	src/lib/net/dvbstp.c \
 	src/lib/net/multicast.c \
 	src/lib/sys/ioutil.c \
+	src/lib/helper/strutil.c \
+	src/lib/helper/growutil.c \
 	src/lib/helper/dateutil.c \
 	src/lib/net/netconnect.c \
 	src/lib/helper/argutil.c \

@@ -31,7 +31,9 @@
 
 static void parse_nack(const unsigned char *p, size_t len, rtcp_nack_cb cb, void *user) {
   rtcp_nack_t nack;
-  size_t fci_off, fci_len, i;
+  size_t fci_off;
+  size_t fci_len;
+  size_t i;
 
   if (len < 12 || !cb)
     return;
@@ -226,7 +228,8 @@ static void parse_rams_i(const unsigned char *p, size_t len, uint32_t sender_ssr
 }
 
 static void parse_rams(const unsigned char *p, size_t len, const rtcp_cbs_t *cbs) {
-  uint32_t sender_ssrc, media_ssrc;
+  uint32_t sender_ssrc;
+  uint32_t media_ssrc;
   unsigned sfmt;
 
   if (len < 16) return; /* SSRC pair (8) + SFMT/reserved (4), at minimum */

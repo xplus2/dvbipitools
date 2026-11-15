@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "dipiradiohead/input/playlist.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 START_TEST(playlist_extract_follows_absolute_m3u_url) {
   const char *body = "#EXTM3U\nhttp://example.com/stream.aac\n";

@@ -5,10 +5,14 @@
 #define DIPISCAN_CONFIG_H
 
 #include "cli/args.h"
+#include "lib/config/yamlcfg.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipiscan.yaml"
 
 int scan_cfg_default_exists(void);
+
+extern const yamlcfg_key_t scan_cfg_keys[];
+extern const size_t scan_cfg_nkeys;
 
 void scan_cfg_defaults(config_t *cfg);
 

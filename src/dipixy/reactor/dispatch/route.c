@@ -2,7 +2,8 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "priv.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/secure_zero.h"
 
 #include <arpa/inet.h>
@@ -218,15 +219,31 @@ int http_auth_ok(const char *expected, const char *auth_hdr) {
   return strlen(ap) == elen && secure_eq(ap, ep, elen);
 }
 
-int path_is_ui_ws(const char *path) {
-  return !strcmp(path, "/ui/ws/") || !strcmp(path, "/ui/ws");
+special_path_t special_path_kind(const char *path) {
+  static const struct {
+    const char *path;
+    special_path_t sp;
+  } tab[] = {
+      {"/", SPECIAL_INDEX}, {"/index.html", SPECIAL_INDEX}, {"/ui/status.js", SPECIAL_STATUS_JS}, {"/ui/ws", SPECIAL_UI_WS}, {"/ui/ws/", SPECIAL_UI_WS},
+      {"/metrics", SPECIAL_METRICS}, {TIME_EP_PATH, SPECIAL_TIME}, {"/dlna/desc.xml", SPECIAL_DLNA_DESC}, {"/dlna/cd_scpd.xml", SPECIAL_DLNA_CD_SCPD},
+      {"/dlna/cm_scpd.xml", SPECIAL_DLNA_CM_SCPD}, {"/dlna/cd_control", SPECIAL_DLNA_CD_CONTROL}, {"/dlna/cm_control", SPECIAL_DLNA_CM_CONTROL},
+      {"/dlna/cd_event", SPECIAL_DLNA_CD_EVENT}, {"/dlna/cm_event", SPECIAL_DLNA_CM_EVENT},
+  };
+  if (!strncmp(path, "/export/", 8)) return SPECIAL_EXPORT;
+  for (size_t i = 0; i < ARRAY_SIZE(tab); i++)
+    if (!strcmp(path, tab[i].path)) return tab[i].sp;
+  return SPECIAL_NONE;
 }
 
-const char *special_path_auth(const char *path) {
+const char *special_path_auth(special_path_t sp) {
   const config_t *cfg = reactor_cfg();
-  if (!strcmp(path, "/") || !strcmp(path, "/index.html") || !strcmp(path, "/ui/status.js") || path_is_ui_ws(path)) return cfg->http_auth[0] ? cfg->http_auth : NULL;
-  if (!strcmp(path, "/metrics")) return cfg->http_metrics_auth[0] ? cfg->http_metrics_auth : NULL;
-  return NULL;
+  switch (sp) {
+    case SPECIAL_INDEX:
+    case SPECIAL_STATUS_JS:
+    case SPECIAL_UI_WS: return cfg->http_auth[0] ? cfg->http_auth : NULL;
+    case SPECIAL_METRICS: return cfg->http_metrics_auth[0] ? cfg->http_metrics_auth : NULL;
+    default: return NULL;
+  }
 }
 
 int route_disabled(const route_t *rt) {

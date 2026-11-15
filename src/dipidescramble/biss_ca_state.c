@@ -12,6 +12,7 @@
 #include "lib/helper/secure_zero.h"
 
 #include "biss_ca_state.h"
+#include "lib/helper/growutil.h"
 
 typedef struct {
   biss_ca_key_t *priv;
@@ -43,15 +44,9 @@ static int add_key(biss_ca_key_t *k, void *ctx) {
     biss_ca_key_free(k);
     return 0;
   }
-  if (s->n_keys == s->cap_keys) {
-    size_t cap = s->cap_keys ? s->cap_keys * 2 : 8;
-    held_key_t *v = realloc(s->keys, cap * sizeof *v);
-    if (!v) {
-      biss_ca_key_free(k);
-      return 1;
-    }
-    s->keys = v;
-    s->cap_keys = cap;
+  if (growbuf_reserve((void **)&s->keys, &s->cap_keys, sizeof *s->keys, s->n_keys + 1, 8)) {
+    biss_ca_key_free(k);
+    return 1;
   }
   s->keys[s->n_keys].priv = k;
   memcpy(s->keys[s->n_keys].ekid, ekid, BISS_CA_EKID_LEN);

@@ -13,8 +13,11 @@
 #include "lib/cas/emmg_server/emmg_server.h"
 #include "lib/helper/argutil.h"
 #include "lib/scrambler/scrambler.h"
+#include "lib/config/yamlcfg.h"
 
-int cas_super_id_parse(const char *s, unsigned *out) {
+static int cas_vendor_set_endpoint(cas_vendor_t *v, const char *val, char *err, size_t errsz);
+
+static int cas_super_id_parse(const char *s, unsigned *out) {
   char *end;
   unsigned long long v = strtoull(s, &end, 0);
   if (*end != '\0' || v == 0 || v > 0xFFFFFFFFULL) return -1;
@@ -22,7 +25,7 @@ int cas_super_id_parse(const char *s, unsigned *out) {
   return 0;
 }
 
-int cas_endpoint_parse(const char *s, char *host_out, size_t host_out_sz, unsigned *port_out) {
+static int cas_endpoint_parse(const char *s, char *host_out, size_t host_out_sz, unsigned *port_out) {
   const char *p = s;
   const char *host;
   const char *colon;
@@ -55,7 +58,7 @@ int cas_endpoint_parse(const char *s, char *host_out, size_t host_out_sz, unsign
   return 0;
 }
 
-int cas_version_parse(const char *s, unsigned *out) {
+static int cas_version_parse(const char *s, unsigned *out) {
   char *end;
   unsigned long v = strtoul(s, &end, 10);
   if (*end != '\0' || (v != 2 && v != 3)) return -1;
@@ -63,33 +66,11 @@ int cas_version_parse(const char *s, unsigned *out) {
   return 0;
 }
 
-static int bad(char *err, size_t errsz, const char *val, const char *want) {
-  snprintf(err, errsz, "invalid '%s' (%s)", val, want);
-  return -1;
-}
-
-static int set_text(char *dst, size_t sz, const char *val, char *err, size_t errsz) {
-  if (strlen(val) >= sz) {
-    snprintf(err, errsz, "too long (max %zu)", sz - 1);
-    return -1;
-  }
-  memcpy(dst, val, strlen(val) + 1);
-  return 0;
-}
-
 static int id_parse(const char *s, unsigned *out) {
   return argutil_uint_range(s, 1, 0xFFFF, out);
 }
 
-static int pid_parse(const char *s, unsigned *out) {
-  char *end;
-  unsigned long v = strtoul(s, &end, 0);
-  if (*end != '\0' || v == 0 || v > 0x1FFE) return -1;
-  *out = (unsigned)v;
-  return 0;
-}
-
-void cas_vendor_defaults(cas_vendor_t *v) {
+static void cas_vendor_defaults(cas_vendor_t *v) {
   memset(v, 0, sizeof *v);
   v->ecm_pid = 0x0020;
   v->emmg_port = 8002;
@@ -109,25 +90,25 @@ int cas_vendor_add(cas_vendor_t *vendors, unsigned *n_vendors, const char *endpo
   return 0;
 }
 
-int cas_vendor_set_endpoint(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  if (cas_endpoint_parse(val, v->ecmg_host, sizeof v->ecmg_host, &v->ecmg_port)) return bad(err, errsz, val, "tcp://host:port");
+static int cas_vendor_set_endpoint(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
+  if (cas_endpoint_parse(val, v->ecmg_host, sizeof v->ecmg_host, &v->ecmg_port)) return yamlcfg_bad(err, errsz, val, "tcp://host:port");
   return 0;
 }
 
 int cas_vendor_set_ecmg_version(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  return cas_version_parse(val, &v->ecmg_version) ? bad(err, errsz, val, "2|3") : 0;
+  return cas_version_parse(val, &v->ecmg_version) ? yamlcfg_bad(err, errsz, val, "2|3") : 0;
 }
 
 int cas_vendor_set_super_id(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  return cas_super_id_parse(val, &v->super_cas_id) ? bad(err, errsz, val, "32 bit, dec or 0x-hex") : 0;
+  return cas_super_id_parse(val, &v->super_cas_id) ? yamlcfg_bad(err, errsz, val, "32 bit, dec or 0x-hex") : 0;
 }
 
 int cas_vendor_set_ecm_id(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  return id_parse(val, &v->ecm_id) ? bad(err, errsz, val, "1..65535") : 0;
+  return id_parse(val, &v->ecm_id) ? yamlcfg_bad(err, errsz, val, "1..65535") : 0;
 }
 
 int cas_vendor_set_ecm_pid(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  return pid_parse(val, &v->ecm_pid) ? bad(err, errsz, val, "0x0001..0x1FFE") : 0;
+  return argutil_pid_parse(val, 1, &v->ecm_pid) ? yamlcfg_bad(err, errsz, val, "0x0001..0x1FFE") : 0;
 }
 
 int cas_vendor_set_emmg_listen(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
@@ -138,7 +119,7 @@ int cas_vendor_set_emmg_listen(cas_vendor_t *v, const char *val, char *err, size
     int family;
     if (argutil_addrport_parse(val, &family, v->emmg_listen_host, sizeof v->emmg_listen_host, &port)) {
       v->emmg_listen_host[0] = '\0';
-      return bad(err, errsz, val, "port | v4addr:port | [v6addr]:port");
+      return yamlcfg_bad(err, errsz, val, "port | v4addr:port | [v6addr]:port");
     }
   }
   v->emmg_port = port;
@@ -147,12 +128,12 @@ int cas_vendor_set_emmg_listen(cas_vendor_t *v, const char *val, char *err, size
 }
 
 int cas_vendor_set_emmg_reverse(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  if (cas_endpoint_parse(val, v->emmg_reverse_host, sizeof v->emmg_reverse_host, &v->emmg_reverse_port)) return bad(err, errsz, val, "tcp://host:port");
+  if (cas_endpoint_parse(val, v->emmg_reverse_host, sizeof v->emmg_reverse_host, &v->emmg_reverse_port)) return yamlcfg_bad(err, errsz, val, "tcp://host:port");
   return 0;
 }
 
 int cas_vendor_set_emmg_version(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  return cas_version_parse(val, &v->emmg_version) ? bad(err, errsz, val, "2|3") : 0;
+  return cas_version_parse(val, &v->emmg_version) ? yamlcfg_bad(err, errsz, val, "2|3") : 0;
 }
 
 int cas_vendor_set_emmg_max_conns(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
@@ -164,71 +145,71 @@ int cas_vendor_set_emmg_max_conns(cas_vendor_t *v, const char *val, char *err, s
 }
 
 int cas_vendor_set_emm_pid(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  return pid_parse(val, &v->emm_pid) ? bad(err, errsz, val, "0x0001..0x1FFE") : 0;
+  return argutil_pid_parse(val, 1, &v->emm_pid) ? yamlcfg_bad(err, errsz, val, "0x0001..0x1FFE") : 0;
 }
 
 int cas_vendor_set_resilience(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
   static const enum_map_t map[] = {{"frozen", CAS_OUTAGE_FROZEN}, {"cycling", CAS_OUTAGE_CYCLING}, {"silent", CAS_OUTAGE_SILENT}};
   int m;
-  if (map_lookup(map, sizeof map / sizeof map[0], val, &m)) return bad(err, errsz, val, "frozen|cycling|silent");
+  if (map_lookup(map, sizeof map / sizeof map[0], val, &m)) return yamlcfg_bad(err, errsz, val, "frozen|cycling|silent");
   v->resilience = (cas_outage_mode_t)m;
   return 0;
 }
 
 int cas_vendor_set_cwenc_algo(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  if (strcmp(val, "des56") && strcmp(val, "aes128") && strcmp(val, "aes256")) return bad(err, errsz, val, "des56|aes128|aes256");
-  return set_text(v->cwenc_algorithm, sizeof v->cwenc_algorithm, val, err, errsz);
+  if (strcmp(val, "des56") && strcmp(val, "aes128") && strcmp(val, "aes256")) return yamlcfg_bad(err, errsz, val, "des56|aes128|aes256");
+  return yamlcfg_set_buf(v->cwenc_algorithm, sizeof v->cwenc_algorithm, val, err, errsz);
 }
 
 int cas_vendor_set_cwenc_aes_mode(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  if (strcmp(val, "stream") && strcmp(val, "ecb")) return bad(err, errsz, val, "stream|ecb");
-  return set_text(v->cwenc_aes_mode, sizeof v->cwenc_aes_mode, val, err, errsz);
+  if (strcmp(val, "stream") && strcmp(val, "ecb")) return yamlcfg_bad(err, errsz, val, "stream|ecb");
+  return yamlcfg_set_buf(v->cwenc_aes_mode, sizeof v->cwenc_aes_mode, val, err, errsz);
 }
 
 int cas_vendor_set_cwenc_fixed_key(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  return set_text(v->cwenc_fixed_key_hex, sizeof v->cwenc_fixed_key_hex, val, err, errsz);
+  return yamlcfg_set_buf(v->cwenc_fixed_key_hex, sizeof v->cwenc_fixed_key_hex, val, err, errsz);
 }
 
 int cas_vendor_set_cwenc_key_list_a(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  return set_text(v->cwenc_key_list_a_path, sizeof v->cwenc_key_list_a_path, val, err, errsz);
+  return yamlcfg_set_buf(v->cwenc_key_list_a_path, sizeof v->cwenc_key_list_a_path, val, err, errsz);
 }
 
 int cas_vendor_set_cwenc_key_list_b(cas_vendor_t *v, const char *val, char *err, size_t errsz) {
-  return set_text(v->cwenc_key_list_b_path, sizeof v->cwenc_key_list_b_path, val, err, errsz);
+  return yamlcfg_set_buf(v->cwenc_key_list_b_path, sizeof v->cwenc_key_list_b_path, val, err, errsz);
 }
 
 int cas_set_algo(cas_algo_t *dst, const char *val, char *err, size_t errsz) {
   static const enum_map_t map[] = {{"cissa", CAS_ALGO_CISSA}, {"csa2", CAS_ALGO_CSA2}, {"csa1", CAS_ALGO_CSA1}};
   int m;
-  if (map_lookup(map, sizeof map / sizeof map[0], val, &m)) return bad(err, errsz, val, "cissa|csa2|csa1");
+  if (map_lookup(map, sizeof map / sizeof map[0], val, &m)) return yamlcfg_bad(err, errsz, val, "cissa|csa2|csa1");
   *dst = (cas_algo_t)m;
   return 0;
 }
 
 int cas_set_cp_duration(unsigned *dst, const char *val, char *err, size_t errsz) {
-  return argutil_uint_range(val, 1, 86400000, dst) ? bad(err, errsz, val, "ms, 1..86400000") : 0;
+  return argutil_uint_range(val, 1, 86400000, dst) ? yamlcfg_bad(err, errsz, val, "ms, 1..86400000") : 0;
 }
 
 int cas_set_biss2_sw(int *enabled, unsigned char *sw, const char *val, char *err, size_t errsz) {
-  if (biss_parse_hex16(val, sw)) return bad(err, errsz, val, "32 hex chars");
+  if (biss_parse_hex16(val, sw)) return yamlcfg_bad(err, errsz, val, "32 hex chars");
   *enabled = 1;
   return 0;
 }
 
 int cas_set_biss2_emit_esw(int *enabled, unsigned char *id, const char *val, char *err, size_t errsz) {
-  if (biss_parse_hex16(val, id)) return bad(err, errsz, val, "32 hex chars");
+  if (biss_parse_hex16(val, id)) return yamlcfg_bad(err, errsz, val, "32 hex chars");
   *enabled = 1;
   return 0;
 }
 
 int cas_set_biss1_sw(int *enabled, unsigned char *cw, const char *val, char *err, size_t errsz) {
-  if (biss1_parse_sw(val, cw)) return bad(err, errsz, val, "12 hex chars");
+  if (biss1_parse_sw(val, cw)) return yamlcfg_bad(err, errsz, val, "12 hex chars");
   *enabled = 1;
   return 0;
 }
 
 int cas_set_biss1_emit_esw(int *enabled, unsigned char *id, const char *val, char *err, size_t errsz) {
-  if (biss1_parse_id(val, id)) return bad(err, errsz, val, "14 hex chars");
+  if (biss1_parse_id(val, id)) return yamlcfg_bad(err, errsz, val, "14 hex chars");
   *enabled = 1;
   return 0;
 }
@@ -236,7 +217,7 @@ int cas_set_biss1_emit_esw(int *enabled, unsigned char *id, const char *val, cha
 int cas_set_biss2_ca_session_id(unsigned *dst, int *given, const char *val, char *err, size_t errsz) {
   char *end;
   unsigned long v = strtoul(val, &end, 0);
-  if (*end != '\0' || v > 0xFFFFUL) return bad(err, errsz, val, "16 bit, dec or 0x-hex");
+  if (*end != '\0' || v > 0xFFFFUL) return yamlcfg_bad(err, errsz, val, "16 bit, dec or 0x-hex");
   *dst = (unsigned)v;
   *given = 1;
   return 0;

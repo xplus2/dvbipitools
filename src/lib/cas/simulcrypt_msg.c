@@ -11,6 +11,7 @@
 #include "lib/sys/signal.h"
 
 #include "simulcrypt_msg.h"
+#include "lib/helper/dateutil.h"
 
 int simulcrypt_hdr_parse(const unsigned char *buf, size_t buf_len, simulcrypt_hdr_t *hdr) {
   if (buf_len < SIMULCRYPT_HDR_LEN)
@@ -54,7 +55,8 @@ int simulcrypt_tlv_reader_next(simulcrypt_tlv_reader_t *r, unsigned short *tag, 
 
 int simulcrypt_find_u8(const unsigned char *payload, size_t payload_len, unsigned short tag, unsigned *out) {
   simulcrypt_tlv_reader_t it;
-  unsigned short t, vlen;
+  unsigned short t;
+  unsigned short vlen;
   const unsigned char *val;
   simulcrypt_tlv_reader_init(&it, payload, payload_len);
   while (simulcrypt_tlv_reader_next(&it, &t, &val, &vlen) == 1) {
@@ -68,7 +70,8 @@ int simulcrypt_find_u8(const unsigned char *payload, size_t payload_len, unsigne
 
 int simulcrypt_find_u16(const unsigned char *payload, size_t payload_len, unsigned short tag, unsigned *out) {
   simulcrypt_tlv_reader_t it;
-  unsigned short t, vlen;
+  unsigned short t;
+  unsigned short vlen;
   const unsigned char *val;
   simulcrypt_tlv_reader_init(&it, payload, payload_len);
   while (simulcrypt_tlv_reader_next(&it, &t, &val, &vlen) == 1) {
@@ -82,7 +85,8 @@ int simulcrypt_find_u16(const unsigned char *payload, size_t payload_len, unsign
 
 int simulcrypt_find_u32(const unsigned char *payload, size_t payload_len, unsigned short tag, unsigned *out) {
   simulcrypt_tlv_reader_t it;
-  unsigned short t, vlen;
+  unsigned short t;
+  unsigned short vlen;
   const unsigned char *val;
   simulcrypt_tlv_reader_init(&it, payload, payload_len);
   while (simulcrypt_tlv_reader_next(&it, &t, &val, &vlen) == 1) {

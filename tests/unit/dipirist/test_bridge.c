@@ -16,16 +16,7 @@
 #include "../metrics_sink.h"
 #include "dipirist/bridge.h"
 #include "lib/sys/signal.h"
-
-START_TEST(profile_of_maps_simple) {
-  ck_assert_int_eq(profile_of(RIST_PROF_SIMPLE), RIST_PROFILE_SIMPLE);
-}
-END_TEST
-
-START_TEST(profile_of_maps_main) {
-  ck_assert_int_eq(profile_of(RIST_PROF_MAIN), RIST_PROFILE_MAIN);
-}
-END_TEST
+#include "lib/helper/dateutil.h"
 
 typedef enum {
   BR_RECV_BAD_PEER,
@@ -349,8 +340,6 @@ END_TEST
 static Suite *bridge_suite(void) {
   Suite *s = suite_create("dipirist_bridge");
   TCase *tc = tcase_create("core");
-  tcase_add_test(tc, profile_of_maps_simple);
-  tcase_add_test(tc, profile_of_maps_main);
   tcase_add_test(tc, receiver_stats_cb_pushes_flow_counters_once_per_interval);
   tcase_add_test(tc, receiver_stats_cb_ignores_other_stats_types);
   tcase_add_test(tc, receiver_idle_push_sends_commons_without_flow);

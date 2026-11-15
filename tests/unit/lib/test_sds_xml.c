@@ -8,10 +8,11 @@
 
 #include "../alloc_fail.h"
 #include "lib/helper/sds_xml.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 START_TEST(sds_broadcast_round_trips_multiple_services) {
-  sds_service_t svcs[2], out[8];
+  sds_service_t svcs[2];
+  sds_service_t out[8];
   unsigned char *buf = NULL;
   size_t len;
   int n;
@@ -317,7 +318,8 @@ START_TEST(sds_broadcast_fcc_resolve_by_port_is_deterministic) {
   sds_fcc_t fcc;
   unsigned char *buf1 = NULL;
   unsigned char *buf2 = NULL;
-  size_t len1, len2;
+  size_t len1;
+  size_t len2;
 
   memset(&svc, 0, sizeof svc);
   svc.family = AF_INET;

@@ -5,13 +5,7 @@
 #include <string.h>
 
 #include "lib/bim/codec/codec_int.h"
-
-#define addf(b, ...) \
-  ({ \
-    char tmp_[64]; \
-    snprintf(tmp_, sizeof tmp_, __VA_ARGS__); \
-    sbuf_add((b), tmp_); \
-  })
+#include "lib/helper/strutil.h"
 
 /* digits in [*p, end), at least one. advances */
 static int take_num(const char **p, const char *end, uint64_t *v, int *ndig) {
@@ -123,24 +117,31 @@ int m7_timepoint_parse(const char *s, m7_timepoint_t *t) {
 
 int m7_timepoint_render(const m7_timepoint_t *t, char *out, size_t cap) {
   sbuf_t b;
-  char num[32];
   sbuf_init(&b, out, cap);
   if (t->date) {
     if (t->neg) sbuf_add(&b, "-");
-    snprintf(num, sizeof num, "%llu", (unsigned long long)t->year);
-    sbuf_add(&b, num);
-    if (t->has_month) addf(&b, "-%02u", t->month);
-    if (t->has_day) addf(&b, "-%02u", t->day);
+    sbuf_add_u64(&b, t->year);
+    if (t->has_month) sbuf_add_upad(&b, "-", t->month, 2);
+    if (t->has_day) sbuf_add_upad(&b, "-", t->day, 2);
   }
   if (t->time) {
-    addf(&b, "T%02u", t->hour);
-    if (t->has_min) addf(&b, ":%02u", t->min);
-    if (t->has_sec) addf(&b, ":%02u", t->sec);
-    if (t->has_n) addf(&b, ":%llu", (unsigned long long)t->n);
-    if (t->has_ff) addf(&b, ".%02u", t->ff);
+    sbuf_add_upad(&b, "T", t->hour, 2);
+    if (t->has_min) sbuf_add_upad(&b, ":", t->min, 2);
+    if (t->has_sec) sbuf_add_upad(&b, ":", t->sec, 2);
+    if (t->has_n) {
+      sbuf_add(&b, ":");
+      sbuf_add_u64(&b, t->n);
+    }
+    if (t->has_ff) sbuf_add_upad(&b, ".", t->ff, 2);
   }
-  if (t->has_frac) addf(&b, "F%llu", (unsigned long long)t->frac);
-  if (t->tz) addf(&b, "%c%02d:%02u", t->tzh < 0 ? '-' : '+', t->tzh < 0 ? -t->tzh : t->tzh, t->tzm);
+  if (t->has_frac) {
+    sbuf_add(&b, "F");
+    sbuf_add_u64(&b, t->frac);
+  }
+  if (t->tz) {
+    sbuf_add_upad(&b, t->tzh < 0 ? "-" : "+", (unsigned)(t->tzh < 0 ? -t->tzh : t->tzh), 2);
+    sbuf_add_upad(&b, ":", t->tzm, 2);
+  }
   return b.truncated ? -1 : 0;
 }
 
@@ -149,15 +150,31 @@ int m7_duration_render(const m7_duration_t *d, char *out, size_t cap) {
   sbuf_t b;
   sbuf_init(&b, out, cap);
   sbuf_add(&b, d->neg ? "-P" : "P");
-  if (d->has_d) addf(&b, "%lluD", (unsigned long long)d->d);
+  if (d->has_d) {
+    sbuf_add_u64(&b, d->d);
+    sbuf_add(&b, "D");
+  }
   if (d->t) {
     sbuf_add(&b, "T");
     for (int u = 0; u < 4; u++)
-      if (d->has[u]) addf(&b, "%llu%c", (unsigned long long)d->v[u], units[u]);
-    if (d->has_ff) addf(&b, "%02uf", d->ff);
+      if (d->has[u]) {
+        sbuf_add_u64(&b, d->v[u]);
+        sbuf_add_n(&b, units + u, 1);
+      }
+    if (d->has_ff) {
+      sbuf_add_upad(&b, "", d->ff, 2);
+      sbuf_add(&b, "f");
+    }
   }
-  if (d->has_frac) addf(&b, "%lluF", (unsigned long long)d->frac);
-  if (d->tz) addf(&b, "%c%02d:%02uZ", d->tzh < 0 ? '-' : '+', d->tzh < 0 ? -d->tzh : d->tzh, d->tzm);
+  if (d->has_frac) {
+    sbuf_add_u64(&b, d->frac);
+    sbuf_add(&b, "F");
+  }
+  if (d->tz) {
+    sbuf_add_upad(&b, d->tzh < 0 ? "-" : "+", (unsigned)(d->tzh < 0 ? -d->tzh : d->tzh), 2);
+    sbuf_add_upad(&b, ":", d->tzm, 2);
+    sbuf_add(&b, "Z");
+  }
   return b.truncated ? -1 : 0;
 }
 

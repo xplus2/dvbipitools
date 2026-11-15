@@ -10,26 +10,26 @@
 
 #include <librist/librist.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
-#include "lib/sys/signal.h"
 
 #include "ristlog.h"
 #include "ristpeer.h"
+#include "lib/helper/dateutil.h"
 
 #define RIST_DEFAULT_BUFFER_MS 1000 /* librist recovery length default */
 
 static int udp_port_bindable(const char *host, unsigned port) {
   struct addrinfo hints;
   struct addrinfo *res = NULL;
-  char svc[8];
+  char svc[12];
   int ok = 0;
 
   memset(&hints, 0, sizeof hints);
   hints.ai_socktype = SOCK_DGRAM;
   hints.ai_flags = AI_PASSIVE | AI_NUMERICSERV;
-  snprintf(svc, sizeof svc, "%u", port);
+  uint_to_str(svc, port);
   if (getaddrinfo(host[0] ? host : NULL, svc, &hints, &res) != 0) return 1; /* let librist report */
   for (const struct addrinfo *a = res; a && !ok; a = a->ai_next) {
     int fd = socket(a->ai_family, a->ai_socktype, 0);
@@ -68,7 +68,7 @@ static int split_listen_uri(const char *uri, char *host, size_t host_cap, unsign
   return *port > 0 && *port <= 65535;
 }
 
-int ristpeer_listen_ports_usable(const char *uri, int rtcp_port) {
+static int ristpeer_listen_ports_usable(const char *uri, int rtcp_port) {
   char host[128];
   unsigned port;
 

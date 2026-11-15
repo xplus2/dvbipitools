@@ -142,11 +142,11 @@ done:
   return (size_t)(mp - m3u8);
 }
 
-int hls_serve_ll(conn_t *c, const capture_ctx_t *ctx,const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
+int hls_serve_ll(conn_t *c, const stream_key_t *k, const hls_store_t *st, const route_file_t *f, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
   char cors_hdr[192];
   hls_ll_resolve_t r;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
-  if (!hls_resolve_ll(ctx, filter, pmt_pid, lcevc, container, filename, if_none_match, &r)) return 0;
+  if (!hls_resolve_ll(k, st, f, if_none_match, &r)) return 0;
   if (r.status == 404) {
     respond_status(c, "404 Not Found", keep_alive);
     return 1;

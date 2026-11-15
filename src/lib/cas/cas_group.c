@@ -16,6 +16,7 @@
 #include "cas_scramble_engine.h"
 #include "cw_gen.h"
 #include "emmg_server/emmg_server.h"
+#include "lib/helper/dateutil.h"
 
 #define CAS_GROUP_CW_HIST 8 /* cw ring size: epoch-keyed, cross-vendor lookahead depth */
 
@@ -63,12 +64,6 @@ struct cas_group {
 
   cas_group_vendor_t vendors[CAS_GROUP_MAX_VENDORS];
 };
-
-static double mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
 
 static unsigned long group_current_epoch(cas_group_t *g) {
   return atomic_load_explicit(&g->cp_clock_ms, memory_order_relaxed) / g->cfg.cp_duration_ms;
@@ -218,7 +213,7 @@ cas_group_t *cas_group_start(const cas_group_cfg_t *cfg, unsigned flush_pid) {
     g->vendors[i].last_ecm_send = -1.0;
   }
   g->clock_wait_s = cfg->clock_detect_timeout_s > 0.0 ? cfg->clock_detect_timeout_s : CAS_CORE_CLOCK_DETECT_TIMEOUT_S;
-  g->clock_wait_deadline = mono() + g->clock_wait_s;
+  g->clock_wait_deadline = mono_seconds() + g->clock_wait_s;
   lm = cfg->cp_duration_ms / 4;
   if (lm > 2000) lm = 2000;
   if (lm < 100) lm = 100;
@@ -241,7 +236,7 @@ void cas_group_stop(cas_group_t *g) {
 int cas_group_failed(cas_group_t *g) { return g->fatal; }
 
 void cas_group_tick_alive(cas_group_t *g) {
-  if (!g->have_clock && !g->fatal && mono() >= g->clock_wait_deadline) {
+  if (!g->have_clock && !g->fatal && mono_seconds() >= g->clock_wait_deadline) {
     g->fatal = 1;
     log_code("LE700112", "cas_group: no clock activity observed within %.0fs, giving up", g->clock_wait_s);
   }

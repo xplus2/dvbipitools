@@ -112,7 +112,8 @@ START_TEST(http_fetch_completes_into_buffer) {
   http_fetch_t *f;
   unsigned char buf[64];
   size_t len;
-  int status, truncated;
+  int status;
+  int truncated;
 
   sarg.listen_fd = listen_fd;
   sarg.response = resp;

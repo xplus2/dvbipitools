@@ -155,7 +155,8 @@ static int send_udp(unsigned port, const unsigned char *data, size_t len) {
 }
 
 START_TEST(listen_pool_delivers_datagram_to_callback) {
-  recorder_t rec, snap;
+  recorder_t rec;
+  recorder_t snap;
   listen_pool_t *p;
   const unsigned char msg[] = "hello listen pool";
 
@@ -203,7 +204,8 @@ START_TEST(listen_pool_start_fails_on_bad_address) {
 END_TEST
 
 START_TEST(listen_multi_delivers_datagram_with_correct_slot) {
-  recorder_t rec, snap;
+  recorder_t rec;
+  recorder_t snap;
   listen_multi_t *p;
   const unsigned char msg[] = "hello listen multi";
 
@@ -225,7 +227,8 @@ START_TEST(listen_multi_delivers_datagram_with_correct_slot) {
 END_TEST
 
 START_TEST(listen_multi_distinguishes_slots) {
-  recorder_t rec, snap;
+  recorder_t rec;
+  recorder_t snap;
   listen_multi_t *p;
   const unsigned char a[] = "a";
   const unsigned char b[] = "b";

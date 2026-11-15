@@ -7,6 +7,7 @@
 #include "lib/helper/log.h"
 #include "lib/sys/signal.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 cas_t *tvhead_single_cas_start(const config_t *cfg, const psi_t *psi, const remux_t *rx) {
   int es_count;

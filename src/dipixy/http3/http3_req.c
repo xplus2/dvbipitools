@@ -49,7 +49,7 @@ static void h3_req_body_append(h3_req_t *r, const uint8_t *data, size_t len) {
     return;
   }
   if (!r->body) {
-    r->body = malloc(HTTPNG_BODY_MAX + 1);
+    r->body = httpng_body_get();
     if (!r->body) {
       r->body_over = 1;
       return;
@@ -161,8 +161,8 @@ void h3_client_ip(const h3_conn_t *c, char *buf, size_t bufsz) {
   sockaddr_ip_str(&c->peer_addr, buf, bufsz);
 }
 
-static void h3ops_respond_status(void *connv, void *reqv, const char *status) {
-  h3_respond_status(connv, ((h3_req_t *)reqv)->stream_id, status);
+static void h3ops_respond_status(void *connv, void *reqv, int status) {
+  h3_respond_status(connv, ((h3_req_t *)reqv)->stream_id, httpng_status_str(status));
 }
 
 static void h3ops_respond_401(void *connv, void *reqv) {

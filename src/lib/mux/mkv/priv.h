@@ -28,7 +28,8 @@ typedef struct {
   pid_class_t cls;
   char lang[4];
   char codecid[24];
-  unsigned width, height;    /* v */
+  unsigned width;
+  unsigned height; /* v */
   int hdr_parsed;
   int64_t ts_ms;
   int64_t step_ms; /* last video ts delta, expected-next hint */
@@ -37,9 +38,11 @@ typedef struct {
   pts_unwrap_t pts;
   int psi_idx; /* m->psi[] index. TrackName resolved late in write_head(), sdt may lag setup() */
   unsigned char *rem; /* audio: partial frame carry-over */
-  size_t remlen, remcap;
+  size_t remlen;
+  size_t remcap;
   unsigned char *vbuf; /* video: length-prefixed AU */
-  size_t vbuflen, vbufcap;
+  size_t vbuflen;
+  size_t vbufcap;
   unsigned char *lcevc_rb; /* strip_lcevc scratch, see esc_strip_lcevc_sei() */
   size_t lcevc_rbcap;
   unsigned char *lcevc_esc;
@@ -57,8 +60,10 @@ typedef struct {
 } cue_t;
 
 typedef struct {
-  int num, key;
-  int64_t ts, dur;
+  int num;
+  int key;
+  int64_t ts;
+  int64_t dur;
   unsigned char *data;
   size_t len;
 } pend_t;
@@ -75,7 +80,9 @@ struct mkv {
   pts_disc_t disc;
   int ntrk;
   int last_trk_idx;
-  int setup, started, err;
+  int setup;
+  int started;
+  int err;
   int flushing; /* EOS: last PES partial */
   int ready_seen;
   int64_t ready_ms; /* when tracks first had headers */

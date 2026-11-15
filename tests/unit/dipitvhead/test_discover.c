@@ -19,7 +19,9 @@
 /* PMT section (table_id 0x02), CRC included. with_es: one MPEG audio ES on pcr_pid */
 static size_t build_pmt_local(unsigned char *out, unsigned prog_num, unsigned pcr_pid, int with_es) {
   unsigned char body[24];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = (unsigned char)(prog_num >> 8);
@@ -94,7 +96,10 @@ START_TEST(discover_completes_once_pat_pmt_sdt_arrive) {
   dipitvhead_input_t in;
   psi_t *psi = psi_new();
   input_metrics_t im;
-  unsigned char sec[64], pat[188], pmt[188], sdt[188];
+  unsigned char sec[64];
+  unsigned char pat[188];
+  unsigned char pmt[188];
+  unsigned char sdt[188];
   size_t slen;
   int rc;
 
@@ -166,7 +171,8 @@ START_TEST(discover_fails_when_requested_pmt_pid_absent_from_pat) {
   dipitvhead_input_t in;
   psi_t *psi = psi_new();
   input_metrics_t im;
-  unsigned char sec[64], pat[188];
+  unsigned char sec[64];
+  unsigned char pat[188];
   size_t slen;
   int rc;
 

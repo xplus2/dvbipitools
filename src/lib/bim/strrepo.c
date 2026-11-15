@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 #include "strrepo.h"
 
 #define STRREPO_ENCODING_UTF8 0x01

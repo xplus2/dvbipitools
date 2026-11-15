@@ -145,69 +145,6 @@ START_TEST(index_chunks_at_string_limit) {
 }
 END_TEST
 
-/* TS 102 323 table 105: type list structure, fragment_type 0xFFFF carries an XPath string */
-START_TEST(typelist_round_trips) {
-  static const uint16_t c1[] = {1, 2, 0x1234};
-  static const uint16_t c2[] = {7};
-  bim_typelist_entry_t in[] = {{0x0001, NULL, c1, 3, NULL}, {0xFFFF, "/tva:TVAMain/tva:Foo", c2, 1, NULL}, {0x0005, NULL, NULL, 0, NULL}};
-  static const unsigned char want[] = {0x00, 0x03, 0xF0, 0x09, 0x00, 0x01, 0x03, 0x00, 0x01, 0x00, 0x02, 0x12, 0x34, 0xF0, 0x07, 0xFF, 0xFF, 0x00, 0x01, 0x01, 0x00, 0x07, 0xF0, 0x03, 0x00, 0x05, 0x00};
-  strrepo_writer_t sw;
-  unsigned char *body;
-  size_t len;
-  bim_typelist_entry_t *out;
-  int n;
-  const unsigned char *strs;
-  size_t slen;
-  ck_assert_int_eq(strrepo_writer_init(&sw), 0);
-  ck_assert_int_eq(bim_typelist_build(in, 3, &sw, &body, &len), 0);
-  ck_assert_uint_eq(len, sizeof want);
-  ck_assert_mem_eq(body, want, len);
-  strs = strrepo_writer_data(&sw, &slen);
-  ck_assert_int_eq(bim_typelist_parse(body, len, strs, slen, &out, &n), 0);
-  ck_assert_int_eq(n, 3);
-  ck_assert_uint_eq(out[0].fragment_type, 1);
-  ck_assert_int_eq(out[0].ncontainers, 3);
-  ck_assert_uint_eq(out[0].containers[2], 0x1234);
-  ck_assert_str_eq(out[1].xpath, "/tva:TVAMain/tva:Foo");
-  ck_assert_int_eq(out[2].ncontainers, 0);
-  bim_typelist_free(out, n);
-  ck_assert_int_eq(bim_typelist_parse(body, len - 1, strs, slen, &out, &n), -1);
-  ck_assert_int_eq(bim_typelist_parse(body, len, NULL, 0, &out, &n), -1);
-  free(body);
-  strrepo_writer_free(&sw);
-}
-END_TEST
-
-/* table 106: namespace map structure */
-START_TEST(nsmap_round_trips) {
-  static const char *const px[] = {"tva2", "int"};
-  static const char *const ns[] = {"urn:tva:metadata:extended:2007", "urn:tva:metadata:int:2007"};
-  unsigned char *body;
-  size_t len;
-  char **p;
-  char **u;
-  int n;
-  ck_assert_int_eq(bim_nsmap_build(px, ns, 2, &body, &len), 0);
-  ck_assert_uint_eq(body[0], 2);
-  ck_assert_uint_eq(body[1], 4);
-  ck_assert_int_eq(bim_nsmap_parse(body, len, &p, &u, &n), 0);
-  ck_assert_int_eq(n, 2);
-  ck_assert_str_eq(p[1], "int");
-  ck_assert_str_eq(u[0], ns[0]);
-  bim_nsmap_free(p, u, n);
-  ck_assert_int_eq(bim_nsmap_parse(body, len - 1, &p, &u, &n), -1);
-  ck_assert_ptr_null(p);
-  free(body);
-  {
-    char big[300];
-    const char *bp[1] = {big};
-    memset(big, 'a', sizeof big);
-    big[299] = '\0';
-    ck_assert_int_eq(bim_nsmap_build(bp, ns, 1, &body, &len), -1);
-  }
-}
-END_TEST
-
 static bim_struct_t *sfind(fake_t *f, unsigned cont, unsigned type, unsigned id) {
   for (int i = 0; i < f->n; i++) {
     if (f->c[i].id != cont) continue;
@@ -537,164 +474,6 @@ START_TEST(index_sort_keys_with_equal_instants_and_containers) {
 }
 END_TEST
 
-START_TEST(typelist_build_rejects_invalid) {
-  static const uint16_t cs[1] = {1};
-  uint16_t many[256];
-  strrepo_writer_t sw;
-  unsigned char *body = NULL;
-  size_t len;
-  char *big = malloc(70000);
-  bim_typelist_entry_t e[1];
-  ck_assert_ptr_nonnull(big);
-  memset(big, 'x', 69999);
-  big[69999] = 0;
-  memset(many, 0, sizeof many);
-  ck_assert_int_eq(strrepo_writer_init(&sw), 0);
-  e[0] = (bim_typelist_entry_t){1, NULL, cs, 1, NULL};
-  ck_assert_int_eq(bim_typelist_build(e, -1, &sw, &body, &len), -1);
-  ck_assert_int_eq(bim_typelist_build(e, 0x10000, &sw, &body, &len), -1);
-  e[0].ncontainers = -1;
-  ck_assert_int_eq(bim_typelist_build(e, 1, &sw, &body, &len), -1);
-  e[0].ncontainers = 256;
-  e[0].containers = many;
-  ck_assert_int_eq(bim_typelist_build(e, 1, &sw, &body, &len), -1);
-  e[0] = (bim_typelist_entry_t){0x10000, NULL, cs, 1, NULL};
-  ck_assert_int_eq(bim_typelist_build(e, 1, &sw, &body, &len), -1);
-  e[0] = (bim_typelist_entry_t){0xFFFF, NULL, cs, 1, NULL};
-  ck_assert_int_eq(bim_typelist_build(e, 1, &sw, &body, &len), -1);
-  e[0] = (bim_typelist_entry_t){0xFFFF, big, cs, 1, NULL};
-  ck_assert_int_eq(bim_typelist_build(e, 1, &sw, &body, &len), -1);
-  strrepo_writer_free(&sw);
-  free(big);
-}
-END_TEST
-
-START_TEST(typelist_parse_rejects_malformed) {
-  static const unsigned char strs[] = {0, 'x', 0};
-  static const unsigned char noterm[] = {0, 'x'};
-  bim_typelist_entry_t *out;
-  int n;
-  /* count 1 with nothing after */
-  static const unsigned char b1[] = {0x00, 0x01};
-  /* dl beyond the body */
-  static const unsigned char b2[] = {0x00, 0x01, 0xF0, 0x09, 0x00};
-  /* dl below 3 */
-  static const unsigned char b3[] = {0x00, 0x01, 0xF0, 0x02, 0x00, 0x01};
-  /* xpath type with dl below 5 */
-  static const unsigned char b4[] = {0x00, 0x01, 0xF0, 0x03, 0xFF, 0xFF, 0x00};
-  /* xpath offset beyond strings */
-  static const unsigned char b5[] = {0x00, 0x01, 0xF0, 0x05, 0xFF, 0xFF, 0x00, 0x09, 0x00};
-  /* container count mismatches dl */
-  static const unsigned char b6[] = {0x00, 0x01, 0xF0, 0x04, 0x00, 0x01, 0x02, 0x00};
-  /* trailing byte */
-  static const unsigned char b7[] = {0x00, 0x01, 0xF0, 0x03, 0x00, 0x01, 0x00, 0x77};
-  static const unsigned char ok[] = {0x00, 0x01, 0xF0, 0x05, 0xFF, 0xFF, 0x00, 0x01, 0x00};
-  ck_assert_int_eq(bim_typelist_parse(b1, 1, strs, sizeof strs, &out, &n), -1);
-  ck_assert_int_eq(bim_typelist_parse(b1, sizeof b1, strs, sizeof strs, &out, &n), -1);
-  ck_assert_int_eq(bim_typelist_parse(b2, sizeof b2, strs, sizeof strs, &out, &n), -1);
-  ck_assert_int_eq(bim_typelist_parse(b3, sizeof b3, strs, sizeof strs, &out, &n), -1);
-  ck_assert_int_eq(bim_typelist_parse(b4, sizeof b4, strs, sizeof strs, &out, &n), -1);
-  ck_assert_int_eq(bim_typelist_parse(b5, sizeof b5, strs, sizeof strs, &out, &n), -1);
-  ck_assert_int_eq(bim_typelist_parse(b6, sizeof b6, strs, sizeof strs, &out, &n), -1);
-  ck_assert_int_eq(bim_typelist_parse(b7, sizeof b7, strs, sizeof strs, &out, &n), -1);
-  ck_assert_int_eq(bim_typelist_parse(ok, sizeof ok, noterm, sizeof noterm, &out, &n), -1);
-  ck_assert_int_eq(bim_typelist_parse(ok, sizeof ok, strs, sizeof strs, &out, &n), 0);
-  bim_typelist_free(out, n);
-  for (long k = 0;; k++) {
-    int hit;
-    int rc;
-    alloc_fail_at(k);
-    rc = bim_typelist_parse(ok, sizeof ok, strs, sizeof strs, &out, &n);
-    hit = alloc_fail_end();
-    if (!rc) bim_typelist_free(out, n);
-    if (!hit) break;
-  }
-  {
-    static const unsigned char two[] = {0x00, 0x01, 0xF0, 0x07, 0x00, 0x01, 0x02, 0x00, 0x03, 0x00, 0x04};
-    for (long k = 0;; k++) {
-      int hit;
-      int rc;
-      alloc_fail_at(k);
-      rc = bim_typelist_parse(two, sizeof two, strs, sizeof strs, &out, &n);
-      hit = alloc_fail_end();
-      if (!rc) bim_typelist_free(out, n);
-      if (!hit) break;
-    }
-  }
-}
-END_TEST
-
-START_TEST(nsmap_rejects_malformed_and_allocation_failures) {
-  static const char *const px[] = {"a", "bb"};
-  static const char *const ns[] = {"urn:a", "urn:bb"};
-  char big[300];
-  const char *bp[1] = {big};
-  const char *bn[1] = {"u"};
-  unsigned char *body;
-  size_t len;
-  char **p;
-  char **u;
-  int n;
-  /* prefix length beyond body */
-  static const unsigned char s1[] = {0x01, 0x09, 'a'};
-  /* ns length beyond body */
-  static const unsigned char s2[] = {0x01, 0x01, 'a', 0x09, 'u'};
-  /* trailing byte */
-  static const unsigned char s3[] = {0x01, 0x01, 'a', 0x01, 'u', 0x00};
-  /* count with no entries */
-  static const unsigned char s4[] = {0x02};
-  memset(big, 'a', sizeof big);
-  big[299] = 0;
-  ck_assert_int_eq(bim_nsmap_parse(s1, 0, &p, &u, &n), -1);
-  ck_assert_int_eq(bim_nsmap_parse(s1, sizeof s1, &p, &u, &n), -1);
-  ck_assert_int_eq(bim_nsmap_parse(s2, sizeof s2, &p, &u, &n), -1);
-  ck_assert_int_eq(bim_nsmap_parse(s3, sizeof s3, &p, &u, &n), -1);
-  ck_assert_int_eq(bim_nsmap_parse(s4, sizeof s4, &p, &u, &n), -1);
-  ck_assert_int_eq(bim_nsmap_build(px, ns, -1, &body, &len), -1);
-  ck_assert_int_eq(bim_nsmap_build(px, ns, 300, &body, &len), -1);
-  ck_assert_int_eq(bim_nsmap_build(bp, bn, 1, &body, &len), -1);
-  ck_assert_int_eq(bim_nsmap_build(bn, bp, 1, &body, &len), -1);
-  ck_assert_int_eq(bim_nsmap_build(px, ns, 2, &body, &len), 0);
-  for (long k = 0;; k++) {
-    int hit;
-    int rc;
-    alloc_fail_at(k);
-    rc = bim_nsmap_parse(body, len, &p, &u, &n);
-    hit = alloc_fail_end();
-    if (!rc) bim_nsmap_free(p, u, n);
-    if (!hit) break;
-  }
-  for (long k = 0;; k++) {
-    unsigned char *b2 = NULL;
-    size_t l2;
-    int hit;
-    int rc;
-    alloc_fail_at(k);
-    rc = bim_nsmap_build(px, ns, 2, &b2, &l2);
-    hit = alloc_fail_end();
-    if (!rc) free(b2);
-    if (!hit) break;
-  }
-  for (long k = 0;; k++) {
-    strrepo_writer_t sw;
-    static const uint16_t cs[2] = {1, 2};
-    bim_typelist_entry_t e[2] = {{1, NULL, cs, 2, NULL}, {0xFFFF, "/a/b", cs, 1, NULL}};
-    unsigned char *b2 = NULL;
-    size_t l2;
-    int hit;
-    int rc;
-    ck_assert_int_eq(strrepo_writer_init(&sw), 0);
-    alloc_fail_at(k);
-    rc = bim_typelist_build(e, 2, &sw, &b2, &l2);
-    hit = alloc_fail_end();
-    if (!rc) free(b2);
-    strrepo_writer_free(&sw);
-    if (!hit) break;
-  }
-  free(body);
-}
-END_TEST
-
 static Suite *index_suite(void) {
   Suite *s = suite_create("bim_index");
   TCase *tc = tcase_create("core");
@@ -703,8 +482,6 @@ static Suite *index_suite(void) {
   tcase_add_test(tc, index_check_reports_unresolved_and_missing);
   tcase_add_test(tc, index_check_needs_list_and_flags_disorder);
   tcase_add_test(tc, index_chunks_at_string_limit);
-  tcase_add_test(tc, typelist_round_trips);
-  tcase_add_test(tc, nsmap_round_trips);
   tcase_add_test(tc, index_check_flags_single_layer_damage);
   tcase_add_test(tc, index_check_flags_index_structure_damage);
   tcase_add_test(tc, index_check_flags_two_layer_damage);
@@ -712,9 +489,6 @@ static Suite *index_suite(void) {
   tcase_add_test(tc, index_build_limits);
   tcase_add_test(tc, index_build_allocation_failures);
   tcase_add_test(tc, index_sort_keys_with_equal_instants_and_containers);
-  tcase_add_test(tc, typelist_build_rejects_invalid);
-  tcase_add_test(tc, typelist_parse_rejects_malformed);
-  tcase_add_test(tc, nsmap_rejects_malformed_and_allocation_failures);
   suite_add_tcase(s, tc);
   return s;
 }

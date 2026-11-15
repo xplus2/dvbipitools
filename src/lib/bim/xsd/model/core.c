@@ -6,6 +6,8 @@
 #include <string.h>
 
 #include "lib/bim/xsd/model/priv.h"
+#include "lib/helper/growutil.h"
+#include "lib/helper/strutil.h"
 
 void *xm_arena_alloc(xsd_set_t *s, size_t n) {
   arena_chunk_t *c = s->arena;
@@ -50,7 +52,7 @@ int xm_plist_add(xsd_set_t *s, plist_t *l, void *p) {
 int xsd_set_fail_str(xsd_set_t *s, const char *code, const char *msg) {
   if (!s->err[0]) {
     s->code = code;
-    snprintf(s->err, sizeof s->err, "%s", msg);
+    bufcpy(s->err, sizeof s->err, msg);
   }
   return -1;
 }

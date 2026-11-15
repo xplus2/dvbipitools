@@ -5,6 +5,7 @@
 #include "internal.h"
 #include "reactor_tls.h"
 #include "qsbr.h"
+#include "wake.h"
 #include "../core/htdocs.h"
 #include "../core/metrics.h"
 #include "../core/status.h"
@@ -23,6 +24,10 @@
 #ifdef HAVE_HTTP3
 #include "../http3/http3.h"
 #endif
+#if defined(HAVE_HTTP2) || defined(HAVE_HTTP3)
+#include "../httpng/httpng.h"
+#endif
+#include "lib/helper/dateutil.h"
 
 #include <errno.h>
 #include <stdatomic.h>
@@ -48,25 +53,14 @@ void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, struct epo
   if (ptr >= (void *)&rl->L[0] && ptr < (void *)&rl->L[rl->nL]) {
     reactor_listener *lp = ptr;
     switch (lp->kind) {
-      case RL_TSPUSH_EFD: {
+      case RL_WAKE_EFD: {
         uint64_t v = 0;
         ssize_t r = read(lp->fd, &v, sizeof v);
+        unsigned kinds = reactor_wake_take(tid);
         (void)r;
-        ts_push_flush_ready(tid);
-        return;
-      }
-      case RL_DASHCHUNK_EFD: {
-        uint64_t v = 0;
-        ssize_t r = read(lp->fd, &v, sizeof v);
-        (void)r;
-        dash_lldash_flush_ready(tid);
-        return;
-      }
-      case RL_MP4PUSH_EFD: {
-        uint64_t v = 0;
-        ssize_t r = read(lp->fd, &v, sizeof v);
-        (void)r;
-        mp4push_flush_ready(tid);
+        if (kinds & 1u << WAKE_TSPUSH) ts_push_flush_ready(tid);
+        if (kinds & 1u << WAKE_DASHCHUNK) dash_lldash_flush_ready(tid);
+        if (kinds & 1u << WAKE_MP4PUSH) mp4push_flush_ready(tid);
         return;
       }
 #ifdef HAVE_HTTP3
@@ -159,19 +153,19 @@ static atomic_int g_setup_done;
 static atomic_int g_setup_failed;
 
 void reactor_startup_begin(int n) {
-  atomic_store(&g_setup_expect, n);
-  atomic_store(&g_setup_done, 0);
-  atomic_store(&g_setup_failed, 0);
+  atomic_store_explicit(&g_setup_expect, n, memory_order_release);
+  atomic_store_explicit(&g_setup_done, 0, memory_order_release);
+  atomic_store_explicit(&g_setup_failed, 0, memory_order_release);
 }
 
-void reactor_startup_lost(void) { atomic_fetch_sub(&g_setup_expect, 1); }
+void reactor_startup_lost(void) { atomic_fetch_sub_explicit(&g_setup_expect, 1, memory_order_acq_rel); }
 
-int reactor_startup_failed(void) { return atomic_load(&g_setup_failed); }
+int reactor_startup_failed(void) { return atomic_load_explicit(&g_setup_failed, memory_order_acquire); }
 
 /* tid 0 only: every worker bound (or failed) before "listening" is announced */
 static void wait_setup_done(void) {
   const struct timespec ts = {0, 1000000L};
-  while (atomic_load(&g_setup_done) < atomic_load(&g_setup_expect) && !signal_stop_requested()) nanosleep(&ts, NULL);
+  while (atomic_load_explicit(&g_setup_done, memory_order_acquire) < atomic_load_explicit(&g_setup_expect, memory_order_acquire) && !signal_stop_requested()) nanosleep(&ts, NULL);
 }
 
 void *worker_thread(void *arg) {
@@ -191,29 +185,30 @@ void *worker_thread(void *arg) {
   epfd = epoll_create1(EPOLL_CLOEXEC);
   if (epfd < 0) {
     int expected = 0;
-    if (atomic_compare_exchange_strong(&g_setup_failed, &expected, 1))
+    if (atomic_compare_exchange_strong_explicit(&g_setup_failed, &expected, 1, memory_order_acq_rel, memory_order_acquire))
       log_code("YE500226", TOOL_NAME ": worker %d: epoll_create1: %s", tid, strerror(errno));
-    atomic_fetch_add(&g_setup_done, 1);
+    atomic_fetch_add_explicit(&g_setup_done, 1, memory_order_acq_rel);
     signal_request_stop();
     return NULL;
   }
   t_reactor_epfd = epfd;
   setup_rc = reactor_setup_listeners(&rl, epfd, tid);
   if (setup_rc != 0) {
-    atomic_store(&g_setup_failed, 1);
+    atomic_store_explicit(&g_setup_failed, 1, memory_order_release);
     signal_request_stop();
   }
-  atomic_fetch_add(&g_setup_done, 1);
+  atomic_fetch_add_explicit(&g_setup_done, 1, memory_order_acq_rel);
   if (tid == 0) {
     wait_setup_done();
-    if (!atomic_load(&g_setup_failed)) reactor_notify_listening();
+    if (!atomic_load_explicit(&g_setup_failed, memory_order_acquire)) reactor_notify_listening();
   }
   if (setup_rc != 0) goto out;
   for (;;) {
     struct epoll_event events[256];
-    int nev, timeout_ms = 200;
+    int nev;
+    int timeout_ms = reactor_wait_timeout_ms(tid, 200);
     if (signal_stop_requested()) {
-      if (tid == 0 && !atomic_load(&g_setup_failed)) log_line(TOOL_NAME ": signal received, shutting down");
+      if (tid == 0 && !atomic_load_explicit(&g_setup_failed, memory_order_acquire)) log_line(TOOL_NAME ": signal received, shutting down");
       break;
     }
 #ifdef HAVE_HTTP3
@@ -262,57 +257,64 @@ out:
 #ifdef HAVE_HTTP2
   h2_body_pool_release();
 #endif
+#if defined(HAVE_HTTP2) || defined(HAVE_HTTP3)
+  httpng_body_pool_release();
+#endif
+#ifdef HAVE_HTTP3
+  h3_ws_buf_pool_release();
+#endif
   conn_zc_linger_flush();
   conn_retire_handoff();
   return NULL;
 }
 
-static void capture_pump_feed(capture_ctx_t *ctx, void *user, const unsigned char *pkt) {
+static void capture_pump_feed(capture_ctx_t *ctx, void *user, const unsigned char *pkts, size_t n) {
   (void)user;
-  if (tspack_pid(pkt) == 0x1FFF) return; /* stuffing, no payload, matches dipirec's STRIP_NUL default */
-  ts_push_feed_pkt(ctx, pkt);
-  hls_seg_feed_all(ctx, pkt);
+  for (const unsigned char *pkt = pkts; n--; pkt += 188) {
+    if (tspack_pid(pkt) == 0x1FFF) continue; /* stuffing, no payload, matches dipirec's STRIP_NUL default */
+    ts_push_feed_pkt(ctx, pkt);
+    hls_seg_feed_all(ctx, pkt);
+  }
 }
 
-#define PUMP_MAINT_INTERVAL_S 1.0
-#define PUMP_IDLE_BACKOFF_MIN_US 200
-#define PUMP_IDLE_BACKOFF_MAX_US 5000
+#define MAINT_INTERVAL_S 1.0
+#define MAINT_TICK_S 0.1
+#define PUMP_IDLE_WAIT_MS 5
 
 void *pump_thread(void *arg) {
   int pid = (int)(intptr_t)arg;
-  double last_maint = mono_seconds();
-  useconds_t idle_backoff_us = PUMP_IDLE_BACKOFF_MIN_US;
   t_pump_tid = pid;
   while (!signal_stop_requested()) {
     int drained;
-    ts_push_wake_batch_begin();
+    reactor_wake_batch_begin();
     drained = capture_pump_tick(pid, capture_pump_feed, NULL);
-    ts_push_wake_batch_end();
-    if (pid == 0) { /* periodic maintenance: one pump thread only, not per-shard */
-      double now = mono_seconds();
-      if (now - last_maint >= PUMP_MAINT_INTERVAL_S) {
-        hls_seg_sweep_idle();
-        hls_seg_pool_trim_idle();
-        hls_store_slot_reclaim_sweep();
-        dipixy_status_tick();
-        ws_clients_tick();
-        tls_gc_sweep();
-        tls_ctx_gc_sweep();
-        last_maint = now;
-      }
-      if (signal_tls_reload_requested()) {
-        if (reload_tls() == 0) log_line(TOOL_NAME ": SIGUSR1: TLS cert reload ok");
-        else                   log_code("YW300106", "SIGUSR1: TLS cert reload failed");
-      }
-      dipixy_metrics_push(reactor_metrics());
+    reactor_wake_batch_end();
+    if (!drained) capture_pump_wait(pid, PUMP_IDLE_WAIT_MS);
+  }
+  return NULL;
+}
+
+void *maint_thread(void *arg) {
+  double last = mono_seconds();
+  (void)arg;
+  while (!signal_stop_requested()) {
+    double now = mono_seconds();
+    if (now - last >= MAINT_INTERVAL_S) {
+      hls_seg_sweep_idle();
+      hls_seg_pool_trim_idle();
+      hls_store_slot_reclaim_sweep();
+      dipixy_status_tick();
+      ws_clients_tick();
+      tls_gc_sweep();
+      tls_ctx_gc_sweep();
+      last = now;
     }
-    if (!drained) {
-      usleep(idle_backoff_us);
-      if (idle_backoff_us < PUMP_IDLE_BACKOFF_MAX_US) idle_backoff_us *= 2;
-      if (idle_backoff_us > PUMP_IDLE_BACKOFF_MAX_US) idle_backoff_us = PUMP_IDLE_BACKOFF_MAX_US;
-    } else {
-      idle_backoff_us = PUMP_IDLE_BACKOFF_MIN_US;
+    if (signal_tls_reload_requested()) {
+      if (reload_tls() == 0) log_line(TOOL_NAME ": SIGUSR1: TLS cert reload ok");
+      else                   log_code("YW300106", "SIGUSR1: TLS cert reload failed");
     }
+    dipixy_metrics_push(reactor_metrics());
+    sleep_interruptible(MAINT_TICK_S);
   }
   return NULL;
 }

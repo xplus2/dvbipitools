@@ -8,7 +8,7 @@
 
 #include "dipixy/dash/dash.h"
 #include "dipixy/dash/dash_int.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 /* want_ll: route-selected, not derived from snap->part_target. split: video and audio as separate AdaptationSets */
 static size_t build_mpd(const mpd_fmt_ctx_t *ctx, char *mpd, size_t cap) {
@@ -159,19 +159,19 @@ static size_t fmt_mpd_all_cb(void *ctx_, char *buf, size_t cap) {
   return build_mpd_lcevc_all(ctx_, buf, cap);
 }
 
-static const hls_snapshot_t *track_snap(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
-  const hls_store_t *t = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+static const hls_snapshot_t *track_snap(const stream_key_t *k) {
+  const hls_store_t *t = hls_store_find(k);
   return t ? atomic_load_explicit(&t->snap, memory_order_acquire) : NULL;
 }
 
-static int mpd_track_snaps(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, mpd_fmt_ctx_t *f) {
+static int mpd_track_snaps(const stream_key_t *k, mpd_fmt_ctx_t *f) {
   const hls_snapshot_t *v;
   const hls_snapshot_t *a;
   f->vsnap = NULL;
   f->asnap = NULL;
   if (!f->snap->acodec_str[0]) return 1;
-  v = track_snap(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4_VIDEO);
-  a = track_snap(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4_AUDIO);
+  v = track_snap(STREAM_KEY_AS(k, SEG_CONTAINER_FMP4_VIDEO));
+  a = track_snap(STREAM_KEY_AS(k, SEG_CONTAINER_FMP4_AUDIO));
   if (!v || !a || v->count == 0 || a->count == 0 || !v->init_size || !a->init_size) return 0;
   if (v->epoch != f->snap->epoch || a->epoch != f->snap->epoch) return 0;
   f->vsnap = v;
@@ -179,9 +179,8 @@ static int mpd_track_snaps(const capture_ctx_t *ctx, const pid_filter_t *filter,
   return 1;
 }
 
-static int dash_resolve_mpd(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int want_ll, const char *utc_url,
-                            dash_mpd_resolve_t *r) {
-  const hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, SEG_CONTAINER_FMP4);
+static int dash_resolve_mpd(const stream_key_t *k, const hls_store_t *st, int want_ll, const char *utc_url, dash_mpd_resolve_t *r) {
+  const hls_store_t *s = st;
   hls_snapshot_t *snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
   mpd_fmt_ctx_t fctx;
   const cached_text_t *ct;
@@ -197,18 +196,18 @@ static int dash_resolve_mpd(const capture_ctx_t *ctx, const pid_filter_t *filter
   fctx.snap = snap;
   fctx.want_ll = want_ll;
   fctx.utc_url = utc_url;
-  if (!mpd_track_snaps(ctx, filter, pmt_pid, lcevc, &fctx)) {
+  if (!mpd_track_snaps(STREAM_KEY_AS(k, SEG_CONTAINER_FMP4), &fctx)) {
     r->status = 404;
     return 1;
   }
-  if (lcevc->mode == LCEVC_SEL_ALL && snap->lcevc_pid_count > 0) {
+  if (k->lcevc->mode == LCEVC_SEL_ALL && snap->lcevc_pid_count > 0) {
     fmt = fmt_mpd_all_cb;
     cap = DASH_MPD_ALL_BUF_CAP;
   } else {
     fmt = fmt_mpd_cb;
     cap = DASH_MPD_BUF_CAP;
   }
-  ct = snapshot_cache_text_keyed(want_ll ? snap->cache_mpd_ll : snap->cache_mpd, MPD_VARIANTS, utc_url, fmt, &fctx, cap, &owned);
+  ct = snapshot_cache_text_keyed(&snap->cache[want_ll ? SNAP_CACHE_MPD_LL : SNAP_CACHE_MPD], MPD_VARIANTS, utc_url, fmt, &fctx, cap, &owned);
   if (owned) r->owned = ct;
   if (!ct) {
     r->status = 404;
@@ -220,11 +219,11 @@ static int dash_resolve_mpd(const capture_ctx_t *ctx, const pid_filter_t *filter
   return 1;
 }
 
-int dash_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int want_ll, const char *utc_url, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
+int dash_serve(conn_t *c, const stream_key_t *k, const hls_store_t *st, int want_ll, const char *utc_url, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
   char cors_hdr[192];
   dash_mpd_resolve_t r;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
-  dash_resolve_mpd(ctx, filter, pmt_pid, lcevc, want_ll, utc_url, &r);
+  dash_resolve_mpd(STREAM_KEY_AS(k, SEG_CONTAINER_FMP4), st, want_ll, utc_url, &r);
   if (r.status == 404) {
     respond_status(c, "404 Not Found", keep_alive);
     return 1;
@@ -235,10 +234,10 @@ int dash_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, 
   return 1;
 }
 
-int dash_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, int want_ll, const char *utc_url, int is_head, hls_resp_t *out) {
+int dash_render(const stream_key_t *k, const hls_store_t *st, int want_ll, const char *utc_url, int is_head, hls_resp_t *out) {
   dash_mpd_resolve_t r;
   memset(out, 0, sizeof *out);
-  dash_resolve_mpd(ctx, filter, pmt_pid, lcevc, want_ll, utc_url, &r);
+  dash_resolve_mpd(STREAM_KEY_AS(k, SEG_CONTAINER_FMP4), st, want_ll, utc_url, &r);
   if (r.status == 404) {
     resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
     return 1;

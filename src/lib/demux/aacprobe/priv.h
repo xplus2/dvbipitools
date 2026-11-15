@@ -11,7 +11,7 @@
 
 #define AACPROBE_MAX_SFB 51
 #define AACPROBE_MAX_GROUPS 8
-#define AACPROBE_SBR_BOOKS 10
+#define AACPROBE_SBR_BOOKS 5
 
 #define AACPROBE_ID_SCE 0
 #define AACPROBE_ID_CPE 1
@@ -28,8 +28,7 @@
 #define AACPROBE_INTENSITY_HCB 15
 
 typedef enum {
-  SBR_BOOK_T_ENV_15, SBR_BOOK_F_ENV_15, SBR_BOOK_T_BAL_15, SBR_BOOK_F_BAL_15, SBR_BOOK_T_ENV_30,
-  SBR_BOOK_F_ENV_30, SBR_BOOK_T_BAL_30, SBR_BOOK_F_BAL_30, SBR_BOOK_T_NOISE, SBR_BOOK_T_NOISE_BAL
+  SBR_BOOK_T_ENV_15, SBR_BOOK_F_ENV_15, SBR_BOOK_T_ENV_30, SBR_BOOK_F_ENV_30, SBR_BOOK_T_NOISE
 } aacprobe_sbr_book_t;
 
 typedef struct {
@@ -74,8 +73,6 @@ extern const aacprobe_book_t aacprobe_book_sbr[AACPROBE_SBR_BOOKS];
 /* symbol, -1 on bad code or short data */
 int aacprobe_huff(br_t *b, const aacprobe_book_t *book);
 
-/* 0 ok, -1 on bad or unsupported data, also for all below */
-int aacprobe_frame(aacprobe_t *p, br_t *b);
 int aacprobe_ics_info(br_t *b, aacprobe_ics_t *ics, unsigned sfi);
 int aacprobe_ics(br_t *b, aacprobe_ics_t *ics, unsigned sfi, int common_window);
 int aacprobe_spectral(br_t *b, const aacprobe_ics_t *ics, unsigned sfi);

@@ -36,7 +36,7 @@ static void h3_hls_cold_finish(hls_waiter_t *w) {
   r = find_req(conn, w->stream_id);
   if (!r) return;
   if (w->kind == HLS_COLD_MP4) {
-    int sub = mp4push_subscribe(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, CONN_PROTO_H3);
+    int sub = mp4push_subscribe(STREAM_KEY_AS(WAITER_KEY(w), SEG_CONTAINER_FMP4), CONN_PROTO_H3);
     if (sub < 0 || !h3_mp4push_dispatch(conn, r, sub, w->ws_handle)) {
       if (sub >= 0) mp4push_sub_close(sub);
       h3_respond_status(conn, w->stream_id, "503");
@@ -44,7 +44,7 @@ static void h3_hls_cold_finish(hls_waiter_t *w) {
   } else if (!hls_cold_ready(w)) {
     h3_respond_status(conn, w->stream_id, hls_cold_expired_status(w) == 503 ? "503" : "404");
   } else {
-    handled = httpng_hls_cold_render(w->kind, w->container, w->want_ll, w->utc_url, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->filename, w->is_head, &resp);
+    handled = httpng_hls_cold_render(w->kind, WAITER_KEY(w), w->want_ll, w->utc_url, &w->file, w->is_head, &resp);
     if (!handled) {
       h3_respond_status(conn, w->stream_id, "404");
     } else {

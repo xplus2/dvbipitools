@@ -5,6 +5,8 @@
 #define DVBIPITOOLS_LIB_HELPER_DATEUTIL_H
 
 #include <stddef.h>
+#include <stdint.h>
+#include <time.h>
 
 typedef enum { ISO8601_OFF_NONE, ISO8601_OFF_Z, ISO8601_OFF_NUMERIC } iso8601_offset_kind_t;
 
@@ -35,6 +37,26 @@ static inline long floor_div(long a, long b) {
   long q = a / b;
   long r = a % b;
   return (r != 0 && ((r < 0) != (b < 0))) ? q - 1 : q;
+}
+
+static inline int64_t now_ms(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return (int64_t)t.tv_sec * 1000 + t.tv_nsec / 1000000;
+}
+
+static inline uint64_t now_ns(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return (uint64_t)t.tv_sec * 1000000000u + (uint64_t)t.tv_nsec;
+}
+
+double mono_seconds(void);
+
+static inline uint64_t wall_ms(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_REALTIME, &t);
+  return (uint64_t)t.tv_sec * 1000u + (uint64_t)t.tv_nsec / 1000000u;
 }
 
 #endif

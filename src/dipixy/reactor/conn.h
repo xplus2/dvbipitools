@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <time.h>
+#include "lib/helper/seqlock.h"
 
 /* threads[] sized to this in reactor_run, -j past it fails at startup */
 #define REACTOR_MAX_WORKERS 256
@@ -28,8 +29,7 @@ typedef enum {
   CONN_H2,            /* HTTP/2 async: nghttp2 session */
   CONN_TSPUSH,        /* MPEG-TS push: output-only. packets via conn_send_buffered */
   CONN_DASHCHUNK,     /* LL-DASH chunk stream: output-only, chunks via conn_send_buffered */
-  CONN_MP4PUSH,       /* MP4 push: output-only, fragments via conn_send_buffered */
-  CONN_CLOSING
+  CONN_MP4PUSH        /* MP4 push: output-only, fragments via conn_send_buffered */
 } conn_state;
 
 /* grow-only byte buffer. out: [off,len) unsent region. in: off = parse cursor */
@@ -46,7 +46,8 @@ typedef void (*conn_zc_release_fn)(void *arg);
 /* external send: caller buf, no copy. off = bytes sent, unconfirmed */
 typedef struct {
   const unsigned char *data;
-  size_t len, off;
+  size_t len;
+  size_t off;
   conn_zc_release_fn release;
   void *release_arg;
   int active;
@@ -94,7 +95,7 @@ typedef struct conn_t {
   char client_ip[64];             /* peer IP, restored into t_req per dispatch */
   _Atomic time_t last_active;
   size_t req_bytes; /* request bytes consumed from in.buf, incl trailing blank line. reactor_keepalive() preserves pipelined bytes past it */
-  _Alignas(64) _Atomic unsigned char want_write; /* EPOLLOUT currently armed for this fd */
+  _Alignas(CACHELINE) _Atomic unsigned char want_write; /* EPOLLOUT currently armed for this fd */
   unsigned char dead;                      /* backpressure tripped or torn down: owner must close */
   unsigned char torn_down;                 /* conn_claim_teardown() won, guarded by out_lock */
   _Atomic unsigned char read_done;         /* recv()==0: blocks EPOLLIN re-arm */

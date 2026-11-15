@@ -71,7 +71,6 @@ int dash_mpd_parse(const char *body, const http_url_t *base, dash_mpd_t *out);
 
 int dash_pick_highest(const dash_adaptation_set_t *as);
 
-unsigned long long dash_wall_ms(void);
 
 /* period holding the live edge: last period if dynamic without availabilityStartTime, else by wall clock. 0 if static */
 unsigned dash_mpd_live_period(const dash_mpd_t *m);
@@ -101,7 +100,5 @@ int dash_timeline_find(const dash_representation_t *r, unsigned long long time, 
 
 /* start of oldest timeline segment, 0 if no timeline */
 unsigned long long dash_timeline_first(const dash_representation_t *r);
-
-unsigned long long dash_effective_availability_ms(unsigned long long nominal_availability_ms, unsigned long long availability_time_offset_ms);
 
 #endif

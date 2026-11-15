@@ -15,7 +15,7 @@
 #include "dipixy/ts/capture/capture.h"
 #include "dipixy/ts/channels/channels.h"
 #include "lib/helper/sds_xml.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 static void write_temp_file(char *path, const char *content) {
   char tmpl[] = "/tmp/dvbipitools_test_channels_XXXXXX.m3u";
@@ -99,10 +99,14 @@ START_TEST(mixed_scheme_playlist_opens_static_ctx_on_demand) {
   pthread_t tid;
   playlist_http_server_t srv;
   unsigned http_port = start_local_http_server(&listen_fd, &tid, &srv);
-  char path[160], content[512];
+  char path[160];
+  char content[512];
   channels_t *ch;
-  capture_ctx_t *http_ctx, *srt_ctx, *rtp_ctx;
-  int family, rtp;
+  capture_ctx_t *http_ctx;
+  char uri[1024];
+  int insecure;
+  int family;
+  int rtp;
   char addr[64];
   unsigned port;
 
@@ -121,8 +125,7 @@ START_TEST(mixed_scheme_playlist_opens_static_ctx_on_demand) {
   ck_assert_ptr_nonnull(ch);
 
   /* rtp entry: resolved per-request via channels_resolve(), no static ctx */
-  rtp_ctx = channels_resolve_static(ch, 1, 1, NULL);
-  ck_assert_ptr_null(rtp_ctx);
+  ck_assert_int_eq(channels_static_target(ch, 1, 1, NULL, uri, sizeof uri, &insecure), 0);
   ck_assert_int_eq(channels_resolve(ch, 1, 1, NULL, &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
   ck_assert_str_eq(addr, "239.1.1.1");
   ck_assert_uint_eq(port, 5000u);
@@ -131,15 +134,14 @@ START_TEST(mixed_scheme_playlist_opens_static_ctx_on_demand) {
   ck_assert_int_eq(srv.accepts, 0); /* build and rtp/none lookups connect nothing */
 
   /* http entry: opened on request */
-  http_ctx = channels_resolve_static(ch, 1, 2, NULL);
+  ck_assert_int_ne(channels_static_target(ch, 1, 2, NULL, uri, sizeof uri, &insecure), 0);
+  http_ctx = capture_open_http_static(uri, insecure);
   ck_assert_ptr_nonnull(http_ctx);
   ck_assert_int_eq(srv.accepts, 1);
   capture_close(http_ctx);
 
   /* srt entry: no libsrt in this build (srtsrc_stub always fails), stays listed,
      unresolvable either way */
-  srt_ctx = channels_resolve_static(ch, 1, 3, NULL);
-  ck_assert_ptr_null(srt_ctx);
   ck_assert_int_ne(channels_resolve(ch, 1, 3, NULL, &family, addr, sizeof addr, NULL, 0, &port, &rtp, NULL), 0);
 
   channels_free(ch);
@@ -152,11 +154,14 @@ START_TEST(sighup_reload_opens_no_http_connection) {
   pthread_t tid;
   playlist_http_server_t srv;
   unsigned http_port = start_local_http_server(&listen_fd, &tid, &srv);
-  char path[160], content[256];
+  char path[160];
+  char content[256];
   config_t cfg;
   source_def_t src;
   channels_t *ch;
   capture_ctx_t *after;
+  char uri[1024];
+  int insecure;
 
   snprintf(content, sizeof content,
            "#EXTINF:-1,HTTP Channel\n"
@@ -177,7 +182,8 @@ START_TEST(sighup_reload_opens_no_http_connection) {
   channels_reload_all(ch, &cfg);
   ck_assert_int_eq(srv.accepts, 0); /* build and reload never connect */
 
-  after = channels_resolve_static(ch, 1, 1, NULL);
+  ck_assert_int_ne(channels_static_target(ch, 1, 1, NULL, uri, sizeof uri, &insecure), 0);
+  after = capture_open_http_static(uri, insecure);
   ck_assert_ptr_nonnull(after);
   ck_assert_int_eq(srv.accepts, 1);
   capture_close(after);
@@ -200,7 +206,8 @@ static void collect_name(void *ctx, const channel_item_t *item) {
 }
 
 START_TEST(srt_open_failure_keeps_entry_in_list) {
-  char path[160], content[256];
+  char path[160];
+  char content[256];
   channels_t *ch;
   collected_names_t collected = {{{0}}, 0};
 
@@ -224,7 +231,9 @@ START_TEST(srt_open_failure_keeps_entry_in_list) {
 END_TEST
 
 typedef struct {
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
   int calls;
 } collected_triplet_t;
 
@@ -345,7 +354,8 @@ START_TEST(channels_resolve_passes_ret_and_fcc_through) {
   FILE *f;
   channels_t *ch;
   channel_ret_fcc_t rf;
-  int family, rtp;
+  int family;
+  int rtp;
   char addr[64];
   unsigned port;
 

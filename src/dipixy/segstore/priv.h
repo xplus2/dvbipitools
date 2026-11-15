@@ -20,16 +20,19 @@ extern qsbr_domain_t *g_segstore_qsbr;
 extern _Atomic int *g_slot_state;
 
 hls_snapshot_t *snap_clone(const hls_snapshot_t *base);
+hls_snapshot_t *snap_clone_into(hls_snapshot_t *mem, const hls_snapshot_t *base);
 void seq_floor_note(uint32_t next_seq);
 void snap_free(hls_snapshot_t *ns);
+void snap_recycle(hls_store_t *s, hls_snapshot_t *ns);
 
-void ring_ref(hls_seg_ring_t *r);
-void ring_unref(hls_seg_ring_t *r);
 hls_seg_ring_t *ring_cow(hls_snapshot_t *ns);
 
 void snap_retire(hls_store_t *s, hls_snapshot_t *old);
 void snap_retire_async(hls_snapshot_t *snap);
 void snap_drain_all_async(hls_store_t *s);
 void slot_retire_push(slot_retire_node_t *node);
+void slot_retire_pool_init(int n);
+slot_retire_node_t *slot_retire_node_get(void);
+void slot_retire_node_put(slot_retire_node_t *node);
 
 #endif

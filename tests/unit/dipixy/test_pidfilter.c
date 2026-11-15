@@ -67,17 +67,23 @@ START_TEST(null_value_leaves_empty) {
 }
 END_TEST
 
-START_TEST(excludes_matches_present_pid_only) {
+START_TEST(mask_has_listed_pids_only) {
+  static const unsigned listed[] = {0, 63, 64, 101, 0x20, 8191};
   pid_filter_t f;
-  pid_filter_parse("101,0x20", &f);
-  ck_assert_int_eq(pid_filter_excludes(&f, 101), 1);
-  ck_assert_int_eq(pid_filter_excludes(&f, 0x20), 1);
-  ck_assert_int_eq(pid_filter_excludes(&f, 42), 0);
+  pid_mask_t m;
+  unsigned n = 0;
+  pid_filter_parse("0,63,64,101,0x20,8191", &f);
+  pid_mask_from_filter(&m, &f);
+  for (unsigned pid = 0; pid < TS_PID_COUNT; pid++) n += (unsigned)pid_mask_has(&m, pid);
+  ck_assert_uint_eq(n, 6);
+  for (unsigned i = 0; i < 6; i++) ck_assert_int_eq(pid_mask_has(&m, listed[i]), 1);
+  ck_assert_int_eq(pid_mask_has(&m, TS_PID_COUNT), 0);
 }
 END_TEST
 
 START_TEST(equal_ignores_input_order) {
-  pid_filter_t a, b;
+  pid_filter_t a;
+  pid_filter_t b;
   pid_filter_parse("101,0x20", &a);
   pid_filter_parse("32,101", &b);
   ck_assert_int_eq(pid_filter_equal(&a, &b), 1);
@@ -85,7 +91,8 @@ START_TEST(equal_ignores_input_order) {
 END_TEST
 
 START_TEST(equal_rejects_different_sets) {
-  pid_filter_t a, b;
+  pid_filter_t a;
+  pid_filter_t b;
   pid_filter_parse("101,0x20", &a);
   pid_filter_parse("101", &b);
   ck_assert_int_eq(pid_filter_equal(&a, &b), 0);
@@ -215,7 +222,7 @@ static Suite *pidfilter_suite(void) {
   tcase_add_test(tc, unparsable_token_skipped);
   tcase_add_test(tc, duplicates_deduped);
   tcase_add_test(tc, null_value_leaves_empty);
-  tcase_add_test(tc, excludes_matches_present_pid_only);
+  tcase_add_test(tc, mask_has_listed_pids_only);
   tcase_add_test(tc, equal_ignores_input_order);
   tcase_add_test(tc, equal_rejects_different_sets);
   tcase_add_test(tc, query_extracts_filter_param);

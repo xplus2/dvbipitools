@@ -23,8 +23,8 @@ struct ts_filter {
   int bad_track;        /* -a track missing from PMT */
   int track_seen;       /* -a track was present once, later PMT drops are transient */
   unsigned strip_mask;  /* --strip, STRIP_* bits */
-  unsigned char int_pending[8192]; /* STRIP_INT: pid currently mid an INT section */
-  unsigned char audio_drop[8192]; /* rebuilt each PMT parse, see rebuild_audio_drop() */
+  unsigned char int_pending[TS_PID_COUNT]; /* STRIP_INT: pid currently mid an INT section */
+  unsigned char audio_drop[TS_PID_COUNT]; /* rebuilt each PMT parse, see rebuild_audio_drop() */
 };
 
 /* audio ES not selected by -a. rebuilt on every PMT parse, not per packet */
@@ -53,7 +53,8 @@ static int es_dropped(const ts_filter_t *f, unsigned pid) {
 
 /* copy descriptors, dropping one tag */
 static size_t filter_descs(const unsigned char *s, size_t slen, unsigned drop, unsigned char *d) {
-  size_t i = 0, o = 0;
+  size_t i = 0;
+  size_t o = 0;
   while (i + 2 <= slen) {
     size_t l = s[i + 1];
     if (i + 2 + l > slen) break;
@@ -81,7 +82,9 @@ static void finish_section(unsigned char *dst, const unsigned char *src, size_t 
 
 /* PAT minus program 0 (NIT) entry */
 static size_t pat_rewrite(const unsigned char *src, size_t srclen, unsigned char *dst) {
-  size_t i, o = 8, end;
+  size_t i;
+  size_t o = 8;
+  size_t end;
   if (srclen < 12 || src[0] != 0x00) return 0;
   memcpy(dst, src, 8);
   end = srclen - 4;
@@ -118,7 +121,11 @@ static size_t pmt_rewrite_es_entry(const ts_filter_t *f, const unsigned char *sr
 /* PMT minus AIT (--strip AIT), unselected audio/subs (-a/-s), CA descriptors
    (ES-level = ECM pid, program-level = EMM pid, each own --strip bit) */
 static size_t pmt_rewrite(const ts_filter_t *f, const unsigned char *src, size_t srclen, unsigned char *dst) {
-  size_t i, o, end, pil, newpil;
+  size_t i;
+  size_t o;
+  size_t end;
+  size_t pil;
+  size_t newpil;
 
   if (srclen < 16 || src[0] != 0x02) return 0;
   memcpy(dst, src, 12);
@@ -176,7 +183,8 @@ void ts_filter_free(ts_filter_t *f) {
 /* table_id of a section-start packet, -1 if not a section start or malformed */
 static int section_table_id(const unsigned char *pkt) {
   const unsigned char *pl;
-  size_t plen, ptr;
+  size_t plen;
+  size_t ptr;
   int pusi;
   if (!tspack_payload(pkt, &pl, &plen, &pusi) || !pusi || plen < 1) return -1;
   ptr = pl[0];

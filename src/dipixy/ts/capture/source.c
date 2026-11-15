@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
 
@@ -49,23 +49,11 @@ static void srt_key(char *key, size_t keysz, const char *host, unsigned port) {
 
 capture_ctx_t *capture_try_ref_srt(const char *host, unsigned port) {
   char key[300];
-  capture_ctx_t *c;
   srt_key(key, sizeof key, host, port);
-  pthread_mutex_lock(&g_lock);
-  c = find_existing_tssrc(key);
-  if (c) atomic_fetch_add_explicit(&c->refcount, 1, memory_order_relaxed);
-  pthread_mutex_unlock(&g_lock);
-  return c;
+  return ref_existing_tssrc(key);
 }
 
-capture_ctx_t *capture_try_ref_http(const char *url) {
-  capture_ctx_t *c;
-  pthread_mutex_lock(&g_lock);
-  c = find_existing_tssrc(url);
-  if (c) atomic_fetch_add_explicit(&c->refcount, 1, memory_order_relaxed);
-  pthread_mutex_unlock(&g_lock);
-  return c;
-}
+capture_ctx_t *capture_try_ref_http(const char *url) { return ref_existing_tssrc(url); }
 
 capture_ctx_t *capture_open_srt(const char *host, unsigned port) {
   char key[300];
@@ -76,14 +64,8 @@ capture_ctx_t *capture_open_srt(const char *host, unsigned port) {
 
   srt_key(key, sizeof key, host, port);
 
-  pthread_mutex_lock(&g_lock);
-  c = find_existing_tssrc(key);
-  if (c) {
-    atomic_fetch_add_explicit(&c->refcount, 1, memory_order_relaxed);
-    pthread_mutex_unlock(&g_lock);
-    return c;
-  }
-  pthread_mutex_unlock(&g_lock);
+  c = ref_existing_tssrc(key);
+  if (c) return c;
 
   keydup = strdup(key);
   if (!keydup) return NULL;
@@ -118,14 +100,8 @@ capture_ctx_t *capture_open_http_static(const char *url, int insecure_tls) {
     return NULL;
   }
 
-  pthread_mutex_lock(&g_lock);
-  c = find_existing_tssrc(url);
-  if (c) {
-    atomic_fetch_add_explicit(&c->refcount, 1, memory_order_relaxed);
-    pthread_mutex_unlock(&g_lock);
-    return c;
-  }
-  pthread_mutex_unlock(&g_lock);
+  c = ref_existing_tssrc(url);
+  if (c) return c;
 
   keydup = strdup(url);
   if (!keydup) return NULL;

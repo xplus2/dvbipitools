@@ -6,7 +6,7 @@
 #include <string.h>
 #include <strings.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/hls/m3u_lines.h"
 #include "playlist.h"
 
@@ -29,7 +29,8 @@ static int is_url_line(const char *l) { return !strncasecmp(l, "http://", 7) || 
 static int is_relative_ref(const char *l) { return *l && l[0] != '#' && !strstr(l, "://"); }
 
 static int parse_m3u(char *text, const http_url_t *base, char *url, size_t n) {
-  char *cur = text, *line;
+  char *cur = text;
+  char *line;
   int extm3u = !strncmp(text, "#EXTM3U", 7);
   while ((line = playlist_next_line(&cur)) != NULL) {
     if (!*line || line[0] == '#') continue;
@@ -56,7 +57,8 @@ static int is_file_key(const char *l, const char **value) {
 }
 
 static int parse_pls(char *text, char *url, size_t n) {
-  char *cur = text, *line;
+  char *cur = text;
+  char *line;
   while ((line = playlist_next_line(&cur)) != NULL) {
     const char *v;
     if (is_file_key(line, &v) && is_url_line(v)) {

@@ -6,7 +6,7 @@
 
 #include "lib/helper/uriparse.h"
 #include "auth.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/mux/amf.h"
 #include "priv.h"
 
@@ -92,7 +92,7 @@ int rtmp_command_connect(struct rtmp *r) {
   return send_invoke(r, 0, &b);
 }
 
-int rtmp_command_release_stream(struct rtmp *r) {
+static int rtmp_command_release_stream(struct rtmp *r) {
   ebuf_t b;
   memset(&b, 0, sizeof b);
   amf_string(&b, "releaseStream");
@@ -102,7 +102,7 @@ int rtmp_command_release_stream(struct rtmp *r) {
   return send_invoke(r, 0, &b);
 }
 
-int rtmp_command_fcpublish(struct rtmp *r) {
+static int rtmp_command_fcpublish(struct rtmp *r) {
   ebuf_t b;
   memset(&b, 0, sizeof b);
   amf_string(&b, "FCPublish");
@@ -112,7 +112,7 @@ int rtmp_command_fcpublish(struct rtmp *r) {
   return send_invoke(r, 0, &b);
 }
 
-int rtmp_command_create_stream(struct rtmp *r) {
+static int rtmp_command_create_stream(struct rtmp *r) {
   ebuf_t b;
   memset(&b, 0, sizeof b);
   amf_string(&b, "createStream");
@@ -121,7 +121,7 @@ int rtmp_command_create_stream(struct rtmp *r) {
   return send_invoke(r, 0, &b);
 }
 
-int rtmp_command_publish(struct rtmp *r) {
+static int rtmp_command_publish(struct rtmp *r) {
   ebuf_t b;
   memset(&b, 0, sizeof b);
   amf_string(&b, "publish");

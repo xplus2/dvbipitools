@@ -6,6 +6,7 @@
 #include "lib/demux/psi/section_asm.h"
 #include "lib/demux/tspack.h"
 #include "pidlock.h"
+#include "lib/helper/dateutil.h"
 
 #include <string.h>
 #include <time.h>
@@ -40,8 +41,9 @@ static void lcevc_lock(hls_seg_ctx_t *s, int n, const psi_es_t *es) {
       break;
     }
   }
-  hls_set_lcevc_pids(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, s->container, pids, (int)count);
+  if (s->store) hls_set_lcevc_pids_at(s->store, pids, (int)count);
   pidlock_apply_lcevc(&s->lcevc, &s->drop, pids, (int)count);
+  pid_mask_from_filter(&s->drop_mask, &s->drop);
   if (s->container == SEG_CONTAINER_FMP4 && count > 0) {
     lcevc_resolved_t r = lcevc_select_resolve(&s->lcevc, pids, (int)count);
     if (r.kind == LCEVC_RESOLVE_ONE) {
@@ -132,6 +134,7 @@ static void relock_program(hls_seg_ctx_t *s, const psi_es_t *es, int n, const pr
   s->demux.audio_pid_known = 0;
   s->demux.lcevc_pid_known = 0;
   s->drop = s->filter;
+  pid_mask_from_filter(&s->drop_mask, &s->drop);
   lock_program(s, es, n, sel);
 }
 
@@ -160,12 +163,6 @@ static void splice_restart(hls_seg_ctx_t *s) {
   if (!select_program(s, es, n, &sel)) return;
   relock_program(s, es, n, &sel);
   log_code("YW700161", "hls: video timestamp jump, segmenter restarted on video pid 0x%04x", sel.video_pid);
-}
-
-static uint64_t wall_ms(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_REALTIME, &t);
-  return (uint64_t)t.tv_sec * 1000u + (uint64_t)t.tv_nsec / 1000000u;
 }
 
 /* no keyframe within buf_max: scrambled, unsupported codec or silent video pid. restart at next kf */
@@ -199,7 +196,7 @@ static void feed_one(hls_seg_ctx_t *s, const unsigned char *pkt, unsigned char *
   size_t n_pkts = 1;
   const unsigned char *out_pkt;
   if (s->splice_pending) splice_restart(s);
-  if (pid_filter_excludes(&s->drop, pid)) return;
+  if (pid_mask_has(&s->drop_mask, pid)) return;
   if (psi_wants_pid(s->demux.psi, pid)) psi_feed(s->demux.psi, pkt);
   if (!s->demux.video_pid_known) {
     if (psi_ready(s->demux.psi)) {

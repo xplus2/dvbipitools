@@ -9,11 +9,13 @@
 #include "lib/demux/crc32.h"
 #include "lib/demux/rawaudio.h"
 
-static int pf_excludes_cb(const void *ctx, unsigned pid) { return pid_filter_excludes((const pid_filter_t *)ctx, pid); }
+static int pf_excludes_cb(const void *ctx, unsigned pid) { return pid_mask_has((const pid_mask_t *)ctx, pid); }
 
 static size_t build_pat(unsigned char *out, unsigned tsid, unsigned prog_num, unsigned pmt_pid) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = (unsigned char)(tsid >> 8);
@@ -44,7 +46,9 @@ static size_t build_pat(unsigned char *out, unsigned tsid, unsigned prog_num, un
 /* one-program PMT, two MPEG-1 audio ES (stream_type 0x03), no video */
 static size_t build_pmt_2audio(unsigned char *out, unsigned prog_num, unsigned pid1, unsigned pid2) {
   unsigned char body[32];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = (unsigned char)(prog_num >> 8);
@@ -118,7 +122,8 @@ static void emit_cb(void *vctx, const unsigned char *data, size_t len) {
 }
 
 static void feed_pat_pmt(rawaudio_demux_t *d, unsigned pid1, unsigned pid2) {
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
 
   slen = build_pat(section, 0x1, 1, 0x0100);
@@ -157,13 +162,15 @@ END_TEST
 
 START_TEST(rawaudio_skips_filtered_lowest_es) {
   pid_filter_t f;
+  pid_mask_t m;
   emit_ctx_t ctx;
   rawaudio_demux_t *d;
   unsigned char pkt[188];
 
   pid_filter_parse("257", &f); /* 0x101 */
   memset(&ctx, 0, sizeof ctx);
-  d = rawaudio_demux_new(0, pf_excludes_cb, &f, emit_cb, &ctx);
+  pid_mask_from_filter(&m, &f);
+  d = rawaudio_demux_new(0, pf_excludes_cb, &m, emit_cb, &ctx);
   ck_assert_ptr_nonnull(d);
 
   feed_pat_pmt(d, 0x101, 0x102);
@@ -182,13 +189,15 @@ END_TEST
 
 START_TEST(rawaudio_no_audio_left_never_emits) {
   pid_filter_t f;
+  pid_mask_t m;
   emit_ctx_t ctx;
   rawaudio_demux_t *d;
   unsigned char pkt[188];
 
   pid_filter_parse("257,258", &f); /* 0x101, 0x102 */
   memset(&ctx, 0, sizeof ctx);
-  d = rawaudio_demux_new(0, pf_excludes_cb, &f, emit_cb, &ctx);
+  pid_mask_from_filter(&m, &f);
+  d = rawaudio_demux_new(0, pf_excludes_cb, &m, emit_cb, &ctx);
   ck_assert_ptr_nonnull(d);
   feed_pat_pmt(d, 0x101, 0x102);
   wrap_pes_packet(pkt, 0x101, 0, (const unsigned char *)"X", 1);

@@ -12,8 +12,6 @@
 
 #include "cli/args.h"
 
-/* exposed for unit testing, not CLI-facing */
-enum rist_profile profile_of(rist_profile_sel_t p);
 
 /* librist stats callback, arg is metrics_exporter_t. frees stats, always 0 */
 int bridge_receiver_stats_cb(void *arg, const struct rist_stats *stats);

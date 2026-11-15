@@ -13,7 +13,9 @@
 #include <unistd.h>
 
 #include "dipixy/dash/lldash.h"
+#include "dipixy/dash/lldash/lldash_int.h"
 #include "dipixy/reactor/conn.h"
+#include "dipixy/reactor/wake.h"
 #include "dipixy/reactor/internal.h"
 #include "dipixy/segstore_int.h"
 #include "dipixy/ts/pidfilter.h"
@@ -30,6 +32,14 @@
 static int g_ctx_marker;
 #define CTX ((capture_ctx_t *)&g_ctx_marker)
 static const lcevc_select_t full = {LCEVC_SEL_FULL, 0, 0};
+
+static const route_file_t *rf(const char *name) {
+  static route_file_t ring[8];
+  static unsigned n;
+  route_file_t *f = &ring[n++ % 8];
+  if (route_file_parse(name, f)) f->kind = ROUTE_FILE_NONE;
+  return f;
+}
 static const uint8_t part_data[PART_BYTES] = {0x00, 0x00, 0x00, 0x18, 'm', 'o', 'o', 'f'};
 
 static void no_filter(pid_filter_t *f) { memset(f, 0, sizeof *f); }
@@ -38,16 +48,16 @@ static hls_store_t *open_store(unsigned pmt, seg_container_t container, int ll) 
   pid_filter_t f;
 
   no_filter(&f);
-  hls_store_open(CTX, &f, pmt, &full, 0.5, 6, container);
-  if (ll) hls_llhls_enable(CTX, &f, pmt, &full, container, 0.5);
-  return hls_store_find(CTX, &f, pmt, &full, container);
+  hls_store_open(&(stream_key_t){CTX, &f, pmt, &full, container}, 0.5, 6);
+  if (ll) hls_llhls_enable(&(stream_key_t){CTX, &f, pmt, &full, container}, 0.5);
+  return hls_store_find(&(stream_key_t){CTX, &f, pmt, &full, container});
 }
 
 static int subscribe_detached(unsigned pmt, const char *name, conn_proto_t proto) {
   pid_filter_t f;
 
   no_filter(&f);
-  return dash_lldash_subscribe(CTX, &f, pmt, &full, name, proto);
+  return dash_lldash_subscribe(&(stream_key_t){CTX, &f, pmt, &full, SEG_CONTAINER_FMP4}, rf(name), proto);
 }
 
 static int subscribe(unsigned pmt, const char *name, conn_proto_t proto) {
@@ -61,14 +71,14 @@ static void push_part(unsigned pmt) {
   pid_filter_t f;
 
   no_filter(&f);
-  ck_assert_int_eq(hls_push_part(CTX, &f, pmt, &full, SEG_CONTAINER_FMP4, part_data, sizeof part_data, 0.1, 1), 0);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX, &f, pmt, &full, SEG_CONTAINER_FMP4}), part_data, sizeof part_data, 0.1, 1), 0);
 }
 
 static void push_segment(unsigned pmt) {
   pid_filter_t f;
 
   no_filter(&f);
-  ck_assert_int_eq(hls_push_segment_ll(CTX, &f, pmt, &full, SEG_CONTAINER_FMP4, 0.5), 0);
+  ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX, &f, pmt, &full, SEG_CONTAINER_FMP4}), 0.5), 0);
 }
 
 static uint32_t live_msn(const hls_store_t *s) {
@@ -204,9 +214,9 @@ START_TEST(track_store_subscriber_gets_track_parts_only) {
   push_part(0);
   ck_assert_int_eq(dash_lldash_ring_pending(idx), 0);
   no_filter(&f);
-  ck_assert_int_eq(hls_push_part(CTX, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO, part_data, sizeof part_data, 0.1, 1), 0);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO}), part_data, sizeof part_data, 0.1, 1), 0);
   ck_assert_uint_eq(drain(idx), sizeof part_data);
-  ck_assert_int_eq(hls_push_segment_ll(CTX, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO, 0.5), 0);
+  ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO}), 0.5), 0);
   ck_assert_int_eq(dash_lldash_sub_finalized(idx), 1);
 }
 END_TEST
@@ -274,7 +284,7 @@ START_TEST(store_close_aborts_h2_subscriber) {
   open_store(0, SEG_CONTAINER_FMP4, 1);
   idx = subscribe(0, SEG_NAME_0, CONN_PROTO_H2);
   no_filter(&f);
-  hls_store_close(CTX, &f, 0, &full, SEG_CONTAINER_FMP4);
+  hls_store_close(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4});
   ck_assert_int_eq(dash_lldash_ring_errored(idx), 1);
   ck_assert_int_eq(dash_lldash_sub_finalized(idx), 1);
 }
@@ -363,9 +373,9 @@ START_TEST(tid_chain_out_of_range_is_a_noop) {
 
   open_store(0, SEG_CONTAINER_FMP4, 1);
   a = subscribe(0, SEG_NAME_0, CONN_PROTO_H2);
-  link_tid_chain(a, -1);
-  link_tid_chain(a, 1 << 20);
-  unlink_tid_chain(a);
+  subtab_link(&g_lldash_tab, a, -1);
+  subtab_link(&g_lldash_tab, a, 1 << 20);
+  subtab_unlink(&g_lldash_tab, a);
   dash_lldash_flush_ready(-1);
   dash_lldash_flush_ready(1 << 20);
 }
@@ -412,7 +422,7 @@ START_TEST(store_close_races_segment_and_part_pushes) {
   no_filter(&f);
   pthread_create(&t, NULL, push_loop, &r);
   while (!atomic_load_explicit(&r.started, memory_order_acquire)) usleep(100);
-  hls_store_close(CTX, &f, 0, &full, SEG_CONTAINER_FMP4);
+  hls_store_close(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4});
   pthread_join(t, NULL);
   ck_assert_int_eq(dash_lldash_sub_finalized(idx), 1);
   ck_assert_int_eq(dash_lldash_ring_errored(idx), 1);
@@ -524,8 +534,8 @@ START_TEST(slot_accessors_ignore_out_of_range_slots) {
   ck_assert_int_eq(dash_lldash_sub_finalized(1000), 1);
   dash_lldash_h2_bind(-1, NULL, NULL, 0, 0);
   dash_lldash_h3_bind(1000, NULL, 0, 0, 0);
-  dash_lldash_register_reactor_efd(-1, 5);
-  dash_lldash_register_reactor_efd(1000, 5);
+  reactor_wake_register(-1, 5);
+  reactor_wake_register(1000, 5);
   dash_lldash_flush_ready(-1);
   dash_lldash_flush_ready(1000);
 }
@@ -600,8 +610,8 @@ START_TEST(try_attach_streams_chunked_framing_to_the_connection) {
   c = plain_conn(sv);
   conn_publish(c);
 
-  ck_assert_int_eq(dash_lldash_try_attach(c, CTX, &f, 0, &full, "bogus.txt", 1, NULL, -1), 0);
-  ck_assert_int_eq(dash_lldash_try_attach(c, CTX, &f, 0, &full, SEG_NAME_0, 1, "http://o.example", -1), 1);
+  ck_assert_int_eq(dash_lldash_try_attach(c, &(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("bogus.txt"), 1, NULL, -1), 0);
+  ck_assert_int_eq(dash_lldash_try_attach(c, &(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4}, rf(SEG_NAME_0), 1, "http://o.example", -1), 1);
   slot = c->slot;
   ck_assert_int_ge(slot, 0);
   ck_assert_int_eq(c->next_state, CONN_NEXT_DASHCHUNK);
@@ -637,7 +647,7 @@ START_TEST(h1_parts_and_terminator_in_publish_window_are_delivered) {
   open_store(0, SEG_CONTAINER_FMP4, 1);
   no_filter(&f);
   c = plain_conn(sv);
-  ck_assert_int_eq(dash_lldash_try_attach(c, CTX, &f, 0, &full, SEG_NAME_0, 1, NULL, -1), 1);
+  ck_assert_int_eq(dash_lldash_try_attach(c, &(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4}, rf(SEG_NAME_0), 1, NULL, -1), 1);
   slot = c->slot;
 
   push_part(0);
@@ -667,7 +677,7 @@ START_TEST(try_attach_without_keep_alive_announces_close) {
   open_store(0, SEG_CONTAINER_FMP4, 1);
   no_filter(&f);
   c = plain_conn(sv);
-  ck_assert_int_eq(dash_lldash_try_attach(c, CTX, &f, 0, &full, SEG_NAME_0, 0, NULL, -1), 1);
+  ck_assert_int_eq(dash_lldash_try_attach(c, &(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4}, rf(SEG_NAME_0), 0, NULL, -1), 1);
   ck_assert_int_eq(c->keep_alive, 0);
   ck_assert(out_has(c, "Connection: close\r\n", 19));
   dash_lldash_sub_close(c->slot);
@@ -687,11 +697,11 @@ START_TEST(close_before_headers_flushed_releases_the_slot) {
   open_store(0, SEG_CONTAINER_FMP4, 1);
   no_filter(&f);
   c = plain_conn(sv);
-  ck_assert_int_eq(dash_lldash_try_attach(c, CTX, &f, 0, &full, SEG_NAME_0, 1, NULL, -1), 1);
+  ck_assert_int_eq(dash_lldash_try_attach(c, &(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4}, rf(SEG_NAME_0), 1, NULL, -1), 1);
   slot = c->slot;
   reactor_close(-1, c);
   capture_flush_deferred_quiescent();
-  again = dash_lldash_subscribe(CTX, &f, 0, &full, SEG_NAME_0, CONN_PROTO_H1);
+  again = dash_lldash_subscribe(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4}, rf(SEG_NAME_0), CONN_PROTO_H1);
   ck_assert_int_eq(again, slot);
   dash_lldash_sub_close(again);
   close(sv[1]);
@@ -709,7 +719,7 @@ START_TEST(oversized_part_flags_the_ring_as_errored) {
   idx = subscribe(0, SEG_NAME_0, CONN_PROTO_H2);
   ck_assert_int_ge(idx, 0);
   no_filter(&f);
-  hls_push_part(CTX, &f, 0, &full, SEG_CONTAINER_FMP4, big, BIG, 0.1, 1);
+  hls_push_part_at(hls_store_find(&(stream_key_t){CTX, &f, 0, &full, SEG_CONTAINER_FMP4}), big, BIG, 0.1, 1);
   free(big);
   ck_assert_int_eq(dash_lldash_ring_errored(idx), 1);
   ck_assert_int_eq(dash_lldash_ring_pending(idx), 0);

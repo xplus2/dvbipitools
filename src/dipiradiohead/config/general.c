@@ -5,7 +5,7 @@
 
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "priv.h"
 
 int rdh_apply_error(void *c, const char *v, char *e, size_t n) {

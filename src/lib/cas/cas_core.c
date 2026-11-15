@@ -11,8 +11,9 @@
 #include "lib/mux/psi_build.h"
 
 #include "cas_core.h"
+#include "lib/helper/dateutil.h"
 
-void cas_core_hex_format(const unsigned char *in, size_t len, char *out) {
+static void cas_core_hex_format(const unsigned char *in, size_t len, char *out) {
   static const char digits[] = "0123456789abcdef";
   for (size_t i = 0; i < len; i++) {
     out[2 * i] = digits[in[i] >> 4];
@@ -121,7 +122,7 @@ int cas_core_vendor_ecm_due(cas_core_t *core, size_t idx, double now, unsigned c
 }
 
 int cas_core_vendor_next_emm(cas_core_t *core, size_t idx, unsigned char *out, size_t cap, size_t *out_len) {
-  if (core->biss_ca) return biss_ca_engine_emm_due(core->biss_ca, cas_core_mono(), out, cap, out_len);
+  if (core->biss_ca) return biss_ca_engine_emm_due(core->biss_ca, mono_seconds(), out, cap, out_len);
   return core->biss_engine ? -1 : cas_group_vendor_next_emm(core->group, idx, out, cap, out_len);
 }
 
@@ -130,7 +131,7 @@ void cas_core_reload_receivers(cas_core_t *core) {
   if (biss_ca_engine_reload_receivers(core->biss_ca) > 0) biss_ca_engine_force_sk_rotation(core->biss_ca);
 }
 
-int cas_core_start_biss(scramble_algo_t algo, const unsigned char *cw, size_t cw_len, const unsigned *pids, size_t pid_count, unsigned flush_pid, const char *label, const char *log_prefix, cas_core_t *out) {
+static int cas_core_start_biss(scramble_algo_t algo, const unsigned char *cw, size_t cw_len, const unsigned *pids, size_t pid_count, unsigned flush_pid, const char *label, const char *log_prefix, cas_core_t *out) {
   memset(out, 0, sizeof *out);
   out->biss_engine = cas_scramble_engine_start(algo, pids, pid_count, flush_pid);
   if (!out->biss_engine) return -1;

@@ -16,7 +16,8 @@ int main(int argc, char **argv) {
   long len;
   size_t n;
   ws_parser_t p;
-  int opcode, rc;
+  int opcode;
+  int rc;
   const uint8_t *payload;
   size_t payload_len;
 

@@ -6,13 +6,20 @@
 #include <string.h>
 
 #include "lib/bim/nodexml.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
+#include "lib/helper/growutil.h"
 
+#define WBUF 4096
 
 typedef struct {
   const char *uri;
   char *prefix; /* "" default namespace */
 } ns_t;
+
+typedef struct {
+  const char *uri;
+  const char *prefix;
+} decl_t;
 
 typedef struct {
   const bim_xml_opts_t *o;
@@ -21,15 +28,47 @@ typedef struct {
   ns_t *ns;
   int nns;
   int cns;
+  decl_t *decl;
+  int ndecl;
+  int cdecl;
+  int decl_done;
   int oom;
   const char *root_ns;
+  size_t blen;
+  char buf[WBUF];
 } w_t;
 
-static void out(w_t *w, const char *s) { w->put(w->ctx, s, strlen(s)); }
+static void flush(w_t *w) {
+  if (w->blen) w->put(w->ctx, w->buf, w->blen);
+  w->blen = 0;
+}
+
+static void emit(w_t *w, const char *s, size_t n) {
+  if (n > WBUF - w->blen) flush(w);
+  if (n >= WBUF) {
+    w->put(w->ctx, s, n);
+    return;
+  }
+  memcpy(w->buf + w->blen, s, n);
+  w->blen += n;
+}
+
+static void wput(void *ctx, const char *s, size_t n) { emit(ctx, s, n); }
+
+static void out(w_t *w, const char *s) { emit(w, s, strlen(s)); }
+
+static void spaces(w_t *w, int n) {
+  static const char sp[] = "                                ";
+  while (n > 0) {
+    int k = n < (int)sizeof sp - 1 ? n : (int)sizeof sp - 1;
+    emit(w, sp, (size_t)k);
+    n -= k;
+  }
+}
 
 static int find(const w_t *w, const char *uri) {
   for (int i = 0; i < w->nns; i++)
-    if (!strcmp(w->ns[i].uri, uri)) return i;
+    if (w->ns[i].uri == uri || !strcmp(w->ns[i].uri, uri)) return i;
   return -1;
 }
 
@@ -39,21 +78,38 @@ static int used_prefix(const w_t *w, const char *p) {
   return 0;
 }
 
-/* prefix declared for uri in subtree, NULL none */
-static const char *declared(const bim_node_t *n, const char *uri) {
-  for (int i = 0; i < n->nnsdecls; i++)
-    if (!strcmp(n->nsdecls[i].uri, uri) && *n->nsdecls[i].prefix) return n->nsdecls[i].prefix;
-  for (int i = 0; i < n->nkids; i++) {
-    const char *p = declared(n->kids[i], uri);
-    if (p) return p;
+static void decls_of(w_t *w, const bim_node_t *n) {
+  for (int i = 0; i < n->nnsdecls && !w->oom; i++) {
+    int k = 0;
+    if (!*n->nsdecls[i].prefix) continue;
+    while (k < w->ndecl && strcmp(w->decl[k].uri, n->nsdecls[i].uri)) k++;
+    if (k < w->ndecl) continue;
+    if (array_reserve((void **)&w->decl, &w->cdecl, w->ndecl + 1, sizeof *w->decl)) {
+      w->oom = 1;
+      return;
+    }
+    w->decl[w->ndecl++] = (decl_t){n->nsdecls[i].uri, n->nsdecls[i].prefix};
   }
+  for (int i = 0; i < n->nkids; i++) decls_of(w, n->kids[i]);
+}
+
+/* prefix declared for uri in subtree, NULL none */
+static const char *declared(w_t *w, const bim_node_t *root, const char *uri) {
+  if (!w->decl_done) {
+    decls_of(w, root);
+    w->decl_done = 1;
+  }
+  for (int i = 0; i < w->ndecl; i++)
+    if (!strcmp(w->decl[i].uri, uri)) return w->decl[i].prefix;
   return NULL;
 }
 
 /* nsN not taken yet */
-static void gen_prefix(const w_t *w, char *gen, size_t cap) {
-  for (int k = w->nns;; k++) {
-    snprintf(gen, cap, "ns%d", k);
+static void gen_prefix(const w_t *w, char *gen) {
+  for (unsigned k = (unsigned)w->nns;; k++) {
+    gen[0] = 'n';
+    gen[1] = 's';
+    uint_to_str(gen + 2, k);
     if (!used_prefix(w, gen)) return;
   }
 }
@@ -68,7 +124,7 @@ static void add_ns(w_t *w, const bim_node_t *root, const char *uri, int for_attr
     ns_t *e = &w->ns[idx];
     if (for_attr && !*e->prefix) {
       /* default namespace does not apply to attributes */
-      gen_prefix(w, gen, sizeof gen);
+      gen_prefix(w, gen);
       free(e->prefix);
       e->prefix = strdup(gen);
       w->oom = w->oom || !e->prefix;
@@ -78,23 +134,18 @@ static void add_ns(w_t *w, const bim_node_t *root, const char *uri, int for_attr
   for (int i = 0; i < w->o->nprefixes && !pref; i++)
     if (!strcmp(w->o->prefixes[i].uri, uri) && *w->o->prefixes[i].prefix && !used_prefix(w, w->o->prefixes[i].prefix)) pref = w->o->prefixes[i].prefix;
   if (!pref) {
-    pref = declared(root, uri);
+    pref = declared(w, root, uri);
     if (pref && used_prefix(w, pref)) pref = NULL;
   }
   if (!pref && !strcmp(uri, XSI_NS) && !used_prefix(w, "xsi")) pref = "xsi";
   if (!pref && !for_attr && w->root_ns && !strcmp(w->root_ns, uri) && !used_prefix(w, "")) pref = "";
   if (!pref) {
-    gen_prefix(w, gen, sizeof gen);
+    gen_prefix(w, gen);
     pref = gen;
   }
-  if (w->nns == w->cns) {
-    ns_t *n = realloc(w->ns, (size_t)(w->cns ? w->cns * 2 : 8) * sizeof *n);
-    if (!n) {
-      w->oom = 1;
-      return;
-    }
-    w->ns = n;
-    w->cns = w->cns ? w->cns * 2 : 8;
+  if (array_reserve((void **)&w->ns, &w->cns, w->nns + 1, sizeof *w->ns)) {
+    w->oom = 1;
+    return;
   }
   if (!w->ns) {
     w->oom = 1;
@@ -127,7 +178,7 @@ static void qname(w_t *w, const char *uri, const char *name) {
   out(w, name);
 }
 
-static void esc(w_t *w, const char *s) { xml_escape_to(s, w->put, w->ctx); }
+static void esc(w_t *w, const char *s) { xml_escape_to(s, wput, w); }
 
 static int has_text(const bim_node_t *n) {
   if (n->text) return 1;
@@ -147,7 +198,7 @@ static void write_node(w_t *w, const bim_node_t *n, int depth, int root, int pre
   }
   if (ind && depth) {
     out(w, "\n");
-    for (int k = 0; k < depth * w->o->indent; k++) out(w, " ");
+    spaces(w, depth * w->o->indent);
   }
   out(w, "<");
   qname(w, n->ns, n->name);
@@ -193,7 +244,7 @@ static void write_node(w_t *w, const bim_node_t *n, int depth, int root, int pre
   for (int k = 0; k < n->nkids; k++) write_node(w, n->kids[k], depth + 1, 0, pretty && !mixed, dflt);
   if (ind && !mixed && n->nkids) {
     out(w, "\n");
-    for (int k = 0; k < depth * w->o->indent; k++) out(w, " ");
+    spaces(w, depth * w->o->indent);
   }
   out(w, "</");
   qname(w, n->ns, n->name);
@@ -202,22 +253,25 @@ static void write_node(w_t *w, const bim_node_t *n, int depth, int root, int pre
 
 int bim_node_write_xml(const bim_node_t *root, const bim_xml_opts_t *o, xml_put_fn put, void *ctx) {
   static const bim_xml_opts_t none;
-  w_t w;
+  w_t *w = calloc(1, sizeof *w);
   int rc;
-  memset(&w, 0, sizeof w);
-  w.o = o ? o : &none;
-  w.put = put;
-  w.ctx = ctx;
-  w.root_ns = root->ns && *root->ns ? root->ns : NULL;
-  collect(&w, root, root);
-  if (!w.oom) {
-    if (w.o->declaration) out(&w, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    write_node(&w, root, 0, 1, 1, NULL);
-    if (w.o->indent > 0 || w.o->declaration) out(&w, "\n");
+  if (!w) return -1;
+  w->o = o ? o : &none;
+  w->put = put;
+  w->ctx = ctx;
+  w->root_ns = root->ns && *root->ns ? root->ns : NULL;
+  collect(w, root, root);
+  if (!w->oom) {
+    if (w->o->declaration) out(w, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    write_node(w, root, 0, 1, 1, NULL);
+    if (w->o->indent > 0 || w->o->declaration) out(w, "\n");
+    flush(w);
   }
-  rc = w.oom ? -1 : 0;
-  for (int i = 0; i < w.nns; i++) free(w.ns[i].prefix);
-  free(w.ns);
+  rc = w->oom ? -1 : 0;
+  for (int i = 0; i < w->nns; i++) free(w->ns[i].prefix);
+  free(w->ns);
+  free(w->decl);
+  free(w);
   return rc;
 }
 

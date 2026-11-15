@@ -96,7 +96,9 @@ static size_t build_emm_u(EVP_PKEY *pub, const unsigned char bk[CRYPTO_KEY_LEN],
 /* builds a real EMM-G section: header + [2B service_id][2B sk_version][AES-256-GCM(sk under bk)] */
 static size_t build_emm_g(const unsigned char bk[CRYPTO_KEY_LEN], const unsigned char sk[CRYPTO_KEY_LEN], unsigned service_id, unsigned char *out, size_t cap) {
   unsigned char *blob;
-  unsigned char *nonce, *ct, *tag;
+  unsigned char *nonce;
+  unsigned char *ct;
+  unsigned char *tag;
   EVP_CIPHER_CTX *ctx;
   int len = 0;
   size_t payload_len = 4 + CRYPTO_EMM_G_LEN;
@@ -152,7 +154,8 @@ static size_t build_ecm(const unsigned char sk[CRYPTO_KEY_LEN], const unsigned c
 START_TEST(full_chain_csa2_recovers_cw) {
   EVP_PKEY *pub;
   device_state_t *d = make_device(&pub, 8);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
   unsigned char cw[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
   unsigned char buf[1024];
   unsigned char cw_out[16];
@@ -187,7 +190,8 @@ END_TEST
 START_TEST(csa2_odd_ecm_fills_odd_half_only) {
   EVP_PKEY *pub;
   device_state_t *d = make_device(&pub, 8);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
   unsigned char cw[8] = {0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x01};
   unsigned char buf[1024];
   unsigned char cw_out[16];
@@ -220,7 +224,8 @@ END_TEST
 START_TEST(full_chain_cissa_recovers_cw) {
   EVP_PKEY *pub;
   device_state_t *d = make_device(&pub, 16);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
   unsigned char cw[16];
   unsigned char buf[1024];
   unsigned char cw_out[16];
@@ -342,7 +347,8 @@ END_TEST
 START_TEST(resolve_cw_rejects_wrong_caid) {
   EVP_PKEY *pub;
   device_state_t *d = make_device_full(&pub, 8, TEST_SERIAL, 0x0B75);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
   unsigned char cw[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
   unsigned char buf[1024];
   unsigned char cw_out[16];
@@ -371,7 +377,8 @@ END_TEST
 START_TEST(resolve_cw_accepts_matching_caid) {
   EVP_PKEY *pub;
   device_state_t *d = make_device_full(&pub, 8, TEST_SERIAL, 0x0B75);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
   unsigned char cw[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
   unsigned char buf[1024];
   unsigned char cw_out[16];

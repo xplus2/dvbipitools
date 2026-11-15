@@ -21,11 +21,10 @@ int toolmain_version_requested(int argc, char **argv) {
 }
 
 int toolmain_daemonize(int daemonize, const char *tool_name) {
-  if (!daemonize)
-    return 0;
-  if (daemon(1, 1) != 0) {
+  if (daemonize && daemon(1, 1) != 0) {
     log_code("LS500142", "%s: daemonize failed: %s", tool_name, strerror(errno));
     return -1;
   }
+  log_async_start();
   return 0;
 }

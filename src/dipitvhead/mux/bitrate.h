@@ -15,10 +15,7 @@ void bitrate_pacer_start(bitrate_pacer_t *p);
    scheduler-jitter prone: pack into one call per send. p NULL: no-op (post-free trailing flush). */
 void bitrate_pace(bitrate_pacer_t *p);
 
-/* call once per queued 188B packet, after bitrate_pace */
-void bitrate_account(bitrate_pacer_t *p);
-
-/* bitrate_account() x n. batch calls, not per packet. p NULL: no-op. */
+/* n queued 188B pkgs, after bitrate_pace. batch calls, not per packet. p NULL: no-op. */
 void bitrate_account_n(bitrate_pacer_t *p, unsigned n);
 
 /* whole null packets to send now to catch up to target, if stuffing enabled.

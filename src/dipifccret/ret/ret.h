@@ -35,8 +35,6 @@ void ret_ctx_reap_step(ret_ctx_t *r, time_t max_age_s, size_t max_scan);
 /* one parsed Generic NACK; unicast-replies to `from` (F.2 baseline) plus repairs via send_mc when MC is on */
 void ret_handle_nack(ret_ctx_t *r, const rtcp_nack_t *nack, int fd, const struct sockaddr *from, socklen_t fromlen);
 
-/* self-detected gap [gap_start, gap_end] on ssrc's channel; sends an FF then repairs via send_mc, no unicast reply */
-void ret_on_self_detected_gap(ret_ctx_t *r, uint32_t ssrc, uint16_t gap_start, uint16_t gap_end);
 
 /* active unicast RTX client sessions, F.3.2.1 */
 size_t ret_ctx_active_clients(ret_ctx_t *r);

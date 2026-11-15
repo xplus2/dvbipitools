@@ -9,12 +9,12 @@
 #include <time.h>
 #include <srt/srt.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 #include "lib/net/srt/srtcommon.h"
 #include "lib/net/srt/srtout.h"
 #include "lib/net/srt/srtout/srtout_int.h"
+#include "lib/helper/dateutil.h"
 
 static int target_count(const srtout_cfg_t *cfg) { return cfg->npeers + (cfg->rendezvous ? 1 : 0); }
 

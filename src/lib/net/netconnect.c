@@ -14,7 +14,7 @@
 #include <unistd.h>
 
 #include "../helper/argutil.h"
-#include "../sys/ioutil.h"
+#include "../helper/strutil.h"
 #include "../helper/log.h"
 #include "../sys/signal.h"
 #include "netconnect.h"

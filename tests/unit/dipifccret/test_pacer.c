@@ -75,7 +75,8 @@ START_TEST(pacer_delivers_cached_packet_to_client) {
   channel_t *c = make_channel_ready_to_burst();
   burst_t *b = burst_new(c, 1.0, 0, 96);
   struct sockaddr_in sin;
-  int recv_fd, send_fd;
+  int recv_fd;
+  int send_fd;
   pthread_t th;
   pacer_ctx_t pc;
   unsigned char buf[256];

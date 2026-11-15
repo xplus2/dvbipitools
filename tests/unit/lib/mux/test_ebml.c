@@ -88,7 +88,8 @@ START_TEST(eb_float_writes_id_size_8_and_ieee754_bytes) {
 END_TEST
 
 START_TEST(eb_master_wraps_child_bytes_into_parent_and_frees_child) {
-  ebuf_t parent = {0}, child = {0};
+  ebuf_t parent = {0};
+  ebuf_t child = {0};
   eb_uint(&child, 0x80u, 7);       /* child.len = 3 */
   eb_master(&parent, 0x8Fu, &child);
 

@@ -68,7 +68,7 @@ static tssrc_t *tssrc_open_base(const tssrc_cfg_t *cfg, net_err_reason_t *reason
     ristin_cfg_t rc;
     memset(&rc, 0, sizeof rc);
     rc.peer_uri = cfg->rist_uri;
-    rc.profile = cfg->rist_profile_main ? RISTIN_PROFILE_MAIN : RISTIN_PROFILE_SIMPLE;
+    rc.profile = cfg->rist_profile_main ? RIST_PROF_MAIN : RIST_PROF_SIMPLE;
     rc.secret = cfg->rist_secret;
     rc.key_size = cfg->rist_key_size;
     rc.cname = cfg->rist_cname;
@@ -357,6 +357,8 @@ void tssrc_fec_poll(tssrc_t *s) {
 }
 
 int tssrc_fd(const tssrc_t *s) { return s->jb ? s->epfd : tssrc_src_fd(s); }
+
+tssrc_kind_t tssrc_kind(const tssrc_t *s) { return s->kind; }
 
 short tssrc_poll_events(const tssrc_t *s) {
   if (!s->jb && s->kind == TSSRC_HTTP) return tssrc_http_poll_events(s);

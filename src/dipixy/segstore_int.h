@@ -9,7 +9,6 @@
 #include <stdint.h>
 #include <time.h>
 
-#include "lib/sys/ioutil.h"
 
 #include "core/time_ep.h"
 #include "segstore.h"
@@ -23,6 +22,8 @@ typedef struct {
 } cached_text_t;
 
 #define MPD_VARIANTS 4
+
+typedef enum { SNAP_CACHE_PLAIN, SNAP_CACHE_LL, SNAP_CACHE_LCEVC, SNAP_CACHE_LCEVC_LL, SNAP_CACHE_MPD, SNAP_CACHE_MPD_LL = SNAP_CACHE_MPD + MPD_VARIANTS, SNAP_CACHE_N = SNAP_CACHE_MPD_LL + MPD_VARIANTS } snap_cache_t;
 
 typedef struct {
   size_t offset[HLS_MAX_PARTS]; /* offsets index owning data: hls_seg_t.data or store's live_data */
@@ -65,7 +66,7 @@ typedef struct hls_snapshot {
 
   uint8_t *init_data; /* SEG_CONTAINER_FMP4 only, seg_buf_alloc'd */
   size_t init_size;
-  int init_gen; /* bump on hls_set_init_segment(), init.mp4 ETag component */
+  int init_gen; /* bump on hls_set_init_segment_at(), init.mp4 ETag component */
   codec_t video_codec; /* HLS VERSION + DASH codecs= */
   char vcodec_str[32];
   char acodec_str[32];
@@ -75,19 +76,16 @@ typedef struct hls_snapshot {
   unsigned audio_chcfg_value;
 
   double part_target; /* 0 = LL disabled */
-  uint8_t *live_data;  /* in-progress segment bytes, hls_push_part()-accumulated */
-  size_t live_len, live_cap;
+  uint8_t *live_data;  /* in-progress segment bytes, hls_push_part_at()-accumulated */
+  size_t live_len;
+  size_t live_cap;
   hls_parts_t live_parts;
   uint32_t live_msn; /* == next_seq while this segment is in progress */
 
   unsigned lcevc_pid[PSI_LCEVC_MAX_LINKS]; /* base video ES's own paired PIDs */
   int lcevc_pid_count; /* 0: no LCEVC, or not known (yet) */
 
-  _Atomic(cached_text_t *) cache_plain;
-  _Atomic(cached_text_t *) cache_ll;
-  _Atomic(cached_text_t *) cache_lcevc[2];
-  _Atomic(cached_text_t *) cache_mpd[MPD_VARIANTS]; /* per UTCTiming url */
-  _Atomic(cached_text_t *) cache_mpd_ll[MPD_VARIANTS];
+  _Atomic(cached_text_t *) cache[SNAP_CACHE_N];
 } hls_snapshot_t;
 
 #define HLS_SNAP_RETIRE_DEPTH 4
@@ -107,6 +105,7 @@ typedef struct hls_store_t {
   hls_snapshot_t *retiring[HLS_SNAP_RETIRE_DEPTH];
   uint64_t retiring_mark[HLS_SNAP_RETIRE_DEPTH][QSBR_MAX_WORKERS];
   int retiring_n;
+  hls_snapshot_t *spare;
 } hls_store_t;
 
 /* store_lock() is writer only */
@@ -138,7 +137,6 @@ void queue_segment_zc(conn_t *c, const uint8_t *body, size_t body_len, const cha
 void seg_etag(uint32_t seq, size_t size, char *out, size_t outsz);
 void part_etag(uint32_t seq, int part, size_t size, char *out, size_t outsz);
 void init_etag(int gen, size_t size, char *out, size_t outsz);
-const char *hls_filename_ext(const char *fn);
 
 char *write_lit(char *dst, const char *lit, size_t len);
 #define WRITE_LIT(dst, lit) write_lit((dst), (lit), sizeof(lit) - 1)

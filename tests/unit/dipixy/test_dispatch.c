@@ -377,20 +377,22 @@ START_TEST(special_path_auth_selects_credentials) {
   config_t cfg;
   memset(&cfg, 0, sizeof cfg);
   g_cfg = &cfg;
-  ck_assert_ptr_null(special_path_auth("/"));
-  ck_assert_ptr_null(special_path_auth("/metrics"));
-  ck_assert_ptr_null(special_path_auth("/other"));
+  ck_assert_ptr_null(special_path_auth(special_path_kind("/")));
+  ck_assert_ptr_null(special_path_auth(special_path_kind("/metrics")));
+  ck_assert_ptr_null(special_path_auth(special_path_kind("/other")));
   strcpy(cfg.http_auth, "Basic aaa");
   strcpy(cfg.http_metrics_auth, "Basic bbb");
-  ck_assert_str_eq(special_path_auth("/"), "Basic aaa");
-  ck_assert_str_eq(special_path_auth("/index.html"), "Basic aaa");
-  ck_assert_str_eq(special_path_auth("/ui/status.js"), "Basic aaa");
-  ck_assert_str_eq(special_path_auth("/ui/ws"), "Basic aaa");
-  ck_assert_str_eq(special_path_auth("/ui/ws/"), "Basic aaa");
-  ck_assert_str_eq(special_path_auth("/metrics"), "Basic bbb");
-  ck_assert_ptr_null(special_path_auth("/other"));
-  ck_assert_int_eq(path_is_ui_ws("/ui/ws"), 1);
-  ck_assert_int_eq(path_is_ui_ws("/ui/wsx"), 0);
+  ck_assert_str_eq(special_path_auth(special_path_kind("/")), "Basic aaa");
+  ck_assert_str_eq(special_path_auth(special_path_kind("/index.html")), "Basic aaa");
+  ck_assert_str_eq(special_path_auth(special_path_kind("/ui/status.js")), "Basic aaa");
+  ck_assert_str_eq(special_path_auth(special_path_kind("/ui/ws")), "Basic aaa");
+  ck_assert_str_eq(special_path_auth(special_path_kind("/ui/ws/")), "Basic aaa");
+  ck_assert_str_eq(special_path_auth(special_path_kind("/metrics")), "Basic bbb");
+  ck_assert_ptr_null(special_path_auth(special_path_kind("/other")));
+  ck_assert_int_eq(special_path_kind("/ui/ws"), SPECIAL_UI_WS);
+  ck_assert_int_eq(special_path_kind("/ui/wsx"), SPECIAL_NONE);
+  ck_assert_int_eq(special_path_kind("/export/x"), SPECIAL_EXPORT);
+  ck_assert_int_eq(special_path_kind("/dlna/cm_event"), SPECIAL_DLNA_CM_EVENT);
   g_cfg = NULL;
 }
 END_TEST

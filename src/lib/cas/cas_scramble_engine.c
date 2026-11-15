@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "cas_scramble_engine.h"
+#include "lib/demux/tspack.h"
 
 struct cas_scramble_engine {
   scrambler_t *scr;
@@ -12,7 +13,7 @@ struct cas_scramble_engine {
 
   cas_pid_state_t pid[CAS_SCRAMBLE_ENGINE_MAX_PIDS];
   size_t pid_count;
-  size_t last_pid_idx; /* MRU 1-entry cache: consecutive packets are usually the same pid */
+  ts_pidmap_t map;
 
   size_t cw_cache_len[2]; /* 0: no key material published for this parity */
 
@@ -20,7 +21,7 @@ struct cas_scramble_engine {
   unsigned long long unexpected_clear_packets_total;
 };
 
-void cas_pid_apply(cas_pid_state_t *ps, int have_target, int target_parity, int pusi, double now, double force_flip_s) {
+static void cas_pid_apply(cas_pid_state_t *ps, int have_target, int target_parity, int pusi, double now, double force_flip_s) {
   if (!have_target)
     return;
   if (target_parity != ps->current_parity && !ps->flip_pending) {
@@ -34,15 +35,15 @@ void cas_pid_apply(cas_pid_state_t *ps, int have_target, int target_parity, int 
 }
 
 static cas_pid_state_t *find_pid_state(cas_scramble_engine_t *e, unsigned pid) {
-  if (e->last_pid_idx < e->pid_count && e->pid[e->last_pid_idx].pid == pid)
-    return &e->pid[e->last_pid_idx];
+  int i = ts_pidmap_get(&e->map, pid);
+  return i < 0 ? NULL : &e->pid[i];
+}
 
-  for (size_t i = 0; i < e->pid_count; i++)
-    if (e->pid[i].pid == pid) {
-      e->last_pid_idx = i;
-      return &e->pid[i];
-    }
-  return NULL;
+static void add_pid(cas_scramble_engine_t *e, unsigned pid) {
+  memset(&e->pid[e->pid_count], 0, sizeof e->pid[0]);
+  e->pid[e->pid_count].pid = pid;
+  if (ts_pidmap_get(&e->map, pid) < 0) ts_pidmap_set(&e->map, pid, (int)e->pid_count);
+  e->pid_count++;
 }
 
 /* AF with PCR flag. MPTS has no single clock pid, any PCR pkg ends batch */
@@ -67,9 +68,7 @@ cas_scramble_engine_t *cas_scramble_engine_start(scramble_algo_t algo, const uns
     return NULL;
   }
   n = pid_count < CAS_SCRAMBLE_ENGINE_MAX_PIDS ? pid_count : CAS_SCRAMBLE_ENGINE_MAX_PIDS;
-  for (size_t i = 0; i < n; i++)
-    e->pid[i].pid = pids[i];
-  e->pid_count = n;
+  for (size_t i = 0; i < n; i++) add_pid(e, pids[i]);
   e->flush_pid = flush_pid;
   return e;
 }
@@ -77,8 +76,7 @@ cas_scramble_engine_t *cas_scramble_engine_start(scramble_algo_t algo, const uns
 int cas_scramble_engine_add_pid(cas_scramble_engine_t *e, unsigned pid) {
   if (find_pid_state(e, pid)) return 0;
   if (e->pid_count >= CAS_SCRAMBLE_ENGINE_MAX_PIDS) return -1;
-  memset(&e->pid[e->pid_count], 0, sizeof e->pid[0]);
-  e->pid[e->pid_count++].pid = pid;
+  add_pid(e, pid);
   return 0;
 }
 

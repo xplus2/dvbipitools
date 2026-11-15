@@ -15,7 +15,8 @@
 #include "../fx_ts.h"
 
 START_TEST(psi_build_pmt_round_trips_through_psi_feed) {
-  unsigned char section[64], pkt[188];
+  unsigned char section[64];
+  unsigned char pkt[188];
   size_t slen;
   psi_t *p;
   const psi_es_t *es;
@@ -143,7 +144,8 @@ END_TEST
 START_TEST(psi_build_eit_bounds_descriptor_length_for_long_metadata) {
   /* short_event_descriptor's own length byte is 1 byte (<=255) - long artist+title
      must clamp instead of silently wrapping */
-  char artist[301], title[301];
+  char artist[301];
+  char title[301];
   unsigned char section[2048];
   size_t slen;
   const size_t desc_start = 26; /* fixed offset of the 0x4D tag, per psi_build_eit's header layout */

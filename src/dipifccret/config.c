@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "lib/config/yamlcfg.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "config.h"
 #include "version.h"
 
@@ -37,10 +37,7 @@ static int set_size(size_t *dst, const char *v, unsigned min, char *e, size_t n)
 }
 
 static int apply_range(void *c, const char *v, char *e, size_t n) {
-  if (fccret_cfg_range(c, v)) {
-    snprintf(e, n, "invalid '%s' (comma list of addr/prefix)", v);
-    return -1;
-  }
+  if (fccret_cfg_range(c, v)) return yamlcfg_bad(e, n, v, "comma list of addr/prefix");
   return 0;
 }
 
@@ -74,10 +71,7 @@ static int apply_workers(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_cpu_affinity(void *c, const char *v, char *e, size_t n) {
-  if (cpuaff_parse(&((config_t *)c)->cpu_affinity, v)) {
-    snprintf(e, n, "invalid '%s' (off, auto, or list like 2-5,8)", v);
-    return -1;
-  }
+  if (cpuaff_parse(&((config_t *)c)->cpu_affinity, v)) return yamlcfg_bad(e, n, v, "off, auto, or list like 2-5,8");
   return 0;
 }
 
@@ -123,7 +117,7 @@ static int apply_ret_client_idle_timeout(void *c, const char *v, char *e, size_t
 }
 
 static int apply_ret_client_rate(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_uint(&((config_t *)c)->ret_client_rate, v, 0, 1000000, e, n);
+  return yamlcfg_set_uint(&((config_t *)c)->ret_client_rate, v, 0, RATE_MAX, e, n);
 }
 
 static int apply_ret_mc_dedup(void *c, const char *v, char *e, size_t n) {
@@ -144,12 +138,7 @@ static int apply_rsi_mc_ret(void *c, const char *v, char *e, size_t n) {
 
 static int apply_rsi_hostname(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (strlen(v) >= sizeof cfg->rsi_hostname) {
-    snprintf(e, n, "too long (max %zu)", sizeof cfg->rsi_hostname - 1);
-    return -1;
-  }
-  bufcpy(cfg->rsi_hostname, sizeof cfg->rsi_hostname, v);
-  return 0;
+  return yamlcfg_set_buf(cfg->rsi_hostname, sizeof cfg->rsi_hostname, v, e, n);
 }
 
 static int apply_no_fcc(void *c, const char *v, char *e, size_t n) {
@@ -189,23 +178,17 @@ static int apply_congestion_nack_threshold(void *c, const char *v, char *e, size
 }
 
 static int apply_fcc_range(void *c, const char *v, char *e, size_t n) {
-  if (fccret_cfg_fcc_range(c, v)) {
-    snprintf(e, n, "invalid '%s' (comma list of addr/prefix)", v);
-    return -1;
-  }
+  if (fccret_cfg_fcc_range(c, v)) return yamlcfg_bad(e, n, v, "comma list of addr/prefix");
   return 0;
 }
 
 static int apply_fcc_client_range(void *c, const char *v, char *e, size_t n) {
-  if (fccret_cfg_fcc_client_range(c, v)) {
-    snprintf(e, n, "invalid '%s' (comma list of addr/prefix)", v);
-    return -1;
-  }
+  if (fccret_cfg_fcc_client_range(c, v)) return yamlcfg_bad(e, n, v, "comma list of addr/prefix");
   return 0;
 }
 
 static int apply_fcc_client_rate(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_uint(&((config_t *)c)->fcc_client_rate, v, 0, 1000000, e, n);
+  return yamlcfg_set_uint(&((config_t *)c)->fcc_client_rate, v, 0, RATE_MAX, e, n);
 }
 
 static int apply_metrics_sock(void *c, const char *v, char *e, size_t n) {
@@ -230,7 +213,7 @@ static int apply_metrics_inspect_ts(void *c, const char *v, char *e, size_t n) {
   return 0;
 }
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t fccret_cfg_keys[] = {
   {"range", apply_range, 0, 0},
   {"listen", apply_listen, 0, 0},
   {"iface", apply_iface, 0, 0},
@@ -272,11 +255,12 @@ static const yamlcfg_key_t keys[] = {
   {"metrics.interval", apply_metrics_interval, 0, 0},
   {"metrics.inspect-ts", apply_metrics_inspect_ts, 0, 0},
 };
+const size_t fccret_cfg_nkeys = sizeof fccret_cfg_keys / sizeof fccret_cfg_keys[0];
 
 int fccret_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
+  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, fccret_cfg_keys, fccret_cfg_nkeys, cfg);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -285,7 +269,7 @@ int fccret_cfg_test(const char *path, int strict) {
   config_t cfg;
 
   fccret_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, fccret_cfg_keys, fccret_cfg_nkeys, &cfg) != YAMLCFG_LOADED) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }

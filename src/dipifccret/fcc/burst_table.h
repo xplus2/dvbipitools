@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <sys/socket.h>
 
+#include "lib/helper/seqlock.h"
 #include "lib/net/sockaddr_index.h"
 
 #include "burst.h"
@@ -32,7 +33,7 @@ typedef struct {
 
 /* full stripe rejects, no eviction: no protocol path to evict active repair session */
 typedef struct {
-  size_t base;
+  _Alignas(CACHELINE) size_t base;
   size_t count;
   size_t *free_list; /* stack of own global slot indices, O(1) claim/release */
   size_t free_count;

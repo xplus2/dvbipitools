@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 static int cmp_u16(const void *a, const void *b) {
   uint16_t x = *(const uint16_t *)a;
@@ -36,7 +36,7 @@ void pid_filter_parse(const char *value, pid_filter_t *out) {
       while (*p && *p != ',') p++;
       continue;
     }
-    if (v <= 8191) out->pids[out->count++] = (uint16_t)v;
+    if (v <= TS_PID_MAX) out->pids[out->count++] = (uint16_t)v;
     p = end;
   }
   if (out->count > 1) qsort(out->pids, (size_t)out->count, sizeof out->pids[0], cmp_u16);
@@ -48,15 +48,9 @@ void pid_filter_parse(const char *value, pid_filter_t *out) {
   out->count = w;
 }
 
-int pid_filter_excludes(const pid_filter_t *f, unsigned pid) {
-  int lo = 0, hi = f->count - 1;
-  while (lo <= hi) {
-    int mid = (lo + hi) / 2;
-    if (f->pids[mid] == pid) return 1;
-    if (f->pids[mid] < pid) lo = mid + 1;
-    else hi = mid - 1;
-  }
-  return 0;
+void pid_mask_from_filter(pid_mask_t *m, const pid_filter_t *f) {
+  memset(m, 0, sizeof *m);
+  for (int i = 0; i < f->count; i++) m->w[f->pids[i] >> 6] |= (uint64_t)1 << (f->pids[i] & 63);
 }
 
 int pid_filter_equal(const pid_filter_t *a, const pid_filter_t *b) {

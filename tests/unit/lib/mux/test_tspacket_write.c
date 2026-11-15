@@ -63,7 +63,8 @@ START_TEST(ts_packet_emit_splits_across_packets_with_pointer_on_first_only) {
   unsigned char data[190];
   unsigned char cc = 0;
   unsigned char rebuilt[190];
-  size_t off, got = 0;
+  size_t off;
+  size_t got = 0;
   const unsigned char pointer_byte = 0x00;
 
   for (size_t i = 0; i < sizeof data; i++)
@@ -119,7 +120,8 @@ END_TEST
 START_TEST(ts_packet_emit_partial_bounds_to_max_packets_per_call) {
   unsigned char data[190];
   unsigned char cc = 0;
-  size_t offset = 0, n;
+  size_t offset = 0;
+  size_t n;
   const unsigned char pointer_byte = 0x00;
 
   for (size_t i = 0; i < sizeof data; i++)
@@ -144,8 +146,10 @@ END_TEST
 
 START_TEST(ts_packet_emit_partial_matches_ts_packet_emit_byte_for_byte) {
   unsigned char data[190];
-  unsigned char cc_full = 0, cc_partial = 0;
-  unsigned char full_pkts[2][188], partial_pkts[2][188];
+  unsigned char cc_full = 0;
+  unsigned char cc_partial = 0;
+  unsigned char full_pkts[2][188];
+  unsigned char partial_pkts[2][188];
   size_t offset = 0;
   const unsigned char pointer_byte = 0x00;
 

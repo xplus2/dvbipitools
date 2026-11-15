@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "lib/demux/crc32.h"
 #include "lib/demux/psi/psi.h"
@@ -22,6 +23,7 @@
 #include "cli/args.h"
 #include "bridge.h"
 #include "version.h"
+#include "lib/helper/dateutil.h"
 
 #define DIPISRT_SENDER_POLL_MS 200
 #define DIPISRT_SENDER_READS_MAX 64
@@ -53,6 +55,18 @@ static void fill_common_opts(const config_t *cfg, srtcommon_opts_t *o) {
   o->streamid = cfg->streamid[0] ? cfg->streamid : NULL;
   o->packetfilter = cfg->packetfilter[0] ? cfg->packetfilter : NULL;
   o->latency_ms = cfg->latency_ms;
+}
+
+static void flush_file_input(srtout_t *srt) {
+  for (;;) {
+    srtout_status_t st;
+    srtout_queue_stats_t q;
+    struct timespec ts = {0, 20L * 1000000L};
+    srtout_service(srt, &st);
+    srtout_queue_stats(srt, &q);
+    if (!q.chunks || signal_stop_requested()) return;
+    nanosleep(&ts, NULL);
+  }
 }
 
 static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
@@ -173,6 +187,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   }
   if (insp) metrics_exporter_set_extra(mx, NULL, NULL);
   tsinspect_free(insp);
+  if (!signal_stop_requested() && tc.kind == TSSRC_FILE) flush_file_input(srt);
   if (signal_stop_requested()) srtout_close_now(srt);
   else srtout_close(srt);
   tssrc_close(src);

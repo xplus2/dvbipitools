@@ -8,7 +8,7 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/uriparse.h"
 
 #include "route.h"
@@ -27,94 +27,87 @@ int fmt_parse(const char *s, route_fmt_t *out) {
   return 0;
 }
 
-static size_t digit_run(const char *s) {
-  size_t i = 0;
-  while (s[i] >= '0' && s[i] <= '9') i++;
-  return i;
+static int dec_u64(const char **p, uint64_t max, uint64_t *out) {
+  const char *s = *p;
+  uint64_t v = 0;
+  if (*s < '0' || *s > '9') return -1;
+  for (; *s >= '0' && *s <= '9'; s++) {
+    if (v > (max - (uint64_t)(*s - '0')) / 10) return -1;
+    v = v * 10 + (uint64_t)(*s - '0');
+  }
+  *p = s;
+  *out = v;
+  return 0;
 }
 
-static int hls_ts_seg_filename(const char *s) {
-  size_t n;
-  if (strncmp(s, "seg", 3) != 0) return 0;
-  n = digit_run(s + 3);
-  return n > 0 && !strcmp(s + 3 + n, ".ts");
+static int seg_ext(const char *s, int *fmp4) {
+  if (!strcmp(s, ".ts")) *fmp4 = 0;
+  else if (!strcmp(s, ".m4s")) *fmp4 = 1;
+  else return -1;
+  return 0;
 }
 
-static int hls_fmp4_seg_filename(const char *s) {
-  size_t n;
-  if (strncmp(s, "seg", 3) != 0) return 0;
-  n = digit_run(s + 3);
-  return n > 0 && !strcmp(s + 3 + n, ".m4s");
-}
-
-/* "dsegTTTT.m4s": DASH media segment, addressed by start time (ms). NOT like hls-fmp4.
-   "dsegvTTTT.m4s"/"dsegaTTTT.m4s" and "dinitv.mp4"/"dinita.mp4": video/audio track of a split manifest */
-static int dash_seg_filename(const char *s) {
-  size_t n;
-  if (!strcmp(s, "dinitv.mp4") || !strcmp(s, "dinita.mp4")) return 1;
-  if (strncmp(s, "dseg", 4) != 0) return 0;
-  s += 4;
-  if (*s == 'v' || *s == 'a') s++;
-  n = digit_run(s);
-  return n > 0 && !strcmp(s + n, ".m4s");
-}
-
-/* "segNNNNN.PP.<ext>": LL-HLS part, distinct from plain "segNNNNN.<ext>" */
-static int llhls_part_filename(const char *s, const char *ext) {
-  size_t n;
-  size_t n2;
-  if (strncmp(s, "seg", 3) != 0) return 0;
-  n = digit_run(s + 3);
-  if (n == 0 || s[3 + n] != '.') return 0;
-  n2 = digit_run(s + 3 + n + 1);
-  return n2 > 0 && !strcmp(s + 3 + n + 1 + n2, ext);
+int route_file_parse(const char *s, route_file_t *out) {
+  static const enum_map_t fixed[] = {
+      {"index.m3u8", ROUTE_FILE_INDEX}, {"index_ll.m3u8", ROUTE_FILE_INDEX_LL}, {"manifest.mpd", ROUTE_FILE_MPD}, {"init.mp4", ROUTE_FILE_INIT},
+      {"dinitv.mp4", ROUTE_FILE_DINIT}, {"dinita.mp4", ROUTE_FILE_DINIT},
+  };
+  uint64_t v;
+  int k;
+  memset(out, 0, sizeof *out);
+  if (!map_lookup(fixed, sizeof fixed / sizeof fixed[0], s, &k)) {
+    out->kind = (route_file_kind_t)k;
+    if (k == ROUTE_FILE_DINIT) out->track = s[5] == 'v' ? ROUTE_TRACK_VIDEO : ROUTE_TRACK_AUDIO;
+    return 0;
+  }
+  if (!strncmp(s, "dseg", 4)) {
+    s += 4;
+    if (*s == 'v' || *s == 'a') out->track = *s++ == 'v' ? ROUTE_TRACK_VIDEO : ROUTE_TRACK_AUDIO;
+    if (dec_u64(&s, UINT64_MAX, &out->t_ms) || strcmp(s, ".m4s")) return -1;
+    out->kind = ROUTE_FILE_DSEG;
+    return 0;
+  }
+  if (strncmp(s, "seg", 3)) return -1;
+  s += 3;
+  if (dec_u64(&s, UINT32_MAX, &v)) return -1;
+  out->seq = (uint32_t)v;
+  out->kind = ROUTE_FILE_SEG;
+  if (*s == '.' && s[1] >= '0' && s[1] <= '9') {
+    s++;
+    if (dec_u64(&s, INT_MAX, &v)) return -1;
+    out->part = (int)v;
+    out->kind = ROUTE_FILE_PART;
+  }
+  return seg_ext(s, &out->fmp4);
 }
 
 unsigned route_file_fmts(const route_t *rt) {
-  const char *f = rt->hls_file;
+  const route_file_t *f = &rt->file;
   unsigned own = 1u << rt->fmt;
-  if (rt->fmt == ROUTE_FMT_HLS && hls_ts_seg_filename(f)) return own | 1u << ROUTE_FMT_LLHLS;
-  if ((rt->fmt == ROUTE_FMT_DASH || rt->fmt == ROUTE_FMT_LLDASH) && strcmp(f, "manifest.mpd")) return 1u << ROUTE_FMT_DASH | 1u << ROUTE_FMT_LLDASH;
-  if (rt->fmt == ROUTE_FMT_HLS_FMP4 && !strcmp(f, "init.mp4")) return own | 1u << ROUTE_FMT_DASH | 1u << ROUTE_FMT_LLHLS_FMP4;
-  if (rt->fmt == ROUTE_FMT_HLS_FMP4 && hls_fmp4_seg_filename(f)) return own | 1u << ROUTE_FMT_LLHLS_FMP4;
+  if (rt->fmt == ROUTE_FMT_HLS && f->kind == ROUTE_FILE_SEG) return own | 1u << ROUTE_FMT_LLHLS;
+  if ((rt->fmt == ROUTE_FMT_DASH || rt->fmt == ROUTE_FMT_LLDASH) && f->kind != ROUTE_FILE_MPD) return 1u << ROUTE_FMT_DASH | 1u << ROUTE_FMT_LLDASH;
+  if (rt->fmt == ROUTE_FMT_HLS_FMP4 && f->kind == ROUTE_FILE_INIT) return own | 1u << ROUTE_FMT_DASH | 1u << ROUTE_FMT_LLHLS_FMP4;
+  if (rt->fmt == ROUTE_FMT_HLS_FMP4 && f->kind == ROUTE_FILE_SEG) return own | 1u << ROUTE_FMT_LLHLS_FMP4;
   return own;
 }
 
 /* playlist-referenced segment/init filenames carry no format token */
 static int fmt_or_hls_file_parse(const char *s, route_t *out) {
-  if (llhls_part_filename(s, ".ts") || !strcmp(s, "index_ll.m3u8")) {
-    out->fmt = ROUTE_FMT_LLHLS;
-    bufcpy(out->hls_file, sizeof out->hls_file, s);
-    return 0;
+  if (!route_file_parse(s, &out->file)) {
+    switch (out->file.kind) {
+      case ROUTE_FILE_INDEX_LL: out->fmt = ROUTE_FMT_LLHLS; return 0;
+      case ROUTE_FILE_PART: out->fmt = out->file.fmp4 ? ROUTE_FMT_LLHLS_FMP4 : ROUTE_FMT_LLHLS; return 0;
+      case ROUTE_FILE_SEG: out->fmt = out->file.fmp4 ? ROUTE_FMT_HLS_FMP4 : ROUTE_FMT_HLS; return 0;
+      case ROUTE_FILE_INIT: out->fmt = ROUTE_FMT_HLS_FMP4; return 0;
+      case ROUTE_FILE_DSEG:
+      case ROUTE_FILE_DINIT: out->fmt = ROUTE_FMT_DASH; return 0;
+      default: out->file.kind = ROUTE_FILE_NONE; return -1;
+    }
   }
-  if (llhls_part_filename(s, ".m4s")) {
-    out->fmt = ROUTE_FMT_LLHLS_FMP4;
-    bufcpy(out->hls_file, sizeof out->hls_file, s);
-    return 0;
-  }
-  if (hls_ts_seg_filename(s)) {
-    out->fmt = ROUTE_FMT_HLS;
-    bufcpy(out->hls_file, sizeof out->hls_file, s);
-    return 0;
-  }
-  if (hls_fmp4_seg_filename(s) || !strcmp(s, "init.mp4")) {
-    out->fmt = ROUTE_FMT_HLS_FMP4;
-    bufcpy(out->hls_file, sizeof out->hls_file, s);
-    return 0;
-  }
-  if (dash_seg_filename(s)) {
-    out->fmt = ROUTE_FMT_DASH;
-    bufcpy(out->hls_file, sizeof out->hls_file, s);
-    return 0;
-  }
-  if (fmt_parse(s, &out->fmt))
-    return -1;
-  if (out->fmt == ROUTE_FMT_HLS || out->fmt == ROUTE_FMT_HLS_FMP4)
-    bufcpy(out->hls_file, sizeof out->hls_file, "index.m3u8");
-  else if (out->fmt == ROUTE_FMT_LLHLS || out->fmt == ROUTE_FMT_LLHLS_FMP4)
-    bufcpy(out->hls_file, sizeof out->hls_file, "index_ll.m3u8");
-  else if (out->fmt == ROUTE_FMT_DASH || out->fmt == ROUTE_FMT_LLDASH)
-    bufcpy(out->hls_file, sizeof out->hls_file, "manifest.mpd");
+  if (fmt_parse(s, &out->fmt)) return -1;
+  if (out->fmt == ROUTE_FMT_HLS || out->fmt == ROUTE_FMT_HLS_FMP4) out->file.kind = ROUTE_FILE_INDEX;
+  else if (out->fmt == ROUTE_FMT_LLHLS || out->fmt == ROUTE_FMT_LLHLS_FMP4) out->file.kind = ROUTE_FILE_INDEX_LL;
+  else if (out->fmt == ROUTE_FMT_DASH || out->fmt == ROUTE_FMT_LLDASH) out->file.kind = ROUTE_FILE_MPD;
   return 0;
 }
 
@@ -182,7 +175,8 @@ int route_resolve_channel_uri(const char *uri, int *family, char *addr, size_t a
 
 /* unlike route_resolve_channel_uri, host may be a DNS name not just numeric */
 int route_parse_srt_uri(const char *uri, char *host, size_t hostsz, unsigned *port) {
-  const char *rest, *colon;
+  const char *rest;
+  const char *colon;
   int family;
   size_t len;
 

@@ -112,10 +112,6 @@ int rtmp_session_write_message(struct rtmp *r, uint32_t cid, unsigned char type,
 int rtmp_session_feed(struct rtmp *r, const unsigned char *data, size_t bytes);
 
 int rtmp_command_connect(struct rtmp *r);
-int rtmp_command_release_stream(struct rtmp *r);
-int rtmp_command_fcpublish(struct rtmp *r);
-int rtmp_command_create_stream(struct rtmp *r);
-int rtmp_command_publish(struct rtmp *r);
 void rtmp_command_on_user_control(struct rtmp *r, const unsigned char *payload, size_t len);
 void rtmp_command_on_invoke(struct rtmp *r, const unsigned char *payload, size_t len);
 

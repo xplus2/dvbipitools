@@ -201,9 +201,11 @@ static void capture_send(const unsigned char *pkt, size_t len, int dscp, void *u
 /* no target_bps getter: compare uncapped vs. client-capped sends instead */
 START_TEST(burst_new_caps_target_to_client_max) {
   channel_t *c;
-  burst_t *uncapped, *capped;
+  burst_t *uncapped;
+  burst_t *capped;
   struct timespec ts;
-  int uncapped_sent, capped_sent;
+  int uncapped_sent;
+  int capped_sent;
 
   c = make_channel_with_rap(8, 30); /* RAP + 30 = 31 cached entries */
   atomic_store_explicit(&c->nominal_bps, 100000000.0, memory_order_relaxed); /* 100 Mbps */

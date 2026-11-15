@@ -264,7 +264,9 @@ static int filter_pid(ts_filter_t *f, unsigned pid) {
 
 START_TEST(ts_filter_pat_rewrite_drops_nit_only_program) {
   ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_DEFAULT);
-  unsigned char sec[256], pkt[188], out[TS_FILTER_OUT_MAX];
+  unsigned char sec[256];
+  unsigned char pkt[188];
+  unsigned char out[TS_FILTER_OUT_MAX];
   size_t slen;
   psi_t *check;
   int count;
@@ -579,9 +581,16 @@ static size_t build_pmt_big(unsigned char *out, unsigned prog_num, int n_audio) 
 
 START_TEST(ts_filter_multi_packet_pmt_emitted_whole) {
   ts_filter_t *f = ts_filter_new(1, 0, 0, 0, STRIP_DEFAULT);
-  unsigned char sec[1024], pkt[188], out[TS_FILTER_OUT_MAX];
-  unsigned char res[TS_FILTER_OUT_MAX], pat[188];
-  size_t slen, off = 0, n, total = 0, pkts;
+  unsigned char sec[1024];
+  unsigned char pkt[188];
+  unsigned char out[TS_FILTER_OUT_MAX];
+  unsigned char res[TS_FILTER_OUT_MAX];
+  unsigned char pat[188];
+  size_t slen;
+  size_t off = 0;
+  size_t n;
+  size_t total = 0;
+  size_t pkts;
   unsigned char cc = 0;
   psi_t *check;
   int count;
@@ -594,7 +603,8 @@ START_TEST(ts_filter_multi_packet_pmt_emitted_whole) {
   pkts = (slen + 1 + 183) / 184;
   ck_assert_uint_ge(pkts, 3u);
   for (size_t k = 0; k < pkts; k++) {
-    size_t room = k ? 184 : 183, take = slen - off < room ? slen - off : room;
+    size_t room = k ? 184 : 183;
+    size_t take = slen - off < room ? slen - off : room;
     const unsigned char *r;
     memset(pkt, 0xFF, sizeof pkt);
     pkt[0] = 0x47;

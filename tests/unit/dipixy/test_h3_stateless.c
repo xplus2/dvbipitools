@@ -36,7 +36,9 @@ static void setup(void) {
 
 START_TEST(retry_token_round_trip) {
   struct sockaddr_in peer = addr_of("192.0.2.7", 4433);
-  ngtcp2_cid retry_scid = cid_of(0x10, 16), odcid = cid_of(0x40, 8), got;
+  ngtcp2_cid retry_scid = cid_of(0x10, 16);
+  ngtcp2_cid odcid = cid_of(0x40, 8);
+  ngtcp2_cid got;
   uint8_t tok[NGTCP2_CRYPTO_MAX_RETRY_TOKENLEN2];
   ngtcp2_ssize n = h3_token_retry_make(tok, (struct sockaddr *)&peer, sizeof peer, NGTCP2_PROTO_VER_V1, &retry_scid, &odcid, 5 * SEC);
   ck_assert_int_gt(n, 0);

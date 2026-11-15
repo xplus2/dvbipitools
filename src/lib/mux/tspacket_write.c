@@ -67,7 +67,8 @@ static void write_packet(const ts_packet_desc_t *d, unsigned char *cc, ts_packet
 }
 
 static size_t emit_core(unsigned pid, unsigned char *cc, const unsigned char *pointer_byte, const unsigned char *data, size_t len, int pcr_first, uint64_t pcr_90k, int disc, ts_packet_cb cb, void *ctx) {
-  size_t sent = 0, count = 0;
+  size_t sent = 0;
+  size_t count = 0;
   int first = 1;
   while (first || sent < len) {
     size_t remaining = len - sent;
@@ -94,7 +95,8 @@ size_t ts_packet_emit_pcr(unsigned pid, unsigned char *cc, const unsigned char *
 }
 
 size_t ts_packet_emit_partial(unsigned pid, unsigned char *cc, const unsigned char *pointer_byte, const unsigned char *data, size_t len, size_t *offset, size_t max_packets, ts_packet_cb cb, void *ctx) {
-  size_t sent = *offset, count = 0;
+  size_t sent = *offset;
+  size_t count = 0;
   int first = (sent == 0);
   while (count < max_packets && sent < len) {
     size_t remaining = len - sent;

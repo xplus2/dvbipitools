@@ -6,9 +6,9 @@
 #include <time.h>
 
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 
 #include "bitrate.h"
+#include "lib/helper/dateutil.h"
 
 #define PACKET_BITS (188.0 * 8.0)
 #define OVERAGE_THRESHOLD_S 2.0     /* sustained backlog before it's a real misconfiguration, not a burst */
@@ -62,7 +62,8 @@ void bitrate_pace(bitrate_pacer_t *p) {
 }
 
 void bitrate_account_n(bitrate_pacer_t *p, unsigned n) {
-  double now, ahead_s;
+  double now;
+  double ahead_s;
   if (!p) return;
   p->bits_sent += (unsigned long long)PACKET_BITS * n;
   if (p->target_bps <= 0.0) return;
@@ -73,8 +74,6 @@ void bitrate_account_n(bitrate_pacer_t *p, unsigned n) {
     p->last_overage_log = now;
   }
 }
-
-void bitrate_account(bitrate_pacer_t *p) { bitrate_account_n(p, 1); }
 
 int bitrate_stuff_due(const bitrate_pacer_t *p, unsigned pending) {
   double behind_bits;

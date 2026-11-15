@@ -5,6 +5,7 @@
 #define DIPIXY_ROUTE_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 typedef enum {
   ROUTE_FMT_TS,
@@ -29,6 +30,20 @@ typedef enum {
   ROUTE_NAMED_BARE /* -n-named -i - or -i rist://, addressed as /<name>/<fmt> */
 } route_kind_t;
 
+typedef enum { ROUTE_FILE_NONE, ROUTE_FILE_INDEX, ROUTE_FILE_INDEX_LL, ROUTE_FILE_MPD, ROUTE_FILE_INIT, ROUTE_FILE_SEG, ROUTE_FILE_PART, ROUTE_FILE_DSEG, ROUTE_FILE_DINIT } route_file_kind_t;
+typedef enum { ROUTE_TRACK_MUXED, ROUTE_TRACK_VIDEO, ROUTE_TRACK_AUDIO } route_track_t;
+
+typedef struct {
+  route_file_kind_t kind;
+  int fmp4;
+  route_track_t track;
+  uint32_t seq;
+  int part;
+  uint64_t t_ms;
+} route_file_t;
+
+int route_file_parse(const char *s, route_file_t *out);
+
 #define ROUTE_NAME_MAX 63 /* -n/--name value, also route_t.src_name capacity - 1 */
 
 typedef struct {
@@ -42,14 +57,7 @@ typedef struct {
   char src_name[ROUTE_NAME_MAX + 1]; /* ROUTE_NAMED_BARE, or ROUTE_LIST_* addressed by -n name instead of list_num */
   unsigned item_num;       /* ROUTE_LIST_ITEM, 1-based, from URL */
   char item_name[128];     /* ROUTE_LIST_NAME, percent-decoded */
-  char hls_file[32];       /* ROUTE_FMT_HLS: "index.m3u8" or "segNNNNN.ts".
-                              ROUTE_FMT_HLS_FMP4: "index.m3u8", "init.mp4", or "segNNNNN.m4s".
-                              ROUTE_FMT_LLHLS: "index_ll.m3u8" or "segNNNNN.PP.ts".
-                              ROUTE_FMT_LLHLS_FMP4: "index_ll.m3u8" (via "llhls-fmp4" token only) or "segNNNNN.PP.m4s".
-                              ROUTE_FMT_DASH/ROUTE_FMT_LLDASH: "manifest.mpd", "dsegTTTT.m4s" (TTTT: start time, ms),
-                              "dsegvTTTT.m4s"/"dsegaTTTT.m4s" or "dinitv.mp4"/"dinita.mp4" (split video/audio).
-                              dseg/dinit: no format (playlist): always resolve to ROUTE_FMT_DASH.
-                              ROUTE_FMT_MP4: unused, bare route only */
+  route_file_t file;       /* dseg/dinit carry no format token: always ROUTE_FMT_DASH */
 } route_t;
 
 /* path starts with '/'. 0 ok, -1 no match or malformed */

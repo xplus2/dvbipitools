@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 #include "bimreader.h"
 #include "bitwriter.h"
 
@@ -74,11 +74,17 @@ static int push_bytes(bitwriter_t *bw, const unsigned char *data, size_t len) {
 }
 
 int bitwriter_put_bytes(bitwriter_t *bw, const unsigned char *data, size_t len) {
-  if (bw->cur_bits == 0)
+  int sh = bw->cur_bits;
+  if (!len)
+    return 0;
+  if (!sh)
     return push_bytes(bw, data, len);
-  for (size_t i = 0; i < len; i++)
-    if (bitwriter_put(bw, data[i], 8))
-      return -1;
+  if (reserve(bw, len))
+    return -1;
+  for (size_t i = 0; i < len; i++) {
+    bw->buf[bw->len++] = (unsigned char)(bw->cur | (unsigned)data[i] >> sh);
+    bw->cur = ((unsigned)data[i] << (8 - sh)) & 0xFF;
+  }
   return 0;
 }
 
@@ -109,12 +115,9 @@ int bitwriter_vluimsbf8_len(uint64_t value) {
 }
 
 int bitwriter_put_vluimsbf8(bitwriter_t *bw, uint64_t value) {
-  for (int i = bitwriter_vluimsbf8_len(value) - 1; i >= 0; i--) {
-    if (bitwriter_put(bw, i != 0, 1))
+  for (int i = bitwriter_vluimsbf8_len(value) - 1; i >= 0; i--)
+    if (bitwriter_put(bw, (uint64_t)(i != 0) << 7 | ((value >> (7 * i)) & 0x7F), 8))
       return -1;
-    if (bitwriter_put(bw, (value >> (7 * i)) & 0x7F, 7))
-      return -1;
-  }
   return 0;
 }
 
@@ -128,6 +131,43 @@ int bitwriter_put_vluimsbf5(bitwriter_t *bw, uint64_t value) {
   if (bitwriter_put(bw, 0, 1))
     return -1;
   return bitwriter_put(bw, value, n * 4);
+}
+
+size_t bitwriter_bits(const bitwriter_t *bw) { return bw->len * 8 + (size_t)bw->cur_bits; }
+
+void bitwriter_truncate(bitwriter_t *bw, size_t nbits) {
+  size_t at = nbits / 8;
+  int rest = (int)(nbits % 8);
+  unsigned keep = rest ? (0xFFu << (8 - rest)) & 0xFF : 0;
+  if (nbits >= bitwriter_bits(bw)) return;
+  bw->cur = (at < bw->len ? bw->buf[at] : bw->cur) & keep;
+  bw->len = at;
+  bw->cur_bits = rest;
+}
+
+static unsigned src_byte(const bitwriter_t *src, size_t i) { return i < src->len ? src->buf[i] : i == src->len ? src->cur : 0; }
+
+int bitwriter_append_range(bitwriter_t *dst, const bitwriter_t *src, size_t start, size_t nbits) {
+  int off = (int)(start % 8);
+  size_t i = start / 8;
+  if (!off && !dst->cur_bits && nbits >= 8) {
+    size_t whole = nbits / 8;
+    if (i + whole > src->len) whole = src->len > i ? src->len - i : 0;
+    if (whole && push_bytes(dst, src->buf + i, whole)) return -1;
+    i += whole;
+    nbits -= whole * 8;
+  }
+  while (nbits) {
+    uint64_t w = 0;
+    int take = nbits < 56 ? (int)nbits : 56;
+    for (int b = 0; b < 8; b++) w = w << 8 | src_byte(src, i + (size_t)b);
+    w = (w << off) >> (64 - take);
+    if (bitwriter_put(dst, w, take)) return -1;
+    i += (size_t)(off + take) / 8;
+    off = (off + take) % 8;
+    nbits -= (size_t)take;
+  }
+  return 0;
 }
 
 int bitwriter_append(bitwriter_t *dst, const bitwriter_t *src) {

@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "h3_rig.h"
+#include "lib/helper/dateutil.h"
 
 #define INITIAL_MAX 2048
 #define CONNS 3
@@ -131,7 +132,7 @@ START_TEST(client_close_releases_the_server_connection) {
   ck_assert_int_eq(t_h3_active_cnt, 1);
   ngtcp2_path_storage_zero(&ps);
   ngtcp2_ccerr_default(&err);
-  n = ngtcp2_conn_write_connection_close(h.qc, &ps.path, NULL, buf, sizeof buf, &err, h3_ts());
+  n = ngtcp2_conn_write_connection_close(h.qc, &ps.path, NULL, buf, sizeof buf, &err, now_ns());
   ck_assert_int_gt((int)n, 0);
   ck_assert_int_eq((int)sendto(h.cli_fd, buf, (size_t)n, 0, (struct sockaddr *)&h.srv_addr, sizeof h.srv_addr), (int)n);
   ck_assert_int_eq(h3r_pump_until(&h, cond_server_empty, NULL), 1);

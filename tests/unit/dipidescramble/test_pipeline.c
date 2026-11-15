@@ -13,8 +13,8 @@
 #include "dipidescramble/pipeline.h"
 #include "lib/demux/crc32.h"
 #include "lib/scrambler/scrambler.h"
-#include "lib/sys/signal.h"
 #include "../fx_ts.h"
+#include "lib/helper/dateutil.h"
 
 #define PMT_PID 0x1000
 #define ECM_PID 0x0064
@@ -22,7 +22,9 @@
 
 static size_t build_pat_local(unsigned char *out, unsigned prog_num, unsigned pmt_pid) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = 0x12;
@@ -53,7 +55,9 @@ static size_t build_pat_local(unsigned char *out, unsigned prog_num, unsigned pm
 /* one-program, zero-ES PMT with a CA_descriptor (tag 0x09) in program_info, CRC included */
 static size_t build_pmt_with_ca(unsigned char *out, unsigned prog_num, unsigned ca_system_id, unsigned ca_pid, unsigned scrambling_mode) {
   unsigned char body[40];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = (unsigned char)(prog_num >> 8);
@@ -95,7 +99,9 @@ static size_t build_pmt_with_ca(unsigned char *out, unsigned prog_num, unsigned 
 /* CAT (table_id 0x01) with one CA_descriptor, CRC included */
 static size_t build_cat(unsigned char *out, unsigned ca_system_id, unsigned emm_pid) {
   unsigned char body[16];
-  size_t n = 0, hdr, crc_at;
+  size_t n = 0;
+  size_t hdr;
+  size_t crc_at;
   uint32_t crc;
 
   body[n++] = 0xFF;
@@ -173,8 +179,10 @@ START_TEST(emit_downstream_writes_identical_bytes_to_every_outfd) {
   int fd0 = mkstemp(path0);
   int fd1 = mkstemp(path1);
   unsigned char pkt[188];
-  unsigned char rd0[188 * 3], rd1[188 * 3];
-  ssize_t n0, n1;
+  unsigned char rd0[188 * 3];
+  unsigned char rd1[188 * 3];
+  ssize_t n0;
+  ssize_t n1;
 
   ck_assert_int_ge(fd0, 0);
   ck_assert_int_ge(fd1, 0);
@@ -211,7 +219,8 @@ START_TEST(emit_downstream_writes_identical_bytes_to_every_outfd) {
 END_TEST
 
 START_TEST(biss1e_ecm_on_null_dev_does_not_crash) {
-  unsigned char pkt[188], sec[64];
+  unsigned char pkt[188];
+  unsigned char sec[64];
   size_t slen;
 
   setup_biss1e();
@@ -567,6 +576,7 @@ START_TEST(classic_cas_descrambles_packets_with_the_resolved_control_words) {
   ck_assert_uint_eq((in_even[3] >> 6) & 3u, 2u);
   ck_assert_uint_eq((in_odd[3] >> 6) & 3u, 3u);
 
+  pipeline_flush(&c.lc);
   base = (size_t)c.lc.packets * 188u;
   ck_assert_int_eq(pkt_cb(&c.lc, in_even), 0);
   ck_assert_int_eq(pkt_cb(&c.lc, in_odd), 0);
@@ -575,6 +585,7 @@ START_TEST(classic_cas_descrambles_packets_with_the_resolved_control_words) {
   ck_assert_int_eq(pkt_cb(&c.lc, in_reserved), 0);
   ck_assert_uint_eq(c.lc.unexpected_clear_packets_total, 1u);
   ck_assert_int_eq(pkt_cb(&c.lc, clear_plain), 0);
+  pipeline_flush(&c.lc);
 
   ck_assert_uint_eq(out_size(&c), base + 188u * 4u);
   out_read(&c, base, out, sizeof out);
@@ -596,10 +607,12 @@ START_TEST(scrambled_packets_before_any_control_word_are_forwarded_and_counted_u
 
   cls_open(&c);
   ck_assert_int_eq(prime_cas(&c.lc, CAS_ID, MODE_CISSA), 0);
+  pipeline_flush(&c.lc);
   base = (size_t)c.lc.packets * 188u;
   make_ts(pkt, VIDEO_PID, 0x77);
   pkt[3] = (unsigned char)((pkt[3] & 0x3F) | 0x80);
   ck_assert_int_eq(pkt_cb(&c.lc, pkt), 0);
+  pipeline_flush(&c.lc);
   ck_assert_uint_eq(c.lc.unexpected_clear_packets_total, 1u);
   ck_assert_uint_eq(out_size(&c), base + 188u);
   out_read(&c, base, out, sizeof out);

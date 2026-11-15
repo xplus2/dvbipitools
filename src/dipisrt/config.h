@@ -5,8 +5,12 @@
 #define DIPISRT_CONFIG_H
 
 #include "cli/args.h"
+#include "lib/config/yamlcfg.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipisrt.yaml"
+
+extern const yamlcfg_key_t srt_cfg_keys[];
+extern const size_t srt_cfg_nkeys;
 
 void srt_cfg_defaults(config_t *cfg);
 

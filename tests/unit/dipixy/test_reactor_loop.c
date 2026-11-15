@@ -16,6 +16,7 @@
 #include "dipixy/reactor/conn.h"
 #include "dipixy/dash/lldash.h"
 #include "dipixy/reactor/internal.h"
+#include "dipixy/reactor/wake.h"
 #include "dipixy/segment/mp4push.h"
 #include "dipixy/ts/ts_push.h"
 
@@ -90,22 +91,50 @@ static void feed_event(loop_t *l, void *ptr, uint32_t events) {
   reactor_handle_event(l->epfd, &l->rl, 0, &ev);
 }
 
-START_TEST(wakeup_eventfds_are_drained_by_their_listener_kind) {
-  static const reactor_listener_kind kinds[] = {RL_TSPUSH_EFD, RL_DASHCHUNK_EFD, RL_MP4PUSH_EFD};
+START_TEST(wakeup_eventfd_is_drained_for_each_wake_kind) {
+  static const wake_kind_t kinds[] = {WAKE_TSPUSH, WAKE_DASHCHUNK, WAKE_MP4PUSH};
   loop_t l;
   int efd = eventfd(0, EFD_NONBLOCK);
-  uint64_t one = 1;
   uint64_t got = 0;
 
   ck_assert_int_ge(efd, 0);
   loop_open(&l);
-  add_listener(&l, efd, kinds[_i]);
-  ck_assert_int_eq((int)write(efd, &one, sizeof one), (int)sizeof one);
+  add_listener(&l, efd, RL_WAKE_EFD);
+  reactor_wake_register(0, efd);
+  reactor_wake(0, kinds[_i]);
+  reactor_wake(0, kinds[_i]);
   feed_event(&l, &l.rl.L[0], EPOLLIN);
   ck_assert_int_eq((int)read(efd, &got, sizeof got), -1);
   ck_assert_int_eq(errno, EAGAIN);
+  ck_assert_uint_eq(reactor_wake_take(0), 0);
+  reactor_wake_register(0, -1);
   close(efd);
   loop_close(&l);
+}
+END_TEST
+
+START_TEST(parked_waiter_shortens_timeout_and_store_push_wakes_reactor) {
+  int efd = eventfd(0, EFD_NONBLOCK);
+  uint64_t got = 0;
+  int ms;
+
+  ck_assert_int_ge(efd, 0);
+  reactor_wake_register(0, efd);
+  ck_assert_int_eq(reactor_wait_timeout_ms(0, 200), 200);
+  reactor_wake_waiters();
+  ck_assert_int_eq((int)read(efd, &got, sizeof got), -1);
+  reactor_wait_note(now_ms() + 50);
+  ck_assert_int_eq(reactor_wait_timeout_ms(0, 200), 0);
+  reactor_wait_note(now_ms() + 50);
+  ms = reactor_wait_timeout_ms(0, 200);
+  ck_assert_int_gt(ms, 0);
+  ck_assert_int_le(ms, 50);
+  reactor_wake_waiters();
+  ck_assert_int_eq((int)read(efd, &got, sizeof got), (int)sizeof got);
+  ck_assert_uint_eq(reactor_wake_take(0), 1u << WAKE_WAITERS);
+  ck_assert_int_eq(reactor_wait_timeout_ms(0, 200), 200);
+  reactor_wake_register(0, -1);
+  close(efd);
 }
 END_TEST
 
@@ -399,7 +428,8 @@ static Suite *loop_suite(void) {
   Suite *s = suite_create("dipixy_reactor_loop");
   TCase *tc = tcase_create("core");
   tcase_set_timeout(tc, 20);
-  tcase_add_loop_test(tc, wakeup_eventfds_are_drained_by_their_listener_kind, 0, 3);
+  tcase_add_loop_test(tc, wakeup_eventfd_is_drained_for_each_wake_kind, 0, 3);
+  tcase_add_test(tc, parked_waiter_shortens_timeout_and_store_push_wakes_reactor);
   tcase_add_test(tc, accepted_connection_is_read_and_answered_through_the_loop);
   tcase_add_loop_test(tc, hangup_without_input_closes_the_connection_for_every_state, 0, (int)(sizeof hup_states / sizeof hup_states[0]));
   tcase_add_test(tc, hangup_with_pending_input_still_reads_first);

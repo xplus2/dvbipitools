@@ -6,9 +6,9 @@
 #include <string.h>
 
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 #include "../../version.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 source_t *build_source(http_t *h, unsigned idx, const char *label, const unsigned char *sniff, size_t got, source_meta_cb cb, void *ctx) {
   source_t *s = calloc(1, sizeof *s);

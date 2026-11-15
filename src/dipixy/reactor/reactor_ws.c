@@ -8,8 +8,9 @@
 #include "../ws/ws_broadcast.h"
 #include "../ws/ws_frame.h"
 #include "lib/helper/base64.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/sha1.h"
+#include "lib/helper/growutil.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -32,20 +33,7 @@ static void ws_sink(void *ctx, const uint8_t *frame, size_t flen) {
 static void send_frame(conn_t *c, int opcode, const void *payload, size_t len) {
   ws_conn_state_t *ws = c->ws;
   size_t flen = ws_frame_hdr_len(len) + len;
-  if (flen > ws->out_cap) {
-    size_t ncap = ws->out_cap ? ws->out_cap : 256;
-    while (ncap < flen) {
-      if (ncap > (SIZE_MAX >> 1)) {
-        ncap = flen;
-        break;
-      }
-      ncap <<= 1;
-    }
-    uint8_t *p = realloc(ws->out_buf, ncap);
-    if (!p) return;
-    ws->out_buf = p;
-    ws->out_cap = ncap;
-  }
+  if (growbuf_reserve((void **)&ws->out_buf, &ws->out_cap, 1, flen, 256)) return;
   ws_frame_encode(ws->out_buf, opcode, payload, len);
   pthread_mutex_lock(&c->out_lock); /* c->out also written by ws_sink() on other threads */
   if (conn_out_pending(c) + flen > CONN_OUT_MAX) c->dead = 1; /* peer not reading */
@@ -125,7 +113,8 @@ static void dispatch_queue_cb(void *ctx, int opcode, const void *payload, size_t
 
 static int ws_drain(conn_t *c, ws_conn_state_t *ws) {
   for (;;) {
-    int opcode, got;
+    int opcode;
+    int got;
     const uint8_t *payload;
     size_t plen;
     got = ws_parser_next(&ws->parser, &opcode, &payload, &plen);
@@ -172,24 +161,23 @@ static int ci_contains(const char *hay, const char *needle) {
   return 0;
 }
 
-static int ws_close_resp(conn_t *c, const char *resp, size_t len) {
+static void ws_close_resp(conn_t *c, const char *resp, size_t len) {
   conn_queue(c, resp, len);
   c->keep_alive = 0;
   c->close_after_flush = 1;
-  return 1;
 }
 
-static int ws_forbid(conn_t *c) {
+static void ws_forbid(conn_t *c) {
   static const char resp[] = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-  return ws_close_resp(c, resp, sizeof resp - 1);
+  ws_close_resp(c, resp, sizeof resp - 1);
 }
 
-static int ws_reject(conn_t *c) {
+static void ws_reject(conn_t *c) {
   static const char resp[] = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-  return ws_close_resp(c, resp, sizeof resp - 1);
+  ws_close_resp(c, resp, sizeof resp - 1);
 }
 
-int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers, size_t num_headers) {
+void ws_upgrade(conn_t *c, const struct phr_header *headers, size_t num_headers) {
   char conn_val[64];
   char upg_val[32];
   char key[80];
@@ -202,13 +190,18 @@ int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers
   size_t klen;
   size_t off;
 
-  if (!path_is_ui_ws(path)) return 0;
-  if (!find_header(headers, num_headers, "Connection", conn_val, sizeof conn_val) || !ci_contains(conn_val, "upgrade")) return ws_reject(c);
-  if (!find_header(headers, num_headers, "Upgrade", upg_val, sizeof upg_val) || strcasecmp(upg_val, "websocket")) return ws_reject(c);
-  if (!find_header(headers, num_headers, "Sec-WebSocket-Key", key, sizeof key)) return ws_reject(c);
+  if (!find_header(headers, num_headers, "Connection", conn_val, sizeof conn_val) || !ci_contains(conn_val, "upgrade") ||
+      !find_header(headers, num_headers, "Upgrade", upg_val, sizeof upg_val) || strcasecmp(upg_val, "websocket") ||
+      !find_header(headers, num_headers, "Sec-WebSocket-Key", key, sizeof key)) {
+    ws_reject(c);
+    return;
+  }
   if (find_header(headers, num_headers, "Origin", origin, sizeof origin)) {
     if (!find_header(headers, num_headers, "Host", host, sizeof host)) host[0] = '\0';
-    if (!ws_origin_ok(reactor_cfg(), origin, host)) return ws_forbid(c);
+    if (!ws_origin_ok(reactor_cfg(), origin, host)) {
+      ws_forbid(c);
+      return;
+    }
   }
 
   klen = bufcpy(input, sizeof input, key);
@@ -223,5 +216,4 @@ int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers
   off += bufcpy(hdr + off, sizeof hdr - off, "\r\n\r\n");
   conn_queue(c, hdr, off);
   c->next_state = CONN_NEXT_WS;
-  return 1;
 }

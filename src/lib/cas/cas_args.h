@@ -6,14 +6,8 @@
 
 #include <stddef.h>
 
-/* 32-bit Super_CAS_id, hex or decimal */
-int cas_super_id_parse(const char *s, unsigned *out);
 
-/* tcp://host:port/ or host:port. brackets required for literal IPv6 host, e.g. [::1]:2222 */
-int cas_endpoint_parse(const char *s, char *host_out, size_t host_out_sz, unsigned *port_out);
 
-/* 2 or 3, ETSI TS 103 197 Simulcrypt protocol versions, no other value valid */
-int cas_version_parse(const char *s, unsigned *out);
 
 /* NONE = --cas-algo not given, CAS disabled */
 typedef enum { CAS_ALGO_NONE, CAS_ALGO_CISSA, CAS_ALGO_CSA2, CAS_ALGO_CSA1 } cas_algo_t;
@@ -46,11 +40,8 @@ typedef struct {
   char cwenc_key_list_b_path[256];
 } cas_vendor_t;
 
-/* shared by cmd line + yaml. 0 ok, -1 with reason in err */
-void cas_vendor_defaults(cas_vendor_t *v);
 
 int cas_vendor_add(cas_vendor_t *vendors, unsigned *n_vendors, const char *endpoint, char *err, size_t errsz);
-int cas_vendor_set_endpoint(cas_vendor_t *v, const char *val, char *err, size_t errsz);
 int cas_vendor_set_ecmg_version(cas_vendor_t *v, const char *val, char *err, size_t errsz);
 int cas_vendor_set_super_id(cas_vendor_t *v, const char *val, char *err, size_t errsz);
 int cas_vendor_set_ecm_id(cas_vendor_t *v, const char *val, char *err, size_t errsz);

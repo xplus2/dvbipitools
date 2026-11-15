@@ -16,7 +16,7 @@
 #include <sys/socket.h>
 #include <time.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/metrics/export.h"
 
 #include "../cli/args.h"
@@ -28,16 +28,19 @@
 #include "../core/time_ep.h"
 #include "../ws/ws_clients.h"
 #include "conn.h"
+#include "wake.h"
 #include "qsbr.h"
 #include "reactor_tls.h"
 #include "lib/vendor/picohttpparser/picohttpparser.h"
+#include "lib/helper/dateutil.h"
+#include "dipixy/ts/streamkey.h"
 
 #include <errno.h>
 
 /* Retry-After secs on 503 cap refusals */
 #define REACTOR_RETRY_AFTER_S "5"
 
-extern long g_connections_total;
+extern _Atomic long g_connections_total;
 extern _Thread_local int t_reactor_tid;
 extern _Thread_local int t_reactor_epfd;
 extern _Thread_local int t_open_replay; /* dispatch re-run after async open */
@@ -53,9 +56,7 @@ void reactor_set_context(const config_t *cfg, const channels_t *channels, metric
 
 typedef enum {
   RL_ACCEPT = 0,     /* TCP/TLS accept socket */
-  RL_TSPUSH_EFD,     /* per-reactor TS-push wakeup eventfd */
-  RL_DASHCHUNK_EFD,  /* per-reactor LL-DASH chunk wakeup eventfd (H2/H3) */
-  RL_MP4PUSH_EFD,    /* per-reactor progressive-MP4 wakeup eventfd (H2/H3) */
+  RL_WAKE_EFD,       /* per-reactor push wakeup eventfd */
   RL_H3_UDP          /* QUIC UDP socket (HAVE_HTTP3 only) */
 } reactor_listener_kind;
 
@@ -66,11 +67,9 @@ typedef struct {
 } reactor_listener;
 
 typedef struct {
-  reactor_listener L[8]; /* 2 TCP (plain+tls), 2 H3 UDP (v4+v6), 1 tspush efd, 1 dashchunk efd, 1 mp4push efd */
+  reactor_listener L[8]; /* 2 TCP (plain+tls), 2 H3 UDP (v4+v6), 1 wake efd */
   int nL;
-  int tspush_efd;
-  int dashchunk_efd;
-  int mp4push_efd;
+  int wake_efd;
 } reactor_listeners_t;
 
 /* reactor.c: conn lifecycle */
@@ -101,6 +100,7 @@ void reactor_startup_lost(void);
 /* nonzero once any worker failed listener setup */
 int reactor_startup_failed(void);
 void *pump_thread(void *arg);
+void *maint_thread(void *arg);
 void reactor_handle_event(int epfd, reactor_listeners_t *rl, int tid, struct epoll_event *evp);
 
 /* dispatch.c: HTTP/1.1 request read + dispatch */
@@ -151,10 +151,25 @@ static inline void hdr_value_copy(char *dst, size_t dst_cap, const uint8_t *valu
 const char *cors_match(const config_t *cfg, const char *origin_hdr, int *vary);
 
 int http_auth_ok(const char *expected, const char *auth_hdr);
-/* credential a h1/h2/h3 path needs: cfg http_auth (ui paths), http_metrics_auth (/metrics), NULL if none or unset */
-const char *special_path_auth(const char *path);
-/* /ui/ws or /ui/ws/ */
-int path_is_ui_ws(const char *path);
+typedef enum {
+  SPECIAL_NONE,
+  SPECIAL_INDEX,
+  SPECIAL_STATUS_JS,
+  SPECIAL_UI_WS,
+  SPECIAL_METRICS,
+  SPECIAL_TIME,
+  SPECIAL_DLNA_DESC,
+  SPECIAL_DLNA_CD_SCPD,
+  SPECIAL_DLNA_CM_SCPD,
+  SPECIAL_DLNA_CD_CONTROL,
+  SPECIAL_DLNA_CM_CONTROL,
+  SPECIAL_DLNA_CD_EVENT,
+  SPECIAL_DLNA_CM_EVENT,
+  SPECIAL_EXPORT
+} special_path_t;
+special_path_t special_path_kind(const char *path);
+/* credential sp needs: cfg http_auth (ui paths), http_metrics_auth (/metrics), NULL if none or unset */
+const char *special_path_auth(special_path_t sp);
 /* browser WS handshake guard: absent Origin ok. else Origin must equal Host, must be an IP, localhost, or a name from dlna.host,
    cors_origins, ws_allowed_hosts. blocks rebinding */
 int ws_origin_ok(const config_t *cfg, const char *origin, const char *host);
@@ -166,7 +181,7 @@ void llhls_flush_waiters(void);
 /* dispatch.c. purges c's waiter slot, call before reactor_close() frees it */
 void llhls_waiter_conn_closing(const conn_t *c);
 
-/* now_ms(): lib/sys/ioutil.h */
+/* now_ms(): lib/helper/dateutil.h */
 
 /* _HLS_msn[&_HLS_part]: 1 if msn present, *want_part -1 without part */
 static inline int parse_blocking_reload(const char *query, uint32_t *want_seg, int *want_part) {
@@ -194,7 +209,7 @@ typedef struct {
   pid_filter_t filter;
   unsigned pmt_pid;
   lcevc_select_t lcevc;
-  char filename[32];
+  route_file_t file;
   int is_head;
   int keep_alive; /* h1 only, unused by h2/h3 */
   char inm[80];    /* h2/h3 only, empty for h1 */
@@ -214,11 +229,8 @@ typedef int (*hls_waiter_ready_fn)(const hls_waiter_t *w);
 typedef void (*hls_waiter_finish_fn)(hls_waiter_t *w);
 
 typedef struct {
-  capture_ctx_t *cap_ctx;
-  const pid_filter_t *filter;
-  unsigned pmt_pid;
-  const lcevc_select_t *lcevc;
-  const char *filename;
+  stream_key_t key;
+  const route_file_t *file;
   int is_head;
   int keep_alive;
   const char *inm;
@@ -227,17 +239,12 @@ typedef struct {
   int want_part;
   int timeout_ms;
   int ws_handle;
-  seg_container_t container;
 } llhls_park_req_t;
 
 typedef struct {
-  capture_ctx_t *cap_ctx;
-  const pid_filter_t *filter;
-  unsigned pmt_pid;
-  const lcevc_select_t *lcevc;
-  const char *filename;
+  stream_key_t key;
+  const route_file_t *file;
   hls_cold_kind_t kind;
-  seg_container_t container;
   int want_ll;
   int is_head;
   int keep_alive;
@@ -247,12 +254,13 @@ typedef struct {
   const char *utc_url; /* HLS_COLD_DASH only */
 } hls_cold_park_req_t;
 
-static inline int llhls_ready_part(const hls_waiter_t *w) {
-  return hls_part_available(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container, w->want_seg, w->want_part);
-}
+#define WAITER_KEY(w) (&(stream_key_t){(w)->cap_ctx, &(w)->filter, (w)->pmt_pid, &(w)->lcevc, (w)->container})
+
+static inline int llhls_ready_part(const hls_waiter_t *w) { return hls_part_available_at(hls_store_find(WAITER_KEY(w)), w->want_seg, w->want_part); }
 
 static inline int hls_cold_ready(const hls_waiter_t *w) {
-  return w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container) : hls_store_ready(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container);
+  const hls_store_t *s = hls_store_find(WAITER_KEY(w));
+  return w->kind == HLS_COLD_LLHLS ? hls_ll_store_ready_at(s) : hls_store_ready_at(s);
 }
 
 /* keyframe wait + one segment cut: up to GOP + segment_size, GOP unknown */
@@ -264,7 +272,7 @@ static inline int hls_cold_timeout_ms(double segment_size) {
 
 /* park expired unready: 503 (retry) while store warms up, 404 no source */
 static inline int hls_cold_expired_status(const hls_waiter_t *w) {
-  return hls_store_find(w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container) ? 503 : 404;
+  return hls_store_find(WAITER_KEY(w)) ? 503 : 404;
 }
 
 /* 1 parked (caller stops touching conn/stream), 0 table full */
@@ -274,16 +282,16 @@ static inline int llhls_waiter_pool_try_park(hls_waiter_t *slots, int cap, int *
     if (w->active) continue;
     w->owner = owner;
     w->stream_id = stream_id;
-    w->cap_ctx = req->cap_ctx;
-    w->filter = *req->filter;
-    w->pmt_pid = req->pmt_pid;
-    w->lcevc = *req->lcevc;
-    bufcpy(w->filename, sizeof w->filename, req->filename);
+    w->cap_ctx = req->key.ctx;
+    w->filter = *req->key.filter;
+    w->pmt_pid = req->key.pmt_pid;
+    w->lcevc = *req->key.lcevc;
+    w->file = *req->file;
     w->is_head = req->is_head;
     w->keep_alive = req->keep_alive;
     bufcpy(w->inm, sizeof w->inm, req->inm ? req->inm : "");
     bufcpy(w->origin, sizeof w->origin, req->origin_hdr ? req->origin_hdr : "");
-    w->container = req->container;
+    w->container = req->key.container;
     w->want_seg = req->want_seg;
     w->want_part = req->want_part;
     w->deadline_ms = now_ms() + req->timeout_ms;
@@ -302,13 +310,13 @@ static inline int hls_cold_waiter_pool_try_park(hls_waiter_t *slots, int cap, in
     if (w->active) continue;
     w->owner = owner;
     w->stream_id = stream_id;
-    w->cap_ctx = req->cap_ctx;
-    w->filter = *req->filter;
-    w->pmt_pid = req->pmt_pid;
-    w->lcevc = *req->lcevc;
-    bufcpy(w->filename, sizeof w->filename, req->filename);
+    w->cap_ctx = req->key.ctx;
+    w->filter = *req->key.filter;
+    w->pmt_pid = req->key.pmt_pid;
+    w->lcevc = *req->key.lcevc;
+    w->file = req->file ? *req->file : (route_file_t){0};
     w->kind = req->kind;
-    w->container = req->container;
+    w->container = req->key.container;
     w->want_ll = req->want_ll;
     w->is_head = req->is_head;
     w->keep_alive = req->keep_alive;
@@ -341,7 +349,10 @@ static inline void llhls_waiter_pool_flush(hls_waiter_t *slots, int cap, int *ac
   for (int i = 0; i < cap; i++) {
     hls_waiter_t *w = &slots[i];
     if (!w->active) continue;
-    if (now < w->deadline_ms && !ready(w)) continue;
+    if (now < w->deadline_ms && !ready(w)) {
+      reactor_wait_note(w->deadline_ms);
+      continue;
+    }
     w->active = 0;
     (*active_count)--;
     finish(w);
@@ -429,7 +440,10 @@ static inline void ts_cold_waiter_pool_flush(ts_cold_waiter_t *slots, int cap, i
   for (int i = 0; i < cap; i++) {
     ts_cold_waiter_t *w = &slots[i];
     if (!w->active) continue;
-    if (now < w->deadline_ms && !capture_ctx_bytes(w->cap_ctx)) continue;
+    if (now < w->deadline_ms && !capture_ctx_bytes(w->cap_ctx)) {
+      reactor_wait_note(w->deadline_ms);
+      continue;
+    }
     w->active = 0;
     (*active_count)--;
     finish(w);
@@ -565,8 +579,8 @@ void reactor_ws_readable(int epfd, conn_t *c);
 void reactor_ws_close(int epfd, conn_t *c);
 void reactor_ws_flush(int epfd, conn_t *c);
 
-/* 1: handled (upgraded or rejected), 0: not WS */
-int ws_try_upgrade(conn_t *c, const char *path, const struct phr_header *headers, size_t num_headers);
+/* SPECIAL_UI_WS request: upgraded or rejected */
+void ws_upgrade(conn_t *c, const struct phr_header *headers, size_t num_headers);
 
 void conn_add_bytes_served(size_t len);
 int buf_ensure(conn_buf *b, size_t need);

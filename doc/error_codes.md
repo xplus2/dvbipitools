@@ -612,7 +612,6 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 000647  | YS             | invalid --max-clients: %s (1..65536)                                                                |
 | 000648  | YS             | invalid --max-channels: %s (1..1024)                                                                |
 | 000649  | YS             | invalid --idle-timeout: %s (seconds, 0..86400, 0 = off)                                             |
-| 000650  | YS             | invalid --capture-ring-size: %s (KiB, 1..262144)                                                    |
 | 000651  | YS             | invalid --ts-startup-timeout: %s (seconds, 0=off)                                                   |
 | 000652  | YS             | invalid --segment-size: %s (seconds, min 2)                                                         |
 | 000653  | YS             | invalid --segment-count: %s (3-%d)                                                                  |
@@ -1111,7 +1110,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 |---------|--------------|--------------------------------------------------------------------------------------------------|
 | 500100  | AS,GS        | cannot join %s                                                                                   |
 | 500101  | *S,AE,GE,LE  | out of memory                                                                                    |
-| 500102  | 3E,3S,FS     | pthread_create: %s                                                                               |
+| 500102  | 3E,3S,FS,LA  | pthread_create: %s                                                                               |
 | 500103  | 3S,FS,LE     | socket: %s                                                                                       |
 | 500104  | 3S           | bind %s port %u: %s                                                                              |
 | 500105  | 3S           | listen: %s                                                                                       |
@@ -1258,6 +1257,7 @@ Config file problems can be of type `A` or type `S`, depending on `--config-stri
 | 500249  | LW           | pes: pid %u PES exceeds %u bytes, dropped until next start                                       |
 | 500250  | BS           | cannot create temporary file                                                                     |
 | 500251  | LW           | cannot set DSCP marking: %s                                                                      |
+| 500252  | LW           | log: %lu lines dropped, writer behind                                                            |
 
 ### 6xxxxx Remote
 

@@ -94,7 +94,9 @@ int emmcache_feed(emmcache_t *c, device_state_t *d, const unsigned char *emm, si
 int emmcache_load(emmcache_t *c, device_state_t *d, const char *path) {
   FILE *f = fopen(path, "rb");
   unsigned char *buf;
-  size_t len = 0, cap = 65536, off;
+  size_t len = 0;
+  size_t cap = 65536;
+  size_t off;
   int rc = 0;
 
   if (!f)

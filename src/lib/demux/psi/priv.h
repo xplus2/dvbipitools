@@ -5,6 +5,7 @@
 #define DVBIPITOOLS_LIB_DEMUX_PSI_PRIV_H
 
 #include "section_asm.h"
+#include "lib/demux/tspack.h"
 #include "psi.h"
 #include "lib/helper/log.h"
 
@@ -98,9 +99,9 @@ struct psi {
   unsigned char pmt_sec[PSI_SECTION_ASM_BUF_LEN]; /* last valid pmt of locked prog */
   psi_multi_program_t multi[PSI_MAX_PROGRAMS];
 
-  uint8_t class_by_pid[8192]; /* direct pid->class, rebuilt on parse_pat/parse_pmt */
-  uint16_t service_by_pid[8192];
-  unsigned char pmt_wanted[8192]; /* direct pid->ever-a-candidate, mirrors pmt_cand[] growth, set-only */
+  uint8_t class_by_pid[TS_PID_COUNT]; /* direct pid->class, rebuilt on parse_pat/parse_pmt */
+  uint16_t service_by_pid[TS_PID_COUNT];
+  unsigned char pmt_wanted[TS_PID_COUNT]; /* direct pid->ever-a-candidate, mirrors pmt_cand[] growth, set-only */
 };
 
 /* psi.c */
@@ -122,8 +123,6 @@ void classify(psi_es_t *e, const unsigned char *desc, size_t dlen, int hdmv);
 void link_lcevc(psi_es_t *es, int count);
 void decode_service_desc(const unsigned char *d, size_t dll, char *provider_dst, char *service_dst, unsigned *type_dst);
 
-/* parse.c */
-void obs_version(psi_t *c, psi_obs_id_t id, const unsigned char *b, pmt_cand_t *cand);
 void parse_pat(psi_t *c);
 int parse_pmt(psi_t *c, pmt_cand_t *cand, const unsigned char *b, size_t n);
 const char *psi_tag(const psi_t *c);

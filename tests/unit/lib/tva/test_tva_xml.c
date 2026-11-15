@@ -9,11 +9,12 @@
 #include "../../alloc_fail.h"
 #include "lib/tva/tva_xml.h"
 #include "lib/tva/tva_xml/tva_xml_int.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "../../log_capture.h"
 
 START_TEST(tva_xml_write_read_round_trips) {
-  bcg_doc_t doc, doc2;
+  bcg_doc_t doc;
+  bcg_doc_t doc2;
   bcg_channel_t *c;
   bcg_programme_t *pr;
   FILE *f;
@@ -99,7 +100,8 @@ START_TEST(tva_xml_write_dtt_is_hex_and_omitted_without_triplet) {
 END_TEST
 
 START_TEST(tva_xml_write_drops_channels_without_uri) {
-  bcg_doc_t doc, doc2;
+  bcg_doc_t doc;
+  bcg_doc_t doc2;
   bcg_channel_t *c;
   bcg_programme_t *pr;
   FILE *f;
@@ -159,7 +161,7 @@ START_TEST(tva_build_crid_offset_crosses_day) {
 }
 END_TEST
 
-START_TEST(tva_programme_crid_cached_and_fallback) {
+START_TEST(tva_programme_crid_builds) {
   bcg_programme_t pr;
   char buf[TVA_CRID_BUF];
   memset(&pr, 0, sizeof pr);
@@ -167,11 +169,6 @@ START_TEST(tva_programme_crid_cached_and_fallback) {
   strcpy(pr.start, "2026-01-01T00:30:00Z");
   ck_assert_ptr_eq(tva_programme_crid(&pr, buf, sizeof buf), buf);
   ck_assert_str_eq(buf, "crid://dipixmltv.invalid/ch/20260101003000");
-  ck_assert_int_eq(tva_programme_cache_crid(&pr), 0);
-  ck_assert_ptr_eq(tva_programme_crid(&pr, buf, sizeof buf), pr.crid);
-  ck_assert_str_eq(pr.crid, "crid://dipixmltv.invalid/ch/20260101003000");
-  bcg_programme_free_text(&pr);
-  ck_assert_ptr_eq(pr.crid, NULL);
 }
 END_TEST
 
@@ -193,7 +190,8 @@ static const prog_case_t multi_channel_programmes[] = {
 };
 
 START_TEST(tva_xml_write_groups_programmes_for_unsorted_channels) {
-  bcg_doc_t doc, doc2;
+  bcg_doc_t doc;
+  bcg_doc_t doc2;
   FILE *f;
   int kept = 0;
 
@@ -249,7 +247,8 @@ static char *slurp_tmp(FILE *f) {
 }
 
 START_TEST(tva_xml_write_omits_absent_optional_fields) {
-  bcg_doc_t doc, doc2;
+  bcg_doc_t doc;
+  bcg_doc_t doc2;
   bcg_channel_t *c;
   bcg_programme_t *pr;
   FILE *f;
@@ -285,7 +284,8 @@ START_TEST(tva_xml_write_omits_absent_optional_fields) {
 END_TEST
 
 START_TEST(tva_xml_write_handles_empty_documents_and_channels_without_programmes) {
-  bcg_doc_t doc, doc2;
+  bcg_doc_t doc;
+  bcg_doc_t doc2;
   bcg_channel_t *c;
   FILE *f;
   char *xml;
@@ -748,23 +748,14 @@ START_TEST(tva_xml_read_survives_allocation_failures) {
 }
 END_TEST
 
-START_TEST(tva_crid_caching_and_unparseable_starts) {
+START_TEST(tva_crid_unparseable_starts) {
   bcg_programme_t pr;
   char crid[TVA_CRID_BUF];
-  int rc;
   memset(&pr, 0, sizeof pr);
   snprintf(pr.channel_id, sizeof pr.channel_id, "ch 1");
   snprintf(pr.start, sizeof pr.start, "2024-05-01T10:20:30+02:00");
-  alloc_fail_at(0);
-  rc = tva_programme_cache_crid(&pr);
-  alloc_fail_end();
-  ck_assert_int_eq(rc, -1);
-  ck_assert_ptr_null(pr.crid);
-  ck_assert_int_eq(tva_programme_cache_crid(&pr), 0);
-  ck_assert_str_eq(pr.crid, "crid://dipixmltv.invalid/ch%201/20240501082030");
-  ck_assert_int_eq(tva_programme_cache_crid(&pr), 0);
-  free(pr.crid);
-  pr.crid = NULL;
+  tva_build_crid(pr.channel_id, pr.start, crid, sizeof crid);
+  ck_assert_str_eq(crid, "crid://dipixmltv.invalid/ch%201/20240501082030");
   snprintf(pr.start, sizeof pr.start, "20240501T10:20:30garbage!!");
   tva_build_crid(pr.channel_id, pr.start, crid, sizeof crid);
   ck_assert_ptr_nonnull(strstr(crid, "crid://dipixmltv.invalid/ch%201/"));
@@ -787,7 +778,7 @@ static Suite *tva_xml_suite(void) {
   tcase_add_test(tc, tva_build_crid_percent_encodes_and_compacts_time);
   tcase_add_test(tc, tva_build_crid_dst_overlap_distinct);
   tcase_add_test(tc, tva_build_crid_offset_crosses_day);
-  tcase_add_test(tc, tva_programme_crid_cached_and_fallback);
+  tcase_add_test(tc, tva_programme_crid_builds);
   tcase_add_test(tc, tva_xml_write_groups_programmes_for_unsorted_channels);
   tcase_add_test(tc, tva_xml_write_omits_absent_optional_fields);
   tcase_add_test(tc, tva_xml_write_handles_empty_documents_and_channels_without_programmes);
@@ -804,7 +795,7 @@ static Suite *tva_xml_suite(void) {
   tcase_add_test(tc, tva_time_helpers_convert_and_reject);
   tcase_add_test(tc, tva_xml_write_covers_optional_parts_and_oom_fallback);
   tcase_add_test(tc, tva_xml_read_survives_allocation_failures);
-  tcase_add_test(tc, tva_crid_caching_and_unparseable_starts);
+  tcase_add_test(tc, tva_crid_unparseable_starts);
   suite_add_tcase(s, tc);
   return s;
 }

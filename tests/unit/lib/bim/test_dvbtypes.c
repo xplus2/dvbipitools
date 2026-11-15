@@ -264,34 +264,10 @@ START_TEST(locator_decode_without_state_and_string_branch) {
   sd = strrepo_writer_data(&sw, &sl);
   bitreader_init(&br, bd, bl);
   ck_assert_int_eq(strrepo_reader_init(&sr, sd, sl), 0);
-  ck_assert_int_eq(dvb_locator_decode(&br, &sr, out, sizeof out), -1);
+  ck_assert_int_eq(dvb_locator_decode_st(&br, &sr, &(dvb_codec_state_t){0}, out, sizeof out), -1);
   bitreader_init(&br, bd, 0);
-  ck_assert_int_eq(dvb_locator_decode(&br, &sr, out, sizeof out), -1);
+  ck_assert_int_eq(dvb_locator_decode_st(&br, &sr, &(dvb_codec_state_t){0}, out, sizeof out), -1);
   bitwriter_free(&bw);
-  strrepo_writer_free(&sw);
-}
-END_TEST
-
-START_TEST(string_decode_dup_handles_empty_and_failure) {
-  strrepo_writer_t sw;
-  strrepo_reader_t sr;
-  const unsigned char *sd;
-  size_t sl;
-  char *s = malloc(4);
-  ck_assert_ptr_nonnull(s);
-  memcpy(s, "old", 4);
-  ck_assert_int_eq(strrepo_writer_init(&sw), 0);
-  ck_assert_int_eq(dvb_string_encode(&sw, ""), 0);
-  ck_assert_int_eq(dvb_string_encode(&sw, "text"), 0);
-  sd = strrepo_writer_data(&sw, &sl);
-  ck_assert_int_eq(strrepo_reader_init(&sr, sd, sl), 0);
-  ck_assert_int_eq(dvb_string_decode_dup(&sr, &s), 0);
-  ck_assert_ptr_null(s);
-  ck_assert_int_eq(dvb_string_decode_dup(&sr, &s), 0);
-  ck_assert_str_eq(s, "text");
-  ck_assert_int_eq(dvb_string_decode_dup(&sr, &s), -1);
-  ck_assert_str_eq(s, "text");
-  free(s);
   strrepo_writer_free(&sw);
 }
 END_TEST
@@ -438,7 +414,7 @@ START_TEST(datetime_round_trips_every_month) {
     ck_assert_int_eq(dvb_datetime_encode(&bw, in), 0);
     bd = bitwriter_data(&bw, &bl);
     bitreader_init(&br, bd, bl);
-    ck_assert_int_eq(dvb_datetime_decode(&br, out, sizeof out), 0);
+    ck_assert_int_eq(dvb_datetime_decode_st(&br, &(dvb_codec_state_t){0}, out, sizeof out), 0);
     ck_assert_str_eq(out, in);
     bitwriter_free(&bw);
   }
@@ -464,7 +440,7 @@ static int run_ct(const fld_t *f, size_t nf, const char *href, size_t drop, char
   ck_assert_uint_ge(bl, drop);
   bitreader_init(&br, bd, bl - drop);
   ck_assert_int_eq(strrepo_reader_init(&sr, sd, sl), 0);
-  rc = dvb_controlledterm_decode(&br, &sr, out, cap);
+  rc = dvb_controlledterm_decode_cs(&br, &sr, NULL, out, cap);
   bitwriter_free(&bw);
   strrepo_writer_free(&sw);
   return rc;
@@ -523,7 +499,6 @@ static Suite *dvbtypes_suite(void) {
   tcase_add_test(tc, locator_optimized_rejects_every_truncation);
   tcase_add_test(tc, locator_optimized_keeps_long_path);
   tcase_add_test(tc, locator_decode_without_state_and_string_branch);
-  tcase_add_test(tc, string_decode_dup_handles_empty_and_failure);
   tcase_add_test(tc, datetime_published_form);
   tcase_add_test(tc, datetime_published_reuses_date);
   tcase_add_test(tc, datetime_rejects_bad_streams);

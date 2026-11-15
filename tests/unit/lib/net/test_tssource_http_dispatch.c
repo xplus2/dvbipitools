@@ -72,18 +72,24 @@ static tssrc_open_state_t drive_open(tssrc_open_t *o, int max_iters) {
 }
 
 START_TEST(tssrc_http_dispatches_hls_ts_segmented_media_playlist) {
-  unsigned pl_port, seg_port;
+  unsigned pl_port;
+  unsigned seg_port;
   int pl_fd = make_listener(&pl_port);
   int seg_fd = make_listener(&seg_port);
-  pthread_t pl_th, seg_th;
+  pthread_t pl_th;
+  pthread_t seg_th;
   unsigned char ts_seg[3 * 188];
-  char pl_body[512], pl_resp[768], seg_resp[1024];
-  size_t pl_resp_len, seg_resp_len;
+  char pl_body[512];
+  char pl_resp[768];
+  char seg_resp[1024];
+  size_t pl_resp_len;
+  size_t seg_resp_len;
   const char *pl_responses[2];
   size_t pl_lens[2];
   const char *seg_responses[1];
   size_t seg_lens[1];
-  scripted_server_t pl_srv, seg_srv;
+  scripted_server_t pl_srv;
+  scripted_server_t seg_srv;
   tssrc_cfg_t cfg;
   tssrc_open_t *o;
   tssrc_t *s;

@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "lib/bim/codec/decode/priv.h"
+#include "lib/helper/strutil.h"
 
 /* 8.5.3, 8.6.3: UQ or NUQ code dequantized to float text */
 static int quant_text(dec_t *d, const bim_simple_t *s, bim_aod_inst_t *in, dstrbuf_t *b) {

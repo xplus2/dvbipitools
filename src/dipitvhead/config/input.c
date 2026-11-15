@@ -9,6 +9,7 @@
 #include "lib/net/jitbuf.h"
 #include "../config.h"
 #include "priv.h"
+#include "lib/net/rist/ristpeer.h"
 
 int tvh_apply_input(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
@@ -20,10 +21,7 @@ int tvh_apply_input(void *c, const char *v, char *e, size_t n) {
 int tvh_apply_input_pmt_pid(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
   if (!in) return -1;
-  if (tvh_cfg_pid(v, &in->pmt_pid) || in->pmt_pid == 0) {
-    snprintf(e, n, "invalid '%s' (0x0010..0x1FFE)", v);
-    return -1;
-  }
+  if (argutil_pid_parse(v, 0x10, &in->pmt_pid)) return yamlcfg_bad(e, n, v, "0x0010..0x1FFE");
   return 0;
 }
 
@@ -39,7 +37,7 @@ int tvh_apply_input_sdt(void *c, const char *v, char *e, size_t n) {
 
 int tvh_apply_input_provider(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? tvh_set_buf(in->provider_text, sizeof in->provider_text, v, e, n) : -1;
+  return in ? yamlcfg_set_buf(in->provider_text, sizeof in->provider_text, v, e, n) : -1;
 }
 
 int tvh_apply_input_iface(void *c, const char *v, char *e, size_t n) {
@@ -56,10 +54,7 @@ int tvh_apply_input_strip_eit(void *c, const char *v, char *e, size_t n) {
 int tvh_apply_input_strip(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
   if (!in) return -1;
-  if (tvh_cfg_strip(&in->strip_mask, v)) {
-    snprintf(e, n, "invalid '%s' (comma list of DATA,ECM, or none)", v);
-    return -1;
-  }
+  if (tvh_cfg_strip(&in->strip_mask, v)) return yamlcfg_bad(e, n, v, "comma list of DATA,ECM, or none");
   return 0;
 }
 
@@ -71,7 +66,7 @@ int tvh_apply_input_hbbtv(void *c, const char *v, char *e, size_t n) {
 
 int tvh_apply_input_hbbtv_name(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? tvh_set_buf(in->hbbtv_name, sizeof in->hbbtv_name, v, e, n) : -1;
+  return in ? yamlcfg_set_buf(in->hbbtv_name, sizeof in->hbbtv_name, v, e, n) : -1;
 }
 
 int tvh_apply_input_hbbtv_org_id(void *c, const char *v, char *e, size_t n) {
@@ -85,29 +80,25 @@ int tvh_apply_input_hbbtv_app_id(void *c, const char *v, char *e, size_t n) {
 }
 
 int tvh_apply_input_rist_profile(void *c, const char *v, char *e, size_t n) {
-  static const enum_map_t map[] = {{"simple", 0}, {"main", 1}};
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
   if (!in) return -1;
-  if (map_lookup(map, sizeof map / sizeof map[0], v, &in->rist_profile_main)) {
-    snprintf(e, n, "invalid '%s' (simple|main)", v);
-    return -1;
-  }
+  if (rist_prof_parse(v, &in->rist_profile_main)) return yamlcfg_bad(e, n, v, RIST_PROF_HINT);
   return 0;
 }
 
 int tvh_apply_input_rist_encryption_type(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? tvh_set_key_size(&in->rist_key_size_in, v, e, n) : -1;
+  return in ? yamlcfg_set_int_by(&in->rist_key_size_in, v, argutil_rist_key_size, ARGUTIL_RIST_KEY_SIZE_HINT, e, n) : -1;
 }
 
 int tvh_apply_input_rist_secret(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? tvh_set_buf(in->rist_secret_in, sizeof in->rist_secret_in, v, e, n) : -1;
+  return in ? yamlcfg_set_buf(in->rist_secret_in, sizeof in->rist_secret_in, v, e, n) : -1;
 }
 
 int tvh_apply_input_rist_cname(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? tvh_set_buf(in->rist_cname_in, sizeof in->rist_cname_in, v, e, n) : -1;
+  return in ? yamlcfg_set_buf(in->rist_cname_in, sizeof in->rist_cname_in, v, e, n) : -1;
 }
 
 int tvh_apply_input_rist_buffer(void *c, const char *v, char *e, size_t n) {
@@ -117,31 +108,28 @@ int tvh_apply_input_rist_buffer(void *c, const char *v, char *e, size_t n) {
 
 int tvh_apply_input_srt_passphrase(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? tvh_set_buf(in->srt_passphrase_in, sizeof in->srt_passphrase_in, v, e, n) : -1;
+  return in ? yamlcfg_set_buf(in->srt_passphrase_in, sizeof in->srt_passphrase_in, v, e, n) : -1;
 }
 
 int tvh_apply_input_srt_pbkeylen(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? tvh_set_pbkeylen(&in->srt_pbkeylen_in, v, e, n) : -1;
+  return in ? yamlcfg_set_int_by(&in->srt_pbkeylen_in, v, argutil_srt_pbkeylen, ARGUTIL_SRT_PBKEYLEN_HINT, e, n) : -1;
 }
 
 int tvh_apply_input_srt_streamid(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? tvh_set_buf(in->srt_streamid_in, sizeof in->srt_streamid_in, v, e, n) : -1;
+  return in ? yamlcfg_set_buf(in->srt_streamid_in, sizeof in->srt_streamid_in, v, e, n) : -1;
 }
 
 int tvh_apply_input_srt_packetfilter(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
-  return in ? tvh_set_buf(in->srt_packetfilter_in, sizeof in->srt_packetfilter_in, v, e, n) : -1;
+  return in ? yamlcfg_set_buf(in->srt_packetfilter_in, sizeof in->srt_packetfilter_in, v, e, n) : -1;
 }
 
 int tvh_apply_input_al_fec(void *c, const char *v, char *e, size_t n) {
   dipitvhead_input_t *in = tvh_cur_input(c, e, n);
   if (!in) return -1;
-  if (fec2022_parse_ld(v, &in->al_fec_l_in, &in->al_fec_d_in)) {
-    snprintf(e, n, "invalid '%s' (want L:D, L*D<=400, L<=40)", v);
-    return -1;
-  }
+  if (fec2022_parse_ld(v, &in->al_fec_l_in, &in->al_fec_d_in)) return yamlcfg_bad(e, n, v, "want L:D, L*D<=400, L<=40");
   return 0;
 }
 

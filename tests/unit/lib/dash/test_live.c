@@ -14,6 +14,7 @@
 #include "lib/dash/live.h"
 #include "lib/dash/live/live_int.h"
 #include "../../fx_net.h"
+#include "lib/helper/dateutil.h"
 
 typedef struct {
   int listen_fd;
@@ -83,25 +84,35 @@ static int drive_until_len(dash_live_t *h, unsigned char *acc, size_t acc_cap, s
 }
 
 START_TEST(dash_live_fetches_init_then_sequential_number_segments) {
-  unsigned mpd_port, init_port, seg_port;
+  unsigned mpd_port;
+  unsigned init_port;
+  unsigned seg_port;
   int mpd_fd = make_listener(&mpd_port);
   int init_fd = make_listener(&init_port);
   int seg_fd = make_listener(&seg_port);
-  pthread_t mpd_th, init_th, seg_th;
+  pthread_t mpd_th;
+  pthread_t init_th;
+  pthread_t seg_th;
   char mpd_body[1024];
   char mpd_uri[64];
   const char init_payload[] = "INIT-FTYP-MOOV";
   const char seg1_payload[] = "SEG0001-BYTES";
   const char seg2_payload[] = "SEG0002-BYTES";
-  char init_resp[256], seg1_resp[256], seg2_resp[256];
-  size_t init_resp_len, seg1_resp_len, seg2_resp_len;
+  char init_resp[256];
+  char seg1_resp[256];
+  char seg2_resp[256];
+  size_t init_resp_len;
+  size_t seg1_resp_len;
+  size_t seg2_resp_len;
   const char *mpd_responses[1];
   size_t mpd_lens[1];
   const char *init_responses[1];
   size_t init_lens[1];
   const char *seg_responses[2];
   size_t seg_lens[2];
-  scripted_server_t mpd_srv = {0}, init_srv = {0}, seg_srv = {0};
+  scripted_server_t mpd_srv = {0};
+  scripted_server_t init_srv = {0};
+  scripted_server_t seg_srv = {0};
   http_url_t mpd_url;
   dash_live_t *h;
   unsigned char acc[4096];
@@ -191,29 +202,38 @@ static void logging_cb(void *ctx, dash_live_t *h, const unsigned char *data, siz
 }
 
 START_TEST(dash_live_init_segment_arrives_via_cb_before_media_segments) {
-  unsigned mpd_port, init_port, seg_port;
+  unsigned mpd_port;
+  unsigned init_port;
+  unsigned seg_port;
   int mpd_fd = make_listener(&mpd_port);
   int init_fd = make_listener(&init_port);
   int seg_fd = make_listener(&seg_port);
-  pthread_t mpd_th, init_th, seg_th;
+  pthread_t mpd_th;
+  pthread_t init_th;
+  pthread_t seg_th;
   char mpd_body[1024];
   char mpd_uri[64];
   const char init_payload[] = "INIT-FTYP-MOOV";
   const char seg1_payload[] = "SEG0001-BYTES";
-  char init_resp[256], seg1_resp[256];
-  size_t init_resp_len, seg1_resp_len;
+  char init_resp[256];
+  char seg1_resp[256];
+  size_t init_resp_len;
+  size_t seg1_resp_len;
   const char *mpd_responses[1];
   size_t mpd_lens[1];
   const char *init_responses[1];
   size_t init_lens[1];
   const char *seg_responses[1];
   size_t seg_lens[1];
-  scripted_server_t mpd_srv = {0}, init_srv = {0}, seg_srv = {0};
+  scripted_server_t mpd_srv = {0};
+  scripted_server_t init_srv = {0};
+  scripted_server_t seg_srv = {0};
   http_url_t mpd_url;
   dash_live_t *h;
   cb_log_t log;
   unsigned char tmp[512];
-  int fd, i;
+  int fd;
+  int i;
 
   memset(&log, 0, sizeof log);
   init_resp_len = (size_t)snprintf(init_resp, sizeof init_resp, "HTTP/1.1 200 OK\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n%s", strlen(init_payload), init_payload);
@@ -754,7 +774,7 @@ static dash_live_t *live_with_periods(unsigned n, const unsigned long long *star
   ck_assert_ptr_nonnull(h);
   h->mpd.is_dynamic = dynamic;
   h->mpd.has_availability_start = dynamic;
-  h->mpd.availability_start_ms = dash_wall_ms();
+  h->mpd.availability_start_ms = wall_ms();
   h->mpd.n_periods = n;
   for (unsigned i = 0; i < n; i++) {
     dash_adaptation_set_t *as = &h->mpd.periods[i].adaptation_sets[0];
@@ -835,7 +855,7 @@ START_TEST(switch_period_is_a_noop_for_single_period_and_wall_anchored_resets_in
   ck_assert_uint_eq(h->period_idx, 0u);
   free(h);
   h = live_with_periods(2, two, 0, 1);
-  h->mpd.availability_start_ms = dash_wall_ms() - 60000;
+  h->mpd.availability_start_ms = wall_ms() - 60000;
   ck_assert_int_eq(pick_representation(h, 0), 1);
   h->seg_idx = 3;
   switch_period_if_due(h);
@@ -857,11 +877,11 @@ START_TEST(join_position_modes) {
   ck_assert_uint_eq(h->seg_time, 0ULL);
   free(h);
   h = live_with_periods(1, starts, 0, 1);
-  h->mpd.availability_start_ms = dash_wall_ms() - 10000;
+  h->mpd.availability_start_ms = wall_ms() - 10000;
   ck_assert_int_eq(pick_representation(h, 0), 1);
   join_position(h);
   ck_assert_uint_gt(h->seg_idx, 0u);
-  h->mpd.availability_start_ms = dash_wall_ms() + 100000;
+  h->mpd.availability_start_ms = wall_ms() + 100000;
   join_position(h);
   ck_assert_uint_eq(h->seg_idx, 0u);
   free(h);

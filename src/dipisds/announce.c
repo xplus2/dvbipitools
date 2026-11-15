@@ -7,18 +7,18 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
 #include "lib/metrics/export.h"
 #include "lib/net/announce_driver.h"
 #include "lib/net/dvbstp.h"
 #include "lib/net/multicast.h"
-#include "lib/sys/signal.h"
 #include "announce.h"
 #include "input.h"
 #include "lib/helper/sds_xml.h"
 #include "version.h"
+#include "lib/helper/dateutil.h"
 
 typedef struct {
   unsigned long long documents_generated_total;
@@ -127,7 +127,8 @@ static size_t build_cell(const config_t *cfg, const input_t *in, const side_t *s
 static size_t build_rmsfus(const config_t *cfg, const input_t *in, const side_t *sd, unsigned version, unsigned char **out) {
   sds_rms_t rms_val;
   sds_fus_t fus_val;
-  int rms_count = 0, fus_count = 0;
+  int rms_count = 0;
+  int fus_count = 0;
   (void)in;
   (void)sd;
   memset(&rms_val, 0, sizeof rms_val);

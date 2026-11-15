@@ -25,29 +25,26 @@ int bitreader_skip(bitreader_t *br, size_t nbits) {
   return 0;
 }
 
+static uint64_t window(const bitreader_t *br) {
+  uint64_t w = 0;
+  size_t n = br->len - br->byte_pos < 8 ? br->len - br->byte_pos : 8;
+  for (size_t i = 0; i < 8; i++) w = w << 8 | (i < n ? br->buf[br->byte_pos + i] : 0);
+  return w;
+}
+
+static uint64_t take(bitreader_t *br, int nbits) {
+  uint64_t v = (window(br) << br->bit_pos) >> (64 - nbits);
+  size_t bit = (size_t)br->bit_pos + (size_t)nbits;
+  br->byte_pos += bit / 8;
+  br->bit_pos = (int)(bit % 8);
+  return v;
+}
+
 int bitreader_get(bitreader_t *br, int nbits, uint64_t *out) {
-  uint64_t v = 0;
-  if ((size_t)nbits > bitreader_bits_left(br)) return -1;
-  if (br->bit_pos == 0) {
-    while (nbits >= 8) {
-      v = (v << 8) | br->buf[br->byte_pos];
-      br->byte_pos++;
-      nbits -= 8;
-    }
-  }
-  while (nbits > 0) {
-    int avail = 8 - br->bit_pos;
-    int take = nbits < avail ? nbits : avail;
-    unsigned bits = (br->buf[br->byte_pos] >> (avail - take)) & ((1u << take) - 1);
-    v = (v << take) | bits;
-    br->bit_pos += take;
-    nbits -= take;
-    if (br->bit_pos == 8) {
-      br->bit_pos = 0;
-      br->byte_pos++;
-    }
-  }
-  *out = v;
+  if (nbits < 0 || nbits > 64 || (size_t)nbits > bitreader_bits_left(br)) return -1;
+  if (!nbits) *out = 0;
+  else if (nbits > 56) *out = take(br, nbits - 32) << 32 | take(br, 32);
+  else *out = take(br, nbits);
   return 0;
 }
 
@@ -56,8 +53,9 @@ int bitreader_get_vluimsbf8(bitreader_t *br, uint64_t *out) {
   uint64_t cont;
   uint64_t group;
   for (int i = 0; i < VLUIMSBF8_MAX_GROUPS; i++) {
-    if (bitreader_get(br, 1, &cont)) return -1;
-    if (bitreader_get(br, 7, &group)) return -1;
+    if (bitreader_get(br, 8, &group)) return -1;
+    cont = group >> 7;
+    group &= 0x7F;
     if (v >> 57) return -1;
     v = (v << 7) | group;
     if (!cont) {

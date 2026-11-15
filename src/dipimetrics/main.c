@@ -10,7 +10,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/protocol.h"
 #include "lib/sys/signal.h"
@@ -20,6 +20,7 @@
 #include "httpserver.h"
 #include "lib/metrics/store.h"
 #include "version.h"
+#include "lib/helper/dateutil.h"
 
 #define POLL_TIMEOUT_MS 1000
 #define UDS_DRAIN_MAX 256
@@ -127,7 +128,8 @@ static void drain_uds_snapshots(int uds_fd, store_t *store, double now, int verb
 
 int main(int argc, char **argv) {
   config_t cfg = {0};
-  int uds_fd, http_fd;
+  int uds_fd;
+  int http_fd;
   http_server_t *hs;
   tls_server_ctx_t *tls_ctx = NULL;
   static store_t store;

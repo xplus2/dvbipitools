@@ -7,9 +7,10 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
 
 /* "all:<port>" (wildcard, both families) or "<addr>:<port>" / "[<addr6>]:<port>" */
 int dixy_cfg_listen(listen_spec_t *out, const char *s) {
@@ -85,10 +86,7 @@ int dixy_cfg_format(config_t *cfg, const char *s) {
 int dixy_cfg_set_h3_retry(config_t *cfg, const char *val, char *err, size_t errsz) {
   static const enum_map_t map[] = {{"auto", H3_RETRY_CFG_AUTO}, {"off", H3_RETRY_CFG_OFF}, {"always", H3_RETRY_CFG_ALWAYS}};
   int v;
-  if (map_lookup(map, sizeof map / sizeof map[0], val, &v)) {
-    snprintf(err, errsz, "invalid '%s' (off, auto or always)", val);
-    return -1;
-  }
+  if (map_lookup(map, sizeof map / sizeof map[0], val, &v)) return yamlcfg_bad(err, errsz, val, "off, auto or always");
   cfg->h3_retry = v;
   return 0;
 }
@@ -96,10 +94,7 @@ int dixy_cfg_set_h3_retry(config_t *cfg, const char *val, char *err, size_t errs
 int dixy_cfg_set_h3_cc(config_t *cfg, const char *val, char *err, size_t errsz) {
   static const enum_map_t map[] = {{"cubic", H3_CC_CFG_CUBIC}, {"bbr", H3_CC_CFG_BBR}, {"reno", H3_CC_CFG_RENO}};
   int v;
-  if (map_lookup(map, sizeof map / sizeof map[0], val, &v)) {
-    snprintf(err, errsz, "invalid '%s' (cubic, bbr or reno)", val);
-    return -1;
-  }
+  if (map_lookup(map, sizeof map / sizeof map[0], val, &v)) return yamlcfg_bad(err, errsz, val, "cubic, bbr or reno");
   cfg->h3_cc = v;
   return 0;
 }
@@ -108,10 +103,7 @@ int dixy_cfg_set_media_type(config_t *cfg, const char *val, char *err, size_t er
   static const enum_map_t map[] = {{"tv", MEDIA_TV}, {"radio", MEDIA_RADIO}};
   media_type_t mt;
   int v;
-  if (map_lookup(map, sizeof map / sizeof map[0], val, &v)) {
-    snprintf(err, errsz, "invalid '%s' (radio or tv)", val);
-    return -1;
-  }
+  if (map_lookup(map, sizeof map / sizeof map[0], val, &v)) return yamlcfg_bad(err, errsz, val, "radio or tv");
   mt = (media_type_t)v;
   if (cfg->media_type_seen) {
     bufcpy(err, errsz, "media type given twice for the same input");

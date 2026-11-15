@@ -5,8 +5,12 @@
 #define DIPIXY_CONFIG_H
 
 #include "cli/args.h"
+#include "lib/config/yamlcfg.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipixy.yaml"
+
+extern const yamlcfg_key_t dixy_cfg_keys[];
+extern const size_t dixy_cfg_nkeys;
 
 void dixy_cfg_defaults(config_t *cfg);
 

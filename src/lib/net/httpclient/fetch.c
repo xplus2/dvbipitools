@@ -7,10 +7,10 @@
 #include <strings.h>
 
 #include "../../helper/log.h"
-#include "../../sys/ioutil.h"
-#include "../../sys/signal.h"
+#include "../../helper/strutil.h"
 #include "httpclient.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 #define HTTP_FETCH_ETAG_MAX 128
 
@@ -41,8 +41,14 @@ http_fetch_t *http_fetch_start(const http_url_t *url, const char *user_agent, in
   const char *hdr_ptr = extra_header;
   http_fetch_t *f;
   if (etag_in && etag_in[0]) {
-    if (extra_header && extra_header[0]) snprintf(hdr, sizeof hdr, "%s\r\nIf-None-Match: %s", extra_header, etag_in);
-    else snprintf(hdr, sizeof hdr, "If-None-Match: %s", etag_in);
+    sbuf_t sb;
+    sbuf_init(&sb, hdr, sizeof hdr);
+    if (extra_header && extra_header[0]) {
+      sbuf_add(&sb, extra_header);
+      sbuf_add(&sb, "\r\n");
+    }
+    sbuf_add(&sb, "If-None-Match: ");
+    sbuf_add(&sb, etag_in);
     hdr_ptr = hdr;
   }
   f = calloc(1, sizeof *f);

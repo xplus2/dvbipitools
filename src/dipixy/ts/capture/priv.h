@@ -17,6 +17,7 @@
 #include "capture.h"
 
 #define CAPTURE_RECV_BUF 65536
+#define CAPTURE_MCAST_BATCH 16
 
 typedef enum { CAP_BACKEND_MCAST, CAP_BACKEND_TSSRC } cap_backend_t;
 
@@ -43,7 +44,6 @@ struct capture_ctx {
   _Atomic int refcount;
   _Atomic int dead;
 
-  unsigned char *ring; /* CAP_BACKEND_MCAST only, capture_service()/capture_reader_* */
   _Atomic uint64_t write_total; /* monotonic bytes ever written */
 
   _Atomic int ts_push_head; /* ts_push.c's per-ctx subscriber chain, -1: none */
@@ -57,13 +57,6 @@ struct capture_ctx {
   struct capture_ctx *next;
 };
 
-struct capture_reader {
-  capture_ctx_t *ctx;
-  uint64_t read_total;
-  uint64_t dropped;
-  log_throttle_t drop_throttle;
-};
-
 typedef struct capture_snapshot {
   struct capture_snapshot *retired_next; /* g_retired list, g_lock protected */
   int n;
@@ -74,13 +67,11 @@ typedef struct capture_snapshot {
 } capture_snapshot_t;
 
 /* capture.c */
-extern size_t g_capture_ring_cap; /* capture_set_ring_cap()'d, default 4 MiB */
 extern capture_ctx_t *g_open;
 extern tsinspect_agg_t *g_insp_agg;
 extern pthread_mutex_t g_lock;
 extern _Atomic(capture_snapshot_t *) g_snapshot;
 extern capture_snapshot_t *g_retired; /* superseded snapshots pending reclaim, g_lock protected */
-capture_ctx_t *find_existing_tssrc(const char *key);
 capture_ctx_t *link_ctx(capture_ctx_t *c); /* c if linked, dup (ref taken) if raced, NULL on oom */
 int unref_unlink_ctx(capture_ctx_t *ctx); /* 1: last ref dropped and unlinked, caller frees */
 void free_ctx_resources(capture_ctx_t *ctx);
@@ -90,15 +81,15 @@ void reclaim_retired_snapshots(void); /* caller holds no lock, not on a pump thr
 /* capture.c */
 ssize_t capture_fec_read(capture_ctx_t *ctx, unsigned char *buf, size_t cap);
 
-/* service.c */
-ssize_t capture_read_dispatch(capture_ctx_t *ctx, unsigned char *buf, size_t bufcap, int *unwrapped);
-
 /* pump.c */
 int next_pump_shard(void);
+void capture_pump_watch(const capture_ctx_t *c);
 
-capture_ctx_t *find_existing(int family, const char *group, const char *source, unsigned port, const char *iface);
 capture_snapshot_t *snapshot_alloc(int need);
 int open_count(void);
+extern _Atomic int g_open_n;
+capture_ctx_t *ref_existing(int family, const char *group, const char *source, unsigned port, const char *iface);
+capture_ctx_t *ref_existing_tssrc(const char *key);
 void publish_snapshot(capture_snapshot_t *snap);
 void free_snapshots(capture_snapshot_t *list);
 int pumps_joined(void);

@@ -7,11 +7,12 @@
 
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/mux/fec2022.h"
 #include "config.h"
 #include "filter/ts.h"
 #include "version.h"
+#include "lib/net/rist/ristpeer.h"
 
 void rec_cfg_defaults(config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
@@ -24,20 +25,8 @@ void rec_cfg_defaults(config_t *cfg) {
   cfg->strip_mask = STRIP_DEFAULT;
 }
 
-static int set_buf(char *dst, size_t sz, const char *v, char *e, size_t n) {
-  if (strlen(v) >= sz) {
-    snprintf(e, n, "too long (max %zu)", sz - 1);
-    return -1;
-  }
-  bufcpy(dst, sz, v);
-  return 0;
-}
-
 static int apply_in(void *c, const char *v, char *e, size_t n) {
-  if (rec_cfg_set_in(c, v)) {
-    snprintf(e, n, "invalid '%s' (uri)", v);
-    return -1;
-  }
+  if (rec_cfg_set_in(c, v)) return yamlcfg_bad(e, n, v, "uri");
   return 0;
 }
 
@@ -55,42 +44,27 @@ static int apply_out(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_audio(void *c, const char *v, char *e, size_t n) {
-  if (rec_cfg_audio(c, v)) {
-    snprintf(e, n, "invalid '%s' (1..N or all)", v);
-    return -1;
-  }
+  if (rec_cfg_audio(c, v)) return yamlcfg_bad(e, n, v, "1..N or all");
   return 0;
 }
 
 static int apply_format(void *c, const char *v, char *e, size_t n) {
-  if (rec_cfg_format(c, v)) {
-    snprintf(e, n, "invalid '%s' (raw|ts|mkv|mka|mp4|m4a)", v);
-    return -1;
-  }
+  if (rec_cfg_format(c, v)) return yamlcfg_bad(e, n, v, "raw|ts|mkv|mka|mp4|m4a");
   return 0;
 }
 
 static int apply_pmt_pid(void *c, const char *v, char *e, size_t n) {
-  if (rec_cfg_pmt(c, v)) {
-    snprintf(e, n, "invalid '%s' (0x0010..0x1FFE, or all)", v);
-    return -1;
-  }
+  if (rec_cfg_pmt(c, v)) return yamlcfg_bad(e, n, v, "0x0010..0x1FFE, or all");
   return 0;
 }
 
 static int apply_subtitles(void *c, const char *v, char *e, size_t n) {
-  if (rec_cfg_subs(c, v)) {
-    snprintf(e, n, "invalid '%s' (strip|keep|srt)", v);
-    return -1;
-  }
+  if (rec_cfg_subs(c, v)) return yamlcfg_bad(e, n, v, "strip|keep|srt");
   return 0;
 }
 
 static int apply_time(void *c, const char *v, char *e, size_t n) {
-  if (rec_cfg_time(c, v)) {
-    snprintf(e, n, "invalid '%s' (duration such as 90, 5m30s, 01:20:03)", v);
-    return -1;
-  }
+  if (rec_cfg_time(c, v)) return yamlcfg_bad(e, n, v, "duration such as 90, 5m30s, 01:20:03");
   return 0;
 }
 
@@ -113,10 +87,7 @@ static int apply_ttl(void *c, const char *v, char *e, size_t n) {
 
 static int apply_al_fec(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) {
-    snprintf(e, n, "invalid '%s' (want L:D, L*D<=400, L<=40)", v);
-    return -1;
-  }
+  if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) return yamlcfg_bad(e, n, v, "want L:D, L*D<=400, L<=40");
   return 0;
 }
 
@@ -126,10 +97,7 @@ static int apply_al_fec_port(void *c, const char *v, char *e, size_t n) {
 
 static int apply_al_fec_out(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (fec2022_parse_ld(v, &cfg->al_fec_out_l, &cfg->al_fec_out_d)) {
-    snprintf(e, n, "invalid '%s' (want L:D, L*D<=400, L<=40)", v);
-    return -1;
-  }
+  if (fec2022_parse_ld(v, &cfg->al_fec_out_l, &cfg->al_fec_out_d)) return yamlcfg_bad(e, n, v, "want L:D, L*D<=400, L<=40");
   return 0;
 }
 
@@ -138,39 +106,28 @@ static int apply_al_fec_port_out(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_profile(void *c, const char *v, char *e, size_t n) {
-  if (rec_cfg_profile(c, v, 0)) {
-    snprintf(e, n, "invalid '%s' (simple|main)", v);
-    return -1;
-  }
+  if (rec_cfg_profile(c, v, 0)) return yamlcfg_bad(e, n, v, RIST_PROF_HINT);
   return 0;
 }
 
 static int apply_secret(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (set_buf(cfg->rist_secret, sizeof cfg->rist_secret, v, e, n)) return -1;
+  if (yamlcfg_set_buf(cfg->rist_secret, sizeof cfg->rist_secret, v, e, n)) return -1;
   cfg->fl.have_secret = 1;
   return 0;
 }
 
 static int apply_encryption_type(void *c, const char *v, char *e, size_t n) {
-  if (argutil_rist_key_size(v, &((config_t *)c)->rist_key_size)) {
-    bufcpy(e, n, "must be 128|256");
-    return -1;
-  }
-  return 0;
+  return yamlcfg_set_int_by(&((config_t *)c)->rist_key_size, v, argutil_rist_key_size, ARGUTIL_RIST_KEY_SIZE_HINT, e, n);
 }
 
 static int apply_encryption_type_in(void *c, const char *v, char *e, size_t n) {
-  if (argutil_rist_key_size(v, &((config_t *)c)->rist_key_size_in)) {
-    bufcpy(e, n, "must be 128|256");
-    return -1;
-  }
-  return 0;
+  return yamlcfg_set_int_by(&((config_t *)c)->rist_key_size_in, v, argutil_rist_key_size, ARGUTIL_RIST_KEY_SIZE_HINT, e, n);
 }
 
 static int apply_cname(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (set_buf(cfg->rist_cname, sizeof cfg->rist_cname, v, e, n)) return -1;
+  if (yamlcfg_set_buf(cfg->rist_cname, sizeof cfg->rist_cname, v, e, n)) return -1;
   cfg->fl.have_cname = 1;
   return 0;
 }
@@ -183,10 +140,7 @@ static int apply_buffer(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_profile_in(void *c, const char *v, char *e, size_t n) {
-  if (rec_cfg_profile(c, v, 1)) {
-    snprintf(e, n, "invalid '%s' (simple|main)", v);
-    return -1;
-  }
+  if (rec_cfg_profile(c, v, 1)) return yamlcfg_bad(e, n, v, RIST_PROF_HINT);
   return 0;
 }
 
@@ -214,10 +168,7 @@ static int apply_pace(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_strip(void *c, const char *v, char *e, size_t n) {
-  if (rec_cfg_strip(c, v)) {
-    snprintf(e, n, "invalid '%s' (comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT,LCEVC, or none)", v);
-    return -1;
-  }
+  if (rec_cfg_strip(c, v)) return yamlcfg_bad(e, n, v, "comma list of NUL,NIT,AIT,EIT,CAT,ECM,EMM,RST,TDT,TOT,INT,LCEVC, or none");
   return 0;
 }
 
@@ -281,29 +232,23 @@ static int apply_ret_wait(void *c, const char *v, char *e, size_t n) {
 
 static int apply_srt_passphrase_in(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (set_buf(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, v, e, n)) return -1;
+  if (yamlcfg_set_buf(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, v, e, n)) return -1;
   return 0;
 }
 
 static int apply_srt_pbkeylen_in(void *c, const char *v, char *e, size_t n) {
-  unsigned u;
-  if (argutil_uint_range(v, 16, 32, &u) || (u != 16 && u != 24 && u != 32)) {
-    snprintf(e, n, "invalid '%s' (16|24|32)", v);
-    return -1;
-  }
-  ((config_t *)c)->srt_pbkeylen_in = (int)u;
-  return 0;
+  return yamlcfg_set_int_by(&((config_t *)c)->srt_pbkeylen_in, v, argutil_srt_pbkeylen, ARGUTIL_SRT_PBKEYLEN_HINT, e, n);
 }
 
 static int apply_srt_streamid_in(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (set_buf(cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, v, e, n)) return -1;
+  if (yamlcfg_set_buf(cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, v, e, n)) return -1;
   return 0;
 }
 
 static int apply_srt_packetfilter_in(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (set_buf(cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, v, e, n)) return -1;
+  if (yamlcfg_set_buf(cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, v, e, n)) return -1;
   return 0;
 }
 
@@ -313,29 +258,23 @@ static int apply_srt_latency_in(void *c, const char *v, char *e, size_t n) {
 
 static int apply_srt_passphrase(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (set_buf(cfg->srt_passphrase, sizeof cfg->srt_passphrase, v, e, n)) return -1;
+  if (yamlcfg_set_buf(cfg->srt_passphrase, sizeof cfg->srt_passphrase, v, e, n)) return -1;
   return 0;
 }
 
 static int apply_srt_pbkeylen(void *c, const char *v, char *e, size_t n) {
-  unsigned u;
-  if (argutil_uint_range(v, 16, 32, &u) || (u != 16 && u != 24 && u != 32)) {
-    snprintf(e, n, "invalid '%s' (16|24|32)", v);
-    return -1;
-  }
-  ((config_t *)c)->srt_pbkeylen = (int)u;
-  return 0;
+  return yamlcfg_set_int_by(&((config_t *)c)->srt_pbkeylen, v, argutil_srt_pbkeylen, ARGUTIL_SRT_PBKEYLEN_HINT, e, n);
 }
 
 static int apply_srt_streamid(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (set_buf(cfg->srt_streamid, sizeof cfg->srt_streamid, v, e, n)) return -1;
+  if (yamlcfg_set_buf(cfg->srt_streamid, sizeof cfg->srt_streamid, v, e, n)) return -1;
   return 0;
 }
 
 static int apply_srt_packetfilter(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (set_buf(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, v, e, n)) return -1;
+  if (yamlcfg_set_buf(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, v, e, n)) return -1;
   return 0;
 }
 
@@ -343,7 +282,7 @@ static int apply_srt_latency(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->srt_latency_ms, v, 1, 60000, e, n);
 }
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t rec_cfg_keys[] = {
   {"in", apply_in, 0, 0},
   {"out", apply_out, 0, 1},
   {"audio", apply_audio, 0, 0},
@@ -392,11 +331,12 @@ static const yamlcfg_key_t keys[] = {
   {"srt.packetfilter", apply_srt_packetfilter, 0, 0},
   {"srt.latency", apply_srt_latency, 0, 0},
 };
+const size_t rec_cfg_nkeys = sizeof rec_cfg_keys / sizeof rec_cfg_keys[0];
 
 int rec_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
+  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, rec_cfg_keys, rec_cfg_nkeys, cfg);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -420,7 +360,7 @@ int rec_cfg_test(const char *path, int strict) {
   const args_flags_t *fl = &cfg.fl;
 
   rec_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, rec_cfg_keys, rec_cfg_nkeys, &cfg) != YAMLCFG_LOADED) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }

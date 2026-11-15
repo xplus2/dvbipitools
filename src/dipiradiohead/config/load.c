@@ -8,7 +8,7 @@
 #include "../version.h"
 #include "priv.h"
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t rdh_cfg_keys[] = {
 {"input", rdh_apply_input, 0, YAMLCFG_LIST_KEYED},
 {"input.sid", rdh_apply_input_sid, 0, 0},
 {"input.jitter-ms", rdh_apply_input_jitter_ms, 0, 0},
@@ -75,11 +75,12 @@ static const yamlcfg_key_t keys[] = {
 {"biss2.ca-receivers", rdh_apply_biss2_ca_receivers, 1, 0},
 {"biss2.ca-session-id", rdh_apply_biss2_ca_session_id, 0, 0},
 };
+const size_t rdh_cfg_nkeys = sizeof rdh_cfg_keys / sizeof rdh_cfg_keys[0];
 
 int rdh_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load_items(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg, rdh_item_hook);
+  int rc = yamlcfg_load_items(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, rdh_cfg_keys, rdh_cfg_nkeys, cfg, rdh_item_hook);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -90,7 +91,7 @@ int rdh_cfg_test(const char *path, int strict) {
   int rc;
 
   rdh_cfg_defaults(&cfg);
-  if (yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg, rdh_item_hook) != YAMLCFG_LOADED) {
+  if (yamlcfg_load_items(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, rdh_cfg_keys, rdh_cfg_nkeys, &cfg, rdh_item_hook) != YAMLCFG_LOADED) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }

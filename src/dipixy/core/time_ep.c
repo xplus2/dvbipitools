@@ -3,7 +3,8 @@
 
 #include "time_ep.h"
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
+#include "lib/helper/dateutil.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -14,12 +15,12 @@
 #define HOST_MAX 127
 
 size_t time_ep_render(char *buf, size_t n) {
-  struct timespec ts;
+  uint64_t ms = wall_ms();
+  time_t sec = (time_t)(ms / 1000u);
   struct tm tm;
   int len;
-  clock_gettime(CLOCK_REALTIME, &ts);
-  gmtime_r(&ts.tv_sec, &tm);
-  len = snprintf(buf, n, "%04d-%02d-%02dT%02d:%02d:%02d.%03ldZ", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec / 1000000L);
+  gmtime_r(&sec, &tm);
+  len = snprintf(buf, n, "%04d-%02d-%02dT%02d:%02d:%02d.%03uZ", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, (unsigned)(ms % 1000u));
   return len > 0 && (size_t)len < n ? (size_t)len : 0;
 }
 

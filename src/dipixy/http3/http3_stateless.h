@@ -14,12 +14,6 @@
 
 #define H3_SCID_LEN 16
 
-static inline ngtcp2_tstamp h3_ts(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (ngtcp2_tstamp)ts.tv_sec * 1000000000ULL + (ngtcp2_tstamp)ts.tv_nsec;
-}
-
 typedef enum {
   H3_RETRY_OFF = 0,
   H3_RETRY_AUTO,

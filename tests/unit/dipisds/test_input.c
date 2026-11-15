@@ -87,7 +87,8 @@ static const char *const bad_groups[] = {
 };
 
 START_TEST(csv_rejects_invalid_group_address) {
-  char path[160], line[160];
+  char path[160];
+  char line[160];
   input_t in;
   snprintf(line, sizeof line, "Channel One,%s\n", bad_groups[_i]);
   write_temp_file(path, ".csv", line);

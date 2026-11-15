@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "lib/demux/bitreader.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 
 #include "aubuild.h"
 
@@ -16,7 +16,7 @@ int esc_rem_append(unsigned char **rem, size_t *remlen, size_t *remcap, const un
   return 0;
 }
 
-int esc_vbuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *nal, size_t n) {
+static int esc_vbuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *nal, size_t n) {
   size_t need = *vbuflen + 4 + n;
   if (growbuf_reserve((void **)vbuf, vbufcap, 1, need, 65536)) return -1;
   (*vbuf)[(*vbuflen)++] = (unsigned char)(n >> 24);
@@ -28,7 +28,7 @@ int esc_vbuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const u
   return 0;
 }
 
-int esc_obuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *data, size_t n) {
+static int esc_obuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *data, size_t n) {
   unsigned char lb[8];
   size_t lbn = 0;
   size_t v = n;

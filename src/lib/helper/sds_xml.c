@@ -139,7 +139,7 @@ size_t sds_build_sp(const char *domain, const char *display_name, const char *la
   return mem_finish(f, &ptr, &len, out);
 }
 
-void sds_package_open(FILE *f, const char *domain, unsigned version) { doc_open(f, "PackageDiscovery", domain, version); }
+static void sds_package_open(FILE *f, const char *domain, unsigned version) { doc_open(f, "PackageDiscovery", domain, version); }
 
 const sds_service_t *sds_find_service(const char *name, const sds_service_t *svcs, int svc_count) {
   for (int i = 0; i < svc_count; i++) {
@@ -148,7 +148,7 @@ const sds_service_t *sds_find_service(const char *name, const sds_service_t *svc
   return NULL;
 }
 
-void sds_package_item(FILE *f, const sds_package_t *pkg, const sds_service_t *svcs, int svc_count) {
+static void sds_package_item(FILE *f, const sds_package_t *pkg, const sds_service_t *svcs, int svc_count) {
   fprintf(f, "<Package Id=\"%u\" Visible=\"%s\">\n<PackageName Language=\"", pkg->id, pkg->visible ? "true" : "false");
   put_lang(f, pkg->lang);
   fputs("\">", f);
@@ -165,7 +165,7 @@ void sds_package_item(FILE *f, const sds_package_t *pkg, const sds_service_t *sv
   fputs("</Package>\n", f);
 }
 
-void sds_package_close(FILE *f) {
+static void sds_package_close(FILE *f) {
   fputs("</PackageDiscovery>\n</ServiceDiscovery>\n", f);
 }
 
@@ -180,9 +180,9 @@ size_t sds_build_package(const char *domain, unsigned version, const sds_package
   return mem_finish(f, &ptr, &len, out);
 }
 
-void sds_regionalisation_open(FILE *f, const char *domain, unsigned version) { doc_open(f, "RegionalisationDiscovery", domain, version); }
+static void sds_regionalisation_open(FILE *f, const char *domain, unsigned version) { doc_open(f, "RegionalisationDiscovery", domain, version); }
 
-void sds_regionalisation_item(FILE *f, const sds_cell_t *cell) {
+static void sds_regionalisation_item(FILE *f, const sds_cell_t *cell) {
   fputs("<Cell Id=\"", f);
   xml_escape(f, cell->id);
   fputs("\">\n<CountryCode>", f);
@@ -197,7 +197,7 @@ void sds_regionalisation_item(FILE *f, const sds_cell_t *cell) {
   fputs("\n</Cell>\n", f);
 }
 
-void sds_regionalisation_close(FILE *f) {
+static void sds_regionalisation_close(FILE *f) {
   fputs("</RegionalisationDiscovery>\n</ServiceDiscovery>\n", f);
 }
 

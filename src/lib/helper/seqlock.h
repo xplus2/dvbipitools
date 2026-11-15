@@ -6,6 +6,8 @@
 
 #include <stdatomic.h>
 
+#define CACHELINE 64
+
 /* seqlock idiom: odd gen = write in progress, readers retry. commit leaves gen even.
    writer-vs-writer exclusion is caller's job, this only orders one writer against lock-free readers. */
 static inline unsigned seqlock_begin_write(_Atomic unsigned *gen) {

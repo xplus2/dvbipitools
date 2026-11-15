@@ -6,6 +6,7 @@
 
 #include "lib/bim/aod.h"
 #include "lib/bim/codec/encode/priv.h"
+#include "lib/helper/growutil.h"
 
 /* compressed chunk of BufferSize bytes, placed where decoder needs them 1st */
 typedef struct {
@@ -49,13 +50,7 @@ int enc_zstring(enc_t *e, const char *v) {
   struct enc_zplan *p = e->zp;
   if (e->zmode == 0) return enc_zchunks(e, v);
   if (e->zmode == 1) {
-    if (p->ns == p->cs) {
-      size_t nc = p->cs ? p->cs * 2 : 16;
-      char **n = realloc(p->s, nc * sizeof *n);
-      if (!n) return -1;
-      p->s = n;
-      p->cs = nc;
-    }
+    if (growbuf_reserve((void **)&p->s, &p->cs, sizeof *p->s, p->ns + 1, 16)) return -1;
     return (p->s[p->ns++] = strdup(v)) ? 0 : -1;
   }
   if (e->zi >= p->ns) return -1;

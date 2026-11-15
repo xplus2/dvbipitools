@@ -8,6 +8,7 @@
 #include "lib/helper/fileutil.h"
 #include "lib/helper/xml_util.h"
 #include "dipibcg/announce/announce_int.h"
+#include "lib/sys/ioutil.h"
 
 #define CODE_TVA_MAIN 0x000E
 

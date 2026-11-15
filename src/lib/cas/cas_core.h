@@ -24,13 +24,6 @@ typedef struct {
   biss_ca_engine_t *biss_ca;          /* NULL unless BISS2 Mode CA */
 } cas_core_t;
 
-static inline double cas_core_mono(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
-
-void cas_core_hex_format(const unsigned char *in, size_t len, char *out);
 void cas_core_format_super_cas_id(unsigned id, char *out);
 
 /* stops+frees whichever of core's 3 engines is set (safe if all NULL). caller frees core itself */
@@ -50,14 +43,6 @@ unsigned cas_core_vendor_emm_pid(cas_core_t *core, size_t idx);
 int cas_core_vendor_ecm_due(cas_core_t *core, size_t idx, double now, unsigned char *out, size_t cap, size_t *out_len);
 int cas_core_vendor_next_emm(cas_core_t *core, size_t idx, unsigned char *out, size_t cap, size_t *out_len);
 void cas_core_reload_receivers(cas_core_t *core);
-
-/* fixed EVEN parity: SW never rotates, both parities would be identical. cw_len picks algo's own convention (BISS1_KEY_LEN or BISS_KEY_LEN).
-   pids/pid_count: pids to scramble
-   flush_pid: emitted immediately, never CSA2-batch-delayed
-   label: logged
-   log_prefix: prepended to progress log lines (may be "").
-   fills *out, 0 ok, -1 OOM/engine start failed */
-int cas_core_start_biss(scramble_algo_t algo, const unsigned char *cw, size_t cw_len, const unsigned *pids, size_t pid_count, unsigned flush_pid, const char *label, const char *log_prefix, cas_core_t *out);
 
 typedef struct {
   int biss1_enabled;

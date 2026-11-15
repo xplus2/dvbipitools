@@ -6,6 +6,7 @@
 
 #include "../reactor/internal.h"
 #include "../reactor/reactor_tls.h"
+#include "../reactor/wake.h"
 #include "../reactor/ws_dispatch.h"
 #include "../ts/ts_push.h"
 #include "../ws/ws_broadcast.h"
@@ -13,7 +14,7 @@
 #include "../httpng/httpng.h"
 #include "http3.h"
 #include "http3_int.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -64,7 +65,7 @@ static void h3_ws_queue_prebuilt(h3_req_t *r, const uint8_t *frame, size_t flen)
     r->ws_pending_len += flen;
   }
   pthread_mutex_unlock(&r->ws_lock);
-  ts_push_wake_reactor(r->ws_tid);
+  reactor_wake(r->ws_tid, WAKE_TSPUSH);
 }
 
 static void h3_ws_queue(h3_req_t *r, int opcode, const void *payload, size_t len) {
@@ -75,7 +76,7 @@ static void h3_ws_queue(h3_req_t *r, int opcode, const void *payload, size_t len
     r->ws_pending_len += flen;
   }
   pthread_mutex_unlock(&r->ws_lock);
-  ts_push_wake_reactor(r->ws_tid);
+  reactor_wake(r->ws_tid, WAKE_TSPUSH);
 }
 
 static void h3_ws_sink(void *ctx, const uint8_t *frame, size_t flen) { h3_ws_queue_prebuilt(ctx, frame, flen); }
@@ -97,7 +98,8 @@ static void h3_ws_fail(h3_conn_t *c, h3_req_t *r) {
 }
 
 void h3_ws_data_chunk(h3_conn_t *c, h3_req_t *r, const uint8_t *data, size_t len) {
-  int opcode, got;
+  int opcode;
+  int got;
   const uint8_t *payload;
   size_t plen;
   if (!r->ws_active || r->ws_dead) return;
@@ -122,8 +124,6 @@ void h3_ws_dispatch(h3_conn_t *c, h3_req_t *r) {
   nghttp3_nv nva[] = {{(uint8_t *)":status", (uint8_t *)"200", 7, 3, NGHTTP3_NV_FLAG_NONE}};
   nghttp3_data_reader dr;
   ws_parser_init(&r->ws_parser);
-  r->ws_pending = malloc(4096);
-  r->ws_pending_cap = r->ws_pending ? 4096 : 0;
   r->ws_active = 1;
   r->ws_tid = t_reactor_tid;
   c->ws_active_count++;
@@ -154,6 +154,38 @@ void h3_ws_on_conn_close(h3_conn_t *c) {
   }
 }
 
+#define H3_WS_BUF_POOL_MAX 64
+
+static _Thread_local h3_ws_buf_t *t_ws_buf_pool;
+static _Thread_local int t_ws_buf_pool_n;
+
+static h3_ws_buf_t *h3_ws_buf_get(void) {
+  h3_ws_buf_t *b = t_ws_buf_pool;
+  if (!b) return malloc(sizeof *b);
+  t_ws_buf_pool = b->next;
+  t_ws_buf_pool_n--;
+  return b;
+}
+
+void h3_ws_buf_put(h3_ws_buf_t *b) {
+  if (t_ws_buf_pool_n >= H3_WS_BUF_POOL_MAX) {
+    free(b);
+    return;
+  }
+  b->next = t_ws_buf_pool;
+  t_ws_buf_pool = b;
+  t_ws_buf_pool_n++;
+}
+
+void h3_ws_buf_pool_release(void) {
+  while (t_ws_buf_pool) {
+    h3_ws_buf_t *b = t_ws_buf_pool;
+    t_ws_buf_pool = b->next;
+    free(b);
+  }
+  t_ws_buf_pool_n = 0;
+}
+
 void h3_ws_acked(h3_req_t *r, size_t n) {
   while (n && r->ws_unacked) {
     h3_ws_buf_t *b = r->ws_unacked;
@@ -168,13 +200,15 @@ void h3_ws_acked(h3_req_t *r, size_t n) {
     r->ws_unacked = b->next;
     if (!r->ws_unacked) r->ws_unacked_tail = NULL;
     free(b->base);
-    free(b);
+    h3_ws_buf_put(b);
   }
 }
 
 /* per-reactor eventfd handler: resumes H3 WS streams with data queued from any thread */
 void h3_ws_flush(void) {
-  int ci, ri, fd;
+  int ci;
+  int ri;
+  int fd;
   for (ci = 0; ci < t_h3_active_cnt; ci++) {
     h3_conn_t *c = t_h3_active[ci];
     if (c->done || !c->ws_active_count) continue;
@@ -207,10 +241,10 @@ void h3_ws_flush(void) {
         flush_tx(c, fd);
         continue;
       }
-      b = malloc(sizeof *b);
+      b = h3_ws_buf_get();
       if (!b) continue;
       if (!httpng_ws_drain_pending(&r->ws_lock, &r->ws_pending, &r->ws_pending_len, &r->ws_pending_cap, &data, &len)) {
-        free(b);
+        h3_ws_buf_put(b);
         continue;
       }
       b->next = NULL;

@@ -22,10 +22,7 @@
 #include "cli/args.h"
 #include "bridge.h"
 #include "version.h"
-
-enum rist_profile profile_of(rist_profile_sel_t p) {
-  return p == RIST_PROF_MAIN ? RIST_PROFILE_MAIN : RIST_PROFILE_SIMPLE;
-}
+#include "lib/helper/dateutil.h"
 
 #define FLOW_STATS_FRESH_S 3.0
 
@@ -185,7 +182,7 @@ static int run_sender(const config_t *cfg, metrics_exporter_t *mx) {
   for (int i = 0; i < cfg->out.n_rist; i++)
     rcfg.peer_uri[i] = cfg->out.rist_uri[i];
   rcfg.npeers = cfg->out.n_rist;
-  rcfg.profile = cfg->profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
+  rcfg.profile = cfg->profile == RIST_PROF_MAIN ? RIST_PROF_MAIN : RIST_PROF_SIMPLE;
   rcfg.secret = cfg->secret;
   rcfg.key_size = cfg->key_size;
   rcfg.cname = cfg->cname;

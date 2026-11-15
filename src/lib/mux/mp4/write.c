@@ -6,7 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 #include "lib/helper/log.h"
 #include "priv.h"
 
@@ -46,7 +46,7 @@ static int samp_reserve(track_t *t, int need) {
   return rc;
 }
 
-void p4_write_sample(mp4_t *m, track_t *t, int64_t ts_ms, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur) {
+static void p4_write_sample(mp4_t *m, track_t *t, int64_t ts_ms, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur) {
   mp4_samp_t *s;
   uint64_t off;
   if (samp_reserve(t, t->nsamp + 1) < 0) {
@@ -70,7 +70,7 @@ void p4_write_sample(mp4_t *m, track_t *t, int64_t ts_ms, int32_t cts, const uns
     t->prev_dur_slot = &s->duration;
 }
 
-void p4_pend_add(mp4_t *m, int trk, int64_t ts, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur) {
+static void p4_pend_add(mp4_t *m, int trk, int64_t ts, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur) {
   pend_t *p;
   track_t *t = &m->trk[trk];
   if (m->npend >= MP4_PEND_MAX || m->pend_bytes + n > MP4_PEND_BYTES) {

@@ -67,7 +67,6 @@ int main(int argc, char **argv) {
   }
   workers = reactor_resolve_workers(cfg.workers_spec, (int)sysconf(_SC_NPROCESSORS_ONLN));
   log_line(TOOL_NAME ": iface=%s workers=%d sources=%d", cfg.iface ? cfg.iface : "(kernel default)", workers, cfg.n_sources);
-  capture_set_ring_cap((size_t)cfg.capture_ring_kib * 1024);
   signals_install();
   htdocs_template_init(&cfg);
   channels = channels_build(&cfg);

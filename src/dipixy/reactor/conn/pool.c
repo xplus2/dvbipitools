@@ -16,11 +16,14 @@
 #include "dipixy/reactor/reactor_tls.h"
 #include "dipixy/version.h"
 #include "lib/helper/log.h"
+#include "lib/helper/dateutil.h"
+#include "lib/helper/growutil.h"
+#include "lib/helper/seqlock.h"
 
 static atomic_long g_conn_active = 0;
 
 typedef struct {
-  _Alignas(64) atomic_ullong bytes;
+  _Alignas(CACHELINE) atomic_ullong bytes;
 } bytes_slot_t;
 
 static bytes_slot_t g_bytes_served[REACTOR_MAX_WORKERS];
@@ -47,22 +50,7 @@ void conn_add_bytes_served(size_t len) {
 #define CONN_BUF_KEEP_MAX (64u * 1024)
 
 /* doubling growth. 0 ok, -1 OOM */
-int buf_ensure(conn_buf *b, size_t need) {
-  if (b->cap >= need) return 0;
-  size_t ncap = b->cap ? b->cap : 256;
-  while (ncap < need) {
-    if (ncap > (SIZE_MAX >> 1)) { /* overflow guard: clamp to exact need */
-      ncap = need;
-      break;
-    }
-    ncap <<= 1;
-  }
-  unsigned char *nb = realloc(b->buf, ncap);
-  if (!nb) return -1;
-  b->buf = nb;
-  b->cap = ncap;
-  return 0;
-}
+int buf_ensure(conn_buf *b, size_t need) { return growbuf_reserve((void **)&b->buf, &b->cap, 1, need, 256); }
 
 /* drop [0,off) prefix: reuse buffer, avoid unbounded growth */
 void buf_compact(conn_buf *b) {
@@ -73,12 +61,7 @@ void buf_compact(conn_buf *b) {
   b->off = 0;
 }
 
-/* data.ptr = conn: reactor's convention for identifying events */
-time_t conn_now_s(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return ts.tv_sec;
-}
+time_t conn_now_s(void) { return (time_t)(now_ms() / 1000); }
 
 int conn_epoll_mod(conn_t *c, int epfd, int want_out) {
   struct epoll_event ev;
@@ -152,13 +135,7 @@ static size_t g_grave_cap;
 static pthread_mutex_t g_grave_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 static void conn_grave_add(conn_t *c) {
-  if (g_grave_n == g_grave_cap) {
-    size_t ncap = g_grave_cap ? g_grave_cap * 2 : 64;
-    conn_t **p = realloc(g_grave, ncap * sizeof *p);
-    if (!p) return;
-    g_grave = p;
-    g_grave_cap = ncap;
-  }
+  if (growbuf_reserve((void **)&g_grave, &g_grave_cap, sizeof *g_grave, g_grave_n + 1, 64)) return;
   g_grave[g_grave_n++] = c;
 }
 

@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "lib/helper/log.h"
+#include "lib/demux/crc32.h"
 #include "lib/helper/secure_zero.h"
 #include "../version.h"
 #include "priv.h"
@@ -30,7 +31,7 @@ cs378x_server_t *cs378x_server_bind(const cs378x_cfg_t *cfg, cs378x_ecm_cb ecm_c
       free(s);
       return NULL;
     }
-    crc = cs378x_crc32(md5tmp, sizeof md5tmp);
+    crc = crc32_zlib(0, md5tmp, sizeof md5tmp);
     s->expected_ucrc[0] = (unsigned char)(crc >> 24);
     s->expected_ucrc[1] = (unsigned char)(crc >> 16);
     s->expected_ucrc[2] = (unsigned char)(crc >> 8);

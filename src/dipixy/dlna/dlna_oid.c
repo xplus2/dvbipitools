@@ -2,7 +2,7 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "lib/helper/uriparse.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "dlna_int.h"
 
 #include <limits.h>

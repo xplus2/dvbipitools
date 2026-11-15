@@ -69,7 +69,6 @@ void rec_print_help(void);
 args_status_t rec_cli_check(config_t *cfg);
 
 int rec_fmt_from_suffix(const char *path, out_fmt_t *f);
-int rec_parse_pbkeylen_opt(const char *val, int *out, const char *optname);
 int rec_validate_srt_passphrase(const char *passphrase, int pbkeylen, const char *suffix);
 
 #endif

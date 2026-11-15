@@ -8,6 +8,7 @@
 
 #include "lib/bim/aod.h"
 #include "lib/bim/codec/encode/priv.h"
+#include "lib/helper/strutil.h"
 
 /* 8.5.3, 8.6.3: nearest representable value */
 static int quant(enc_t *e, bim_aod_inst_t *in, const char *v) {

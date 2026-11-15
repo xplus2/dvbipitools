@@ -40,8 +40,6 @@ h3:
 #max-variants: 8
 # --idle-timeout 60 # seconds, 0 = off
 #idle-timeout: 60
-# --capture-ring-size 4096 # KiB
-#capture-ring-size: 4096
 ts:
   # --ts-startup-timeout 5 # seconds, 0 = off
   startup-timeout: 5

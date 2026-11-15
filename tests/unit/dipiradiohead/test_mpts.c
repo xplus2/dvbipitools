@@ -12,12 +12,13 @@
 #include <unistd.h>
 
 #include "../run_helper.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/sys/signal.h"
 
 #include "dipiradiohead/input/source/priv.h"
 #include "dipiradiohead/radiohead/priv.h"
 #include "input/http_fixture.h"
+#include "lib/helper/dateutil.h"
 
 #define MP3_FRAME_LEN FIXTURE_MP3_FRAME_LEN
 #define MP3_FRAMES 20

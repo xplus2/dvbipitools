@@ -51,7 +51,7 @@ int scan_http_path_tmpl_valid(const char *t) {
   return 0;
 }
 
-int scan_fmt_from_name(const char *s, out_fmt_t *f) {
+static int scan_fmt_from_name(const char *s, out_fmt_t *f) {
   int v;
   if (playlist_out_fmt_parse(s, &v)) return -1;
   *f = (out_fmt_t)v;

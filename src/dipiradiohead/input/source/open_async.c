@@ -4,13 +4,13 @@
 #include <poll.h>
 #include <stdlib.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 
 #include "../../version.h"
 #include "../playlist.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 typedef enum { SO_FETCHING, SO_SNIFFING } source_open_phase_t;
 

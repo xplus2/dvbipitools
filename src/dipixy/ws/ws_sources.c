@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 #include "ws_sources.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/jsonbuf.h"
 #include "lib/helper/uriparse.h"
 

@@ -8,10 +8,11 @@
 
 #include "../../alloc_fail.h"
 #include "lib/tva/xmltv.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 START_TEST(xmltv_write_read_round_trips) {
-  bcg_doc_t doc, doc2;
+  bcg_doc_t doc;
+  bcg_doc_t doc2;
   bcg_channel_t *c;
   bcg_programme_t *pr;
   FILE *f;
@@ -112,7 +113,8 @@ START_TEST(xmltv_read_keeps_description_past_1k) {
 END_TEST
 
 START_TEST(xmltv_write_falls_back_to_id_when_no_names) {
-  bcg_doc_t doc, doc2;
+  bcg_doc_t doc;
+  bcg_doc_t doc2;
   bcg_channel_t *c;
   FILE *f;
 
@@ -138,7 +140,8 @@ START_TEST(xmltv_write_falls_back_to_id_when_no_names) {
 END_TEST
 
 START_TEST(xmltv_write_untitled_fallback_for_empty_title) {
-  bcg_doc_t doc, doc2;
+  bcg_doc_t doc;
+  bcg_doc_t doc2;
   bcg_channel_t *c;
   bcg_programme_t *pr;
   FILE *f;

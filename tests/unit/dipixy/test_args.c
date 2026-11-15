@@ -1596,8 +1596,6 @@ START_TEST(out_of_range_option_values_are_rejected) {
       {"--max-variants", "0"},
       {"--max-variants", "1025"},
       {"--idle-timeout", "86401"},
-      {"--capture-ring-size", "0"},
-      {"--capture-ring-size", "262145"},
       {"--ts-startup-timeout", "-1"},
       {"--ts-startup-timeout", "abc"},
       {"--sds-refresh-interval", "0"},
@@ -1628,13 +1626,12 @@ START_TEST(out_of_range_option_values_are_rejected) {
 END_TEST
 
 START_TEST(server_limits_are_recorded) {
-  char *argv[] = {"dipixy", "--max-channels", "64", "--max-variants", "3", "--idle-timeout", "0", "--capture-ring-size", "512", "--ts-startup-timeout", "0", NULL};
+  char *argv[] = {"dipixy", "--max-channels", "64", "--max-variants", "3", "--idle-timeout", "0", "--ts-startup-timeout", "0", NULL};
   config_t cfg = {0};
   ck_assert_int_eq(args_parse(ARGC(argv), argv, &cfg), ARGS_OK);
   ck_assert_int_eq(cfg.max_channels, 64);
   ck_assert_int_eq(cfg.max_variants, 3);
   ck_assert_uint_eq(cfg.idle_timeout_s, 0u);
-  ck_assert_uint_eq(cfg.capture_ring_kib, 512u);
   ck_assert_double_eq_tol(cfg.ts_startup_timeout_s, 0.0, 1e-9);
   args_free(&cfg);
   yamlcfg_strpool_free(cfg.str_pool);

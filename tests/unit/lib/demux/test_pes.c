@@ -10,8 +10,10 @@
 
 static int g_calls;
 static unsigned g_pid;
-static int g_has_pts, g_has_dts;
-static uint64_t g_pts, g_dts;
+static int g_has_pts;
+static int g_has_dts;
+static uint64_t g_pts;
+static uint64_t g_dts;
 static unsigned char g_data[512];
 static size_t g_len;
 
@@ -89,7 +91,8 @@ static void wrap_ts_raw(unsigned char pkt[188], unsigned pid, int pusi, const un
 
 START_TEST(pes_reassembles_across_packets_and_extracts_pts) {
   pes_t *p = pes_new(capture_cb, NULL);
-  unsigned char payload[184], pkt[188];
+  unsigned char payload[184];
+  unsigned char pkt[188];
   size_t i;
 
   ck_assert_int_eq(pes_track(p, 0x101), 0);
@@ -123,7 +126,8 @@ END_TEST
 
 START_TEST(pes_extracts_dts_when_present) {
   pes_t *p = pes_new(capture_cb, NULL);
-  unsigned char payload[184], pkt[188];
+  unsigned char payload[184];
+  unsigned char pkt[188];
 
   ck_assert_int_eq(pes_track(p, 0x101), 0);
   build_pes_start_payload_pts_dts(payload, 0xE0, 900000u, 810000u, 0x00);
@@ -144,7 +148,8 @@ END_TEST
 
 START_TEST(pes_has_no_dts_when_pts_only) {
   pes_t *p = pes_new(capture_cb, NULL);
-  unsigned char payload[184], pkt[188];
+  unsigned char payload[184];
+  unsigned char pkt[188];
 
   ck_assert_int_eq(pes_track(p, 0x101), 0);
   build_pes_start_payload(payload, 0xE0, 900000u, 0x00); /* PTS_DTS_flags = '10' */
@@ -163,7 +168,8 @@ END_TEST
 
 START_TEST(pes_ignores_untracked_pid) {
   pes_t *p = pes_new(capture_cb, NULL);
-  unsigned char payload[184], pkt[188];
+  unsigned char payload[184];
+  unsigned char pkt[188];
 
   ck_assert_int_eq(pes_track(p, 0x101), 0);
   build_pes_start_payload(payload, 0xE0, 0, 0);
@@ -179,7 +185,8 @@ END_TEST
 
 START_TEST(pes_ignores_start_without_valid_startcode) {
   pes_t *p = pes_new(capture_cb, NULL);
-  unsigned char payload[184], pkt[188];
+  unsigned char payload[184];
+  unsigned char pkt[188];
   size_t i;
 
   ck_assert_int_eq(pes_track(p, 0x101), 0);

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "lib/bim/fuu/priv.h"
+#include "lib/helper/growutil.h"
 
 /* SchemaSwitching branch: SchemaID + global code */
 static int rd_global(fr_t *r, int elems, const void **x) {
@@ -67,15 +68,9 @@ static bim_tbc_t *push(fr_t *r, bim_tbc_kind_t kind, const bim_type_t *parent, u
     range(r, "context path length");
     return NULL;
   }
-  if (f->ntbcs == r->cap) {
-    size_t nc = r->cap ? r->cap * 2 : 8;
-    bim_tbc_t *n = realloc(f->tbcs, nc * sizeof *n);
-    if (!n) {
-      bim_oom(r->r.err);
-      return NULL;
-    }
-    f->tbcs = n;
-    r->cap = nc;
+  if (growbuf_reserve((void **)&f->tbcs, &r->cap, sizeof *f->tbcs, (size_t)f->ntbcs + 1, 8)) {
+    bim_oom(r->r.err);
+    return NULL;
   }
   r->ptype[f->ntbcs] = parent;
   r->pmax[f->ntbcs] = max;

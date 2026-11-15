@@ -8,7 +8,7 @@
 #include "priv.h"
 
 /* live push: no pend[]-style buffer/rewrite like mkv. pre-ready frames dropped, no rewind for late joiners. */
-void flv_all_ready(flv_t *f) {
+static void flv_all_ready(flv_t *f) {
   if (f->started) return;
   if (f->have_v && (!f->vtrk.hdr_parsed || !f->vtrk.got_key)) return;
   if (f->have_a && !f->atrk.hdr_parsed) return;

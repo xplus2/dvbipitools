@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "lib/bim/tvafrag.h"
+#include "lib/helper/growutil.h"
 
 #define STEPS_MAX 16
 
@@ -48,11 +49,8 @@ static const row_t rows[] = {
 };
 
 static const char *find_ns(const xsd_compiled_t *c, const char *prefix) {
-  const bim_schema_t *s = &c->schema;
-  for (int i = 0; i < s->ntypes; i++)
-    if (s->types[i]->ns && !strncmp(s->types[i]->ns, prefix, strlen(prefix))) return s->types[i]->ns;
-  for (int i = 0; i < s->nelems; i++)
-    if (s->elems[i]->ns && !strncmp(s->elems[i]->ns, prefix, strlen(prefix))) return s->elems[i]->ns;
+  for (int i = 0; i < c->nnss; i++)
+    if (!strncmp(c->nss[i], prefix, strlen(prefix))) return c->nss[i];
   return NULL;
 }
 
@@ -60,8 +58,6 @@ void bim_tvans_detect(const xsd_compiled_t *c, bim_tvans_t *ns) {
   ns->tva2 = find_ns(c, "urn:tva:metadata:extended:");
   ns->intr = find_ns(c, "urn:tva:metadata:int:");
 }
-
-static int same(const char *a, const char *b) { return (!a || !*a) && (!b || !*b) ? 1 : a && b && !strcmp(a, b); }
 
 static const char *prefix_ns(const bim_tvans_t *ns, const char *seg, size_t n) {
   if (n == 3 && !strncmp(seg, "tva", 3)) return ns->tva;
@@ -72,7 +68,7 @@ static const char *prefix_ns(const bim_tvans_t *ns, const char *seg, size_t n) {
 
 static const bim_sbc_t *child(const bim_type_t *t, const char *ns, const char *name, size_t n) {
   for (int i = 0; t && i < t->nsbc; i++)
-    if (t->sbc[i].kind == BIM_SBC_ELEM && strlen(t->sbc[i].name) == n && !strncmp(t->sbc[i].name, name, n) && same(t->sbc[i].ns, ns)) return &t->sbc[i];
+    if (t->sbc[i].kind == BIM_SBC_ELEM && strlen(t->sbc[i].name) == n && !strncmp(t->sbc[i].name, name, n) && bim_ns_same(t->sbc[i].ns, ns)) return &t->sbc[i];
   return NULL;
 }
 
@@ -138,7 +134,7 @@ static int search(const bim_type_t *top, const char *tvans, const row_t *r, cons
   size_t qcap = 64;
   tset_t seen = {NULL, 0, 0};
   int rc = -1;
-  if (!q || tset_add(&seen, top) < 0) goto out;
+  if (!q || tset_add(&seen, top) < 0) goto oom;
   q[nq++] = (hop_t){top, NULL, -1, 1};
   for (size_t h = 0; h < nq; h++) {
     const bim_type_t *t = q[h].t;
@@ -147,23 +143,21 @@ static int search(const bim_type_t *top, const char *tvans, const row_t *r, cons
       const bim_sbc_t *s = &t->sbc[i];
       int fresh;
       if (s->kind != BIM_SBC_ELEM || !s->type) continue;
-      if (!strcmp(s->name, r->name) && same(s->ns, tvans) && s->type == want) {
+      if (!strcmp(s->name, r->name) && bim_ns_same(s->ns, tvans) && s->type == want) {
         steps[q[h].depth] = (bim_tvaroot_t){s->name, s->ns, s->type};
         for (size_t k = h; q[k].s; k = (size_t)q[k].parent) steps[q[k].depth - 1] = (bim_tvaroot_t){q[k].s->name, q[k].s->ns, q[k].s->type};
         rc = q[h].depth + 1;
         goto out;
       }
-      if ((fresh = tset_add(&seen, s->type)) < 0) goto out;
+      if ((fresh = tset_add(&seen, s->type)) < 0) goto oom;
       if (!fresh) continue;
-      if (nq == qcap) {
-        hop_t *g = realloc(q, sizeof *q * qcap * 2);
-        if (!g) goto out;
-        q = g;
-        qcap *= 2;
-      }
+      if (growbuf_reserve((void **)&q, &qcap, sizeof *q, nq + 1, 64)) goto oom;
       q[nq++] = (hop_t){s->type, s, (int)h, q[h].depth + 1};
     }
   }
+  goto out;
+oom:
+  rc = -2;
 out:
   free(q);
   free(seen.v);
@@ -183,20 +177,87 @@ const char *bim_tvafrag_name(unsigned code) {
   return NULL;
 }
 
-int bim_tvafrag_steps(const xsd_compiled_t *c, const bim_tvans_t *ns, unsigned code, bim_tvaroot_t *steps, int cap) {
+static int steps_compute(const xsd_compiled_t *c, const bim_tvans_t *ns, size_t row, bim_tvaroot_t *steps) {
   const bim_elem_t *main = xsd_compiled_elem(c, ns->tva, "TVAMain");
-  if (!main || cap < 1 || cap > STEPS_MAX) return -1;
+  const bim_type_t *want;
+  if (!main) return -1;
   steps[0] = (bim_tvaroot_t){main->name, main->ns, main->type};
-  for (size_t i = 0; i < sizeof rows / sizeof rows[0]; i++) {
-    const bim_type_t *want;
-    if (rows[i].code != code) continue;
-    if (rows[i].path) return walk(ns, main->type, rows[i].path, steps, cap);
-    want = xsd_compiled_type(c, ns->tva, rows[i].type);
-    if (!want) return -1;
-    if (code == 0x000E) return main->type == want ? 1 : -1;
-    return search(main->type, ns->tva, &rows[i], want, steps, cap);
+  if (rows[row].path) return walk(ns, main->type, rows[row].path, steps, STEPS_MAX);
+  want = xsd_compiled_type(c, ns->tva, rows[row].type);
+  if (!want) return -1;
+  if (rows[row].code == 0x000E) return main->type == want ? 1 : -1;
+  return search(main->type, ns->tva, &rows[row], want, steps, STEPS_MAX);
+}
+
+#define NROWS (sizeof rows / sizeof rows[0])
+#define CACHE_DEPTH 8
+#define CACHE_NS 128
+
+typedef struct {
+  int n;
+  bim_tvaroot_t s[CACHE_DEPTH];
+} cslot_t;
+
+typedef struct {
+  uint64_t id;
+  unsigned have;
+  char ns[3][CACHE_NS];
+  cslot_t slot[NROWS];
+} cache_t;
+
+static _Thread_local cache_t g_cache;
+
+static int key_put(char *dst, const char *src, unsigned bit, unsigned *have) {
+  size_t n;
+  if (!src) return 0;
+  n = strlen(src);
+  if (n >= CACHE_NS) return -1;
+  memcpy(dst, src, n + 1);
+  *have |= bit;
+  return 0;
+}
+
+static int key_eq(const char *k, const char *src, unsigned bit, unsigned have) { return src ? (have & bit) && !strcmp(k, src) : !(have & bit); }
+
+static cache_t *cache_for(const xsd_compiled_t *c, const bim_tvans_t *ns) {
+  cache_t *k = &g_cache;
+  if (k->id == c->id && key_eq(k->ns[0], ns->tva, 1, k->have) && key_eq(k->ns[1], ns->tva2, 2, k->have) && key_eq(k->ns[2], ns->intr, 4, k->have)) return k;
+  memset(k, 0, sizeof *k);
+  if (key_put(k->ns[0], ns->tva, 1, &k->have) || key_put(k->ns[1], ns->tva2, 2, &k->have) || key_put(k->ns[2], ns->intr, 4, &k->have)) {
+    k->have = 0;
+    return NULL;
   }
-  return -1;
+  k->id = c->id;
+  return k;
+}
+
+static size_t row_of(unsigned code) {
+  size_t row = 0;
+  while (row < NROWS && rows[row].code != code) row++;
+  return row;
+}
+
+int bim_tvafrag_steps(const xsd_compiled_t *c, const bim_tvans_t *ns, unsigned code, bim_tvaroot_t *steps, int cap) {
+  bim_tvaroot_t full[STEPS_MAX];
+  const bim_tvaroot_t *src = full;
+  size_t row = row_of(code);
+  cache_t *k;
+  int n;
+  if (cap < 1 || cap > STEPS_MAX || row == NROWS) return -1;
+  k = cache_for(c, ns);
+  if (k && k->slot[row].n) {
+    n = k->slot[row].n;
+    src = k->slot[row].s;
+  } else {
+    n = steps_compute(c, ns, row, full);
+    if (k && n >= -1 && n <= CACHE_DEPTH) {
+      k->slot[row].n = n;
+      if (n > 0) memcpy(k->slot[row].s, full, sizeof *full * (size_t)n);
+    }
+  }
+  if (n < 0 || n > cap) return -1;
+  memcpy(steps, src, sizeof *steps * (size_t)n);
+  return n;
 }
 
 int bim_tvafrag_root(const xsd_compiled_t *c, const bim_tvans_t *ns, unsigned code, bim_tvaroot_t *out) {
@@ -211,7 +272,7 @@ int bim_tvafrag_code(const xsd_compiled_t *c, const bim_tvans_t *ns, const char 
   for (size_t i = 0; i < sizeof rows / sizeof rows[0]; i++) {
     bim_tvaroot_t r;
     if (strcmp(bim_tvafrag_name(rows[i].code), name)) continue;
-    if (!bim_tvafrag_root(c, ns, rows[i].code, &r) && !strcmp(r.name, name) && same(r.ns, elem_ns) && r.type == type) return (int)rows[i].code;
+    if (!bim_tvafrag_root(c, ns, rows[i].code, &r) && !strcmp(r.name, name) && bim_ns_same(r.ns, elem_ns) && r.type == type) return (int)rows[i].code;
   }
   return -1;
 }
@@ -243,12 +304,7 @@ static int collect(hits_t *h, const bim_node_t *n, const bim_tvaroot_t *steps, i
     const bim_node_t *kid = n->kids[i];
     if (!kid->name || !bim_node_is(kid, steps[level].ns, steps[level].name)) continue;
     if (level == k - 1) {
-      if (h->n == h->cap) {
-        void *np = realloc(h->v, sizeof *h->v * (h->cap ? h->cap * 2 : 64));
-        if (!np) return -1;
-        h->v = np;
-        h->cap = h->cap ? h->cap * 2 : 64;
-      }
+      if (growbuf_reserve((void **)&h->v, &h->cap, sizeof *h->v, h->n + 1, 64)) return -1;
       h->v[h->n++] = (hit_t){kid, code};
     } else if (collect(h, kid, steps, level + 1, k, code)) {
       return -1;
@@ -364,12 +420,7 @@ int bim_tvafrag_split(const xsd_compiled_t *c, const bim_tvans_t *ns, const bim_
     int k = bim_tvafrag_steps(c, ns, rows[i].code, steps, STEPS_MAX);
     if (k < 1) continue;
     if (k == 1) {
-      if (h.n == h.cap) {
-        void *np = realloc(h.v, sizeof *h.v * (h.cap ? h.cap * 2 : 64));
-        if (!np) goto out;
-        h.v = np;
-        h.cap = h.cap ? h.cap * 2 : 64;
-      }
+      if (growbuf_reserve((void **)&h.v, &h.cap, sizeof *h.v, h.n + 1, 64)) goto out;
       h.v[h.n++] = (hit_t){doc, rows[i].code};
     } else if (collect(&h, doc, steps, 1, k, rows[i].code)) {
       goto out;
@@ -398,8 +449,14 @@ static int sbc_index(const bim_type_t *t, const bim_node_t *k) {
 static int add_ordered(bim_node_t *parent, const bim_type_t *pt, bim_node_t *kid) {
   int at = parent->nkids;
   int idx = sbc_index(pt, kid);
+  const bim_node_t *prev = NULL;
+  int pi = 0;
   if (bim_node_add(parent, kid)) return -1;
-  while (at > 0 && sbc_index(pt, parent->kids[at - 1]) > idx) {
+  while (at > 0) {
+    const bim_node_t *o = parent->kids[at - 1];
+    if (!prev || o->name != prev->name || o->ns != prev->ns) pi = sbc_index(pt, o);
+    prev = o;
+    if (pi <= idx) break;
     parent->kids[at] = parent->kids[at - 1];
     at--;
   }

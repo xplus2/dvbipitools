@@ -9,7 +9,7 @@
 #include <unistd.h>
 
 #include "lib/helper/log.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 #include "priv.h"
 
 void wfd(mkv_t *m, const void *p, size_t n) {
@@ -129,7 +129,8 @@ static void write_head(mkv_t *m) {
   const char *app = m->opts->app_name;
   const char *srcuri = m->opts->source_desc ? m->opts->source_desc : "";
   char date[32];
-  ebuf_t b, e;
+  ebuf_t b;
+  ebuf_t e;
   time_t now = time(NULL);
   struct tm tm;
   ebuf_t tag;
@@ -186,7 +187,8 @@ static void write_head(mkv_t *m) {
   memset(&e, 0, sizeof e);
   for (int i = 0; i < m->ntrk; i++) {
     track_t *t = &m->trk[i];
-    ebuf_t te, sub;
+    ebuf_t te;
+    ebuf_t sub;
     int video = (t->cls == PID_VIDEO);
     memset(&te, 0, sizeof te);
     memset(&sub, 0, sizeof sub);
@@ -362,7 +364,8 @@ void start(mkv_t *m) {
   m->t0 = 0;
   m->cut_num = 0;
   if (m->npend) {
-    int vnum = 0, found = 0;
+    int vnum = 0;
+    int found = 0;
     int64_t vt = 0;
     for (int i = 0; i < m->ntrk; i++)
       if (m->trk[i].cls == PID_VIDEO) {

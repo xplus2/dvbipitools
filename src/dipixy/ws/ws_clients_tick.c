@@ -3,12 +3,12 @@
 
 #include "ws_clients_int.h"
 #include "ws_broadcast.h"
+#include "lib/helper/dateutil.h"
 
 #include <stdlib.h>
 
-#include "lib/sys/signal.h"
-
 #define WS_CLIENTS_PULL_IDLE_SEC 20
+#define WS_CLIENTS_TICK_BATCH 64
 
 int *g_expired_scratch;
 tick_rate_t *g_tick_rate_scratch;
@@ -31,14 +31,18 @@ void ws_clients_tick(void) {
   pthread_mutex_lock(&g_clients_mtx);
   for (i = 0; i < g_clients_cap; i++) {
     ws_client_t *e = &g_clients[i];
+    if (i && !(i % WS_CLIENTS_TICK_BATCH)) {
+      pthread_mutex_unlock(&g_clients_mtx);
+      pthread_mutex_lock(&g_clients_mtx);
+    }
     if (!e->used) continue;
-    if (!e->persistent && now - e->last_seen > WS_CLIENTS_PULL_IDLE_SEC) {
+    if (!e->persistent && now - atomic_load_explicit(&e->last_seen, memory_order_relaxed) > WS_CLIENTS_PULL_IDLE_SEC) {
       ws_stripe_t *stripe = stripe_for_entry(i);
       pthread_mutex_lock(&stripe->lock);
       hash_delete(stripe, i);
       pthread_mutex_unlock(&stripe->lock);
       e->used = 0;
-      if (g_free_slots) g_free_slots[g_free_slots_n++] = i;
+      idxstack_push(&g_free_slots, i);
       if (expired) expired[n_expired++] = i;
       continue;
     }
@@ -89,21 +93,31 @@ void ws_clients_tick(void) {
   if (!j->failed) ws_broadcast_publish(j->buf);
 }
 
+typedef struct {
+  int id;
+  ws_client_snapshot_t snap;
+} id_snap_t;
+
 int ws_clients_build_snapshot(char **out) {
   static _Thread_local jbuf_t j;
-  ws_client_snapshot_t snap;
+  id_snap_t *snaps = malloc((size_t)(g_clients_cap > 0 ? g_clients_cap : 1) * sizeof *snaps);
   int n = 0;
-  jbuf_thread_own(&j);
-  jbuf_reset(&j);
-  jbuf_str(&j, "{\"type\":\"clients.snapshot\",\"clients\":[");
+  if (!snaps) return -1;
   pthread_mutex_lock(&g_clients_mtx);
   for (int i = 0; i < g_clients_cap; i++) {
     if (!g_clients[i].used) continue;
-    if (n++) jbuf_str(&j, ",");
-    snapshot_client(&snap, &g_clients[i]);
-    emit_client_json(&j, i, &snap);
+    snaps[n].id = i;
+    snapshot_client(&snaps[n++].snap, &g_clients[i]);
   }
   pthread_mutex_unlock(&g_clients_mtx);
+  jbuf_thread_own(&j);
+  jbuf_reset(&j);
+  jbuf_str(&j, "{\"type\":\"clients.snapshot\",\"clients\":[");
+  for (int i = 0; i < n; i++) {
+    if (i) jbuf_str(&j, ",");
+    emit_client_json(&j, snaps[i].id, &snaps[i].snap);
+  }
+  free(snaps);
   jbuf_str(&j, "]}");
   if (j.failed) return -1;
   *out = j.buf;

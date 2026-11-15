@@ -10,12 +10,12 @@
 #include "../../dlna/dlna.h"
 #include "../../dlna/gena.h"
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-void serve_body(conn_t *c, const char *content_type, const char *body, size_t len, int is_head, int keep_alive) {
+static void serve_body(conn_t *c, const char *content_type, const char *body, size_t len, int is_head, int keep_alive) {
   char hdr[256];
   size_t n = build_ok_header(hdr, sizeof hdr, content_type, len, keep_alive, c->ssl != NULL);
   conn_queue(c, hdr, n);
@@ -89,7 +89,7 @@ void serve_dlna_cm_scpd(conn_t *c, int is_head, int keep_alive) {
   serve_body(c, "text/xml; charset=utf-8", body, len, is_head, keep_alive);
 }
 
-void serve_dlna_control(conn_t *c, const char *service, const struct phr_header *headers, size_t num_headers, const char *body, size_t body_len, int keep_alive) {
+void serve_dlna_control(conn_t *c, gena_svc_t svc, const struct phr_header *headers, size_t num_headers, const char *body, size_t body_len, int keep_alive) {
   char soapaction_raw[256];
   char action[64];
   char *resp;
@@ -101,7 +101,7 @@ void serve_dlna_control(conn_t *c, const char *service, const struct phr_header 
     respond_status(c, RESP_400, keep_alive);
     return;
   }
-  status = dlna_handle_control(reactor_cfg(), reactor_channels(), service, action, body, body_len, &resp, &resp_len);
+  status = dlna_handle_control(reactor_cfg(), reactor_channels(), svc, action, body, body_len, &resp, &resp_len);
   sbuf_init(&b, hdr, sizeof hdr);
   sbuf_add(&b, "HTTP/1.1 ");
   sbuf_add_u64(&b, (uint64_t)status);

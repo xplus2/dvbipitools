@@ -9,6 +9,7 @@
 
 #include "lib/helper/argutil.h"
 #include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 #include "lib/helper/log.h"
 #include "lib/bim/sdns.h"
 #include "lib/net/dvbstp.h"

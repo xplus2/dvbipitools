@@ -19,7 +19,7 @@ nghttp3_ssize h3_tspush_read_cb(nghttp3_conn *h3, int64_t sid, nghttp3_vec *vec,
     return 0;
   }
   ts_sub_t *sub = &g_ts_subs[r->tspush_sub_idx];
-  if (atomic_load_explicit(&sub->alive, memory_order_acquire) != TS_SUB_ALIVE) {
+  if (atomic_load_explicit(&sub->h.alive, memory_order_acquire) != TS_SUB_ALIVE) {
     *pflags = NGHTTP3_DATA_FLAG_EOF;
     return 0;
   }
@@ -37,7 +37,7 @@ void h3_tspush_acked(const h3_req_t *r, size_t n) {
   ts_sub_t *sub;
   if (r->tspush_sub_idx < 0) return;
   sub = &g_ts_subs[r->tspush_sub_idx];
-  if (atomic_load_explicit(&sub->alive, memory_order_acquire) != TS_SUB_ALIVE) return;
+  if (atomic_load_explicit(&sub->h.alive, memory_order_acquire) != TS_SUB_ALIVE) return;
   byte_ring_ack(&sub->h3_ring, n);
 }
 

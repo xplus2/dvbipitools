@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 #include "lib/helper/log.h"
 #include "pes.h"
 #include "tspack.h"
@@ -31,7 +31,7 @@ struct pes {
   void *ctx;
   stream_t s[PES_MAX];
   int n;
-  int last_idx; /* MRU 1-entry cache: consecutive packets are usually the same pid */
+  ts_pidmap_t map;
 };
 
 static uint64_t read_pts(const unsigned char *p) {
@@ -60,20 +60,14 @@ int pes_track(pes_t *p, unsigned pid) {
     return -1;
   p->s[p->n].pid = pid;
   p->s[p->n].used = 1;
+  if (ts_pidmap_get(&p->map, pid) < 0) ts_pidmap_set(&p->map, pid, p->n);
   p->n++;
   return 0;
 }
 
 static stream_t *find(pes_t *p, unsigned pid) {
-  if (p->last_idx >= 0 && p->last_idx < p->n && p->s[p->last_idx].pid == pid)
-    return &p->s[p->last_idx];
-
-  for (int i = 0; i < p->n; i++)
-    if (p->s[i].pid == pid) {
-      p->last_idx = i;
-      return &p->s[i];
-    }
-  return NULL;
+  int i = ts_pidmap_get(&p->map, pid);
+  return i < 0 ? NULL : &p->s[i];
 }
 
 static int sgrow(stream_t *s, size_t need) {

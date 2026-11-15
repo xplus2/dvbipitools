@@ -49,7 +49,8 @@ END_TEST
 START_TEST(rtcp_build_rsi_header_and_addr_layout) {
   unsigned char buf[32];
   static const unsigned char addr[4] = {192, 168, 1, 1};
-  size_t hdr_n, addr_n;
+  size_t hdr_n;
+  size_t addr_n;
 
   hdr_n = rtcp_build_rsi_header(0xAAAAAAAAu, 0xBBBBBBBBu, 111, 222, 20 + 8, buf, sizeof buf);
   addr_n = rtcp_build_rsi_srbt_addr(addr, 4, 5000, buf + hdr_n, sizeof(buf) - hdr_n);
@@ -68,7 +69,8 @@ START_TEST(rtcp_build_rsi_header_and_addr_layout) {
 END_TEST
 
 START_TEST(rtcp_build_rsi_srbt_addr_rejects_bad_addr_len) {
-  unsigned char buf[32], addr[6] = {0};
+  unsigned char buf[32];
+  unsigned char addr[6] = {0};
   ck_assert_uint_eq(rtcp_build_rsi_srbt_addr(addr, 6, 0, buf, sizeof buf), 0u);
 }
 END_TEST

@@ -9,7 +9,6 @@
 
 #include "lib/bim/codec.h"
 #include "lib/bim/xsd/xsd.h"
-#include "lib/sys/ioutil.h"
 
 #define ARENA_CHUNK 65536
 

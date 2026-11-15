@@ -6,14 +6,14 @@
 #include <string.h>
 
 #include "lib/helper/describe.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/uriparse.h"
 #include "lib/net/plain_endpoint.h"
 
 #include "priv.h"
 
-void dipirist_uri_redact(const char *uri, char *buf, size_t n) {
+static void dipirist_uri_redact(const char *uri, char *buf, size_t n) {
   char *safe = uriparse_redact_dup(uri);
   bufcpy(buf, n, safe ? safe : "?");
   free(safe);

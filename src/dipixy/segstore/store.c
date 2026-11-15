@@ -16,6 +16,7 @@ static pthread_mutex_t *g_store_locks; /* writer-only now, see segstore_int.h */
 _Atomic int *g_slot_state; /* kept out of hls_store_t: open() sets fields, no memset */
 
 static hls_store_closing_cb g_store_closing_cb;
+static stream_key_index_t g_index;
 
 qsbr_domain_t *g_segstore_qsbr;
 
@@ -37,37 +38,32 @@ void hls_store_init(int max_channels) {
     g_slot_state = NULL;
     return;
   }
+  if (stream_key_index_init(&g_index, n)) {
+    log_code("YS500221", TOOL_NAME ": out of memory sizing store table (%d entries)", n);
+    return;
+  }
+  slot_retire_pool_init(n);
   g_stores_n = n;
 }
+
+static stream_key_t store_key(hls_store_t *s) { return (stream_key_t){s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, s->container}; }
 
 pthread_mutex_t *store_lock(const hls_store_t *s) { return &g_store_locks[s - g_stores]; }
 static _Atomic int *slot_state(const hls_store_t *s) { return &g_slot_state[s - g_stores]; }
 
-static _Thread_local hls_store_t *t_find_hint;
-
-hls_store_t *hls_store_find(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
-  hls_store_t *hint = t_find_hint;
-  if (hint) {
-    int idx = (int)(hint - g_stores);
-    if (idx >= 0 && idx < g_stores_n && atomic_load_explicit(&g_slot_state[idx], memory_order_acquire) == STORE_OPEN &&
-        hint->cap_ctx == ctx && hint->pmt_pid == pmt_pid && hint->container == container &&
-        pid_filter_equal(&hint->filter, filter) && lcevc_select_equal(&hint->lcevc, lcevc))
-      return hint;
-  }
-  for (int i = 0; i < g_stores_n; i++) {
+hls_store_t *hls_store_find(const stream_key_t *k) {
+  for (int i = stream_key_index_first(&g_index, stream_key_hash(k)); i >= 0; i = stream_key_index_next(&g_index, i)) {
     if (atomic_load_explicit(&g_slot_state[i], memory_order_acquire) != STORE_OPEN) continue;
-    if (g_stores[i].cap_ctx == ctx && g_stores[i].pmt_pid == pmt_pid && g_stores[i].container == container &&
-        pid_filter_equal(&g_stores[i].filter, filter) && lcevc_select_equal(&g_stores[i].lcevc, lcevc)) {
-      t_find_hint = &g_stores[i];
+    if (g_stores[i].cap_ctx == k->ctx && g_stores[i].pmt_pid == k->pmt_pid && g_stores[i].container == k->container &&
+        pid_filter_equal(&g_stores[i].filter, k->filter) && lcevc_select_equal(&g_stores[i].lcevc, k->lcevc))
       return &g_stores[i];
-    }
   }
   return NULL;
 }
 
 void hls_set_store_closing_cb(hls_store_closing_cb cb) { g_store_closing_cb = cb; }
 
-void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, double seg_target, int max_segs, seg_container_t container) {
+void hls_store_open(const stream_key_t *k, double seg_target, int max_segs) {
   hls_store_t *s;
   int expected;
   int fresh = 0;
@@ -75,7 +71,7 @@ void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   if (max_segs > HLS_MAX_SEGS) max_segs = HLS_MAX_SEGS;
 
   for (;;) {
-    s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+    s = hls_store_find(k);
     if (s) {
       expected = STORE_OPEN;
       if (atomic_compare_exchange_strong_explicit(slot_state(s), &expected, STORE_OPENING, memory_order_acq_rel, memory_order_relaxed)) break;
@@ -95,11 +91,12 @@ void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   pthread_mutex_lock(store_lock(s));
   snap_drain_all_async(s);
   if (fresh) {
-    s->cap_ctx = ctx;
-    s->filter = *filter;
-    s->pmt_pid = pmt_pid;
-    s->lcevc = *lcevc;
-    s->container = container;
+    s->cap_ctx = k->ctx;
+    s->filter = *k->filter;
+    s->pmt_pid = k->pmt_pid;
+    s->lcevc = *k->lcevc;
+    s->container = k->container;
+    stream_key_index_insert(&g_index, (int)(s - g_stores), stream_key_hash(k));
   }
   s->seg_target = seg_target;
   s->max_segs = max_segs;
@@ -109,14 +106,15 @@ void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt
   pthread_mutex_unlock(store_lock(s));
 }
 
-void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
-  hls_store_t *s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+void hls_store_close(const stream_key_t *k) {
+  hls_store_t *s = hls_store_find(k);
   int expected = STORE_OPEN;
   slot_retire_node_t *node;
   hls_snapshot_t *cur;
+  stream_key_t sk;
   if (!s) return;
   if (!atomic_compare_exchange_strong_explicit(slot_state(s), &expected, STORE_CLOSING, memory_order_acq_rel, memory_order_relaxed)) return;
-  node = malloc(sizeof *node);
+  node = slot_retire_node_get();
   if (!node) {
     log_code("YE500222", TOOL_NAME ": hls: close retire alloc failed, store stays open");
     atomic_store_explicit(slot_state(s), STORE_OPEN, memory_order_release);
@@ -124,6 +122,8 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
   }
   node->idx = (int)(s - g_stores);
   node->nsnaps = 0;
+  sk = store_key(s);
+  stream_key_index_remove(&g_index, node->idx, stream_key_hash(&sk));
 
   pthread_mutex_lock(store_lock(s));
   cur = atomic_exchange_explicit(&s->snap, NULL, memory_order_acq_rel);
@@ -133,6 +133,8 @@ void hls_store_close(const capture_ctx_t *ctx, const pid_filter_t *filter, unsig
   }
   for (int i = 0; i < s->retiring_n; i++) node->snaps[node->nsnaps++] = s->retiring[i];
   s->retiring_n = 0;
+  free(s->spare);
+  s->spare = NULL;
   pthread_mutex_unlock(store_lock(s));
 
   qsbr_mark(g_segstore_qsbr, node->mark);

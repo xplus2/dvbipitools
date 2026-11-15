@@ -4,10 +4,12 @@
 #ifndef DIPIXY_DASH_INT_H
 #define DIPIXY_DASH_INT_H
 
+#include "../core/route.h"
 #include "../segstore_int.h"
 
-/* dash.c */
-int parse_dash_seg_filename(const char *fn, uint64_t *t, seg_container_t *container);
+static inline seg_container_t dash_track_container(route_track_t t) {
+  return t == ROUTE_TRACK_VIDEO ? SEG_CONTAINER_FMP4_VIDEO : t == ROUTE_TRACK_AUDIO ? SEG_CONTAINER_FMP4_AUDIO : SEG_CONTAINER_FMP4;
+}
 
 #define DASH_MPD_BUF_CAP 8192
 #define DASH_UTC_SCHEME "urn:mpeg:dash:utc:http-xsdate:2014"
@@ -49,7 +51,6 @@ typedef struct {
 void iso8601_utc(time_t t, char *out, size_t outsz);
 void mpd_avail_time(const hls_store_t *s, const hls_snapshot_t *snap, char *out, size_t outsz);
 size_t xml_escaped_len(const char *s);
-char *write_xml_escaped(char *dst, const char *s);
 char *write_mpd_prolog(char *mp, const char *avail, const char *publish, double min_update, double tsb_depth, double pres_delay, double min_buffer, int want_ll, double part_target, int dvb);
 char *write_ll_resync(char *mp, const char *avail, const char *utc_url, double part_target, unsigned prt_id);
 char *write_mpd_utc_timing(char *mp, const char *utc_url);

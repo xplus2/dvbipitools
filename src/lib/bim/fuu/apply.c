@@ -37,54 +37,66 @@ static int same_name(const bim_node_t *k, const char *name, const char *ns) {
 
 static int sbc_index(const bim_type_t *pt, const char *name, const char *ns) {
   for (int i = 0; pt && name && i < pt->nsbc; i++)
-    if (pt->sbc[i].name && !strcmp(pt->sbc[i].name, name) && ((!pt->sbc[i].ns && !ns) || (pt->sbc[i].ns && ns && !strcmp(pt->sbc[i].ns, ns)))) return i;
+    if (pt->sbc[i].name && !strcmp(pt->sbc[i].name, name) && bim_ns_eq(pt->sbc[i].ns, ns)) return i;
   return pt ? pt->nsbc : 0;
 }
 
 /* 6.6.5.5.4 rational: positions of z consecutive nodes */
-static void rat_implicit(uint64_t z, uint64_t *out) {
+static uint64_t rat_pos(uint64_t z, uint64_t i) {
   int b = bim_width(z + 1);
   uint64_t step = b >= 64 ? 1 : 1ULL << (64 - b);
   uint64_t n = 1ULL << (b < 63 ? b : 63);
-  uint64_t p = 0;
-  uint64_t i = 0;
-  while (i < z && (i <= (3 * z - n + 3) / 2 || !(i % 2))) {
-    p += step;
-    out[i++] = p;
-  }
-  while (i < z) {
-    p += 2 * step;
-    out[i++] = p;
-  }
+  uint64_t t = (3 * z - n + 3) / 2;
+  uint64_t m = (t + 1) % 2 ? t + 1 : t + 2;
+  return i < m ? (i + 1) * step : m * step + 2 * step * (i - m + 1);
+}
+
+typedef struct {
+  bim_node_t *k;
+  int i;
+} kid_t;
+
+static int str_cmp(const char *a, const char *b) { return a && b ? strcmp(a, b) : (a != NULL) - (b != NULL); }
+
+static int key_cmp(const bim_node_t *a, const bim_node_t *b) {
+  int c = str_cmp(a->name, b->name);
+  return c || !a->name ? c : str_cmp(a->ns, b->ns);
+}
+
+static int kid_cmp(const void *pa, const void *pb) {
+  const kid_t *a = pa;
+  const kid_t *b = pb;
+  int c = key_cmp(a->k, b->k);
+  return c ? c : (a->i > b->i) - (a->i < b->i);
+}
+
+static void place(const bim_fuu_state_t *st, bim_node_t *k, uint64_t idx, uint64_t z) {
+  if (k->pos_set) return;
+  k->pos = st->di->insert ? rat_pos(z, idx) : idx;
+  k->pos_set = 1;
 }
 
 /* 6.6.5.5.4: nodes added by payload get positions in document order, MPC per parent, SPC per name */
 static int materialize(const bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t *pt, bim_err_t *err) {
-  int mpc = bim_fuu_uses_mpc(st, pt);
-  for (int i = 0; i < parent->nkids; i++) {
-    bim_node_t *k = parent->kids[i];
-    uint64_t idx = 0;
-    uint64_t z = 0;
-    if (k->pos_set) continue;
-    for (int j = 0; j < parent->nkids; j++)
-      if (mpc || same_name(parent->kids[j], k->name, k->ns)) {
-        idx += j < i;
-        z++;
-      }
-    k->pos = idx;
-    if (st->di->insert) {
-      uint64_t *pos = malloc((z ? z : 1) * sizeof *pos);
-      if (!pos) return bim_oom(err);
-      rat_implicit(z, pos);
-      if (idx >= z) {
-        free(pos);
-        return state(err, "position index out of range");
-      }
-      k->pos = pos[idx];
-      free(pos);
-    }
-    k->pos_set = 1;
+  int n = parent->nkids;
+  int todo = 0;
+  kid_t *v;
+  for (int i = 0; i < n && !todo; i++) todo = !parent->kids[i]->pos_set;
+  if (!todo) return 0;
+  if (bim_fuu_uses_mpc(st, pt)) {
+    for (int i = 0; i < n; i++) place(st, parent->kids[i], (uint64_t)i, (uint64_t)n);
+    return 0;
   }
+  if (!(v = malloc(sizeof *v * (size_t)n))) return bim_oom(err);
+  for (int i = 0; i < n; i++) v[i] = (kid_t){parent->kids[i], i};
+  qsort(v, (size_t)n, sizeof *v, kid_cmp);
+  for (int g = 0; g < n;) {
+    int e = g + 1;
+    while (e < n && !key_cmp(v[e].k, v[g].k)) e++;
+    for (int i = g; i < e; i++) place(st, v[i].k, (uint64_t)(i - g), (uint64_t)(e - g));
+    g = e;
+  }
+  free(v);
   return 0;
 }
 
@@ -108,13 +120,20 @@ static int find_child(const bim_fuu_state_t *st, bim_node_t *parent, const bim_t
 /* MPC by position, SPC by SBC index then position */
 static int insert_child(const bim_fuu_state_t *st, bim_node_t *parent, const bim_type_t *pt, bim_node_t *k, bim_err_t *err) {
   int mpc = bim_fuu_uses_mpc(st, pt);
-  int ki = sbc_index(pt, k->name, k->ns);
+  int ki = mpc ? 0 : sbc_index(pt, k->name, k->ns);
+  const bim_node_t *prev = NULL;
+  int oi = 0;
   int at;
   if (bim_node_add(parent, k)) return bim_oom(err);
   for (at = 0; at < parent->nkids - 1; at++) {
     const bim_node_t *o = parent->kids[at];
-    int oi = sbc_index(pt, o->name, o->ns);
-    if (mpc ? o->pos > k->pos : (oi > ki || (oi == ki && o->pos > k->pos))) break;
+    if (mpc) {
+      if (o->pos > k->pos) break;
+      continue;
+    }
+    if (!prev || o->name != prev->name || o->ns != prev->ns) oi = sbc_index(pt, o->name, o->ns);
+    prev = o;
+    if (oi > ki || (oi == ki && o->pos > k->pos)) break;
   }
   memmove(&parent->kids[at + 1], &parent->kids[at], (size_t)(parent->nkids - 1 - at) * sizeof *parent->kids);
   parent->kids[at] = k;
@@ -129,7 +148,7 @@ static void remove_child(bim_node_t *parent, int i) {
 
 static int find_attr(const bim_node_t *n, const bim_tbc_t *t) {
   for (int i = 0; i < n->nattrs; i++)
-    if (!strcmp(n->attrs[i].name, t->name) && ((!n->attrs[i].ns && !t->ns) || (n->attrs[i].ns && t->ns && !strcmp(n->attrs[i].ns, t->ns)))) return i;
+    if (!strcmp(n->attrs[i].name, t->name) && bim_ns_eq(n->attrs[i].ns, t->ns)) return i;
   return -1;
 }
 

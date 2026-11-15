@@ -101,7 +101,8 @@ static channels_t *build_two_lists(char *path_a, char *path_b, source_def_t src[
 }
 
 START_TEST(render_m3u_builds_http_play_paths_with_triplet_and_icon) {
-  char path_a[160], path_b[160];
+  char path_a[160];
+  char path_b[160];
   source_def_t src[2];
   config_t cfg;
   channels_t *ch = build_two_lists(path_a, path_b, src);

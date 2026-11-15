@@ -24,8 +24,10 @@ END_TEST
 
 START_TEST(rtpheader_build_increments_seq_and_keeps_ssrc) {
   rtpheader_t *r = rtpheader_new();
-  unsigned char b1[12], b2[12];
-  rtp_hdr_t h1, h2;
+  unsigned char b1[12];
+  unsigned char b2[12];
+  rtp_hdr_t h1;
+  rtp_hdr_t h2;
 
   ck_assert_uint_eq(rtpheader_build(r, 0, b1, sizeof b1), 12u);
   ck_assert_uint_eq(rtpheader_build(r, 90000, b2, sizeof b2), 12u);

@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "lib/helper/xml_util.h"
+#include "lib/helper/growutil.h"
 
 static const char *find_bytes(const char *s, const char *end, const char *pat) {
   size_t n = strlen(pat);
@@ -61,15 +62,9 @@ static int convert_to_utf8(iconv_t cd, char *in, size_t len, char **out, size_t 
       return -1;
     }
     used = (size_t)(op - buf);
-    if (left > 0) {
-      char *nb;
-      cap *= 2;
-      nb = realloc(buf, cap);
-      if (!nb) {
-        free(buf);
-        return -2;
-      }
-      buf = nb;
+    if (left > 0 && growbuf_reserve((void **)&buf, &cap, 1, cap + 1, 0)) {
+      free(buf);
+      return -2;
     }
   }
   buf[used] = '\0';

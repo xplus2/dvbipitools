@@ -10,7 +10,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/sys/signal.h"
 
@@ -73,7 +73,7 @@ static int dial_addr(const _Atomic int *stop, const struct addrinfo *ai, unsigne
 int cas_tcp_dial(const _Atomic int *stop, const char *host, unsigned port, unsigned poll_interval_ms, unsigned timeout_ms, const char *log_tag) {
   struct addrinfo hints;
   struct addrinfo *res;
-  char portstr[6];
+  char portstr[12];
   int fd = -1;
   int e;
   int save_errno = 0;

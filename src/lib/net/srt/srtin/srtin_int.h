@@ -13,7 +13,6 @@
 #include <unistd.h>
 #include <srt/srt.h>
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 #include "lib/net/srt/srtcommon.h"
 #include "lib/net/srt/srtin.h"
 

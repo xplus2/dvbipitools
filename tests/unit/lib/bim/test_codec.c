@@ -31,8 +31,10 @@ START_TEST(dvb_locator_round_trips_string_fallback) {
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bwdata, *swdata;
-  size_t bwlen, swlen;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  size_t bwlen;
+  size_t swlen;
   char out[128];
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
@@ -43,7 +45,7 @@ START_TEST(dvb_locator_round_trips_string_fallback) {
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
 
-  ck_assert_int_eq(dvb_locator_decode(&br, &sr, out, sizeof out), 0);
+  ck_assert_int_eq(dvb_locator_decode_st(&br, &sr, &(dvb_codec_state_t){0}, out, sizeof out), 0);
   ck_assert_str_eq(out, "http://example.com/stream");
 
   bitwriter_free(&bw);
@@ -72,7 +74,7 @@ START_TEST(dvb_locator_decode_rejects_value_longer_than_buffer) {
   swdata = strrepo_writer_data(&sw, &swlen);
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
-  ck_assert_int_eq(dvb_locator_decode(&br, &sr, out, sizeof out), -1);
+  ck_assert_int_eq(dvb_locator_decode_st(&br, &sr, &(dvb_codec_state_t){0}, out, sizeof out), -1);
 
   bitwriter_free(&bw);
   strrepo_writer_free(&sw);
@@ -90,7 +92,7 @@ START_TEST(dvb_datetime_round_trips_utc) {
   ck_assert_int_eq(dvb_datetime_encode(&bw, "2020-12-15T12:45:42Z"), 0);
   data = bitwriter_data(&bw, &len);
   bitreader_init(&br, data, len);
-  ck_assert_int_eq(dvb_datetime_decode(&br, out, sizeof out), 0);
+  ck_assert_int_eq(dvb_datetime_decode_st(&br, &(dvb_codec_state_t){0}, out, sizeof out), 0);
   ck_assert_str_eq(out, "2020-12-15T12:45:42Z");
 
   bitwriter_free(&bw);
@@ -109,7 +111,7 @@ START_TEST(dvb_datetime_normalizes_offset_to_utc_across_midnight) {
   ck_assert_int_eq(dvb_datetime_encode(&bw, "2020-12-15T00:30:00+02:00"), 0);
   data = bitwriter_data(&bw, &len);
   bitreader_init(&br, data, len);
-  ck_assert_int_eq(dvb_datetime_decode(&br, out, sizeof out), 0);
+  ck_assert_int_eq(dvb_datetime_decode_st(&br, &(dvb_codec_state_t){0}, out, sizeof out), 0);
   ck_assert_str_eq(out, "2020-12-14T22:30:00Z");
 
   bitwriter_free(&bw);
@@ -127,7 +129,7 @@ START_TEST(dvb_datetime_no_offset_is_utc) {
   ck_assert_int_eq(dvb_datetime_encode(&bw, "2020-12-15T12:45:42"), 0);
   data = bitwriter_data(&bw, &len);
   bitreader_init(&br, data, len);
-  ck_assert_int_eq(dvb_datetime_decode(&br, out, sizeof out), 0);
+  ck_assert_int_eq(dvb_datetime_decode_st(&br, &(dvb_codec_state_t){0}, out, sizeof out), 0);
   ck_assert_str_eq(out, "2020-12-15T12:45:42Z");
 
   bitwriter_free(&bw);
@@ -189,7 +191,7 @@ static int decode_raw_datetime(uint64_t mjd, uint64_t ms) {
   ck_assert_int_eq(bitwriter_put(&bw, ms, 32), 0);
   data = bitwriter_data(&bw, &len);
   bitreader_init(&br, data, len);
-  rc = dvb_datetime_decode(&br, out, sizeof out);
+  rc = dvb_datetime_decode_st(&br, &(dvb_codec_state_t){0}, out, sizeof out);
   bitwriter_free(&bw);
   return rc;
 }
@@ -239,20 +241,22 @@ START_TEST(dvb_controlledterm_round_trips_dotted_term) {
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bwdata, *swdata;
-  size_t bwlen, swlen;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  size_t bwlen;
+  size_t swlen;
   char out[128];
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
 
-  ck_assert_int_eq(dvb_controlledterm_encode(&bw, &sw, "urn:tva:metadata:cs:ContentCS:2011:3.1.1"), 0);
+  ck_assert_int_eq(dvb_controlledterm_encode_cs(&bw, &sw, NULL, "urn:tva:metadata:cs:ContentCS:2011:3.1.1"), 0);
   bwdata = bitwriter_data(&bw, &bwlen);
   swdata = strrepo_writer_data(&sw, &swlen);
   ck_assert_uint_eq(bwlen, 1u); /* encoding_flag only */
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
 
-  ck_assert_int_eq(dvb_controlledterm_decode(&br, &sr, out, sizeof out), 0);
+  ck_assert_int_eq(dvb_controlledterm_decode_cs(&br, &sr, NULL, out, sizeof out), 0);
   ck_assert_str_eq(out, "urn:tva:metadata:cs:ContentCS:2011:3.1.1");
 
   bitwriter_free(&bw);
@@ -265,19 +269,21 @@ START_TEST(dvb_controlledterm_round_trips_unknown_scheme_as_string) {
   bitreader_t br;
   strrepo_writer_t sw;
   strrepo_reader_t sr;
-  const unsigned char *bwdata, *swdata;
-  size_t bwlen, swlen;
+  const unsigned char *bwdata;
+  const unsigned char *swdata;
+  size_t bwlen;
+  size_t swlen;
   char out[128];
   bitwriter_init(&bw);
   strrepo_writer_init(&sw);
 
-  ck_assert_int_eq(dvb_controlledterm_encode(&bw, &sw, "urn:example:custom:Foo"), 0);
+  ck_assert_int_eq(dvb_controlledterm_encode_cs(&bw, &sw, NULL, "urn:example:custom:Foo"), 0);
   bwdata = bitwriter_data(&bw, &bwlen);
   swdata = strrepo_writer_data(&sw, &swlen);
   bitreader_init(&br, bwdata, bwlen);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
 
-  ck_assert_int_eq(dvb_controlledterm_decode(&br, &sr, out, sizeof out), 0);
+  ck_assert_int_eq(dvb_controlledterm_decode_cs(&br, &sr, NULL, out, sizeof out), 0);
   ck_assert_str_eq(out, "urn:example:custom:Foo");
 
   bitwriter_free(&bw);
@@ -297,7 +303,7 @@ START_TEST(dvb_controlledterm_decode_rejects_compact_form) {
   swdata = strrepo_writer_data(&sw, &swlen);
   bitreader_init(&br, bits, sizeof bits);
   ck_assert_int_eq(strrepo_reader_init(&sr, swdata, swlen), 0);
-  ck_assert_int_eq(dvb_controlledterm_decode(&br, &sr, out, sizeof out), -1);
+  ck_assert_int_eq(dvb_controlledterm_decode_cs(&br, &sr, NULL, out, sizeof out), -1);
   strrepo_writer_free(&sw);
 }
 END_TEST

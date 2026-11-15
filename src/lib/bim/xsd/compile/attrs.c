@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "lib/bim/xsd/compile/priv.h"
+#include "lib/helper/growutil.h"
 
 static bim_wildcard_t *wc_new(cc_t *c, bim_wc_kind_t kind, const char *const *ns, int nns, bim_process_t pc) {
   bim_wildcard_t *w = xc_alloc(c, sizeof *w);
@@ -33,7 +34,7 @@ const bim_wildcard_t *xc_wc_from(cc_t *c, const xsd_wildcard_t *x) {
 
 static int ns_in(const bim_wildcard_t *w, const char *ns) {
   for (int i = 0; i < w->nns; i++)
-    if (xc_ns_eq(w->ns[i], ns)) return 1;
+    if (bim_ns_eq(w->ns[i], ns)) return 1;
   return 0;
 }
 
@@ -60,7 +61,7 @@ static const bim_wildcard_t *wc_intersect(cc_t *c, const xsd_type_t *t, const bi
     const bim_wildcard_t *neg = a->kind == BIM_WC_NOT ? a : b;
     const bim_wildcard_t *set = a->kind == BIM_WC_NOT ? b : a;
     for (int i = 0; i < set->nns && n < 256; i++)
-      if (set->ns[i] && !xc_ns_eq(set->ns[i], neg->ns[0])) v[n++] = set->ns[i];
+      if (set->ns[i] && !bim_ns_eq(set->ns[i], neg->ns[0])) v[n++] = set->ns[i];
   } else {
     for (int i = 0; i < a->nns && n < 256; i++)
       if (ns_in(b, a->ns[i])) v[n++] = a->ns[i];
@@ -133,7 +134,7 @@ static int complete_wildcard(cc_t *c, const xsd_type_t *t, const bim_wildcard_t 
 
 static int alist_find(const alist_t *l, const xsd_attr_t *a) {
   for (int i = 0; i < l->n; i++)
-    if (xc_ns_eq(l->v[i].attr->q.ns, a->q.ns) && !strcmp(l->v[i].attr->q.name, a->q.name)) return i;
+    if (bim_ns_eq(l->v[i].attr->q.ns, a->q.ns) && !strcmp(l->v[i].attr->q.name, a->q.name)) return i;
   return -1;
 }
 

@@ -13,15 +13,10 @@
 #include "../../helper/log.h"
 
 #include "source_priv.h"
+#include "lib/helper/dateutil.h"
 
 #define JITTER_FILL_MAX 256
 #define JITTER_RECV_CAP 2048 /* over JITBUF_MAX_DGRAM: oversize seen, not truncated */
-
-static uint64_t mono_ns(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
-}
 
 static int is_dgram_kind(tssrc_kind_t k) { return k == TSSRC_RTP || k == TSSRC_UDP; }
 
@@ -72,7 +67,7 @@ static void jitter_fill(tssrc_t *s) {
   if (tr > 0) s->tfd_due = 0;
   if (s->fec_dec) {
     tssrc_fec_poll(s);
-    jitter_fec_drain(s, tmp, sizeof tmp, mono_ns());
+    jitter_fec_drain(s, tmp, sizeof tmp, now_ns());
   }
   for (unsigned i = 0; i < JITTER_FILL_MAX && !s->jb_failed; i++) {
     struct pollfd p;
@@ -92,7 +87,7 @@ static void jitter_fill(tssrc_t *s) {
       break;
     }
     if (n == 0) break;
-    now = mono_ns();
+    now = now_ns();
     if (!s->fec_dec) {
       jitbuf_push(s->jb, tmp, (size_t)n, now);
       continue;
@@ -125,7 +120,7 @@ ssize_t tssrc_jitter_read(tssrc_t *s, unsigned char *buf, size_t cap, net_err_re
   size_t n;
 
   jitter_fill(s);
-  now = mono_ns();
+  now = now_ns();
   n = jitbuf_pop(s->jb, buf, cap, now);
   jitter_rearm(s, now);
   if (n) return is_dgram_kind(s->kind) ? tssrc_rtp_strip(buf, n) : (ssize_t)n;
@@ -150,5 +145,5 @@ void tssrc_jitter_free(tssrc_t *s) {
 }
 int64_t tssrc_buffer_ms(const tssrc_t *s) {
   if (!s->jb) return -1;
-  return (int64_t)(jitbuf_depth_ns(s->jb, mono_ns()) / 1000000ULL);
+  return (int64_t)(jitbuf_depth_ns(s->jb, now_ns()) / 1000000ULL);
 }

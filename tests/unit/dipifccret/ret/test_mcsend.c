@@ -10,7 +10,7 @@
 #include <sys/socket.h>
 
 #include "dipifccret/ret/mcsend.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 START_TEST(mcsend_ensure_then_get_returns_socket) {
   mcsend_table_t *t = mcsend_table_new(4, NULL, 1);
@@ -31,7 +31,8 @@ END_TEST
 START_TEST(mcsend_ensure_is_idempotent) {
   mcsend_table_t *t = mcsend_table_new(4, NULL, 1);
   channel_t c;
-  mcast_t *m1, *m2;
+  mcast_t *m1;
+  mcast_t *m2;
   memset(&c, 0, sizeof c);
   c.family = AF_INET;
   bufcpy(c.group, sizeof c.group, "239.1.1.2");
@@ -49,7 +50,8 @@ END_TEST
 
 START_TEST(mcsend_ensure_different_channels_get_different_sockets) {
   mcsend_table_t *t = mcsend_table_new(4, NULL, 1);
-  channel_t a, b;
+  channel_t a;
+  channel_t b;
   memset(&a, 0, sizeof a);
   a.family = AF_INET;
   bufcpy(a.group, sizeof a.group, "239.1.1.3");
@@ -95,7 +97,8 @@ END_TEST
 START_TEST(mcsend_stale_generation_reopens_socket) {
   mcsend_table_t *t = mcsend_table_new(4, NULL, 1);
   channel_t c;
-  mcast_t *m1, *m2;
+  mcast_t *m1;
+  mcast_t *m2;
   memset(&c, 0, sizeof c);
   c.family = AF_INET;
   bufcpy(c.group, sizeof c.group, "239.1.1.5");
@@ -144,7 +147,8 @@ static void *mc_race_reader(void *arg) {
 }
 
 START_TEST(mcsend_publish_race_no_torn_pointer) {
-  pthread_t writer, readers[MCSEND_RACE_READERS];
+  pthread_t writer;
+  pthread_t readers[MCSEND_RACE_READERS];
   long i;
 
   g_mc_race_table = mcsend_table_new(4, NULL, 1);

@@ -2,39 +2,32 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
-#include <math.h>
 #include <stdlib.h>
 
 #include "lib/helper/argutil.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+
+static const yamlcfg_opt_t opts[] = {
+    {OPT_SDS_TIMEOUT, "sds.timeout", "YS000628", "invalid --sds-timeout: %s (seconds, > 0)", 0},
+    {OPT_SDS_REFRESH_INTERVAL, "sds.refresh-interval", "YS000629", "invalid --sds-refresh-interval: %s (seconds, > 0)", 0},
+    {OPT_SSDP_TTL, "ssdp.ttl", "YS000630", "invalid --ssdp-ttl: %s (1..255)", 0},
+    {OPT_SSDP_INTERVAL, "ssdp.interval", "YS000631", "invalid --ssdp-interval: %s (seconds, > 0)", 0},
+    {OPT_SSDP_MAX_AGE, "ssdp.max-age", "YS000632", "invalid --ssdp-max-age: %s (seconds, > 0)", 0},
+};
 
 args_status_t dixy_opt_dlna(dixy_opt_t *p, int c) {
   config_t *cfg = p->cfg;
 
+  switch (yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), dixy_cfg_keys, dixy_cfg_nkeys, cfg, c, optarg)) {
+    case 1: return ARGS_OK;
+    case -1:
+      args_free(cfg);
+      return ARGS_ERR;
+    default: break;
+  }
   switch (c) {
-    case OPT_SDS_TIMEOUT: {
-      char *end;
-      double v = strtod(optarg, &end);
-      if (*end != '\0' || !isfinite(v) || v <= 0.0 || v > 1e9) {
-        argerr("YS000628", "invalid --sds-timeout: %s (seconds, > 0)", optarg);
-        args_free(cfg);
-        return ARGS_ERR;
-      }
-      cfg->sds_timeout_s = v;
-      break;
-    }
-    case OPT_SDS_REFRESH_INTERVAL: {
-      char *end;
-      double v = strtod(optarg, &end);
-      if (*end != '\0' || !isfinite(v) || v <= 0.0 || v > 1e9) {
-        argerr("YS000629", "invalid --sds-refresh-interval: %s (seconds, > 0)", optarg);
-        args_free(cfg);
-        return ARGS_ERR;
-      }
-      cfg->sds_refresh_interval_s = v;
-      break;
-    }
     case OPT_SDS_BIM_NAMESPACE:
       cfg->sdns_ns = optarg;
       break;
@@ -48,40 +41,9 @@ args_status_t dixy_opt_dlna(dixy_opt_t *p, int c) {
       }
       cfg->schemas[cfg->nschemas++] = optarg;
       break;
-    case OPT_SSDP_TTL: {
-      unsigned v;
-      if (argutil_uint_range(optarg, 1, 255, &v)) {
-        argerr("YS000630", "invalid --ssdp-ttl: %s (1..255)", optarg);
-        args_free(cfg);
-        return ARGS_ERR;
-      }
-      cfg->ssdp_ttl = (int)v;
-      break;
-    }
     case OPT_SSDP_IFACE:
       cfg->ssdp_iface = optarg;
       break;
-    case OPT_SSDP_INTERVAL: {
-      char *end;
-      double v = strtod(optarg, &end);
-      if (*end != '\0' || !isfinite(v) || v <= 0.0 || v > 1e9) {
-        argerr("YS000631", "invalid --ssdp-interval: %s (seconds, > 0)", optarg);
-        args_free(cfg);
-        return ARGS_ERR;
-      }
-      cfg->ssdp_interval_s = v;
-      break;
-    }
-    case OPT_SSDP_MAX_AGE: {
-      unsigned v;
-      if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-        argerr("YS000632", "invalid --ssdp-max-age: %s (seconds, > 0)", optarg);
-        args_free(cfg);
-        return ARGS_ERR;
-      }
-      cfg->ssdp_max_age_s = v;
-      break;
-    }
     case OPT_ENABLE_DLNA:
       cfg->enable_dlna = 1;
       break;

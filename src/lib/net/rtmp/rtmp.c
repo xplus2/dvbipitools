@@ -7,7 +7,7 @@
 #include <time.h>
 
 #include "lib/helper/uriparse.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "priv.h"
 
 rtmp_t *rtmp_new(const rtmp_cfg_t *cfg) {

@@ -5,8 +5,12 @@
 #define DIPIRIST_CONFIG_H
 
 #include "cli/args.h"
+#include "lib/config/yamlcfg.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipirist.yaml"
+
+extern const yamlcfg_key_t dipirist_cfg_keys[];
+extern const size_t dipirist_cfg_nkeys;
 
 void dipirist_cfg_defaults(config_t *cfg);
 

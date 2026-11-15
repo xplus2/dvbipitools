@@ -14,7 +14,7 @@
 
 int enc_bit(bitwriter_t *bw, int v) { return bitwriter_put(bw, v ? 1 : 0, 1); }
 
-const char *enc_skip_ws(const char *s) {
+static const char *enc_skip_ws(const char *s) {
   while (isspace((unsigned char)*s)) s++;
   return s;
 }

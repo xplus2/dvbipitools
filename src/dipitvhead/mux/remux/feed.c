@@ -11,15 +11,7 @@
 #include "priv.h"
 
 /* es[] index for a source pid, or -1 if not carried (dropped) */
-static int find_es(remux_t *r, unsigned in_pid) {
-  if (r->last_es_idx >= 0 && r->last_es_idx < r->es_count && r->es[r->last_es_idx].in_pid == in_pid) return r->last_es_idx;
-  for (int i = 0; i < r->es_count; i++)
-    if (r->es[i].in_pid == in_pid) {
-      r->last_es_idx = i;
-      return i;
-    }
-  return -1;
-}
+static int find_es(const remux_t *r, unsigned in_pid) { return ts_pidmap_get(&r->es_map, in_pid); }
 
 static int es_carries_pes(const out_es_t *es) {
   if (!es || es->is_ca != CA_PASS_NONE) return 0;

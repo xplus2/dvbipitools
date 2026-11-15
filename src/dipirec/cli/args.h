@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/net/rist/ristpeer.h"
 #include "lib/net/httpclient/httpclient.h"
 
 typedef enum {
@@ -41,9 +42,7 @@ typedef struct {
 
 typedef enum { FMT_RAW, FMT_TS, FMT_MKV, FMT_MKA, FMT_MP4, FMT_M4A } out_fmt_t;
 typedef enum { SUB_KEEP, SUB_STRIP, SUB_SRT } sub_mode_t;
-typedef enum { PMT_SEL_AUTO, PMT_SEL_PID, PMT_SEL_ALL } pmt_sel_t;
 typedef enum { OUT_FILE, OUT_RTP, OUT_UDP, OUT_RIST, OUT_RTMP, OUT_RTMPS, OUT_SRT } out_kind_t;
-typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_profile_sel_t;
 
 #define DIPIREC_MAX_OUT 8
 
@@ -114,11 +113,11 @@ typedef struct {
   ret_cfg_t ret;        /* --ret and friends, RTP source only */
   int pace;             /* --pace, URI_FILE source only */
   unsigned strip_mask;  /* --strip, STRIP_* bits from filter/ts.h, -f ts only */
-  rist_profile_sel_t rist_profile; /* --rist-profile, -o rist:// only */
+  rist_prof_t rist_profile; /* --rist-profile, -o rist:// only */
   char rist_secret[128];  /* --rist-secret, -o rist:// + --rist-profile main only, "" = none */
   char rist_cname[128];   /* --rist-cname, -o rist:// only, "" = library default */
   unsigned rist_buffer_ms; /* --rist-buffer, -o rist:// only, 0 = library default */
-  rist_profile_sel_t rist_profile_in; /* --rist-profile-in, -i rist:// only */
+  rist_prof_t rist_profile_in; /* --rist-profile-in, -i rist:// only */
   int rist_key_size;      /* --rist-encryption-type, -o rist:// + --rist-profile main only, 0 = default */
   int rist_key_size_in;   /* --rist-encryption-type-in, -i rist:// + --rist-profile-in main only, 0 = default */
   int insecure_tls;              /* --insecure, -o rtmps:// or -i https:// */

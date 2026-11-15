@@ -8,6 +8,9 @@
 
 #include "lib/helper/base64.h"
 #include "lib/bim/codec/decode/priv.h"
+#include "lib/helper/strutil.h"
+
+static int dec_text(dec_t *d, const bim_simple_t *s, dstrbuf_t *b);
 
 int dec_add_n(dstrbuf_t *b, const char *s, size_t n) {
   dstrbuf_add_n(b, s, n);
@@ -182,13 +185,13 @@ static int duration_render(dec_t *d, const bim_simple_t *s, char *out, size_t ca
 
 /* XML Schema Part 2 3.2.4, 3.2.5 lexical forms of special values */
 void dec_float_render(double x, int prec, char *buf, size_t cap) {
-  if (isnan(x)) snprintf(buf, cap, "NaN");
-  else if (isinf(x)) snprintf(buf, cap, "%s", x < 0 ? "-INF" : "INF");
+  if (isnan(x)) bufcpy(buf, cap, "NaN");
+  else if (isinf(x)) bufcpy(buf, cap, x < 0 ? "-INF" : "INF");
   else snprintf(buf, cap, "%.*g", prec, x);
 }
 
 /* ISO 23001-1 7.5.4.2.3 */
-int dec_list_count(dec_t *d, const bim_simple_t *s, uint64_t *n) {
+static int dec_list_count(dec_t *d, const bim_simple_t *s, uint64_t *n) {
   int w = s->unbounded ? -1 : range_bits(&s->range);
   if (w < 0 ? bitreader_get_vluimsbf5(d->br, n) : bitreader_get(d->br, w, n)) return -1;
   if ((!s->unbounded && *n > s->range.span) || *n > UINT64_MAX - (uint64_t)s->range.min) return -1;
@@ -239,9 +242,9 @@ int dec_plain(dec_t *d, const bim_simple_t *s, dstrbuf_t *b) {
       int w = range_bits(&s->range);
       if (w < 0 ? bitreader_get_vluimsbf5(d->br, &v) : bitreader_get(d->br, w, &v)) return -1;
       if (v > s->range.span) return -1;
-      if (s->range.min >= 0) snprintf(t, sizeof t, "%llu", (unsigned long long)((uint64_t)s->range.min + v));
-      else snprintf(t, sizeof t, "%lld", (long long)((uint64_t)s->range.min + v));
-      return dec_add(b, t);
+      if (s->range.min >= 0) dstrbuf_add_u64(b, (uint64_t)s->range.min + v);
+      else dstrbuf_add_i64(b, (int64_t)((uint64_t)s->range.min + v));
+      return b->buf ? 0 : -1;
     }
     case BIM_SVLU5: {
       uint64_t sign;
@@ -266,8 +269,11 @@ int dec_plain(dec_t *d, const bim_simple_t *s, dstrbuf_t *b) {
       if (bitreader_get(d->br, 1, &v)) return -1;
       if (!v) return dvb_string_append(d->sr, b);
       if (bitreader_get(d->br, 11, &v)) return -1;
-      snprintf(t, sizeof t, "PT%lluH%lluM", (unsigned long long)(v / 60), (unsigned long long)(v % 60));
-      return dec_add(b, t);
+      dstrbuf_add(b, "PT");
+      dstrbuf_add_u64(b, v / 60);
+      dstrbuf_add(b, "H");
+      dstrbuf_add_u64(b, v % 60);
+      return dec_add(b, "M");
     case BIM_TERMREF: return d->sr ? dvb_controlledterm_decode_buf(d->br, d->sr, d->st.cs, b) : -1;
     case BIM_TVA_DATETIME: return tva_datetime_decode(d->br, t, sizeof t) || dec_add(b, t);
     case BIM_TVA_DATE: return tva_date_decode(d->br, t, sizeof t) || dec_add(b, t);
@@ -278,7 +284,7 @@ int dec_plain(dec_t *d, const bim_simple_t *s, dstrbuf_t *b) {
 }
 
 /* 7.4.7: advanced optimised decoder mapped to type or base, else default */
-int dec_text(dec_t *d, const bim_simple_t *s, dstrbuf_t *b) {
+static int dec_text(dec_t *d, const bim_simple_t *s, dstrbuf_t *b) {
   const bim_aod_map_t *m = d->opts && d->opts->aod && s ? bim_aod_find(d->opts->aod, s) : NULL;
   return m ? dec_aod(d, s, m, b) : dec_plain(d, s, b);
 }

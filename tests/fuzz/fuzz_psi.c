@@ -15,7 +15,8 @@ int main(int argc, char **argv) {
   FILE *f;
   unsigned char *buf;
   long len;
-  size_t n, off;
+  size_t n;
+  size_t off;
   psi_t *c;
 
   if (argc != 2) {

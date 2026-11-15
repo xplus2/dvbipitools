@@ -190,7 +190,8 @@ END_TEST
 
 START_TEST(aac_latm_probe_reuses_config_across_frames) {
   aac_latm_t *c = aac_latm_new();
-  unsigned char frame1[32], frame2[32];
+  unsigned char frame1[32];
+  unsigned char frame2[32];
   size_t len1 = build_full_config_frame(frame1, sizeof frame1, 1);
   size_t len2 = build_reuse_config_frame(frame2, sizeof frame2);
   aac_latm_info_t info;

@@ -70,9 +70,11 @@ size_t emmg_build_stream_bw_allocation(unsigned char *out, size_t cap, unsigned 
 
 int emmg_extract_datagrams(const unsigned char *body, size_t body_len, emmg_datagram_cb cb, void *user) {
   simulcrypt_tlv_reader_t it;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *val;
-  int rc, count = 0;
+  int rc;
+  int count = 0;
   simulcrypt_tlv_reader_init(&it, body, body_len);
   while ((rc = simulcrypt_tlv_reader_next(&it, &tag, &val, &vlen)) == 1) {
     if (tag == EMMG_P_DATAGRAM) {

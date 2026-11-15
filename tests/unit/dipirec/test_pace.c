@@ -27,7 +27,8 @@ static void build_pcr_pkt(unsigned char *pkt, unsigned pid, uint64_t base33) {
 }
 
 START_TEST(pace_accumulate_simple_forward) {
-  uint64_t last = 1000, elapsed = 0;
+  uint64_t last = 1000;
+  uint64_t elapsed = 0;
   pace_accumulate(&last, &elapsed, 1500, 32);
   ck_assert_uint_eq(elapsed, 500u);
   ck_assert_uint_eq(last, 1500u);
@@ -35,7 +36,8 @@ START_TEST(pace_accumulate_simple_forward) {
 END_TEST
 
 START_TEST(pace_accumulate_wraps_32bit) {
-  uint64_t last = 4294967290ULL, elapsed = 0; /* 2^32 minus 6 */
+  uint64_t last = 4294967290ULL;
+  uint64_t elapsed = 0; /* 2^32 minus 6 */
   pace_accumulate(&last, &elapsed, 100, 32);
   ck_assert_uint_eq(elapsed, 106u); /* 6 to wrap, then 100 more */
   ck_assert_uint_eq(last, 100u);
@@ -43,7 +45,8 @@ START_TEST(pace_accumulate_wraps_32bit) {
 END_TEST
 
 START_TEST(pace_accumulate_wraps_33bit) {
-  uint64_t last = (((uint64_t)1 << 33) - 1) - 4, elapsed = 0; /* 5 short of wrap */
+  uint64_t last = (((uint64_t)1 << 33) - 1) - 4;
+  uint64_t elapsed = 0; /* 5 short of wrap */
   pace_accumulate(&last, &elapsed, 50, 33);
   ck_assert_uint_eq(elapsed, 55u); /* 5 to wrap, then 50 more */
   ck_assert_uint_eq(last, 50u);
@@ -51,7 +54,8 @@ START_TEST(pace_accumulate_wraps_33bit) {
 END_TEST
 
 START_TEST(pace_accumulate_ignores_small_backward_jitter) {
-  uint64_t last = 10000, elapsed = 0;
+  uint64_t last = 10000;
+  uint64_t elapsed = 0;
   pace_accumulate(&last, &elapsed, 9990, 32); /* reorder/jitter, not a wrap */
   ck_assert_uint_eq(elapsed, 0u);
   ck_assert_uint_eq(last, 9990u);

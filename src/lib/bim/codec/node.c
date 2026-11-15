@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 #include "lib/bim/codec.h"
 #include "lib/bim/codec/codec_int.h"
 
@@ -94,7 +94,7 @@ int bim_node_qname(const bim_node_t *n, const char *qn, const char **ns, const c
 }
 
 /* Takes ownership of v, also on failure */
-int node_put_attr(bim_node_t *n, const char *name, char *v) {
+static int node_put_attr(bim_node_t *n, const char *name, char *v) {
   for (int i = 0; i < n->nattrs; i++) {
     if (strcmp(n->attrs[i].name, name)) continue;
     free(n->attrs[i].value);
@@ -118,12 +118,12 @@ const char *bim_node_attr(const bim_node_t *n, const char *name) {
 
 const char *bim_node_attr_ns(const bim_node_t *n, const char *ns, const char *name) {
   for (int i = 0; i < n->nattrs; i++)
-    if (!strcmp(n->attrs[i].name, name) && (ns && n->attrs[i].ns ? !strcmp(ns, n->attrs[i].ns) : ns == n->attrs[i].ns)) return n->attrs[i].value;
+    if (!strcmp(n->attrs[i].name, name) && bim_ns_eq(ns, n->attrs[i].ns)) return n->attrs[i].value;
   return NULL;
 }
 
 int bim_node_is(const bim_node_t *n, const char *ns, const char *name) {
-  return n->name && !strcmp(n->name, name) && (ns && n->ns ? !strcmp(ns, n->ns) : ns == n->ns);
+  return n->name && !strcmp(n->name, name) && bim_ns_eq(ns, n->ns);
 }
 
 int bim_node_set_text(bim_node_t *n, const char *text) {

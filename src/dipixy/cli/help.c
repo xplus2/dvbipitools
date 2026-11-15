@@ -25,7 +25,6 @@ void dixy_print_help(void) {
   "                                 (source,filter,pmt,container)           [32]\n"
   "      --max-variants <n>         cap on concurrent variants per source   [8]\n"
   "      --idle-timeout <s>         close idle conns after  this, 0 = off   [60]\n"
-  "      --capture-ring-size <n>    per-source ingress ring buffer, KiB     [4096, max 262144]\n"
   "      --ts-startup-timeout <s>   ts/spts/rawaudio: wait this long for a source's\n"
   "                                 first packet before 504, 0 = off        [5]\n"
   "  -i, --input <source>           add an input, repeatable, by form:\n"

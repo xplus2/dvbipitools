@@ -8,6 +8,7 @@
 
 #include "lib/helper/log.h"
 #include "../../reactor/reactor_tls.h"
+#include "lib/helper/strutil.h"
 
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -52,8 +53,8 @@ void h3_init(const char *cert_path, const char *key_path) {
   if (h3_stateless_init() != 0) return;
   ctx = h3_build_ctx(cert_path, key_path);
   if (!ctx) return;
-  snprintf(g_h3_cert, sizeof g_h3_cert, "%s", cert_path);
-  snprintf(g_h3_key, sizeof g_h3_key, "%s", key_path);
+  bufcpy(g_h3_cert, sizeof g_h3_cert, cert_path);
+  bufcpy(g_h3_key, sizeof g_h3_key, key_path);
   g_h3_ssl_ctx = ctx;
   log_line("http3: quic context ready");
 }

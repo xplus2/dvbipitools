@@ -59,8 +59,10 @@ static void callback_for(unsigned port, char *out, size_t outsz) {
 }
 
 START_TEST(subscribe_returns_sid_and_timeout) {
-  char cb[64], sid[64];
-  unsigned port, t = 0;
+  char cb[64];
+  char sid[64];
+  unsigned port;
+  unsigned t = 0;
   int lfd = listen_local(&port);
   callback_for(port, cb, sizeof cb);
   ck_assert_int_eq(gena_subscribe(&g_cfg, GENA_SVC_CD, PEER, NULL, cb, "upnp:event", "Second-600", sid, sizeof sid, &t), 200);

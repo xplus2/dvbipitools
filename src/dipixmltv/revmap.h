@@ -18,7 +18,8 @@ typedef struct {
 
 typedef struct {
   revmap_entry_t *entries;
-  int count, cap;
+  int count;
+  int cap;
   revmap_idx_t *idx;
 } revmap_t;
 

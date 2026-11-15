@@ -17,8 +17,15 @@ int argutil_port_parse(const char *p, unsigned *out);
 /* dec only, [min, max] incl. 0 ok, -1 bad format or oor */
 int argutil_uint_range(const char *s, unsigned min, unsigned max, unsigned *out);
 
+int argutil_pid_parse(const char *s, unsigned min, unsigned *out);
+
+typedef enum { PMT_SEL_AUTO, PMT_SEL_PID, PMT_SEL_ALL } pmt_sel_t;
+
+int argutil_pmt_sel_parse(const char *s, pmt_sel_t *sel, unsigned *pid);
+
 /* RIST AES key size: 128|256. 0 ok, -1 invalid */
 int argutil_rist_key_size(const char *s, int *out);
+#define ARGUTIL_RIST_KEY_SIZE_HINT "128|256"
 
 int argutil_bufcpy_opt(const char *tool, char *dst, size_t dstsz, const char *val, const char *optname);
 
@@ -27,6 +34,7 @@ int argutil_srt_passphrase_valid(const char *passphrase);
 
 /* srt AES key size: 16|24|32. 0 ok, -1 invalid */
 int argutil_srt_pbkeylen(const char *s, int *out);
+#define ARGUTIL_SRT_PBKEYLEN_HINT "16|24|32"
 
 int argutil_srt_passphrase_opt(const char *tool, const char *passphrase, const char *optname);
 

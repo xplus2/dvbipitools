@@ -7,7 +7,7 @@
 #include <time.h>
 
 #include "dipibcg/announce.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/tva/bcg_doc.h"
 
 typedef struct {

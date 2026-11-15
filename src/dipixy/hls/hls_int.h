@@ -4,7 +4,9 @@
 #ifndef DIPIXY_HLS_INT_H
 #define DIPIXY_HLS_INT_H
 
+#include "../core/route.h"
 #include "../segstore_int.h"
+#include "dipixy/ts/streamkey.h"
 
 typedef struct {
   uint32_t seq;
@@ -59,8 +61,6 @@ typedef struct {
   uint64_t bandwidth;
 } lcevc_master_snap_t;
 
-/* hls_serve.c */
-int parse_part_filename(const char *fn, seg_container_t container, uint32_t *seq, int *part);
 void snapshot_plain_playlist(const hls_snapshot_t *s, seg_container_t container, const lcevc_select_t *lcevc, plain_playlist_snap_t *snap);
 char *write_lcevc_arg(char *mp, const char *lcevc, char sep);
 size_t format_plain_playlist(const plain_playlist_snap_t *snap, char *m3u8, size_t cap);
@@ -85,8 +85,7 @@ typedef struct {
 /* raw If-None-Match value vs bare etag: "*", or list of [W/]"etag". weak compare */
 int hls_inm_match(const char *inm, const char *etag);
 
-int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
-  seg_container_t container, const char *filename, const char *if_none_match, hls_resolve_t *r);
+int hls_resolve(const stream_key_t *k, const hls_store_t *st, const route_file_t *f, const char *if_none_match, hls_resolve_t *r);
 
 typedef struct {
   hls_resolve_kind_t kind;
@@ -98,7 +97,6 @@ typedef struct {
   size_t body_len;
 } hls_ll_resolve_t;
 
-int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
-  const char *filename, const char *if_none_match, hls_ll_resolve_t *r);
+int hls_resolve_ll(const stream_key_t *k, const hls_store_t *st, const route_file_t *f, const char *if_none_match, hls_ll_resolve_t *r);
 
 #endif

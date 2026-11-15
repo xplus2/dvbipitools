@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "lib/helper/dateutil.h"
-#include "../sys/ioutil.h"
+#include "../helper/strutil.h"
 #include "timefmt.h"
 
 static const struct {

@@ -403,9 +403,12 @@ END_TEST
 
 START_TEST(sequential_scrapes_each_get_a_correct_independent_response) {
   store_t st;
-  int lfd, c1, c2;
+  int lfd;
+  int c1;
+  int c2;
   http_server_t *hs;
-  char buf1[8192], buf2[8192];
+  char buf1[8192];
+  char buf2[8192];
 
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);
@@ -433,9 +436,14 @@ END_TEST
 
 START_TEST(request_counters_reflect_status_and_include_current_request) {
   store_t st;
-  int lfd, c1, c2, c3;
+  int lfd;
+  int c1;
+  int c2;
+  int c3;
   http_server_t *hs;
-  char buf1[8192], buf2[8192], buf3[8192];
+  char buf1[8192];
+  char buf2[8192];
+  char buf3[8192];
 
   store_init(&st);
   lfd = http_listen(AF_INET, "127.0.0.1", 0);

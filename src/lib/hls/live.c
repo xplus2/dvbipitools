@@ -8,10 +8,10 @@
 #include <string.h>
 
 #include "aes128cbc.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 #include "playlist.h"
+#include "lib/helper/dateutil.h"
 
 #define HLS_ETAG_MAX 128
 #define HLS_PLAYLIST_BUF_CAP (64 * 1024)

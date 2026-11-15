@@ -21,7 +21,8 @@ typedef struct {
   int family; /* AF_INET or AF_INET6 */
   union {
     struct {
-      struct in_addr addr, mask;
+      struct in_addr addr;
+      struct in_addr mask;
     } v4;
     struct {
       struct in6_addr addr;

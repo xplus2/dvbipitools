@@ -21,7 +21,6 @@ typedef struct {
    no CW published yet, no-op. force_flip_s: CAS_FORCE_FLIP_S at real call site,
    param here for testing. */
 #define CAS_FORCE_FLIP_S 2.0
-void cas_pid_apply(cas_pid_state_t *ps, int have_target, int target_parity, int pusi, double now, double force_flip_s);
 
 /* scrambler_t + per-pid parity-flip state, decoupled from CW source.
    cas_core: fed from one ecmg_client. cas_group: fed from shared group CW.

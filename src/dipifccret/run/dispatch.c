@@ -9,12 +9,11 @@
 
 #include "lib/demux/rtcp.h"
 #include "lib/helper/log.h"
-#include "lib/sys/ioutil.h"
-#include "lib/sys/signal.h"
 #include "lib/mux/rtcp_build.h"
 #include "../fcc/burst.h"
 #include "../version.h"
 #include "run.h"
+#include "lib/helper/dateutil.h"
 
 /* 0 on success, else errno */
 static int send_unicast(int fd, const struct sockaddr *to, socklen_t tolen, const unsigned char *pkt, size_t len, int dscp) {
@@ -46,7 +45,7 @@ void burst_send_cb(const unsigned char *pkt, size_t len, int dscp, void *user) {
   if (err == EAGAIN || err == EWOULDBLOCK || err == ENOBUFS) dst->congestion = 1;
 }
 
-void send_rams_i_msn(const unicast_dest_t *dst, uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn, uint16_t response, const rtcp_rams_i_tlvs_t *tlvs) {
+static void send_rams_i_msn(const unicast_dest_t *dst, uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn, uint16_t response, const rtcp_rams_i_tlvs_t *tlvs) {
   unsigned char pkt[128];
   size_t n = rtcp_build_rams_i(sender_ssrc, media_ssrc, msn, response, tlvs, pkt, sizeof pkt);
   if (n > 0) send_unicast(dst->fd, dst->to, dst->tolen, pkt, n, NET_DSCP_SIGNALLING);

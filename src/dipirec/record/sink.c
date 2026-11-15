@@ -7,7 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "../version.h"
 #include "priv.h"
@@ -97,11 +97,6 @@ ssize_t src_read_reason(src_t *s, unsigned char *buf, size_t cap, net_err_reason
   return tssrc_read(s->t, buf, cap, reason);
 }
 
-ssize_t src_read(src_t *s, unsigned char *buf, size_t cap) {
-  net_err_reason_t reason;
-  return src_read_reason(s, buf, cap, &reason);
-}
-
 int src_wait_readable(src_t *s, int timeout_ms) {
   if (s->ret) return 1; /* --ret already bounds its own poll */
   return tssrc_wait(s->t, timeout_ms);
@@ -155,7 +150,7 @@ int sink_open(const config_t *cfg, const out_target_t *t, out_sink_t *o) {
     memset(&rc, 0, sizeof rc);
     rc.peer_uri[0] = t->rist_uri;
     rc.npeers = 1;
-    rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
+    rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RIST_PROF_MAIN : RIST_PROF_SIMPLE;
     rc.secret = cfg->rist_secret;
     rc.key_size = cfg->rist_key_size;
     rc.cname = cfg->rist_cname;

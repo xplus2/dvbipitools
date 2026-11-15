@@ -4,12 +4,12 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 
 #include "../version.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 /* clamp: keeps formatted length bounded */
 void fmt_dur(double secs, char *buf, size_t n) {

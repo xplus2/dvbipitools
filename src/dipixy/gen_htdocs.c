@@ -8,7 +8,8 @@
 #include <stdlib.h>
 
 int main(int argc, char **argv) {
-  FILE *in, *out;
+  FILE *in;
+  FILE *out;
   const char *sym;
   int ch;
   size_t len = 0;

@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/helper/seqlock.h"
 #include "lib/net/sockaddr_index.h"
 
 #include "rtx_session_table.h"
@@ -20,7 +21,7 @@ typedef struct {
 #define RTX_STRIPE_COUNT_MAX 8 /* client addr hashed to one of these, independent lock each */
 
 typedef struct {
-  rtx_session_slot_t *slots; /* fixed array, size cap, preallocated once */
+  _Alignas(CACHELINE) rtx_session_slot_t *slots; /* fixed array, size cap, preallocated once */
   size_t cap;
 
   sockaddr_index_t *index; /* addr->slot, O(1) avg */
@@ -65,7 +66,9 @@ static void stripe_destroy(rtx_session_stripe_t *s) {
 
 rtx_session_table_t *rtx_session_table_new(size_t cap) {
   rtx_session_table_t *t;
-  size_t n, base, extra;
+  size_t n;
+  size_t base;
+  size_t extra;
 
   if (cap == 0)
     return NULL;
@@ -73,11 +76,12 @@ rtx_session_table_t *rtx_session_table_new(size_t cap) {
   if (!t)
     return NULL;
   n = cap < RTX_STRIPE_COUNT_MAX ? cap : RTX_STRIPE_COUNT_MAX;
-  t->stripes = calloc(n, sizeof *t->stripes);
+  t->stripes = aligned_alloc(CACHELINE, n * sizeof *t->stripes);
   if (!t->stripes) {
     free(t);
     return NULL;
   }
+  memset(t->stripes, 0, n * sizeof *t->stripes);
   t->stripe_count = n;
   base = cap / n; /* remainder spread over first `extra` stripes: total always == cap exactly */
   extra = cap % n;
@@ -108,7 +112,8 @@ static rtx_session_stripe_t *pick_stripe(rtx_session_table_t *t, const struct so
 
 static uint16_t stripe_next_seq(rtx_session_stripe_t *t, const struct sockaddr *addr, socklen_t addrlen) {
   time_t now = time(NULL);
-  size_t idx, found;
+  size_t idx;
+  size_t found;
   uint16_t seq;
 
   pthread_mutex_lock(&t->lock);

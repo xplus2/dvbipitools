@@ -2,17 +2,17 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include "qsbr.h"
+#include "lib/helper/seqlock.h"
 
 #include <sched.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <time.h>
 
-#define QSBR_CACHELINE 64
 #define QSBR_ONLINE 1u
 
 typedef struct {
-  _Alignas(QSBR_CACHELINE) _Atomic uint64_t v; /* odd: online, even: offline; quiescent adds 2 */
+  _Alignas(CACHELINE) _Atomic uint64_t v; /* odd: online, even: offline; quiescent adds 2 */
 } qsbr_slot_t;
 
 struct qsbr_domain {
@@ -28,7 +28,7 @@ qsbr_domain_t *qsbr_domain_create(int nworkers) {
   qsbr_domain_t *d = calloc(1, sizeof *d);
   if (!d) return NULL;
   if (nworkers < 1) nworkers = 1;
-  d->slot = aligned_alloc(QSBR_CACHELINE, (size_t)nworkers * sizeof *d->slot);
+  d->slot = aligned_alloc(CACHELINE, (size_t)nworkers * sizeof *d->slot);
   if (!d->slot) {
     free(d);
     return NULL;

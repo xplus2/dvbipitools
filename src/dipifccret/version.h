@@ -5,6 +5,6 @@
 #define DIPIFCCRET_VERSION_H
 
 #define TOOL_NAME    "dipifccret"
-#define TOOL_VERSION "3.3.3"
+#define TOOL_VERSION "3.3.4"
 
 #endif

@@ -150,11 +150,14 @@ START_TEST(http_async_completes_against_local_server) {
 END_TEST
 
 START_TEST(http_async_follows_redirect) {
-  unsigned port_a, port_b;
+  unsigned port_a;
+  unsigned port_b;
   int listen_a = make_listener(&port_a);
   int listen_b = make_listener(&port_b);
-  pthread_t th_a, th_b;
-  server_arg_t sarg_a, sarg_b;
+  pthread_t th_a;
+  pthread_t th_b;
+  server_arg_t sarg_a;
+  server_arg_t sarg_b;
   char resp_a[256];
   const char *resp_b = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nOK";
   char uri[64];

@@ -67,33 +67,23 @@ void emit_client_json(jbuf_t *j, int id, const ws_client_snapshot_t *e) {
   jbuf_str(j, "}");
 }
 
-void publish_client_event(const char *type, int id) {
-  ws_client_snapshot_t snap;
-  static _Thread_local jbuf_t j;
-  if (!ws_broadcast_has_sinks()) return;
-  jbuf_thread_own(&j);
-  if (strcmp(type, "clients.remove") == 0) {
-    jbuf_reset(&j);
-    jbuf_str(&j, "{\"type\":\"clients.remove\",\"id\":");
-    jbuf_i64(&j, id);
-    jbuf_str(&j, "}");
-    if (!j.failed) ws_broadcast_publish(j.buf);
-    return;
-  }
-  pthread_mutex_lock(&g_clients_mtx);
-  snapshot_client(&snap, &g_clients[id]);
-  pthread_mutex_unlock(&g_clients_mtx);
-  publish_client_event_snap(type, id, &snap);
-}
-
-void publish_client_event_snap(const char *type, int id, const ws_client_snapshot_t *snap) {
+void publish_client_remove(int id) {
   static _Thread_local jbuf_t j;
   if (!ws_broadcast_has_sinks()) return;
   jbuf_thread_own(&j);
   jbuf_reset(&j);
-  jbuf_str(&j, "{\"type\":\"");
-  jbuf_str(&j, type);
-  jbuf_str(&j, "\",\"client\":");
+  jbuf_str(&j, "{\"type\":\"clients.remove\",\"id\":");
+  jbuf_i64(&j, id);
+  jbuf_str(&j, "}");
+  if (!j.failed) ws_broadcast_publish(j.buf);
+}
+
+void publish_client_add(int id, const ws_client_snapshot_t *snap) {
+  static _Thread_local jbuf_t j;
+  if (!ws_broadcast_has_sinks()) return;
+  jbuf_thread_own(&j);
+  jbuf_reset(&j);
+  jbuf_str(&j, "{\"type\":\"clients.add\",\"client\":");
   emit_client_json(&j, id, snap);
   jbuf_str(&j, "}");
   if (!j.failed) ws_broadcast_publish(j.buf);

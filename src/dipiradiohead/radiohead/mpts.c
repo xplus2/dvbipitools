@@ -14,6 +14,7 @@
 #include "../input/source.h"
 #include "../mux/tspacketizer.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 /* lib/mux/mpts.c is tool-agnostic (shared with dipitvhead). these adapt our concrete types to its void*-based ops vtable. */
 static int mpts_program_get_sdt_info(void *ctx, psi_sdt_entry_t *out) {
@@ -145,224 +146,204 @@ int process_input_slot(mpts_tick_t *tk, unsigned i) {
   return 0;
 }
 
-int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
+typedef struct {
+  const config_t *cfg;
+  metrics_exporter_t *mx;
+  unsigned n;
   out_ctx_t out;
   meta_state_t metas[RADIOHEAD_MAX_INPUTS];
-  void *meta_ctxs[RADIOHEAD_MAX_INPUTS] = {0};
+  void *meta_ctxs[RADIOHEAD_MAX_INPUTS];
   tspacketizer_t *tsps[RADIOHEAD_MAX_INPUTS];
   uint64_t timeline[RADIOHEAD_MAX_INPUTS];
   uint64_t cas_prev_pts[RADIOHEAD_MAX_INPUTS]; /* leading input advance drives the shared CAS clock */
-  uint64_t cas_clock = 0;
+  uint64_t cas_clock;
   double pace_deadline[RADIOHEAD_MAX_INPUTS];
   int was_connected[RADIOHEAD_MAX_INPUTS];
   psi_pat_entry_t entries[RADIOHEAD_MAX_INPUTS];
   input_metrics_t input_stats[RADIOHEAD_MAX_INPUTS];
   unsigned long long last_synced_bytes[RADIOHEAD_MAX_INPUTS];
   radio_metrics_t rm;
-  int metrics_on = metrics_exporter_enabled(mx);
-  unsigned n = cfg->n_inputs;
-  inputset_t *is = NULL;
-  mpts_t *mpts = NULL;
-  cas_t *cas = NULL;
-  double start, last_stat = 0;
-  int rc = 0;
-  tsinspect_t *in_insp[RADIOHEAD_MAX_INPUTS] = {0};
+  int metrics_on;
+  inputset_t *is;
+  mpts_t *mpts;
+  cas_t *cas;
+  tsinspect_t *in_insp[RADIOHEAD_MAX_INPUTS];
   source_insp_t sins[RADIOHEAD_MAX_INPUTS];
-  tsinspect_set_t set = {in_insp, cfg->n_inputs, &out.insp, 1};
-  srtsink_queue_ctx_t qctx = {&out.srt, 1, metrics_queue_level(cfg->metrics_inspect_ts)};
+  tsinspect_set_t set;
+  srtsink_queue_ctx_t qctx;
+  unsigned rr_start;
+} mpts_run_t;
 
-  memset(&out, 0, sizeof out);
-  memset(metas, 0, sizeof metas);
-  memset(tsps, 0, sizeof tsps);
-  memset(timeline, 0, sizeof timeline);
-  memset(cas_prev_pts, 0, sizeof cas_prev_pts);
-  memset(pace_deadline, 0, sizeof pace_deadline);
-  memset(was_connected, 0, sizeof was_connected);
-  memset(input_stats, 0, sizeof input_stats);
-  memset(last_synced_bytes, 0, sizeof last_synced_bytes);
-  memset(&rm, 0, sizeof rm);
+static ts_packet_cb run_packet_cb(const mpts_run_t *r) { return r->out.insp ? &packet_cb_inspect : &packet_cb; }
 
-  if (radiohead_output_open(cfg, &out)) {
-    radiohead_output_close(&out);
-    return 1;
+static int run_setup(mpts_run_t *r) {
+  const config_t *cfg = r->cfg;
+  for (unsigned i = 0; i < r->n; i++) {
+    r->meta_ctxs[i] = &r->metas[i];
+    r->metas[i].rm = r->metrics_on ? &r->rm : NULL;
+    r->sins[i].slot = &r->in_insp[i];
+    r->sins[i].level = cfg->metrics_inspect_ts;
+    r->sins[i].known_pids = cfg->metrics_known_pids;
+    r->sins[i].n_known_pids = cfg->metrics_n_known_pids;
   }
-  if (out.insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &set);
-  if (out.srt && qctx.queue_metrics) metrics_exporter_add_extra(mx, srtsink_put_queue_metrics, &qctx);
-
-  for (unsigned i = 0; i < n; i++) {
-    meta_ctxs[i] = &metas[i];
-    metas[i].rm = metrics_on ? &rm : NULL;
-    sins[i].slot = &in_insp[i];
-    sins[i].level = cfg->metrics_inspect_ts;
-    sins[i].known_pids = cfg->metrics_known_pids;
-    sins[i].n_known_pids = cfg->metrics_n_known_pids;
+  r->is = inputset_new(cfg, meta_cb, r->meta_ctxs, r->metrics_on ? r->input_stats : NULL, r->sins);
+  if (!r->is) return -1;
+  for (unsigned i = 0; i < r->n; i++) {
+    r->entries[i].program_number = inputset_sid(r->is, i);
+    r->entries[i].pmt_pid = inputset_pmt_pid(r->is, i);
   }
-  is = inputset_new(cfg, meta_cb, meta_ctxs, metrics_on ? input_stats : NULL, sins);
-  if (!is) {
-    rc = 1;
-    goto done;
-  }
-  for (unsigned i = 0; i < n; i++) {
-    entries[i].program_number = inputset_sid(is, i);
-    entries[i].pmt_pid = inputset_pmt_pid(is, i);
-  }
-  mpts = mpts_new(cfg->tsid, cfg->onid, cfg->nit_text, entries, n, &mpts_program_ops);
-  if (!mpts) {
-    rc = 1;
-    goto done;
-  }
-
+  r->mpts = mpts_new(cfg->tsid, cfg->onid, cfg->nit_text, r->entries, r->n, &mpts_program_ops);
+  if (!r->mpts) return -1;
   if (cfg->cas_algo != CAS_ALGO_NONE || cfg->biss2_enabled || cfg->biss1_enabled || cfg->biss2_ca_enabled) {
     unsigned audio_pids[RADIOHEAD_MAX_INPUTS] = {0};
-    for (unsigned i = 0; i < n; i++) audio_pids[i] = inputset_audio_pid(is, i);
-    cas = cas_start(cfg, audio_pids, n);
-    if (!cas) {
+    for (unsigned i = 0; i < r->n; i++) audio_pids[i] = inputset_audio_pid(r->is, i);
+    r->cas = cas_start(cfg, audio_pids, r->n);
+    if (!r->cas) {
       log_code_ansi("RS300163", "cas: \e[0;31mfailed to start\e[0m");
-      rc = 1;
-      goto done;
+      return -1;
     }
-    radiohead_mpts_set_cas(mpts, cas);
+    radiohead_mpts_set_cas(r->mpts, r->cas);
   }
-  for (unsigned i = 0; i < n; i++) {
-    tsps[i] = program_new(cfg, is, cas, i, 0, 0);
-    if (!tsps[i]) {
-      rc = 1;
-      goto done;
-    }
+  for (unsigned i = 0; i < r->n; i++) {
+    r->tsps[i] = program_new(cfg, r->is, r->cas, i, 0, 0);
+    if (!r->tsps[i]) return -1;
   }
+  return 0;
+}
 
+static int build_poll(const mpts_run_t *r, struct pollfd *pfds, unsigned *pfd_slot, nfds_t *npfd) {
+  int timeout_ms = RADIOHEAD_POLL_MAX_MS;
+  time_t deadline = inputset_next_deadline(r->is);
+  double now_pre;
+  *npfd = 0;
+  if (deadline != INPUTSET_NEVER) {
+    long remain_s = (long)(deadline - (time_t)mono_seconds());
+    int remain_ms = remain_s <= 0 ? 0 : (int)(remain_s * 1000);
+    if (remain_ms < timeout_ms) timeout_ms = remain_ms;
+  }
+  now_pre = mono_seconds();
+  for (unsigned i = 0; i < r->n; i++) {
+    int fd = inputset_poll_fd(r->is, i);
+    double pcr_due = r->tsps[i] ? tspacketizer_pcr_next_due(r->tsps[i]) : -1.0;
+    if (pcr_due >= 0.0) {
+      int wait_ms = pcr_due <= now_pre ? 0 : 1 + (int)((pcr_due - now_pre) * 1000.0);
+      if (wait_ms < timeout_ms) timeout_ms = wait_ms;
+    }
+    if (fd < 0) {
+      if (inputset_source(r->is, i) && timeout_ms > RADIOHEAD_IDLE_WAIT_MS) timeout_ms = RADIOHEAD_IDLE_WAIT_MS;
+      continue;
+    }
+    /* sock readable, skip&sleep. avoid poll() spin. */
+    if (inputset_source(r->is, i) && r->pace_deadline[i] > now_pre + RADIOHEAD_PACE_TOLERANCE_S) {
+      /* ceil, not trunc */
+      int wait_ms = 1 + (int)((r->pace_deadline[i] - now_pre - RADIOHEAD_PACE_TOLERANCE_S) * 1000.0);
+      if (wait_ms < 1) wait_ms = 1;
+      if (wait_ms < timeout_ms) timeout_ms = wait_ms;
+      continue;
+    }
+    pfds[*npfd].fd = fd;
+    pfds[*npfd].events = inputset_poll_events(r->is, i);
+    pfds[*npfd].revents = 0;
+    pfd_slot[(*npfd)++] = i;
+  }
+  return timeout_ms;
+}
+
+static int cas_advance(mpts_run_t *r) {
+  uint64_t adv = 0;
+  for (unsigned i = 0; i < r->n; i++) {
+    uint64_t cur = timeline_pts(r->timeline[i]);
+    if (cur > r->cas_prev_pts[i] && cur - r->cas_prev_pts[i] > adv) adv = cur - r->cas_prev_pts[i];
+    r->cas_prev_pts[i] = cur;
+  }
+  if (adv) {
+    r->cas_clock += adv;
+    cas_clock_tick(r->cas, r->cas_clock);
+  }
+  return radiohead_cas_service(r->cas);
+}
+
+static int run_pass(mpts_run_t *r, double start, double *last_stat) {
+  struct pollfd pfds[RADIOHEAD_MAX_INPUTS];
+  unsigned pfd_slot[RADIOHEAD_MAX_INPUTS];
+  nfds_t npfd;
+  int timeout_ms = build_poll(r, pfds, pfd_slot, &npfd);
+  ts_packet_cb cb;
+  mpts_tick_t tk;
+  unsigned active = 0;
+  double now;
+  double now_pcr;
+  poll(npfd ? pfds : NULL, npfd, timeout_ms);
+  if (signal_stop_requested()) return 0;
+  radiohead_srt_service(&r->out);
+  now = mono_seconds();
+  for (unsigned i = 0; i < r->n; i++) inputset_service(r->is, i, (time_t)now);
+  tk = (mpts_tick_t){.is = r->is, .mpts = r->mpts, .cas = r->cas, .cfg = r->cfg, .tsps = r->tsps, .metas = r->metas, .timeline = r->timeline, .pace_deadline = r->pace_deadline,
+                     .was_connected = r->was_connected, .input_stats = r->input_stats, .last_synced_bytes = r->last_synced_bytes, .rm = &r->rm, .out = &r->out,
+                     .metrics_on = r->metrics_on, .now = now, .now_t = (time_t)now, .pfd_slot = pfd_slot, .pfds = pfds, .npfd = npfd,
+                     .ready_mask = compute_ready_mask(pfd_slot, pfds, npfd)};
+  r->out.cur_pts = (uint64_t)(now * 90000.0);
+  for (unsigned k = 0; k < r->n; k++)
+    if (process_input_slot(&tk, (r->rr_start + k) % r->n) != 0) return 1;
+  if (r->n) r->rr_start = (r->rr_start + 1) % r->n;
+  cb = run_packet_cb(r);
+  now_pcr = mono_seconds();
+  for (unsigned i = 0; i < r->n; i++) tspacketizer_pcr_flush(r->tsps[i], now_pcr, cb, &r->out);
+  /* PAT lists all programs: idle ones keep PMT */
+  for (unsigned i = 0; i < r->n; i++)
+    if (!r->was_connected[i] || now > r->pace_deadline[i] + RADIOHEAD_PACE_TOLERANCE_S) tspacketizer_idle(r->tsps[i], now, cb, &r->out);
+  if (r->out.insp) tsinspect_tick(r->out.insp, now);
+  mpts_tick(r->mpts, now, cb, &r->out);
+  if (r->cas && cas_advance(r)) return 1;
+  if (r->cfg->verbose && now - *last_stat >= 1.0) {
+    fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, r->out.packets);
+    fflush(stderr);
+    *last_stat = now;
+  }
+  for (unsigned i = 0; i < r->n; i++) active += r->was_connected[i] != 0;
+  flush_batch(&r->out); /* each pass: PCR must not wait for full datagram */
+  emit_metrics(r->mx, now, &r->out, r->n, active, r->input_stats, r->n, &r->rm, r->cas);
+  return 0;
+}
+
+static void run_teardown(mpts_run_t *r) {
+  if (r->cas) cas_flush(r->cas, run_packet_cb(r), &r->out);
+  flush_batch(&r->out);
+  for (unsigned i = 0; i < r->n; i++)
+    if (r->tsps[i]) tspacketizer_free(r->tsps[i]);
+  if (r->mpts) mpts_free(r->mpts);
+  if (r->is) inputset_free(r->is);
+  if (r->cas) cas_stop(r->cas);
+  metrics_exporter_clear_extras(r->mx);
+  for (unsigned i = 0; i < r->n; i++) tsinspect_free(r->in_insp[i]);
+  radiohead_output_close(&r->out);
+}
+
+int radiohead_run_mpts(const config_t *cfg, metrics_exporter_t *mx) {
+  mpts_run_t r;
+  double start;
+  double last_stat = 0;
+  int rc = 0;
+
+  memset(&r, 0, sizeof r);
+  r.cfg = cfg;
+  r.mx = mx;
+  r.n = cfg->n_inputs;
+  r.metrics_on = metrics_exporter_enabled(mx);
+  r.set = (tsinspect_set_t){r.in_insp, cfg->n_inputs, &r.out.insp, 1};
+  r.qctx = (srtsink_queue_ctx_t){&r.out.srt, 1, metrics_queue_level(cfg->metrics_inspect_ts)};
+  if (radiohead_output_open(cfg, &r.out)) {
+    radiohead_output_close(&r.out);
+    return 1;
+  }
+  if (r.out.insp) metrics_exporter_set_extra(mx, tsinspect_set_put, &r.set);
+  if (r.out.srt && r.qctx.queue_metrics) metrics_exporter_add_extra(mx, srtsink_put_queue_metrics, &r.qctx);
+
+  if (run_setup(&r)) rc = 1;
   start = mono_seconds();
-  unsigned rr_start = 0;
-  while (!signal_stop_requested()) {
-    struct pollfd pfds[RADIOHEAD_MAX_INPUTS];
-    unsigned pfd_slot[RADIOHEAD_MAX_INPUTS];
-    nfds_t npfd = 0;
-    double now;
-    double now_pre;
-    time_t now_t, deadline;
-    int timeout_ms = RADIOHEAD_POLL_MAX_MS;
-    mpts_tick_t tk;
-    unsigned active;
-    deadline = inputset_next_deadline(is);
-    if (deadline != INPUTSET_NEVER) {
-      long remain_s = (long)(deadline - (time_t)mono_seconds());
-      int remain_ms = remain_s <= 0 ? 0 : (int)(remain_s * 1000);
-      if (remain_ms < timeout_ms) timeout_ms = remain_ms;
-    }
-    now_pre = mono_seconds();
-    for (unsigned i = 0; i < n; i++) {
-      int fd = inputset_poll_fd(is, i);
-      double pcr_due = tsps[i] ? tspacketizer_pcr_next_due(tsps[i]) : -1.0;
-      if (pcr_due >= 0.0) {
-        int wait_ms = pcr_due <= now_pre ? 0 : 1 + (int)((pcr_due - now_pre) * 1000.0);
-        if (wait_ms < timeout_ms) timeout_ms = wait_ms;
-      }
-      if (fd < 0) {
-        if (inputset_source(is, i) && timeout_ms > RADIOHEAD_IDLE_WAIT_MS) timeout_ms = RADIOHEAD_IDLE_WAIT_MS;
-        continue;
-      }
-      /* sock readable, skip&sleep. avoid poll() spin. */
-      if (inputset_source(is, i) && pace_deadline[i] > now_pre + RADIOHEAD_PACE_TOLERANCE_S) {
-        /* ceil, not trunc */
-        int wait_ms = 1 + (int)((pace_deadline[i] - now_pre - RADIOHEAD_PACE_TOLERANCE_S) * 1000.0);
-        if (wait_ms < 1) wait_ms = 1;
-        if (wait_ms < timeout_ms) timeout_ms = wait_ms;
-        continue;
-      }
-      pfds[npfd].fd = fd;
-      pfds[npfd].events = inputset_poll_events(is, i);
-      pfds[npfd].revents = 0;
-      pfd_slot[npfd] = i;
-      npfd++;
-    }
-    poll(npfd ? pfds : NULL, npfd, timeout_ms);
-    if (signal_stop_requested()) break;
-    radiohead_srt_service(&out);
-    now = mono_seconds();
-    now_t = (time_t)now;
-    for (unsigned i = 0; i < n; i++) inputset_service(is, i, now_t);
+  while (!rc && !signal_stop_requested()) rc = run_pass(&r, start, &last_stat);
 
-    tk.is = is;
-    tk.mpts = mpts;
-    tk.cas = cas;
-    tk.cfg = cfg;
-    tk.tsps = tsps;
-    tk.metas = metas;
-    tk.timeline = timeline;
-    tk.pace_deadline = pace_deadline;
-    tk.was_connected = was_connected;
-    tk.input_stats = input_stats;
-    tk.last_synced_bytes = last_synced_bytes;
-    tk.rm = &rm;
-    tk.out = &out;
-    tk.metrics_on = metrics_on;
-    tk.now = now;
-    tk.now_t = now_t;
-    tk.pfd_slot = pfd_slot;
-    tk.pfds = pfds;
-    tk.npfd = npfd;
-    out.cur_pts = (uint64_t)(now * 90000.0);
-    tk.ready_mask = compute_ready_mask(pfd_slot, pfds, npfd);
-    for (unsigned k = 0; k < n; k++) {
-      unsigned i = (rr_start + k) % n;
-      if (process_input_slot(&tk, i) != 0) {
-        rc = 1;
-        goto done;
-      }
-    }
-    if (n) rr_start = (rr_start + 1) % n;
-    {
-      double now_pcr = mono_seconds();
-      for (unsigned i = 0; i < n; i++) tspacketizer_pcr_flush(tsps[i], now_pcr, out.insp ? &packet_cb_inspect : &packet_cb, &out);
-      /* PAT lists all programs: idle ones keep PMT */
-      for (unsigned i = 0; i < n; i++) {
-        if (!was_connected[i] || now > pace_deadline[i] + RADIOHEAD_PACE_TOLERANCE_S) tspacketizer_idle(tsps[i], now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
-      }
-    }
-
-    if (out.insp) tsinspect_tick(out.insp, now);
-    mpts_tick(mpts, now, out.insp ? &packet_cb_inspect : &packet_cb, &out);
-    if (cas) {
-      uint64_t adv = 0;
-      for (unsigned i = 0; i < n; i++) {
-        uint64_t cur = timeline_pts(timeline[i]);
-        if (cur > cas_prev_pts[i] && cur - cas_prev_pts[i] > adv) adv = cur - cas_prev_pts[i];
-        cas_prev_pts[i] = cur;
-      }
-      if (adv) {
-        cas_clock += adv;
-        cas_clock_tick(cas, cas_clock);
-      }
-      if (radiohead_cas_service(cas)) {
-        rc = 1;
-        goto done;
-      }
-    }
-    if (cfg->verbose && now - last_stat >= 1.0) {
-      fprintf(stderr, "\r%.0fs, %llu TS packets\033[K", now - start, out.packets);
-      fflush(stderr);
-      last_stat = now;
-    }
-    active = 0;
-    for (unsigned i = 0; i < n; i++) {
-      if (was_connected[i]) active++;
-    }
-    flush_batch(&out); /* each pass: PCR must not wait for full datagram */
-    emit_metrics(mx, now, &out, n, active, input_stats, n, &rm, cas);
-  }
-
-done:
-  if (cas) cas_flush(cas, out.insp ? &packet_cb_inspect : &packet_cb, &out);
-  flush_batch(&out);
-  for (unsigned i = 0; i < n; i++) {
-    if (tsps[i]) tspacketizer_free(tsps[i]);
-  }
-  if (mpts) mpts_free(mpts);
-  if (is) inputset_free(is);
-  if (cas) cas_stop(cas);
-  metrics_exporter_clear_extras(mx);
-  for (unsigned i = 0; i < n; i++) tsinspect_free(in_insp[i]);
-  radiohead_output_close(&out);
+  run_teardown(&r);
   if (cfg->verbose && log_stderr_is_tty()) fputc('\n', stderr);
   if (rc == 0) log_line("stopped.");
   return rc;

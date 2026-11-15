@@ -6,7 +6,6 @@
 #include <openssl/hmac.h>
 
 #include "lib/cas/des.h"
-#include "lib/demux/crc32.h"
 #include "lib/helper/secure_zero.h"
 
 #include "crypto.h"
@@ -54,7 +53,9 @@ int crypto_ecm_block_decrypt(crypto_ecm_cipher_t cipher, int cbc, const unsigned
                               const unsigned char *iv, const unsigned char *ct, size_t ct_len, unsigned char *out) {
   const EVP_CIPHER *evp = ecm_evp_cipher(cipher, cbc);
   EVP_CIPHER_CTX *ctx;
-  int len = 0, finlen = 0, ret = -1;
+  int len = 0;
+  int finlen = 0;
+  int ret = -1;
   if (cipher == CRYPTO_ECM_DES_EDE || cipher == CRYPTO_ECM_DES_EDE3) return ecm_des3_decrypt(cipher, cbc, key, iv, ct, ct_len, out);
   if (!evp || ct_len == 0) return -1;
   ctx = EVP_CIPHER_CTX_new();
@@ -71,11 +72,14 @@ done:
 }
 
 int crypto_ecm_gcm_decrypt(int key_bits, const unsigned char *key, const unsigned char nonce[CRYPTO_GCM_NONCE_LEN],
-                            const unsigned char *aad, size_t aad_len, const unsigned char *ct, size_t ct_len,
-                            const unsigned char tag[CRYPTO_GCM_TAG_LEN], unsigned char *out) {
+  const unsigned char *aad, size_t aad_len, const unsigned char *ct, size_t ct_len, const unsigned char tag[CRYPTO_GCM_TAG_LEN], unsigned char *out) {
+
   const EVP_CIPHER *evp = key_bits == 128 ? EVP_aes_128_gcm() : EVP_aes_256_gcm();
   EVP_CIPHER_CTX *ctx;
-  int discard = 0, outlen = 0, finlen = 0, ret = -1;
+  int discard = 0;
+  int outlen = 0;
+  int finlen = 0;
+  int ret = -1;
 
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx) return -1;
@@ -115,8 +119,4 @@ int crypto_hkdf_sha256(const unsigned char key[CRYPTO_KEY_LEN], const char *info
   ret = crypto_hmac_sha256(prk, t1_input, infolen + 1, out); /* expand, single block */
   secure_zero(prk, sizeof prk);
   return ret;
-}
-
-uint32_t crypto_crc32(int castagnoli, const unsigned char *data, size_t len) {
-  return crc32_zlib(castagnoli, data, len);
 }

@@ -66,7 +66,7 @@ static void decode_locators(const unsigned char *b, size_t n, const unsigned cha
   bitreader_init(&br, b, n);
   (void)dvb_locator_decode_st(&br, NULL, &st, out, 8);
   bitreader_init(&br, b, n);
-  (void)dvb_locator_decode(&br, &sr, out, sizeof out);
+  (void)dvb_locator_decode_st(&br, &sr, &(dvb_codec_state_t){0}, out, sizeof out);
 }
 
 START_TEST(dvbtypes_locators_round_trip_and_survive_damage) {
@@ -185,7 +185,7 @@ START_TEST(dvbtypes_durations_and_terms_round_trip_and_survive_damage) {
       for (size_t i = 0; i < sizeof terms / sizeof terms[0]; i++)
         if (dvb_controlledterm_decode_cs(&br, &sr, use, out, bit % 2 ? sizeof out : 10)) break;
       bitreader_init(&br, copy, n);
-      (void)dvb_controlledterm_decode(&br, &sr, out, sizeof out);
+      (void)dvb_controlledterm_decode_cs(&br, &sr, NULL, out, sizeof out);
       if (bit < n * 8) copy[bit / 8] ^= (unsigned char)(0x80u >> (bit % 8));
     }
     for (size_t cut = 0; cut < n; cut++) {

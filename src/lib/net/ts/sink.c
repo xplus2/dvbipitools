@@ -10,10 +10,10 @@
 #include "lib/helper/log.h"
 #include "lib/mux/fec2022.h"
 #include "lib/mux/rtpheader.h"
-#include "lib/sys/signal.h"
 
 #include "../multicast.h"
 #include "sink.h"
+#include "lib/helper/dateutil.h"
 
 #define TS_PER_DGRAM 7 /* 7*188 = 1316B, fits one Ethernet MTU with RTP/UDP/IP headroom */
 #define AL_FEC_PT 96
@@ -92,30 +92,46 @@ static int write_all(int fd, const unsigned char *p, size_t n) {
   return 0;
 }
 
-static int write_net(tssink_t *s, const unsigned char *buf, size_t n) {
-  unsigned char hdr[12];
+#define SINK_SEND_BATCH 16
+
+static int write_net_fec(tssink_t *s, const unsigned char *buf, size_t n) {
   unsigned char dgram[12 + TS_PER_DGRAM * 188];
   unsigned char repair[FEC2022_MAX_REPAIR];
   while (n) {
     size_t chunk = n < TS_PER_DGRAM * 188 ? n : TS_PER_DGRAM * 188;
+    uint32_t ts90k = (uint32_t)(uint64_t)(mono_seconds() * 90000.0);
     size_t rlen;
-    if (s->rtph) {
-      uint32_t ts90k = (uint32_t)(uint64_t)(mono_seconds() * 90000.0);
-      if (s->fec_enc) {
-        rtpheader_build(s->rtph, ts90k, dgram, 12);
-        memcpy(dgram + 12, buf, chunk);
-        if (mcast_send(s->mc, dgram, 12 + chunk) < 0) return -1;
-        rlen = fec2022_enc_feed(s->fec_enc, dgram, 12 + chunk, ts90k, repair, sizeof repair);
-        if (rlen && mcast_send(s->fec_mc, repair, rlen) < 0) return -1;
-      } else {
-        rtpheader_build(s->rtph, ts90k, hdr, 12);
-        if (mcast_sendv(s->mc, hdr, 12, buf, chunk) < 0) return -1;
-      }
-    } else if (mcast_send(s->mc, buf, chunk) < 0) {
-      return -1;
-    }
+    rtpheader_build(s->rtph, ts90k, dgram, 12);
+    memcpy(dgram + 12, buf, chunk);
+    if (mcast_send(s->mc, dgram, 12 + chunk) < 0) return -1;
+    rlen = fec2022_enc_feed(s->fec_enc, dgram, 12 + chunk, ts90k, repair, sizeof repair);
+    if (rlen && mcast_send(s->fec_mc, repair, rlen) < 0) return -1;
     buf += chunk;
     n -= chunk;
+  }
+  return 0;
+}
+
+static int write_net(tssink_t *s, const unsigned char *buf, size_t n) {
+  unsigned char hdr[SINK_SEND_BATCH][12];
+  const void *hp[SINK_SEND_BATCH];
+  const void *pp[SINK_SEND_BATCH];
+  size_t pl[SINK_SEND_BATCH];
+  int k = 0;
+  if (s->fec_enc) return write_net_fec(s, buf, n);
+  while (n) {
+    size_t chunk = n < TS_PER_DGRAM * 188 ? n : TS_PER_DGRAM * 188;
+    if (s->rtph) rtpheader_build(s->rtph, (uint32_t)(uint64_t)(mono_seconds() * 90000.0), hdr[k], 12);
+    hp[k] = hdr[k];
+    pp[k] = buf;
+    pl[k] = chunk;
+    k++;
+    buf += chunk;
+    n -= chunk;
+    if (k == SINK_SEND_BATCH || !n) {
+      if (mcast_send_batch(s->mc, hp, s->rtph ? 12 : 0, pp, pl, k)) return -1;
+      k = 0;
+    }
   }
   return 0;
 }

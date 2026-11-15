@@ -2,33 +2,38 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/mux/fec2022.h"
 #include "lib/net/netconnect.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+
+static const yamlcfg_opt_t opts[] = {
+    {OPT_AL_FEC, "al-fec", "RS000154", "invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", 0},
+    {OPT_AL_FEC_PORT, "al-fec-port", "RS000155", "invalid --al-fec-port: %s", 0},
+    {OPT_RIST_ENCRYPTION_TYPE, "rist.encryption-type", "RS000358", "invalid --rist-encryption-type: %s (" ARGUTIL_RIST_KEY_SIZE_HINT ")", 0},
+    {OPT_RIST_CNAME, "rist.cname", "LS000685", "--rist-cname too long", 0},
+    {OPT_RIST_BUFFER, "rist.buffer", "RS000511", "invalid --rist-buffer: %s (ms)", 0},
+    {OPT_SRT_PASSPHRASE, "srt.passphrase", "LS000685", "--srt-passphrase too long", 0},
+    {OPT_SRT_PBKEYLEN, "srt.pbkeylen", "RS000361", "invalid --srt-pbkeylen: %s (" ARGUTIL_SRT_PBKEYLEN_HINT ")", 0},
+    {OPT_SRT_STREAMID, "srt.streamid", "LS000685", "--srt-streamid too long", 0},
+    {OPT_SRT_PACKETFILTER, "srt.packetfilter", "LS000685", "--srt-packetfilter too long", 0},
+    {OPT_SRT_LATENCY, "srt.latency", "RS000362", "invalid --srt-latency: %s (1..60000 ms)", 0},
+};
 
 args_status_t rdh_opt_net(rdh_opt_t *p, int c) {
   config_t *cfg = p->cfg;
 
+  switch (yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), rdh_cfg_keys, rdh_cfg_nkeys, cfg, c, optarg)) {
+    case 1: return ARGS_OK;
+    case -1: return ARGS_ERR;
+    default: break;
+  }
   switch (c) {
     case OPT_DSCP:
       if (argutil_int_opt(TOOL_NAME, "RS000106", "dscp", optarg, net_dscp_parse, NET_DSCP_NAMES, &cfg->dscp)) return ARGS_ERR;
-      break;
-    case OPT_AL_FEC:
-      if (fec2022_parse_ld(optarg, &cfg->al_fec_l, &cfg->al_fec_d)) {
-        argerr("RS000154", "invalid --al-fec: %s (want L:D, L*D<=400, L<=40)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_AL_FEC_PORT:
-      if (argutil_port_parse(optarg, &cfg->al_fec_port)) {
-        argerr("RS000155", "invalid --al-fec-port: %s", optarg);
-        return ARGS_ERR;
-      }
       break;
     case 'R':
       if (!p->cli_peers) {
@@ -79,59 +84,9 @@ args_status_t rdh_opt_net(rdh_opt_t *p, int c) {
         return ARGS_ERR;
       p->have_secret = 1;
       break;
-    case OPT_RIST_ENCRYPTION_TYPE:
-      if (argutil_rist_key_size(optarg, &cfg->rist_key_size)) {
-        argerr("RS000358", "invalid --rist-encryption-type: %s (128|256)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_RIST_CNAME:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->rist_cname, sizeof cfg->rist_cname, optarg, "--rist-cname"))
-        return ARGS_ERR;
-      break;
-    case OPT_RIST_BUFFER: {
-      unsigned v;
-      if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-        argerr("RS000511", "invalid --rist-buffer: %s (ms)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->rist_buffer_ms = v;
-      break;
-    }
     case OPT_SRT_GROUP_MODE:
       p->srt_group_mode_arg = optarg;
       break;
-    case OPT_SRT_PASSPHRASE:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_passphrase, sizeof cfg->srt_passphrase, optarg, "--srt-passphrase"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_PBKEYLEN: {
-      char *end;
-      unsigned long v = strtoul(optarg, &end, 10);
-      if (*end != '\0' || (v != 16 && v != 24 && v != 32)) {
-        argerr("RS000361", "invalid --srt-pbkeylen: %s (16|24|32)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->srt_pbkeylen = (int)v;
-      break;
-    }
-    case OPT_SRT_STREAMID:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_streamid, sizeof cfg->srt_streamid, optarg, "--srt-streamid"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_PACKETFILTER:
-      if (argutil_bufcpy_opt(TOOL_NAME, cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, optarg, "--srt-packetfilter"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_LATENCY: {
-      unsigned v;
-      if (argutil_uint_range(optarg, 1, 60000, &v)) {
-        argerr("RS000362", "invalid --srt-latency: %s (1..60000 ms)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->srt_latency_ms = v;
-      break;
-    }
     default:
       return OPT_UNHANDLED;
   }

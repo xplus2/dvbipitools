@@ -6,7 +6,8 @@
 
 #include "lib/helper/beutil.h"
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
+#include "lib/helper/growutil.h"
 #include "lib/helper/log.h"
 
 #include "../version.h"

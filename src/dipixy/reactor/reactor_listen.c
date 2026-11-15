@@ -4,9 +4,7 @@
 #define _GNU_SOURCE
 #include "internal.h"
 #include "reactor_tls.h"
-#include "../dash/lldash.h"
-#include "../segment/mp4push.h"
-#include "../ts/ts_push.h"
+#include "wake.h"
 #include "../version.h"
 #ifdef HAVE_HTTP3
 #include "../http3/http3.h"
@@ -111,22 +109,10 @@ int reactor_setup_listeners(reactor_listeners_t *rl, int epfd, int tid) {
   }
 #endif
 
-  rl->tspush_efd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-  if (rl->tspush_efd >= 0) {
-    ts_push_register_reactor_efd(tid, rl->tspush_efd);
-    rl->L[rl->nL++] = (reactor_listener){rl->tspush_efd, 0, RL_TSPUSH_EFD};
-  }
-
-  rl->dashchunk_efd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-  if (rl->dashchunk_efd >= 0) {
-    dash_lldash_register_reactor_efd(tid, rl->dashchunk_efd);
-    rl->L[rl->nL++] = (reactor_listener){rl->dashchunk_efd, 0, RL_DASHCHUNK_EFD};
-  }
-
-  rl->mp4push_efd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-  if (rl->mp4push_efd >= 0) {
-    mp4push_register_reactor_efd(tid, rl->mp4push_efd);
-    rl->L[rl->nL++] = (reactor_listener){rl->mp4push_efd, 0, RL_MP4PUSH_EFD};
+  rl->wake_efd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+  if (rl->wake_efd >= 0) {
+    reactor_wake_register(tid, rl->wake_efd);
+    rl->L[rl->nL++] = (reactor_listener){rl->wake_efd, 0, RL_WAKE_EFD};
   }
 
   for (int i = 0; i < rl->nL; i++) {

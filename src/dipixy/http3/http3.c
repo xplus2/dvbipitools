@@ -7,6 +7,7 @@
 
 #include "http3.h"
 #include "http3_int.h"
+#include "lib/helper/dateutil.h"
 
 #include <sys/socket.h>
 
@@ -52,7 +53,7 @@ static void handle_dgram(int udp_fd, const h3_rx_t *rx, const struct sockaddr_st
     if (!c) return;
   }
   /* ts sampled after conn: h3conn_new() seeds ngtcp2 initial_ts, read_pkt ts >= that (ngtcp2 monotonic) */
-  ngtcp2_tstamp ts = h3_ts();
+  ngtcp2_tstamp ts = now_ns();
   c->last_rx = ts;
   ngtcp2_path_storage ps;
   ngtcp2_path_storage_zero(&ps);
@@ -116,7 +117,7 @@ void h3_handle_readable(int udp_fd) {
 /* ms until nearest QUIC timer across this thread's conns, for epoll_wait sizing. -1 = no active HTTP/3 conns. */
 int h3_next_timeout_ms(void) {
   if (!t_h3_init || t_h3_active_cnt == 0) return -1;
-  ngtcp2_tstamp now = h3_ts();
+  ngtcp2_tstamp now = now_ns();
   ngtcp2_tstamp nearest = UINT64_MAX;
   for (int i = 0; i < t_h3_active_cnt; i++) {
     ngtcp2_tstamp expiry = ngtcp2_conn_get_expiry(t_h3_active[i]->qconn);
@@ -129,7 +130,7 @@ int h3_next_timeout_ms(void) {
 
 void h3_tick(void) {
   if (!t_h3_init) return;
-  ngtcp2_tstamp now = h3_ts();
+  ngtcp2_tstamp now = now_ns();
   for (int i = 0; i < t_h3_active_cnt; ) {
     h3_conn_t *c = t_h3_active[i];
     if (now - c->last_rx > g_h3_idle_ns) {

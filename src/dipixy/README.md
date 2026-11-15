@@ -31,7 +31,6 @@ dipixy [-l addr:port] [-i source ...] [options]
 |      | `--max-channels`         | `<n>`                       | `32`, concurrency (source,filter,pmt,container)   |       |
 |      | `--max-variants`         | `<n>`                       | `8`, variants per source (filter,pmt,container)   |       |
 |      | `--idle-timeout`         | `<seconds>`                 | `60` (0 = off), close idle connections            |       |
-|      | `--capture-ring-size`    | `<KiB>`                     | `4096`, max `262144`, per-source ingress buffer   |       |
 |      | `--ts-startup-timeout`   | `<seconds>`                 | `5`, wait for a source's 1st packet, `0` = off    |       |
 | `-i` | `--input`                | `<source>`                  | none, repeatable                                  |       |
 | `-n` | `--name`                 | `<name>`                    | none, names the input                             | input |
@@ -342,7 +341,6 @@ For sizing, the following factors should be considered (spoiler: basically just 
     + The number of different concurrent clients to support (`--max-clients` ). It defaults to `256` as a reasonable 
       pre-allocated middle-ground for lab/home scenario. Set it much lower to run it on a modem/gateway or as high as
       your installed memory allows for "infrastructure" operation. 
-    + `--capture-ring-size` is the third knob to tweak.
     + To a smaller extent, if you enable HTTP/2 and/or HTTP/3, because of their inherent memory needs.
   * Network throughput
 

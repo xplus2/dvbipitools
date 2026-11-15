@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/vendor/libyaml/yaml.h"
 #include "yamlcfg.h"
@@ -44,7 +44,7 @@ typedef struct {
 } walk_t;
 
 static void code_for(const yamlcfg_t *y, const char *code, char *out, size_t n) {
-  snprintf(out, n, "%s", code);
+  bufcpy(out, n, code);
   out[1] = y->strict ? 'S' : 'A';
 }
 
@@ -105,7 +105,7 @@ int yamlcfg_report(const yamlcfg_t *y) {
   if (y->strict || !y->errors) n += y->warnings;
   const char *noun = as_error ? "error" : "warning";
   char cb[16];
-  snprintf(cb, sizeof cb, "%s", as_error ? "LS700001" : "LA700001");
+  bufcpy(cb, sizeof cb, as_error ? "LS700001" : "LA700001");
   if (n) argutil_err(y->tool, cb, "%s: %u %s%s", y->path, n, noun, n == 1 ? "" : "s");
   else   argutil_err(y->tool, NULL, "%s: ok", y->path);
   return as_error && n ? -1 : 0;
@@ -409,6 +409,42 @@ int yamlcfg_add_str(void **pool, const char **list, int *n, int max, const char 
   return 0;
 }
 
+/* CLI values: argv outlives cfg, set_str keeps the pointer */
+static _Thread_local int t_borrow;
+
+int yamlcfg_opt_apply(const char *tool, const yamlcfg_opt_t *opts, size_t nopts, const yamlcfg_key_t *keys, size_t nkeys, void *cfg, int opt, const char *val) {
+  char err[256];
+  for (size_t i = 0; i < nopts; i++) {
+    if (opts[i].opt != opt) continue;
+    for (size_t k = 0; k < nkeys; k++) {
+      int rc;
+      if (strcmp(keys[k].key, opts[i].key)) continue;
+      t_borrow = 1;
+      rc = keys[k].apply(cfg, val, err, sizeof err);
+      t_borrow = 0;
+      if (!rc) return 1;
+      argutil_err(tool, opts[i].code, opts[i].fmt, opts[i].fmt_err ? err : val);
+      return -1;
+    }
+    return 0;
+  }
+  return 0;
+}
+
+int yamlcfg_bad(char *err, size_t errsz, const char *val, const char *want) {
+  snprintf(err, errsz, "invalid '%s' (%s)", val, want);
+  return -1;
+}
+
+int yamlcfg_set_buf(char *dst, size_t sz, const char *val, char *err, size_t errsz) {
+  if (strlen(val) >= sz) {
+    snprintf(err, errsz, "too long (max %zu)", sz - 1);
+    return -1;
+  }
+  bufcpy(dst, sz, val);
+  return 0;
+}
+
 int yamlcfg_set_str(void **pool, const char **dst, const char *val, char *err, size_t errsz) {
   size_t n = strlen(val);
   strnode_t *node;
@@ -416,6 +452,10 @@ int yamlcfg_set_str(void **pool, const char **dst, const char *val, char *err, s
   if (!n) {
     bufcpy(err, errsz, "empty value");
     return -1;
+  }
+  if (t_borrow) {
+    *dst = val;
+    return 0;
   }
   node = malloc(sizeof *node + n + 1);
   if (!node) {
@@ -468,10 +508,7 @@ int yamlcfg_set_double(double *dst, const char *val, double min, double max, int
 }
 
 int yamlcfg_set_lang(char *dst, const char *val, char *err, size_t errsz) {
-  if (strlen(val) != 3) {
-    snprintf(err, errsz, "invalid '%s' (3-letter ISO 639-2 code)", val);
-    return -1;
-  }
+  if (strlen(val) != 3) return yamlcfg_bad(err, errsz, val, "3-letter ISO 639-2 code");
   memcpy(dst, val, 3);
   dst[3] = 0;
   return 0;
@@ -493,10 +530,7 @@ int yamlcfg_set_addrport(int *family, char *addr, size_t addrsz, unsigned *port,
 
 int yamlcfg_set_color(int *dst, const char *val, char *err, size_t errsz) {
   log_color_t v;
-  if (log_color_from_string(val, &v)) {
-    snprintf(err, errsz, "invalid '%s' (auto|always|never)", val);
-    return -1;
-  }
+  if (log_color_from_string(val, &v)) return yamlcfg_bad(err, errsz, val, "auto|always|never");
   *dst = v;
   return 0;
 }
@@ -516,11 +550,7 @@ int yamlcfg_set_u8(unsigned char *dst, const char *val, unsigned max, char *err,
 }
 
 int yamlcfg_set_int_by(int *dst, const char *val, int (*parse)(const char *s, int *out), const char *hint, char *err, size_t errsz) {
-  if (parse(val, dst)) {
-    snprintf(err, errsz, "invalid '%s' (%s)", val, hint);
-    return -1;
-  }
-  return 0;
+  return parse(val, dst) ? yamlcfg_bad(err, errsz, val, hint) : 0;
 }
 
 void yamlcfg_warn_if(yamlcfg_t *y, int cond, const char *code, const char *msg) {

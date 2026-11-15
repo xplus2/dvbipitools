@@ -6,7 +6,8 @@
 START_TEST(full_chain_csa2_recovers_cw) {
   EVP_PKEY *pub;
   device_state_t *d = make_device(&pub);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
   unsigned char cw[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
   unsigned char buf[1024];
   unsigned char cw_out[16];
@@ -37,7 +38,8 @@ START_TEST(resolve_cw_ignores_srvid_mismatch_with_one_cached_service) {
   /* --sid need not equal the CAS's service_id - mux-wide CW, one session per process */
   EVP_PKEY *pub;
   device_state_t *d = make_device(&pub);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
   unsigned char cw[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
   unsigned char buf[1024];
   unsigned char cw_out[16];
@@ -67,7 +69,8 @@ END_TEST
 START_TEST(max_services_override_drops_emm_g_past_cap) {
   EVP_PKEY *pub;
   device_state_t *d = make_device_serial(&pub, TEST_SERIAL, 2);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
   unsigned char buf[1024];
   size_t n;
 
@@ -164,7 +167,8 @@ END_TEST
 START_TEST(resolve_cw_rejects_bad_cw_len) {
   EVP_PKEY *pub;
   device_state_t *d = make_device(&pub);
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
   unsigned char cw[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
   unsigned char buf[1024];
   unsigned char cw_out[16];

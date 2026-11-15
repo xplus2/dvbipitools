@@ -84,15 +84,14 @@ int hls_store_anchor_at(hls_store_t *s, uint64_t wall_ms) {
   g_anchor_ms = wall_ms;
   return 0;
 }
-hls_store_t *hls_store_find(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container) {
-  (void)ctx; (void)filter; (void)pmt_pid; (void)lcevc;
+hls_store_t *hls_store_find(const stream_key_t *k) {
   if (!g_track_stores) return NULL;
-  if (container == SEG_CONTAINER_FMP4_VIDEO) return (hls_store_t *)&g_vstore_dummy;
-  if (container == SEG_CONTAINER_FMP4_AUDIO) return (hls_store_t *)&g_astore_dummy;
+  if (k->container == SEG_CONTAINER_FMP4_VIDEO) return (hls_store_t *)&g_vstore_dummy;
+  if (k->container == SEG_CONTAINER_FMP4_AUDIO) return (hls_store_t *)&g_astore_dummy;
   return (hls_store_t *)&g_store_dummy;
 }
-void hls_store_open(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, double seg_target, int max_segs, seg_container_t container) {
-  (void)ctx; (void)filter; (void)pmt_pid; (void)lcevc; (void)seg_target; (void)max_segs; (void)container;
+void hls_store_open(const stream_key_t *k, double seg_target, int max_segs) {
+  (void)k; (void)seg_target; (void)max_segs;
 }
 int hls_set_audio_params_at(hls_store_t *s, unsigned rate, hls_chcfg_t scheme, unsigned value) {
   g_audio_scheme = scheme;

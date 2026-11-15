@@ -11,10 +11,10 @@
 #include "lib/demux/tspack.h"
 #include "lib/helper/log.h"
 #include "lib/helper/secure_zero.h"
-#include "lib/sys/signal.h"
 
 #include "pipeline.h"
 #include "version.h"
+#include "lib/helper/dateutil.h"
 
 #define BISS_CA_SYSTEM_ID_CA 0x2610
 
@@ -75,7 +75,7 @@ void srt_service_all(loop_ctx_t *lc) {
   }
 }
 
-void pipeline_ecm_cache_invalidate(loop_ctx_t *lc) {
+static void pipeline_ecm_cache_invalidate(loop_ctx_t *lc) {
   lc->last_ecm_len[0] = 0;
   lc->last_ecm_len[1] = 0;
 }

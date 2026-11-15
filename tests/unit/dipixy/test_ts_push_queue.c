@@ -8,6 +8,7 @@
 #include <sys/eventfd.h>
 #include <unistd.h>
 
+#include "dipixy/reactor/wake.h"
 #include "dipixy/segment/pidlock.h"
 #include "lib/demux/crc32.h"
 #include "lib/demux/psi/psi.h"
@@ -170,17 +171,18 @@ void conn_request_close(conn_t *c) {
 static ts_sub_t *alive_sub(int idx, uint32_t ring_bytes) {
   ts_sub_t *s = &g_ts_subs[idx];
 
-  s->proto = CONN_PROTO_H1;
-  s->reactor_tid = -1;
-  s->ws_handle = -1;
+  s->h.proto = CONN_PROTO_H1;
+  s->h.reactor_tid = -1;
+  s->h.ws_handle = -1;
   byte_ring_reset(&s->pkt_ring, ring_bytes);
-  atomic_store(&s->alive, TS_SUB_ALIVE);
+  atomic_store(&s->h.alive, TS_SUB_ALIVE);
   return s;
 }
 
 START_TEST(queue_stats_report_bytes_and_fullest_ring) {
   ts_push_queue_stats_t st;
-  ts_sub_t *a, *b;
+  ts_sub_t *a;
+  ts_sub_t *b;
   uint8_t chunk[1000];
   uint8_t sink[4096];
 
@@ -205,7 +207,7 @@ START_TEST(queue_stats_report_bytes_and_fullest_ring) {
   ck_assert_uint_eq(st.bytes, 1500u);
   ck_assert_uint_eq(st.max_bytes, 1000u);
 
-  atomic_store(&b->alive, TS_SUB_FREE);
+  atomic_store(&b->h.alive, TS_SUB_FREE);
   ts_push_queue_stats(&st, 0.0);
   ck_assert_uint_eq(st.bytes, 500u);
 }
@@ -239,7 +241,7 @@ START_TEST(queue_ms_follows_enqueue_rate_between_calls) {
   ck_assert_int_eq(st.ms_known, 1);
   ck_assert_uint_eq(st.max_ms, 0u);
 
-  atomic_store(&a->alive, TS_SUB_FREE);
+  atomic_store(&a->h.alive, TS_SUB_FREE);
   ts_push_queue_stats(&st, 3.0);
   ck_assert_int_eq(st.ms_known, 0);
   a = alive_sub(0, 4096);
@@ -288,13 +290,13 @@ START_TEST(drop_sub_h1_closes_conn_and_frees_slot) {
 
   ts_push_init(0, 4);
   a = alive_sub(0, 4096);
-  a->proto = CONN_PROTO_H1;
+  a->h.proto = CONN_PROTO_H1;
   g_conn_request_close_calls = 0;
 
   ts_push_drop_sub(a, 0);
 
   ck_assert_int_eq(g_conn_request_close_calls, 1);
-  ck_assert_int_eq(atomic_load(&a->alive), TS_SUB_FREE);
+  ck_assert_int_eq(atomic_load(&a->h.alive), TS_SUB_FREE);
 }
 END_TEST
 
@@ -303,13 +305,13 @@ START_TEST(drop_sub_h2_skips_conn_close_but_frees_slot) {
 
   ts_push_init(0, 4);
   a = alive_sub(0, 4096);
-  a->proto = CONN_PROTO_H2;
+  a->h.proto = CONN_PROTO_H2;
   g_conn_request_close_calls = 0;
 
   ts_push_drop_sub(a, 0);
 
   ck_assert_int_eq(g_conn_request_close_calls, 0);
-  ck_assert_int_eq(atomic_load(&a->alive), TS_SUB_FREE);
+  ck_assert_int_eq(atomic_load(&a->h.alive), TS_SUB_FREE);
 }
 END_TEST
 
@@ -329,8 +331,8 @@ static void reset_fakes(void) {
 static ts_sub_t *attached_sub(int idx, conn_proto_t proto, int fd, int tid) {
   ts_sub_t *s = alive_sub(idx, 4096);
 
-  s->proto = proto;
-  s->fd = fd;
+  s->h.proto = proto;
+  s->h.fd = fd;
   byte_ring_reset(&s->h2_ring, 4096);
   byte_ring_reset(&s->h3_ring, 4096);
   atomic_store(&s->ready, 1);
@@ -354,7 +356,7 @@ START_TEST(flush_drains_h1_ring_into_the_connection) {
   ck_assert_uint_eq(g_sent_len[3], sizeof chunk);
   ck_assert_mem_eq(g_sent[3], chunk, sizeof chunk);
   ck_assert_int_eq(g_sent_calls[3], 1);
-  ck_assert_int_eq(atomic_load(&a->alive), TS_SUB_ALIVE);
+  ck_assert_int_eq(atomic_load(&a->h.alive), TS_SUB_ALIVE);
   ts_push_flush_ready(0);
   ck_assert_int_eq(g_sent_calls[3], 1);
 }
@@ -400,7 +402,7 @@ START_TEST(flush_drops_a_sub_whose_connection_is_gone) {
   g_gone_fd = 4;
   atomic_store(&g_ts_active_count, 1);
   ts_push_flush_ready(0);
-  ck_assert_int_eq(atomic_load(&a->alive), TS_SUB_FREE);
+  ck_assert_int_eq(atomic_load(&a->h.alive), TS_SUB_FREE);
   ck_assert_int_eq(g_conn_request_close_calls, 0);
   ck_assert_int_eq(ts_push_active_count(), 0);
 }
@@ -417,7 +419,7 @@ START_TEST(flush_drops_a_sub_when_the_send_fails) {
   g_send_fail_fd = 5;
   atomic_store(&g_ts_active_count, 1);
   ts_push_flush_ready(0);
-  ck_assert_int_eq(atomic_load(&a->alive), TS_SUB_FREE);
+  ck_assert_int_eq(atomic_load(&a->h.alive), TS_SUB_FREE);
   ck_assert_int_eq(g_conn_request_close_calls, 1);
   ck_assert_int_eq(g_sent_calls[5], 0);
   ck_assert_int_eq(ts_push_active_count(), 0);
@@ -434,7 +436,7 @@ START_TEST(flush_drops_an_overrun_sub_without_sending) {
   ts_push_ring_enqueue(a, chunk, sizeof chunk);
   atomic_store(&a->pkt_overrun, 1);
   ts_push_flush_ready(0);
-  ck_assert_int_eq(atomic_load(&a->alive), TS_SUB_FREE);
+  ck_assert_int_eq(atomic_load(&a->h.alive), TS_SUB_FREE);
   ck_assert_int_eq(g_conn_request_close_calls, 1);
   ck_assert_int_eq(g_sent_calls[6], 0);
 }
@@ -453,8 +455,8 @@ START_TEST(flush_skips_subs_that_are_dead_unready_or_foreign) {
   unready = attached_sub(1, CONN_PROTO_H1, 1, 0);
   foreign = attached_sub(2, CONN_PROTO_H1, 2, 0);
   ok = attached_sub(3, CONN_PROTO_H1, 3, 0);
-  foreign->reactor_tid = 1;
-  atomic_store(&dead->alive, TS_SUB_FREE);
+  foreign->h.reactor_tid = 1;
+  atomic_store(&dead->h.alive, TS_SUB_FREE);
   atomic_store(&unready->ready, 0);
   for (int i = 0; i < 4; i++) ts_push_ring_enqueue(&g_ts_subs[i], chunk, sizeof chunk);
   ts_push_flush_ready(0);
@@ -462,7 +464,7 @@ START_TEST(flush_skips_subs_that_are_dead_unready_or_foreign) {
   ck_assert_int_eq(g_sent_calls[1], 0);
   ck_assert_int_eq(g_sent_calls[2], 0);
   ck_assert_int_eq(g_sent_calls[3], 1);
-  ck_assert_int_eq(atomic_load(&ok->alive), TS_SUB_ALIVE);
+  ck_assert_int_eq(atomic_load(&ok->h.alive), TS_SUB_ALIVE);
   ck_assert_int_eq(g_conn_request_close_calls, 0);
 }
 END_TEST
@@ -501,9 +503,9 @@ START_TEST(flush_continues_past_a_sub_dropped_mid_walk) {
   ts_push_flush_ready(0);
   ck_assert_int_eq(g_sent_calls[0], 1);
   ck_assert_int_eq(g_sent_calls[2], 1);
-  ck_assert_int_eq(atomic_load(&s[1]->alive), TS_SUB_FREE);
-  ck_assert_int_eq(atomic_load(&s[0]->alive), TS_SUB_ALIVE);
-  ck_assert_int_eq(atomic_load(&s[2]->alive), TS_SUB_ALIVE);
+  ck_assert_int_eq(atomic_load(&s[1]->h.alive), TS_SUB_FREE);
+  ck_assert_int_eq(atomic_load(&s[0]->h.alive), TS_SUB_ALIVE);
+  ck_assert_int_eq(atomic_load(&s[2]->h.alive), TS_SUB_ALIVE);
 }
 END_TEST
 
@@ -527,7 +529,7 @@ START_TEST(flush_wakes_h2_and_h3_subs_with_pending_bytes_only) {
   atomic_store(&busy->ready, 0);
   ts_push_flush_ready(0);
   ck_assert_int_eq(*wakes, 1);
-  ck_assert_int_eq(atomic_load(&idle->alive), TS_SUB_ALIVE);
+  ck_assert_int_eq(atomic_load(&idle->h.alive), TS_SUB_ALIVE);
   ck_assert_int_eq(g_sent_calls[0] + g_sent_calls[1], 0);
 }
 END_TEST
@@ -543,7 +545,7 @@ START_TEST(flush_ignores_subs_of_unknown_protocol) {
   ts_push_flush_ready(0);
   ck_assert_int_eq(g_sent_calls[0], 0);
   ck_assert_int_eq(g_h2_wakes + g_h3_wakes, 0);
-  ck_assert_int_eq(atomic_load(&a->alive), TS_SUB_ALIVE);
+  ck_assert_int_eq(atomic_load(&a->h.alive), TS_SUB_ALIVE);
 }
 END_TEST
 
@@ -569,13 +571,13 @@ START_TEST(h2_h3_enqueue_fill_their_own_ring_and_wake_the_reactor) {
   ts_push_init(0, 4);
   a = attached_sub(0, proto, 0, 2);
   ring = _i ? &a->h3_ring : &a->h2_ring;
-  ts_push_register_reactor_efd(2, efd);
+  reactor_wake_register(2, efd);
   if (_i) ts_push_h3_enqueue(0, chunk, sizeof chunk);
   else ts_push_h2_enqueue(0, chunk, sizeof chunk);
   ck_assert_int_eq((int)read(efd, &ticks, sizeof ticks), (int)sizeof ticks);
   ck_assert_uint_eq(byte_ring_read(ring, sink, sizeof sink), sizeof chunk);
   ck_assert_mem_eq(sink, chunk, sizeof chunk);
-  ts_push_register_reactor_efd(2, -1);
+  reactor_wake_register(2, -1);
   close(efd);
 }
 END_TEST
@@ -733,8 +735,8 @@ static void feed_video_packet(void) {
 static ts_sub_t *feed_sub(conn_proto_t proto, int spts) {
   ts_sub_t *s = attached_sub(0, proto, 3, 0);
 
-  atomic_store(&s->ctx, FEED_CTX);
-  atomic_store(&s->ctx_next, -1);
+  atomic_store(&s->h.cap_ctx, FEED_CTX);
+  atomic_store(&s->h.chain_next, -1);
   atomic_store(capture_ts_push_head_ptr(FEED_CTX), 0);
   s->spts = spts;
   s->spts_locked = 0;
@@ -814,8 +816,8 @@ START_TEST(spts_feed_relocks_when_the_pmt_layout_changes) {
   ck_assert_int_eq(g_pidlock_lcevc_applies, 2);
   ck_assert_int_eq(a->lcevc_locked, 1);
   ck_assert_int_eq(a->spts_n_allowed, 1);
-  ck_assert_int_eq(pid_filter_excludes(&a->filter, 0x300), 1);
-  ck_assert_int_eq(pid_filter_excludes(&a->filter, 0x999), 0);
+  ck_assert_int_eq(pid_mask_has(&a->filter_mask, 0x300), 1);
+  ck_assert_int_eq(pid_mask_has(&a->filter_mask, 0x999), 0);
   psi_free(a->spts_psi);
   a->spts_psi = NULL;
 }

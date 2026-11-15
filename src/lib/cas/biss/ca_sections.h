@@ -18,9 +18,6 @@
 /* 3292-s1 Table 3, CA_descriptor private_data. (esid, onid) pair. shape actually used (SS4.2.1.4: scoped id per scrambler). 0 on overflow */
 size_t biss_ca_build_entitlement_session_id_desc(unsigned esid, unsigned onid, unsigned char *out, size_t cap);
 
-/* 0 ok, -1 malformed/wrong tag */
-int biss_ca_parse_entitlement_session_id_desc(const unsigned char *in, size_t in_len, unsigned *esid_out, unsigned *onid_out);
-
 /* Table 9: session_key_descriptor (AES-128, Table 10-11) + entitlement_flags_descriptor.
    Table 12: flags always 0, unenforced. fixed 24 bytes, the RSA-OAEP plaintext, <= BISS_CA_SESSION_DATA_MAX. 0 on overflow */
 #define BISS_CA_SESSION_DATA_LEN 24

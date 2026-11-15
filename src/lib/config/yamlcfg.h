@@ -22,6 +22,17 @@ typedef struct {
   int list;
 } yamlcfg_key_t;
 
+typedef struct {
+  int opt;
+  const char *key;
+  const char *code;
+  const char *fmt;
+  int fmt_err;
+} yamlcfg_opt_t;
+
+/* 1 applied, -1 bad value (reported), 0 opt not in opts or key unknown */
+int yamlcfg_opt_apply(const char *tool, const yamlcfg_opt_t *opts, size_t nopts, const yamlcfg_key_t *keys, size_t nkeys, void *cfg, int opt, const char *val);
+
 typedef int (*yamlcfg_item_fn)(void *cfg, const char *list, int begin, char *err, size_t errsz);
 
 typedef struct {
@@ -44,6 +55,9 @@ int yamlcfg_report(const yamlcfg_t *y);
 int yamlcfg_parse_bool(const char *val, int *out);
 
 int yamlcfg_set_str(void **pool, const char **dst, const char *val, char *err, size_t errsz);
+/* "invalid '<val>' (<want>)" into err. always -1 */
+int yamlcfg_bad(char *err, size_t errsz, const char *val, const char *want);
+int yamlcfg_set_buf(char *dst, size_t sz, const char *val, char *err, size_t errsz);
 /* copy of val appended to list[*n], max entries. 0 ok, -1 error (err) */
 int yamlcfg_add_str(void **pool, const char **list, int *n, int max, const char *val, char *err, size_t errsz);
 void yamlcfg_strpool_free(void *pool);

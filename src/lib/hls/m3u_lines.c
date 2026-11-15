@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 char *playlist_skip_blank(char *p) {
   while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
@@ -33,36 +33,36 @@ char *playlist_next_line(char **cursor) {
 }
 
 int playlist_resolve_relative(const http_url_t *base, const char *ref, char *out, size_t n) {
-  char path[sizeof base->path];
-  int len;
-  const char *lb;
-  const char *rb;
+  const char *dir_end;
+  int v6;
+  sbuf_t sb;
   if (!base) return 0;
-  lb = strchr(base->host, ':') ? "[" : "";
-  rb = strchr(base->host, ':') ? "]" : "";
-  if (ref[0] == '/') {
-    if (bufcpy(path, sizeof path, ref) >= sizeof path) return 0;
-  } else {
-    char *slash;
-    if (bufcpy(path, sizeof path, base->path) >= sizeof path) return 0;
-    slash = strrchr(path, '/');
-    if (slash) slash[1] = '\0';
-    else       path[0] = '\0';
-    if (strlen(path) + strlen(ref) >= sizeof path) return 0;
-    strcat(path, ref);
+  v6 = strchr(base->host, ':') != NULL;
+  sbuf_init(&sb, out, n);
+  sbuf_add(&sb, base->tls ? "https://" : "http://");
+  if (v6) sbuf_add(&sb, "[");
+  sbuf_add(&sb, base->host);
+  if (v6) sbuf_add(&sb, "]");
+  if (base->port != (unsigned)(base->tls ? 443 : 80)) {
+    sbuf_add(&sb, ":");
+    sbuf_add_uint(&sb, base->port);
   }
-  if (base->port == (unsigned)(base->tls ? 443 : 80)) len = snprintf(out, n, "%s://%s%s%s%s", base->tls ? "https" : "http", lb, base->host, rb, path);
-  else len = snprintf(out, n, "%s://%s%s%s:%u%s", base->tls ? "https" : "http", lb, base->host, rb, base->port, path);
-
-  return len > 0 && (size_t)len < n;
+  if (ref[0] != '/') {
+    dir_end = strrchr(base->path, '/');
+    if (dir_end) sbuf_add_n(&sb, base->path, (size_t)(dir_end - base->path) + 1);
+  }
+  sbuf_add(&sb, ref);
+  return !sb.truncated;
 }
 
 void playlist_resolve_uri(const http_url_t *base, const char *ref, char *out, size_t n) {
   if (!strncasecmp(ref, "http://", 7) || !strncasecmp(ref, "https://", 8)) bufcpy(out, n, ref);
   else if (ref[0] == '/' && ref[1] == '/') {
-    const char *scheme = (base && base->tls) ? "https" : "http";
-    int len = base ? snprintf(out, n, "%s:%s", scheme, ref) : 0;
-    if (len <= 0 || (size_t)len >= n) out[0] = '\0';
+    sbuf_t sb;
+    sbuf_init(&sb, out, n);
+    sbuf_add(&sb, (base && base->tls) ? "https:" : "http:");
+    sbuf_add(&sb, ref);
+    if (!base || sb.truncated) out[0] = '\0';
   }
   else if (!playlist_resolve_relative(base, ref, out, n)) out[0] = '\0';
 }

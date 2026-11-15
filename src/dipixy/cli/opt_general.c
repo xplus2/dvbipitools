@@ -2,7 +2,6 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
 
 #include "lib/helper/argutil.h"
 #include "priv.h"

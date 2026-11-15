@@ -109,7 +109,11 @@ int channel_find(const channel_t *c, uint16_t seq, channel_slot_t *out) {
 
 int channel_cache_peek_meta(const channel_t *c, size_t index, rap_cache_meta_t *out) {
   const fcc_ring_entry_t *ring = (const fcc_ring_entry_t *)c->cache.entries;
-  uint64_t wc, rwc, avail, start, abs_pos;
+  uint64_t wc;
+  uint64_t rwc;
+  uint64_t avail;
+  uint64_t start;
+  uint64_t abs_pos;
   const fcc_ring_entry_t *slot;
   unsigned g;
 
@@ -137,7 +141,9 @@ int channel_has_rap(const channel_t *c) {
 }
 
 size_t channel_cache_count(const channel_t *c) {
-  uint64_t wc, rwc, avail;
+  uint64_t wc;
+  uint64_t rwc;
+  uint64_t avail;
 
   if (!atomic_load_explicit(&c->cache.have_rap, memory_order_acquire)) return 0;
   wc = atomic_load_explicit(&c->cache.write_count, memory_order_acquire);

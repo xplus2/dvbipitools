@@ -102,7 +102,7 @@ START_TEST(srt_sink_delivers_to_a_listening_source) {
       sent = 1;
     }
     if (src_wait_readable(&src, 20) != 1) continue;
-    n = src_read(&src, rx + got, total - got);
+    n = src_read_reason(&src, rx + got, total - got, &(net_err_reason_t){0});
     if (n < 0) break;
     got += (size_t)n;
   }
@@ -150,7 +150,7 @@ START_TEST(rist_sink_delivers_to_a_listening_source) {
       next_send = now_seconds() + 0.05;
     }
     if (src_wait_readable(&src, 20) != 1) continue;
-    n = src_read(&src, rx + got, total - got);
+    n = src_read_reason(&src, rx + got, total - got, &(net_err_reason_t){0});
     if (n < 0) break;
     got += (size_t)n;
   }

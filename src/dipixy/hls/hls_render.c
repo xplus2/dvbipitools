@@ -3,9 +3,7 @@
 
 #include "hls_int.h"
 
-#include <errno.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 
 static size_t fmt_plain_cb(void *ctx, char *buf, size_t cap) {
@@ -46,40 +44,30 @@ int hls_inm_match(const char *inm, const char *etag) {
   }
 }
 
-int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
-                const char *filename, const char *if_none_match, hls_resolve_t *r) {
-  hls_store_t *s;
+int hls_resolve(const stream_key_t *k, const hls_store_t *st, const route_file_t *f, const char *if_none_match, hls_resolve_t *r) {
   hls_snapshot_t *snap;
-  const char *ext;
-  unsigned long seq_ul;
-  uint32_t req_seq;
-  uint32_t oldest;
-  uint32_t last;
-  int seq_ok;
   memset(r, 0, sizeof *r);
-  ext =hls_filename_ext(filename);
-  if (!ext) return 0;
-  s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
-  snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
-  if (!strcmp(ext, "index")) {
+  if (f->kind != ROUTE_FILE_INDEX && f->kind != ROUTE_FILE_INIT && f->kind != ROUTE_FILE_SEG) return 0;
+  snap = st ? atomic_load_explicit(&st->snap, memory_order_acquire) : NULL;
+  if (f->kind == ROUTE_FILE_INDEX) {
     r->kind = HLS_RESOLVE_PLAYLIST;
     if (!snap || snap->count == 0) {
       r->status = 404;
       return 1;
     }
-    if (lcevc->mode == LCEVC_SEL_ALL && snap->lcevc_pid_count > 0) {
+    if (k->lcevc->mode == LCEVC_SEL_ALL && snap->lcevc_pid_count > 0) {
       lcevc_master_snap_t msnap;
       const cached_text_t *ct;
       snapshot_lcevc_master(snap, &msnap);
-      ct = snapshot_cache_text(&snap->cache_lcevc[0], fmt_lcevc_cb, &msnap, HLS_PLAYLIST_BUF_CAP);
+      ct = snapshot_cache_text(&snap->cache[SNAP_CACHE_LCEVC], fmt_lcevc_cb, &msnap, HLS_PLAYLIST_BUF_CAP);
       if (!ct) return 0;
       r->body = (uint8_t *)ct->text;
       r->body_len = ct->len;
     } else {
       plain_playlist_snap_t psnap;
       const cached_text_t *ct;
-      snapshot_plain_playlist(snap, container, lcevc, &psnap);
-      ct = snapshot_cache_text(&snap->cache_plain, fmt_plain_cb, &psnap, HLS_PLAYLIST_BUF_CAP);
+      snapshot_plain_playlist(snap, k->container, k->lcevc, &psnap);
+      ct = snapshot_cache_text(&snap->cache[SNAP_CACHE_PLAIN], fmt_plain_cb, &psnap, HLS_PLAYLIST_BUF_CAP);
       if (!ct) return 0;
       r->body = (uint8_t *)ct->text;
       r->body_len = ct->len;
@@ -89,7 +77,7 @@ int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
     return 1;
   }
 
-  if (!strcmp(ext, "init")) {
+  if (f->kind == ROUTE_FILE_INIT) {
     r->kind = HLS_RESOLVE_INIT;
     if (snap && snap->init_size) {
       r->body = snap->init_data;
@@ -99,18 +87,13 @@ int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
     }
   } else {
     r->kind = HLS_RESOLVE_SEGMENT;
-    errno = 0;
-    seq_ul = strtoul(filename + 3, NULL, 10);
-    req_seq = (uint32_t)seq_ul;
-    seq_ok = errno == 0 && seq_ul <= UINT32_MAX && (container == SEG_CONTAINER_FMP4) == !strcmp(ext, "m4s");
-    if (seq_ok && snap && snap->count > 0) {
-      oldest = snap->oldest_seq;
-      last = oldest + (uint32_t)snap->count - 1u;
-      if (req_seq >= oldest && req_seq <= last) {
-        const hls_seg_t *seg = &snap->ring->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
+    if ((k->container == SEG_CONTAINER_FMP4) == f->fmp4 && snap && snap->count > 0) {
+      uint32_t oldest = snap->oldest_seq;
+      if (f->seq >= oldest && f->seq - oldest < (uint32_t)snap->count) {
+        const hls_seg_t *seg = &snap->ring->segs[(snap->head + (int)(f->seq - oldest)) % HLS_MAX_SEGS];
         r->body = seg->data;
         r->body_len = seg->size;
-        r->content_type = !strcmp(ext, "m4s") ? "video/mp4" : "video/mp2t";
+        r->content_type = f->fmp4 ? "video/mp4" : "video/mp2t";
         seg_etag(seg->seq, seg->size, r->etag, sizeof r->etag);
       }
     }
@@ -123,10 +106,10 @@ int hls_resolve(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned p
   return 1;
 }
 
-int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
+int hls_render(const stream_key_t *k, const hls_store_t *st, const route_file_t *f, int is_head, const char *if_none_match, hls_resp_t *out) {
   hls_resolve_t r;
   memset(out, 0, sizeof *out);
-  if (!hls_resolve(ctx, filter, pmt_pid, lcevc, container, filename, if_none_match, &r)) return 0;
+  if (!hls_resolve(k, st, f, if_none_match, &r)) return 0;
   if (r.status == 404) {
     resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
   } else if (r.status == 304) {
@@ -143,35 +126,32 @@ int hls_render(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pm
 
 #define HLS_LL_PLAYLIST_BUF_CAP 16384
 
-int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc,
-  seg_container_t container, const char *filename, const char *if_none_match, hls_ll_resolve_t *r) {
-  hls_store_t *s;
+int hls_resolve_ll(const stream_key_t *k, const hls_store_t *st, const route_file_t *f, const char *if_none_match, hls_ll_resolve_t *r) {
   hls_snapshot_t *snap;
-  uint32_t req_seq;
-  int req_part;
+  uint32_t req_seq = f->seq;
+  int req_part = f->part;
   memset(r, 0, sizeof *r);
-  s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
-  snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
+  snap = st ? atomic_load_explicit(&st->snap, memory_order_acquire) : NULL;
 
-  if (!strcmp(filename, "index_ll.m3u8")) {
+  if (f->kind == ROUTE_FILE_INDEX_LL) {
     r->kind = HLS_RESOLVE_PLAYLIST;
     if (!snap || snap->part_target <= 0.0 || (snap->count == 0 && snap->live_parts.count == 0)) {
       r->status = 404;
       return 1;
     }
-    if (lcevc->mode == LCEVC_SEL_ALL && snap->lcevc_pid_count > 0) {
+    if (k->lcevc->mode == LCEVC_SEL_ALL && snap->lcevc_pid_count > 0) {
       lcevc_master_snap_t msnap;
       const cached_text_t *ct;
       snapshot_lcevc_master(snap, &msnap);
-      ct = snapshot_cache_text(&snap->cache_lcevc[1], fmt_lcevc_cb, &msnap, HLS_LL_PLAYLIST_BUF_CAP);
+      ct = snapshot_cache_text(&snap->cache[SNAP_CACHE_LCEVC_LL], fmt_lcevc_cb, &msnap, HLS_LL_PLAYLIST_BUF_CAP);
       if (!ct) return 0;
       r->body = (const uint8_t *)ct->text;
       r->body_len = ct->len;
     } else {
       ll_playlist_snap_t llsnap;
       const cached_text_t *ct;
-      snapshot_ll_playlist(snap, container, lcevc, &llsnap);
-      ct = snapshot_cache_text(&snap->cache_ll, fmt_ll_cb, &llsnap, HLS_LL_PLAYLIST_BUF_CAP);
+      snapshot_ll_playlist(snap, k->container, k->lcevc, &llsnap);
+      ct = snapshot_cache_text(&snap->cache[SNAP_CACHE_LL], fmt_ll_cb, &llsnap, HLS_LL_PLAYLIST_BUF_CAP);
       if (!ct) return 0;
       r->body = (const uint8_t *)ct->text;
       r->body_len = ct->len;
@@ -180,12 +160,8 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     r->content_type = "application/vnd.apple.mpegurl";
     return 1;
   }
-  if (!parse_part_filename(filename, container, &req_seq, &req_part)) return 0;
+  if (f->kind != ROUTE_FILE_PART || f->fmp4 != (k->container == SEG_CONTAINER_FMP4)) return 0;
   r->kind = HLS_RESOLVE_SEGMENT;
-  if (req_part < 0) {
-    r->status = 404;
-    return 1;
-  }
   if (snap && snap->live_msn == req_seq && req_part < snap->live_parts.count) {
     r->owner = snap->live_data;
     r->body = snap->live_data + snap->live_parts.offset[req_part];
@@ -193,8 +169,7 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     part_etag(req_seq, req_part, r->body_len, r->etag, sizeof r->etag);
   } else if (snap && snap->count > 0) {
     uint32_t oldest = snap->oldest_seq;
-    uint32_t last = oldest + (uint32_t)snap->count - 1u;
-    if (req_seq >= oldest && req_seq <= last) {
+    if (req_seq >= oldest && req_seq - oldest < (uint32_t)snap->count) {
       const hls_seg_t *seg = &snap->ring->segs[(snap->head + (int)(req_seq - oldest)) % HLS_MAX_SEGS];
       if (req_part < seg->parts.count) {
         r->owner = seg->data;
@@ -208,15 +183,15 @@ int hls_resolve_ll(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigne
     r->status = 404;
     return 1;
   }
-  r->content_type = container == SEG_CONTAINER_FMP4 ? "video/mp4" : "video/mp2t";
+  r->content_type = k->container == SEG_CONTAINER_FMP4 ? "video/mp4" : "video/mp2t";
   r->status = hls_inm_match(if_none_match, r->etag) ? 304 : 200;
   return 1;
 }
 
-int hls_render_ll(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container, const char *filename, int is_head, const char *if_none_match, hls_resp_t *out) {
+int hls_render_ll(const stream_key_t *k, const hls_store_t *st, const route_file_t *f, int is_head, const char *if_none_match, hls_resp_t *out) {
   hls_ll_resolve_t r;
   memset(out, 0, sizeof *out);
-  if (!hls_resolve_ll(ctx, filter, pmt_pid, lcevc, container, filename, if_none_match, &r)) return 0;
+  if (!hls_resolve_ll(k, st, f, if_none_match, &r)) return 0;
   if (r.status == 404) {
     resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
   } else if (r.status == 304) {

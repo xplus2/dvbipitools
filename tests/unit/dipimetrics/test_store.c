@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/metrics/store.h"
 
 static void make_hdr(metrics_hdr_t *hdr, metrics_component_t component, const char *id, uint64_t process_start, uint64_t sequence) {
@@ -260,7 +260,8 @@ END_TEST
 START_TEST(store_full_drops_new_instance) {
   store_t st;
   unsigned char buf[METRICS_MAX_SNAPSHOT_BYTES];
-  int i, used = 0;
+  int i;
+  int used = 0;
   char id[METRICS_ID_MAX];
 
   store_init(&st);

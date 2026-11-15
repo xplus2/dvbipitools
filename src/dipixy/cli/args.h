@@ -48,7 +48,6 @@ typedef struct {
   int max_variants;
   unsigned idle_timeout_s;
   double ts_startup_timeout_s;
-  unsigned capture_ring_kib;
   double sds_timeout_s;
   const char *sdns_ns; /* --sds-bim-namespace. NULL: newest, with --sds-schema: ns of schema file */
   const char *schemas[SCHEMA_MAX]; /* --sds-schema: schema file or dirs. empty: compiled-in SD&S schemas */

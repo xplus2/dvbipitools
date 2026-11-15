@@ -3,7 +3,8 @@
 
 #include "dlna_int.h"
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/xml_util.h"
 
 #include "gena.h"
@@ -12,11 +13,18 @@
 #include <string.h>
 
 static int handle_browse(const config_t *cfg, const channels_t *channels, const char *body, size_t body_len, char **out, size_t *out_len) {
-  char objid[64] = "0", flag[32] = "BrowseDirectChildren", startbuf[16] = "0", countbuf[16] = "0";
+  char objid[64] = "0";
+  char flag[32] = "BrowseDirectChildren";
+  char startbuf[16] = "0";
+  char countbuf[16] = "0";
   oid_t oid;
-  unsigned starting_index, requested_count, number_returned = 0, total_matches = 0;
+  unsigned starting_index;
+  unsigned requested_count;
+  unsigned number_returned = 0;
+  unsigned total_matches = 0;
   char *didl = NULL;
-  int metadata, status;
+  int metadata;
+  int status;
   const char *end = body + body_len;
   char nr[16];
   char tm[16];
@@ -53,38 +61,56 @@ void dlna_source_protocol_info(const config_t *cfg, char *out, size_t outsz) {
   }
 }
 
-int dlna_handle_control(const config_t *cfg, const channels_t *channels, const char *service, const char *action, const char *body, size_t body_len, char **out, size_t *out_len) {
-  if (!strcmp(service, "cd")) {
-    if (!strcmp(action, "Browse"))
+typedef enum { ACT_NONE, ACT_BROWSE, ACT_SEARCH_CAPS, ACT_SORT_CAPS, ACT_UPDATE_ID, ACT_PROTOCOL_INFO, ACT_CONN_IDS, ACT_CONN_INFO } dlna_action_t;
+
+static dlna_action_t action_lookup(gena_svc_t svc, const char *name) {
+  static const struct {
+    gena_svc_t svc;
+    const char *name;
+    dlna_action_t act;
+  } tab[] = {
+      {GENA_SVC_CD, "Browse", ACT_BROWSE},
+      {GENA_SVC_CD, "GetSearchCapabilities", ACT_SEARCH_CAPS},
+      {GENA_SVC_CD, "GetSortCapabilities", ACT_SORT_CAPS},
+      {GENA_SVC_CD, "GetSystemUpdateID", ACT_UPDATE_ID},
+      {GENA_SVC_CM, "GetProtocolInfo", ACT_PROTOCOL_INFO},
+      {GENA_SVC_CM, "GetCurrentConnectionIDs", ACT_CONN_IDS},
+      {GENA_SVC_CM, "GetCurrentConnectionInfo", ACT_CONN_INFO},
+  };
+  for (size_t i = 0; i < ARRAY_SIZE(tab); i++)
+    if (tab[i].svc == svc && !strcmp(tab[i].name, name)) return tab[i].act;
+  return ACT_NONE;
+}
+
+int dlna_handle_control(const config_t *cfg, const channels_t *channels, gena_svc_t svc, const char *action, const char *body, size_t body_len, char **out, size_t *out_len) {
+  switch (action_lookup(svc, action)) {
+    case ACT_BROWSE:
       return handle_browse(cfg, channels, body, body_len, out, out_len);
-    if (!strcmp(action, "GetSearchCapabilities")) {
+    case ACT_SEARCH_CAPS: {
       soap_field_t f[1] = {{"SearchCaps", ""}};
       return soap_action_response(out, out_len, CD_URN, "GetSearchCapabilitiesResponse", f, 1);
     }
-    if (!strcmp(action, "GetSortCapabilities")) {
+    case ACT_SORT_CAPS: {
       soap_field_t f[1] = {{"SortCaps", ""}};
       return soap_action_response(out, out_len, CD_URN, "GetSortCapabilitiesResponse", f, 1);
     }
-    if (!strcmp(action, "GetSystemUpdateID")) {
+    case ACT_UPDATE_ID: {
       char id[16];
       uint_to_str(id, gena_system_update_id());
       soap_field_t f[1] = {{"Id", id}};
       return soap_action_response(out, out_len, CD_URN, "GetSystemUpdateIDResponse", f, 1);
     }
-    return soap_fault(out, out_len, 401, "Invalid Action");
-  }
-  if (!strcmp(service, "cm")) {
-    if (!strcmp(action, "GetProtocolInfo")) {
+    case ACT_PROTOCOL_INFO: {
       char source[512];
       dlna_source_protocol_info(cfg, source, sizeof source);
       soap_field_t f[2] = {{"Source", source}, {"Sink", ""}};
       return soap_action_response(out, out_len, CM_URN, "GetProtocolInfoResponse", f, 2);
     }
-    if (!strcmp(action, "GetCurrentConnectionIDs")) {
+    case ACT_CONN_IDS: {
       soap_field_t f[1] = {{"ConnectionIDs", "0"}};
       return soap_action_response(out, out_len, CM_URN, "GetCurrentConnectionIDsResponse", f, 1);
     }
-    if (!strcmp(action, "GetCurrentConnectionInfo")) {
+    case ACT_CONN_INFO: {
       soap_field_t f[7] = {{"RcsID", "-1"},
                             {"AVTransportID", "-1"},
                             {"ProtocolInfo", TS_PROTOCOL_INFO},
@@ -94,7 +120,8 @@ int dlna_handle_control(const config_t *cfg, const channels_t *channels, const c
                             {"Status", "OK"}};
       return soap_action_response(out, out_len, CM_URN, "GetCurrentConnectionInfoResponse", f, 7);
     }
-    return soap_fault(out, out_len, 401, "Invalid Action");
+    case ACT_NONE:
+      break;
   }
   return soap_fault(out, out_len, 401, "Invalid Action");
 }

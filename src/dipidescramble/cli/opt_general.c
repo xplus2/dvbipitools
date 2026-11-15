@@ -2,22 +2,30 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
 
 #include "lib/cas/device_state_core.h"
 #include "lib/helper/argutil.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+
+static const yamlcfg_opt_t opts[] = {
+    {'i', "input", "DS000349", "invalid -i input: %s", 0},
+    {OPT_TOKEN_HEADER, "token-header", "DS000350", "invalid --token-header: %s", 0},
+    {'f', "format", "DS000353", "invalid -f format: %s (ts|mkv|mka)", 0},
+    {'p', "pmt-pid", "DS000354", "invalid -p pmt-pid: %s (0x0010..0x1FFE, or \"all\")", 0},
+    {OPT_ECM_PROFILE, "ecm-profile", "DS000355", "invalid --ecm-profile: %s", 0},
+};
 
 args_status_t dscr_opt_general(dscr_opt_t *p, int c) {
   config_t *cfg = p->cfg;
 
+  switch (yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), dscr_cfg_keys, dscr_cfg_nkeys, cfg, c, optarg)) {
+    case 1: return ARGS_OK;
+    case -1: return ARGS_ERR;
+    default: break;
+  }
   switch (c) {
-    case 'i':
-      if (dscr_cfg_set_input(cfg, optarg)) {
-        argerr("DS000349", "invalid -i input: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
     case 'k':
       cfg->key_path = optarg;
       break;
@@ -36,12 +44,6 @@ args_status_t dscr_opt_general(dscr_opt_t *p, int c) {
     case OPT_STRIP_LCEVC:
       cfg->strip_lcevc = 1;
       break;
-    case OPT_TOKEN_HEADER:
-      if (dscr_cfg_token_header(cfg, optarg)) {
-        argerr("DS000350", "invalid --token-header: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
     case 'o':
       if (!p->cli_out) {
         cfg->n_out = 0;
@@ -53,18 +55,6 @@ args_status_t dscr_opt_general(dscr_opt_t *p, int c) {
       }
       if (dscr_cfg_add_out(cfg, optarg)) {
         argerr("DS000352", "invalid -o target: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 'f':
-      if (dscr_cfg_format(cfg, optarg)) {
-        argerr("DS000353", "invalid -f format: %s (ts|mkv|mka)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case 'p':
-      if (dscr_cfg_pmt(cfg, optarg)) {
-        argerr("DS000354", "invalid -p pmt-pid: %s (0x0010..0x1FFE, or \"all\")", optarg);
         return ARGS_ERR;
       }
       break;
@@ -80,12 +70,6 @@ args_status_t dscr_opt_general(dscr_opt_t *p, int c) {
     case OPT_COLOR:
       {
         if (argutil_color_opt(TOOL_NAME, "DS000105", optarg, &cfg->color_mode)) return ARGS_ERR;
-      }
-      break;
-    case OPT_ECM_PROFILE:
-      if (ecm_profile_parse(optarg, &cfg->ecm_profile) != 0 || ecm_profile_validate(&cfg->ecm_profile) != 0) {
-        argerr("DS000355", "invalid --ecm-profile: %s", optarg);
-        return ARGS_ERR;
       }
       break;
     case OPT_METRICS:

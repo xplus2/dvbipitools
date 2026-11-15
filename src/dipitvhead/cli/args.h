@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/net/rist/ristpeer.h"
 #include "lib/cas/biss/biss.h"
 #include "lib/cas/cas_args.h"
 #include "lib/net/httpclient/httpclient.h"
@@ -46,7 +47,6 @@ typedef enum { TABLE_PASSTHROUGH, TABLE_DROP, TABLE_OVERRIDE } table_mode_t;
 #define ARGS_MAX_RIST_PEERS 8 /* matches RISTOUT_MAX_PEERS */
 #define ARGS_MAX_SRT_PEERS 8  /* matches SRTSINK_MAX_PEERS */
 
-typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_profile_sel_t;
 typedef enum { SRT_BOND_NONE, SRT_BOND_BROADCAST, SRT_BOND_BACKUP } srt_bond_mode_t;
 typedef enum { PCR_MODE_PRESERVE, PCR_MODE_REBASE, PCR_MODE_REGENERATE } pcr_mode_t;
 
@@ -151,7 +151,7 @@ typedef struct {
   unsigned metrics_n_known_pids;
   char rist_uri[ARGS_MAX_RIST_PEERS][256]; /* -R/--remote, repeatable; bonded onto one sender, simultaneous with -m */
   unsigned n_rist;
-  rist_profile_sel_t rist_profile; /* --rist-profile; n_rist>0 only */
+  rist_prof_t rist_profile; /* --rist-profile; n_rist>0 only */
   int rist_profile_given;
   char rist_secret[128];  /* --rist-secret; n_rist>0 + --rist-profile main only, "" = none */
   int rist_key_size;      /* --rist-encryption-type; n_rist>0 + --rist-profile main only, 0 = default */

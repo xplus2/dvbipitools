@@ -38,7 +38,6 @@
 #define OPT_RET_MC_DEDUP 1030
 #define OPT_FCC_CLIENT_RATE 1031
 
-#define RATE_MAX 1000000 /* per-source rate cap, keeps burst depth math in range */
 
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 

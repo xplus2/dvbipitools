@@ -47,7 +47,7 @@ void h2_wake_stream(conn_t *c, int32_t sid) {
 }
 
 void ts_push_set_reactor_tid(int idx, int tid) {
-  g_ts_subs[idx].reactor_tid = tid;
+  g_ts_subs[idx].h.reactor_tid = tid;
 }
 
 void ts_push_unsubscribe_by_idx(int idx) {
@@ -221,7 +221,7 @@ static int mp4_closed_count(int sub) { return fake_mp4[sub].closed; }
 static void ts_bound(int sub, void **h2c, void **slot, int *tid, int *ws) {
   *h2c = g_ts_subs[sub].h2c;
   *slot = g_ts_subs[sub].h2_slot;
-  *tid = g_ts_subs[sub].reactor_tid;
+  *tid = g_ts_subs[sub].h.reactor_tid;
   *ws = FAKE_WS_HANDLE;
 }
 

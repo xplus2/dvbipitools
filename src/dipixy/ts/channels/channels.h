@@ -17,7 +17,9 @@ typedef struct {
   char *name; /* malloc'd */
   char *uri;  /* malloc'd, e.g. rtp://@239.0.0.1:8000 */
   char *icon_uri; /* malloc'd, NULL if absent. m3u/xspf/csv sources only */
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
   unsigned max_bitrate_kbps;
   int has_bitrate;
   unsigned content_nibble;
@@ -85,10 +87,6 @@ int channels_resolve(const channels_t *ch, unsigned list_num, unsigned item_num,
 
 /* srt/http item: 1 with uri/insecure_tls, else 0. never opens */
 int channels_static_target(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name, char *uri, size_t urisz, int *insecure_tls);
-
-/* same params as channels_resolve(). srt/http items only: opens on demand (deduped), ref++'d ctx instead of family/addr/port.
-   no connection held while unused. NULL otherwise or open failed */
-capture_ctx_t *channels_resolve_static(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name);
 
 /* emit(ctx,item) per item, locked vs refresh. NULL emit: count only, no walk. ret count, 0 if empty/invalid */
 int channels_list_for_each(const channels_t *ch, unsigned list_num, void (*emit)(void *ctx, const channel_item_t *item), void *ctx);

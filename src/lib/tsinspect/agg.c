@@ -4,13 +4,14 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include "priv.h"
+#include "lib/helper/growutil.h"
 
 struct tsinspect_agg {
   metrics_inspect_ts_t level;
   pthread_mutex_t lock;
   tsinspect_t **list;
   unsigned n;
-  unsigned cap;
+  size_t cap;
   tsinspect_counters_t retired;
   tspack_sync_t retired_sync;
   int sync_used;
@@ -75,16 +76,10 @@ tsinspect_t *tsinspect_agg_add(tsinspect_agg_t *a) {
   t = tsinspect_new_light(a->level);
   if (!t) return NULL;
   pthread_mutex_lock(&a->lock);
-  if (a->n == a->cap) {
-    unsigned ncap = a->cap ? a->cap * 2 : 16;
-    tsinspect_t **nl = realloc(a->list, ncap * sizeof *nl);
-    if (!nl) {
-      pthread_mutex_unlock(&a->lock);
-      tsinspect_free(t);
-      return NULL;
-    }
-    a->list = nl;
-    a->cap = ncap;
+  if (growbuf_reserve((void **)&a->list, &a->cap, sizeof *a->list, (size_t)a->n + 1, 16)) {
+    pthread_mutex_unlock(&a->lock);
+    tsinspect_free(t);
+    return NULL;
   }
   a->list[a->n++] = t;
   pthread_mutex_unlock(&a->lock);

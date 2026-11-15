@@ -29,26 +29,17 @@ static int apply_mcast(void *c, const char *v, char *e, size_t n) {
     snprintf(e, n, "range '%s' too large (max %u addresses)", v, MAX_SWEEP_ADDRS);
     return -1;
   }
-  if (rc) {
-    snprintf(e, n, "invalid '%s' (addr, addr/prefixlen, or startaddr-stopaddr)", v);
-    return -1;
-  }
+  if (rc) return yamlcfg_bad(e, n, v, "addr, addr/prefixlen, or startaddr-stopaddr");
   return 0;
 }
 
 static int apply_port(void *c, const char *v, char *e, size_t n) {
-  if (scan_cfg_port(c, v)) {
-    snprintf(e, n, "invalid '%s' (port or port-port)", v);
-    return -1;
-  }
+  if (scan_cfg_port(c, v)) return yamlcfg_bad(e, n, v, "port or port-port");
   return 0;
 }
 
 static int apply_format(void *c, const char *v, char *e, size_t n) {
-  if (scan_cfg_format(c, v)) {
-    snprintf(e, n, "invalid '%s' (m3u|csv|xspf|xml|null)", v);
-    return -1;
-  }
+  if (scan_cfg_format(c, v)) return yamlcfg_bad(e, n, v, "m3u|csv|xspf|xml|null");
   return 0;
 }
 
@@ -78,19 +69,13 @@ static int apply_mpts(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_http_proxy(void *c, const char *v, char *e, size_t n) {
-  if (scan_cfg_http_proxy(c, v)) {
-    snprintf(e, n, "invalid '%s' (host[:port])", v);
-    return -1;
-  }
+  if (scan_cfg_http_proxy(c, v)) return yamlcfg_bad(e, n, v, "host[:port]");
   return 0;
 }
 
 static int apply_http_path(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (scan_cfg_http_path(v)) {
-    snprintf(e, n, "invalid '%s' (%%g, %%p, %%%% only)", v);
-    return -1;
-  }
+  if (scan_cfg_http_path(v)) return yamlcfg_bad(e, n, v, "%g, %p, %% only");
   return yamlcfg_set_str(&cfg->str_pool, &cfg->http_path_tmpl, v, e, n);
 }
 
@@ -107,7 +92,7 @@ static int apply_color(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_color(&((config_t *)c)->color_mode, v, e, n);
 }
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t scan_cfg_keys[] = {
   {"mcast", apply_mcast, 0, 0},
   {"port", apply_port, 0, 0},
   {"format", apply_format, 0, 0},
@@ -122,11 +107,12 @@ static const yamlcfg_key_t keys[] = {
   {"verbose", apply_verbose, 0, 0},
   {"color", apply_color, 0, 0},
 };
+const size_t scan_cfg_nkeys = sizeof scan_cfg_keys / sizeof scan_cfg_keys[0];
 
 int scan_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
+  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, scan_cfg_keys, scan_cfg_nkeys, cfg);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -136,7 +122,7 @@ int scan_cfg_test(const char *path, int strict) {
   config_t cfg;
 
   scan_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, scan_cfg_keys, scan_cfg_nkeys, &cfg) != YAMLCFG_LOADED) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }

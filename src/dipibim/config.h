@@ -5,8 +5,12 @@
 #define DIPIBIM_CONFIG_H
 
 #include "cli/args.h"
+#include "lib/config/yamlcfg.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipibim.yaml"
+
+extern const yamlcfg_key_t bim_cfg_keys[];
+extern const size_t bim_cfg_nkeys;
 
 void bim_cfg_defaults(config_t *cfg);
 

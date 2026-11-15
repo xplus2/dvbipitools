@@ -8,7 +8,7 @@
 
 #include "lib/bim/codec.h"
 #include "lib/helper/xml_util/xml_util_int.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 
 #define XML_DEPTH_MAX 256
 #define POOL_CHUNK 16384
@@ -57,18 +57,7 @@ typedef struct {
   int acap;
 } parser_t;
 
-static int gbuf_reserve(gbuf_t *b, size_t extra) {
-  char *nb;
-  size_t cap;
-  if (b->len + extra + 1 <= b->cap) return 0;
-  cap = b->cap ? b->cap : 256;
-  while (cap < b->len + extra + 1) cap *= 2;
-  nb = realloc(b->buf, cap);
-  if (!nb) return -1;
-  b->buf = nb;
-  b->cap = cap;
-  return 0;
-}
+static int gbuf_reserve(gbuf_t *b, size_t extra) { return growbuf_reserve((void **)&b->buf, &b->cap, 1, b->len + extra + 1, 256); }
 
 static char *pool_alloc(xml_doc_t *d, size_t n) {
   pool_chunk_t *c = d->chunks;

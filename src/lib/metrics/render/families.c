@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/metrics/render/render_int.h"
 
 const char *metric_kind_name(metric_kind_t k) {

@@ -1,13 +1,13 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include <stdio.h>
 #include <string.h>
 
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 
 #include "auth.h"
+#include "lib/helper/strutil.h"
 
 static int md5_b64(const char *s, char *out, size_t cap) {
   unsigned char digest[EVP_MAX_MD_SIZE];
@@ -27,12 +27,22 @@ int rtmp_auth_adobe_response(const char *user, const char *password, const char 
   char hash1[32];
   char buf[512];
   unsigned char rnd[8];
+  sbuf_t sb;
 
   if (!opaque && !server_challenge) return -1;
-  if ((size_t)snprintf(buf, sizeof buf, "%s%s%s", user, salt, password) >= sizeof buf) return -1;
-  if (md5_b64(buf, hash1, sizeof hash1)) return -1;
+  sbuf_init(&sb, buf, sizeof buf);
+  sbuf_add(&sb, user);
+  sbuf_add(&sb, salt);
+  sbuf_add(&sb, password);
+  if (sb.truncated || md5_b64(buf, hash1, sizeof hash1)) return -1;
   if (1 != RAND_bytes(rnd, sizeof rnd)) return -1;
-  if ((size_t)snprintf(challenge2_out, challenge2_cap, "%02x%02x%02x%02x%02x%02x%02x%02x", rnd[0], rnd[1], rnd[2], rnd[3], rnd[4], rnd[5], rnd[6], rnd[7]) >= challenge2_cap) return -1;
-  if ((size_t)snprintf(buf, sizeof buf, "%s%s%s", hash1, opaque ? opaque : server_challenge, challenge2_out) >= sizeof buf) return -1;
+  sbuf_init(&sb, challenge2_out, challenge2_cap);
+  for (size_t i = 0; i < sizeof rnd; i++) sbuf_add_hex2(&sb, rnd[i]);
+  if (sb.truncated) return -1;
+  sbuf_init(&sb, buf, sizeof buf);
+  sbuf_add(&sb, hash1);
+  sbuf_add(&sb, opaque ? opaque : server_challenge);
+  sbuf_add(&sb, challenge2_out);
+  if (sb.truncated) return -1;
   return md5_b64(buf, response_out, response_cap);
 }

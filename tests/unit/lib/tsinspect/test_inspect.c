@@ -305,7 +305,8 @@ static void feed_psi(tsinspect_t *t, psi_t *psi, const unsigned char *pkt) {
 START_TEST(pat_missing_counts_once_until_it_arrives) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   psi_t *psi = psi_new();
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len = build_pat(sec, 0, 1, 0x100);
 
   tsinspect_bind_psi(t, psi);
@@ -652,7 +653,8 @@ static size_t build_si(unsigned char *sec, unsigned tid, unsigned ext, unsigned 
 
 START_TEST(eit_pf_missing_section_counted_once) {
   tsinspect_t *t = tsinspect_new(METRICS_INSPECT_TS_BASIC);
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len;
 
   tsinspect_tick(t, 1.0);
@@ -1012,7 +1014,8 @@ START_TEST(exported_series_cover_tables_gap_stalls_and_bat_crc_by_level) {
   tsinspect_t *basic = tsinspect_new(METRICS_INSPECT_TS_BASIC);
   tsinspect_t *med = tsinspect_new(METRICS_INSPECT_TS_MEDIUM);
   tsinspect_t *both[2] = {basic, med};
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t len = build_pat(sec, 0, 1, 0x100);
 
   section_pkt(pkt, 0, sec, len);
@@ -1387,7 +1390,8 @@ START_TEST(dts_pcr_lead_signed_and_underruns_counted_from_full) {
   tsinspect_t *med = tsinspect_new(METRICS_INSPECT_TS_MEDIUM);
   tsinspect_t *both[2] = {full, med};
   psi_t *psi[2] = {psi_new(), psi_new()};
-  unsigned char sec[128], pkt[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
   int64_t lead = 0;
   size_t len;
 

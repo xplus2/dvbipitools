@@ -70,7 +70,11 @@ uint32_t crc32_mpeg_pclmul(const unsigned char *data, size_t len) {
   uint32_t state = 0xFFFFFFFFu;
   size_t i = 0;
   while (i + 8 <= len) {
-    uint64_t raw, block, high32, low64, reduced;
+    uint64_t raw;
+    uint64_t block;
+    uint64_t high32;
+    uint64_t low64;
+    uint64_t reduced;
     memcpy(&raw, data + i, 8);
     block = __builtin_bswap64(raw);
     high32 = (uint64_t)state ^ (block >> 32);

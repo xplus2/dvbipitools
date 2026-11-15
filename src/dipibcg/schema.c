@@ -10,6 +10,7 @@
 #include "lib/helper/log.h"
 #include "schema.h"
 #include "version.h"
+#include "lib/helper/strutil.h"
 
 static int build_init(bcg_schema_t *s, const char *const *more, size_t nmore) {
   bim_tvainit_t ti = {.encoding_version = BIM_TVAINIT_DVB, .char_encoding = 1};
@@ -51,7 +52,7 @@ int bcg_schema_open(bcg_schema_t *s, const config_t *cfg, const char *ns, int st
   if (!s->idx) goto fail;
   rc = xsd_load_for_ns(s->set, s->idx, cfg->schemas, cfg->nschemas, ns, &culprit, s->ns, sizeof s->ns);
   if (rc) goto fail;
-  if (!s->ns[0]) snprintf(s->ns, sizeof s->ns, "%s", ns);
+  if (!s->ns[0]) bufcpy(s->ns, sizeof s->ns, ns);
   if ((rc = dvbtva_compile(s->set, s->ns, &c))) goto fail;
   memset(&eo, 0, sizeof eo);
   eo.dvb_locator = cfg->dvb_locator;

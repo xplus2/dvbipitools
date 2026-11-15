@@ -94,7 +94,8 @@ static size_t put_rtp_ts(unsigned char *p, uint16_t seq, uint32_t timestamp, uin
 }
 
 static size_t put_ipv4_udp_rtp(unsigned char *p, const char *dst_ip, unsigned dst_port, unsigned char tos, int rtp_valid) {
-  size_t udp_off = 20, rtp_off = udp_off + 8;
+  size_t udp_off = 20;
+  size_t rtp_off = udp_off + 8;
   size_t rtp_len = put_rtp_ts(p + rtp_off, 1, 0x1000, 0xdeadbeef, rtp_valid);
   struct in_addr dst;
 
@@ -118,8 +119,12 @@ static size_t put_ipv4_udp_rtp(unsigned char *p, const char *dst_ip, unsigned ds
 }
 
 static size_t put_ipv6_udp_rtp(unsigned char *p, const char *dst_ip, unsigned dst_port, unsigned char tc, int hopbyhop, int rtp_valid) {
-  size_t off = 40, udp_off, rtp_off, rtp_len;
-  struct in6_addr src, dst;
+  size_t off = 40;
+  size_t udp_off;
+  size_t rtp_off;
+  size_t rtp_len;
+  struct in6_addr src;
+  struct in6_addr dst;
 
   memset(p, 0, 40);
   p[0] = (unsigned char)(0x60 | (tc >> 4)); /* version 6, high nibble of Traffic Class */
@@ -687,7 +692,8 @@ END_TEST
 START_TEST(bpf_instruction_count_stays_within_kernel_limit) {
   cidr_t ranges[40];
   struct sock_filter *prog;
-  size_t prog_len, i;
+  size_t prog_len;
+  size_t i;
   char buf[40][32];
 
   for (i = 0; i < 40; i++) {

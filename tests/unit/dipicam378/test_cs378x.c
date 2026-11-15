@@ -15,18 +15,19 @@
 #include <unistd.h>
 
 #include "dipicam378/cs378x/cs378x.h"
+#include "lib/demux/crc32.h"
 #include "../fx_net.h"
 
 START_TEST(crc32_matches_standard_check_value) {
   /* "123456789" -> 0xCBF43926 is the universal CRC-32/ISO-HDLC check value,
      confirms this is the same reflected/0xEDB88320/0xFFFFFFFF variant oscam uses */
   const unsigned char data[] = "123456789";
-  ck_assert_uint_eq(cs378x_crc32(data, 9), 0xCBF43926u);
+  ck_assert_uint_eq(crc32_zlib(0, data, 9), 0xCBF43926u);
 }
 END_TEST
 
 START_TEST(crc32_of_empty_is_zero) {
-  ck_assert_uint_eq(cs378x_crc32((const unsigned char *)"", 0), 0);
+  ck_assert_uint_eq(crc32_zlib(0, (const unsigned char *)"", 0), 0);
 }
 END_TEST
 
@@ -49,7 +50,8 @@ END_TEST
 
 START_TEST(aes128_ecb_roundtrip) {
   unsigned char key[16];
-  unsigned char buf[32], orig[32];
+  unsigned char buf[32];
+  unsigned char orig[32];
   int i;
 
   for (i = 0; i < 16; i++)
@@ -160,7 +162,7 @@ static void build_ecm_request(unsigned char frame[36], const char *password) {
   body[20] = 0x80;
   body[21] = 0;
   body[22] = 0;
-  crc = cs378x_crc32(body + 20, 3);
+  crc = crc32_zlib(0, body + 20, 3);
   body[4] = (unsigned char)(crc >> 24);
   body[5] = (unsigned char)(crc >> 16);
   body[6] = (unsigned char)(crc >> 8);
@@ -186,7 +188,8 @@ static int always_cw(const unsigned char *ecm, size_t ecm_len, unsigned srvid, u
 static int make_throttled_client(unsigned port) {
   struct timeval tv = {0, 100 * 1000};
   int fd = connect_loopback(port);
-  int flags, rcvbuf = 4096;
+  int flags;
+  int rcvbuf = 4096;
 
   ck_assert_int_eq(setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf), 0);
   ck_assert_int_eq(setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv), 0);
@@ -223,7 +226,8 @@ START_TEST(server_stop_unblocks_slow_reader_worker) {
   cs378x_server_t *srv;
   unsigned char frame[36];
   int cfd;
-  double start, elapsed;
+  double start;
+  double elapsed;
   unsigned port = test_free_port();
 
   memset(&cfg, 0, sizeof cfg);
@@ -252,9 +256,13 @@ START_TEST(server_stop_reaps_all_max_conns_in_mixed_states) {
   cs378x_cfg_t cfg;
   cs378x_server_t *srv;
   unsigned char frame[36];
-  int idle_fd, partial_fd, slow_fd1, slow_fd2;
+  int idle_fd;
+  int partial_fd;
+  int slow_fd1;
+  int slow_fd2;
   int fds[4];
-  double start, elapsed;
+  double start;
+  double elapsed;
   unsigned port = test_free_port();
   struct timespec settle = {0, 100L * 1000000L};
 
@@ -343,7 +351,7 @@ static size_t build_frame(unsigned char *frame, const unsigned char ucrc[4], con
   body[11] = 0x75;
   body[15] = 0x01;
   memcpy(body + 20, payload, plen);
-  crc = cs378x_crc32(body + 20, buflen);
+  crc = crc32_zlib(0, body + 20, buflen);
   body[4] = (unsigned char)(crc >> 24);
   body[5] = (unsigned char)(crc >> 16);
   body[6] = (unsigned char)(crc >> 8);
@@ -564,7 +572,7 @@ START_TEST(username_is_checked_when_configured) {
   ck_assert_int_eq(peer_closed(fd), 1);
   close(fd);
   ck_assert_int_eq(cs378x_md5((const unsigned char *)"alice", 5, md5), 0);
-  crc = cs378x_crc32(md5, sizeof md5);
+  crc = crc32_zlib(0, md5, sizeof md5);
   good[0] = (unsigned char)(crc >> 24);
   good[1] = (unsigned char)(crc >> 16);
   good[2] = (unsigned char)(crc >> 8);

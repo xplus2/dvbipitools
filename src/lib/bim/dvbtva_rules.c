@@ -8,11 +8,9 @@
 #include "lib/bim/dvbtva.h"
 #include "lib/tva/tva_xml.h"
 
-static int same_ns(const char *a, const char *b) { return (!a || !*a) && (!b || !*b) ? 1 : a && b && !strcmp(a, b); }
-
 static const bim_node_t *child(const bim_tvans_t *ns, const bim_node_t *n, const char *name) {
   for (int i = 0; i < n->nkids; i++)
-    if (n->kids[i]->name && !strcmp(n->kids[i]->name, name) && same_ns(n->kids[i]->ns, ns->tva)) return n->kids[i];
+    if (n->kids[i]->name && !strcmp(n->kids[i]->name, name) && bim_ns_same(n->kids[i]->ns, ns->tva)) return n->kids[i];
   return NULL;
 }
 
@@ -28,10 +26,10 @@ static int is_crid(const char *s) { return s && !strncmp(s, "crid://", 7) && s[7
 static int synopsis_length(const bim_tvans_t *ns, const bim_node_t *n, int only_multiple) {
   int count = 0;
   for (int i = 0; i < n->nkids; i++)
-    count += n->kids[i]->name && !strcmp(n->kids[i]->name, "Synopsis") && same_ns(n->kids[i]->ns, ns->tva);
+    count += n->kids[i]->name && !strcmp(n->kids[i]->name, "Synopsis") && bim_ns_same(n->kids[i]->ns, ns->tva);
   if (only_multiple && count < 2) return 0;
   for (int i = 0; i < n->nkids; i++)
-    if (n->kids[i]->name && !strcmp(n->kids[i]->name, "Synopsis") && same_ns(n->kids[i]->ns, ns->tva) && !attr(n->kids[i], "length")) return -1;
+    if (n->kids[i]->name && !strcmp(n->kids[i]->name, "Synopsis") && bim_ns_same(n->kids[i]->ns, ns->tva) && !attr(n->kids[i], "length")) return -1;
   return 0;
 }
 

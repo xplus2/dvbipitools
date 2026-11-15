@@ -42,7 +42,7 @@ static int browse(const config_t *cfg, const channels_t *ch, const char *objid, 
            "<ObjectID>%s</ObjectID><BrowseFlag>%s</BrowseFlag>"
            "<StartingIndex>0</StartingIndex><RequestedCount>0</RequestedCount>",
            objid, flag);
-  return dlna_handle_control(cfg, ch, "cd", "Browse", body, strlen(body), out, out_len);
+  return dlna_handle_control(cfg, ch, GENA_SVC_CD, "Browse", body, strlen(body), out, out_len);
 }
 
 START_TEST(keep_multicast_off_uses_http_proxy_for_rtp_item) {
@@ -233,7 +233,7 @@ START_TEST(get_protocol_info_lists_video) {
   size_t out_len;
 
   memset(&cfg, 0, sizeof cfg);
-  ck_assert_int_eq(dlna_handle_control(&cfg, NULL, "cm", "GetProtocolInfo", "", 0, &out, &out_len), 200);
+  ck_assert_int_eq(dlna_handle_control(&cfg, NULL, GENA_SVC_CM, "GetProtocolInfo", "", 0, &out, &out_len), 200);
   ck_assert_ptr_nonnull(strstr(out, "video/mpeg"));
   ck_assert_ptr_nonnull(strstr(out, "audio/mpeg"));
   ck_assert_ptr_null(strstr(out, "dvb-igmp"));
@@ -247,7 +247,7 @@ START_TEST(get_protocol_info_lists_multicast_when_keep_multicast_set) {
 
   memset(&cfg, 0, sizeof cfg);
   cfg.dlna_keep_multicast = 1;
-  ck_assert_int_eq(dlna_handle_control(&cfg, NULL, "cm", "GetProtocolInfo", "", 0, &out, &out_len), 200);
+  ck_assert_int_eq(dlna_handle_control(&cfg, NULL, GENA_SVC_CM, "GetProtocolInfo", "", 0, &out, &out_len), 200);
   ck_assert_ptr_nonnull(strstr(out, "dvb-igmp"));
   ck_assert_ptr_nonnull(strstr(out, "dvb-mld"));
 }
@@ -636,22 +636,22 @@ START_TEST(direct_children_of_leaf_objects_are_empty_and_unknown_ids_fail) {
 END_TEST
 
 typedef struct {
-  const char *service;
+  gena_svc_t service;
   const char *action;
   const char *want;
 } soap_case_t;
 
 START_TEST(simple_soap_actions_answer_and_unknown_ones_fault) {
   static const soap_case_t cases[] = {
-      {"cd", "GetSearchCapabilities", "GetSearchCapabilitiesResponse"},
-      {"cd", "GetSortCapabilities", "GetSortCapabilitiesResponse"},
-      {"cd", "GetSystemUpdateID", "GetSystemUpdateIDResponse"},
-      {"cm", "GetProtocolInfo", "GetProtocolInfoResponse"},
-      {"cm", "GetCurrentConnectionIDs", "GetCurrentConnectionIDsResponse"},
-      {"cm", "GetCurrentConnectionInfo", "GetCurrentConnectionInfoResponse"},
-      {"cd", "NoSuchAction", "<errorCode>401</errorCode>"},
-      {"cm", "NoSuchAction", "<errorCode>401</errorCode>"},
-      {"xx", "Browse", "<errorCode>401</errorCode>"},
+      {GENA_SVC_CD, "GetSearchCapabilities", "GetSearchCapabilitiesResponse"},
+      {GENA_SVC_CD, "GetSortCapabilities", "GetSortCapabilitiesResponse"},
+      {GENA_SVC_CD, "GetSystemUpdateID", "GetSystemUpdateIDResponse"},
+      {GENA_SVC_CM, "GetProtocolInfo", "GetProtocolInfoResponse"},
+      {GENA_SVC_CM, "GetCurrentConnectionIDs", "GetCurrentConnectionIDsResponse"},
+      {GENA_SVC_CM, "GetCurrentConnectionInfo", "GetCurrentConnectionInfoResponse"},
+      {GENA_SVC_CD, "NoSuchAction", "<errorCode>401</errorCode>"},
+      {GENA_SVC_CM, "NoSuchAction", "<errorCode>401</errorCode>"},
+      {GENA_SVC_CM, "Browse", "<errorCode>401</errorCode>"},
   };
   const soap_case_t *sc = &cases[_i];
   config_t cfg;
@@ -663,7 +663,7 @@ START_TEST(simple_soap_actions_answer_and_unknown_ones_fault) {
   status = dlna_handle_control(&cfg, NULL, sc->service, sc->action, "", 0, &out, &out_len);
   ck_assert_int_eq(status, strstr(sc->want, "errorCode") ? 500 : 200);
   ck_assert_ptr_nonnull(out);
-  ck_assert_msg(strstr(out, sc->want) != NULL, "%s/%s: %s", sc->service, sc->action, out);
+  ck_assert_msg(strstr(out, sc->want) != NULL, "%d/%s: %s", (int)sc->service, sc->action, out);
 }
 END_TEST
 

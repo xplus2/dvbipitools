@@ -23,8 +23,9 @@ void llhls_waiter_conn_closing(const conn_t *c) {
 
 static void h1_llhls_finish(hls_waiter_t *w) {
   conn_t *c = w->owner;
+  const stream_key_t *k = WAITER_KEY(w);
   size_t bytes = 0;
-  if (hls_serve_ll(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container, w->filename, w->is_head, w->keep_alive, NULL, w->origin[0] ? w->origin : NULL, &bytes))
+  if (hls_serve_ll(c, k, hls_store_find(k), &w->file, w->is_head, w->keep_alive, NULL, w->origin[0] ? w->origin : NULL, &bytes))
     ws_clients_add_bytes(w->ws_handle, bytes);
   else
     respond_status(c, RESP_404, w->keep_alive);
@@ -53,6 +54,8 @@ void hls_cold_waiter_conn_closing(const conn_t *c) {
 
 static void hls_cold_finish(hls_waiter_t *w) {
   conn_t *c = w->owner;
+  const stream_key_t *k = WAITER_KEY(w);
+  const stream_key_t *fk = STREAM_KEY_AS(k, SEG_CONTAINER_FMP4);
   int served;
   size_t bytes = 0;
   if (w->kind != HLS_COLD_MP4 && !hls_cold_ready(w)) {
@@ -63,18 +66,18 @@ static void hls_cold_finish(hls_waiter_t *w) {
   }
   switch (w->kind) {
     case HLS_COLD_MP4:
-      if (!mp4push_try_attach(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->ws_handle)) respond_status(c, RESP_503, w->keep_alive);
+      if (!mp4push_try_attach(c, fk, w->ws_handle)) respond_status(c, RESP_503, w->keep_alive);
       break;
     case HLS_COLD_LLHLS:
-      served = hls_serve_ll(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container, w->filename, w->is_head, w->keep_alive, NULL, w->origin[0] ? w->origin : NULL, &bytes);
+      served = hls_serve_ll(c, k, hls_store_find(k), &w->file, w->is_head, w->keep_alive, NULL, w->origin[0] ? w->origin : NULL, &bytes);
       if (served) ws_clients_add_bytes(w->ws_handle, bytes); else respond_status(c, RESP_404, w->keep_alive);
       break;
     case HLS_COLD_DASH:
-      served = dash_serve(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->want_ll, w->utc_url, w->is_head, w->keep_alive, w->origin[0] ? w->origin : NULL, &bytes);
+      served = dash_serve(c, fk, hls_store_find(fk), w->want_ll, w->utc_url, w->is_head, w->keep_alive, w->origin[0] ? w->origin : NULL, &bytes);
       if (served) ws_clients_add_bytes(w->ws_handle, bytes); else respond_status(c, RESP_404, w->keep_alive);
       break;
     case HLS_COLD_HLS:
-      served = hls_serve(c, w->cap_ctx, &w->filter, w->pmt_pid, &w->lcevc, w->container, w->filename, w->is_head, w->keep_alive, NULL, w->origin[0] ? w->origin : NULL, &bytes);
+      served = hls_serve(c, k, hls_store_find(k), &w->file, w->is_head, w->keep_alive, NULL, w->origin[0] ? w->origin : NULL, &bytes);
       if (served) ws_clients_add_bytes(w->ws_handle, bytes); else respond_status(c, RESP_404, w->keep_alive);
       break;
   }

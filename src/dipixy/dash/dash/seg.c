@@ -9,33 +9,6 @@
 #include "dipixy/dash/dash.h"
 #include "dipixy/dash/dash_int.h"
 
-/* "dsegTTTT.m4s" muxed, "dsegvTTTT.m4s" video track, "dsegaTTTT.m4s" audio track. 1 ok (t, container set), 0 wrong shape */
-int parse_dash_seg_filename(const char *fn, uint64_t *t, seg_container_t *container) {
-  const char *p;
-  char *end;
-  if (strncmp(fn, "dseg", 4) != 0) return 0;
-  p = fn + 4;
-  *container = SEG_CONTAINER_FMP4;
-  if (*p == 'v') {
-    *container = SEG_CONTAINER_FMP4_VIDEO;
-    p++;
-  } else if (*p == 'a') {
-    *container = SEG_CONTAINER_FMP4_AUDIO;
-    p++;
-  }
-  if (*p < '0' || *p > '9') return 0;
-  *t = strtoull(p, &end, 10);
-  return !strcmp(end, ".m4s");
-}
-
-/* "dinitv.mp4", "dinita.mp4": track store init segments */
-static int parse_dash_init_filename(const char *fn, seg_container_t *container) {
-  if (!strcmp(fn, "dinitv.mp4")) *container = SEG_CONTAINER_FMP4_VIDEO;
-  else if (!strcmp(fn, "dinita.mp4")) *container = SEG_CONTAINER_FMP4_AUDIO;
-  else return 0;
-  return 1;
-}
-
 /* NULL if no segment starts exactly at t_ms */
 static const hls_seg_t *find_seg_by_time(const hls_snapshot_t *snap, uint64_t t_ms) {
   for (int i = 0; i < snap->count; i++) {
@@ -45,21 +18,18 @@ static const hls_seg_t *find_seg_by_time(const hls_snapshot_t *snap, uint64_t t_
   return NULL;
 }
 
-static int dash_resolve_seg(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, dash_seg_resolve_t *r) {
+static int dash_resolve_seg(const stream_key_t *k, const route_file_t *f, dash_seg_resolve_t *r) {
   const hls_store_t *s;
   const hls_snapshot_t *snap;
   const hls_seg_t *seg;
-  seg_container_t container;
-  uint64_t req_t;
-  int init;
+  seg_container_t container = dash_track_container(f->track);
 
   memset(r, 0, sizeof *r);
-  init = parse_dash_init_filename(filename, &container);
-  if (!init && !parse_dash_seg_filename(filename, &req_t, &container)) return 0;
+  if (f->kind != ROUTE_FILE_DSEG && f->kind != ROUTE_FILE_DINIT) return 0;
   r->content_type = container == SEG_CONTAINER_FMP4_AUDIO ? "audio/mp4" : "video/mp4";
-  s = hls_store_find(ctx, filter, pmt_pid, lcevc, container);
+  s = hls_store_find(STREAM_KEY_AS(k, container));
   snap = s ? atomic_load_explicit(&s->snap, memory_order_acquire) : NULL;
-  if (init) {
+  if (f->kind == ROUTE_FILE_DINIT) {
     if (!snap || !snap->init_size) {
       r->status = 404;
       return 1;
@@ -70,7 +40,7 @@ static int dash_resolve_seg(const capture_ctx_t *ctx, const pid_filter_t *filter
     init_etag(snap->init_gen, snap->init_size, r->etag, sizeof r->etag);
     return 1;
   }
-  seg = snap ? find_seg_by_time(snap, req_t) : NULL;
+  seg = snap ? find_seg_by_time(snap, f->t_ms) : NULL;
   if (!seg) {
     r->status = 404;
     return 1;
@@ -82,10 +52,10 @@ static int dash_resolve_seg(const capture_ctx_t *ctx, const pid_filter_t *filter
   return 1;
 }
 
-int dash_serve_seg(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
+int dash_serve_seg(conn_t *c, const stream_key_t *k, const route_file_t *f, int is_head, int keep_alive, const char *origin_hdr, size_t *out_bytes) {
   char cors_hdr[192];
   dash_seg_resolve_t r;
-  if (!dash_resolve_seg(ctx, filter, pmt_pid, lcevc, filename, &r)) return 0;
+  if (!dash_resolve_seg(STREAM_KEY_AS(k, SEG_CONTAINER_FMP4), f, &r)) return 0;
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
   if (r.status == 404) {
     respond_status(c, "404 Not Found", keep_alive);
@@ -101,10 +71,10 @@ int dash_serve_seg(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filt
   return 1;
 }
 
-int dash_render_seg(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, const char *filename, int is_head, hls_resp_t *out) {
+int dash_render_seg(const stream_key_t *k, const route_file_t *f, int is_head, hls_resp_t *out) {
   dash_seg_resolve_t r;
   memset(out, 0, sizeof *out);
-  if (!dash_resolve_seg(ctx, filter, pmt_pid, lcevc, filename, &r)) return 0;
+  if (!dash_resolve_seg(STREAM_KEY_AS(k, SEG_CONTAINER_FMP4), f, &r)) return 0;
   if (r.status == 404) {
     resp_set(out, 404, NULL, NULL, NULL, 0, is_head);
     return 1;

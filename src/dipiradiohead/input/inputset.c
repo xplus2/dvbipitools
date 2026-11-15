@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/metrics/export.h"
 #include "lib/net/retryset.h"
 
@@ -35,7 +35,8 @@ typedef struct {
   unsigned sid;
   const char *service_name;
   const char *provider_name;
-  unsigned pmt_pid, audio_pid;
+  unsigned pmt_pid;
+  unsigned audio_pid;
 } slot_meta_t;
 
 struct inputset {

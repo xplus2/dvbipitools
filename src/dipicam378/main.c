@@ -15,6 +15,7 @@
 #include "device.h"
 #include "hooks.h"
 #include "version.h"
+#include "lib/helper/dateutil.h"
 
 /* banner prints before parsing: --color read early */
 int main(int argc, char **argv) {

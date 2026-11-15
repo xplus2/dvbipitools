@@ -33,14 +33,17 @@ static void build_rai_packet(unsigned char pkt[188], unsigned pid) {
 
 static size_t build_pat_pmt_rai(unsigned char *out, unsigned prog_num, unsigned pmt_pid, unsigned video_pid) {
   unsigned char sec[64];
-  size_t slen, off = 0;
+  size_t slen;
+  size_t off = 0;
 
   slen = psi_build_pat(0x1234, 0, prog_num, pmt_pid, sec, sizeof sec);
   wrap_section_packet(out + off, 0x0000, sec, slen);
   off += 188;
   {
     unsigned char body[16];
-    size_t n = 0, hdr, crc_at;
+    size_t n = 0;
+    size_t hdr;
+    size_t crc_at;
     uint32_t crc;
     body[n++] = (unsigned char)(prog_num >> 8);
     body[n++] = (unsigned char)prog_num;
@@ -78,7 +81,10 @@ static size_t build_pat_pmt_rai(unsigned char *out, unsigned prog_num, unsigned 
 
 START_TEST(channel_lookup_allocates_finds_and_exhausts) {
   channel_table_t *t = channel_table_new(2, 0, 0);
-  channel_t *a, *b, *a_again, *c;
+  channel_t *a;
+  channel_t *b;
+  channel_t *a_again;
+  channel_t *c;
   a = lookup_ip(t, "239.1.1.1", 5000);
   ck_assert_ptr_nonnull(a);
   b = lookup_ip(t, "239.1.1.2", 5000);
@@ -142,7 +148,9 @@ END_TEST
 START_TEST(channel_ring_wraps_and_overwrites_oldest) {
   channel_table_t *t = channel_table_new(1, 2, 0); /* only 2 ring slots */
   channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
-  unsigned char p1[1] = {1}, p2[1] = {2}, p3[1] = {3};
+  unsigned char p1[1] = {1};
+  unsigned char p2[1] = {2};
+  unsigned char p3[1] = {3};
   channel_slot_t out;
   channel_store(t, c, 1, 10, 0, 0, p1, 1); /* slot 10%2=0 */
   channel_store(t, c, 1, 11, 0, 0, p2, 1); /* slot 11%2=1 */
@@ -229,7 +237,7 @@ START_TEST(channel_lookup_by_resolve_slot_ignores_reused_index_with_other_slot) 
   size_t idx = (size_t)(a - &t->chan[0]);
 
   atomic_store_explicit(&a->last_seen, time(NULL) - 100, memory_order_relaxed);
-  channel_table_reap(t, 10);
+  channel_table_reap_step(t, 10, (t)->max_channels);
   atomic_store_explicit(&t->resolve_hash[old_slot], idx + 1, memory_order_relaxed); /* stale entry */
   a = lookup_ip(t, "239.1.1.1", 5000);
   a->resolve_slot = (old_slot + 1) % 8; /* index reused under another slot */
@@ -245,7 +253,7 @@ START_TEST(channel_lookup_by_resolve_slot_survives_reap_and_rediscovery) {
   size_t slot = a->resolve_slot;
 
   atomic_store_explicit(&a->last_seen, time(NULL) - 100, memory_order_relaxed);
-  channel_table_reap(t, 10);
+  channel_table_reap_step(t, 10, (t)->max_channels);
   ck_assert_ptr_null(channel_lookup_by_resolve_slot(t, slot));
 
   a = lookup_ip(t, "239.1.1.1", 5000);
@@ -304,10 +312,11 @@ END_TEST
 
 START_TEST(channel_table_reap_frees_stale_channels) {
   channel_table_t *t = channel_table_new(1, 0, 0);
-  channel_t *a, *b;
+  channel_t *a;
+  channel_t *b;
   a = lookup_ip(t, "239.1.1.1", 5000);
   ck_assert_ptr_nonnull(a);
-  channel_table_reap(t, -1); /* max_age -1: always "older" than now */
+  channel_table_reap_step(t, -1, (t)->max_channels); /* max_age -1: always "older" than now */
   b = lookup_ip(t, "239.1.1.2", 5000); /* slot should be free again */
   ck_assert_ptr_nonnull(b);
   ck_assert_ptr_eq(a, b); /* same underlying slot, reused */
@@ -319,11 +328,12 @@ END_TEST
    reclaimed slot must start that space fresh for new group */
 START_TEST(channel_lookup_reclaim_resets_rtx_seq_mc) {
   channel_table_t *t = channel_table_new(1, 0, 0);
-  channel_t *a, *b;
+  channel_t *a;
+  channel_t *b;
   a = lookup_ip(t, "239.1.1.1", 5000);
   ck_assert_ptr_nonnull(a);
   atomic_store_explicit(&a->rtx_seq_mc, 42, memory_order_relaxed);
-  channel_table_reap(t, -1); /* max_age -1: always "older" than now */
+  channel_table_reap_step(t, -1, (t)->max_channels); /* max_age -1: always "older" than now */
   b = lookup_ip(t, "239.1.1.2", 5000); /* slot reused for a different group */
   ck_assert_ptr_eq(a, b);
   ck_assert_uint_eq(atomic_load_explicit(&b->rtx_seq_mc, memory_order_relaxed), 0u);
@@ -335,7 +345,8 @@ END_TEST
    never all at once. cursor advances every call, eventually covers whole table */
 START_TEST(channel_table_reap_step_bounds_work_per_call) {
   channel_table_t *t = channel_table_new(4, 0, 0);
-  channel_t *a, *e;
+  channel_t *a;
+  channel_t *e;
 
   a = lookup_ip(t, "239.2.2.1", 5000);
   ck_assert_ptr_nonnull(a);
@@ -370,7 +381,7 @@ START_TEST(channel_lookup_churn_triggers_rebuild_without_hanging) {
     snprintf(group, sizeof group, "239.9.9.%d", i + 1);
     c = lookup_ip(t, group, 5000);
     ck_assert_ptr_nonnull(c);
-    channel_table_reap(t, -1); /* expire immediately: piles up tombstones */
+    channel_table_reap_step(t, -1, (t)->max_channels); /* expire immediately: piles up tombstones */
   }
 
   {
@@ -425,7 +436,8 @@ static void *ret_race_reader(void *arg) {
 
 START_TEST(channel_seqlock_race_no_torn_reads) {
   channel_table_t *t = channel_table_new(1, 64, 0); /* small ring: wraps under writer */
-  pthread_t writer, readers[RET_RACE_READER_THREADS];
+  pthread_t writer;
+  pthread_t readers[RET_RACE_READER_THREADS];
   long i;
 
   g_ret_race_table = t;
@@ -492,7 +504,8 @@ START_TEST(channel_fcc_cache_race_no_torn_reads) {
   channel_table_t *t = channel_table_new(1, 0, 8); /* small cache: wraps under writer */
   unsigned char discovery[3 * 188];
   size_t dlen;
-  pthread_t writer, readers[FCC_RACE_READER_THREADS];
+  pthread_t writer;
+  pthread_t readers[FCC_RACE_READER_THREADS];
   long i;
 
   g_fcc_race_table = t;
@@ -523,7 +536,8 @@ END_TEST
 #define SSRC_RACE_SPAN 8 /* distinct ssrcs cycled per channel */
 
 static channel_table_t *g_ssrc_race_table;
-static channel_t *g_ssrc_race_a, *g_ssrc_race_b;
+static channel_t *g_ssrc_race_a;
+static channel_t *g_ssrc_race_b;
 static _Atomic int g_ssrc_race_bad;
 
 static void *ssrc_race_writer(void *arg) {
@@ -553,7 +567,8 @@ static void *ssrc_race_reader(void *arg) {
 
 START_TEST(channel_find_by_ssrc_race_no_corruption) {
   channel_table_t *t = channel_table_new(2, 0, 0);
-  pthread_t writer, readers[SSRC_RACE_READER_THREADS];
+  pthread_t writer;
+  pthread_t readers[SSRC_RACE_READER_THREADS];
   long i;
 
   g_ssrc_race_table = t;
@@ -626,7 +641,7 @@ START_TEST(channel_table_at_reflects_in_use_and_capacity) {
     ck_assert_int_eq(found, 1);
   }
 
-  channel_table_reap(t, -1); /* max_age -1: always "older" than now */
+  channel_table_reap_step(t, -1, (t)->max_channels); /* max_age -1: always "older" than now */
   for (i = 0; i < channel_table_capacity(t); i++)
     ck_assert_ptr_null(channel_table_at(t, i)); /* reclaimed, no longer visible */
 
@@ -659,7 +674,8 @@ END_TEST
 START_TEST(channel_hned_seen_detects_collision_from_different_address) {
   channel_table_t *t = channel_table_new(1, 0, 0);
   channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
-  struct sockaddr_in a, b;
+  struct sockaddr_in a;
+  struct sockaddr_in b;
   uint32_t out[CHANNEL_HNED_COLLISION_MAX];
   size_t n;
 
@@ -678,7 +694,8 @@ END_TEST
 START_TEST(channel_hned_seen_cname_takes_precedence_over_address) {
   channel_table_t *t = channel_table_new(1, 0, 0);
   channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
-  struct sockaddr_in a, b;
+  struct sockaddr_in a;
+  struct sockaddr_in b;
   uint32_t out[CHANNEL_HNED_COLLISION_MAX];
 
   mk_addr(&a, 6001);
@@ -712,7 +729,8 @@ END_TEST
 START_TEST(channel_hned_seen_falls_back_to_address_without_cname) {
   channel_table_t *t = channel_table_new(1, 0, 0);
   channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
-  struct sockaddr_in a, b;
+  struct sockaddr_in a;
+  struct sockaddr_in b;
   uint32_t out[CHANNEL_HNED_COLLISION_MAX];
   size_t n;
 
@@ -731,7 +749,8 @@ END_TEST
 START_TEST(channel_hned_collisions_ages_out_past_max_age) {
   channel_table_t *t = channel_table_new(1, 0, 0);
   channel_t *c = lookup_ip(t, "239.1.1.1", 5000);
-  struct sockaddr_in a, b;
+  struct sockaddr_in a;
+  struct sockaddr_in b;
   uint32_t out[CHANNEL_HNED_COLLISION_MAX];
 
   mk_addr(&a, 6001);
@@ -749,7 +768,8 @@ START_TEST(channel_hned_collisions_are_per_channel) {
   channel_table_t *t = channel_table_new(2, 0, 0);
   channel_t *c1 = lookup_ip(t, "239.1.1.1", 5000);
   channel_t *c2 = lookup_ip(t, "239.1.1.2", 5000);
-  struct sockaddr_in a, b;
+  struct sockaddr_in a;
+  struct sockaddr_in b;
   uint32_t out[CHANNEL_HNED_COLLISION_MAX];
 
   mk_addr(&a, 6001);
@@ -922,7 +942,7 @@ START_TEST(reap_walks_past_tombstones_and_the_table_stays_usable) {
       addr[3] = (unsigned char)(i + 1);
       ck_assert_ptr_nonnull(channel_lookup(t, AF_INET, addr, sizeof addr, 5000 + round));
     }
-    channel_table_reap(t, -1);
+    channel_table_reap_step(t, -1, (t)->max_channels);
     for (i = 0; i < channel_table_capacity(t); i++)
       ck_assert_ptr_null(channel_table_at(t, i));
   }
@@ -941,7 +961,7 @@ START_TEST(reap_leaves_fresh_channels_and_removes_only_stale_ones) {
   channel_store(t, fresh, 0xA1, 1, 0, 0, payload, sizeof payload);
   channel_store(t, stale, 0xA2, 1, 0, 0, payload, sizeof payload);
   atomic_store(&stale->last_seen, time(NULL) - 500);
-  channel_table_reap(t, 100);
+  channel_table_reap_step(t, 100, (t)->max_channels);
   ck_assert_ptr_nonnull(channel_find_by_ssrc(t, 0xA1));
   ck_assert_ptr_null(channel_find_by_ssrc(t, 0xA2));
   channel_table_free(t);
@@ -963,7 +983,7 @@ START_TEST(reap_of_a_channel_whose_home_bucket_is_taken_probes_to_its_own_entry)
   ck_assert_ptr_nonnull(a);
   ck_assert_ptr_nonnull(b);
   atomic_store(&b->last_seen, time(NULL) - 500);
-  channel_table_reap(t, 100);
+  channel_table_reap_step(t, 100, (t)->max_channels);
   ck_assert_ptr_eq(channel_lookup(t, AF_INET, first, sizeof first, 5000), a);
   ck_assert_ptr_ne(channel_lookup(t, AF_INET, second, sizeof second, 5000), NULL);
   channel_table_free(t);
@@ -1020,7 +1040,7 @@ START_TEST(set_inspect_registers_the_aggregate_and_reclaim_detaches_the_channel_
   c = lookup_ip(t, "239.1.1.1", 5000);
   c->insp = tsinspect_agg_add(agg);
   ck_assert_ptr_nonnull(c->insp);
-  channel_table_reap(t, -1);
+  channel_table_reap_step(t, -1, (t)->max_channels);
   c = lookup_ip(t, "239.1.1.2", 5000);
   ck_assert_ptr_nonnull(c);
   ck_assert_ptr_null(c->insp);

@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include "lib/helper/argutil.h"
+#include "lib/net/rist/ristpeer.h"
 #include "lib/net/plain_endpoint.h"
 
 #define DIPIRIST_MAX_PEERS 8
@@ -18,14 +19,13 @@ typedef struct {
   plain_endpoint_t nonrist; /* valid iff !is_rist */
 } endpoint_t;
 
-typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_profile_sel_t;
 
 typedef struct {
   endpoint_t in;  /* -i */
   endpoint_t out; /* -o */
   int n_in;
   int n_out;
-  rist_profile_sel_t profile;
+  rist_prof_t profile;
   char secret[128];   /* "" = none; --profile main only */
   int key_size;       /* --encryption-type: 0 = default, 128/256; --profile main only */
   char cname[128];    /* "" = library default */
@@ -59,7 +59,5 @@ int dipirist_cfg_add_endpoint(config_t *cfg, int is_out, const char *uri);
 
 void endpoint_describe(const endpoint_t *e, char *buf, size_t n);
 
-/* uri without userinfo, query (secret), fragment, for logs */
-void dipirist_uri_redact(const char *uri, char *buf, size_t n);
 
 #endif

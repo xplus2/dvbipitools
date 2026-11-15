@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #include "tlscert.h"
 
@@ -17,7 +17,8 @@ static int file_exists(const char *path) {
 
 int tlscert_find(const char *explicit_cert, const char *explicit_key, const char **cert_out, const char **key_out) {
   static const char *const dirs[] = {".", "/etc/dvbipitools", "/etc/dvbipitools/dipixy"};
-  static char cert_buf[512], key_buf[512];
+  static char cert_buf[512];
+  static char key_buf[512];
 
   if (explicit_cert && explicit_key) {
     *cert_out = explicit_cert;

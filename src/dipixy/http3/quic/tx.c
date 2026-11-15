@@ -5,6 +5,7 @@
 
 #include "../http3.h"
 #include "../http3_int.h"
+#include "lib/helper/dateutil.h"
 
 #include <string.h>
 
@@ -12,7 +13,7 @@ _Thread_local int t_h3_udp4 = -1;
 _Thread_local int t_h3_udp6 = -1;
 
 void flush_tx(h3_conn_t *c, int udp_fd) {
-  ngtcp2_tstamp ts = h3_ts();
+  ngtcp2_tstamp ts = now_ns();
   uint8_t *buf = h3_udp_tx_buf();
   size_t max_udp = ngtcp2_conn_get_path_max_tx_udp_payload_size(c->qconn);
   size_t max_segs = ngtcp2_conn_get_send_quantum(c->qconn) / max_udp;

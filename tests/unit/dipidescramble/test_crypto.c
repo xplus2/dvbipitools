@@ -56,7 +56,8 @@ END_TEST
 START_TEST(emm_u_decrypt_recovers_bk) {
   EVP_PKEY *pkey = make_rsa_key();
   EVP_PKEY_CTX *ctx;
-  unsigned char bk[CRYPTO_KEY_LEN], recovered[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char recovered[CRYPTO_KEY_LEN];
   unsigned char ct[512];
   size_t ctlen = sizeof ct;
   int i;
@@ -82,7 +83,8 @@ START_TEST(emm_u_decrypt_rejects_wrong_key) {
   EVP_PKEY *pkey = make_rsa_key();
   EVP_PKEY *other = make_rsa_key();
   EVP_PKEY_CTX *ctx;
-  unsigned char bk[CRYPTO_KEY_LEN] = {0}, recovered[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN] = {0};
+  unsigned char recovered[CRYPTO_KEY_LEN];
   unsigned char ct[512];
   size_t ctlen = sizeof ct;
 
@@ -100,7 +102,9 @@ START_TEST(emm_u_decrypt_rejects_wrong_key) {
 END_TEST
 
 static void gcm_encrypt(const unsigned char key[CRYPTO_KEY_LEN], const unsigned char pt[CRYPTO_KEY_LEN], unsigned char out[CRYPTO_EMM_G_LEN]) {
-  unsigned char *nonce = out, *ct = out + CRYPTO_GCM_NONCE_LEN, *tag = out + CRYPTO_GCM_NONCE_LEN + CRYPTO_KEY_LEN;
+  unsigned char *nonce = out;
+  unsigned char *ct = out + CRYPTO_GCM_NONCE_LEN;
+  unsigned char *tag = out + CRYPTO_GCM_NONCE_LEN + CRYPTO_KEY_LEN;
   EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
   int len = 0;
 
@@ -115,7 +119,9 @@ static void gcm_encrypt(const unsigned char key[CRYPTO_KEY_LEN], const unsigned 
 }
 
 START_TEST(emm_g_decrypt_recovers_sk) {
-  unsigned char bk[CRYPTO_KEY_LEN], sk[CRYPTO_KEY_LEN], recovered[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN];
+  unsigned char sk[CRYPTO_KEY_LEN];
+  unsigned char recovered[CRYPTO_KEY_LEN];
   unsigned char blob[CRYPTO_EMM_G_LEN];
   int i;
 
@@ -131,7 +137,9 @@ START_TEST(emm_g_decrypt_recovers_sk) {
 END_TEST
 
 START_TEST(emm_g_decrypt_rejects_bad_tag) {
-  unsigned char bk[CRYPTO_KEY_LEN] = {0}, sk[CRYPTO_KEY_LEN] = {0}, recovered[CRYPTO_KEY_LEN];
+  unsigned char bk[CRYPTO_KEY_LEN] = {0};
+  unsigned char sk[CRYPTO_KEY_LEN] = {0};
+  unsigned char recovered[CRYPTO_KEY_LEN];
   unsigned char blob[CRYPTO_EMM_G_LEN];
 
   gcm_encrypt(bk, sk, blob);

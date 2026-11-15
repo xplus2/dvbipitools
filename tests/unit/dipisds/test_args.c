@@ -13,6 +13,7 @@
 #include "dipisds/cli/args.h"
 #include "dipisds/cli/priv.h"
 #include "lib/helper/log.h"
+#include "lib/helper/uriparse.h"
 #include "lib/net/netconnect.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1) /* -1: drop trailing NULL */
@@ -762,26 +763,17 @@ START_TEST(mcast_describe_formats_group_and_port) {
   config_t cfg = {0};
   char buf[96];
 
-  ck_assert_int_eq(sds_mcast_parse(describe_cases[_i].mcast, &cfg), 0);
+  ck_assert_int_eq(uriparse_mcast_addrport(describe_cases[_i].mcast, &cfg.family, cfg.mcast_group, sizeof cfg.mcast_group, &cfg.mcast_port), 0);
   mcast_describe(&cfg, buf, sizeof buf);
   ck_assert_str_eq(buf, describe_cases[_i].want);
 }
 END_TEST
 
-START_TEST(suffix_and_address_helpers) {
-  char addr[64];
-  unsigned port = 0;
-
+START_TEST(suffix_helper) {
   ck_assert_int_eq(sds_has_suffix("a.xml", ".xml"), 1);
   ck_assert_int_eq(sds_has_suffix("xml", ".xml"), 0);
   ck_assert_int_eq(sds_has_suffix("a.xmlx", ".xml"), 0);
   ck_assert_int_eq(sds_has_suffix("a.XML", ".xml"), 1);
-  ck_assert_int_eq(sds_ret_addr_parse("10.0.0.1:6000", addr, sizeof addr, &port), 0);
-  ck_assert_str_eq(addr, "10.0.0.1");
-  ck_assert_uint_eq(port, 6000u);
-  ck_assert_int_eq(sds_ret_addr_parse("10.0.0.1", addr, sizeof addr, &port), -1);
-  ck_assert_int_eq(sds_ret_addr_parse("10.0.0.1:0", addr, sizeof addr, &port), -1);
-  ck_assert_int_eq(sds_mcast_parse("127.0.0.1:5000", &(config_t){0}), -1);
 }
 END_TEST
 
@@ -997,7 +989,7 @@ static Suite *args_suite(void) {
   tcase_add_loop_test(tc, option_errors_report_their_message, 0, (int)(sizeof error_cases / sizeof error_cases[0]));
   tcase_add_loop_test(tc, consistency_checks_report_their_message, 0, (int)(sizeof check_cases / sizeof check_cases[0]));
   tcase_add_loop_test(tc, mcast_describe_formats_group_and_port, 0, (int)(sizeof describe_cases / sizeof describe_cases[0]));
-  tcase_add_test(tc, suffix_and_address_helpers);
+  tcase_add_test(tc, suffix_helper);
   tcase_add_test(tc, bcg_options_need_name_and_transport);
   tcase_add_test(tc, schema_option_is_listen_only_and_repeatable);
   tcase_add_test(tc, discovery_and_metrics_options_parse_and_reject);

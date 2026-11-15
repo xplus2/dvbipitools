@@ -2,15 +2,15 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "lib/helper/argutil.h"
 #include "lib/helper/log.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
 
 static int basic_auth_parse(const char *val, char *out, size_t outsz) {
   char err[64];
@@ -39,6 +39,11 @@ static const struct option longopts[] = {
   {"help", no_argument, 0, 'h'},
   {0, 0, 0, 0}};
 
+static const yamlcfg_opt_t opts[] = {
+    {'l', "listen", "MS000135", "invalid -l addr:port: %s", 0},
+    {'e', "expiry", "MS000136", "invalid -e expiry seconds: %s", 0},
+};
+
 args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   const char *cfg_path = NULL;
   const char *conflict;
@@ -46,6 +51,7 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
   int configtest = 0;
   int strict = 0;
   int c;
+  int r;
 
   if (argutil_prescan(argc, argv, shortopts, longopts, OPT_CONFIGTEST, OPT_CONFIG_STRICT, &cfg_path, &configtest, &strict)) {
     metrics_print_help();
@@ -58,6 +64,9 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
 
   optind = 1;
   while ((c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+    r = yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), metrics_cfg_keys, metrics_cfg_nkeys, cfg, c, optarg);
+    if (r < 0) return ARGS_ERR;
+    if (r > 0) continue;
     switch (c) {
       case 'S':
         if (!*optarg) {
@@ -66,21 +75,6 @@ args_status_t args_parse(int argc, char **argv, config_t *cfg) {
         }
         cfg->sock_path = optarg;
         break;
-      case 'l':
-        if (argutil_addrport_parse(optarg, &cfg->family, cfg->listen_addr, sizeof cfg->listen_addr, &cfg->listen_port)) {
-          argerr("MS000135", "invalid -l addr:port: %s", optarg);
-          return ARGS_ERR;
-        }
-        break;
-      case 'e': {
-        unsigned v;
-        if (argutil_uint_range(optarg, 1, UINT_MAX, &v)) {
-          argerr("MS000136", "invalid -e expiry seconds: %s", optarg);
-          return ARGS_ERR;
-        }
-        cfg->expiry_s = v;
-        break;
-      }
       case OPT_TLS_CERT:
         if (!*optarg) {
           argerr("MS000716", "empty --tls-cert path");

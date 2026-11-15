@@ -111,7 +111,7 @@ size_t chan_ssrc_hash(uint32_t ssrc) {
 }
 
 /* drops all tombstones, reinserts every ssrc-known live entry */
-void ssrc_hash_rebuild(channel_table_t *t) {
+static void ssrc_hash_rebuild(channel_table_t *t) {
   size_t live = 0;
 
   for (size_t h = 0; h < t->ssrc_hash_size; h++)

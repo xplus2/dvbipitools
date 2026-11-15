@@ -8,6 +8,7 @@
 #include <librist/librist.h>
 
 #include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/pipereader.h"
 #include "lib/sys/signal.h"
@@ -105,7 +106,7 @@ ristin_t *ristin_open(const ristin_cfg_t *cfg) {
   if (cfg->cname) bufcpy(r->cname, sizeof r->cname, cfg->cname);
   r->key_size = cfg->key_size;
   r->buffer_ms = cfg->buffer_ms;
-  r->simple = cfg->profile != RISTIN_PROFILE_MAIN;
+  r->simple = cfg->profile != RIST_PROF_MAIN;
   r->verbose = cfg->verbose;
   r->ctx = ctx_start(r);
   if (!r->ctx) {

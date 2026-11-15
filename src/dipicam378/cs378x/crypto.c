@@ -3,13 +3,7 @@
 
 #include <openssl/evp.h>
 
-#include "lib/demux/crc32.h"
-
 #include "cs378x.h"
-
-uint32_t cs378x_crc32(const unsigned char *buf, size_t len) {
-  return crc32_zlib(0, buf, len);
-}
 
 int cs378x_md5(const unsigned char *data, size_t len, unsigned char out[16]) {
   unsigned int outlen = 0;
@@ -19,7 +13,8 @@ int cs378x_md5(const unsigned char *data, size_t len, unsigned char out[16]) {
 /* AES-128, plain ECB, no padding */
 int cs378x_aes128_ecb(const unsigned char key[16], unsigned char *buf, size_t len, int encrypt) {
   EVP_CIPHER_CTX *ctx;
-  int outlen, ok = 0;
+  int outlen;
+  int ok = 0;
   if (len == 0 || len % 16 != 0) return -1;
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx) return -1;

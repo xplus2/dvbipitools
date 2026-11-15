@@ -243,7 +243,7 @@ int psi_wants_pid(const psi_t *c, unsigned pid) {
       break;
   }
   if (c->pmt_locked && !c->multi_mode) return pid == c->pmt_pid;
-  return c->have_pat && pid < 8192 && c->pmt_wanted[pid];
+  return c->have_pat && pid < TS_PID_COUNT && c->pmt_wanted[pid];
 }
 
 void psi_select_pmt_pid(psi_t *c, unsigned pmt_pid) { c->preferred_pmt_pid = pmt_pid; }

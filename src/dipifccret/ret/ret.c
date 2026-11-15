@@ -8,12 +8,12 @@
 #include "lib/helper/log.h"
 #include "lib/mux/rtcp_build.h"
 #include "lib/mux/rtx.h"
-#include "lib/sys/ioutil.h"
 
 #include "../version.h"
 #include "ratelimit.h"
 #include "ret.h"
 #include "rtx_session_table.h"
+#include "lib/helper/dateutil.h"
 
 #define RET_LIMIT_SLOTS 4096 /* per-source buckets, direct-mapped */
 #define RET_BUCKET_SECONDS 3 /* depth = rate x this */
@@ -126,16 +126,6 @@ static int repair_seq(ret_ctx_t *r, channel_t *c, uint16_t seq, int fd, const st
   return 1;
 }
 
-static void repair_range(ret_ctx_t *r, channel_t *c, uint16_t start, uint16_t end) {
-  uint16_t seq = start;
-  for (;;) {
-    channel_slot_t slot;
-    if (channel_find(c, seq, &slot)) repair_one(r, c, &slot);
-    if (seq == end) break;
-    seq++;
-  }
-}
-
 void ret_handle_nack(ret_ctx_t *r, const rtcp_nack_t *nack, int fd, const struct sockaddr *from, socklen_t fromlen) {
   channel_t *c = channel_find_by_ssrc(r->channels, nack->media_ssrc);
   unsigned char ff[12 + 4 * RTCP_NACK_MAX_ENTRIES];
@@ -173,16 +163,3 @@ limited:
   note_limited(r);
 }
 
-void ret_on_self_detected_gap(ret_ctx_t *r, uint32_t ssrc, uint16_t gap_start, uint16_t gap_end) {
-  channel_t *c = channel_find_by_ssrc(r->channels, ssrc);
-  rtcp_nack_entry_t entry;
-  unsigned char ff[16];
-  size_t ff_len;
-  if (!c) return;
-
-  entry.pid = gap_start;
-  entry.blp = 0; /* signals gap start only; repair below still covers full range */
-  ff_len = rtcp_build_ff(0, ssrc, &entry, 1, ff, sizeof ff);
-  if (ff_len > 0) r->send_mc(c, ff, ff_len, NET_DSCP_SIGNALLING, r->send_mc_user);
-  repair_range(r, c, gap_start, gap_end);
-}

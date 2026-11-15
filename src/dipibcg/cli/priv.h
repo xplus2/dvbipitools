@@ -31,5 +31,6 @@
 #define argerr(...) argutil_err(TOOL_NAME, __VA_ARGS__)
 
 void bcg_print_help(void);
+args_status_t bcg_cli_check(config_t *cfg);
 
 #endif

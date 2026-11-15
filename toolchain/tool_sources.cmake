@@ -8,6 +8,8 @@
 # schema loader and compiler
 set(BIM_XSD_SRCS
         ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/model/core.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+        ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
         ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/model/parse.c
         ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/model/doc.c
         ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/model/resolve.c
@@ -19,10 +21,7 @@ set(BIM_XSD_SRCS
         ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/compile/sbc.c
         ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/compile/codes.c
         ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/compile/compile.c
-        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/pattern.c
-        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/encschema.c
-        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/schemaupdate.c
-        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/schemagen.c)
+        ${CMAKE_SOURCE_DIR}/src/lib/bim/xsd/pattern.c)
 
 function(dipibcg_resolve_sources)
     option(DIPIBCG_ZLIB "build dipibcg with zlib compression support for BCG containers" ON)
@@ -44,6 +43,7 @@ function(dipibcg_resolve_sources)
     endif ()
     set(DIPIBCG_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipibcg/main.c
+            ${CMAKE_SOURCE_DIR}/src/dipibcg/cli/check.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/cli/args.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/cli/help.c
             ${CMAKE_SOURCE_DIR}/src/dipibcg/config.c
@@ -76,6 +76,8 @@ function(dipibcg_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -203,6 +205,8 @@ function(dipibim_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/tree.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/nodexml.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/api.c
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/libyaml/reader.c
@@ -255,7 +259,10 @@ function(dipicam378_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/antidebug.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/secure_zero.c)
@@ -397,6 +404,8 @@ function(dipidescramble_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/parse.c
@@ -498,9 +507,12 @@ function(dipifccret_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/cpuaffinity.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/sockaddr_index.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
@@ -562,8 +574,11 @@ function(dipimetrics_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/base64.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
             ${TLS_SRC}
             ${TLS_SERVER_SRC})
@@ -710,6 +725,8 @@ function(dipiradiohead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/fetch.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/bitreader.c
@@ -803,7 +820,8 @@ function(dipirec_resolve_sources)
     endif ()
     if (DIPIREC_HAVE_TLS)
         set(TLS_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls.c)
-        set(RTMP_AUTH_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth.c)
+        set(RTMP_AUTH_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth.c
+${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c)
     else ()
         set(TLS_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/tls_stub.c)
         set(RTMP_AUTH_SRC ${CMAKE_SOURCE_DIR}/src/lib/net/rtmp/auth_stub.c)
@@ -919,6 +937,8 @@ function(dipirec_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/rtp.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/rtx.c
@@ -1054,6 +1074,8 @@ function(dipirist_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
@@ -1191,6 +1213,8 @@ function(dipisrt_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
@@ -1280,6 +1304,7 @@ function(dipiscan_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/sds_xml.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/escape.c
@@ -1288,6 +1313,8 @@ function(dipiscan_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/httpclient.c
@@ -1395,6 +1422,7 @@ function(dipixy_resolve_sources)
     if (DIPIXY_HAVE_HTTP2)
         set(DIPIXY_HTTP2_SRCS
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2.c
+                ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_tspush.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_dashchunk.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http2/http2_mp4push.c
@@ -1465,6 +1493,8 @@ function(dipixy_resolve_sources)
     if (DIPIXY_HAVE_HTTP3)
         set(DIPIXY_HTTP3_SRCS
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/http3.c
+                ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+                ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/quic/limits.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/quic/pool.c
                 ${CMAKE_SOURCE_DIR}/src/dipixy/http3/quic/callbacks.c
@@ -1495,6 +1525,9 @@ function(dipixy_resolve_sources)
 
     set(DIPIXY_SRCS
             ${CMAKE_SOURCE_DIR}/src/dipixy/main.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/subtab.c
+            ${CMAKE_SOURCE_DIR}/src/dipixy/reactor/wake.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/idxstack.c
             ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/core.c
             ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/tick.c
             ${CMAKE_SOURCE_DIR}/src/lib/tsinspect/packet.c
@@ -1533,7 +1566,6 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/ctx/open.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/ctx/lifecycle.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/pump.c
-            ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/service.c
             ${CMAKE_SOURCE_DIR}/src/dipixy/ts/capture/source.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/m3u_lines.c
             ${CMAKE_SOURCE_DIR}/src/lib/hls/playlist.c
@@ -1660,6 +1692,8 @@ function(dipixy_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/cpuaffinity.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/byte_ring.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
@@ -1763,6 +1797,8 @@ function(sdns_bim_resolve tool)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${BIM_XSD_SRCS}
             ${CMAKE_SOURCE_DIR}/src/lib/helper/log.c
             ${CMAKE_SOURCE_DIR}/src/lib/bim/sdns/decode.c
@@ -1826,6 +1862,7 @@ function(dipisds_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/argutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/signal.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/toolmain.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/protocol.c
             ${CMAKE_SOURCE_DIR}/src/lib/metrics/export.c
@@ -1836,6 +1873,8 @@ function(dipisds_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/multicast.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/netconnect.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/dvbstp.c
@@ -2047,6 +2086,8 @@ function(dipitvhead_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/vendor/picohttpparser/picohttpparser.c
             ${CMAKE_SOURCE_DIR}/src/lib/net/httpclient/async.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/crc32.c
             ${CMAKE_SOURCE_DIR}/src/lib/demux/psi/psi.c
@@ -2094,6 +2135,8 @@ function(dipixmltv_resolve_sources)
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/scan.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/xml_util/query.c
             ${CMAKE_SOURCE_DIR}/src/lib/sys/ioutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/strutil.c
+            ${CMAKE_SOURCE_DIR}/src/lib/helper/growutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/dateutil.c
             ${CMAKE_SOURCE_DIR}/src/lib/helper/uriparse.c
             ${CMAKE_SOURCE_DIR}/src/lib/tva/bcg_doc.c

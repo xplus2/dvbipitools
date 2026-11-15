@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "../../helper/log.h"
-#include "../../sys/ioutil.h"
+#include "../../helper/strutil.h"
 
 #include "priv.h"
 
@@ -118,7 +118,11 @@ int resolve_location(http_url_t *u, const char *loc) {
   ref[n] = '\0';
   if (ref[0] == '/' && ref[1] == '/') {
     char full[sizeof u->path + 8];
-    if (snprintf(full, sizeof full, "%s:%s", u->tls ? "https" : "http", ref) >= (int)sizeof full) return -1;
+    sbuf_t fb;
+    sbuf_init(&fb, full, sizeof full);
+    sbuf_add(&fb, u->tls ? "https:" : "http:");
+    sbuf_add(&fb, ref);
+    if (fb.truncated) return -1;
     return http_url_parse(full, u);
   }
   if (ref[0] == '\0') return 0; /* fragment only */

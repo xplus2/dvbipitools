@@ -5,12 +5,13 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/net/netconnect.h"
 #include "../config.h"
 #include "../input/inputset.h"
 #include "../mux/tspacketizer.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
 
 #define RDH_PID_CAT 0x0001
 #define RDH_PID_NIT 0x0010
@@ -47,25 +48,6 @@ void rdh_cfg_defaults(config_t *cfg) {
   cfg->cas_cp_duration_ms = 10000;
 }
 
-int rdh_set_buf(char *dst, size_t sz, const char *v, char *e, size_t n) {
-  if (strlen(v) >= sz) {
-    snprintf(e, n, "too long (max %zu)", sz - 1);
-    return -1;
-  }
-  bufcpy(dst, sz, v);
-  return 0;
-}
-
-int rdh_set_pbkeylen(int *dst, const char *v, char *e, size_t n) {
-  unsigned u;
-  if (argutil_uint_range(v, 16, 32, &u) || (u != 16 && u != 24 && u != 32)) {
-    snprintf(e, n, "invalid '%s' (16|24|32)", v);
-    return -1;
-  }
-  *dst = (int)u;
-  return 0;
-}
-
 int rdh_add_input(config_t *cfg, const char *uri, char *e, size_t n) {
   if (cfg->n_inputs >= RADIOHEAD_MAX_INPUTS) {
     snprintf(e, n, "too many inputs (max %d)", RADIOHEAD_MAX_INPUTS);
@@ -87,7 +69,7 @@ int rdh_add_peer(config_t *cfg, const char *uri, char *e, size_t n) {
       snprintf(e, n, "too many peers (max %d)", ARGS_MAX_RIST_PEERS);
       return -1;
     }
-    if (rdh_set_buf(cfg->rist_uri[cfg->n_rist], sizeof cfg->rist_uri[0], uri, e, n)) return -1;
+    if (yamlcfg_set_buf(cfg->rist_uri[cfg->n_rist], sizeof cfg->rist_uri[0], uri, e, n)) return -1;
     cfg->n_rist++;
     return 0;
   }

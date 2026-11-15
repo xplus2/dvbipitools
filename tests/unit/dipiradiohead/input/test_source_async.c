@@ -62,10 +62,12 @@ START_TEST(source_open_async_completes_for_plain_body) {
 END_TEST
 
 START_TEST(source_open_async_follows_playlist_redirect) {
-  unsigned port_a, port_b;
+  unsigned port_a;
+  unsigned port_b;
   int listen_a = fixture_listener(&port_a);
   int listen_b = fixture_listener(&port_b);
-  pthread_t th_a, th_b;
+  pthread_t th_a;
+  pthread_t th_b;
   http_fixture_t fx_a;
   http_fixture_t fx_b;
   char resp_a[256];

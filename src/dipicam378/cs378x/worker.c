@@ -14,10 +14,13 @@
 #include <unistd.h>
 
 #include "lib/helper/log.h"
+#include "lib/helper/strutil.h"
+#include "lib/demux/crc32.h"
 #include "lib/sys/signal.h"
 
 #include "../version.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 static void reap_worker_slot(cs378x_server_t *s, int slot) {
   if (!s->worker_thread_joinable[slot]) return;
@@ -85,7 +88,8 @@ static frame_status_t frame_timeout(int slot, int authed) {
 static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned char *buf,
   unsigned char **body_out, size_t *buflen_out, unsigned char conn_ucrc[4], int *have_ucrc, int authed, double deadline) {
   unsigned char *body = buf + 4;
-  size_t buflen, total;
+  size_t buflen;
+  size_t total;
   int rc;
 
   rc = read_exact(fd, buf, CS378X_MIN_FRAME, &s->stop, deadline);
@@ -126,7 +130,7 @@ static frame_status_t read_frame(cs378x_server_t *s, int fd, int slot, unsigned 
     if (cs378x_aes128_ecb(s->aes_key, body + 32, total - 32, 0) != 0) return FRAME_STOP;
   }
 
-  if (cs378x_crc32(body + 20, buflen) != (((uint32_t)body[4] << 24) | ((uint32_t)body[5] << 16) | ((uint32_t)body[6] << 8) | body[7])) {
+  if (crc32_zlib(0, body + 20, buflen) != (((uint32_t)body[4] << 24) | ((uint32_t)body[5] << 16) | ((uint32_t)body[6] << 8) | body[7])) {
     log_code("3W300104", TOOL_NAME ": checksum error, wrong password? (slot %d)", slot);
     atomic_fetch_add_explicit(&s->auth_errors_total[CAM_AUTH_CHECKSUM], 1, memory_order_relaxed);
     return FRAME_AUTH_FAIL;
@@ -196,7 +200,7 @@ static void *worker_main(void *arg) {
 int tcp_listen(const char *bind_addr, unsigned port) {
   struct addrinfo hints;
   struct addrinfo *ai;
-  char portstr[8];
+  char portstr[12];
   int fd;
   int on = 1;
   int off = 0;
@@ -207,7 +211,7 @@ int tcp_listen(const char *bind_addr, unsigned port) {
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE;
-  snprintf(portstr, sizeof portstr, "%u", port);
+  uint_to_str(portstr, port);
   rc = getaddrinfo(bind_addr, portstr, &hints, &ai);
   if (rc != 0) {
     log_code("3S000133", TOOL_NAME ": bind address %s: %s", bind_addr, gai_strerror(rc));

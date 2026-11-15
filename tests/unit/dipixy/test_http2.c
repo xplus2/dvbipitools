@@ -506,9 +506,9 @@ START_TEST(ops_llhls_try_park_parks_and_clears_on_close) {
   memset(&filter, 0, sizeof filter);
   memset(&lcevc, 0, sizeof lcevc);
   memset(&req, 0, sizeof req);
-  req.filter = &filter;
-  req.lcevc = &lcevc;
-  req.filename = "x.m3u8";
+  req.key.filter = &filter;
+  req.key.lcevc = &lcevc;
+  req.file = &(route_file_t){.kind = ROUTE_FILE_INDEX_LL};
   req.timeout_ms = 1000;
   ck_assert_int_eq(h2_httpng_ops.llhls_try_park(r.h2, &ctx, &req), 1);
   h2_llhls_on_stream_close(r.h2, sid);

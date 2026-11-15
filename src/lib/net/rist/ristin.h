@@ -5,12 +5,12 @@
 #define DVBIPITOOLS_LIB_NET_RIST_RISTIN_H
 
 #include "lib/metrics/export.h"
+#include "lib/net/rist/ristpeer.h"
 
-typedef enum { RISTIN_PROFILE_SIMPLE, RISTIN_PROFILE_MAIN } ristin_profile_t;
 
 typedef struct {
   const char *peer_uri;    /* rist://@host:port[?query], single peer, @ required (listen) */
-  ristin_profile_t profile;
+  rist_prof_t profile;
   const char *secret;      /* NULL/"" = none; profile main only */
   int key_size;            /* 0 = default, else 128/256 */
   const char *cname;       /* NULL/"" = library default */

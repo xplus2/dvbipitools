@@ -38,7 +38,7 @@ static const unsigned char *ex_video_fourcc(codec_t c) {
 static const unsigned char FOURCC_AC3[4] = {'a', 'c', '-', '3'};
 static const unsigned char FOURCC_EAC3[4] = {'e', 'c', '-', '3'};
 
-void flv_send_tag(flv_t *f, flv_tag_type_t type, uint32_t ts, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
+static void flv_send_tag(flv_t *f, flv_tag_type_t type, uint32_t ts, const unsigned char *hdr, size_t hn, const unsigned char *payload, size_t pn) {
   if (f->bytes) *f->bytes += hn + pn;
   if (f->cb) f->cb(f->cb_ctx, type, ts, hdr, hn, payload, pn);
 }

@@ -8,38 +8,17 @@
 #include "lib/cas/device_state_core.h"
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "config.h"
 #include "version.h"
+#include "lib/net/rist/ristpeer.h"
 
 void dscr_cfg_defaults(config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
 }
 
-static int set_buf(char *dst, size_t sz, const char *v, char *e, size_t n) {
-  if (strlen(v) >= sz) {
-    snprintf(e, n, "too long (max %zu)", sz - 1);
-    return -1;
-  }
-  bufcpy(dst, sz, v);
-  return 0;
-}
-
-static int set_pbkeylen(int *dst, const char *v, char *e, size_t n) {
-  unsigned u;
-  if (argutil_uint_range(v, 16, 32, &u) || (u != 16 && u != 24 && u != 32)) {
-    snprintf(e, n, "invalid '%s' (16|24|32)", v);
-    return -1;
-  }
-  *dst = (int)u;
-  return 0;
-}
-
 static int apply_input(void *c, const char *v, char *e, size_t n) {
-  if (dscr_cfg_set_input(c, v)) {
-    snprintf(e, n, "invalid '%s' (uri)", v);
-    return -1;
-  }
+  if (dscr_cfg_set_input(c, v)) return yamlcfg_bad(e, n, v, "uri");
   return 0;
 }
 
@@ -71,10 +50,7 @@ static int apply_token_header(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   const char *hdr;
   if (yamlcfg_set_str(&cfg->str_pool, &hdr, v, e, n)) return -1;
-  if (dscr_cfg_token_header(c, hdr)) {
-    snprintf(e, n, "invalid '%s' (no space or colon)", v);
-    return -1;
-  }
+  if (dscr_cfg_token_header(c, hdr)) return yamlcfg_bad(e, n, v, "no space or colon");
   return 0;
 }
 
@@ -92,10 +68,7 @@ static int apply_output(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_format(void *c, const char *v, char *e, size_t n) {
-  if (dscr_cfg_format(c, v)) {
-    snprintf(e, n, "invalid '%s' (ts|mkv|mka)", v);
-    return -1;
-  }
+  if (dscr_cfg_format(c, v)) return yamlcfg_bad(e, n, v, "ts|mkv|mka");
   return 0;
 }
 
@@ -104,10 +77,7 @@ static int apply_strip_lcevc(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_pmt_pid(void *c, const char *v, char *e, size_t n) {
-  if (dscr_cfg_pmt(c, v)) {
-    snprintf(e, n, "invalid '%s' (0x0010..0x1FFE, or all)", v);
-    return -1;
-  }
+  if (dscr_cfg_pmt(c, v)) return yamlcfg_bad(e, n, v, "0x0010..0x1FFE, or all");
   return 0;
 }
 
@@ -130,60 +100,42 @@ static int apply_color(void *c, const char *v, char *e, size_t n) {
 
 static int apply_biss2_sw(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (biss_parse_hex16(v, cfg->biss2_sw)) {
-    snprintf(e, n, "invalid '%s' (32 hex chars)", v);
-    return -1;
-  }
+  if (biss_parse_hex16(v, cfg->biss2_sw)) return yamlcfg_bad(e, n, v, "32 hex chars");
   cfg->biss2_sw_given = 1;
   return 0;
 }
 
 static int apply_biss2_esw(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (biss_parse_hex16(v, cfg->biss2_esw)) {
-    snprintf(e, n, "invalid '%s' (32 hex chars)", v);
-    return -1;
-  }
+  if (biss_parse_hex16(v, cfg->biss2_esw)) return yamlcfg_bad(e, n, v, "32 hex chars");
   cfg->biss2_esw_given = 1;
   return 0;
 }
 
 static int apply_biss2_id(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (biss_parse_hex16(v, cfg->biss2_id)) {
-    snprintf(e, n, "invalid '%s' (32 hex chars)", v);
-    return -1;
-  }
+  if (biss_parse_hex16(v, cfg->biss2_id)) return yamlcfg_bad(e, n, v, "32 hex chars");
   cfg->biss2_id_given = 1;
   return 0;
 }
 
 static int apply_biss1_sw(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (biss1_parse_sw(v, cfg->biss1_sw)) {
-    snprintf(e, n, "invalid '%s' (12 hex chars)", v);
-    return -1;
-  }
+  if (biss1_parse_sw(v, cfg->biss1_sw)) return yamlcfg_bad(e, n, v, "12 hex chars");
   cfg->biss1_sw_given = 1;
   return 0;
 }
 
 static int apply_biss1_esw(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (biss1_parse_esw(v, cfg->biss1_esw)) {
-    snprintf(e, n, "invalid '%s' (16 hex chars)", v);
-    return -1;
-  }
+  if (biss1_parse_esw(v, cfg->biss1_esw)) return yamlcfg_bad(e, n, v, "16 hex chars");
   cfg->biss1_esw_given = 1;
   return 0;
 }
 
 static int apply_biss1_id(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (biss1_parse_id(v, cfg->biss1_id)) {
-    snprintf(e, n, "invalid '%s' (14 hex chars)", v);
-    return -1;
-  }
+  if (biss1_parse_id(v, cfg->biss1_id)) return yamlcfg_bad(e, n, v, "14 hex chars");
   cfg->biss1_id_given = 1;
   return 0;
 }
@@ -246,38 +198,32 @@ static int apply_max_services(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_profile(void *c, const char *v, char *e, size_t n) {
-  if (dscr_cfg_profile(c, v)) {
-    snprintf(e, n, "invalid '%s' (simple|main)", v);
-    return -1;
-  }
+  if (dscr_cfg_profile(c, v)) return yamlcfg_bad(e, n, v, RIST_PROF_HINT);
   return 0;
 }
 
 static int apply_encryption_type(void *c, const char *v, char *e, size_t n) {
-  if (argutil_rist_key_size(v, &((config_t *)c)->rist_key_size)) {
-    snprintf(e, n, "invalid '%s' (128|256)", v);
-    return -1;
-  }
+  if (argutil_rist_key_size(v, &((config_t *)c)->rist_key_size)) return yamlcfg_bad(e, n, v, ARGUTIL_RIST_KEY_SIZE_HINT);
   return 0;
 }
 
 static int apply_srt_passphrase_in(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return set_buf(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_passphrase_in, sizeof cfg->srt_passphrase_in, v, e, n);
 }
 
 static int apply_srt_pbkeylen_in(void *c, const char *v, char *e, size_t n) {
-  return set_pbkeylen(&((config_t *)c)->srt_pbkeylen_in, v, e, n);
+  return yamlcfg_set_int_by(&((config_t *)c)->srt_pbkeylen_in, v, argutil_srt_pbkeylen, ARGUTIL_SRT_PBKEYLEN_HINT, e, n);
 }
 
 static int apply_srt_streamid_in(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return set_buf(cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_streamid_in, sizeof cfg->srt_streamid_in, v, e, n);
 }
 
 static int apply_srt_packetfilter_in(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return set_buf(cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_packetfilter_in, sizeof cfg->srt_packetfilter_in, v, e, n);
 }
 
 static int apply_srt_latency_in(void *c, const char *v, char *e, size_t n) {
@@ -286,28 +232,28 @@ static int apply_srt_latency_in(void *c, const char *v, char *e, size_t n) {
 
 static int apply_srt_passphrase(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return set_buf(cfg->srt_passphrase, sizeof cfg->srt_passphrase, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_passphrase, sizeof cfg->srt_passphrase, v, e, n);
 }
 
 static int apply_srt_pbkeylen(void *c, const char *v, char *e, size_t n) {
-  return set_pbkeylen(&((config_t *)c)->srt_pbkeylen, v, e, n);
+  return yamlcfg_set_int_by(&((config_t *)c)->srt_pbkeylen, v, argutil_srt_pbkeylen, ARGUTIL_SRT_PBKEYLEN_HINT, e, n);
 }
 
 static int apply_srt_streamid(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return set_buf(cfg->srt_streamid, sizeof cfg->srt_streamid, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_streamid, sizeof cfg->srt_streamid, v, e, n);
 }
 
 static int apply_srt_packetfilter(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return set_buf(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, v, e, n);
 }
 
 static int apply_srt_latency(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->srt_latency_ms, v, 1, 60000, e, n);
 }
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t dscr_cfg_keys[] = {
   {"input", apply_input, 0, 0},
   {"key", apply_key, 1, 0},
   {"serial", apply_serial, 0, 0},
@@ -351,11 +297,12 @@ static const yamlcfg_key_t keys[] = {
   {"srt.packetfilter", apply_srt_packetfilter, 0, 0},
   {"srt.latency", apply_srt_latency, 0, 0},
 };
+const size_t dscr_cfg_nkeys = sizeof dscr_cfg_keys / sizeof dscr_cfg_keys[0];
 
 int dscr_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
+  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, dscr_cfg_keys, dscr_cfg_nkeys, cfg);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -376,7 +323,7 @@ int dscr_cfg_test(const char *path, int strict) {
   int n_srt;
 
   dscr_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, dscr_cfg_keys, dscr_cfg_nkeys, &cfg) != YAMLCFG_LOADED) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }

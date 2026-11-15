@@ -8,6 +8,7 @@
 #include "lib/bim/sdnsbim.h"
 #include "lib/bim/tvainit.h"
 #include "lib/bim/xsd/xsd.h"
+#include "lib/helper/strutil.h"
 
 int bim_sdnsbim_root(const void *ctx, unsigned code, bim_tvaroot_t *out) {
   const bim_sdnsroots_t *r = ctx;
@@ -65,7 +66,7 @@ int bim_sdnsdoc_open(bim_sdnsdoc_t *d, const char *const *paths, int npaths, con
   if ((rc == XSD_LOAD_NONE && !ns) || (!rc && !ns && !tns[0])) rc = -3;
   if (!rc && xsd_compile(d->set, &co, &d->c)) rc = -1;
   if (rc) return rc;
-  snprintf(d->ns, sizeof d->ns, "%s", ns ? ns : tns);
+  bufcpy(d->ns, sizeof d->ns, ns ? ns : tns);
   return 0;
 }
 

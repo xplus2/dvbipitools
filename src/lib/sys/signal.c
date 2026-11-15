@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "signal.h"
+#include "lib/helper/dateutil.h"
 
 /* atomic, not just volatile sig_atomic_t: readers run on other threads now (CAS worker threads),
    and volatile alone gives no cross-thread ordering under C11 */
@@ -81,12 +82,6 @@ int signal_reload_requested(void) { return atomic_exchange_explicit(&g_reload, 0
 int signal_template_reload_requested(void) { return atomic_exchange_explicit(&g_tpl_reload, 0, memory_order_relaxed); }
 
 int signal_tls_reload_requested(void) { return atomic_exchange_explicit(&g_tls_reload, 0, memory_order_relaxed); }
-
-double mono_seconds(void) {
-  struct timespec t;
-  clock_gettime(CLOCK_MONOTONIC, &t);
-  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
 
 int signal_wake_fd(void) { return g_wake_fd; }
 

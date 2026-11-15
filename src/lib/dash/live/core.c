@@ -5,10 +5,10 @@
 #include <string.h>
 
 #include "lib/dash/live.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 #include "lib/dash/live/live_int.h"
+#include "lib/helper/dateutil.h"
 
 void dash_live_emit(dash_live_t *h, const unsigned char *data, size_t len) {
   size_t room = sizeof h->out_buf - h->out_len;

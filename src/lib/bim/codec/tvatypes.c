@@ -48,25 +48,26 @@ int tva_datetime_decode(bitreader_t *br, char *out, size_t cap) {
   int y;
   int mo;
   int d;
-  int n;
+  sbuf_t s;
   if (bitreader_get(br, 32, &mjd) || bitreader_get(br, 32, &ms) || ms >= (uint64_t)MS_PER_DAY || mjd > 0xFFFFFu) return -1;
   mjd_to_date((long)mjd, &y, &mo, &d);
-  n = snprintf(out, cap, "%04d-%02d-%02dT%02u:%02u:%02u", y, mo, d, (unsigned)(ms / 3600000), (unsigned)(ms / 60000 % 60), (unsigned)(ms / 1000 % 60));
-  if (n < 0 || (size_t)n >= cap) return -1;
+  sbuf_init(&s, out, cap);
+  sbuf_add_upad(&s, "", (unsigned)y, 4);
+  sbuf_add_upad(&s, "-", (unsigned)mo, 2);
+  sbuf_add_upad(&s, "-", (unsigned)d, 2);
+  sbuf_add_upad(&s, "T", (unsigned)(ms / 3600000), 2);
+  sbuf_add_upad(&s, ":", (unsigned)(ms / 60000 % 60), 2);
+  sbuf_add_upad(&s, ":", (unsigned)(ms / 1000 % 60), 2);
   if (ms % 1000) {
     char frac[8];
-    size_t k;
-    snprintf(frac, sizeof frac, ".%03u", (unsigned)(ms % 1000));
-    k = strlen(frac);
+    size_t k = uint_to_str_pad(frac, (unsigned)(ms % 1000), 3);
     while (frac[k - 1] == '0') k--;
     frac[k] = '\0';
-    if ((size_t)n + strlen(frac) >= cap) return -1;
-    strcpy(out + n, frac);
-    n += (int)strlen(frac);
+    sbuf_add(&s, ".");
+    sbuf_add(&s, frac);
   }
-  if ((size_t)n + 2 > cap) return -1;
-  strcpy(out + n, "Z");
-  return 0;
+  sbuf_add(&s, "Z");
+  return s.truncated ? -1 : 0;
 }
 
 int tva_date_encode(bitwriter_t *bw, const char *v) {
@@ -76,10 +77,14 @@ int tva_date_encode(bitwriter_t *bw, const char *v) {
   int used = 0;
   long mjd;
   char back[16];
+  sbuf_t s;
   if (sscanf(v, "%4d-%2d-%2d%n", &y, &mo, &d, &used) != 3 || v[used] || mo < 1 || mo > 12 || d < 1 || d > 31) return -1;
   mjd = date_to_mjd(y, mo, d);
   mjd_to_date(mjd, &y, &mo, &d);
-  snprintf(back, sizeof back, "%04d-%02d-%02d", y, mo, d);
+  sbuf_init(&s, back, sizeof back);
+  sbuf_add_upad(&s, "", (unsigned)y, 4);
+  sbuf_add_upad(&s, "-", (unsigned)mo, 2);
+  sbuf_add_upad(&s, "-", (unsigned)d, 2);
   if (strcmp(back, v) || mjd < 0 || (uint64_t)mjd > 0xFFFFFFFFu) return -1;
   return bitwriter_put(bw, (uint64_t)mjd, 32) ? -1 : 0;
 }
@@ -89,9 +94,12 @@ int tva_date_decode(bitreader_t *br, char *out, size_t cap) {
   int y;
   int mo;
   int d;
-  int n;
+  sbuf_t s;
   if (bitreader_get(br, 32, &mjd) || mjd > 0xFFFFFu) return -1;
   mjd_to_date((long)mjd, &y, &mo, &d);
-  n = snprintf(out, cap, "%04d-%02d-%02d", y, mo, d);
-  return n < 0 || (size_t)n >= cap ? -1 : 0;
+  sbuf_init(&s, out, cap);
+  sbuf_add_upad(&s, "", (unsigned)y, 4);
+  sbuf_add_upad(&s, "-", (unsigned)mo, 2);
+  sbuf_add_upad(&s, "-", (unsigned)d, 2);
+  return s.truncated ? -1 : 0;
 }

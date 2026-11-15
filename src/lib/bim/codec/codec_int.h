@@ -9,11 +9,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/bim/bimio.h"
 #include "lib/bim/codec.h"
 
-#define DECODING_MODES 0x0F /* lengthCodingMode 00, hasDeferredNodes 0, hasTypeCasting 0, reserved 1111 */
 #define MAX_NODES 100000
 #define ZLIB_BUF_MAX 1000 /* BufferSize default, TS 102 822-3-2 4.4.1 */
 /* compressed chunk of a buffer of size B, zlib expansion bound */
@@ -21,14 +20,12 @@
 
 static inline int qn_name_char(int c) { return isalnum(c) || c == '_' || c == '-' || c == '.'; }
 
-int node_put_attr(bim_node_t *n, const char *name, char *v);
 /* ISO 15938-1 8.5.2.2.5.2 (case b, c-2), 8.5.2.4.3: *shunt = presence bit first,
    returns width of count-min, -1 = vluimsbf5, 0 = count not coded */
 int occ_coding(const bim_part_t *p, int *shunt);
 /* ISO 15938-1 8.5.4.2.1: width of value-min, -1 = vluimsbf5 */
 int range_bits(const bim_range_t *r);
 
-int dvb_flagged_string_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char *s);
 /* next repository string appended to b. 0 ok, -1 none or oom */
 int dvb_string_append(strrepo_reader_t *sr, dstrbuf_t *b);
 /* dvb_locator_decode_st, dvb_controlledterm_decode_cs appending to b, no length limit */

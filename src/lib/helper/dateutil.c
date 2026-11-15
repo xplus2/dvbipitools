@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "dateutil.h"
-#include "../sys/ioutil.h"
+#include "strutil.h"
 
 static int days_in_month(int y, int mo) {
   static const unsigned char dim[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -89,4 +89,10 @@ int iso8601_format(char *out, size_t cap, long unix_days, long sec_of_day) {
   mjd_to_date(unix_days + MJD_UNIX_EPOCH, &y, &mo, &d);
   n = snprintf(out, cap, "%04d-%02d-%02dT%02d:%02d:%02d", y, mo, d, (int)(sec_of_day / 3600), (int)(sec_of_day % 3600 / 60), (int)(sec_of_day % 60));
   return n < 0 || (size_t)n >= cap ? -1 : n;
+}
+
+double mono_seconds(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
 }

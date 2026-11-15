@@ -21,11 +21,9 @@ uint64_t bim_di_nall(const bim_decoderinit_t *di) {
 
 static int range(rd_t *r, const char *what) { return bim_fail(r->r.err, BIM_DI_RANGE, "bim: DecoderInit %s out of range", what); }
 
-static void *alloc_n(size_t n, size_t sz) { return n ? calloc(n, sz) : NULL; }
-
 static int rd_codecs(rd_t *r, bim_di_schema_t *s) {
   if (bim_rd_count(&r->r, 16, &s->ncodecs)) return -1;
-  if (s->ncodecs) s->codecs = alloc_n(s->ncodecs, sizeof *s->codecs);
+  if (s->ncodecs) s->codecs = calloc(s->ncodecs, sizeof *s->codecs);
   if (s->ncodecs && !s->codecs) {
     s->ncodecs = 0;
     return bim_oom(r->r.err);
@@ -35,7 +33,7 @@ static int rd_codecs(rd_t *r, bim_di_schema_t *s) {
     /* ISO 15938-1:2002 Cor 1 7.2.3 */
     if (bim_rd_str(&r->r, r->di->mpegb ? NULL : BIM_DI_ZERO, "TypeCodecURI_Length", &c->uri)) return -1;
     if (bim_rd_count(&r->r, 8, &c->ntypes)) return -1;
-    if (c->ntypes) c->types = alloc_n(c->ntypes, sizeof *c->types);
+    if (c->ntypes) c->types = calloc(c->ntypes, sizeof *c->types);
     if (c->ntypes && !c->types) {
       c->ntypes = 0;
       return bim_oom(r->r.err);
@@ -76,7 +74,7 @@ static int rd_features(rd_t *r) {
     if (avail < FLAG_BITS) return bim_fail(r->r.err, BIM_DI_LENGTH, "bim: DecoderInit %s mismatch", "AdvancedFeatureFlags_Length");
     if (bim_rd_zero(&r->r, FLAG_BITS - 9, BIM_DI_RESERVED)) return -1;
     if (bim_rd_count(&r->r, 16, &di->nprefixes)) return -1;
-    if (di->nprefixes) di->prefixes = alloc_n(di->nprefixes, sizeof *di->prefixes);
+    if (di->nprefixes) di->prefixes = calloc(di->nprefixes, sizeof *di->prefixes);
     if (di->nprefixes && !di->prefixes) {
       di->nprefixes = 0;
       return bim_oom(r->r.err);
@@ -108,7 +106,7 @@ static int rd_cpt(rd_t *r) {
     di->ncpaths = 0;
     return range(r, "ContextPathCode_Length");
   }
-  if (di->ncpaths) di->cpaths = alloc_n(di->ncpaths, sizeof *di->cpaths);
+  if (di->ncpaths) di->cpaths = calloc(di->ncpaths, sizeof *di->cpaths);
   if (di->ncpaths && !di->cpaths) {
     di->ncpaths = 0;
     return bim_oom(r->r.err);
@@ -135,7 +133,7 @@ static int rd_known(rd_t *r) {
   bim_decoderinit_t *di = r->di;
   uint64_t end = bim_di_nall(di);
   if (bim_rd_count(&r->r, 24, &di->nknown)) return -1;
-  if (di->nknown) di->known = alloc_n(di->nknown, sizeof *di->known);
+  if (di->nknown) di->known = calloc(di->nknown, sizeof *di->known);
   if (di->nknown && !di->known) {
     di->nknown = 0;
     return bim_oom(r->r.err);
@@ -169,7 +167,7 @@ static int rd_instances(rd_t *r) {
   bim_decoderinit_t *di = r->di;
   int tw = bim_width(di->naod_types);
   if (bim_rd_count(&r->r, 8, &di->ninstances)) return -1;
-  if (di->ninstances) di->instances = alloc_n(di->ninstances, sizeof *di->instances);
+  if (di->ninstances) di->instances = calloc(di->ninstances, sizeof *di->instances);
   if (di->ninstances && !di->instances) {
     di->ninstances = 0;
     return bim_oom(r->r.err);
@@ -192,7 +190,7 @@ static int rd_mappings(rd_t *r, int sw) {
   bim_decoderinit_t *di = r->di;
   int iw = bim_width(di->ninstances);
   if (bim_rd_count(&r->r, 16, &di->nmappings)) return -1;
-  if (di->nmappings) di->mappings = alloc_n(di->nmappings, sizeof *di->mappings);
+  if (di->nmappings) di->mappings = calloc(di->nmappings, sizeof *di->mappings);
   if (di->nmappings && !di->mappings) {
     di->nmappings = 0;
     return bim_oom(r->r.err);
@@ -204,7 +202,7 @@ static int rd_mappings(rd_t *r, int sw) {
     if (bim_rd_bits(&r->r, 7, &v)) return -1;
     if (bim_rd_count(&r->r, (uint64_t)iw, &m->ninstances)) return -1;
     m->reserved = (unsigned)v;
-    if (m->ninstances) m->instances = alloc_n(m->ninstances, sizeof *m->instances);
+    if (m->ninstances) m->instances = calloc(m->ninstances, sizeof *m->instances);
     if (m->ninstances && !m->instances) {
       m->ninstances = 0;
       return bim_oom(r->r.err);
@@ -214,7 +212,7 @@ static int rd_mappings(rd_t *r, int sw) {
       if (m->instances[i] >= di->ninstances) return range(r, "AdvancedOptimisedDecoderInstanceID");
     }
     if (bim_rd_count(&r->r, (uint64_t)sw + 8, &m->ntypes)) return -1;
-    if (m->ntypes) m->types = alloc_n(m->ntypes, sizeof *m->types);
+    if (m->ntypes) m->types = calloc(m->ntypes, sizeof *m->types);
     if (m->ntypes && !m->types) {
       m->ntypes = 0;
       return bim_oom(r->r.err);
@@ -369,7 +367,7 @@ static int rd_all(rd_t *r) {
     if (di->cpt && rd_cpt(r)) return -1;
     if (di->aod) {
       if (bim_rd_count(&r->r, 8, &di->naod_types)) return -1;
-      if (di->naod_types) di->aod_types = alloc_n(di->naod_types, sizeof *di->aod_types);
+      if (di->naod_types) di->aod_types = calloc(di->naod_types, sizeof *di->aod_types);
       if (di->naod_types && !di->aod_types) {
         di->naod_types = 0;
         return bim_oom(r->r.err);

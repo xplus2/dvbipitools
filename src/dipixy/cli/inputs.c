@@ -7,10 +7,12 @@
 #include <strings.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
+#include "lib/helper/growutil.h"
 
 #include "priv.h"
 #include "../core/route.h"
+#include "lib/config/yamlcfg.h"
 
 /* case-insensitive suffix match against known playlist extensions */
 static int playlist_kind_from_ext(const char *path, source_kind_t *out) {
@@ -87,10 +89,7 @@ int dixy_cfg_add_input(config_t *cfg, const char *val, char *err, size_t errsz) 
       bufcpy(err, errsz, "at most one rist:// input");
       return -1;
     }
-    if (val[7] != '@') {
-      snprintf(err, errsz, "invalid '%s' (rist:// needs rist://@host:port)", val);
-      return -1;
-    }
+    if (val[7] != '@') return yamlcfg_bad(err, errsz, val, "rist:// needs rist://@host:port");
     cfg->rist_uri = val;
     cfg->rist_ordinal = ordinal;
     cfg->last_input = LAST_RIST;
@@ -101,10 +100,7 @@ int dixy_cfg_add_input(config_t *cfg, const char *val, char *err, size_t errsz) 
       char addr[64];
       unsigned port;
       value = val + 6;
-      if (argutil_addrport_parse(value, &family, addr, sizeof addr, &port)) {
-        snprintf(err, errsz, "invalid '%s' (sds:// needs sds://addr:port)", val);
-        return -1;
-      }
+      if (argutil_addrport_parse(value, &family, addr, sizeof addr, &port)) return yamlcfg_bad(err, errsz, val, "sds:// needs sds://addr:port");
       kind = SRC_SDS;
     } else if (strncmp(val, "http://", 7) == 0 || strncmp(val, "https://", 8) == 0) {
       kind = SRC_HTTP;

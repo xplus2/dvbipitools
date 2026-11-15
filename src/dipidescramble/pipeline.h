@@ -101,8 +101,6 @@ void srt_service_all(loop_ctx_t *lc);
 /* same for -o rtmp(s):// targets */
 void rtmp_service_all(const loop_ctx_t *lc);
 
-/* key material changed: cached ECM sections no longer imply their CW */
-void pipeline_ecm_cache_invalidate(loop_ctx_t *lc);
 
 void pipeline_service_unicast_emm(loop_ctx_t *lc);
 

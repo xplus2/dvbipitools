@@ -9,14 +9,15 @@
 #include "lib/helper/zutil.h"
 #endif
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #include "id3.h"
 
 struct id3 {
   id3_meta_cb cb;
   void *ctx;
-  char last_artist[256], last_title[256];
+  char last_artist[256];
+  char last_title[256];
 };
 
 id3_t *id3_new(id3_meta_cb cb, void *ctx) {
@@ -46,7 +47,8 @@ static unsigned be32(const unsigned char *b) {
 }
 
 size_t id3_tag_size(const unsigned char *p, size_t avail) {
-  unsigned body, footer;
+  unsigned body;
+  unsigned footer;
   if (avail < 10 || !id3_is_tag(p, avail))
     return 0;
   body = syncsafe32(p + 6);
@@ -262,7 +264,8 @@ void id3_consume(id3_t *c, const unsigned char *p, size_t taglen) {
   unsigned char flags = (taglen > 5) ? p[5] : 0;
   size_t cursor = 10;
   size_t hdr = (version == 2) ? 6 : 10;
-  char artist[256] = "", title[256] = "";
+  char artist[256] = "";
+  char title[256] = "";
   int found = 0;
   unsigned char *copy = NULL;
 

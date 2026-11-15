@@ -3,6 +3,7 @@
 
 #include <string.h>
 
+#include "lib/demux/crc32.h"
 #include "lib/helper/secure_zero.h"
 #include "priv.h"
 
@@ -65,7 +66,7 @@ static int compute_tag(const ecm_profile_t *p, const unsigned char mac_key[CRYPT
   if (data_len) memcpy(buf, data, data_len);
   if (assoc_len) memcpy(buf + data_len, assoc, assoc_len);
   if (p->integrity.type == ECM_INTEGRITY_CRC32) {
-    uint32_t crc = crypto_crc32(p->integrity.crc32_variant == ECM_CRC32_CASTAGNOLI, buf, data_len + assoc_len);
+    uint32_t crc = crc32_zlib(p->integrity.crc32_variant == ECM_CRC32_CASTAGNOLI, buf, data_len + assoc_len);
     serialize_crc32(crc, p->integrity.crc32_endian, tag_out);
     *tag_len_out = 4;
     return 0;

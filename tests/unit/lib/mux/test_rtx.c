@@ -30,8 +30,10 @@ END_TEST
 
 START_TEST(rtx_build_increments_seq_independent_of_orig_seq) {
   _Atomic uint16_t seq = 0;
-  unsigned char b1[16], b2[16];
-  rtx_pkt_t o1, o2;
+  unsigned char b1[16];
+  unsigned char b2[16];
+  rtx_pkt_t o1;
+  rtx_pkt_t o2;
 
   rtx_build(&seq, 1, 99, 0, 5, NULL, 0, b1, sizeof b1);
   rtx_build(&seq, 1, 99, 0, 5, NULL, 0, b2, sizeof b2); /* same orig_seq both times */

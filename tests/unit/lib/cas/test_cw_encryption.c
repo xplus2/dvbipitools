@@ -15,7 +15,9 @@ static void hex_decode(const char *hex, unsigned char *out) {
 }
 
 START_TEST(des56_expand_matches_annex_d_kat) {
-  unsigned char in[7], expect[8], out[8];
+  unsigned char in[7];
+  unsigned char expect[8];
+  unsigned char out[8];
   hex_decode("4DA19FF0AF6B8F", in);
   hex_decode("4CD067FE0B7AAE1F", expect);
   des_key_expand(in, out);

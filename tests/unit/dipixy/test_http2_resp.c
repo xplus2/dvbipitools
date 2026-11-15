@@ -203,15 +203,15 @@ END_TEST
 
 typedef struct {
   hls_cold_kind_t kind;
-  const char *file;
+  route_file_kind_t file;
   int expect_status;
 } cold_case_t;
 
 static const cold_case_t cold_cases[] = {
-    {HLS_COLD_HLS, "index.m3u8", 404},
-    {HLS_COLD_LLHLS, "index_ll.m3u8", 404},
-    {HLS_COLD_DASH, "manifest.mpd", 404},
-    {HLS_COLD_MP4, "", 503},
+    {HLS_COLD_HLS, ROUTE_FILE_INDEX, 404},
+    {HLS_COLD_LLHLS, ROUTE_FILE_INDEX_LL, 404},
+    {HLS_COLD_DASH, ROUTE_FILE_MPD, 404},
+    {HLS_COLD_MP4, ROUTE_FILE_NONE, 503},
 };
 
 static capture_ctx_t *open_cold_ctx(void) {
@@ -228,7 +228,7 @@ START_TEST(cold_waiter_is_answered_when_its_deadline_passes) {
   capture_ctx_t *ctx = open_cold_ctx();
   pid_filter_t filter = {0};
   lcevc_select_t lcevc = {0};
-  hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, cc->file, cc->kind, SEG_CONTAINER_TS, 0, 0, 0, NULL, 0, -1, NULL};
+  hls_cold_park_req_t req = {{ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS}, &(route_file_t){.kind = cc->file}, cc->kind, 0, 0, 0, NULL, 0, -1, NULL};
 
   rig_open(&r);
   sid = open_stream(&r);
@@ -250,7 +250,7 @@ START_TEST(cold_waiter_table_fills_and_releases_by_stream_and_connection) {
   capture_ctx_t *ctx = open_cold_ctx();
   pid_filter_t filter = {0};
   lcevc_select_t lcevc = {0};
-  hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 60000, -1, NULL};
+  hls_cold_park_req_t req = {{ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS}, &(route_file_t){.kind = ROUTE_FILE_INDEX}, HLS_COLD_HLS, 0, 0, 0, NULL, 60000, -1, NULL};
 
   rig_open(&r);
   for (int i = 0; i < COLD_WAITERS_MAX; i++) ck_assert_int_eq(h2_hls_cold_try_park(r.h2, 1 + 2 * i, &req), 1);
@@ -274,7 +274,7 @@ START_TEST(llhls_waiter_is_answered_when_its_deadline_passes) {
   capture_ctx_t *ctx = open_cold_ctx();
   pid_filter_t filter = {0};
   lcevc_select_t lcevc = {0};
-  llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 0, -1, SEG_CONTAINER_TS};
+  llhls_park_req_t req = {{ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS}, &(route_file_t){.kind = ROUTE_FILE_INDEX_LL}, 0, 0, NULL, NULL, 5, 1, 0, -1};
 
   rig_open(&r);
   sid = open_stream(&r);
@@ -292,7 +292,7 @@ START_TEST(llhls_waiter_table_fills_and_releases_by_stream_and_connection) {
   capture_ctx_t *ctx = open_cold_ctx();
   pid_filter_t filter = {0};
   lcevc_select_t lcevc = {0};
-  llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 60000, -1, SEG_CONTAINER_TS};
+  llhls_park_req_t req = {{ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS}, &(route_file_t){.kind = ROUTE_FILE_INDEX_LL}, 0, 0, NULL, NULL, 5, 1, 60000, -1};
 
   rig_open(&r);
   for (int i = 0; i < LLHLS_WAITERS_MAX; i++) ck_assert_int_eq(h2_llhls_try_park(r.h2, r.c, 1 + 2 * i, &req), 1);

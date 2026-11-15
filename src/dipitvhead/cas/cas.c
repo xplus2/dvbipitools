@@ -11,6 +11,7 @@
 #include "../mux/timemap.h"
 #include "../version.h"
 #include "cas.h"
+#include "lib/helper/dateutil.h"
 
 #define CAS_PCR_DETECT_TIMEOUT_S CAS_CORE_CLOCK_DETECT_TIMEOUT_S /* startup grace period to observe a real PCR */
 #define PCR_TICKS_PER_MS (PCR_CLOCK_HZ / 1000)
@@ -33,7 +34,7 @@ static void deliver_clock_tick(cas_t *c, unsigned long delta_ms) {
 
 /* wall-clock is a plausibility fence only, never primary clock */
 static void pcr_sample(cas_t *c, uint64_t pcr27) {
-  double now = cas_core_mono();
+  double now = mono_seconds();
 
   if (!c->have_pcr) {
     c->have_pcr = 1;

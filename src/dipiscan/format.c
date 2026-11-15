@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "format.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/playlist_out.h"
 #include "lib/helper/sds_xml.h"
 

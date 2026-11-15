@@ -7,7 +7,8 @@
 
 /* skips one scaling list (H.264 SPS scaling_list()): sz entries, delta-coded, wraps mod 256 */
 void skip_scaling_list(br_t *b, int sz) {
-  int last = 8, next = 8;
+  int last = 8;
+  int next = 8;
   for (int j = 0; j < sz; j++) {
     if (next) next = (last + br_se(b) + 256) % 256;
     last = next ? next : last;

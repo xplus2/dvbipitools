@@ -106,7 +106,8 @@ static void build_empty_table(mp4buf_t *out, const char fourcc[4]) {
 }
 
 static void build_stbl(mp4buf_t *out, const trak_meta_t *tm) {
-  mp4buf_t stsz, stbl;
+  mp4buf_t stsz;
+  mp4buf_t stbl;
   memset(&stbl, 0, sizeof stbl);
   trak_build_stsd(&stbl, tm);
   build_empty_table(&stbl, "stts");

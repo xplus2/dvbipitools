@@ -26,7 +26,8 @@ START_TEST(fmp4_box_read_locates_ftyp_and_moov_at_top_level) {
   fmp4_mux_t *m = build_one_video_track_mux();
   unsigned char *out;
   size_t len;
-  fmp4_box_t ftyp, moov;
+  fmp4_box_t ftyp;
+  fmp4_box_t moov;
   ck_assert_ptr_nonnull(m);
   len = fmp4_init_segment(m, &out);
   ck_assert_uint_gt(len, 0u);

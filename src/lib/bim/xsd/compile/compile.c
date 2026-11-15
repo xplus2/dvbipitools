@@ -1,10 +1,12 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "lib/bim/xsd/compile/priv.h"
+#include "lib/helper/growutil.h"
 
 bim_type_t *xc_get_type(cc_t *c, const xsd_type_t *t) {
   bim_type_t *b = xc_pmap_get(&c->types, t);
@@ -36,6 +38,107 @@ static int filled_all(cc_t *c) {
     while (!rc && c->nsbc < c->nfilled) rc = xc_compile_sbc(c, c->queue[c->nsbc++], 0);
   }
   return rc;
+}
+
+static _Atomic uint64_t g_compile_id;
+
+static void ix_put(int *ix, int cap, size_t h, int i, int (*same)(const void *, int, int), const void *ctx) {
+  size_t k = h & (size_t)(cap - 1);
+  for (; ix[k]; k = (k + 1) & (size_t)(cap - 1))
+    if (same(ctx, ix[k] - 1, i)) return;
+  ix[k] = i + 1;
+}
+
+static int same_type(const void *ctx, int a, int b) {
+  const bim_type_t *const *t = ctx;
+  return !strcmp(t[a]->name, t[b]->name) && bim_ns_eq(t[a]->ns, t[b]->ns);
+}
+
+static int same_elem(const void *ctx, int a, int b) {
+  const bim_elem_t *const *e = ctx;
+  return !strcmp(e[a]->name, e[b]->name) && bim_ns_eq(e[a]->ns, e[b]->ns);
+}
+
+static int same_sub(const void *ctx, int a, int b) {
+  const bim_subtypes_t *s = ctx;
+  return s[a].base == s[b].base;
+}
+
+static int same_subname(const void *ctx, int a, int b) {
+  const bim_subtypes_t *s = ctx;
+  return !strcmp(s[a].base->name, s[b].base->name) && bim_ns_eq(s[a].base->ns, s[b].base->ns);
+}
+
+static int same_elem_loose(const void *ctx, int a, int b) {
+  const bim_elem_t *const *e = ctx;
+  return !strcmp(e[a]->name, e[b]->name) && bim_ns_same(e[a]->ns, e[b]->ns);
+}
+
+static int same_attr_loose(const void *ctx, int a, int b) {
+  const bim_attr_t *v = ctx;
+  return !strcmp(v[a].name, v[b].name) && bim_ns_same(v[a].ns, v[b].ns);
+}
+
+static int note_nss(const char **v, int *n, const char *ns) {
+  if (!ns) return 0;
+  for (int i = 0; i < *n; i++)
+    if (v[i] == ns || !strcmp(v[i], ns)) return 0;
+  v[(*n)++] = ns;
+  return 1;
+}
+
+static int build_index(cc_t *c, xsd_compiled_t *res) {
+  bim_schema_t *sc = &res->schema;
+  int most = res->ntypes > res->nelems ? res->ntypes : res->nelems;
+  int cap = 16;
+  int *tix;
+  int *eix;
+  int *six;
+  int *snix;
+  int *enix;
+  int *anix;
+  const char **nss;
+  if (sc->nsubs > most) most = sc->nsubs;
+  if (sc->nattrs > most) most = sc->nattrs;
+  while (cap < 2 * most + 2) cap *= 2;
+  tix = xc_alloc(c, sizeof *tix * (size_t)cap);
+  eix = xc_alloc(c, sizeof *eix * (size_t)cap);
+  six = xc_alloc(c, sizeof *six * (size_t)cap);
+  snix = xc_alloc(c, sizeof *snix * (size_t)cap);
+  enix = xc_alloc(c, sizeof *enix * (size_t)cap);
+  anix = xc_alloc(c, sizeof *anix * (size_t)cap);
+  nss = xc_alloc(c, sizeof *nss * (size_t)(res->ntypes + res->nelems + 1));
+  if (!tix || !eix || !six || !snix || !enix || !anix || !nss) return xc_oom(c);
+  for (int i = 0; i < res->ntypes; i++) {
+    const bim_type_t *t = res->types[i];
+    if (t->name) ix_put(tix, cap, bim_qhash(t->ns, t->name), i, same_type, res->types);
+    note_nss(nss, &res->nnss, t->ns);
+  }
+  for (int i = 0; i < res->nelems; i++) {
+    ix_put(eix, cap, bim_qhash(res->elems[i]->ns, res->elems[i]->name), i, same_elem, res->elems);
+    ix_put(enix, cap, bim_qhash(res->elems[i]->ns, res->elems[i]->name), i, same_elem_loose, res->elems);
+    note_nss(nss, &res->nnss, res->elems[i]->ns);
+  }
+  for (int i = 0; i < sc->nsubs; i++) {
+    const bim_type_t *b = sc->subs[i].base;
+    ix_put(six, cap, bim_phash(b), i, same_sub, sc->subs);
+    if (b->name) ix_put(snix, cap, bim_qhash(b->ns, b->name), i, same_subname, sc->subs);
+  }
+  for (int i = 0; i < sc->nattrs; i++) ix_put(anix, cap, bim_qhash(sc->attrs[i].ns, sc->attrs[i].name), i, same_attr_loose, sc->attrs);
+  sc->ix_elems = sc->elems;
+  sc->ix_attrs = sc->attrs;
+  sc->elem_nix = enix;
+  sc->attr_nix = anix;
+  sc->ea_cap = cap;
+  res->type_ix = tix;
+  res->elem_ix = eix;
+  res->ix_cap = cap;
+  res->nss = nss;
+  sc->ix_subs = sc->subs;
+  sc->sub_ix = six;
+  sc->sub_nix = snix;
+  sc->sub_cap = cap;
+  return 0;
 }
 
 int xsd_compile(xsd_set_t *s, const xsd_compile_opts_t *o, const xsd_compiled_t **out) {
@@ -95,6 +198,8 @@ int xsd_compile(xsd_set_t *s, const xsd_compile_opts_t *o, const xsd_compiled_t 
     res->schema.types = res->types;
     res->schema.ntypes = res->ntypes;
     res->schema.string = xc_get_simple(&c, xsd_find_type(s, XSD_NS, "string"));
+    res->id = atomic_fetch_add_explicit(&g_compile_id, 1, memory_order_relaxed) + 1;
+    rc = build_index(&c, res);
   }
   free(c.queue);
   if (rc) return xsd_set_error_code(s) && !strcmp(xsd_set_error_code(s), "LS500101") ? -2 : -1;
@@ -103,8 +208,10 @@ int xsd_compile(xsd_set_t *s, const xsd_compile_opts_t *o, const xsd_compiled_t 
 }
 
 const bim_type_t *xsd_compiled_type(const xsd_compiled_t *c, const char *ns, const char *name) {
-  for (int i = 0; i < c->ntypes; i++)
-    if (c->types[i]->name && !strcmp(c->types[i]->name, name) && xc_ns_eq(c->types[i]->ns, ns)) return c->types[i];
+  for (size_t k = bim_qhash(ns, name) & (size_t)(c->ix_cap - 1); c->type_ix[k]; k = (k + 1) & (size_t)(c->ix_cap - 1)) {
+    const bim_type_t *t = c->types[c->type_ix[k] - 1];
+    if (!strcmp(t->name, name) && bim_ns_eq(t->ns, ns)) return t;
+  }
   return NULL;
 }
 
@@ -131,10 +238,8 @@ int xsd_cast_bind(const xsd_compiled_t *const *cs, size_t n, bim_node_t *root, c
 }
 
 int xsd_compiled_has_ns(const xsd_compiled_t *c, const char *ns) {
-  for (int i = 0; i < c->ntypes; i++)
-    if (c->types[i]->ns && !strcmp(c->types[i]->ns, ns)) return 1;
-  for (int i = 0; i < c->nelems; i++)
-    if (c->elems[i]->ns && !strcmp(c->elems[i]->ns, ns)) return 1;
+  for (int i = 0; i < c->nnss; i++)
+    if (c->nss[i] == ns || !strcmp(c->nss[i], ns)) return 1;
   return 0;
 }
 
@@ -166,7 +271,9 @@ int xsd_tree_extra_ns(const xsd_compiled_t *c, const bim_node_t *root, const cha
 }
 
 const bim_elem_t *xsd_compiled_elem(const xsd_compiled_t *c, const char *ns, const char *name) {
-  for (int i = 0; i < c->nelems; i++)
-    if (!strcmp(c->elems[i]->name, name) && xc_ns_eq(c->elems[i]->ns, ns)) return c->elems[i];
+  for (size_t k = bim_qhash(ns, name) & (size_t)(c->ix_cap - 1); c->elem_ix[k]; k = (k + 1) & (size_t)(c->ix_cap - 1)) {
+    const bim_elem_t *e = c->elems[c->elem_ix[k] - 1];
+    if (!strcmp(e->name, name) && bim_ns_eq(e->ns, ns)) return e;
+  }
   return NULL;
 }

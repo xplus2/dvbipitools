@@ -5,7 +5,7 @@
 
 #include "lib/config/yamlcfg.h"
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "../config.h"
 #include "priv.h"
 
@@ -16,7 +16,7 @@ int tvh_apply_nit(void *c, const char *v, char *e, size_t n) {
 
 int tvh_apply_default_provider(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return tvh_set_buf(cfg->default_provider_text, sizeof cfg->default_provider_text, v, e, n);
+  return yamlcfg_set_buf(cfg->default_provider_text, sizeof cfg->default_provider_text, v, e, n);
 }
 
 int tvh_apply_bitrate(void *c, const char *v, char *e, size_t n) {

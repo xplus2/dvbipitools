@@ -652,7 +652,7 @@ START_TEST(route_disabled_follows_each_config_flag) {
   memset(&cfg, 0, sizeof cfg);
   reactor_set_context(&cfg, NULL, NULL);
   rt.fmt = dc->fmt;
-  if (dc->fmt == ROUTE_FMT_DASH || dc->fmt == ROUTE_FMT_LLDASH) strcpy(rt.hls_file, "manifest.mpd");
+  if (dc->fmt == ROUTE_FMT_DASH || dc->fmt == ROUTE_FMT_LLDASH) rt.file.kind = ROUTE_FILE_MPD;
   ck_assert_int_eq(route_disabled(&rt), 0);
   *(int *)((char *)&cfg + dc->flag_off) = 1;
   ck_assert_int_eq(route_disabled(&rt), 1);

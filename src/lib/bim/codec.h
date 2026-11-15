@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "bimreader.h"
 #include "bitwriter.h"
@@ -20,11 +21,12 @@
 #define XSI_NS "http://www.w3.org/2001/XMLSchema-instance"
 #define XML_NS "http://www.w3.org/XML/1998/namespace"
 
+static inline int bim_ns_eq(const char *a, const char *b) { return a && b ? !strcmp(a, b) : a == b; }
+static inline int bim_ns_same(const char *a, const char *b) { return (!a || !*a) && (!b || !*b) ? 1 : a && b && !strcmp(a, b); }
+
 /* dvbStringCodec, TS 102 323 9.4.3.3 */
 int dvb_string_encode(strrepo_writer_t *sw, const char *s);
 int dvb_string_decode(strrepo_reader_t *sr, char *out, size_t outcap);
-/* heap variant, never truncated. empty string -> *out NULL, old *out freed. 0 ok, -1 error */
-int dvb_string_decode_dup(strrepo_reader_t *sr, char **out);
 
 /* classification schemes for dvbControlledTermCodec, TS 102 323 9.4.3.7.
    rank: termID of term. term: inverse, both 0 ok.
@@ -55,7 +57,6 @@ typedef struct {
 int dvb_locator_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char *uri);
 /* optimized: OptimizedDVBLocator if lossless, st: prefix and day reuse. else: str */
 int dvb_locator_encode_st(bitwriter_t *bw, strrepo_writer_t *sw, dvb_codec_state_t *st, const char *uri, int optimized);
-int dvb_locator_decode(bitreader_t *br, strrepo_reader_t *sr, char *out, size_t outcap);
 /* also optimized branch, rendered as dvb:// text */
 int dvb_locator_decode_st(bitreader_t *br, strrepo_reader_t *sr, dvb_codec_state_t *st, char *out, size_t outcap);
 
@@ -63,7 +64,6 @@ int dvb_locator_decode_st(bitreader_t *br, strrepo_reader_t *sr, dvb_codec_state
 int dvb_datetime_encode(bitwriter_t *bw, const char *iso8601);
 /* published: PublishedTime if seconds 0 and date in 16 bit MJD window, st: date reuse. Else as above */
 int dvb_datetime_encode_st(bitwriter_t *bw, dvb_codec_state_t *st, const char *iso8601, int published);
-int dvb_datetime_decode(bitreader_t *br, char *out, size_t outcap);
 int dvb_datetime_decode_st(bitreader_t *br, dvb_codec_state_t *st, char *out, size_t outcap);
 
 /* TS 102 822-3-2 4.4.2.4.2, 4.4.2.4.3: MJD and ms of day in UTC, MJD. encode: 0 ok, -1 not representable */
@@ -76,8 +76,6 @@ int tva_date_decode(bitreader_t *br, char *out, size_t cap);
 int dvb_duration_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char *s, int compact);
 
 /* dvbControlledTermCodec, TS 102 323 9.4.3.7. without cs: encode as string, decode renders compact form as dvbcs:group:scheme:term */
-int dvb_controlledterm_encode(bitwriter_t *bw, strrepo_writer_t *sw, const char *href);
-int dvb_controlledterm_decode(bitreader_t *br, strrepo_reader_t *sr, char *out, size_t outcap);
 /* cs: compact form table 70 schemes with known term, else str. decode: URI:term if cs known */
 int dvb_controlledterm_encode_cs(bitwriter_t *bw, strrepo_writer_t *sw, const dvb_cs_t *cs, const char *href);
 int dvb_controlledterm_decode_cs(bitreader_t *br, strrepo_reader_t *sr, const dvb_cs_t *cs, char *out, size_t outcap);
@@ -212,12 +210,39 @@ typedef struct {
   const bim_attr_t *attrs;
   int nattrs;
   const bim_simple_t *string; /* xs:string, mixed character data */
+  const bim_subtypes_t *ix_subs;
+  const int *sub_ix;
+  const int *sub_nix;
+  int sub_cap;
+  const struct bim_elem *const *ix_elems;
+  const bim_attr_t *ix_attrs;
+  const int *elem_nix;
+  const int *attr_nix;
+  int ea_cap;
 } bim_schema_t;
+
+static inline size_t bim_phash(const void *p) {
+  uint64_t x = (uint64_t)(uintptr_t)p;
+  x ^= x >> 33;
+  x *= 0xff51afd7ed558ccdULL;
+  x ^= x >> 33;
+  return (size_t)x;
+}
+
+static inline size_t bim_qhash(const char *ns, const char *name) {
+  uint64_t h = 1469598103934665603ULL;
+  for (const char *p = ns; p && *p; p++) h = (h ^ (unsigned char)*p) * 1099511628211ULL;
+  h = (h ^ 0xFF) * 1099511628211ULL;
+  for (const char *p = name; *p; p++) h = (h ^ (unsigned char)*p) * 1099511628211ULL;
+  return (size_t)h;
+}
 
 /* subtype table of base t in sc, NULL none */
 const bim_subtypes_t *bim_subtypes_find(const bim_schema_t *sc, const bim_type_t *t);
 /* as find, then base of same expanded name. Schemas compile imports separately */
 const bim_subtypes_t *bim_subtypes_find_x(const bim_schema_t *sc, const bim_type_t *t);
+int bim_schema_elem(const bim_schema_t *sc, const char *ns, const char *name);
+int bim_schema_attr(const bim_schema_t *sc, const char *ns, const char *name);
 
 typedef enum { BIM_SBC_ELEM, BIM_SBC_SIMPLE, BIM_SBC_ANY, BIM_SBC_ATTR, BIM_SBC_ANYATTR } bim_sbc_kind_t;
 

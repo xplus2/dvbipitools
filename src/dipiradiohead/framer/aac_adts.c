@@ -11,7 +11,9 @@ int aac_adts_is_sync(const unsigned char *p, size_t avail) {
 
 int aac_adts_probe(const unsigned char *p, size_t avail, aac_adts_info_t *info) {
   static const unsigned rates[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000,  7350};
-  unsigned sr_idx, frame_length, raw_blocks;
+  unsigned sr_idx;
+  unsigned frame_length;
+  unsigned raw_blocks;
 
   if (avail < 7)
     return 0;

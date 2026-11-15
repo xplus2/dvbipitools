@@ -5,7 +5,7 @@
 
 #include "lib/cas/cas_args.h"
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 
 #include "priv.h"
@@ -78,13 +78,12 @@ args_status_t rdh_cli_check(config_t *cfg, const rdh_opt_t *p) {
   if (cfg->al_fec_l && !cfg->mcast_port)
     log_code("RA000467", TOOL_NAME ": --al-fec has no effect without -m");
   if (profile_arg) {
-    static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
     int v;
-    if (map_lookup(map, sizeof map / sizeof map[0], profile_arg, &v)) {
-      argerr("RS000357", "invalid --rist-profile: %s (simple|main)", profile_arg);
+    if (rist_prof_parse(profile_arg, &v)) {
+      argerr("RS000357", "invalid --rist-profile: %s (" RIST_PROF_HINT ")", profile_arg);
       return ARGS_ERR;
     }
-    cfg->rist_profile = (rist_profile_sel_t)v;
+    cfg->rist_profile = (rist_prof_t)v;
   }
   if (cfg->n_rist == 0 && (profile_arg || cfg->rist_profile_given || have_secret || cfg->rist_key_size || cfg->rist_cname[0] || cfg->rist_buffer_ms))
     log_code("RA000468", TOOL_NAME ": --rist-profile/--rist-secret/--rist-encryption-type/--rist-cname/--rist-buffer have no effect without -R");

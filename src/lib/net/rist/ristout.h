@@ -7,15 +7,15 @@
 #include <stddef.h>
 
 #include "lib/metrics/export.h"
+#include "lib/net/rist/ristpeer.h"
 
 #define RISTOUT_MAX_PEERS 8
 
-typedef enum { RISTOUT_PROFILE_SIMPLE, RISTOUT_PROFILE_MAIN } ristout_profile_t;
 
 typedef struct {
   const char *peer_uri[RISTOUT_MAX_PEERS]; /* rist://..., bonded onto one context */
   int npeers;
-  ristout_profile_t profile;
+  rist_prof_t profile;
   const char *secret;      /* NULL/"" = none; profile main only */
   int key_size;            /* 0 = default, else 128/256; needs secret */
   const char *cname;       /* NULL/"" = library default */

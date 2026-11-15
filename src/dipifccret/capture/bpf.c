@@ -9,6 +9,7 @@
 #include <linux/if_ether.h>
 
 #include "capture.h"
+#include "lib/helper/growutil.h"
 
 #define CAPTURE_BPF_MAX_INSNS 4096u /* kernel classic-BPF program length limit */
 
@@ -21,18 +22,12 @@
 
 typedef struct {
   struct sock_filter *insns;
-  size_t len, cap;
+  size_t len;
+  size_t cap;
 } bpf_buf_t;
 
 static int bpf_emit(bpf_buf_t *b, struct sock_filter insn) {
-  if (b->len == b->cap) {
-    size_t new_cap = b->cap ? b->cap * 2 : 64;
-    struct sock_filter *grown = realloc(b->insns, new_cap * sizeof *grown);
-    if (!grown)
-      return -1;
-    b->insns = grown;
-    b->cap = new_cap;
-  }
+  if (growbuf_reserve((void **)&b->insns, &b->cap, sizeof *b->insns, b->len + 1, 64)) return -1;
   b->insns[b->len++] = insn;
   return 0;
 }
@@ -63,7 +58,9 @@ static uint32_t v6_word_mask(unsigned prefix, unsigned w) {
 /* 4 word-checks chained by fixed jf offsets (10/7/4/1), self-contained regardless of range count, no cross-clause backpatching */
 static int emit_v6_clause(bpf_buf_t *b, unsigned addr_off, const cidr_t *c) {
   for (unsigned w = 0; w < 4; w++) {
-    uint32_t raw, mask, net;
+    uint32_t raw;
+    uint32_t mask;
+    uint32_t net;
     unsigned jf;
     memcpy(&raw, &c->u.v6.addr.s6_addr[w * 4], 4);
     mask = v6_word_mask(c->u.v6.prefix, w);
@@ -117,7 +114,10 @@ static int emit_dispatch_block(bpf_buf_t *b, unsigned base, const cidr_t *ranges
    (jt/jf are 8-bit): skipping it toward vlan path uses unconditional BPF_JA trampoline, no condjump. */
 struct sock_filter *capture_build_bpf(const cidr_t *ranges, size_t range_count, size_t *out_len) {
   bpf_buf_t b;
-  size_t nv4 = 0, nv6 = 0, d_len, total;
+  size_t nv4 = 0;
+  size_t nv6 = 0;
+  size_t d_len;
+  size_t total;
 
   memset(&b, 0, sizeof b);
   for (size_t i = 0; i < range_count; i++)

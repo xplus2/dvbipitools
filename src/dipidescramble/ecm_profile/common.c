@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
 
 #include "priv.h"
 
@@ -34,7 +34,7 @@ int cipher_is_cbc(ecm_cipher_t c) {
 int cipher_is_gcm(ecm_cipher_t c) {
   return c == ECM_CIPHER_AES128_GCM || c == ECM_CIPHER_AES256_GCM;
 }
-int cipher_is_3des(ecm_cipher_t c) {
+static int cipher_is_3des(ecm_cipher_t c) {
   return c == ECM_CIPHER_DES_EDE_ECB || c == ECM_CIPHER_DES_EDE_CBC || c == ECM_CIPHER_DES_EDE3_ECB || c == ECM_CIPHER_DES_EDE3_CBC;
 }
 int cipher_block_size(ecm_cipher_t c) { return cipher_is_3des(c) ? 8 : 16; }

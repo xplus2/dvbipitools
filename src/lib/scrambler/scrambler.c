@@ -20,7 +20,8 @@ typedef enum { SCRAMBLER_QUEUE_MODE_NONE, SCRAMBLER_QUEUE_MODE_ENCRYPT, SCRAMBLE
 typedef struct {
   unsigned char pkt[188];
   int needs_crypto;
-  size_t payload_off, payload_size;
+  size_t payload_off;
+  size_t payload_size;
 } scrambler_queue_entry_t;
 
 struct scrambler {
@@ -30,8 +31,9 @@ struct scrambler {
   int have_key[2];
 
   scrambler_queue_entry_t *queue;
-  csa2_batch_entry_t *batch_entries; /* allocated queue_cap, replaces a VLA in scrambler_queue_flush */
-  unsigned queue_batch_size; /* csa2_batch_size() result, 0 means no batching backend */
+  csa2_batch_entry_t *batch_entries; /* CSA2, allocated queue_cap */
+  cissa_batch_entry_t *cissa_entries; /* CISSA, allocated queue_cap */
+  unsigned queue_batch_size; /* 0 means no batching backend */
   unsigned queue_cap;        /* allocated s->queue length */
   unsigned long long dropped_total; /* packets dropped on failed batch */
   unsigned queue_len;
@@ -49,18 +51,15 @@ scrambler_t *scrambler_new(scramble_algo_t algo) {
   s->algo = algo;
   s->queue_parity = -1;
   s->queue_mode = SCRAMBLER_QUEUE_MODE_NONE;
-  if (algo == SCRAMBLE_ALGO_CSA2) {
-    s->queue_batch_size = csa2_batch_size();
-    if (s->queue_batch_size > 0) {
-      s->queue_cap = s->queue_batch_size * SCRAMBLER_QUEUE_CAP_MULTIPLIER;
-      s->queue = calloc(s->queue_cap, sizeof *s->queue);
-      s->batch_entries = calloc(s->queue_cap, sizeof *s->batch_entries);
-      if (!s->queue || !s->batch_entries) {
-        free(s->queue);
-        free(s->batch_entries);
-        free(s);
-        return NULL;
-      }
+  s->queue_batch_size = algo == SCRAMBLE_ALGO_CSA2 ? csa2_batch_size() : cissa_available() ? CISSA_BATCH_MAX : 0;
+  if (s->queue_batch_size > 0) {
+    s->queue_cap = s->queue_batch_size * SCRAMBLER_QUEUE_CAP_MULTIPLIER;
+    s->queue = calloc(s->queue_cap, sizeof *s->queue);
+    if (algo == SCRAMBLE_ALGO_CSA2) s->batch_entries = calloc(s->queue_cap, sizeof *s->batch_entries);
+    else s->cissa_entries = calloc(s->queue_cap, sizeof *s->cissa_entries);
+    if (!s->queue || (!s->batch_entries && !s->cissa_entries)) {
+      scrambler_free(s);
+      return NULL;
     }
   }
   return s;
@@ -75,6 +74,7 @@ void scrambler_free(scrambler_t *s) {
   cissa_key_free(s->cissa_key[SCRAMBLE_PARITY_ODD]);
   free(s->queue);
   free(s->batch_entries);
+  free(s->cissa_entries);
   free(s);
 }
 
@@ -124,7 +124,8 @@ static size_t ts_payload_offset(const unsigned char *pkt) {
 }
 
 int scrambler_encrypt_packet(scrambler_t *s, unsigned char pkt[188], int parity) {
-  size_t payload_off, payload_size;
+  size_t payload_off;
+  size_t payload_size;
 
   if (!s || (parity != SCRAMBLE_PARITY_EVEN && parity != SCRAMBLE_PARITY_ODD) || !s->have_key[parity])
     return -1;
@@ -155,7 +156,8 @@ int scrambler_encrypt_packet(scrambler_t *s, unsigned char pkt[188], int parity)
 
 int scrambler_decrypt_packet(scrambler_t *s, unsigned char pkt[188]) {
   unsigned ctrl = (pkt[3] >> 6) & 0x3;
-  size_t payload_off, payload_size;
+  size_t payload_off;
+  size_t payload_size;
   int parity;
 
   if (ctrl == 0)
@@ -200,19 +202,17 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
     return;
   int failed = 0;
   if (s->queue_scrambled_count > 0) {
-    csa2_batch_entry_t *entries = s->batch_entries;
+    int enc = s->queue_mode == SCRAMBLER_QUEUE_MODE_ENCRYPT;
     unsigned ei = 0;
     for (unsigned i = 0; i < s->queue_len; i++) {
-      if (s->queue[i].needs_crypto) {
-        entries[ei].data = s->queue[i].pkt + s->queue[i].payload_off;
-        entries[ei].len = s->queue[i].payload_size;
-        ei++;
-      }
+      if (!s->queue[i].needs_crypto) continue;
+      if (s->cissa_entries) s->cissa_entries[ei++] = (cissa_batch_entry_t){s->queue[i].pkt + s->queue[i].payload_off, s->queue[i].payload_size};
+      else s->batch_entries[ei++] = (csa2_batch_entry_t){s->queue[i].pkt + s->queue[i].payload_off, s->queue[i].payload_size};
     }
-    if (s->queue_mode == SCRAMBLER_QUEUE_MODE_ENCRYPT)
-      failed = csa2_encrypt_batch(s->csa2_key[s->queue_parity], entries, s->queue_scrambled_count) != 0;
+    if (s->cissa_entries)
+      failed = cissa_crypt_batch(s->cissa_key[s->queue_parity], enc, s->cissa_entries, ei) != 0;
     else
-      failed = csa2_decrypt_batch(s->csa2_key[s->queue_parity], entries, s->queue_scrambled_count) != 0;
+      failed = (enc ? csa2_encrypt_batch : csa2_decrypt_batch)(s->csa2_key[s->queue_parity], s->batch_entries, ei) != 0;
   }
   for (unsigned i = 0; i < s->queue_len; i++) {
     if (failed && s->queue[i].needs_crypto) {
@@ -238,7 +238,10 @@ static void scrambler_queue_ensure_batch(scrambler_t *s, scrambler_queue_mode_t 
   s->queue_parity = parity;
 }
 
-/* queue_cap == 0 (CISSA, or CSA2 without libdvbcsa): no batching backend, emit immediately.
+/* CISSA: whole 16-byte blocks only, residue stays clear */
+static size_t crypto_size(const scrambler_t *s, size_t payload_size) { return s->algo == SCRAMBLE_ALGO_CISSA ? payload_size - payload_size % 16u : payload_size; }
+
+/* queue_cap == 0 (no batching backend): emit immediately.
    needs_crypto entries never reach here, @see scrambler_encrypt_packet_queued/scrambler_decrypt_packet_queued. */
 static void scrambler_queue_push(scrambler_t *s, const unsigned char pkt[188], int needs_crypto, size_t payload_off, size_t payload_size, scrambler_emit_cb emit, void *ctx) {
   scrambler_queue_entry_t *e;
@@ -267,7 +270,8 @@ static void scrambler_queue_push(scrambler_t *s, const unsigned char pkt[188], i
 }
 
 int scrambler_encrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], int parity, scrambler_emit_cb emit, void *ctx) {
-  size_t payload_off, payload_size;
+  size_t payload_off;
+  size_t payload_size;
 
   if (!s || (parity != SCRAMBLE_PARITY_EVEN && parity != SCRAMBLE_PARITY_ODD) || !s->have_key[parity])
     return -1;
@@ -284,7 +288,11 @@ int scrambler_encrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], int 
     scrambler_queue_push(s, pkt, 0, 0, 0, emit, ctx);
     return 0;
   }
-  payload_size = 188 - payload_off;
+  payload_size = crypto_size(s, 188 - payload_off);
+  if (!payload_size) {
+    scrambler_queue_push(s, pkt, 0, 0, 0, emit, ctx);
+    return 0;
+  }
 
   scrambler_queue_ensure_batch(s, SCRAMBLER_QUEUE_MODE_ENCRYPT, parity, emit, ctx);
   pkt[3] = (unsigned char)((pkt[3] & 0x3F) | (parity == SCRAMBLE_PARITY_ODD ? 0xC0 : 0x80));
@@ -294,7 +302,8 @@ int scrambler_encrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], int 
 
 int scrambler_decrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], scrambler_emit_cb emit, void *ctx) {
   unsigned ctrl = (pkt[3] >> 6) & 0x3;
-  size_t payload_off, payload_size;
+  size_t payload_off;
+  size_t payload_size;
   int parity;
 
   if (!s)
@@ -324,7 +333,12 @@ int scrambler_decrypt_packet_queued(scrambler_t *s, unsigned char pkt[188], scra
     scrambler_queue_push(s, pkt, 0, 0, 0, emit, ctx);
     return 0;
   }
-  payload_size = 188 - payload_off;
+  payload_size = crypto_size(s, 188 - payload_off);
+  if (!payload_size) {
+    pkt[3] &= 0x3F;
+    scrambler_queue_push(s, pkt, 0, 0, 0, emit, ctx);
+    return 0;
+  }
 
   scrambler_queue_ensure_batch(s, SCRAMBLER_QUEUE_MODE_DECRYPT, parity, emit, ctx);
   pkt[3] &= 0x3F;

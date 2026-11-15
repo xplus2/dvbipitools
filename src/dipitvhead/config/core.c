@@ -5,10 +5,11 @@
 #include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/net/netconnect.h"
 #include "../config.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
 
 void tvh_cfg_defaults(config_t *cfg) {
   memset(cfg, 0, sizeof *cfg);
@@ -20,39 +21,12 @@ void tvh_cfg_defaults(config_t *cfg) {
   cfg->pcr_lead_ms = PCR_LEAD_MS_DEFAULT;
 }
 
-int tvh_set_buf(char *dst, size_t sz, const char *v, char *e, size_t n) {
-  if (strlen(v) >= sz) {
-    snprintf(e, n, "too long (max %zu)", sz - 1);
-    return -1;
-  }
-  bufcpy(dst, sz, v);
-  return 0;
-}
-
-int tvh_set_key_size(int *dst, const char *v, char *e, size_t n) {
-  if (argutil_rist_key_size(v, dst)) {
-    snprintf(e, n, "invalid '%s' (128|256)", v);
-    return -1;
-  }
-  return 0;
-}
-
-int tvh_set_pbkeylen(int *dst, const char *v, char *e, size_t n) {
-  unsigned u;
-  if (argutil_uint_range(v, 16, 32, &u) || (u != 16 && u != 24 && u != 32)) {
-    snprintf(e, n, "invalid '%s' (16|24|32)", v);
-    return -1;
-  }
-  *dst = (int)u;
-  return 0;
-}
-
 int tvh_set_table(table_mode_t *mode, char *text, size_t sz, const char *v, char *e, size_t n) {
   if (!strcmp(v, "-")) {
     *mode = TABLE_DROP;
     return 0;
   }
-  if (tvh_set_buf(text, sz, v, e, n)) return -1;
+  if (yamlcfg_set_buf(text, sz, v, e, n)) return -1;
   *mode = TABLE_OVERRIDE;
   return 0;
 }

@@ -7,7 +7,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "lib/sys/ioutil.h"
 
 #include "dlna.h"
 
@@ -24,12 +23,14 @@
 typedef enum { OID_ROOT, OID_STDIN, OID_RIST, OID_HTTP, OID_LIST, OID_ITEM } oid_kind_t;
 typedef struct {
   oid_kind_t kind;
-  unsigned ord, item_num;
+  unsigned ord;
+  unsigned item_num;
 } oid_t;
 
 typedef struct {
   char *buf;
-  size_t len, cap;
+  size_t len;
+  size_t cap;
 } gbuf_t;
 
 /* dlna_oid.c */
@@ -38,11 +39,10 @@ const source_def_t *find_source(const config_t *cfg, unsigned ord);
 const char *strip_scheme_at(const char *uri);
 void build_play_path(const config_t *cfg, oid_kind_t kind, unsigned ord, unsigned item_num, media_type_t media_type, char *out, size_t outsz);
 
-/* dlna_soap.c */
-FILE *gbuf_open(gbuf_t *g);
 FILE *gbuf_open_thread(gbuf_t *g);
 typedef struct {
-  const char *name, *value;
+  const char *name;
+  const char *value;
 } soap_field_t;
 int soap_action_response(char **out, size_t *out_len, const char *service_urn, const char *action_response_tag, const soap_field_t *fields, int nfields);
 int soap_fault(char **out, size_t *out_len, int upnp_error_code, const char *desc);

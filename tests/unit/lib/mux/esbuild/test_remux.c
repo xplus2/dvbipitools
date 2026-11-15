@@ -116,8 +116,12 @@ static unsigned char *to_v1(const unsigned char *in, size_t len, const char *cc,
 
 START_TEST(esbuild_remux_init_reads_version1_tkhd_mdhd) {
   fmp4_mux_t *m = build_mux();
-  unsigned char *init, *v1a, *v1b;
-  size_t len, len_a, len_b;
+  unsigned char *init;
+  unsigned char *v1a;
+  unsigned char *v1b;
+  size_t len;
+  size_t len_a;
+  size_t len_b;
   esbuild_remux_t r;
 
   ck_assert_ptr_nonnull(m);
@@ -267,8 +271,10 @@ static fmp4_mux_t *build_audio_mux(void) {
 START_TEST(esbuild_remux_add_init_appends_tracks_without_disturbing_existing_pids) {
   fmp4_mux_t *vm = build_mux();
   fmp4_mux_t *am = build_audio_mux();
-  unsigned char *vinit, *ainit;
-  size_t vinit_len, ainit_len;
+  unsigned char *vinit;
+  unsigned char *ainit;
+  size_t vinit_len;
+  size_t ainit_len;
   esbuild_remux_t r;
 
   ck_assert_ptr_nonnull(vm);
@@ -365,15 +371,18 @@ static void count_cb(void *ctx, const unsigned char *pkt) {
 START_TEST(esbuild_remux_big_sample_not_dropped_and_pcr_present) {
   enum { SZ = 100000 };
   fmp4_mux_t *m = build_mux();
-  unsigned char *initbuf, *segbuf;
+  unsigned char *initbuf;
+  unsigned char *segbuf;
   unsigned char *frame = malloc(SZ + 4);
-  size_t initlen, seglen;
+  size_t initlen;
+  size_t seglen;
   esbuild_remux_t r;
   counted_t c;
   fmp4_sample_t s;
   const unsigned char *p;
   const unsigned char *pes;
-  uint64_t dts, pcr;
+  uint64_t dts;
+  uint64_t pcr;
 
   ck_assert_ptr_nonnull(m);
   ck_assert_ptr_nonnull(frame);

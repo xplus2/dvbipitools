@@ -15,8 +15,16 @@ typedef struct {
   int code;
 } lax_sym_t;
 
+#define LAX_BUCKETS 256
+
 typedef struct {
-  lax_sym_t tab[LAX_SYMS];
+  lax_sym_t sym[LAX_SYMS];
+  int16_t prev[LAX_SYMS];
+  int16_t next[LAX_SYMS];
+  int16_t hnext[LAX_SYMS];
+  int16_t bucket[LAX_BUCKETS];
+  int head;
+  int tail;
   int agg;
   int has_last;
   int has_last2;

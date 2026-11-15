@@ -13,6 +13,7 @@
 #include "lib/net/srt/srtcommon.h"
 #include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtin/srtin_int.h"
+#include "lib/helper/dateutil.h"
 
 /* no stats without live socket: header and extras still go out */
 static void push_stats(srtin_t *r) {
@@ -109,7 +110,7 @@ static int read_once(srtin_t *r, unsigned char *buf, size_t cap, int *reconnecte
     }
     srt_close(r->sock);
     r->sock = SRT_INVALID_SOCK;
-    atomic_store(r->busy, 0);
+    atomic_store_explicit(r->busy, 0, memory_order_release);
     return 0;
   }
   return n;

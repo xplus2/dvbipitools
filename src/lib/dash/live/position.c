@@ -4,10 +4,10 @@
 #include <string.h>
 
 #include "lib/dash/live.h"
-#include "lib/sys/ioutil.h"
-#include "lib/sys/signal.h"
+#include "lib/helper/strutil.h"
 #include "lib/dash/mpd.h"
 #include "lib/dash/live/live_int.h"
+#include "lib/helper/dateutil.h"
 
 int uses_timeline(const dash_live_t *h) { return h->repr.n_timeline > 0; }
 
@@ -25,7 +25,7 @@ double segment_duration_s(const dash_live_t *h) {
 
 unsigned long long elapsed_ms(const dash_live_t *h) {
   unsigned long long since = h->mpd.availability_start_ms + h->cur_period_start_ms;
-  unsigned long long now = dash_wall_ms();
+  unsigned long long now = wall_ms();
   return now > since ? now - since : 0;
 }
 

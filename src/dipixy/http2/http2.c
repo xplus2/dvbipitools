@@ -43,7 +43,7 @@ void h2_free_stream(h2_conn_t *conn, int32_t id) {
     if (conn->streams[i].id != id) continue;
     for (int j = 0; j < conn->pending_n; j++)
       if (conn->pending[j] == &conn->streams[i]) conn->pending[j] = NULL;
-    free(conn->streams[i].body);
+    httpng_body_put(conn->streams[i].body);
     conn->streams[i].body = NULL;
     conn->streams[i].id = 0;
   }
@@ -92,7 +92,7 @@ static void h2_stream_body_append(h2_stream_t *s, const uint8_t *data, size_t le
     return;
   }
   if (!s->body) {
-    s->body = malloc(HTTPNG_BODY_MAX + 1);
+    s->body = httpng_body_get();
     if (!s->body) {
       s->body_over = 1;
       return;
@@ -209,8 +209,8 @@ static void h2_respond_hls(h2_conn_t *conn, int32_t stream_id, int handled, cons
     h2_submit_resp(conn, stream_id, resp->status, resp->content_type, resp->etag, resp->body_len, resp->body, resp->owner, resp->zc, origin_hdr);
 }
 
-static void h2ops_respond_status(void *connv, void *reqv, const char *status) {
-  h2_respond_status(connv, ((h2_req_ctx_t *)reqv)->stream->id, status);
+static void h2ops_respond_status(void *connv, void *reqv, int status) {
+  h2_respond_status(connv, ((h2_req_ctx_t *)reqv)->stream->id, httpng_status_str(status));
 }
 
 static void h2ops_respond_401(void *connv, void *reqv) {
@@ -409,7 +409,7 @@ void h2_conn_close(int epfd, conn_t *c) {
   h2_open_on_conn_close(conn);
   h2_ws_on_conn_close(conn);
   h2_body_on_conn_close(conn);
-  for (int i = 0; i < H2_MAX_STREAMS; i++) free(conn->streams[i].body);
+  for (int i = 0; i < H2_MAX_STREAMS; i++) httpng_body_put(conn->streams[i].body);
   nghttp2_session_del(conn->ng);
   free(conn);
   c->h2 = NULL;

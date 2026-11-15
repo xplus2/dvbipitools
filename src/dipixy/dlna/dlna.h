@@ -8,6 +8,7 @@
 
 #include "../cli/args.h"
 #include "../ts/channels/channels.h"
+#include "gena.h"
 
 /* out/out_len point into static thread-local buf, until this thread's next call, caller must not free. 0 ok, -1 on error */
 int dlna_device_desc_xml(const config_t *cfg, char **out, size_t *out_len);
@@ -19,9 +20,9 @@ void dlna_cm_scpd_xml(const char **out, size_t *out_len);
 /* "urn:...:service:ContentDirectory:1#Browse" = Browse. 0 ok, -1 malformed/missing */
 int dlna_soap_action_name(const char *soapaction_header, char *out, size_t outsz);
 
-/* fully-buffered SOAP body. service: cd/cm. out/out_len point to persistent thread-local buff, until this thread's next call, caller must not free.
+/* fully-buffered SOAP body. out/out_len point to persistent thread-local buff, until this thread's next call, caller must not free.
    return HTTP status: 200 / 500 */
-int dlna_handle_control(const config_t *cfg, const channels_t *channels, const char *service, const char *action, const char *body, size_t body_len, char **out, size_t *out_len);
+int dlna_handle_control(const config_t *cfg, const channels_t *channels, gena_svc_t svc, const char *action, const char *body, size_t body_len, char **out, size_t *out_len);
 
 /* CM::GetProtocolInfo's "Source" field: every protocolInfo string cfg can currently serve. reused by GENA initial cm-service NOTIFY */
 void dlna_source_protocol_info(const config_t *cfg, char *out, size_t outsz);

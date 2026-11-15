@@ -3,19 +3,112 @@
 
 
 #include <getopt.h>
-#include <limits.h>
-#include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/mux/fec2022.h"
 #include "lib/net/jitbuf.h"
 #include "priv.h"
+#include "lib/net/rist/ristpeer.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+
+static const yamlcfg_opt_t opts[] = {
+    {'p', "input.pmt-pid", "TS000604", "invalid -p pmt-pid: %s (0x0010..0x1FFE)", 0},
+    {'s', "input.sdt", "LS000685", "-s sdt-text too long", 0},
+    {OPT_PROVIDER, "input.provider", "LS000685", "--provider text too long", 0},
+    {OPT_STRIP, "input.strip", "TS000605", "invalid --strip: %s (comma list of DATA,ECM, or \"none\")", 0},
+    {OPT_HBBTV_ORG_ID, "input.hbbtv-org-id", "TS000606", "invalid --hbbtv-org-id: %s", 0},
+    {OPT_HBBTV_APP_ID, "input.hbbtv-app-id", "TS000607", "invalid --hbbtv-app-id: %s", 0},
+    {OPT_HBBTV_NAME, "input.hbbtv-name", "LS000685", "--hbbtv-name text too long", 0},
+    {OPT_SID, "input.sid", "TS000502", "invalid --sid: %s (1..65535)", 0},
+    {OPT_RIST_ENCRYPTION_TYPE_IN, "input.rist-encryption-type-in", "TS000552", "invalid --rist-encryption-type-in: %s (" ARGUTIL_RIST_KEY_SIZE_HINT ")", 0},
+    {OPT_RIST_SECRET_IN, "input.rist-secret-in", "LS000685", "--rist-secret-in too long", 0},
+    {OPT_RIST_CNAME_IN, "input.rist-cname-in", "LS000685", "--rist-cname-in too long", 0},
+    {OPT_RIST_BUFFER_IN, "input.rist-buffer-in", "TS000724", "invalid --rist-buffer-in: %s (1..60000 ms)", 0},
+    {OPT_RIST_PROFILE_IN, "input.rist-profile-in", "TS000553", "invalid --rist-profile-in: %s (" RIST_PROF_HINT ")", 0},
+    {OPT_SRT_PASSPHRASE_IN, "input.srt-passphrase-in", "LS000685", "--srt-passphrase-in too long", 0},
+    {OPT_SRT_PBKEYLEN_IN, "input.srt-pbkeylen-in", "TS000359", "invalid --srt-pbkeylen-in: %s (" ARGUTIL_SRT_PBKEYLEN_HINT ")", 0},
+    {OPT_SRT_STREAMID_IN, "input.srt-streamid-in", "LS000685", "--srt-streamid-in too long", 0},
+    {OPT_SRT_PACKETFILTER_IN, "input.srt-packetfilter-in", "LS000685", "--srt-packetfilter-in too long", 0},
+    {OPT_SRT_LATENCY_IN, "input.srt-latency-in", "TS000360", "invalid --srt-latency-in: %s (1..60000 ms)", 0},
+    {OPT_AL_FEC_IN, "input.al-fec-in", "TS000727", "invalid --al-fec-in: %s (want L:D, L*D<=400, L<=40)", 0},
+    {OPT_AL_FEC_PORT_IN, "input.al-fec-port-in", "TS000728", "invalid --al-fec-port-in: %s", 0},
+};
 
 args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
   config_t *cfg = p->cfg;
   dipitvhead_input_t *in = p->in;
   char err[192];
 
+  int r;
+
+  switch (c) {
+    case 'p':
+      REQUIRE_INPUT("-p/--pmt-pid");
+      break;
+    case 's':
+      REQUIRE_INPUT("-s/--sdt");
+      break;
+    case OPT_PROVIDER:
+      REQUIRE_INPUT("--provider");
+      break;
+    case OPT_STRIP:
+      REQUIRE_INPUT("--strip");
+      break;
+    case OPT_HBBTV_ORG_ID:
+      REQUIRE_INPUT("--hbbtv-org-id");
+      break;
+    case OPT_HBBTV_APP_ID:
+      REQUIRE_INPUT("--hbbtv-app-id");
+      break;
+    case OPT_HBBTV_NAME:
+      REQUIRE_INPUT("--hbbtv-name");
+      break;
+    case OPT_SID:
+      REQUIRE_INPUT("--sid");
+      break;
+    case OPT_RIST_ENCRYPTION_TYPE_IN:
+      REQUIRE_INPUT("--rist-encryption-type-in");
+      break;
+    case OPT_RIST_SECRET_IN:
+      REQUIRE_INPUT("--rist-secret-in");
+      break;
+    case OPT_RIST_CNAME_IN:
+      REQUIRE_INPUT("--rist-cname-in");
+      break;
+    case OPT_RIST_BUFFER_IN:
+      REQUIRE_INPUT("--rist-buffer-in");
+      break;
+    case OPT_RIST_PROFILE_IN:
+      REQUIRE_INPUT("--rist-profile-in");
+      break;
+    case OPT_SRT_PASSPHRASE_IN:
+      REQUIRE_INPUT("--srt-passphrase-in");
+      break;
+    case OPT_SRT_PBKEYLEN_IN:
+      REQUIRE_INPUT("--srt-pbkeylen-in");
+      break;
+    case OPT_SRT_STREAMID_IN:
+      REQUIRE_INPUT("--srt-streamid-in");
+      break;
+    case OPT_SRT_PACKETFILTER_IN:
+      REQUIRE_INPUT("--srt-packetfilter-in");
+      break;
+    case OPT_SRT_LATENCY_IN:
+      REQUIRE_INPUT("--srt-latency-in");
+      break;
+    case OPT_AL_FEC_IN:
+      REQUIRE_INPUT("--al-fec-in");
+      break;
+    case OPT_AL_FEC_PORT_IN:
+      REQUIRE_INPUT("--al-fec-port-in");
+      break;
+    default:
+      break;
+  }
+  cfg->parse_item.input = 1;
+  r = yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), tvh_cfg_keys, tvh_cfg_nkeys, cfg, c, optarg);
+  cfg->parse_item.input = 0;
+  if (r) return r > 0 ? ARGS_OK : ARGS_ERR;
   switch (c) {
     case 'i':
       if (!p->cli_inputs) {
@@ -24,150 +117,17 @@ args_status_t tvh_opt_input(tvh_opt_t *p, int c) {
       }
       CHECK(tvh_cfg_add_input(cfg, optarg, err, sizeof err), "-i");
       break;
-    case 'p':
-      REQUIRE_INPUT("-p/--pmt-pid");
-      if (tvh_cfg_pid(optarg, &in->pmt_pid) || in->pmt_pid == 0) {
-        argerr("TS000604", "invalid -p pmt-pid: %s (0x0010..0x1FFE)", optarg);
-        return ARGS_ERR;
-      }
-      break;
     case 'I':
       REQUIRE_INPUT("-I/--iface");
       in->iface_in = optarg;
-      break;
-    case 's':
-      REQUIRE_INPUT("-s/--sdt");
-      if (strcmp(optarg, "-") == 0) {
-        in->sdt_mode = TABLE_DROP;
-      } else {
-        in->sdt_mode = TABLE_OVERRIDE;
-        if (argutil_bufcpy_opt(TOOL_NAME, in->sdt_text, sizeof in->sdt_text, optarg, "-s sdt-text"))
-          return ARGS_ERR;
-      }
-      break;
-    case OPT_PROVIDER:
-      REQUIRE_INPUT("--provider");
-      if (argutil_bufcpy_opt(TOOL_NAME, in->provider_text, sizeof in->provider_text, optarg, "--provider text"))
-        return ARGS_ERR;
       break;
     case OPT_STRIP_EIT:
       REQUIRE_INPUT("--strip-eit");
       in->strip_eit = 1;
       break;
-    case OPT_STRIP:
-      REQUIRE_INPUT("--strip");
-      if (tvh_cfg_strip(&in->strip_mask, optarg)) {
-        argerr("TS000605", "invalid --strip: %s (comma list of DATA,ECM, or \"none\")", optarg);
-        return ARGS_ERR;
-      }
-      break;
     case OPT_HBBTV:
       REQUIRE_INPUT("--hbbtv");
       in->hbbtv_url = optarg;
-      break;
-    case OPT_HBBTV_ORG_ID:
-      REQUIRE_INPUT("--hbbtv-org-id");
-      if (tvh_org_id_parse(optarg, &in->hbbtv_org_id)) {
-        argerr("TS000606", "invalid --hbbtv-org-id: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_HBBTV_APP_ID:
-      REQUIRE_INPUT("--hbbtv-app-id");
-      if (tvh_id_parse(optarg, &in->hbbtv_app_id)) {
-        argerr("TS000607", "invalid --hbbtv-app-id: %s", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_HBBTV_NAME:
-      REQUIRE_INPUT("--hbbtv-name");
-      if (argutil_bufcpy_opt(TOOL_NAME, in->hbbtv_name, sizeof in->hbbtv_name, optarg, "--hbbtv-name text"))
-        return ARGS_ERR;
-      break;
-    case OPT_SID:
-      REQUIRE_INPUT("--sid");
-      if (tvh_id_parse(optarg, &in->sid)) {
-        argerr("TS000502", "invalid --sid: %s (1..65535)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_RIST_ENCRYPTION_TYPE_IN:
-      REQUIRE_INPUT("--rist-encryption-type-in");
-      if (argutil_rist_key_size(optarg, &in->rist_key_size_in)) {
-        argerr("TS000552", "invalid --rist-encryption-type-in: %s (128|256)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_RIST_SECRET_IN:
-      REQUIRE_INPUT("--rist-secret-in");
-      if (argutil_bufcpy_opt(TOOL_NAME, in->rist_secret_in, sizeof in->rist_secret_in, optarg, "--rist-secret-in"))
-        return ARGS_ERR;
-      break;
-    case OPT_RIST_CNAME_IN:
-      REQUIRE_INPUT("--rist-cname-in");
-      if (argutil_bufcpy_opt(TOOL_NAME, in->rist_cname_in, sizeof in->rist_cname_in, optarg, "--rist-cname-in"))
-        return ARGS_ERR;
-      break;
-    case OPT_RIST_BUFFER_IN:
-      REQUIRE_INPUT("--rist-buffer-in");
-      if (argutil_uint_range(optarg, 1, 60000, &in->rist_buffer_ms_in)) {
-        argerr("TS000724", "invalid --rist-buffer-in: %s (1..60000 ms)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_RIST_PROFILE_IN: {
-      static const enum_map_t map[] = {{"simple", 0}, {"main", 1}};
-      int v;
-      REQUIRE_INPUT("--rist-profile-in");
-      if (map_lookup(map, sizeof map / sizeof map[0], optarg, &v)) {
-        argerr("TS000553", "invalid --rist-profile-in: %s (simple|main)", optarg);
-        return ARGS_ERR;
-      }
-      in->rist_profile_main = v;
-      break;
-    }
-    case OPT_SRT_PASSPHRASE_IN:
-      REQUIRE_INPUT("--srt-passphrase-in");
-      if (argutil_bufcpy_opt(TOOL_NAME, in->srt_passphrase_in, sizeof in->srt_passphrase_in, optarg, "--srt-passphrase-in"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_PBKEYLEN_IN:
-      REQUIRE_INPUT("--srt-pbkeylen-in");
-      if (tvh_set_pbkeylen(&in->srt_pbkeylen_in, optarg, err, sizeof err)) {
-        argerr("TS000359", "invalid --srt-pbkeylen-in: %s (16|24|32)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_SRT_STREAMID_IN:
-      REQUIRE_INPUT("--srt-streamid-in");
-      if (argutil_bufcpy_opt(TOOL_NAME, in->srt_streamid_in, sizeof in->srt_streamid_in, optarg, "--srt-streamid-in"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_PACKETFILTER_IN:
-      REQUIRE_INPUT("--srt-packetfilter-in");
-      if (argutil_bufcpy_opt(TOOL_NAME, in->srt_packetfilter_in, sizeof in->srt_packetfilter_in, optarg, "--srt-packetfilter-in"))
-        return ARGS_ERR;
-      break;
-    case OPT_SRT_LATENCY_IN:
-      REQUIRE_INPUT("--srt-latency-in");
-      if (argutil_uint_range(optarg, 1, 60000, &in->srt_latency_in_ms)) {
-        argerr("TS000360", "invalid --srt-latency-in: %s (1..60000 ms)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_AL_FEC_IN:
-      REQUIRE_INPUT("--al-fec-in");
-      if (fec2022_parse_ld(optarg, &in->al_fec_l_in, &in->al_fec_d_in)) {
-        argerr("TS000727", "invalid --al-fec-in: %s (want L:D, L*D<=400, L<=40)", optarg);
-        return ARGS_ERR;
-      }
-      break;
-    case OPT_AL_FEC_PORT_IN:
-      REQUIRE_INPUT("--al-fec-port-in");
-      if (argutil_port_parse(optarg, &in->al_fec_port_in)) {
-        argerr("TS000728", "invalid --al-fec-port-in: %s", optarg);
-        return ARGS_ERR;
-      }
       break;
     case OPT_JITTER_MS:
       REQUIRE_INPUT("--jitter-ms");

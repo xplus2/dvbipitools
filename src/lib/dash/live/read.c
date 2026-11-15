@@ -5,9 +5,9 @@
 #include <string.h>
 
 #include "lib/dash/live.h"
-#include "lib/sys/signal.h"
 #include "lib/dash/mpd.h"
 #include "lib/dash/live/live_int.h"
+#include "lib/helper/dateutil.h"
 
 ssize_t dash_live_read(dash_live_t *h, unsigned char *buf, size_t cap, net_err_reason_t *reason_out) {
   if (h->si.slot && *h->si.slot) tsinspect_tick(*h->si.slot, mono_seconds());

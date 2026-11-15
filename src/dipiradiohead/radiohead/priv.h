@@ -76,7 +76,8 @@ typedef struct {
 } radio_metrics_t;
 
 typedef struct {
-  char artist[256], title[256];
+  char artist[256];
+  char title[256];
   int dirty;
   radio_metrics_t *rm; /* shared, not owned */
 } meta_state_t;

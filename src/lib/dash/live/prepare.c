@@ -6,9 +6,9 @@
 
 #include "lib/dash/live.h"
 #include "lib/helper/log.h"
-#include "lib/sys/signal.h"
 #include "lib/dash/mpd.h"
 #include "lib/dash/live/live_int.h"
+#include "lib/helper/dateutil.h"
 
 static int timeline_ended(const dash_live_t *h) {
   const dash_timeline_entry_t *e = &h->repr.timeline[h->repr.n_timeline - 1];

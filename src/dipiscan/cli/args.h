@@ -23,7 +23,8 @@ typedef struct {
   unsigned char start[16]; /* 1st group address */
   unsigned char end[16];   /* last group address */
   unsigned total;          /* address count (start-end) */
-  unsigned port_lo, port_hi; /* inclusive port range probed per address */
+  unsigned port_lo;
+  unsigned port_hi; /* inclusive port range probed per address */
   unsigned jets;            /* -j|--jets */
   out_fmt_t format;
   const char *provider; /* -P, DomainName for -f xml. required if format==OUT_XML */

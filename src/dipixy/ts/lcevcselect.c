@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 void lcevc_select_parse_query(const char *query, lcevc_select_t *out) {
   char buf[16];

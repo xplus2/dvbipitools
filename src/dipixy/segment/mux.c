@@ -125,10 +125,10 @@ void fmp4_reset(hls_seg_ctx_t *s, uint64_t base_ms) {
 }
 
 static hls_store_t *track_store(const hls_seg_ctx_t *s, seg_container_t container) {
-  hls_store_t *t = hls_store_find(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, container);
+  hls_store_t *t = hls_store_find(&(stream_key_t){s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, container});
   if (t) return t;
-  hls_store_open(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, s->video.seg_target, s->video.max_segs, container);
-  return hls_store_find(s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, container);
+  hls_store_open(&(stream_key_t){s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, container}, s->video.seg_target, s->video.max_segs);
+  return hls_store_find(&(stream_key_t){s->cap_ctx, &s->filter, s->pmt_pid, &s->lcevc, container});
 }
 
 static void track_init_segment(hls_seg_ctx_t *s, hls_store_t *store, fmp4_mux_t *m) {

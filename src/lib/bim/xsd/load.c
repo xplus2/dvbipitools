@@ -14,6 +14,8 @@
 #include "lib/helper/log.h"
 #include "lib/helper/xml_util.h"
 #include "lib/sys/ioutil.h"
+#include "lib/helper/growutil.h"
+#include "lib/helper/strutil.h"
 
 #define DIR_DEPTH_MAX 16
 
@@ -123,11 +125,16 @@ static int index_dir(loader_t *l, const char *dir, int id, int depth) {
     e = readdir(d);
     if (!e) break;
     char p[PATH_MAX];
+    sbuf_t sp;
     struct stat st;
     char *real;
     size_t n = strlen(e->d_name);
     if (e->d_name[0] == '.') continue;
-    if (snprintf(p, sizeof p, "%s/%s", dir, e->d_name) >= (int)sizeof p) continue;
+    sbuf_init(&sp, p, sizeof p);
+    sbuf_add(&sp, dir);
+    sbuf_add(&sp, "/");
+    sbuf_add(&sp, e->d_name);
+    if (sp.truncated) continue;
     if (stat(p, &st)) continue;
     if (S_ISDIR(st.st_mode)) {
       if (depth < DIR_DEPTH_MAX) rc = index_dir(l, p, id, depth + 1);
@@ -254,13 +261,15 @@ static int locate(loader_t *l, const char *from, const char *loc, char *out, siz
   const char *slash = strrchr(from, '/');
   const char *hit = NULL;
   int rc;
-  if (loc[0] == '/') snprintf(out, cap, "%s", loc);
-  else snprintf(out, cap, "%.*s%s", slash ? (int)(slash - from + 1) : 0, from, loc);
+  sbuf_t s;
+  sbuf_init(&s, out, cap);
+  if (loc[0] != '/') sbuf_add_n(&s, from, slash ? (size_t)(slash - from + 1) : 0);
+  sbuf_add(&s, loc);
   if (is_file(out)) return 1;
   if (ensure_index(l)) return -1;
   rc = find_indexed(l, loc, NULL, 0, &hit);
   if (rc < 0) return xsd_set_fail(l->s, "LS000745", "bim: %s: schemaLocation %s matches several files in the schema directories", from, loc);
-  if (rc) snprintf(out, cap, "%s", hit);
+  if (rc) bufcpy(out, cap, hit);
   return rc;
 }
 
@@ -283,7 +292,7 @@ static int load_ref(loader_t *l, const char *from, const xsd_ref_t *r) {
       if (rc == -2) return oom(l);
       if (rc < 0) return xsd_set_fail(l->s, "LS000747", "bim: %s: namespace %s found in several schema files", from, r->ns ? r->ns : "(none)");
       if (!rc) return xsd_set_fail(l->s, "LS000746", "bim: %s: no schema for imported namespace %s", from, r->ns ? r->ns : "(none)");
-      snprintf(p, sizeof p, "%s", hit);
+      bufcpy(p, sizeof p, hit);
     }
     if (load_file(l, p, 'm', NULL)) return -1;
     /* XML Schema Part 1 4.2.3, src-import 3.1 */
@@ -381,7 +390,7 @@ int xsd_find_schema(xsd_set_t *s, xsd_index_t *x, const char *const *dirs, int n
         rc = 2;
       }
     }
-    if (hit) snprintf(out, cap, "%s", hit);
+    if (hit) bufcpy(out, cap, hit);
   }
   loader_done(&l, tmp);
   return rc;
@@ -467,7 +476,7 @@ static int load_for_ns(xsd_set_t *s, xsd_index_t *x, const char *const *paths, i
   if (!rc && tns_out) {
     int oomf = 0;
     const char *t = path_tns(x, file, &oomf);
-    snprintf(tns_out, tns_cap, "%s", t ? t : "");
+    bufcpy(tns_out, tns_cap, t ? t : "");
     if (oomf) rc = -2;
   }
 out:
@@ -491,6 +500,7 @@ int xsd_helper_ns(const char *ns) { return !strcmp(ns, XML_NS) || !strcmp(ns, XS
 
 void xsd_load_report(const char *startup, const char *runtime, int rc, const char *culprit, const char *ns, const xsd_set_t *s) {
   char code[16];
+  sbuf_t cb;
   const char *type = startup;
   int num = 500101;
   switch (rc) {
@@ -503,7 +513,8 @@ void xsd_load_report(const char *startup, const char *runtime, int rc, const cha
       log_code(xsd_set_error_code(s), "%s", xsd_set_error(s));
       return;
   }
-  snprintf(code, sizeof code, "%s%06d", type, num);
+  sbuf_init(&cb, code, sizeof code);
+  sbuf_add_upad(&cb, type, (unsigned)num, 6);
   switch (rc) {
     case XSD_LOAD_NONE: log_code(code, "no schema file for namespace %s below the schema directories", ns); break;
     case XSD_LOAD_SEVERAL: log_code(code, "namespace %s found in several schema files, give the schema file", ns); break;

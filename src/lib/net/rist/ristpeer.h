@@ -6,19 +6,27 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "lib/metrics/export.h"
 
 struct rist_ctx;
 struct rist_stats;
 
+typedef enum { RIST_PROF_SIMPLE, RIST_PROF_MAIN } rist_prof_t;
+
+#define RIST_PROF_HINT "simple|main"
+
+static inline int rist_prof_parse(const char *s, int *out) {
+  if (!strcmp(s, "simple")) *out = RIST_PROF_SIMPLE;
+  else if (!strcmp(s, "main")) *out = RIST_PROF_MAIN;
+  else return -1;
+  return 0;
+}
+
 #define RIST_RECEIVER_FLOW_ENTRIES 6
 #define RIST_READ_TIMEOUT_MS 200
 #define RIST_STATS_INTERVAL_MS 1000 /* metrics_exporter_due() gates actual push cadence */
-
-/* listening peer: data port (and rtcp_port: +1 sibling, simple profile) must be free.
-   librist crash in rist_peer_create() on taken rtcp_port. 1 ok, 0 taken */
-int ristpeer_listen_ports_usable(const char *uri, int rtcp_port);
 
 /* key_size 128/256, 0 = URI/lib default. rtcp_port: simple profile, listening
    0 ok, -1 rist_parse_address2/rist_peer_create failed (logged) */

@@ -9,7 +9,8 @@
 
 #include "lib/helper/log.h"
 #include "lib/helper/playlist_in.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
+#include "lib/helper/growutil.h"
 #include "lib/tva/bcg_doc.h"
 #include "lib/tva/xmltv.h"
 #include "suggest.h"
@@ -17,7 +18,9 @@
 typedef struct {
   char name[BCG_ID_LEN];
   char uri[BCG_ID_LEN];
-  unsigned tsid, onid, sid;
+  unsigned tsid;
+  unsigned onid;
+  unsigned sid;
 } scan_entry_t;
 
 typedef struct {
@@ -68,7 +71,8 @@ static int name_index_find(const name_index_t *idx, const scan_entry_t *scan, co
 }
 
 static int ci_contains(const char *hay, const char *needle) {
-  size_t hn = strlen(hay), nn = strlen(needle);
+  size_t hn = strlen(hay);
+  size_t nn = strlen(needle);
   if (nn == 0) return 0;
   if (nn > hn) return 0;
   for (size_t i = 0; i + nn <= hn; i++) {
@@ -177,7 +181,8 @@ int suggest_map(FILE *xmltv_f, FILE *scan_f, FILE *out) {
 
   for (int i = 0; i < doc.channel_count; i++) {
     bcg_channel_t *c = &doc.channels[i];
-    int exact, fuzzy = -1;
+    int exact;
+    int fuzzy = -1;
     const char *first_name = c->name_count ? c->names[0] : "?";
     exact = find_exact_match(c, scan, &idx);
     if (exact < 0) fuzzy = find_fuzzy_match(c, scan, scan_n);

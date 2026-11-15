@@ -19,8 +19,8 @@ static const cfg_field_case_t field_cases[] = {
   CFG_FIELD(config_t, "max-channels: 66\n", CFG_INT, max_channels, 66, NULL),
   CFG_FIELD(config_t, "max-variants: 5\n", CFG_INT, max_variants, 5, NULL),
   CFG_FIELD(config_t, "idle-timeout: 33\n", CFG_UINT, idle_timeout_s, 33, NULL),
-  CFG_FIELD(config_t, "capture-ring-size: 8192\n", CFG_UINT, capture_ring_kib, 8192, NULL),
   CFG_FIELD(config_t, "ts:\n  startup-timeout: 7.5\n", CFG_DOUBLE, ts_startup_timeout_s, 7.5, NULL),
+  CFG_FIELD(config_t, "ts:\n  startup-timeout: 0\n", CFG_DOUBLE, ts_startup_timeout_s, 0.0, NULL),
   CFG_FIELD(config_t, "join-all: true\n", CFG_INT, join_all, 1, NULL),
   CFG_FIELD(config_t, "insecure: yes\n", CFG_INT, insecure_tls, 1, NULL),
   CFG_FIELD(config_t, "sds:\n  timeout: 4.5\n", CFG_DOUBLE, sds_timeout_s, 4.5, NULL),
@@ -96,8 +96,6 @@ static const bad_case_t bad_cases[] = {
   {"max-variants: 0\n"},
   {"max-variants: 1025\n"},
   {"idle-timeout: 86401\n"},
-  {"capture-ring-size: 0\n"},
-  {"capture-ring-size: 262145\n"},
   {"ts:\n  startup-timeout: -1\n"},
   {"join-all: maybe\n"},
   {"insecure: maybe\n"},
@@ -299,7 +297,6 @@ START_TEST(defaults_are_the_documented_values) {
   ck_assert_int_eq(cfg.max_clients, 256);
   ck_assert_int_eq(cfg.max_channels, 32);
   ck_assert_int_eq(cfg.max_variants, 8);
-  ck_assert_uint_eq(cfg.capture_ring_kib, 4096u);
   ck_assert_int_eq(cfg.segment_count, 4);
   ck_assert_int_eq(cfg.ssdp_ttl, 3);
   ck_assert_uint_eq(cfg.ssdp_max_age_s, 1800u);

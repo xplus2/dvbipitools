@@ -24,6 +24,10 @@ mcast_t *mcast_open_src(int family, const char *group, unsigned port, const char
 /* one datagram. >0 len, 0 timeout, -1 error. reason_out: nullable, set only on -1 */
 ssize_t mcast_recv(mcast_t *m, void *buf, size_t cap, net_err_reason_t *reason_out);
 
+/* drain-loop callers only: up to n datagrams per recvmmsg, served by later mcast_recv() calls.
+   queued datagrams leave fd unreadable, don't gate mcast_recv() on poll(). 0 ok, -1 OOM */
+int mcast_set_batch(mcast_t *m, int n);
+
 int mcast_enable_rx_timestamps(mcast_t *m);
 uint64_t mcast_last_rx_ns(const mcast_t *m);
 
@@ -42,7 +46,11 @@ mcast_t *mcast_open_send(int family, const char *group, unsigned port, const cha
 
 /* one datagram to group:port given to mcast_open_send. >=0 sent, -1 error */
 ssize_t mcast_send(mcast_t *m, const void *buf, size_t len);
-ssize_t mcast_sendv(mcast_t *m, const void *hdr, size_t hdr_len, const void *payload, size_t payload_len);
+
+#define MCAST_SEND_BATCH_MAX 32
+
+/* n datagrams, each hdr[i] (hdr_len, 0 = none) + payload[i]. UDP GSO when sizes allow, else sendmmsg. 0 ok, -1 error */
+int mcast_send_batch(mcast_t *m, const void *const *hdr, size_t hdr_len, const void *const *payload, const size_t *len, int n);
 
 /* mcast_send with per-packet tos byte (thread-safe on a shared socket). >=0 sent, -1 error */
 ssize_t mcast_send_tos(mcast_t *m, const void *buf, size_t len, int tos);

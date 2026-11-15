@@ -32,16 +32,27 @@ static void make_rtp_header(unsigned char hdr[12]) {
   hdr[1] = 33;   /* MP2T payload type */
 }
 
-static size_t drain(capture_ctx_t *c, capture_reader_t *r, unsigned char *buf, size_t cap) {
-  for (int i = 0; i < 40; i++) {
-    size_t n;
-    capture_service(c);
-    n = capture_reader_read(r, buf, cap);
-    if (n > 0)
-      return n;
-    usleep(5000);
+typedef struct {
+  unsigned char *buf;
+  size_t cap;
+  size_t len;
+} collect_t;
+
+static void collect_sink(capture_ctx_t *ctx, void *user, const unsigned char *pkts, size_t n) {
+  collect_t *c = user;
+  size_t b = n * 188 < c->cap - c->len ? n * 188 : c->cap - c->len;
+  (void)ctx;
+  memcpy(c->buf + c->len, pkts, b);
+  c->len += b;
+}
+
+static size_t drain(capture_ctx_t *c, unsigned char *buf, size_t cap) {
+  collect_t col = {buf, cap, 0};
+  for (int i = 0; i < 40 && !col.len; i++) {
+    capture_drain(c, collect_sink, &col);
+    if (!col.len) usleep(5000);
   }
-  return capture_reader_read(r, buf, cap);
+  return col.len;
 }
 
 START_TEST(dedup_shares_context_for_same_key) {
@@ -62,58 +73,24 @@ START_TEST(dedup_shares_context_for_same_key) {
 }
 END_TEST
 
-START_TEST(two_readers_on_same_context_each_see_all_bytes) {
-  unsigned port = free_udp_port();
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.2", port, NULL, 1);
-  capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.2", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
-  capture_reader_t *r1, *r2;
-  unsigned char dgram[188], out1[512], out2[512];
-
-  ck_assert_ptr_nonnull(send);
-  ck_assert_ptr_nonnull(cap);
-  r1 = capture_reader_open(cap);
-  r2 = capture_reader_open(cap);
-  ck_assert_ptr_nonnull(r1);
-  ck_assert_ptr_nonnull(r2);
-
-  make_ts_packet(dgram, 9);
-  ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), (int)sizeof dgram);
-
-  ck_assert_uint_eq(drain(cap, r1, out1, sizeof out1), sizeof dgram);
-  ck_assert_int_eq(memcmp(out1, dgram, sizeof dgram), 0);
-  /* r2 opened before the send, so it independently sees same bytes w/o another capture_service() pass (buffered) */
-  ck_assert_uint_eq(capture_reader_read(r2, out2, sizeof out2), sizeof dgram);
-  ck_assert_int_eq(memcmp(out2, dgram, sizeof dgram), 0);
-
-  capture_reader_close(r1);
-  capture_reader_close(r2);
-  mcast_close(send);
-  capture_close(cap);
-}
-END_TEST
-
 START_TEST(plain_udp_two_ts_packets_round_trip) {
   unsigned port = free_udp_port();
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.3", port, NULL, 1);
   capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.3", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
-  capture_reader_t *r;
-  unsigned char dgram[376], out[512];
+  unsigned char dgram[376];
+  unsigned char out[512];
   size_t n;
 
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
-  r = capture_reader_open(cap);
-  ck_assert_ptr_nonnull(r);
   make_ts_packet(dgram, 1);
   make_ts_packet(dgram + 188, 2);
   ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), (int)sizeof dgram);
 
-  n = drain(cap, r, out, sizeof out);
+  n = drain(cap, out, sizeof out);
   ck_assert_uint_eq(n, sizeof dgram);
   ck_assert_int_eq(memcmp(out, dgram, sizeof dgram), 0);
-  ck_assert_uint_eq(capture_reader_dropped(r), 0u);
 
-  capture_reader_close(r);
   mcast_close(send);
   capture_close(cap);
 }
@@ -123,24 +100,22 @@ START_TEST(rtp_wrapped_packet_has_header_stripped) {
   unsigned port = free_udp_port();
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.4", port, NULL, 1);
   capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.4", NULL, port, NULL, 1, NULL, NULL, NULL, 0, 0);
-  capture_reader_t *r;
-  unsigned char dgram[12 + 188], ts[188], out[512];
+  unsigned char dgram[12 + 188];
+  unsigned char ts[188];
+  unsigned char out[512];
   size_t n;
 
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
-  r = capture_reader_open(cap);
-  ck_assert_ptr_nonnull(r);
   make_rtp_header(dgram);
   make_ts_packet(ts, 7);
   memcpy(dgram + 12, ts, 188);
   ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), (int)sizeof dgram);
 
-  n = drain(cap, r, out, sizeof out);
+  n = drain(cap, out, sizeof out);
   ck_assert_uint_eq(n, 188u);
   ck_assert_int_eq(memcmp(out, ts, 188), 0);
 
-  capture_reader_close(r);
   mcast_close(send);
   capture_close(cap);
 }
@@ -150,21 +125,18 @@ START_TEST(non_rtp_payload_dropped_when_rtp_expected) {
   unsigned port = free_udp_port();
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.5", port, NULL, 1);
   capture_ctx_t *cap = capture_open(AF_INET, "239.8.8.5", NULL, port, NULL, 1, NULL, NULL, NULL, 0, 0);
-  capture_reader_t *r;
-  unsigned char junk[20], out[512];
+  unsigned char junk[20];
+  unsigned char out[512];
   size_t n;
 
   ck_assert_ptr_nonnull(send);
   ck_assert_ptr_nonnull(cap);
-  r = capture_reader_open(cap);
-  ck_assert_ptr_nonnull(r);
   memset(junk, 0x00, sizeof junk); /* version bits 0, not RTP v2 */
   ck_assert_int_eq(mcast_send(send, junk, sizeof junk), (int)sizeof junk);
 
-  n = drain(cap, r, out, sizeof out);
+  n = drain(cap, out, sizeof out);
   ck_assert_uint_eq(n, 0u);
 
-  capture_reader_close(r);
   mcast_close(send);
   capture_close(cap);
 }
@@ -205,7 +177,8 @@ START_TEST(http_static_dedup_shares_context_for_same_url) {
   pthread_t tid;
   http_dedup_server_t srv;
   char url[64];
-  capture_ctx_t *a, *b;
+  capture_ctx_t *a;
+  capture_ctx_t *b;
 
   ck_assert_int_ge(listen_fd, 0);
   memset(&addr, 0, sizeof addr);
@@ -240,9 +213,10 @@ typedef struct {
   atomic_int got;
 } drain_thread_ctx_t;
 
-static void drain_sink(void *user, const unsigned char *pkt) {
+static void drain_sink(capture_ctx_t *ctx, void *user, const unsigned char *pkts, size_t n) {
   drain_thread_ctx_t *d = user;
-  memcpy(d->pkt, pkt, 188);
+  (void)ctx;
+  memcpy(d->pkt, pkts + (n - 1) * 188, 188);
   atomic_store(&d->got, 1);
 }
 
@@ -280,7 +254,8 @@ START_TEST(ret_wired_capture_delivers_plain_packet) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.6", port, NULL, 1);
   sds_ret_t ret;
   capture_ctx_t *cap;
-  unsigned char dgram[12 + 188], ts[188];
+  unsigned char dgram[12 + 188];
+  unsigned char ts[188];
   drain_thread_ctx_t d = {{0}, 0};
 
   memset(&ret, 0, sizeof ret);
@@ -312,7 +287,8 @@ START_TEST(fcc_wired_capture_delivers_plain_multicast_after_cutover) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.7", port, NULL, 1);
   sds_fcc_t fcc;
   capture_ctx_t *cap;
-  unsigned char dgram[12 + 188], ts[188];
+  unsigned char dgram[12 + 188];
+  unsigned char ts[188];
   drain_thread_ctx_t d = {{0}, 0};
 
   memset(&fcc, 0, sizeof fcc);
@@ -377,71 +353,6 @@ START_TEST(stdin_source_is_shared_once_initialised) {
 }
 END_TEST
 
-START_TEST(reader_that_falls_behind_loses_the_oldest_bytes) {
-  unsigned port = free_udp_port();
-  enum { DGRAM = 1316, SENDS = 6 };
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.5", port, NULL, 1);
-  capture_ctx_t *cap;
-  capture_reader_t *r;
-  unsigned char dgram[DGRAM];
-  unsigned char out[4 * DGRAM];
-  size_t n;
-
-  capture_set_ring_cap(2 * DGRAM);
-  cap = capture_open(AF_INET, "239.8.8.5", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
-  ck_assert_ptr_nonnull(send);
-  ck_assert_ptr_nonnull(cap);
-  r = capture_reader_open(cap);
-  ck_assert_ptr_nonnull(r);
-
-  memset(dgram, 0, sizeof dgram);
-  for (int i = 0; i < SENDS; i++) {
-    for (size_t k = 0; k < sizeof dgram; k += 188) make_ts_packet(dgram + k, (unsigned char)(i + 1));
-    ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), DGRAM);
-    usleep(2000);
-  }
-  for (int i = 0; i < 40; i++) {
-    capture_service(cap);
-    usleep(2000);
-  }
-  n = capture_reader_read(r, out, sizeof out);
-  ck_assert_uint_eq(n, (size_t)(2 * DGRAM));
-  ck_assert_uint_gt(capture_reader_dropped(r), 0u);
-  ck_assert_uint_eq(out[2], (unsigned char)(SENDS - 1));
-  ck_assert_uint_eq(out[DGRAM + 2], (unsigned char)SENDS);
-
-  capture_reader_close(r);
-  mcast_close(send);
-  capture_close(cap);
-}
-END_TEST
-
-START_TEST(datagram_larger_than_the_ring_keeps_only_its_tail) {
-  unsigned port = free_udp_port();
-  enum { DGRAM = 1316, RING = 564 };
-  mcast_t *send = mcast_open_send(AF_INET, "239.8.8.6", port, NULL, 1);
-  capture_ctx_t *cap;
-  capture_reader_t *r;
-  unsigned char dgram[DGRAM];
-  unsigned char out[2 * DGRAM];
-
-  capture_set_ring_cap(RING);
-  cap = capture_open(AF_INET, "239.8.8.6", NULL, port, NULL, 0, NULL, NULL, NULL, 0, 0);
-  ck_assert_ptr_nonnull(send);
-  ck_assert_ptr_nonnull(cap);
-  r = capture_reader_open(cap);
-  for (size_t i = 0; i < sizeof dgram; i++) dgram[i] = (unsigned char)i;
-  ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), DGRAM);
-
-  ck_assert_uint_eq(drain(cap, r, out, sizeof out), (size_t)RING);
-  ck_assert_int_eq(memcmp(out, dgram + DGRAM - RING, RING), 0);
-
-  capture_reader_close(r);
-  mcast_close(send);
-  capture_close(cap);
-}
-END_TEST
-
 typedef struct {
   int listen_fd;
   size_t chunk;
@@ -473,11 +384,13 @@ typedef struct {
   unsigned char marks[8];
 } sink_count_t;
 
-static void count_sink(void *user, const unsigned char *pkt) {
+static void count_sink(capture_ctx_t *ctx, void *user, const unsigned char *pkts, size_t n) {
   sink_count_t *c = user;
-
-  if (c->count < sizeof c->marks) c->marks[c->count] = pkt[2];
-  c->count++;
+  (void)ctx;
+  for (size_t i = 0; i < n; i++) {
+    if (c->count < sizeof c->marks) c->marks[c->count] = pkts[i * 188 + 2];
+    c->count++;
+  }
 }
 
 START_TEST(http_stream_reassembles_packets_split_across_reads) {
@@ -696,7 +609,6 @@ START_TEST(al_fec_repair_stream_that_cannot_open_is_dropped_but_capture_works) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.41", port, NULL, 1);
   sds_fec_t fec;
   capture_ctx_t *cap;
-  capture_reader_t *r;
   unsigned char dgram[12 + 188];
   unsigned char out[512];
   memset(&fec, 0, sizeof fec);
@@ -704,12 +616,10 @@ START_TEST(al_fec_repair_stream_that_cannot_open_is_dropped_but_capture_works) {
   fec.port = port_b;
   cap = capture_open(AF_INET, "239.8.8.41", NULL, port, NULL, 1, NULL, NULL, &fec, 5, 2);
   ck_assert_ptr_nonnull(cap);
-  r = capture_reader_open(cap);
   make_rtp_header(dgram);
   make_ts_packet(dgram + 12, 3);
   ck_assert_int_eq(mcast_send(send, dgram, sizeof dgram), (int)sizeof dgram);
-  ck_assert_uint_eq(drain(cap, r, out, sizeof out), 188u);
-  capture_reader_close(r);
+  ck_assert_uint_eq(drain(cap, out, sizeof out), 188u);
   mcast_close(send);
   capture_close(cap);
 }
@@ -721,7 +631,6 @@ START_TEST(al_fec_decoder_passes_in_order_source_packets) {
   mcast_t *send = mcast_open_send(AF_INET, "239.8.8.42", port, NULL, 1);
   sds_fec_t fec;
   capture_ctx_t *cap;
-  capture_reader_t *r;
   unsigned char dgram[12 + 188];
   unsigned char out[2048];
   size_t total = 0;
@@ -730,7 +639,6 @@ START_TEST(al_fec_decoder_passes_in_order_source_packets) {
   fec.port = port_b;
   cap = capture_open(AF_INET, "239.8.8.42", NULL, port, NULL, 1, NULL, NULL, &fec, 5, 2);
   ck_assert_ptr_nonnull(cap);
-  r = capture_reader_open(cap);
   for (unsigned i = 0; i < 12; i++) {
     make_rtp_header(dgram);
     dgram[2] = (unsigned char)(i >> 8);
@@ -740,12 +648,11 @@ START_TEST(al_fec_decoder_passes_in_order_source_packets) {
     sleep_ms(2);
   }
   for (int i = 0; i < 100 && total < 188; i++) {
-    size_t n = drain(cap, r, out + total, sizeof out - total);
+    size_t n = drain(cap, out + total, sizeof out - total);
     total += n;
     if (!n) sleep_ms(5);
   }
   ck_assert_uint_ge(total, 188u);
-  capture_reader_close(r);
   mcast_close(send);
   capture_close(cap);
 }
@@ -755,7 +662,6 @@ static Suite *capture_suite(void) {
   Suite *s = suite_create("dipixy_capture");
   TCase *tc = tcase_create("core");
   tcase_add_test(tc, dedup_shares_context_for_same_key);
-  tcase_add_test(tc, two_readers_on_same_context_each_see_all_bytes);
   tcase_add_test(tc, plain_udp_two_ts_packets_round_trip);
   tcase_add_test(tc, rtp_wrapped_packet_has_header_stripped);
   tcase_add_test(tc, non_rtp_payload_dropped_when_rtp_expected);
@@ -766,8 +672,6 @@ static Suite *capture_suite(void) {
   tcase_add_test(tc, srt_open_to_a_closed_port_fails);
   tcase_add_test(tc, rist_source_is_optional);
   tcase_add_test(tc, stdin_source_is_shared_once_initialised);
-  tcase_add_test(tc, reader_that_falls_behind_loses_the_oldest_bytes);
-  tcase_add_test(tc, datagram_larger_than_the_ring_keeps_only_its_tail);
   tcase_add_test(tc, http_stream_reassembles_packets_split_across_reads);
   tcase_add_test(tc, rtp_source_drain_unwraps_and_skips_non_rtp_datagrams);
   tcase_add_test(tc, al_fec_repair_stream_that_cannot_open_is_dropped_but_capture_works);

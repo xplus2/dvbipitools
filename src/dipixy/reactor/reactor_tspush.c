@@ -22,7 +22,7 @@ void reactor_tspush_begin(int epfd, conn_t *c) {
   c->epfd = epfd;
   c->reactor_tid = t_reactor_tid;
   ts_push_set_reactor_tid(c->slot, t_reactor_tid);
-  g_ts_subs[c->slot].fd = c->fd;
+  g_ts_subs[c->slot].h.fd = c->fd;
   setsockopt(c->fd, SOL_SOCKET, SO_KEEPALIVE, &ka, sizeof ka);
   reactor_arm(epfd, c, 0); /* EPOLLIN for FIN detection, EPOLLOUT on demand */
   conn_publish(c);
@@ -31,7 +31,7 @@ void reactor_tspush_begin(int epfd, conn_t *c) {
 
 int reactor_tspush_send_head(int sub_idx, const char *content_type) {
   const ts_sub_t *s = &g_ts_subs[sub_idx];
-  conn_t *c = conn_for_fd_gen(s->fd, s->conn_gen);
+  conn_t *c = conn_for_fd_gen(s->h.fd, s->h.conn_gen);
   char header[160];
   size_t header_len;
   if (!c) return -1;

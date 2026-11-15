@@ -21,7 +21,6 @@ static const struct option longopts[] = {
   {"max-channels", required_argument, 0, OPT_MAX_CHANNELS},
   {"max-variants", required_argument, 0, OPT_MAX_VARIANTS},
   {"idle-timeout", required_argument, 0, OPT_IDLE_TIMEOUT},
-  {"capture-ring-size", required_argument, 0, OPT_CAPTURE_RING_SIZE},
   {"ts-startup-timeout", required_argument, 0, OPT_TS_STARTUP_TIMEOUT},
   {"sds-timeout", required_argument, 0, OPT_SDS_TIMEOUT},
   {"sds-refresh-interval", required_argument, 0, OPT_SDS_REFRESH_INTERVAL},

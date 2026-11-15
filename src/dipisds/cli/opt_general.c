@@ -3,16 +3,28 @@
 
 #include <getopt.h>
 #include <limits.h>
-#include <string.h>
 
 #include "lib/helper/argutil.h"
-#include "lib/helper/playlist_out.h"
 #include "lib/net/netconnect.h"
 #include "priv.h"
+#include "lib/config/yamlcfg.h"
+#include "lib/helper/growutil.h"
+
+static const yamlcfg_opt_t opts[] = {
+    {'L', "lang", "AS000194", "invalid -L lang: %s (3-letter ISO 639-2 code)", 0},
+    {'m', "mcast", "AS000103", "invalid -m group:port: %s", 0},
+    {'T', "ttl", "AS000495", "invalid -T ttl: %s (1..255)", 0},
+    {'f', "format", "AS000195", "invalid --format: %s (m3u|csv|xspf|xml|null)", 0},
+};
 
 args_status_t sds_opt_general(sds_opt_t *p, int c) {
   config_t *cfg = p->cfg;
 
+  switch (yamlcfg_opt_apply(TOOL_NAME, opts, ARRAY_SIZE(opts), sds_cfg_keys, sds_cfg_nkeys, cfg, c, optarg)) {
+    case 1: return ARGS_OK;
+    case -1: return ARGS_ERR;
+    default: break;
+  }
   switch (c) {
     case 'a':
     case 'l':
@@ -35,33 +47,12 @@ args_status_t sds_opt_general(sds_opt_t *p, int c) {
     case 'O':
       cfg->offering = optarg;
       break;
-    case 'L':
-      if (strlen(optarg) != 3) {
-        argerr("AS000194", "invalid -L lang: %s (3-letter ISO 639-2 code)", optarg);
-        return ARGS_ERR;
-      }
-      memcpy(cfg->lang, optarg, 3);
-      break;
-    case 'm':
-      if (sds_mcast_parse(optarg, cfg)) {
-        argerr("AS000103", "invalid -m group:port: %s", optarg);
-        return ARGS_ERR;
-      }
-      cfg->fl.have_mcast = 1;
-      break;
     case 'I':
       cfg->iface = optarg;
       break;
     case OPT_DSCP:
       if (argutil_int_opt(TOOL_NAME, "AS000106", "dscp", optarg, net_dscp_parse, NET_DSCP_NAMES, &cfg->dscp)) return ARGS_ERR;
       cfg->fl.have_dscp = 1;
-      break;
-    case 'T':
-      if (argutil_uint_range(optarg, 1, 255, &cfg->ttl)) {
-        argerr("AS000495", "invalid -T ttl: %s (1..255)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->fl.have_ttl = 1;
       break;
     case 't': {
       unsigned v;
@@ -76,16 +67,6 @@ args_status_t sds_opt_general(sds_opt_t *p, int c) {
     case 'o':
       cfg->output_path = optarg;
       break;
-    case 'f': {
-      int v;
-      if (playlist_out_fmt_parse(optarg, &v)) {
-        argerr("AS000195", "invalid --format: %s (m3u|csv|xspf|xml|null)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->format = (out_fmt_t)v;
-      cfg->fl.have_format = 1;
-      break;
-    }
     case 'v':
       cfg->verbose = 1;
       break;

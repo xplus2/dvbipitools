@@ -10,7 +10,7 @@
 
 #include "lib/helper/log.h"
 #include "lib/net/netconnect.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "../version.h"
 #include "dlna_int.h"
 

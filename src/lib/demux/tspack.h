@@ -6,6 +6,27 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
+
+#define TS_PID_COUNT 8192
+#define TS_PID_MAX (TS_PID_COUNT - 1)
+
+/* pid -> slot index, max 255 */
+typedef struct {
+  uint8_t slot1[TS_PID_COUNT];
+} ts_pidmap_t;
+
+static inline void ts_pidmap_clear(ts_pidmap_t *m) { memset(m->slot1, 0, sizeof m->slot1); }
+
+static inline void ts_pidmap_set(ts_pidmap_t *m, unsigned pid, int slot) {
+  if (pid < TS_PID_COUNT && slot >= 0 && slot < 255) m->slot1[pid] = (uint8_t)(slot + 1);
+}
+
+static inline void ts_pidmap_unset(ts_pidmap_t *m, unsigned pid) {
+  if (pid < TS_PID_COUNT) m->slot1[pid] = 0;
+}
+
+static inline int ts_pidmap_get(const ts_pidmap_t *m, unsigned pid) { return pid < TS_PID_COUNT ? (int)m->slot1[pid] - 1 : -1; }
 
 typedef struct {
   unsigned char acc[188];

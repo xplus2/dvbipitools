@@ -10,6 +10,7 @@
 #include "../http2/http2.h"
 #endif
 
+#include <stdatomic.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/tcp.h>
@@ -50,7 +51,7 @@ static char tls_pending_marker;
 
 /* accept finish: sockopts, conn_new, client_ip, epoll add. shared by io_uring + accept4() paths */
 static void reactor_accept_setup(int epfd, const reactor_listener *L, int fd, const struct sockaddr_storage *saddr) {
-  __atomic_add_fetch(&g_connections_total, 1, __ATOMIC_RELAXED);
+  atomic_fetch_add_explicit(&g_connections_total, 1, memory_order_relaxed);
   if (!conn_fd_trackable(fd)) {
     close(fd);
     return;

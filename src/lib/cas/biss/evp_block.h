@@ -9,7 +9,8 @@
 /* single EVP_CIPHER_CTX block op, no padding: out gets exactly len bytes. 0 ok, -1 failed. iv: NULL for ECB */
 static inline int evp_cipher_block(const EVP_CIPHER *cipher, const unsigned char *key, const unsigned char *iv, const unsigned char *in, unsigned char *out, int len, int enc) {
   EVP_CIPHER_CTX *ctx;
-  int outlen, totlen;
+  int outlen;
+  int totlen;
   int rc = -1;
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx)

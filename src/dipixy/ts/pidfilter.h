@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "lib/demux/tspack.h"
+
 #define PID_FILTER_MAX 32
 
 /* sorted ascending, deduped, PIDs 0..8191 only */
@@ -14,6 +16,14 @@ typedef struct {
   uint16_t pids[PID_FILTER_MAX];
   int count;
 } pid_filter_t;
+
+typedef struct {
+  uint64_t w[TS_PID_COUNT / 64];
+} pid_mask_t;
+
+void pid_mask_from_filter(pid_mask_t *m, const pid_filter_t *f);
+
+static inline int pid_mask_has(const pid_mask_t *m, unsigned pid) { return pid < TS_PID_COUNT && ((m->w[pid >> 6] >> (pid & 63)) & 1u); }
 
 /* parses one dec/0x-hex token at s ("101" or "0x20") into *out. *end set
    past number (== s if unparsable). 1 parsed, 0 unparsable */
@@ -30,9 +40,6 @@ void pid_filter_parse_query(const char *query, pid_filter_t *out);
 /* find "key=" in query, copies value up to '&' or bufsz-1 into buf, urldecoded, NUL-terminates.
    malformed %XX kept. 1 found, 0 not (buf untouched) */
 int query_param_extract(const char *query, const char *key, char *buf, size_t bufsz);
-
-/* 1 if pid is in f (drop it), 0 otherwise */
-int pid_filter_excludes(const pid_filter_t *f, unsigned pid);
 
 /* 1 if a and b are same set, order never matters (parse already sorts) */
 int pid_filter_equal(const pid_filter_t *a, const pid_filter_t *b);

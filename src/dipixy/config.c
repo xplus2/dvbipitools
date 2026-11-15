@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "lib/config/yamlcfg.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/mux/fec2022.h"
 #include "config.h"
 #include "segstore.h"
@@ -27,7 +27,6 @@ void dixy_cfg_defaults(config_t *cfg) {
   cfg->max_channels = 32;
   cfg->max_variants = 8;
   cfg->idle_timeout_s = 60;
-  cfg->capture_ring_kib = 4096;
   cfg->ts_startup_timeout_s = 5.0;
   cfg->sds_timeout_s = 3.0;
   cfg->sds_refresh_interval_s = 30.0;
@@ -99,18 +98,12 @@ static int apply_iface(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_listen(void *c, const char *v, char *e, size_t n) {
-  if (dixy_cfg_listen(&((config_t *)c)->listen, v)) {
-    snprintf(e, n, "invalid '%s' (all:<port> or <addr>:<port>)", v);
-    return -1;
-  }
+  if (dixy_cfg_listen(&((config_t *)c)->listen, v)) return yamlcfg_bad(e, n, v, "all:<port> or <addr>:<port>");
   return 0;
 }
 
 static int apply_listen_tls(void *c, const char *v, char *e, size_t n) {
-  if (dixy_cfg_listen(&((config_t *)c)->listen_tls, v)) {
-    snprintf(e, n, "invalid '%s' (all:<port> or <addr>:<port>)", v);
-    return -1;
-  }
+  if (dixy_cfg_listen(&((config_t *)c)->listen_tls, v)) return yamlcfg_bad(e, n, v, "all:<port> or <addr>:<port>");
   return 0;
 }
 
@@ -125,18 +118,12 @@ static int apply_tls_key(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_workers(void *c, const char *v, char *e, size_t n) {
-  if (dixy_cfg_workers(&((config_t *)c)->workers_spec, v)) {
-    snprintf(e, n, "invalid '%s' (-1/-2/-3, or a positive count)", v);
-    return -1;
-  }
+  if (dixy_cfg_workers(&((config_t *)c)->workers_spec, v)) return yamlcfg_bad(e, n, v, "-1/-2/-3, or a positive count");
   return 0;
 }
 
 static int apply_cpu_affinity(void *c, const char *v, char *e, size_t n) {
-  if (cpuaff_parse(&((config_t *)c)->cpu_affinity, v)) {
-    snprintf(e, n, "invalid '%s' (off, auto, or list like 2-5,8)", v);
-    return -1;
-  }
+  if (cpuaff_parse(&((config_t *)c)->cpu_affinity, v)) return yamlcfg_bad(e, n, v, "off, auto, or list like 2-5,8");
   return 0;
 }
 
@@ -156,12 +143,8 @@ static int apply_idle_timeout(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->idle_timeout_s, v, 0, 86400, e, n);
 }
 
-static int apply_capture_ring_size(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_uint(&((config_t *)c)->capture_ring_kib, v, 1, 262144, e, n);
-}
-
 static int apply_ts_startup_timeout(void *c, const char *v, char *e, size_t n) {
-  return yamlcfg_set_double(&((config_t *)c)->ts_startup_timeout_s, v, 0.0, 2e6, 1, e, n);
+  return yamlcfg_set_double(&((config_t *)c)->ts_startup_timeout_s, v, 0.0, 2e6, 0, e, n);
 }
 
 static int apply_join_all(void *c, const char *v, char *e, size_t n) {
@@ -251,10 +234,7 @@ static int apply_metrics_auth(void *c, const char *v, char *e, size_t n) {
 }
 
 static int apply_format(void *c, const char *v, char *e, size_t n) {
-  if (dixy_cfg_format(c, v)) {
-    snprintf(e, n, "invalid '%s' (comma-separated list of ts,spts,rawaudio,hls,llhls,dash,lldash)", v);
-    return -1;
-  }
+  if (dixy_cfg_format(c, v)) return yamlcfg_bad(e, n, v, "comma-separated list of ts,spts,rawaudio,hls,llhls,dash,lldash");
   return 0;
 }
 
@@ -328,10 +308,7 @@ static int apply_no_ret(void *c, const char *v, char *e, size_t n) {
 
 static int apply_al_fec(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) {
-    snprintf(e, n, "invalid '%s' (want L:D, L*D<=400, L<=40)", v);
-    return -1;
-  }
+  if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) return yamlcfg_bad(e, n, v, "want L:D, L*D<=400, L<=40");
   return 0;
 }
 
@@ -410,7 +387,7 @@ static int apply_color(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_color(&((config_t *)c)->color_mode, v, e, n);
 }
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t dixy_cfg_keys[] = {
   {"iface", apply_iface, 0, 0},
   {"listen", apply_listen, 0, 0},
   {"listen-tls", apply_listen_tls, 0, 0},
@@ -422,7 +399,6 @@ static const yamlcfg_key_t keys[] = {
   {"max-channels", apply_max_channels, 0, 0},
   {"max-variants", apply_max_variants, 0, 0},
   {"idle-timeout", apply_idle_timeout, 0, 0},
-  {"capture-ring-size", apply_capture_ring_size, 0, 0},
   {"ts.startup-timeout", apply_ts_startup_timeout, 0, 0},
   {"input", apply_input, 0, YAMLCFG_LIST_KEYED},
   {"input.name", apply_input_name, 0, 0},
@@ -482,9 +458,10 @@ static const yamlcfg_key_t keys[] = {
   {"verbose", apply_verbose, 0, 0},
   {"color", apply_color, 0, 0},
 };
+const size_t dixy_cfg_nkeys = sizeof dixy_cfg_keys / sizeof dixy_cfg_keys[0];
 
 static int load(yamlcfg_t *y, int check, config_t *cfg, const char *path) {
-  int rc = yamlcfg_load_items(y, TOOL_NAME, check, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg, item_hook);
+  int rc = yamlcfg_load_items(y, TOOL_NAME, check, path, DEFAULT_CONFIG_PATH, dixy_cfg_keys, dixy_cfg_nkeys, cfg, item_hook);
   cfg->last_input = LAST_NONE;
   cfg->media_type_seen = 0;
   return rc;

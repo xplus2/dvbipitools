@@ -66,8 +66,4 @@ args_status_t sds_opt_rms(sds_opt_t *p, int c);
 void sds_print_help(void);
 args_status_t sds_cli_check(config_t *cfg);
 
-int sds_mcast_parse(const char *s, config_t *cfg);
-int sds_ret_addr_parse(const char *s, char *addr_out, size_t addr_cap, unsigned *port_out);
-int sds_mcast_addr_parse(const char *s, char *addr_out, size_t addr_cap, unsigned *port_out);
-
 #endif

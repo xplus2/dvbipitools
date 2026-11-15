@@ -5,8 +5,14 @@
 #define DIPIFCCRET_CONFIG_H
 
 #include "cli/args.h"
+#include "lib/config/yamlcfg.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipifccret.yaml"
+
+#define RATE_MAX 1000000 /* per-source rate cap, keeps burst depth math in range */
+
+extern const yamlcfg_key_t fccret_cfg_keys[];
+extern const size_t fccret_cfg_nkeys;
 
 void fccret_cfg_defaults(config_t *cfg);
 

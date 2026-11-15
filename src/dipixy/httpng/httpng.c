@@ -41,9 +41,14 @@ const char *httpng_status_str(int status) {
   switch (status) {
     case 200: return "200";
     case 304: return "304";
+    case 400: return "400";
+    case 403: return "403";
     case 404: return "404";
+    case 405: return "405";
+    case 412: return "412";
     case 501: return "501";
     case 503: return "503";
+    case 504: return "504";
     default: return "500";
   }
 }
@@ -59,34 +64,52 @@ size_t httpng_format_etag(char *etag_buf, size_t etag_buf_sz, const char *etag) 
   return elen + 2;
 }
 
+#define HDR_IS(lit) (!memcmp(name, lit, sizeof lit - 1))
+
 void httpng_parse_known_header(const char *name, size_t namelen, const char *value, size_t valuelen, const httpng_hdr_out_t *out) {
-  const uint8_t *v = (const uint8_t *)value;
-  if (namelen == 7 && memcmp(name, ":method", 7) == 0) {
-    hdr_value_copy(out->method, out->method_sz, v, valuelen);
-  } else if (namelen == 5 && memcmp(name, ":path", 5) == 0) {
-    hdr_value_copy(out->path, out->path_sz, v, valuelen);
-  } else if (namelen == 13 && memcmp(name, "if-none-match", 13) == 0) {
-    hdr_value_copy(out->inm, out->inm_sz, v, valuelen);
-  } else if (namelen == 6 && memcmp(name, "origin", 6) == 0) {
-    hdr_value_copy(out->origin, out->origin_sz, v, valuelen);
-  } else if (namelen == 13 && memcmp(name, "authorization", 13) == 0) {
-    hdr_value_copy(out->authz, out->authz_sz, v, valuelen);
-  } else if (namelen == 9 && memcmp(name, ":protocol", 9) == 0) {
-    hdr_value_copy(out->protocol, out->protocol_sz, v, valuelen);
-  } else if ((namelen == 10 && memcmp(name, ":authority", 10) == 0) || (namelen == 4 && memcmp(name, "host", 4) == 0)) {
-    hdr_value_copy(out->host, out->host_sz, v, valuelen);
-  } else if (namelen == 10 && memcmp(name, "soapaction", 10) == 0) {
-    hdr_value_copy(out->soapaction, out->soapaction_sz, v, valuelen);
-  } else if (namelen == 3 && memcmp(name, "sid", 3) == 0) {
-    hdr_value_copy(out->sid, out->sid_sz, v, valuelen);
-  } else if (namelen == 8 && memcmp(name, "callback", 8) == 0) {
-    hdr_value_copy(out->callback, out->callback_sz, v, valuelen);
-  } else if (namelen == 2 && memcmp(name, "nt", 2) == 0) {
-    hdr_value_copy(out->nt, out->nt_sz, v, valuelen);
-  } else if (namelen == 7 && memcmp(name, "timeout", 7) == 0) {
-    hdr_value_copy(out->timeout, out->timeout_sz, v, valuelen);
+  char *dst = NULL;
+  size_t dsz = 0;
+  switch (namelen) {
+    case 2:
+      if (HDR_IS("nt")) dst = out->nt, dsz = out->nt_sz;
+      break;
+    case 3:
+      if (HDR_IS("sid")) dst = out->sid, dsz = out->sid_sz;
+      break;
+    case 4:
+      if (HDR_IS("host")) dst = out->host, dsz = out->host_sz;
+      break;
+    case 5:
+      if (HDR_IS(":path")) dst = out->path, dsz = out->path_sz;
+      break;
+    case 6:
+      if (HDR_IS("origin")) dst = out->origin, dsz = out->origin_sz;
+      break;
+    case 7:
+      if (HDR_IS(":method")) dst = out->method, dsz = out->method_sz;
+      else if (HDR_IS("timeout")) dst = out->timeout, dsz = out->timeout_sz;
+      break;
+    case 8:
+      if (HDR_IS("callback")) dst = out->callback, dsz = out->callback_sz;
+      break;
+    case 9:
+      if (HDR_IS(":protocol")) dst = out->protocol, dsz = out->protocol_sz;
+      break;
+    case 10:
+      if (HDR_IS(":authority")) dst = out->host, dsz = out->host_sz;
+      else if (HDR_IS("soapaction")) dst = out->soapaction, dsz = out->soapaction_sz;
+      break;
+    case 13:
+      if (HDR_IS("if-none-match")) dst = out->inm, dsz = out->inm_sz;
+      else if (HDR_IS("authorization")) dst = out->authz, dsz = out->authz_sz;
+      break;
+    default:
+      break;
   }
+  if (dst) hdr_value_copy(dst, dsz, (const uint8_t *)value, valuelen);
 }
+
+#undef HDR_IS
 
 int httpng_ws_drain_pending(pthread_mutex_t *lock, uint8_t **pending, size_t *pending_len, size_t *pending_cap, uint8_t **out_data, size_t *out_len) {
   uint8_t *data;
@@ -107,17 +130,17 @@ int httpng_ws_drain_pending(pthread_mutex_t *lock, uint8_t **pending, size_t *pe
   return 1;
 }
 
-int httpng_hls_cold_render(hls_cold_kind_t kind, seg_container_t container, int want_ll, const char *utc_url, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,
-                           const lcevc_select_t *lcevc, const char *filename, int is_head, hls_resp_t *out) {
+int httpng_hls_cold_render(hls_cold_kind_t kind, const stream_key_t *k, int want_ll, const char *utc_url, const route_file_t *f, int is_head, hls_resp_t *out) {
+  const stream_key_t *fk = STREAM_KEY_AS(k, SEG_CONTAINER_FMP4);
   switch (kind) {
     case HLS_COLD_LLHLS:
-      return hls_render_ll(ctx, filter, pmt_pid, lcevc, container, filename, is_head, NULL, out);
+      return hls_render_ll(k, hls_store_find(k), f, is_head, NULL, out);
     case HLS_COLD_DASH:
-      return dash_render(ctx, filter, pmt_pid, lcevc, want_ll, utc_url, is_head, out);
+      return dash_render(fk, hls_store_find(fk), want_ll, utc_url, is_head, out);
     case HLS_COLD_HLS:
     case HLS_COLD_MP4:
     default:
-      return hls_render(ctx, filter, pmt_pid, lcevc, container, filename, is_head, NULL, out);
+      return hls_render(k, hls_store_find(k), f, is_head, NULL, out);
   }
 }
 
@@ -145,7 +168,7 @@ static void park_open(httpng_req_t *rq, capture_open_job_t *job) {
     return;
   }
   capture_open_job_cancel(job);
-  rq->ops->respond_status(rq->conn, rq->req, "503");
+  rq->ops->respond_status(rq->conn, rq->req, 503);
 }
 
 void dispatch_ts_route(httpng_req_t *rq) {
@@ -160,7 +183,7 @@ void dispatch_ts_route(httpng_req_t *rq) {
   int rawaudio = rq->rt->fmt == ROUTE_FMT_RAWAUDIO;
   unsigned tp_pmt_pid = rq->rt->fmt == ROUTE_FMT_TS ? 0 : rq->pmt_pid;
   if (!rq->is_head && !rq->ops->admission_ok(rq->conn)) {
-    rq->ops->respond_status(rq->conn, rq->req, "503");
+    rq->ops->respond_status(rq->conn, rq->req, 503);
     return;
   }
   res = open_source_try(rq->rt, &list_num, &ctx, &job);
@@ -169,7 +192,7 @@ void dispatch_ts_route(httpng_req_t *rq) {
     return;
   }
   if (res == OPEN_RES_FAIL) {
-    rq->ops->respond_status(rq->conn, rq->req, "404");
+    rq->ops->respond_status(rq->conn, rq->req, 404);
     return;
   }
   if (rq->is_head) {
@@ -185,160 +208,82 @@ void dispatch_ts_route(httpng_req_t *rq) {
   sub = ts_push_subscribe(ctx, rq->filter, rq->ops->proto, rq->fd, tp_pmt_pid, spts, rawaudio, &cinfo, rq->lcevc);
   if (sub < 0) {
     capture_close(ctx);
-    rq->ops->respond_status(rq->conn, rq->req, "503");
+    rq->ops->respond_status(rq->conn, rq->req, 503);
     return;
   }
   if (!rq->ops->tspush_dispatch(rq->conn, rq->req, sub, rawaudio)) {
     ts_push_unsubscribe_by_idx(sub);
-    rq->ops->respond_status(rq->conn, rq->req, "503");
+    rq->ops->respond_status(rq->conn, rq->req, 503);
   }
 }
 
-void dispatch_hls_route(httpng_req_t *rq) {
-  seg_container_t container = rq->rt->fmt == ROUTE_FMT_HLS_FMP4 ? SEG_CONTAINER_FMP4 : SEG_CONTAINER_TS;
+static void ng_status(void *t, int code) {
+  const httpng_req_t *rq = t;
+  rq->ops->respond_status(rq->conn, rq->req, code);
+}
+
+static int ng_park_open(void *t, capture_open_job_t *job) {
+  httpng_req_t *rq = t;
+  if (!rq->ops->open_try_park(rq->conn, rq->req, job)) return 0;
+  rq->opening = 1;
+  return 1;
+}
+
+static int ng_cold_park(void *t, const hls_cold_park_req_t *pr) {
+  const httpng_req_t *rq = t;
+  return rq->ops->hls_cold_try_park(rq->conn, rq->req, pr);
+}
+
+static int ng_ll_park(void *t, const llhls_park_req_t *pr) {
+  const httpng_req_t *rq = t;
+  return rq->ops->llhls_try_park(rq->conn, rq->req, pr);
+}
+
+static size_t ng_respond(const httpng_req_t *rq, int handled, const hls_resp_t *resp) {
+  rq->ops->respond_hls(rq->conn, rq->req, handled, resp, rq->origin);
+  return handled && resp->status == 200 ? resp->body_len : 0;
+}
+
+static size_t ng_hls(void *t, const stream_key_t *k, const hls_store_t *st, const route_file_t *f, int ll) {
+  const httpng_req_t *rq = t;
   hls_resp_t resp;
-  route_setup_t rs;
-  route_setup_status_t st;
-  unsigned list_num;
-  capture_ctx_t *ctx;
-  int handled;
-  st = route_setup(rq->rt, &list_num, rq->filter, rq->pmt_pid, rq->lcevc, rq->client_ip, rq->ops->proto, rq->item_bufs, rq->cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
-                   container, container == SEG_CONTAINER_FMP4 ? 0.0 : reactor_cfg()->hls_part_size, &rs);
-  if (st == ROUTE_SETUP_PENDING) {
-    park_open(rq, rs.job);
-    return;
-  }
-  if (st == ROUTE_SETUP_404) {
-    rq->ops->respond_status(rq->conn, rq->req, "404");
-    return;
-  }
-  if (st == ROUTE_SETUP_503) {
-    rq->ops->respond_status(rq->conn, rq->req, "503");
-    return;
-  }
-  ctx = rs.ctx;
-  if (!strcmp(rq->rt->hls_file, "index.m3u8") && !hls_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, container) &&
-      rq->ops->hls_cold_try_park(rq->conn, rq->req, &(hls_cold_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_HLS, container, 0, rq->is_head, 0, rq->origin, hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle, NULL}))
-    return;
-  handled = hls_render(ctx, rq->filter, rq->pmt_pid, rq->lcevc, container, rq->rt->hls_file, rq->is_head, rq->inm, &resp);
-  rq->ops->respond_hls(rq->conn, rq->req, handled, &resp, rq->origin);
-  if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
+  int handled = ll ? hls_render_ll(k, st, f, rq->is_head, rq->inm, &resp) : hls_render(k, st, f, rq->is_head, rq->inm, &resp);
+  return ng_respond(rq, handled, &resp);
 }
 
-void dispatch_llhls_route(httpng_req_t *rq) {
-  seg_container_t container = rq->rt->fmt == ROUTE_FMT_LLHLS_FMP4 ? SEG_CONTAINER_FMP4 : SEG_CONTAINER_TS;
-  uint32_t want_seg;
-  int want_part;
+static size_t ng_dash(void *t, const stream_key_t *k, const hls_store_t *st, int want_ll, const char *utc_url) {
+  const httpng_req_t *rq = t;
   hls_resp_t resp;
-  route_setup_t rs;
-  route_setup_status_t st;
-  unsigned list_num;
-  capture_ctx_t *ctx;
-  int handled;
-  int is_index_ll;
-  st = route_setup(rq->rt, &list_num, rq->filter, rq->pmt_pid, rq->lcevc, rq->client_ip, rq->ops->proto, rq->item_bufs, rq->cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count, container,
-    reactor_cfg()->hls_part_size, &rs);
-  if (st == ROUTE_SETUP_PENDING) {
-    park_open(rq, rs.job);
-    return;
-  }
-  if (st == ROUTE_SETUP_404) {
-    rq->ops->respond_status(rq->conn, rq->req, "404");
-    return;
-  }
-  if (st == ROUTE_SETUP_503) {
-    rq->ops->respond_status(rq->conn, rq->req, "503");
-    return;
-  }
-  ctx = rs.ctx;
-  is_index_ll = !strcmp(rq->rt->hls_file, "index_ll.m3u8");
-  if (is_index_ll && !hls_ll_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, container) &&
-      rq->ops->hls_cold_try_park(rq->conn, rq->req, &(hls_cold_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_LLHLS, container, 0, rq->is_head, 0, rq->origin, hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle, NULL}))
-    return;
-  if (is_index_ll && parse_blocking_reload(rq->query, &want_seg, &want_part) &&
-      !hls_part_available(ctx, rq->filter, rq->pmt_pid, rq->lcevc, container, want_seg, want_part) &&
-      rq->ops->llhls_try_park(rq->conn, rq->req, &(llhls_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->is_head, 0, rq->inm, rq->origin, want_seg, want_part, (int)(reactor_cfg()->hls_part_size * 2000.0), rs.ws_handle, container}))
-    return;
-  handled = hls_render_ll(ctx, rq->filter, rq->pmt_pid, rq->lcevc, container, rq->rt->hls_file, rq->is_head, rq->inm, &resp);
-  rq->ops->respond_hls(rq->conn, rq->req, handled, &resp, rq->origin);
-  if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
+  return ng_respond(rq, dash_render(k, st, want_ll, utc_url, rq->is_head, &resp), &resp);
 }
 
-void dispatch_dash_route(httpng_req_t *rq) {
-  int want_ll = rq->rt->fmt == ROUTE_FMT_LLDASH;
+static size_t ng_dash_seg(void *t, const stream_key_t *k, const route_file_t *f) {
+  const httpng_req_t *rq = t;
   hls_resp_t resp;
-  route_setup_t rs;
-  route_setup_status_t st;
-  unsigned list_num;
-  capture_ctx_t *ctx;
-  char utc_url[TIME_EP_URL_MAX];
-  int handled;
-  time_ep_utc_url(utc_url, sizeof utc_url, reactor_cfg()->dash_utc_url, 1, rq->host);
-  st = route_setup(rq->rt, &list_num, rq->filter, rq->pmt_pid, rq->lcevc, rq->client_ip, rq->ops->proto, rq->item_bufs, rq->cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count,
-                   SEG_CONTAINER_FMP4, want_ll ? reactor_cfg()->dash_part_size : 0.0, &rs);
-  if (st == ROUTE_SETUP_PENDING) {
-    park_open(rq, rs.job);
-    return;
-  }
-  if (st == ROUTE_SETUP_404) {
-    rq->ops->respond_status(rq->conn, rq->req, "404");
-    return;
-  }
-  if (st == ROUTE_SETUP_503) {
-    rq->ops->respond_status(rq->conn, rq->req, "503");
-    return;
-  }
-  ctx = rs.ctx;
-  if (strcmp(rq->rt->hls_file, "manifest.mpd") != 0) {
-    if (!reactor_cfg()->no_lldash && !rq->is_head) {
-      int sub = dash_lldash_subscribe(ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->ops->proto);
-      if (sub >= 0) {
-        if (rq->ops->dashchunk_dispatch(rq->conn, rq->req, sub, rs.ws_handle)) return;
-        dash_lldash_sub_close(sub);
-      }
-    }
-    handled = dash_render_seg(ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, rq->is_head, &resp);
-  } else {
-    if (!hls_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, SEG_CONTAINER_FMP4) &&
-        rq->ops->hls_cold_try_park(rq->conn, rq->req, &(hls_cold_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->rt->hls_file, HLS_COLD_DASH, SEG_CONTAINER_FMP4, want_ll, rq->is_head, 0, rq->origin, hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle, utc_url}))
-      return;
-    handled = dash_render(ctx, rq->filter, rq->pmt_pid, rq->lcevc, want_ll, utc_url, rq->is_head, &resp);
-  }
-  rq->ops->respond_hls(rq->conn, rq->req, handled, &resp, rq->origin);
-  if (handled && resp.status == 200) ws_clients_add_bytes(rs.ws_handle, resp.body_len);
+  return ng_respond(rq, dash_render_seg(k, f, rq->is_head, &resp), &resp);
 }
 
-void dispatch_mp4_route(httpng_req_t *rq) {
-  route_setup_t rs;
-  route_setup_status_t st;
-  unsigned list_num;
-  capture_ctx_t *ctx;
-  int sub;
-  st = route_setup(rq->rt, &list_num, rq->filter, rq->pmt_pid, rq->lcevc, rq->client_ip, rq->ops->proto, rq->item_bufs, rq->cinfo, reactor_cfg()->segment_size, reactor_cfg()->segment_count, SEG_CONTAINER_FMP4, 0.0, &rs);
-  if (st == ROUTE_SETUP_PENDING) {
-    park_open(rq, rs.job);
-    return;
-  }
-  if (st == ROUTE_SETUP_404) {
-    rq->ops->respond_status(rq->conn, rq->req, "404");
-    return;
-  }
-  if (st == ROUTE_SETUP_503) {
-    rq->ops->respond_status(rq->conn, rq->req, "503");
-    return;
-  }
-  ctx = rs.ctx;
-  if (!hls_store_ready(ctx, rq->filter, rq->pmt_pid, rq->lcevc, SEG_CONTAINER_FMP4) &&
-      rq->ops->hls_cold_try_park(rq->conn, rq->req, &(hls_cold_park_req_t){ctx, rq->filter, rq->pmt_pid, rq->lcevc, "", HLS_COLD_MP4, SEG_CONTAINER_FMP4, 0, rq->is_head, 0, rq->origin, hls_cold_timeout_ms(reactor_cfg()->segment_size), rs.ws_handle, NULL}))
-    return;
-  sub = mp4push_subscribe(ctx, rq->filter, rq->pmt_pid, rq->lcevc, rq->ops->proto);
-  if (sub >= 0 && rq->ops->mp4push_dispatch(rq->conn, rq->req, sub, rs.ws_handle)) return;
+static int ng_lldash(void *t, const stream_key_t *k, const route_file_t *f, int ws_handle) {
+  const httpng_req_t *rq = t;
+  int sub = dash_lldash_subscribe(k, f, rq->ops->proto);
+  if (sub < 0) return 0;
+  if (rq->ops->dashchunk_dispatch(rq->conn, rq->req, sub, ws_handle)) return 1;
+  dash_lldash_sub_close(sub);
+  return 0;
+}
+
+static void ng_mp4(void *t, const stream_key_t *k, int ws_handle) {
+  const httpng_req_t *rq = t;
+  int sub = mp4push_subscribe(k, rq->ops->proto);
+  if (sub >= 0 && rq->ops->mp4push_dispatch(rq->conn, rq->req, sub, ws_handle)) return;
   if (sub >= 0) mp4push_sub_close(sub);
-  rq->ops->respond_status(rq->conn, rq->req, "503");
+  rq->ops->respond_status(rq->conn, rq->req, 503);
 }
 
-static int method_is_dlna(const char *method) {
-  return !strcmp(method, "POST") || !strcmp(method, "SUBSCRIBE") || !strcmp(method, "UNSUBSCRIBE");
+void dispatch_store_route(httpng_req_t *rq) {
+  const route_io_ops_t ops = {ng_status, ng_park_open, ng_cold_park, ng_ll_park, ng_hls, ng_dash, ng_dash_seg, ng_lldash, ng_mp4};
+  route_dispatch_store(&(route_io_t){&ops, rq, rq->rt, rq->filter, rq->pmt_pid, rq->lcevc, rq->client_ip, rq->ops->proto, rq->is_head, 0, rq->origin, rq->inm, rq->query, rq->host, 1,
+                                     rq->item_bufs, rq->cinfo});
 }
 
 /* matches reactor/dispatch.c's HTTP/1.1 dispatch */
@@ -352,13 +297,15 @@ void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, const httpn
   char *query;
   const char *want_auth;
   httpng_req_t rq;
+  http_method_t method = parse_http_method(hdrs->method, strlen(hdrs->method));
+  special_path_t sp;
 
   if (!t_open_replay) dipixy_metrics_note_request();
-  if (!strcmp(hdrs->method, "CONNECT") && !strcmp(hdrs->protocol, "websocket")) {
-    if (reactor_cfg()->no_status || !path_is_ui_ws(hdrs->path))
-      ops->respond_status(conn, req, "404");
+  if (method == HTTP_METHOD_CONNECT && !strcmp(hdrs->protocol, "websocket")) {
+    if (reactor_cfg()->no_status || special_path_kind(hdrs->path) != SPECIAL_UI_WS)
+      ops->respond_status(conn, req, 404);
     else if (!ws_origin_ok(reactor_cfg(), hdrs->origin, hdrs->host))
-      ops->respond_status(conn, req, "403");
+      ops->respond_status(conn, req, 403);
     else if (!http_auth_ok(reactor_cfg()->http_auth, hdrs->authz[0] ? hdrs->authz : NULL))
       ops->respond_401(conn, req);
     else
@@ -369,16 +316,23 @@ void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, const httpn
   qmark = strchr(hdrs->path, '?');
   query = qmark ? qmark + 1 : NULL;
   if (qmark) *qmark = '\0';
+  sp = special_path_kind(hdrs->path);
 
-  if (method_is_dlna(hdrs->method)) {
-    httpng_dispatch_dlna(ops, conn, req, hdrs, client_ip);
-    return;
+  switch (method) {
+    case HTTP_METHOD_GET:
+    case HTTP_METHOD_HEAD:
+      break;
+    case HTTP_METHOD_POST:
+    case HTTP_METHOD_SUBSCRIBE:
+    case HTTP_METHOD_UNSUBSCRIBE:
+      httpng_dispatch_dlna(ops, conn, req, method, sp, hdrs, client_ip);
+      return;
+    case HTTP_METHOD_CONNECT:
+    case HTTP_METHOD_OTHER:
+      ops->respond_status(conn, req, 405);
+      return;
   }
-  if (strcmp(hdrs->method, "GET") != 0 && strcmp(hdrs->method, "HEAD") != 0) {
-    ops->respond_status(conn, req, "405");
-    return;
-  }
-  want_auth = special_path_auth(hdrs->path);
+  want_auth = special_path_auth(sp);
   if (want_auth && !http_auth_ok(want_auth, hdrs->authz[0] ? hdrs->authz : NULL)) {
     ops->respond_401(conn, req);
     return;
@@ -397,15 +351,15 @@ void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, const httpn
   rq.cinfo = &cinfo;
   rq.client_ip = client_ip;
   rq.fd = fd;
-  rq.is_head = !strcmp(hdrs->method, "HEAD");
+  rq.is_head = method == HTTP_METHOD_HEAD;
   rq.origin = hdrs->origin[0] ? hdrs->origin : NULL;
   rq.inm = hdrs->inm[0] ? hdrs->inm : NULL;
   rq.query = query;
   rq.host = hdrs->host;
   rq.opening = 0;
-  if (httpng_dispatch_special(ops, conn, req, hdrs, query, &filter, &lcevc, rq.is_head)) return;
+  if (httpng_dispatch_special(ops, conn, req, sp, hdrs, query, &filter, &lcevc, rq.is_head)) return;
   if (route_parse(hdrs->path, &rt) || route_disabled(&rt)) {
-    ops->respond_status(conn, req, "404");
+    ops->respond_status(conn, req, 404);
     return;
   }
 
@@ -417,24 +371,35 @@ void httpng_dispatch(const httpng_ops_t *ops, void *conn, void *req, const httpn
       break;
     case ROUTE_FMT_HLS:
     case ROUTE_FMT_HLS_FMP4:
-      dispatch_hls_route(&rq);
-      break;
     case ROUTE_FMT_LLHLS:
     case ROUTE_FMT_LLHLS_FMP4:
-      dispatch_llhls_route(&rq);
-      break;
     case ROUTE_FMT_DASH:
     case ROUTE_FMT_LLDASH:
-      dispatch_dash_route(&rq);
-      break;
     case ROUTE_FMT_MP4:
-      dispatch_mp4_route(&rq);
+      dispatch_store_route(&rq);
       break;
     default:
-      ops->respond_status(conn, req, "501");
+      ops->respond_status(conn, req, 501);
       break;
   }
   if (rq.opening && qmark) *qmark = '?';
+}
+
+#define HTTPNG_BODY_POOL_MAX 8
+
+static _Thread_local uint8_t *t_body_pool[HTTPNG_BODY_POOL_MAX];
+static _Thread_local int t_body_pool_n;
+
+uint8_t *httpng_body_get(void) { return t_body_pool_n ? t_body_pool[--t_body_pool_n] : malloc(HTTPNG_BODY_MAX + 1); }
+
+void httpng_body_put(uint8_t *b) {
+  if (!b) return;
+  if (t_body_pool_n < HTTPNG_BODY_POOL_MAX) t_body_pool[t_body_pool_n++] = b;
+  else free(b);
+}
+
+void httpng_body_pool_release(void) {
+  while (t_body_pool_n) free(t_body_pool[--t_body_pool_n]);
 }
 
 #endif /* HAVE_HTTP2 || HAVE_HTTP3 */

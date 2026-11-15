@@ -13,12 +13,13 @@
 #include <unistd.h>
 
 #include "lib/cas/cas_core.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/sys/signal.h"
 #include "dipiradiohead/radiohead/priv.h"
 #include "input/http_fixture.h"
 #include "../run_helper.h"
 #include "../fx_ts.h"
+#include "lib/helper/dateutil.h"
 
 START_TEST(meta_cb_copies_artist_and_title_and_marks_dirty) {
   meta_state_t m;

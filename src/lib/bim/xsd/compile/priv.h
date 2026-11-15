@@ -9,7 +9,6 @@
 
 #include "lib/bim/codec.h"
 #include "lib/bim/xsd/xsd.h"
-#include "lib/sys/ioutil.h"
 
 #define DEPTH_MAX 256
 
@@ -107,7 +106,6 @@ int xc_ename_cmp(const char *ans, const char *a, const char *bns, const char *b)
 char *xc_cat(cc_t *c, const char *const *parts, int n);
 char *xc_ename(cc_t *c, const char *ns, const char *name);
 int xc_strp_cmp(const void *a, const void *b);
-int xc_ns_eq(const char *a, const char *b);
 int xc_add_codec(cc_t *c, const char *ns, const char *name, bim_codec_t codec, int derived);
 const bim_simple_t *xc_get_simple(cc_t *c, const xsd_type_t *t);
 /* XML Schema 1 3.4.2 */

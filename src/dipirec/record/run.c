@@ -15,6 +15,7 @@
 #include "../filter/ts.h"
 #include "../version.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 #define MPTS_NAME_WAIT_MS 3000
 

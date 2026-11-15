@@ -9,7 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../sys/ioutil.h"
+#include "strutil.h"
+#include "growutil.h"
 
 #define JBUF_SHRINK_RATIO 2
 #define JBUF_OWN_MAX 16

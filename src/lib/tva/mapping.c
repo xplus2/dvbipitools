@@ -7,6 +7,8 @@
 
 #include "lib/helper/argutil.h"
 #include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
+#include "lib/helper/growutil.h"
 #include "lib/helper/log.h"
 
 #include "mapping.h"
@@ -69,7 +71,11 @@ int mapping_load(const char *path, mapping_t *m) {
     return -1;
   }
   while ((rc = read_line(f, line, sizeof line)) != 0) {
-    char *id, *uri, *tsid_s, *onid_s, *sid_s;
+    char *id;
+    char *uri;
+    char *tsid_s;
+    char *onid_s;
+    char *sid_s;
     mapping_entry_t *e;
     unsigned tsid;
     unsigned onid;

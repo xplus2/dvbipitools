@@ -7,6 +7,8 @@
 #include <string.h>
 
 #include "../sys/ioutil.h"
+#include "strutil.h"
+#include "growutil.h"
 #include "log.h"
 #include "playlist_in.h"
 #include "xml_util.h"

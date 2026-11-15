@@ -31,7 +31,6 @@ typedef struct {
 } unicast_dest_t;
 
 void burst_send_cb(const unsigned char *pkt, size_t len, int dscp, void *user);
-void send_rams_i_msn(const unicast_dest_t *dst, uint32_t sender_ssrc, uint32_t media_ssrc, uint8_t msn, uint16_t response, const rtcp_rams_i_tlvs_t *tlvs);
 void send_rams_i(const unicast_dest_t *dst, uint32_t sender_ssrc, uint32_t media_ssrc, uint16_t response, const rtcp_rams_i_tlvs_t *tlvs);
 
 typedef struct {

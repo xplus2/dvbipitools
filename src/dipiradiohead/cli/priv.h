@@ -91,8 +91,6 @@ void rdh_print_help(void);
 args_status_t rdh_cli_check(config_t *cfg, const rdh_opt_t *p);
 
 int rdh_mcast_parse(const char *s, config_t *cfg);
-int rdh_id_parse(const char *s, unsigned *out);
-int rdh_pid_parse(const char *s, unsigned *out);
 cas_vendor_t *rdh_current_cas_vendor(config_t *cfg, int cli_vendors, const char *flag);
 
 #endif

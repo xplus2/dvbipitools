@@ -6,11 +6,15 @@
 
 #include "cli/args.h"
 #include "cs378x/cs378x.h"
+#include "lib/config/yamlcfg.h"
 
 #define ARGS_DEFAULT_BIND CS378X_DEFAULT_BIND
 #define ARGS_DEFAULT_PORT 27500u
 #define ARGS_DEFAULT_PASSWORD TOOL_NAME
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipicam378.yaml"
+
+extern const yamlcfg_key_t cam378_cfg_keys[];
+extern const size_t cam378_cfg_nkeys;
 
 void cam378_cfg_defaults(config_t *cfg);
 

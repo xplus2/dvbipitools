@@ -34,6 +34,7 @@
 #define sink_open metrics_sink_open
 #define sink_close metrics_sink_close
 #include "../metrics_sink.h"
+#include "lib/helper/dateutil.h"
 #undef sink_open
 #undef sink_close
 
@@ -145,7 +146,7 @@ static size_t drain_source(src_t *s) {
   size_t total = 0;
 
   for (int i = 0; i < 20; i++) {
-    ssize_t n = src_read(s, buf, sizeof buf);
+    ssize_t n = src_read_reason(s, buf, sizeof buf, &(net_err_reason_t){0});
 
     if (n < 0) break;
     ck_assert_int_eq((int)(n % 188), 0);
@@ -236,7 +237,7 @@ START_TEST(src_open_joins_udp_and_rtp_groups) {
   ck_assert_int_eq(inet_pton(AF_INET, group, &dst.sin_addr), 1);
   ck_assert_int_eq((int)sendto(tx, dgram, hdr + 188, 0, (struct sockaddr *)&dst, sizeof dst), (int)(hdr + 188));
   ck_assert_int_eq(src_wait_readable(&s, 1000), 1);
-  ck_assert_int_eq((int)src_read(&s, buf, sizeof buf), 188);
+  ck_assert_int_eq((int)src_read_reason(&s, buf, sizeof buf, &(net_err_reason_t){0}), 188);
   ck_assert_uint_eq(buf[0], 0x47);
   src_close(&s);
   close(tx);

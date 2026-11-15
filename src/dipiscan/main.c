@@ -43,6 +43,7 @@ int main(int argc, char **argv) {
   }
   setvbuf(out, NULL, _IOLBF, 0);
   signals_install_oneshot();
+  log_async_start();
   rc = scan_run(&cfg, out);
   {
     int failed = fflush(out) != 0 || ferror(out);

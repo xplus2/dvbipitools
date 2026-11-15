@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "lib/helper/uriparse.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "dipisds/input/input_int.h"
 

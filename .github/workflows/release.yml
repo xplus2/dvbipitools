@@ -44,7 +44,7 @@ jobs:
             image: debian:trixie
           - arch: armhf
             runner: ubuntu-26.04
-            image: debian:bookworm
+            image: debian:trixie
             platform: linux/arm/v7
           - arch: ppc64el
             runner: ubuntu-26.04
@@ -145,6 +145,9 @@ jobs:
         cpu_family = '${{ matrix.mesoncpu }}'
         cpu = '${{ matrix.sysproc }}'
         endian = 'little'
+
+        [built-in options]
+        c_args = ['-D_FILE_OFFSET_BITS=64', '-D_TIME_BITS=64']
         EOF
         MESON_ARGS="$MESON_ARGS --cross-file /tmp/librist-cross.ini"
         meson setup /tmp/librist-build /tmp/librist-v0.2.20 $MESON_ARGS
@@ -156,7 +159,8 @@ jobs:
         cmake -S /tmp/srt-1.5.6 -B /tmp/srt-build -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/srt-static \
           -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DENABLE_APPS=OFF -DENABLE_UNITTESTS=OFF -DENABLE_ENCRYPTION=ON \
-          -DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -DCMAKE_CXX_FLAGS=-static-libgcc \
+          -DCMAKE_EXE_LINKER_FLAGS=-static-libgcc \
+          "-DCMAKE_C_FLAGS=-D_FILE_OFFSET_BITS=64 -D_TIME_BITS=64" "-DCMAKE_CXX_FLAGS=-static-libgcc -D_FILE_OFFSET_BITS=64 -D_TIME_BITS=64" \
           -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} \
           -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_CXX_COMPILER=${{ matrix.triplet }}-g++ \
           -DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a
@@ -182,11 +186,11 @@ jobs:
         set -ex
         export DEBIAN_FRONTEND=noninteractive
         apt-get update
-        apt-get install -y build-essential cmake curl git meson ninja-build ${{ matrix.crosspkg }} libmbedtls-dev
+        apt-get install -y build-essential cmake curl git meson ninja-build pkg-config ${{ matrix.crosspkg }} libmbedtls-dev
         dpkg --add-architecture ${{ matrix.dpkgarch }}
         apt-get update
         mkdir /tmp/foreign-debs
-        (cd /tmp/foreign-debs && apt-get download libssl3:${{ matrix.dpkgarch }} libssl-dev:${{ matrix.dpkgarch }} libmbedcrypto7:${{ matrix.dpkgarch }} libmbedx509-1:${{ matrix.dpkgarch }} libmbedtls14:${{ matrix.dpkgarch }} libmbedtls-dev:${{ matrix.dpkgarch }})
+        (cd /tmp/foreign-debs && apt-get download libssl3:${{ matrix.dpkgarch }} libssl-dev:${{ matrix.dpkgarch }} libmbedcrypto7:${{ matrix.dpkgarch }} libmbedx509-1:${{ matrix.dpkgarch }} libmbedtls14:${{ matrix.dpkgarch }} libmbedtls-dev:${{ matrix.dpkgarch }} zlib1g-dev:${{ matrix.dpkgarch }})
         for deb in /tmp/foreign-debs/*.deb; do dpkg-deb -x "$deb" /; done
         git clone --depth 1 --branch v0.2.20 https://code.videolan.org/rist/librist.git /tmp/librist-v0.2.20
         cat > /tmp/librist-cross.ini <<EOF
@@ -201,6 +205,9 @@ jobs:
         cpu_family = '${{ matrix.mesoncpu }}'
         cpu = '${{ matrix.sysproc }}'
         endian = 'little'
+
+        [built-in options]
+        c_args = ['-D_FILE_OFFSET_BITS=64', '-D_TIME_BITS=64']
         EOF
         meson setup /tmp/librist-build /tmp/librist-v0.2.20 --default-library=static --libdir=lib --prefix=/tmp/librist-static -Dbuiltin_cjson=true -Duse_mbedtls=true -Dbuiltin_mbedtls=false -Dtest=false -Dbuilt_tools=false --cross-file /tmp/librist-cross.ini
         ninja -C /tmp/librist-build install
@@ -208,7 +215,8 @@ jobs:
         cmake -S /tmp/srt-1.5.6 -B /tmp/srt-build -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX=/tmp/srt-static \
           -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DENABLE_APPS=OFF -DENABLE_UNITTESTS=OFF -DENABLE_ENCRYPTION=ON \
-          -DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -DCMAKE_CXX_FLAGS=-static-libgcc \
+          -DCMAKE_EXE_LINKER_FLAGS=-static-libgcc \
+          "-DCMAKE_C_FLAGS=-D_FILE_OFFSET_BITS=64 -D_TIME_BITS=64" "-DCMAKE_CXX_FLAGS=-static-libgcc -D_FILE_OFFSET_BITS=64 -D_TIME_BITS=64" \
           -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} \
           -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_CXX_COMPILER=${{ matrix.triplet }}-g++ \
           -DOPENSSL_INCLUDE_DIR=/usr/include -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/${{ matrix.triplet }}/libcrypto.a -DOPENSSL_SSL_LIBRARY=/usr/lib/${{ matrix.triplet }}/libssl.a
@@ -336,6 +344,9 @@ jobs:
         cpu_family = '${{ matrix.mesoncpu }}'
         cpu = '${{ matrix.sysproc }}'
         endian = 'little'
+
+        [built-in options]
+        c_args = ['-D_FILE_OFFSET_BITS=64', '-D_TIME_BITS=64']
         EOF
           MESON_ARGS="$MESON_ARGS --cross-file /tmp/librist-cross.ini"
         fi
@@ -356,7 +367,7 @@ jobs:
         curl -sSLf "https://github.com/Haivision/srt/archive/refs/tags/v1.5.6.tar.gz" | tar xz -C /tmp
         SRT_ARGS="-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/srt-static"
         SRT_ARGS="$SRT_ARGS -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DENABLE_APPS=OFF -DENABLE_UNITTESTS=OFF -DENABLE_ENCRYPTION=ON"
-        SRT_ARGS="$SRT_ARGS -DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -DCMAKE_CXX_FLAGS=-static-libgcc"
+        SRT_ARGS="$SRT_ARGS -DCMAKE_EXE_LINKER_FLAGS=-static-libgcc"
         case "${{ matrix.arch }}" in
           i386)
             sudo dpkg --add-architecture i386
@@ -375,7 +386,8 @@ jobs:
         if [ -n "${{ matrix.triplet }}" ]; then
           SRT_ARGS="$SRT_ARGS -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.sysproc }} -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc -DCMAKE_CXX_COMPILER=${{ matrix.triplet }}-g++"
         fi
-        cmake -S /tmp/srt-1.5.6 -B /tmp/srt-build $SRT_ARGS
+        CFLAGS="-D_FILE_OFFSET_BITS=64 -D_TIME_BITS=64" CXXFLAGS="-static-libgcc -D_FILE_OFFSET_BITS=64 -D_TIME_BITS=64" \
+          cmake -S /tmp/srt-1.5.6 -B /tmp/srt-build $SRT_ARGS
         cmake --build /tmp/srt-build -j"$(nproc)"
         cmake --install /tmp/srt-build
     - name: build ngtcp2 + nghttp3 (static)

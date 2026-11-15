@@ -17,6 +17,7 @@
 
 #include "psi_fixture.h"
 #include "stderr_capture.h"
+#include "lib/helper/dateutil.h"
 
 #define RIG_MAX 3
 #define COLLECT_MAX 16

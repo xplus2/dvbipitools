@@ -50,7 +50,9 @@ static size_t build_test_emm(unsigned esid, const unsigned char ekid[BISS_CA_EKI
 }
 
 static size_t build_test_ecm(unsigned esid, const unsigned char sk[BISS_CA_SK_LEN], int parity, const unsigned char sw_even[BISS_CA_SW_LEN], const unsigned char sw_odd[BISS_CA_SW_LEN], unsigned char *out, size_t cap) {
-  unsigned char iv[BISS_CA_IV_LEN], esw_even[BISS_CA_SW_LEN], esw_odd[BISS_CA_SW_LEN];
+  unsigned char iv[BISS_CA_IV_LEN];
+  unsigned char esw_even[BISS_CA_SW_LEN];
+  unsigned char esw_odd[BISS_CA_SW_LEN];
 
   ck_assert_int_eq(biss_ca_random(iv, sizeof iv), 0);
   ck_assert_int_eq(biss_ca_aes_cbc_encrypt(sk, iv, sw_even, esw_even), 0);
@@ -75,9 +77,12 @@ START_TEST(emm_matching_ekid_updates_sk_and_ecm_decodes) {
   unsigned char sk[BISS_CA_SK_LEN] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
   unsigned char sw_even[BISS_CA_SW_LEN] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00};
   unsigned char sw_odd[BISS_CA_SW_LEN] = {0x00, 0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11};
-  unsigned char emm[4096], ecm[128];
-  unsigned char out_even[BISS_CA_SW_LEN], out_odd[BISS_CA_SW_LEN];
-  size_t emm_len, ecm_len;
+  unsigned char emm[4096];
+  unsigned char ecm[128];
+  unsigned char out_even[BISS_CA_SW_LEN];
+  unsigned char out_odd[BISS_CA_SW_LEN];
+  size_t emm_len;
+  size_t ecm_len;
 
   gen_keypair();
   pub = biss_ca_key_load_public_file(g_pub_path);
@@ -131,7 +136,8 @@ START_TEST(ecm_before_emm_has_no_sk_yet) {
   unsigned char sk[BISS_CA_SK_LEN] = {0};
   unsigned char sw[BISS_CA_SW_LEN] = {0};
   unsigned char ecm[128];
-  unsigned char out_even[BISS_CA_SW_LEN], out_odd[BISS_CA_SW_LEN];
+  unsigned char out_even[BISS_CA_SW_LEN];
+  unsigned char out_odd[BISS_CA_SW_LEN];
   size_t ecm_len;
 
   gen_keypair();
@@ -151,9 +157,12 @@ START_TEST(ecm_with_mismatched_esid_is_rejected) {
   unsigned char ekid[BISS_CA_EKID_LEN];
   unsigned char sk[BISS_CA_SK_LEN] = {0};
   unsigned char sw[BISS_CA_SW_LEN] = {0};
-  unsigned char emm[4096], ecm[128];
-  unsigned char out_even[BISS_CA_SW_LEN], out_odd[BISS_CA_SW_LEN];
-  size_t emm_len, ecm_len;
+  unsigned char emm[4096];
+  unsigned char ecm[128];
+  unsigned char out_even[BISS_CA_SW_LEN];
+  unsigned char out_odd[BISS_CA_SW_LEN];
+  size_t emm_len;
+  size_t ecm_len;
 
   gen_keypair();
   pub = biss_ca_key_load_public_file(g_pub_path);

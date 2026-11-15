@@ -13,7 +13,7 @@
 START_TEST(bitrate_pacer_lifecycle_does_not_crash) {
   bitrate_pacer_t *p = bitrate_pacer_new(1000000, 1, 1);
   ck_assert_ptr_nonnull(p);
-  bitrate_account(p);
+  bitrate_account_n(p, 1);
   bitrate_pace(p);
   ck_assert_int_ge(bitrate_stuff_due(p, 0), 0);
   bitrate_pacer_free(p);
@@ -35,7 +35,7 @@ START_TEST(bitrate_pace_disabled_when_burst_limit_zero) {
   double t0;
   int i;
   for (i = 0; i < 10; i++)
-    bitrate_account(p); /* far ahead of a 100 bps target */
+    bitrate_account_n(p, 1); /* far ahead of a 100 bps target */
   t0 = mono();
   bitrate_pace(p);
   ck_assert(mono() - t0 < 0.05); /* must not sleep */
@@ -70,7 +70,7 @@ START_TEST(bitrate_pace_sleeps_when_far_ahead_of_schedule) {
   double t0;
   int i;
   for (i = 0; i < 3; i++)
-    bitrate_account(p); /* ~4512 bits sent "instantly" -> ~45ms owed at 100kbps */
+    bitrate_account_n(p, 1); /* ~4512 bits sent "instantly" -> ~45ms owed at 100kbps */
   t0 = mono();
   bitrate_pace(p);
   ck_assert(mono() - t0 > 0.015); /* generous lower bound well under the ~45ms nominal sleep */
@@ -100,13 +100,13 @@ START_TEST(bitrate_pacer_shares_budget_regardless_of_source_order) {
   int i;
 
   for (i = 0; i < 3; i++)
-    bitrate_account(a); /* simulates program 1's packets */
+    bitrate_account_n(a, 1); /* simulates program 1's packets */
   for (i = 0; i < 3; i++)
-    bitrate_account(a); /* simulates program 2's packets, same pacer */
+    bitrate_account_n(a, 1); /* simulates program 2's packets, same pacer */
 
   for (i = 0; i < 3; i++) {
-    bitrate_account(b); /* interleaved: 1, 2, 1, 2, 1, 2 */
-    bitrate_account(b);
+    bitrate_account_n(b, 1); /* interleaved: 1, 2, 1, 2, 1, 2 */
+    bitrate_account_n(b, 1);
   }
 
   ck_assert_int_eq(bitrate_stuff_due(a, 0), bitrate_stuff_due(b, 0));
@@ -124,7 +124,7 @@ START_TEST(bitrate_pacer_logs_sustained_overage_without_crashing) {
   int i;
 
   for (i = 0; i < 50; i++)
-    bitrate_account(p);
+    bitrate_account_n(p, 1);
   ck_assert_int_eq(bitrate_stuff_due(p, 0), 0); /* far ahead, never behind - no stuffing due */
 
   bitrate_pacer_free(p);
@@ -137,7 +137,7 @@ START_TEST(bitrate_account_n_matches_n_single_calls) {
   int i;
 
   for (i = 0; i < 6; i++)
-    bitrate_account(a);
+    bitrate_account_n(a, 1);
   bitrate_account_n(b, 6);
 
   ck_assert_int_eq(bitrate_stuff_due(a, 0), bitrate_stuff_due(b, 0));
@@ -202,7 +202,7 @@ static double delay_after_accounting(const unsigned *order, int single_calls) {
     unsigned n = burst_sizes[order[i]];
 
     if (single_calls)
-      for (unsigned k = 0; k < n; k++) bitrate_account(p);
+      for (unsigned k = 0; k < n; k++) bitrate_account_n(p, 1);
     else
       bitrate_account_n(p, n);
   }

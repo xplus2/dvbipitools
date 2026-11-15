@@ -2,7 +2,6 @@
  * See NOTICE and LICENSE for details and authorship information. */
 
 #include <getopt.h>
-#include <limits.h>
 #include <string.h>
 
 #include "lib/helper/argutil.h"
@@ -44,15 +43,6 @@ args_status_t dipirist_opt_general(dipirist_opt_t *p, int c) {
     case OPT_PACE:
       cfg->pace = 1;
       break;
-    case OPT_TTL: {
-      unsigned v;
-      if (argutil_uint_range(optarg, 0, 255, &v)) {
-        argerr("VS000558", "invalid --ttl: %s (0..255)", optarg);
-        return ARGS_ERR;
-      }
-      cfg->out_ttl = (int)v;
-      break;
-    }
     case OPT_DSCP:
       if (argutil_int_opt(TOOL_NAME, "VS000106", "dscp", optarg, net_dscp_parse, NET_DSCP_NAMES, &cfg->out_tos)) return ARGS_ERR;
       break;

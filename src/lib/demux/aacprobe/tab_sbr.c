@@ -60,32 +60,6 @@ static const aacprobe_vlc_t f_env_15_vlc[121] = {
   {0xfffff, 120, 20},
 };
 
-static const aacprobe_vlc_t t_bal_15_vlc[49] = {
-  {0x0, 24, 1}, {0x2, 25, 2}, {0x6, 23, 3}, {0xe, 26, 4}, {0x1e, 22, 5},
-  {0x3e, 27, 6}, {0x7e, 21, 7}, {0xfe, 28, 8}, {0x1fe, 20, 9}, {0x7fc, 19, 11},
-  {0x7fd, 29, 11}, {0xffc, 18, 12}, {0xffd, 30, 12}, {0x7ff0, 31, 15}, {0xffe2, 17, 16},
-  {0xffe3, 32, 16}, {0xffe4, 0, 16}, {0xffe5, 1, 16}, {0xffe6, 2, 16}, {0xffe7, 3, 16},
-  {0xffe8, 4, 16}, {0xffe9, 5, 16}, {0xffea, 6, 16}, {0xffeb, 7, 16}, {0xffec, 8, 16},
-  {0xffed, 9, 16}, {0xffee, 10, 16}, {0xffef, 11, 16}, {0xfff0, 12, 16}, {0xfff1, 13, 16},
-  {0xfff2, 14, 16}, {0xfff3, 15, 16}, {0xfff4, 16, 16}, {0xfff5, 33, 16}, {0xfff6, 34, 16},
-  {0xfff7, 35, 16}, {0xfff8, 36, 16}, {0xfff9, 37, 16}, {0xfffa, 38, 16}, {0x1fff6, 39, 17},
-  {0x1fff7, 40, 17}, {0x1fff8, 41, 17}, {0x1fff9, 42, 17}, {0x1fffa, 43, 17}, {0x1fffb, 44, 17},
-  {0x1fffc, 45, 17}, {0x1fffd, 46, 17}, {0x1fffe, 47, 17}, {0x1ffff, 48, 17},
-};
-
-static const aacprobe_vlc_t f_bal_15_vlc[49] = {
-  {0x0, 24, 1}, {0x2, 23, 2}, {0x6, 25, 3}, {0xe, 22, 4}, {0x1e, 26, 5},
-  {0x3e, 27, 6}, {0x7e, 21, 7}, {0xfe, 20, 8}, {0x1fe, 28, 9}, {0x7fc, 19, 11},
-  {0x7fd, 29, 11}, {0x7fe, 18, 11}, {0xffe, 30, 12}, {0x3ffc, 17, 14}, {0x7ffa, 31, 15},
-  {0xfff6, 32, 16}, {0xfff7, 15, 16}, {0x1fff0, 16, 17}, {0x3ffe2, 0, 18}, {0x3ffe3, 1, 18},
-  {0x3ffe4, 2, 18}, {0x3ffe5, 3, 18}, {0x3ffe6, 4, 18}, {0x3ffe7, 5, 18}, {0x3ffe8, 6, 18},
-  {0x3ffe9, 7, 18}, {0x3ffea, 8, 18}, {0x3ffeb, 9, 18}, {0x3ffec, 10, 18}, {0x3ffed, 11, 18},
-  {0x3ffee, 12, 18}, {0x3ffef, 13, 18}, {0x3fff0, 14, 18}, {0x3fff1, 33, 18}, {0x3fff2, 34, 18},
-  {0x3fff3, 35, 18}, {0x3fff4, 36, 18}, {0x3fff5, 37, 18}, {0x3fff6, 38, 18}, {0x3fff7, 39, 18},
-  {0x3fff8, 40, 18}, {0x3fff9, 41, 18}, {0x3fffa, 42, 18}, {0x3fffb, 43, 18}, {0x3fffc, 44, 18},
-  {0x3fffd, 45, 18}, {0x3fffe, 46, 18}, {0x7fffe, 47, 19}, {0x7ffff, 48, 19},
-};
-
 static const aacprobe_vlc_t t_env_30_vlc[63] = {
   {0x0, 31, 1}, {0x2, 30, 2}, {0x6, 32, 3}, {0xe, 29, 4}, {0x1e, 33, 5},
   {0x3e, 28, 6}, {0x7e, 34, 7}, {0xfe, 27, 8}, {0x1fe, 35, 9}, {0x7fc, 26, 11},
@@ -118,22 +92,6 @@ static const aacprobe_vlc_t f_env_30_vlc[63] = {
   {0xffffd, 60, 20}, {0xffffe, 61, 20}, {0xfffff, 62, 20},
 };
 
-static const aacprobe_vlc_t t_bal_30_vlc[25] = {
-  {0x0, 12, 1}, {0x2, 13, 2}, {0x6, 11, 3}, {0xe, 10, 4}, {0x1e, 14, 5},
-  {0x3e, 15, 6}, {0x7e, 9, 7}, {0xfe, 8, 8}, {0x1fe, 16, 9}, {0xff8, 7, 12},
-  {0x1ff2, 0, 13}, {0x1ff3, 1, 13}, {0x1ff4, 2, 13}, {0x1ff5, 3, 13}, {0x1ff6, 4, 13},
-  {0x1ff7, 5, 13}, {0x1ff8, 6, 13}, {0x1ff9, 17, 13}, {0x1ffa, 18, 13}, {0x1ffb, 19, 13},
-  {0x1ffc, 20, 13}, {0x1ffd, 21, 13}, {0x1ffe, 22, 13}, {0x3ffe, 23, 14}, {0x3fff, 24, 14},
-};
-
-static const aacprobe_vlc_t f_bal_30_vlc[25] = {
-  {0x0, 12, 1}, {0x2, 11, 2}, {0x6, 13, 3}, {0xe, 10, 4}, {0x1e, 14, 5},
-  {0x3e, 15, 6}, {0x7e, 9, 7}, {0xfe, 8, 8}, {0x1fe, 16, 9}, {0x7fc, 7, 11},
-  {0xffa, 17, 12}, {0x1ff6, 18, 13}, {0x1ff7, 0, 13}, {0x1ff8, 1, 13}, {0x1ff9, 2, 13},
-  {0x1ffa, 3, 13}, {0x1ffb, 4, 13}, {0x3ff8, 5, 14}, {0x3ff9, 6, 14}, {0x3ffa, 19, 14},
-  {0x3ffb, 20, 14}, {0x3ffc, 21, 14}, {0x3ffd, 22, 14}, {0x3ffe, 23, 14}, {0x3fff, 24, 14},
-};
-
 static const aacprobe_vlc_t t_noise_vlc[63] = {
   {0x0, 31, 1}, {0x2, 32, 2}, {0x6, 30, 3}, {0xe, 29, 4}, {0x1e, 33, 5},
   {0x3e, 28, 6}, {0xfc, 34, 8}, {0xfd, 27, 8}, {0x3f8, 35, 10}, {0x7f2, 26, 11},
@@ -150,23 +108,10 @@ static const aacprobe_vlc_t t_noise_vlc[63] = {
   {0x1ffe, 60, 13}, {0x3ffe, 61, 14}, {0x3fff, 62, 14},
 };
 
-static const aacprobe_vlc_t t_noise_bal_vlc[25] = {
-  {0x0, 12, 1}, {0x2, 11, 2}, {0x6, 13, 3}, {0x1c, 10, 5}, {0x3a, 14, 6},
-  {0xec, 0, 8}, {0xed, 1, 8}, {0xee, 2, 8}, {0xef, 3, 8}, {0xf0, 4, 8},
-  {0xf1, 5, 8}, {0xf2, 6, 8}, {0xf3, 7, 8}, {0xf4, 8, 8}, {0xf5, 9, 8},
-  {0xf6, 15, 8}, {0xf7, 16, 8}, {0xf8, 17, 8}, {0xf9, 18, 8}, {0xfa, 19, 8},
-  {0xfb, 20, 8}, {0xfc, 21, 8}, {0xfd, 22, 8}, {0xfe, 23, 8}, {0xff, 24, 8},
-};
-
 const aacprobe_book_t aacprobe_book_sbr[AACPROBE_SBR_BOOKS] = {
   {t_env_15_vlc, 121},
   {f_env_15_vlc, 121},
-  {t_bal_15_vlc, 49},
-  {f_bal_15_vlc, 49},
   {t_env_30_vlc, 63},
   {f_env_30_vlc, 63},
-  {t_bal_30_vlc, 25},
-  {f_bal_30_vlc, 25},
   {t_noise_vlc, 63},
-  {t_noise_bal_vlc, 25},
 };

@@ -11,7 +11,8 @@
 
 int main(int argc, char **argv) {
   config_t cfg = {0};
-  char in[1024], out[1024];
+  char in[1024];
+  char out[1024];
   metrics_exporter_t mx;
   int rc;
 

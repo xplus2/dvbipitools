@@ -18,7 +18,7 @@
 #include "lib/net/dvbstp.h"
 #include "lib/helper/sds_xml.h"
 #include "lib/tva/bcg_doc.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/metrics/protocol.h"
 #include "lib/tva/tva_xml.h"
 #include "lib/bim/bcgip.h"
@@ -40,7 +40,8 @@ static int write_file(const char *dir, const char *name, const unsigned char *da
 }
 
 static void gen_psi(const char *dir) {
-  unsigned char sec[188], pkt[188];
+  unsigned char sec[188];
+  unsigned char pkt[188];
   size_t seclen;
 
   seclen = psi_build_pat(1, 0, 1, 0x0100, sec, sizeof sec);

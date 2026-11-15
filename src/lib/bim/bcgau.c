@@ -6,7 +6,8 @@
 
 #include "lib/bim/bcgfrag.h"
 #include "lib/bim/nodexml.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
+#include "lib/helper/growutil.h"
 
 #define CODE_PROGRAM 0x0001
 #define CODE_SCHEDULE 0x0005
@@ -197,13 +198,7 @@ static int read_tail(void *ctx, size_t k, const dvbtva_fuu_t *f, strrepo_reader_
   size_t pos = sr->pos;
   char synth[8];
   bcgau_tail_t tail = {"", 0};
-  if (k >= t->cap) {
-    size_t cap = t->cap ? t->cap * 2 : 64;
-    bcgau_tail_t *np = realloc(t->v, cap * sizeof *np);
-    if (!np) return -1;
-    t->v = np;
-    t->cap = cap;
-  }
+  if (growbuf_reserve((void **)&t->v, &t->cap, sizeof *t->v, k + 1, 64)) return -1;
   if (f->code == CODE_SERVICE) {
     if (!dvb_string_decode(sr, tail.dtt, sizeof tail.dtt) && !dvb_string_decode(sr, synth, sizeof synth) && (!strcmp(synth, "0") || !strcmp(synth, "1")) &&
         (!tail.dtt[0] || !strncmp(tail.dtt, "dvb://", 6))) {
@@ -249,13 +244,7 @@ typedef struct {
 
 static int ptext_add(ptext_t *pt, const char *crid, bcg_programme_t *tmp) {
   bcg_progtext_t *e;
-  if (pt->n >= pt->cap) {
-    int cap = pt->cap ? pt->cap * 2 : 64;
-    bcg_progtext_t *np = realloc(pt->arr, sizeof *np * (size_t)cap);
-    if (!np) return -1;
-    pt->arr = np;
-    pt->cap = cap;
-  }
+  if (array_reserve((void **)&pt->arr, &pt->cap, pt->n + 1, sizeof *pt->arr)) return -1;
   e = &pt->arr[pt->n];
   if (!(e->crid = strdup(crid))) return -1;
   e->title = tmp->title;

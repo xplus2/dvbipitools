@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/metrics/render.h"
 
 typedef enum { M_GAUGE, M_COUNTER, M_INFO, M_GAUGE_SIGNED } metric_kind_t;

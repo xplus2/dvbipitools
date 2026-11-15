@@ -25,9 +25,6 @@ int signal_template_reload_requested(void);
 /* SIGUSR1-triggered, clears on read (edge, not level) */
 int signal_tls_reload_requested(void);
 
-/* CLOCK_MONOTONIC, seconds as a double */
-double mono_seconds(void);
-
 int signal_wake_fd(void);
 
 /* sleeps secs, in 100ms steps, checking signal_stop_requested() each step */

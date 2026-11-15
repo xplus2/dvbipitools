@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #include "priv.h"
 

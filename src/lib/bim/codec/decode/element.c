@@ -6,6 +6,10 @@
 
 #include "lib/bim/codec/decode/priv.h"
 
+static void aod_reset(dec_t *d) {
+  if (d->opts && d->opts->aod) d->zpos = d->zlen = 0;
+}
+
 static void string_resync(dec_t *d) {
   if (d->sr && !d->mpegb) d->sr->resync = d->br; /* next string carries string_offset, TS 102 323 table 58 */
 }
@@ -103,16 +107,10 @@ static int decode_mono(dec_t *d, const bim_part_t *p, const bim_type_t *t, bim_n
     }
   }
   if (nil && set_nil(k)) return -1;
-  if (has_len && d->opts && d->opts->aod) {
-    d->zpos = 0;
-    d->zlen = d->zpos;
-  }
+  if (has_len) aod_reset(d);
   if (!*deferred && !nil && (!t || decode_body(d, t, k))) return -1;
   if (has_len && start - bitreader_bits_left(d->br) != len) return -1;
-  if (has_len && d->opts && d->opts->aod) {
-    d->zpos = 0;
-    d->zlen = d->zpos;
-  }
+  if (has_len) aod_reset(d);
   if (has_len) string_resync(d);
   return 0;
 }
@@ -185,7 +183,7 @@ done:
 }
 
 /* ISO 23001-1 7.4.1, tables 11 and 12 */
-int dec_element(dec_t *d, const bim_part_t *p, const bim_type_t *t, bim_node_t *k, int top, int *deferred) {
+static int dec_element(dec_t *d, const bim_part_t *p, const bim_type_t *t, bim_node_t *k, int top, int *deferred) {
   int hot = d->hot;
   int multi = 0;
   int rc;

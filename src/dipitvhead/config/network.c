@@ -11,10 +11,7 @@
 #include "priv.h"
 
 int tvh_apply_mcast(void *c, const char *v, char *e, size_t n) {
-  if (tvh_cfg_mcast(c, v)) {
-    snprintf(e, n, "invalid '%s' (multicast addr:port)", v);
-    return -1;
-  }
+  if (tvh_cfg_mcast(c, v)) return yamlcfg_bad(e, n, v, "multicast addr:port");
   return 0;
 }
 
@@ -40,10 +37,7 @@ int tvh_apply_dscp(void *c, const char *v, char *e, size_t n) {
 
 int tvh_apply_al_fec(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) {
-    snprintf(e, n, "invalid '%s' (want L:D, L*D<=400, L<=40)", v);
-    return -1;
-  }
+  if (fec2022_parse_ld(v, &cfg->al_fec_l, &cfg->al_fec_d)) return yamlcfg_bad(e, n, v, "want L:D, L*D<=400, L<=40");
   return 0;
 }
 
@@ -61,16 +55,16 @@ int tvh_apply_profile(void *c, const char *v, char *e, size_t n) {
 
 int tvh_apply_secret(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return tvh_set_buf(cfg->rist_secret, sizeof cfg->rist_secret, v, e, n);
+  return yamlcfg_set_buf(cfg->rist_secret, sizeof cfg->rist_secret, v, e, n);
 }
 
 int tvh_apply_encryption_type(void *c, const char *v, char *e, size_t n) {
-  return tvh_set_key_size(&((config_t *)c)->rist_key_size, v, e, n);
+  return yamlcfg_set_int_by(&((config_t *)c)->rist_key_size, v, argutil_rist_key_size, ARGUTIL_RIST_KEY_SIZE_HINT, e, n);
 }
 
 int tvh_apply_cname(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return tvh_set_buf(cfg->rist_cname, sizeof cfg->rist_cname, v, e, n);
+  return yamlcfg_set_buf(cfg->rist_cname, sizeof cfg->rist_cname, v, e, n);
 }
 
 int tvh_apply_buffer(void *c, const char *v, char *e, size_t n) {
@@ -83,21 +77,21 @@ int tvh_apply_srt_group_mode(void *c, const char *v, char *e, size_t n) {
 
 int tvh_apply_srt_passphrase(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return tvh_set_buf(cfg->srt_passphrase, sizeof cfg->srt_passphrase, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_passphrase, sizeof cfg->srt_passphrase, v, e, n);
 }
 
 int tvh_apply_srt_pbkeylen(void *c, const char *v, char *e, size_t n) {
-  return tvh_set_pbkeylen(&((config_t *)c)->srt_pbkeylen, v, e, n);
+  return yamlcfg_set_int_by(&((config_t *)c)->srt_pbkeylen, v, argutil_srt_pbkeylen, ARGUTIL_SRT_PBKEYLEN_HINT, e, n);
 }
 
 int tvh_apply_srt_streamid(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return tvh_set_buf(cfg->srt_streamid, sizeof cfg->srt_streamid, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_streamid, sizeof cfg->srt_streamid, v, e, n);
 }
 
 int tvh_apply_srt_packetfilter(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  return tvh_set_buf(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, v, e, n);
+  return yamlcfg_set_buf(cfg->srt_packetfilter, sizeof cfg->srt_packetfilter, v, e, n);
 }
 
 int tvh_apply_srt_latency(void *c, const char *v, char *e, size_t n) {

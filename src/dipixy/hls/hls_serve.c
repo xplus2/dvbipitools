@@ -3,10 +3,7 @@
 
 #include "hls_int.h"
 
-#include <errno.h>
-#include <limits.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 
 char *write_lcevc_arg(char *mp, const char *lcevc, char sep) {
@@ -110,13 +107,12 @@ size_t format_lcevc_master_playlist(const lcevc_master_snap_t *snap, char *m3u8,
   return (size_t)(mp - m3u8);
 }
 
-int hls_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container,
-              const char *filename, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
+int hls_serve(conn_t *c, const stream_key_t *k, const hls_store_t *st, const route_file_t *f, int is_head, int keep_alive, const char *if_none_match, const char *origin_hdr, size_t *out_bytes) {
   char cors_hdr[192];
   hls_resolve_t r;
 
   cors_prepare(origin_hdr, cors_hdr, sizeof cors_hdr);
-  if (!hls_resolve(ctx, filter, pmt_pid, lcevc, container, filename, if_none_match, &r)) return 0;
+  if (!hls_resolve(k, st, f, if_none_match, &r)) return 0;
   if (r.status == 404) {
     respond_status(c, "404 Not Found", keep_alive);
     return 1;
@@ -134,25 +130,5 @@ int hls_serve(conn_t *c, const capture_ctx_t *ctx, const pid_filter_t *filter, u
     queue_segment(c, r.body, r.body_len, r.content_type, r.etag, is_head, keep_alive, cors_hdr);
   }
   if (out_bytes) *out_bytes = r.body_len;
-  return 1;
-}
-
-/* parses "segNNNNN.PP.ts" ("segNNNNN.PP.m4s" for fmp4). 1 ok (seq/part set), 0 wrong shape */
-int parse_part_filename(const char *fn, seg_container_t container, uint32_t *seq, int *part) {
-  const char *p;
-  char *end;
-  unsigned long v;
-  if (strncmp(fn, "seg", 3) != 0) return 0;
-  p = fn + 3;
-  if (*p < '0' || *p > '9') return 0;
-  errno = 0;
-  v = strtoul(p, &end, 10);
-  if (*end != '.' || errno != 0 || v > UINT32_MAX) return 0;
-  *seq = (uint32_t)v;
-  p = end + 1;
-  if (*p < '0' || *p > '9') return 0;
-  v = strtoul(p, &end, 10);
-  if (strcmp(end, container == SEG_CONTAINER_FMP4 ? ".m4s" : ".ts") != 0 || v > INT_MAX) return 0;
-  *part = (int)v;
   return 1;
 }

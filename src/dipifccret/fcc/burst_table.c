@@ -43,9 +43,10 @@ burst_table_t *burst_table_new(size_t cap) {
 
   if (cap == 0)
     return NULL;
-  t = calloc(1, sizeof *t);
+  t = aligned_alloc(CACHELINE, sizeof *t);
   if (!t)
     return NULL;
+  memset(t, 0, sizeof *t);
   t->slots = calloc(cap, sizeof *t->slots);
   if (!t->slots) {
     free(t);

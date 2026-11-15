@@ -206,10 +206,10 @@ START_TEST(cold_waiter_on_warming_store_expires_as_retryable_503) {
   h3r_open(&h);
   ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
-  hls_store_open(ctx, &filter, 0, &lcevc, 3.0, 4, SEG_CONTAINER_TS);
+  hls_store_open(&(stream_key_t){ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS}, 3.0, 4);
   sid = parked_request(&h, PARK_PATH);
   {
-    hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 0, -1, NULL};
+    hls_cold_park_req_t req = {{ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS}, &(route_file_t){.kind = ROUTE_FILE_INDEX}, HLS_COLD_HLS, 0, 0, 0, NULL, 0, -1, NULL};
 
     ck_assert_int_eq(h3_hls_cold_try_park(server_conn(), sid, &req), 1);
   }
@@ -217,7 +217,7 @@ START_TEST(cold_waiter_on_warming_store_expires_as_retryable_503) {
   ck_assert_int_eq(h3r_wait_response(&h, sid), 1);
   ck_assert_int_eq(h3r_resp_for(&h, sid)->status, 503);
   ck_assert_str_eq(client_resp_header_value(h3r_resp_for(&h, sid), "retry-after"), "5");
-  hls_store_close(ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS);
+  hls_store_close(&(stream_key_t){ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS});
   capture_close(ctx);
   h3r_close(&h);
 }
@@ -235,7 +235,7 @@ START_TEST(cold_waiter_table_fills_and_releases_by_stream_and_connection) {
   ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
   {
-    hls_cold_park_req_t req = {ctx, &filter, 0, &lcevc, "index.m3u8", HLS_COLD_HLS, SEG_CONTAINER_TS, 0, 0, 0, NULL, 60000, -1, NULL};
+    hls_cold_park_req_t req = {{ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS}, &(route_file_t){.kind = ROUTE_FILE_INDEX}, HLS_COLD_HLS, 0, 0, 0, NULL, 60000, -1, NULL};
 
     for (int i = 0; i < COLD_WAITERS_MAX; i++) ck_assert_int_eq(h3_hls_cold_try_park(c, 1000 + 4 * i, &req), 1);
     ck_assert_int_eq(h3_hls_cold_try_park(c, 9999, &req), 0);
@@ -265,7 +265,7 @@ START_TEST(llhls_waiter_is_answered_when_its_deadline_passes) {
   ck_assert_ptr_nonnull(ctx);
   sid = parked_request(&h, PARK_PATH);
   {
-    llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 0, -1, SEG_CONTAINER_TS};
+    llhls_park_req_t req = {{ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS}, &(route_file_t){.kind = ROUTE_FILE_INDEX_LL}, 0, 0, NULL, NULL, 5, 1, 0, -1};
 
     ck_assert_int_eq(h3_llhls_try_park(server_conn(), sid, &req), 1);
   }
@@ -289,7 +289,7 @@ START_TEST(llhls_waiter_table_fills_and_releases_by_stream_and_connection) {
   ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
   {
-    llhls_park_req_t req = {ctx, &filter, 0, &lcevc, "index_ll.m3u8", 0, 0, NULL, NULL, 5, 1, 60000, -1, SEG_CONTAINER_TS};
+    llhls_park_req_t req = {{ctx, &filter, 0, &lcevc, SEG_CONTAINER_TS}, &(route_file_t){.kind = ROUTE_FILE_INDEX_LL}, 0, 0, NULL, NULL, 5, 1, 60000, -1};
 
     for (int i = 0; i < LLHLS_WAITERS_MAX; i++) ck_assert_int_eq(h3_llhls_try_park(c, 1000 + 4 * i, &req), 1);
     ck_assert_int_eq(h3_llhls_try_park(c, 9999, &req), 0);
@@ -538,7 +538,7 @@ START_TEST(ts_push_streams_deliver_ring_data_and_release_the_subscription) {
   ck_assert_int_eq(ngtcp2_conn_shutdown_stream(h.qc, 0, sid, NGHTTP3_H3_REQUEST_CANCELLED), 0);
   (void)h3r_pump_timed(&h, cond_never, NULL, SETTLE_MS);
   capture_flush_deferred_quiescent();
-  ck_assert_int_eq(atomic_load(&g_ts_subs[sub].alive), TS_SUB_FREE);
+  ck_assert_int_eq(atomic_load(&g_ts_subs[sub].h.alive), TS_SUB_FREE);
   capture_close(ctx);
   h3r_close(&h);
 }
@@ -737,16 +737,17 @@ START_TEST(ops_llhls_try_park_parks_on_the_stream) {
   capture_ctx_t *ctx;
   pid_filter_t filter = {0};
   lcevc_select_t lcevc = {0};
-  llhls_park_req_t req = {0};
+  llhls_park_req_t req;
 
   h3r_open(&h);
   ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
   sid = parked_request(&h, PARK_PATH);
-  req.cap_ctx = ctx;
-  req.filter = &filter;
-  req.lcevc = &lcevc;
-  req.filename = "index_ll.m3u8";
+  memset(&req, 0, sizeof req);
+  req.key.ctx = ctx;
+  req.key.filter = &filter;
+  req.key.lcevc = &lcevc;
+  req.file = &(route_file_t){.kind = ROUTE_FILE_INDEX_LL};
   req.want_seg = 5;
   req.want_part = 1;
   req.timeout_ms = 0;
@@ -770,17 +771,17 @@ START_TEST(ops_dashchunk_dispatch_binds_a_subscription) {
   h3r_open(&h);
   ctx = capture_open(AF_INET, PARK_GROUP, NULL, PARK_PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(ctx);
-  hls_store_open(ctx, &filter, 0, &lcevc, 0.5, 6, SEG_CONTAINER_FMP4);
-  hls_llhls_enable(ctx, &filter, 0, &lcevc, SEG_CONTAINER_FMP4, 0.5);
+  hls_store_open(&(stream_key_t){ctx, &filter, 0, &lcevc, SEG_CONTAINER_FMP4}, 0.5, 6);
+  hls_llhls_enable(&(stream_key_t){ctx, &filter, 0, &lcevc, SEG_CONTAINER_FMP4}, 0.5);
   sid = parked_request(&h, PARK_PATH);
-  sub = dash_lldash_subscribe(ctx, &filter, 0, &lcevc, "dseg0.m4s", CONN_PROTO_H3);
+  sub = dash_lldash_subscribe(&(stream_key_t){ctx, &filter, 0, &lcevc, SEG_CONTAINER_FMP4}, &(route_file_t){.kind = ROUTE_FILE_DSEG}, CONN_PROTO_H3);
   ck_assert_int_ge(sub, 0);
   ck_assert_int_eq(h3_httpng_ops.dashchunk_dispatch(server_conn(), find_req(server_conn(), sid), sub, -1), 1);
   flush_server(&h);
   ck_assert_int_eq(h3r_pump_until(&h, cond_response_started, &sid), 1);
   ck_assert_int_eq(h3r_resp_for(&h, sid)->status, 200);
   h3r_close(&h);
-  hls_store_close(ctx, &filter, 0, &lcevc, SEG_CONTAINER_FMP4);
+  hls_store_close(&(stream_key_t){ctx, &filter, 0, &lcevc, SEG_CONTAINER_FMP4});
   capture_close(ctx);
 }
 END_TEST

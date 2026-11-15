@@ -64,8 +64,6 @@ unsigned long ecmg_client_cryptoperiod_transitions(ecmg_client_t *c);
 unsigned long ecmg_client_ecm_total(ecmg_client_t *c);
 unsigned long ecmg_client_ecm_errors(ecmg_client_t *c);
 
-/* target ecm_slot, see ecmg_target_parity_calc() for cycling math */
-int ecmg_client_target_parity(ecmg_client_t *c);
 
 /* pure calc, unit-test only */
 int ecmg_target_parity_calc(ecmg_outage_mode_t outage_mode, int connected, unsigned long packets_per_cp, unsigned long cur, unsigned long published_at, unsigned long last_parity);

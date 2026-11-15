@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/send_result.h"
 #include "lib/sys/signal.h"
@@ -15,6 +15,7 @@
 #include "../input/source.h"
 #include "../mux/tspacketizer.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 void meta_cb(void *ctx, const char *artist, const char *title) {
   meta_state_t *m = ctx;
@@ -40,7 +41,7 @@ ristout_t *radiohead_rist_open(const config_t *cfg) {
   memset(&rc, 0, sizeof rc);
   for (unsigned i = 0; i < cfg->n_rist; i++) rc.peer_uri[i] = cfg->rist_uri[i];
   rc.npeers = (int)cfg->n_rist;
-  rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RISTOUT_PROFILE_MAIN : RISTOUT_PROFILE_SIMPLE;
+  rc.profile = cfg->rist_profile == RIST_PROF_MAIN ? RIST_PROF_MAIN : RIST_PROF_SIMPLE;
   rc.secret = cfg->rist_secret;
   rc.key_size = cfg->rist_key_size;
   rc.cname = cfg->rist_cname;
@@ -288,7 +289,8 @@ int radiohead_run(const config_t *cfg, metrics_exporter_t *mx) {
   meta_state_t meta;
   tspacketizer_t *tsp = NULL;
   cas_t *cas = NULL;
-  double start, last_stat = 0;
+  double start;
+  double last_stat = 0;
   int rc = 0;
   input_metrics_t im;
   radio_metrics_t rm;

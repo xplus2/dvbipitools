@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/helper/xml_util.h"
 #include "lib/tva/tva_xml.h"

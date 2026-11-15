@@ -9,7 +9,7 @@
 
 #include "priv.h"
 
-void obs_version(psi_t *c, psi_obs_id_t id, const unsigned char *b, pmt_cand_t *cand) {
+static void obs_version(psi_t *c, psi_obs_id_t id, const unsigned char *b, pmt_cand_t *cand) {
   int *ver;
   int v;
   if (!c->obs || !(b[5] & 1)) return;

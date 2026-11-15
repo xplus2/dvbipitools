@@ -6,6 +6,7 @@
 #include <string.h>
 #include <strings.h>
 
+#include "lib/helper/strutil.h"
 #include "lib/helper/uriparse.h"
 #include "lib/tva/tva_xml.h"
 #include "lib/tva/tva_xml/tva_xml_int.h"
@@ -72,27 +73,20 @@ const char *tva_genre_href(const char *category) {
 void tva_build_crid(const char *channel_id, const char *start_iso, char *out, size_t outcap) {
   char enc[BCG_ID_LEN * 3];
   char ts[BCG_TIME_LEN];
+  sbuf_t b;
   uriparse_pct_encode_seg(channel_id, enc, sizeof enc);
   if (iso8601_utc_compact(start_iso, ts, sizeof ts) != 0) {
     iso8601_compact_prefix(start_iso, ts, sizeof ts);
     if (strlen(ts) >= 14) ts[14] = '\0';
   }
-  snprintf(out, outcap, "crid://dipixmltv.invalid/%s/%s", enc, ts);
-}
-
-int tva_programme_cache_crid(bcg_programme_t *pr) {
-  char crid[TVA_CRID_BUF];
-  char *dup;
-  tva_build_crid(pr->channel_id, pr->start, crid, sizeof crid);
-  dup = strdup(crid);
-  if (!dup) return -1;
-  free(pr->crid);
-  pr->crid = dup;
-  return 0;
+  sbuf_init(&b, out, outcap);
+  sbuf_add(&b, "crid://dipixmltv.invalid/");
+  sbuf_add(&b, enc);
+  sbuf_add(&b, "/");
+  sbuf_add(&b, ts);
 }
 
 const char *tva_programme_crid(const bcg_programme_t *pr, char *buf, size_t cap) {
-  if (pr->crid) return pr->crid;
   tva_build_crid(pr->channel_id, pr->start, buf, cap);
   return buf;
 }

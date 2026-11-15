@@ -17,7 +17,7 @@
 #include "lib/demux/crc32.h"
 #include "lib/helper/beutil.h"
 #include "lib/mux/psi_build.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "../fx_ts.h"
 
 #define MAX_SEEN 64

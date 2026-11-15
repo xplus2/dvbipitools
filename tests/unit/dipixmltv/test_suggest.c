@@ -10,7 +10,9 @@
 #include "../log_capture.h"
 
 START_TEST(suggest_map_classifies_exact_fuzzy_and_unmatched) {
-  FILE *xmltv_f, *scan_f, *out_f;
+  FILE *xmltv_f;
+  FILE *scan_f;
+  FILE *out_f;
   char *buf;
   size_t len;
 

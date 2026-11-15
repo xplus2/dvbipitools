@@ -68,10 +68,7 @@ typedef struct {
 /* doubles *remcap as needed. 0 ok, -1 realloc failed */
 int esc_rem_append(unsigned char **rem, size_t *remlen, size_t *remcap, const unsigned char *d, size_t n);
 
-/* prefixes nal with 4-byte BE length before appending. 0 ok, -1 realloc failed */
-int esc_vbuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *nal, size_t n);
 
-int esc_obuf_add(unsigned char **vbuf, size_t *vbuflen, size_t *vbufcap, const unsigned char *data, size_t n);
 
 void esc_ps_store(unsigned char *dst, size_t *dlen, const unsigned char *s, size_t n);
 

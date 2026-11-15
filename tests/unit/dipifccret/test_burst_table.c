@@ -57,8 +57,10 @@ START_TEST(find_locates_claimed_slot_by_address) {
   burst_table_t *t = burst_table_new(4);
   channel_t *c = make_channel_with_rap();
   burst_t *b = burst_new(c, 1.0, 0, 99);
-  struct sockaddr_in sin, other;
-  burst_slot_t *claimed, *found;
+  struct sockaddr_in sin;
+  struct sockaddr_in other;
+  burst_slot_t *claimed;
+  burst_slot_t *found;
 
   addr_of(&sin, 6000);
   claimed = burst_table_claim(t, (const struct sockaddr *)&sin, sizeof sin, 3, b);
@@ -87,7 +89,8 @@ START_TEST(claim_fails_when_table_full) {
   channel_t *c = make_channel_with_rap();
   burst_t *b1 = burst_new(c, 1.0, 0, 99);
   burst_t *b2 = burst_new(c, 1.0, 0, 99);
-  struct sockaddr_in sin1, sin2;
+  struct sockaddr_in sin1;
+  struct sockaddr_in sin2;
   burst_slot_t *slot;
 
   addr_of(&sin1, 6000);
@@ -107,7 +110,8 @@ START_TEST(terminate_marks_burst_done_and_reports_found) {
   burst_table_t *t = burst_table_new(4);
   channel_t *c = make_channel_with_rap();
   burst_t *b = burst_new(c, 1.0, 0, 99);
-  struct sockaddr_in sin, other;
+  struct sockaddr_in sin;
+  struct sockaddr_in other;
 
   addr_of(&sin, 6000);
   burst_table_claim(t, (const struct sockaddr *)&sin, sizeof sin, 3, b);
@@ -146,7 +150,8 @@ START_TEST(claim_reclaims_slot_after_manual_release) {
   channel_t *c = make_channel_with_rap();
   burst_t *b1 = burst_new(c, 1.0, 0, 99);
   burst_t *b2 = burst_new(c, 1.0, 0, 99);
-  struct sockaddr_in sin1, sin2;
+  struct sockaddr_in sin1;
+  struct sockaddr_in sin2;
   burst_slot_t *slot;
   size_t idx;
   int did_clear = 0;
@@ -191,7 +196,8 @@ START_TEST(congestion_adapted_resets_on_claim_and_reclaim) {
   channel_t *c = make_channel_with_rap();
   burst_t *b1 = burst_new(c, 1.0, 0, 99);
   burst_t *b2 = burst_new(c, 1.0, 0, 99);
-  struct sockaddr_in sin1, sin2;
+  struct sockaddr_in sin1;
+  struct sockaddr_in sin2;
   burst_slot_t *slot;
 
   addr_of(&sin1, 6000);
@@ -408,7 +414,8 @@ static void *burst_race_pacer(void *arg) {
   (void)arg;
 
   while (!atomic_load_explicit(&g_burst_race_stop, memory_order_relaxed)) {
-    size_t i, n = 0;
+    size_t i;
+    size_t n = 0;
 
     pthread_mutex_lock(&t->stripes[0].lock); /* BURST_RACE_CAP 1: always exactly one stripe */
     for (i = 0; i < t->cap && n < BURST_RACE_CAP; i++) {
@@ -440,7 +447,10 @@ static void *burst_race_pacer(void *arg) {
 }
 
 START_TEST(burst_table_survives_rams_r_pacer_nack_termination_race) {
-  pthread_t rams_r_thread, terminate_thread, pacer_thread, nack_threads[BURST_RACE_NACK_THREADS];
+  pthread_t rams_r_thread;
+  pthread_t terminate_thread;
+  pthread_t pacer_thread;
+  pthread_t nack_threads[BURST_RACE_NACK_THREADS];
   channel_t *c = make_channel_with_rap();
   long i;
   burst_t *seed;
@@ -507,7 +517,9 @@ START_TEST(start_under_concurrent_exhaustion_admits_exactly_cap_sessions) {
   channel_t *c = make_channel_with_rap();
   pthread_t threads[BURST_EXHAUST_THREADS];
   burst_exhaust_arg_t args[BURST_EXHAUST_THREADS];
-  int i, claimed = 0, rejected = 0;
+  int i;
+  int claimed = 0;
+  int rejected = 0;
   size_t in_use_count = 0;
   unsigned seen_ports[BURST_EXHAUST_CAP];
   size_t seen_n = 0;

@@ -72,6 +72,8 @@ typedef struct h3_ws_buf {
   size_t len;    /* unacked bytes */
 } h3_ws_buf_t;
 
+void h3_ws_buf_put(h3_ws_buf_t *b);
+
 typedef struct h3_req {
   int active;
   int64_t stream_id;
@@ -104,7 +106,8 @@ typedef struct h3_req {
   int ws_active;
   ws_parser_t ws_parser;
   uint8_t *ws_pending;    /* not yet handed to nghttp3 */
-  size_t ws_pending_len, ws_pending_cap;
+  size_t ws_pending_len;
+  size_t ws_pending_cap;
   int ws_inflight;
   int ws_dead;  /* under ws_lock: overflow or protocol error, stream reset by reactor */
   int ws_reset; /* stream shutdown issued */
@@ -112,7 +115,8 @@ typedef struct h3_req {
   int ws_fin;
   int ws_tid;
   uint8_t *ws_send_data; /* currently being read by nghttp3, zero-copy. owned by ws_unacked tail */
-  size_t ws_send_len, ws_send_off;
+  size_t ws_send_len;
+  size_t ws_send_off;
   struct h3_ws_buf *ws_unacked; /* handed to nghttp3, freed once acked: it re-reads them for retransmits */
   struct h3_ws_buf *ws_unacked_tail;
   size_t ws_unacked_bytes;
@@ -220,12 +224,12 @@ static inline void release_req(h3_req_t *r) {
     h3_ws_buf_t *b = r->ws_unacked;
     r->ws_unacked = b->next;
     free(b->base);
-    free(b);
+    h3_ws_buf_put(b);
   }
   r->ws_unacked_tail = NULL;
   r->ws_unacked_bytes = 0;
   r->ws_send_data = NULL;
-  free(r->body);
+  httpng_body_put(r->body);
   r->body = NULL;
   free(r->path);
   r->path = NULL;

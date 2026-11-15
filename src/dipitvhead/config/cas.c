@@ -16,10 +16,7 @@ int tvh_apply_cas_algo(void *c, const char *v, char *e, size_t n) {
 int tvh_apply_cas_pids(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
   cfg->any_cas_flag = 1;
-  if (tvh_cfg_cas_pids(cfg, v)) {
-    snprintf(e, n, "invalid '%s' (pids and/or video|audio|lcevc)", v);
-    return -1;
-  }
+  if (tvh_cfg_cas_pids(cfg, v)) return yamlcfg_bad(e, n, v, "pids and/or video|audio|lcevc");
   return 0;
 }
 

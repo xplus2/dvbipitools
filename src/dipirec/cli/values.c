@@ -10,6 +10,7 @@
 #include "lib/helper/argutil.h"
 #include "priv.h"
 #include "../filter/ts.h"
+#include "lib/net/rist/ristpeer.h"
 
 /* total += v * mul, -1 on overflow */
 static int dur_add(long *total, long v, long mul) {
@@ -81,25 +82,6 @@ long duration_parse(const char *s) {
     if (argutil_uint_range(s, 1, UINT_MAX, &v)) return -1;
     return (long)v;
   }
-}
-
-/* decimal or 0x-hex, PMT pid range 0x0010..0x1FFE */
-static int pid_parse(const char *s, unsigned *out) {
-  char *end;
-  unsigned long v = strtoul(s, &end, 0);
-  if (*end != '\0' || v < 0x0010 || v > 0x1FFE) return -1;
-  *out = (unsigned)v;
-  return 0;
-}
-
-static int parse_pmt_sel(const char *s, config_t *cfg) {
-  if (strcmp(s, "all") == 0) {
-    cfg->pmt_sel = PMT_SEL_ALL;
-    return 0;
-  }
-  if (pid_parse(s, &cfg->pmt_pid)) return -1;
-  cfg->pmt_sel = PMT_SEL_PID;
-  return 0;
 }
 
 /* comma-separated STRIP_* tokens, or "none".
@@ -176,7 +158,7 @@ int rec_cfg_audio(config_t *cfg, const char *s) {
 }
 
 int rec_cfg_pmt(config_t *cfg, const char *s) {
-  return parse_pmt_sel(s, cfg);
+  return argutil_pmt_sel_parse(s, &cfg->pmt_sel, &cfg->pmt_pid);
 }
 
 int rec_cfg_format(config_t *cfg, const char *s) {
@@ -207,14 +189,13 @@ int rec_cfg_strip(config_t *cfg, const char *s) {
 }
 
 int rec_cfg_profile(config_t *cfg, const char *s, int is_in) {
-  static const enum_map_t map[] = {{"simple", RIST_PROF_SIMPLE}, {"main", RIST_PROF_MAIN}};
   int v;
-  if (map_lookup(map, sizeof map / sizeof map[0], s, &v)) return -1;
+  if (rist_prof_parse(s, &v)) return -1;
   if (is_in) {
-    cfg->rist_profile_in = (rist_profile_sel_t)v;
+    cfg->rist_profile_in = (rist_prof_t)v;
     cfg->fl.have_profile_in = 1;
   } else {
-    cfg->rist_profile = (rist_profile_sel_t)v;
+    cfg->rist_profile = (rist_prof_t)v;
     cfg->fl.have_profile = 1;
   }
   return 0;

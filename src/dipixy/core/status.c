@@ -13,12 +13,12 @@
 #include <unistd.h>
 
 #include "lib/helper/jsonbuf.h"
-#include "lib/sys/signal.h"
 #include "../ts/capture/capture.h"
 #include "../ts/channels/channels.h"
 #include "../reactor/reactor.h"
 #include "../reactor/reactor_tls.h"
 #include "../version.h"
+#include "lib/helper/dateutil.h"
 
 static int g_argc;
 static char **g_argv;
@@ -31,7 +31,8 @@ void dipixy_status_init(int argc, char **argv) {
 }
 
 static _Atomic uint64_t g_rate_bits;
-static uint64_t g_prev_in, g_prev_out;
+static uint64_t g_prev_in;
+static uint64_t g_prev_out;
 static double g_prev_t = -1.0;
 
 void dipixy_status_tick(void) {
@@ -62,7 +63,8 @@ static void status_bitrate(double *in_mbps, double *out_mbps) {
 
 static uint64_t status_rss_bytes(void) {
   FILE *f = fopen("/proc/self/statm", "r");
-  long total_pages = 0, rss_pages = 0;
+  long total_pages = 0;
+  long rss_pages = 0;
   if (!f) return 0;
   if (fscanf(f, "%ld %ld", &total_pages, &rss_pages) != 2) rss_pages = 0;
   fclose(f);
@@ -85,10 +87,10 @@ static uint64_t status_rss_bytes(void) {
 #define STATUS_HAVE_HTTP3 0
 #endif
 
-#define JFIELD(setter, name, val, sep) do { jbuf_key(&j, name); setter(&j, val); jbuf_str(&j, sep); } while (0)
+#define JFIELD(setter, name, val, sep) do { jbuf_key(jp, name); setter(jp, val); jbuf_str(jp, sep); } while (0)
 #define JOBJ(name) JFIELD(jbuf_str, name, "{", "")
 #define JBOOL(name, cond, sep) JFIELD(jbuf_str, name, (cond) ? "true" : "false", sep)
-#define JSTR_OR_NULL(name, cond, val, sep) do { jbuf_key(&j, name); if (cond) jbuf_json_string(&j, val); else jbuf_str(&j, "null"); jbuf_str(&j, sep); } while (0)
+#define JSTR_OR_NULL(name, cond, val, sep) do { jbuf_key(jp, name); if (cond) jbuf_json_string(jp, val); else jbuf_str(jp, "null"); jbuf_str(jp, sep); } while (0)
 
 static int secret_opt(const char *a, int *has_value) {
   const char *name;
@@ -103,17 +105,7 @@ static int secret_opt(const char *a, int *has_value) {
   return n >= 9 && !strncmp("metrics-auth", name, n);
 }
 
-int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) {
-  static _Thread_local jbuf_t j;
-  struct tm tmv;
-  char start_str[32];
-  double in_mbps, out_mbps;
-  int i;
-
-  jbuf_thread_own(&j);
-  jbuf_reset(&j);
-  jbuf_str(&j, "{");
-
+static void emit_build(jbuf_t *jp) {
   JFIELD(jbuf_json_string, "tool", TOOL_NAME, ",");
   JFIELD(jbuf_json_string, "version", TOOL_VERSION, ",");
   JOBJ("build");
@@ -124,9 +116,17 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JBOOL("tls", STATUS_HAVE_TLS, ",");
   JBOOL("http2", STATUS_HAVE_HTTP2, ",");
   JBOOL("http3", STATUS_HAVE_HTTP3, "");
-  jbuf_str(&j, "}"); /* features */
-  jbuf_str(&j, "}"); /* build */
-  jbuf_str(&j, ",");
+  jbuf_str(jp, "}"); /* features */
+  jbuf_str(jp, "}"); /* build */
+  jbuf_str(jp, ",");
+}
+
+static void emit_runtime(jbuf_t *jp) {
+  struct tm tmv;
+  char start_str[32];
+  double in_mbps;
+  double out_mbps;
+  int i;
 
   gmtime_r(&g_start_unix, &tmv);
   strftime(start_str, sizeof start_str, "%Y-%m-%dT%H:%M:%SZ", &tmv);
@@ -134,37 +134,38 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JFIELD(jbuf_i64, "start_time_unix", (long long)g_start_unix, ",");
   JFIELD(jbuf_i64, "uptime_seconds", (long long)(time(NULL) - g_start_unix), ",");
 
-  jbuf_key(&j, "exec_args");
-  jbuf_str(&j, "[");
+  jbuf_key(jp, "exec_args");
+  jbuf_str(jp, "[");
   i = 0;
   while (i < g_argc) {
     int has_value;
     int secret = secret_opt(g_argv[i], &has_value);
 
-    if (i) jbuf_str(&j, ",");
+    if (i) jbuf_str(jp, ",");
     if (secret && has_value) {
       char red[32];
       size_t n = strcspn(g_argv[i], "=");
 
       snprintf(red, sizeof red, "%.*s=***", (int)n, g_argv[i]);
-      jbuf_json_string(&j, red);
+      jbuf_json_string(jp, red);
     } else {
-      jbuf_json_string(&j, g_argv[i]);
+      jbuf_json_string(jp, g_argv[i]);
     }
     if (secret && !has_value && i + 1 < g_argc) {
-      jbuf_str(&j, ",");
-      jbuf_json_string(&j, "***");
+      jbuf_str(jp, ",");
+      jbuf_json_string(jp, "***");
       i++;
     }
     i++;
   }
-  jbuf_str(&j, "],");
+  jbuf_str(jp, "],");
 
   JOBJ("threads");
   JFIELD(jbuf_i64, "workers", reactor_worker_count(), ",");
   JFIELD(jbuf_i64, "pump", capture_pump_thread_count(), ",");
   JFIELD(jbuf_i64, "channels_refresh", channels_refresh_active(), ",");
-  JFIELD(jbuf_i64, "total", reactor_worker_count() + capture_pump_thread_count() + channels_refresh_active(), "},");
+  JFIELD(jbuf_i64, "maint", 1, ",");
+  JFIELD(jbuf_i64, "total", reactor_worker_count() + capture_pump_thread_count() + channels_refresh_active() + 1, "},");
 
   JOBJ("memory");
   JFIELD(jbuf_u64, "rss_bytes", (unsigned long long)status_rss_bytes(), "},");
@@ -173,7 +174,9 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JOBJ("bitrate");
   JFIELD(jbuf_fixed3, "in_mbps", in_mbps, ",");
   JFIELD(jbuf_fixed3, "out_mbps", out_mbps, "},");
+}
 
+static void emit_config(jbuf_t *jp, const config_t *cfg) {
   JOBJ("listen");
   JFIELD(jbuf_json_string, "addr", cfg->listen.scope == LISTEN_ANY ? "all" : cfg->listen.addr, ",");
   JFIELD(jbuf_u64, "port", cfg->listen.port, ",");
@@ -184,8 +187,7 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JFIELD(jbuf_i64, "workers_spec", cfg->workers_spec, ",");
   JFIELD(jbuf_i64, "max_clients", cfg->max_clients, ",");
   JFIELD(jbuf_i64, "max_channels", cfg->max_channels, ",");
-  JFIELD(jbuf_i64, "max_variants", cfg->max_variants, ",");
-  JFIELD(jbuf_u64, "capture_ring_kib", cfg->capture_ring_kib, "},");
+  JFIELD(jbuf_i64, "max_variants", cfg->max_variants, "},");
 
   JOBJ("segment");
   JFIELD(jbuf_fixed3, "size_s", cfg->segment_size, ",");
@@ -208,6 +210,10 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JFIELD(jbuf_json_string, "ws_allowed_hosts", cfg->ws_allowed_hosts ? cfg->ws_allowed_hosts : "", ",");
 
   JBOOL("auth_enabled", cfg->http_auth[0], ",");
+}
+
+static void emit_tls(jbuf_t *jp) {
+  int i;
 
   JOBJ("tls");
   if (tls_is_running()) {
@@ -215,20 +221,22 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
     tls_cert_detail(NULL, 0, &d);
     JFIELD(jbuf_str, "enabled", "true", ",");
     JFIELD(jbuf_json_string, "cn", d.cn, ",");
-    jbuf_key(&j, "aliases");
-    jbuf_str(&j, "[");
+    jbuf_key(jp, "aliases");
+    jbuf_str(jp, "[");
     for (i = 0; i < d.alias_count; i++) {
-      if (i) jbuf_str(&j, ",");
-      jbuf_json_string(&j, d.aliases[i]);
+      if (i) jbuf_str(jp, ",");
+      jbuf_json_string(jp, d.aliases[i]);
     }
-    jbuf_str(&j, "],");
+    jbuf_str(jp, "],");
     JFIELD(jbuf_json_string, "expiry", d.valid_to, "");
   } else {
     JFIELD(jbuf_str, "enabled", "false", "");
   }
-  jbuf_str(&j, "}"); /* tls */
-  jbuf_str(&j, ",");
+  jbuf_str(jp, "}"); /* tls */
+  jbuf_str(jp, ",");
+}
 
+static void emit_dlna(jbuf_t *jp, const config_t *cfg) {
   JOBJ("dlna");
   JBOOL("enabled", cfg->enable_dlna, ",");
   JFIELD(jbuf_i64, "ssdp_ttl", cfg->ssdp_ttl, ",");
@@ -238,7 +246,9 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JBOOL("keep_multicast", cfg->dlna_keep_multicast, ",");
   JFIELD(jbuf_fixed3, "ssdp_interval_s", cfg->ssdp_interval_s, ",");
   JFIELD(jbuf_u64, "ssdp_max_age_s", cfg->ssdp_max_age_s, "},");
+}
 
+static void emit_flags(jbuf_t *jp, const config_t *cfg) {
   JOBJ("flags");
   JBOOL("no_hls", cfg->no_hls, ",");
   JBOOL("no_llhls", cfg->no_llhls, ",");
@@ -258,6 +268,20 @@ int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) 
   JBOOL("no_fcc", cfg->no_fcc, ",");
   JBOOL("no_ret", cfg->no_ret, ",");
   JBOOL("join_all", cfg->join_all, "}");
+}
+
+int dipixy_status_render_json(const config_t *cfg, char **out, size_t *out_len) {
+  static _Thread_local jbuf_t j;
+
+  jbuf_thread_own(&j);
+  jbuf_reset(&j);
+  jbuf_str(&j, "{");
+  emit_build(&j);
+  emit_runtime(&j);
+  emit_config(&j, cfg);
+  emit_tls(&j);
+  emit_dlna(&j, cfg);
+  emit_flags(&j, cfg);
   jbuf_str(&j, "}"); /* root */
 
   if (j.failed) return -1;

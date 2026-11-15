@@ -219,47 +219,6 @@ START_TEST(ret_handle_nack_skips_seq_not_in_ring) {
 }
 END_TEST
 
-START_TEST(ret_on_self_detected_gap_sends_ff_and_repairs_range) {
-  channel_table_t *t;
-  channel_t *c = make_channel(&t, 0xBBBB, 50, 5); /* seq 50..54 */
-  ret_ctx_t *r = ret_ctx_new(t, 99, 32, send_mc, send_unicast, NULL);
-  rtx_pkt_t out;
-  int i;
-
-  (void)c;
-  reset_capture();
-  ret_on_self_detected_gap(r, 0xBBBB, 51, 53);
-
-  /* 1 FF + 3 repairs (51,52,53), all via mc only, no unicast at all */
-  ck_assert_int_eq(g_mc_calls, 4);
-  ck_assert_int_eq(g_uni_calls, 0);
-  ck_assert_int_eq(g_mc_dscp[0], NET_DSCP_SIGNALLING);
-
-  for (i = 1; i < 4; i++) {
-    ck_assert_int_eq(rtx_parse(g_mc_pkt[i], g_mc_len[i], 99, &out), 1);
-    ck_assert_uint_eq(out.osn, (unsigned)(50 + i));
-  }
-
-  ret_ctx_free(r);
-  channel_table_free(t);
-}
-END_TEST
-
-START_TEST(ret_on_self_detected_gap_ignores_unknown_ssrc) {
-  channel_table_t *t;
-  channel_t *c = make_channel(&t, 0xBBBB, 50, 5);
-
-  ret_ctx_t *r = ret_ctx_new(t, 99, 32, send_mc, send_unicast, NULL);
-  (void)c;
-  reset_capture();
-  ret_on_self_detected_gap(r, 0x9999, 51, 53);
-  ck_assert_int_eq(g_mc_calls, 0);
-
-  ret_ctx_free(r);
-  channel_table_free(t);
-}
-END_TEST
-
 /* F.3.2.1: N unicast RET RTP sessions, one per HNED; each client's RTX seq space
    must be its own, unshared with any other client */
 START_TEST(unicast_rtx_seq_is_independent_per_client) {
@@ -303,8 +262,10 @@ START_TEST(mc_and_unicast_rtx_seq_are_independent) {
   channel_t *c = make_channel(&t, 0xBBBB, 50, 5); /* seq 50..54 cached */
   ret_ctx_t *r = ret_ctx_new(t, 99, 32, send_mc, send_unicast, NULL);
   struct sockaddr_in addr_a = make_client_addr("10.0.0.5", 6000);
+  struct sockaddr_in addr_b = make_client_addr("10.0.0.6", 6000);
   rtcp_nack_t nack;
-  int i, mc_repair_idx;
+  int i;
+  int mc_repair_idx;
 
   (void)c;
   memset(&nack, 0, sizeof nack);
@@ -316,9 +277,7 @@ START_TEST(mc_and_unicast_rtx_seq_are_independent) {
 
   ret_handle_nack(r, &nack, 1, (const struct sockaddr *)&addr_a, sizeof addr_a); /* mc seq 0, unicast seq 0 */
 
-  reset_capture();
-  ret_on_self_detected_gap(r, 0xBBBB, 51, 51); /* mc-only repair, F.5.2: bumps mc to next 2, unicast untouched */
-  ck_assert_int_eq(g_uni_calls, 0);
+  ret_handle_nack(r, &nack, 1, (const struct sockaddr *)&addr_b, sizeof addr_b);
 
   reset_capture();
   ret_handle_nack(r, &nack, 1, (const struct sockaddr *)&addr_a, sizeof addr_a); /* client A's 2nd repair, mc's 3rd */
@@ -328,7 +287,7 @@ START_TEST(mc_and_unicast_rtx_seq_are_independent) {
   mc_repair_idx = -1;
   for (i = 0; i < g_mc_calls; i++) if (g_mc_dscp[i] != NET_DSCP_SIGNALLING) mc_repair_idx = i;
   ck_assert_int_ge(mc_repair_idx, 0);
-  ck_assert_uint_eq(rtx_wire_seq(g_mc_pkt[mc_repair_idx]), 2u); /* mc: 3rd repair ever (0, 1 via gap, 2 now) */
+  ck_assert_uint_eq(rtx_wire_seq(g_mc_pkt[mc_repair_idx]), 2u); /* mc: 3rd repair ever (0, 1 via B, 2 now) */
 
   ret_ctx_free(r);
   channel_table_free(t);
@@ -531,8 +490,6 @@ static Suite *ret_suite(void) {
   tcase_add_test(tc, ret_handle_nack_generic_nack_matches_requested_entries);
   tcase_add_test(tc, ret_handle_nack_ignores_unknown_ssrc);
   tcase_add_test(tc, ret_handle_nack_skips_seq_not_in_ring);
-  tcase_add_test(tc, ret_on_self_detected_gap_sends_ff_and_repairs_range);
-  tcase_add_test(tc, ret_on_self_detected_gap_ignores_unknown_ssrc);
   tcase_add_test(tc, unicast_rtx_seq_is_independent_per_client);
   tcase_add_test(tc, mc_and_unicast_rtx_seq_are_independent);
   tcase_add_test(tc, active_clients_counts_distinct_client_addresses);

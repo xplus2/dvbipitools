@@ -39,6 +39,19 @@ START_TEST(log_code_puts_code_after_timestamp) {
 }
 END_TEST
 
+START_TEST(log_async_queues_and_flushes_on_stop) {
+  char out[OUT_MAX];
+
+  log_capture_begin();
+  log_async_start();
+  log_code("TE500001", "async %d", 3);
+  log_async_stop();
+  log_capture_end(out, sizeof out);
+  ck_assert_ptr_nonnull(body(out));
+  ck_assert_str_eq(body(out), "[TE500001] async 3\n");
+}
+END_TEST
+
 START_TEST(log_line_stays_uncoded) {
   char out[OUT_MAX];
 
@@ -211,6 +224,7 @@ static Suite *log_suite(void) {
   tcase_add_test(tc, argutil_err_null_code_keeps_plain_form);
   tcase_add_test(tc, log_ansi_strip_handles_every_escape_shape);
   tcase_add_test(tc, log_color_prescan_reads_both_spellings);
+  tcase_add_test(tc, log_async_queues_and_flushes_on_stop);
   tcase_add_loop_test(tc, log_colors_follow_terminal_and_environment, 0, 4);
   suite_add_tcase(s, tc);
   return s;

@@ -1,10 +1,10 @@
 /* Copyright 2026 dvbipitools authors. Licensed under GPL-3.0-or-later.
  * See NOTICE and LICENSE for details and authorship information. */
 
-#include "lib/sys/signal.h"
 
 #include "hooks.h"
 #include "version.h"
+#include "lib/helper/dateutil.h"
 
 void cam378_push_metrics(metrics_exporter_t *mx, const cs378x_server_t *srv, device_state_t *dev) {
   cs378x_metrics_t m;

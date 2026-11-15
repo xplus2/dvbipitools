@@ -12,10 +12,10 @@
 #include <unistd.h>
 
 #include "lib/demux/rtcp.h"
-#include "lib/sys/signal.h"
 #include "lib/mux/rtcp_build.h"
 #include "lib/mux/rtx.h"
 #include "lib/fccret/fcc_client.h"
+#include "lib/helper/dateutil.h"
 
 static fcc_client_t *open_client(unsigned server_port) {
   fcc_client_cfg_t cfg;
@@ -141,7 +141,9 @@ START_TEST(first_multicast_packet_sends_rams_t_and_waits_for_the_burst_end) {
   int listener = bind_listener(&port);
   fcc_client_t *c;
   mcast_t *main_ = open_scratch_main();
-  unsigned char buf[64], rbuf[256], rtx[128];
+  unsigned char buf[64];
+  unsigned char rbuf[256];
+  unsigned char rtx[128];
   _Atomic uint16_t rtx_seq = 0;
   rtp_hdr_t h;
   ssize_t n;
@@ -185,7 +187,8 @@ END_TEST
 START_TEST(burst_and_buffered_multicast_come_out_in_order) {
   fcc_client_t *c = open_client(9);
   mcast_t *main_ = open_scratch_main();
-  unsigned char rtx[128], buf[64];
+  unsigned char rtx[128];
+  unsigned char buf[64];
   _Atomic uint16_t rtx_seq = 0;
   static const char *const want[4] = {"b40", "b41", "m42", "m43"};
   rtp_hdr_t h;

@@ -45,9 +45,9 @@ static void seg_open(seg_t *g, const pid_filter_t *filter, seg_container_t conta
   hls_seg_init(MAX_STORES);
   g->ctx = capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0);
   ck_assert_ptr_nonnull(g->ctx);
-  ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), filter, 0, &full, SEG_TARGET, MAX_SEGS, container, 0.0), 1);
+  ck_assert_int_eq(hls_seg_touch(&(stream_key_t){capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), filter, 0, &full, container}, SEG_TARGET, MAX_SEGS, 0.0), 1);
   hls_seg_registry_lock();
-  g->s = hls_seg_find_locked(g->ctx, filter, 0, &full, container);
+  g->s = hls_seg_find_locked(&(stream_key_t){g->ctx, filter, 0, &full, container});
   hls_seg_registry_unlock();
   ck_assert_ptr_nonnull(g->s);
 }
@@ -445,9 +445,11 @@ START_TEST(lcevc_selection_excludes_the_unwanted_layers) {
   const lcevc_case_t *lc = &lcevc_cases[_i];
   static const unsigned pids[3] = {0x200, 0x201, 0x202};
   pid_filter_t filter = {0};
+  pid_mask_t m;
 
   pidlock_apply_lcevc(&lc->sel, &filter, pids, 3);
-  for (int i = 0; i < 3; i++) ck_assert_int_eq(pid_filter_excludes(&filter, pids[i]), lc->expect_excluded[i]);
+  pid_mask_from_filter(&m, &filter);
+  for (int i = 0; i < 3; i++) ck_assert_int_eq(pid_mask_has(&m, pids[i]), lc->expect_excluded[i]);
 }
 END_TEST
 

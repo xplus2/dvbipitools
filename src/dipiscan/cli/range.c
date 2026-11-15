@@ -166,7 +166,7 @@ int scan_mcast_range_parse(const char *s, int *family, unsigned char *start, uns
 }
 
 /* port or port-port, inclusive range */
-int scan_port_range_parse(const char *s, unsigned *lo, unsigned *hi) {
+static int scan_port_range_parse(const char *s, unsigned *lo, unsigned *hi) {
   const char *dash = strchr(s, '-');
   char buf[16];
   size_t len;

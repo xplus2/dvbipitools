@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "export.h"
 #include "store.h"
 

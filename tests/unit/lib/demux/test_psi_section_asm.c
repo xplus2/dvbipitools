@@ -44,9 +44,11 @@ START_TEST(multi_packet_section_reassembles) {
   unsigned char payload[300];
   unsigned char sec[320];
   size_t seclen;
-  unsigned char pl1[184], pl2[184];
+  unsigned char pl1[184];
+  unsigned char pl2[184];
   int i;
-  size_t first_chunk, rest;
+  size_t first_chunk;
+  size_t rest;
 
   memset(&a, 0, sizeof a);
   for (i = 0; i < (int)sizeof payload; i++)
@@ -126,7 +128,8 @@ START_TEST(second_section_after_first_resets_state) {
   psi_section_asm_t a;
   unsigned char payload_a[4] = {1, 1, 1, 1};
   unsigned char payload_b[6] = {2, 2, 2, 2, 2, 2};
-  unsigned char sec_a[8], sec_b[10];
+  unsigned char sec_a[8];
+  unsigned char sec_b[10];
   size_t len_a = build_section(0x82, payload_a, sizeof payload_a, sec_a);
   size_t len_b = build_section(0x82, payload_b, sizeof payload_b, sec_b);
   unsigned char pl[20];

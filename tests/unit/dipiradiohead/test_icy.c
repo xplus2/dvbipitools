@@ -69,7 +69,8 @@ START_TEST(metadata_block_is_stripped_and_callback_fires) {
   unsigned char meta[256];
   unsigned char in[512];
   unsigned char out[512] = {0};
-  size_t meta_len, off = 0;
+  size_t meta_len;
+  size_t off = 0;
   size_t w;
 
   memset(&m, 0, sizeof m);
@@ -99,7 +100,8 @@ START_TEST(metadata_without_separator_goes_entirely_to_title) {
   unsigned char meta[256];
   unsigned char in[256];
   unsigned char out[256] = {0};
-  size_t meta_len, off = 0;
+  size_t meta_len;
+  size_t off = 0;
 
   memset(&m, 0, sizeof m);
   c = icy_new(2, meta_cb, &m);
@@ -149,7 +151,8 @@ START_TEST(state_carries_across_calls_when_boundary_splits_mid_call) {
   unsigned char in2[8] = {7, 8, 9, 10, 0x00, 11, 12, 13};
   unsigned char out1[6] = {0};
   unsigned char out2[8] = {0};
-  size_t w1, w2;
+  size_t w1;
+  size_t w2;
 
   w1 = icy_feed(c, in1, sizeof in1, out1, sizeof out1);
   ck_assert_uint_eq(w1, 6);

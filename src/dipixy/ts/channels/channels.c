@@ -6,10 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/sys/signal.h"
 
 #include "../../core/route.h"
+#include "lib/helper/dateutil.h"
 
 static qsbr_domain_t *g_channels_qsbr;
 
@@ -154,19 +155,6 @@ int channels_static_target(const channels_t *ch, unsigned list_num, unsigned ite
   bufcpy(uri, urisz, it->uri);
   *insecure_tls = it->insecure_tls;
   return 1;
-}
-
-capture_ctx_t *channels_resolve_static(const channels_t *ch, unsigned list_num, unsigned item_num, const char *item_name) {
-  char uri[1024];
-  int insecure_tls;
-  if (!channels_static_target(ch, list_num, item_num, item_name, uri, sizeof uri, &insecure_tls)) return NULL;
-  if (!strncmp(uri, "srt://", 6)) {
-    char host[256];
-    unsigned port;
-    if (route_parse_srt_uri(uri, host, sizeof host, &port)) return NULL;
-    return capture_open_srt(host, port);
-  }
-  return capture_open_http_static(uri, insecure_tls);
 }
 
 int channels_list_for_each(const channels_t *ch, unsigned list_num, void (*emit)(void *ctx, const channel_item_t *item), void *ctx) {

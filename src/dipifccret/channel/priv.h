@@ -8,7 +8,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "lib/sys/ioutil.h"
 #include "lib/helper/seqlock.h"
 
 #include "channel.h"
@@ -86,7 +85,6 @@ channel_t *chan_hash_find_or_claim(channel_table_t *t, int family, const void *a
 void chan_hash_publish_claim(channel_table_t *t, size_t h, int was_tombstone, size_t slot_idx);
 void chan_hash_rollback_claim(channel_table_t *t, size_t h, int was_tombstone);
 size_t chan_ssrc_hash(uint32_t ssrc);
-void ssrc_hash_rebuild(channel_table_t *t);
 void ssrc_hash_remove(channel_table_t *t, size_t slot_idx, uint32_t ssrc);
 void ssrc_hash_insert(channel_table_t *t, size_t slot_idx, uint32_t ssrc);
 

@@ -8,6 +8,7 @@
 #include "reactor_tls.h"
 #include "../ws/ws_frame.h"
 #include "../ws/ws_sources.h"
+#include "lib/helper/dateutil.h"
 
 #include <stdatomic.h>
 #include <string.h>
@@ -16,11 +17,8 @@
 #define WS_RELOAD_MIN_INTERVAL_MS 5000
 
 static int reload_allowed(_Atomic int64_t *last_ms) {
-  struct timespec ts;
-  int64_t now;
+  int64_t now = now_ms();
   int64_t last = atomic_load_explicit(last_ms, memory_order_relaxed);
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  now = (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
   if (last && now - last < WS_RELOAD_MIN_INTERVAL_MS) return 0;
   return atomic_compare_exchange_strong_explicit(last_ms, &last, now, memory_order_relaxed, memory_order_relaxed);
 }

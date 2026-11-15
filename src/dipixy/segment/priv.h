@@ -19,6 +19,7 @@
 #include "../ts/lcevcselect.h"
 
 #include "segment.h"
+#include "dipixy/ts/streamkey.h"
 
 /* 90 kHz ticks: pts/dts domain, fmp4 video timescale */
 #define HLS_TS_HZ 90000
@@ -189,6 +190,7 @@ typedef struct hls_seg_ctx {
   hls_store_t *store_a;
   pid_filter_t filter; /* lookup key, as requested */
   pid_filter_t drop;   /* filter plus lcevc layers not selected: what feeds drop */
+  pid_mask_t drop_mask;
   unsigned pmt_pid; /* 0 = auto */
   unsigned char cc_pmt; /* SEG_CONTAINER_TS: rewritten PMT packets' own cc */
   unsigned char cc_pat; /* SEG_CONTAINER_TS: rewritten PAT packets' own cc */
@@ -239,10 +241,10 @@ typedef struct seg_retiree {
 int buf_reserve(unsigned char **buf, size_t *cap, size_t need);
 void hls_seg_registry_lock(void);
 void hls_seg_registry_unlock(void);
-hls_seg_ctx_t *hls_seg_find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container);
+hls_seg_ctx_t *hls_seg_find_locked(const stream_key_t *k);
 int seg_try_pin(hls_seg_ctx_t *s);
 void seg_unpin(hls_seg_ctx_t *s);
-hls_seg_ctx_t *find_locked(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid, const lcevc_select_t *lcevc, seg_container_t container);
+hls_seg_ctx_t *find_locked(const stream_key_t *k);
 int touch_pinned(hls_seg_ctx_t *s, double part_target, int *llhls_newly_on);
 void unlink_from_ctx_chain(hls_seg_ctx_t *victim);
 

@@ -42,12 +42,12 @@ static capture_ctx_t *open_ctx(void) {
   return ctx;
 }
 
-static hls_seg_ctx_t *make_seg(const capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt, const lcevc_select_t *lcevc, seg_container_t container, double part) {
+static hls_seg_ctx_t *make_seg(capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt, const lcevc_select_t *lcevc, seg_container_t container, double part) {
   hls_seg_ctx_t *s;
 
-  ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), filter, pmt, lcevc, SEG_TARGET, MAX_SEGS, container, part), 1);
+  ck_assert_int_eq(hls_seg_touch(&(stream_key_t){capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), filter, pmt, lcevc, container}, SEG_TARGET, MAX_SEGS, part), 1);
   hls_seg_registry_lock();
-  s = hls_seg_find_locked(ctx, filter, pmt, lcevc, container);
+  s = hls_seg_find_locked(&(stream_key_t){ctx, filter, pmt, lcevc, container});
   hls_seg_registry_unlock();
   ck_assert_ptr_nonnull(s);
   return s;
@@ -112,17 +112,17 @@ START_TEST(lookup_matches_only_the_exact_key) {
   ctx = open_ctx();
   pid_filter_add(&some, 0x123);
   hls_seg_registry_lock();
-  ck_assert_ptr_null(find_locked(ctx, &none, 0, &full, SEG_CONTAINER_TS));
+  ck_assert_ptr_null(find_locked(&(stream_key_t){ctx, &none, 0, &full, SEG_CONTAINER_TS}));
   hls_seg_registry_unlock();
   s = make_seg(ctx, &none, 0, &full, SEG_CONTAINER_TS, 0.0);
   segs[0] = s;
   hls_seg_registry_lock();
-  ck_assert_ptr_eq(find_locked(ctx, &none, 0, &full, SEG_CONTAINER_TS), s);
-  ck_assert_ptr_null(find_locked(ctx, &none, 0x100, &full, SEG_CONTAINER_TS));
-  ck_assert_ptr_null(find_locked(ctx, &none, 0, &full, SEG_CONTAINER_FMP4));
-  ck_assert_ptr_null(find_locked(ctx, &some, 0, &full, SEG_CONTAINER_TS));
-  ck_assert_ptr_null(find_locked(ctx, &none, 0, &base, SEG_CONTAINER_TS));
-  ck_assert_ptr_null(find_locked((capture_ctx_t *)(void *)&none, &none, 0, &full, SEG_CONTAINER_TS));
+  ck_assert_ptr_eq(find_locked(&(stream_key_t){ctx, &none, 0, &full, SEG_CONTAINER_TS}), s);
+  ck_assert_ptr_null(find_locked(&(stream_key_t){ctx, &none, 0x100, &full, SEG_CONTAINER_TS}));
+  ck_assert_ptr_null(find_locked(&(stream_key_t){ctx, &none, 0, &full, SEG_CONTAINER_FMP4}));
+  ck_assert_ptr_null(find_locked(&(stream_key_t){ctx, &some, 0, &full, SEG_CONTAINER_TS}));
+  ck_assert_ptr_null(find_locked(&(stream_key_t){ctx, &none, 0, &base, SEG_CONTAINER_TS}));
+  ck_assert_ptr_null(find_locked(&(stream_key_t){(capture_ctx_t *)(void *)&none, &none, 0, &full, SEG_CONTAINER_TS}));
   hls_seg_registry_unlock();
   release_all(segs, 1);
   capture_close(ctx);
@@ -316,7 +316,7 @@ START_TEST(variant_cap_limits_new_variants_per_source) {
   pid_filter_add(&f3, 0x103);
   segs[0] = make_seg(ctx, &f1, 0, &full, SEG_CONTAINER_TS, 0.0);
   segs[1] = make_seg(ctx, &f2, 0, &full, SEG_CONTAINER_TS, 0.0);
-  ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), &f3, 0, &full, SEG_TARGET, MAX_SEGS, SEG_CONTAINER_TS, 0.0), 0);
+  ck_assert_int_eq(hls_seg_touch(&(stream_key_t){capture_open(AF_INET, GROUP, NULL, PORT, NULL, 0, NULL, NULL, NULL, 0, 0), &f3, 0, &full, SEG_CONTAINER_TS}, SEG_TARGET, MAX_SEGS, 0.0), 0);
   ck_assert_int_eq(chain_length(ctx), 2);
   ck_assert_ptr_eq(make_seg(ctx, &f1, 0, &full, SEG_CONTAINER_TS, 0.0), segs[0]);
   release_all(segs, 2);
@@ -340,9 +340,9 @@ START_TEST(variant_cap_is_counted_per_source) {
   pid_filter_add(&f1, 0x101);
   pid_filter_add(&f2, 0x102);
   segs[0] = make_seg(a, &f1, 0, &full, SEG_CONTAINER_TS, 0.0);
-  ck_assert_int_eq(hls_seg_touch(capture_open(AF_INET, GROUP, NULL, PORT + 1, NULL, 0, NULL, NULL, NULL, 0, 0), &f2, 0, &full, SEG_TARGET, MAX_SEGS, SEG_CONTAINER_TS, 0.0), 1);
+  ck_assert_int_eq(hls_seg_touch(&(stream_key_t){capture_open(AF_INET, GROUP, NULL, PORT + 1, NULL, 0, NULL, NULL, NULL, 0, 0), &f2, 0, &full, SEG_CONTAINER_TS}, SEG_TARGET, MAX_SEGS, 0.0), 1);
   hls_seg_registry_lock();
-  segs[1] = hls_seg_find_locked(b, &f2, 0, &full, SEG_CONTAINER_TS);
+  segs[1] = hls_seg_find_locked(&(stream_key_t){b, &f2, 0, &full, SEG_CONTAINER_TS});
   hls_seg_registry_unlock();
   ck_assert_ptr_nonnull(segs[1]);
   release_all(segs, 2);

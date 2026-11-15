@@ -8,7 +8,7 @@
 
 #include "../../alloc_fail.h"
 #include "lib/helper/uriparse.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 typedef struct {
   const char *in;
@@ -177,7 +177,8 @@ START_TEST(mcast_src_addrport_table) {
   const ssm_case_t *c = &ssm_cases[_i];
   int family = 0;
   unsigned port = 0;
-  char group[64] = "", src[64] = "";
+  char group[64] = "";
+  char src[64] = "";
   int rc = uriparse_mcast_src_addrport(c->in, &family, group, sizeof group, &port, src, sizeof src);
   ck_assert_msg(rc == c->rc, "'%s': rc %d, want %d", c->in, rc, c->rc);
   if (rc) return;

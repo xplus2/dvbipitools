@@ -54,7 +54,8 @@ int device_emm_g_decrypt(const unsigned char bk[CRYPTO_KEY_LEN], const unsigned 
   const unsigned char *ciphertext = in + CRYPTO_GCM_NONCE_LEN;
   const unsigned char *tag = in + CRYPTO_GCM_NONCE_LEN + CRYPTO_KEY_LEN;
   EVP_CIPHER_CTX *ctx;
-  int len = 0, ret = -1;
+  int len = 0;
+  int ret = -1;
 
   ctx = EVP_CIPHER_CTX_new();
   if (!ctx)
@@ -84,7 +85,8 @@ done:
 int device_ecm_decrypt(const unsigned char sk[CRYPTO_KEY_LEN], const unsigned char enc[CRYPTO_CW_ENC_LEN], int cw_len, unsigned char *cw_out) {
   EVP_CIPHER_CTX *ctx;
   unsigned char block[CRYPTO_CW_ENC_LEN];
-  int len = 0, ret = -1;
+  int len = 0;
+  int ret = -1;
 
   if (cw_len < 1 || cw_len > CRYPTO_CW_ENC_LEN)
     return -1;

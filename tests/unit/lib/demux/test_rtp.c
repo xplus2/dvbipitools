@@ -11,7 +11,8 @@
 /* builds an RTP header (no CSRC content, no real extension payload beyond
  * the 4-byte extension header itself), returns header length */
 static size_t build_rtp_header(unsigned char *buf, unsigned cc, int ext, unsigned pt, int marker, uint16_t seq, uint32_t ts, uint32_t ssrc) {
-  size_t off, k;
+  size_t off;
+  size_t k;
 
   buf[0] = (unsigned char)(0x80 | (cc & 0x0F));
   if (ext)

@@ -12,11 +12,12 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "../../sys/ioutil.h"
+#include "../../helper/strutil.h"
 #include "../../helper/log.h"
 #include "../../sys/signal.h"
 #include "../netconnect.h"
 #include "priv.h"
+#include "lib/helper/dateutil.h"
 
 static void set_rcvtimeo(int fd, double secs) {
   struct timeval tv;
@@ -218,6 +219,7 @@ int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *
   char hdrline[512] = "";
   unsigned default_port = url->tls ? 443 : 80;
   int rl;
+  sbuf_t rb;
 
   if (extra_header) {
     sbuf_t hb;
@@ -238,8 +240,18 @@ int build_get_request(char *buf, size_t cap, const http_url_t *url, const char *
     }
   }
 
-  rl = snprintf(buf, cap, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\n%s\r\n", url->path, hostport, user_agent, hdrline);
-  if (rl < 0 || rl >= (int)cap) {
+  sbuf_init(&rb, buf, cap);
+  sbuf_add(&rb, "GET ");
+  sbuf_add(&rb, url->path);
+  sbuf_add(&rb, " HTTP/1.1\r\nHost: ");
+  sbuf_add(&rb, hostport);
+  sbuf_add(&rb, "\r\nUser-Agent: ");
+  sbuf_add(&rb, user_agent);
+  sbuf_add(&rb, "\r\n");
+  sbuf_add(&rb, hdrline);
+  sbuf_add(&rb, "\r\n");
+  rl = (int)rb.len;
+  if (rb.truncated) {
     log_code("LE000310", "http request too long");
     return -1;
   }

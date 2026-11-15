@@ -4,6 +4,7 @@
 #include "priv.h"
 #include "../reactor/qsbr.h"
 #include "../version.h"
+#include "lib/helper/idxstack.h"
 #include "lib/helper/log.h"
 
 #include <stdatomic.h>
@@ -14,7 +15,7 @@ void snap_retire(hls_store_t *s, hls_snapshot_t *old) {
   if (!old) return;
   for (int i = 0; i < s->retiring_n; ) {
     if (qsbr_mark_passed(g_segstore_qsbr, s->retiring_mark[i])) {
-      snap_free(s->retiring[i]);
+      snap_recycle(s, s->retiring[i]);
       s->retiring[i] = s->retiring[--s->retiring_n];
       memcpy(s->retiring_mark[i], s->retiring_mark[s->retiring_n], sizeof s->retiring_mark[i]);
     } else i++;
@@ -30,6 +31,29 @@ void snap_retire(hls_store_t *s, hls_snapshot_t *old) {
 }
 
 static _Atomic(slot_retire_node_t *) g_slot_retire_head;
+static slot_retire_node_t *g_nodes;
+static idxstack_t g_node_free;
+
+void slot_retire_pool_init(int n) {
+  g_nodes = calloc((size_t)n, sizeof *g_nodes);
+  if (!g_nodes || idxstack_init(&g_node_free, n)) {
+    free(g_nodes);
+    g_nodes = NULL;
+    return;
+  }
+  for (int i = n - 1; i >= 0; i--) idxstack_push(&g_node_free, i);
+}
+
+slot_retire_node_t *slot_retire_node_get(void) {
+  int i = g_nodes ? idxstack_pop(&g_node_free) : -1;
+  return i >= 0 ? &g_nodes[i] : malloc(sizeof(slot_retire_node_t));
+}
+
+void slot_retire_node_put(slot_retire_node_t *node) {
+  uintptr_t off = (uintptr_t)node - (uintptr_t)g_nodes;
+  if (g_nodes && off < (uintptr_t)g_node_free.cap * sizeof *g_nodes) idxstack_push(&g_node_free, (int)(off / sizeof *g_nodes));
+  else free(node);
+}
 
 void slot_retire_push(slot_retire_node_t *node) {
   slot_retire_node_t *old_head = atomic_load_explicit(&g_slot_retire_head, memory_order_relaxed);
@@ -48,7 +72,7 @@ void hls_store_slot_reclaim_sweep(void) {
     if (qsbr_mark_passed(g_segstore_qsbr, chain->mark)) {
       for (int i = 0; i < chain->nsnaps; i++) snap_free(chain->snaps[i]);
       if (chain->idx >= 0) atomic_store_explicit(&g_slot_state[chain->idx], STORE_FREE, memory_order_release);
-      free(chain);
+      slot_retire_node_put(chain);
     } else {
       atomic_store_explicit(&chain->next, keep_head, memory_order_relaxed);
       keep_head = chain;
@@ -69,7 +93,7 @@ void hls_store_slot_reclaim_sweep(void) {
 void snap_retire_async(hls_snapshot_t *snap) {
   slot_retire_node_t *node;
   if (!snap) return;
-  node = malloc(sizeof *node);
+  node = slot_retire_node_get();
   if (!node) {
     log_code("YE500220", TOOL_NAME ": hls: snapshot retire alloc failed, leaking snapshot");
     return;

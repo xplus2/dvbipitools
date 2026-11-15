@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 #include "icy.h"
 
@@ -20,7 +20,8 @@ struct icy {
 
   icy_state_t state;
   size_t audio_count;
-  size_t meta_need, meta_have;
+  size_t meta_need;
+  size_t meta_have;
   unsigned char meta_buf[ICY_META_CAP + 1];
   char last_title[512];
 };
@@ -91,7 +92,8 @@ static char *find_value_end(char *start) {
 /* "StreamTitle='...';" -> split on first " - " into artist/title */
 static void handle_meta_block(icy_t *c) {
   const char *tag = "StreamTitle='";
-  char *start, *end;
+  char *start;
+  char *end;
   size_t len;
   char artist[2 * sizeof c->last_title];
   char title[2 * sizeof c->last_title];

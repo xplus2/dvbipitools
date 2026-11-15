@@ -18,7 +18,8 @@ int main(int argc, char **argv) {
   size_t n;
   simulcrypt_hdr_t hdr;
   simulcrypt_tlv_reader_t r;
-  unsigned short tag, vlen;
+  unsigned short tag;
+  unsigned short vlen;
   const unsigned char *val;
 
   if (argc != 2) {

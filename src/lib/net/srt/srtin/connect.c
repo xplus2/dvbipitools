@@ -12,6 +12,7 @@
 #include "lib/net/srt/srtcommon.h"
 #include "lib/net/srt/srtin.h"
 #include "lib/net/srt/srtin/srtin_int.h"
+#include "lib/helper/dateutil.h"
 
 int stop_wanted(const srtin_cfg_t *cfg) {
   return signal_stop_requested() || (cfg->stop && atomic_load_explicit(cfg->stop, memory_order_relaxed));
@@ -29,7 +30,7 @@ static int connect_interruptible(const srtin_cfg_t *cfg, SRTSOCKET s, const stru
   int tmo = (int)total;
   int events = SRT_EPOLL_OUT | SRT_EPOLL_ERR;
   int eid;
-  struct timespec t0;
+  int64_t t0;
   int rc = -1;
 
   if (srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof sync) != 0 || srt_setsockopt(s, 0, SRTO_CONNTIMEO, &tmo, sizeof tmo) != 0) {
@@ -45,7 +46,7 @@ static int connect_interruptible(const srtin_cfg_t *cfg, SRTSOCKET s, const stru
     log_code("LE500161", "srt: epoll add failed: %s", srt_getlasterror_str());
     goto out;
   }
-  clock_gettime(CLOCK_MONOTONIC, &t0);
+  t0 = now_ms();
   if ((local ? srt_rendezvous(s, local, local_len, remote, remote_len) : srt_connect(s, remote, remote_len)) == SRT_ERROR &&
       srt_getlasterror(NULL) != SRT_EASYNCSND) {
     log_code(local ? "LE600136" : "LE600137", "srt: %s failed: %s", local ? "rendezvous" : "connect", srt_getlasterror_str());
@@ -57,8 +58,6 @@ static int connect_interruptible(const srtin_cfg_t *cfg, SRTSOCKET s, const stru
     SRTSOCKET wr[1];
     int nrd = 1;
     int nwr = 1;
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
     if (st == SRTS_CONNECTED) {
       sync = 1;
       if (srt_setsockopt(s, 0, SRTO_RCVSYN, &sync, sizeof sync) != 0) {
@@ -73,7 +72,7 @@ static int connect_interruptible(const srtin_cfg_t *cfg, SRTSOCKET s, const stru
       log_code("LE600137", "srt: connect failed: %s", rej == SRT_REJ_UNKNOWN ? srt_getlasterror_str() : srt_rejectreason_str(rej));
       goto out;
     }
-    if ((now.tv_sec - t0.tv_sec) * 1000L + (now.tv_nsec - t0.tv_nsec) / 1000000L >= (long)total) {
+    if (now_ms() - t0 >= (int64_t)total) {
       log_code("LE600137", "srt: connect failed: timeout");
       goto out;
     }
@@ -142,7 +141,7 @@ static int reject_while_busy(void *opaq, SRTSOCKET ns, int hsversion, const stru
   (void)hsversion;
   (void)peeraddr;
   (void)streamid;
-  if (!atomic_load(busy)) return 0;
+  if (!atomic_load_explicit(busy, memory_order_acquire)) return 0;
   srt_setrejectreason(ns, SRT_REJ_RESOURCE);
   return -1;
 }
@@ -177,7 +176,7 @@ int accept_poll(SRTSOCKET lsn, SRTSOCKET *out, atomic_int *busy) {
       log_code("LE600138", "srt: accept failed: %s", srt_getlasterror_str());
       rc = -1;
     } else if (busy) {
-      atomic_store(busy, 1);
+      atomic_store_explicit(busy, 1, memory_order_release);
     }
   }
   srt_epoll_release(eid);

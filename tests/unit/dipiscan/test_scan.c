@@ -23,6 +23,7 @@
 #include "dipiscan/scan.h"
 #include "../fx_ts.h"
 #include "../cfg_fixture.h"
+#include "lib/helper/dateutil.h"
 
 #define ARGC(argv) (int)(sizeof(argv) / sizeof(argv[0]) - 1)
 
@@ -73,9 +74,12 @@ END_TEST
 
 START_TEST(mcast_parse_plain_address_sweeps_default_24) {
   config_t cfg;
-  char argv0[] = "dipiscan", argv1[] = "-m", argv2[] = "239.1.1.5";
+  char argv0[] = "dipiscan";
+  char argv1[] = "-m";
+  char argv2[] = "239.1.1.5";
   char *argv[] = {argv0, argv1, argv2, NULL};
-  char lo[64], hi[64];
+  char lo[64];
+  char hi[64];
 
   ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.total, 256u);
@@ -88,9 +92,12 @@ END_TEST
 
 START_TEST(mcast_parse_cidr_sweeps_host_range) {
   config_t cfg;
-  char argv0[] = "dipiscan", argv1[] = "-m", argv2[] = "239.1.0.0/23";
+  char argv0[] = "dipiscan";
+  char argv1[] = "-m";
+  char argv2[] = "239.1.0.0/23";
   char *argv[] = {argv0, argv1, argv2, NULL};
-  char lo[64], hi[64];
+  char lo[64];
+  char hi[64];
 
   ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.total, 512u);
@@ -103,7 +110,9 @@ END_TEST
 
 START_TEST(mcast_parse_cidr_rejects_range_over_cap) {
   config_t cfg;
-  char argv0[] = "dipiscan", argv1[] = "-m", argv2[] = "239.0.0.0/8";
+  char argv0[] = "dipiscan";
+  char argv1[] = "-m";
+  char argv2[] = "239.0.0.0/8";
   char *argv[] = {argv0, argv1, argv2, NULL};
 
   ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_ERR);
@@ -112,9 +121,12 @@ END_TEST
 
 START_TEST(mcast_parse_explicit_range) {
   config_t cfg;
-  char argv0[] = "dipiscan", argv1[] = "-m", argv2[] = "239.1.1.10-239.1.1.20";
+  char argv0[] = "dipiscan";
+  char argv1[] = "-m";
+  char argv2[] = "239.1.1.10-239.1.1.20";
   char *argv[] = {argv0, argv1, argv2, NULL};
-  char lo[64], hi[64];
+  char lo[64];
+  char hi[64];
 
   ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_OK);
   ck_assert_uint_eq(cfg.total, 11u);
@@ -127,7 +139,9 @@ END_TEST
 
 START_TEST(mcast_parse_explicit_range_rejects_reversed) {
   config_t cfg;
-  char argv0[] = "dipiscan", argv1[] = "-m", argv2[] = "239.1.1.20-239.1.1.10";
+  char argv0[] = "dipiscan";
+  char argv1[] = "-m";
+  char argv2[] = "239.1.1.20-239.1.1.10";
   char *argv[] = {argv0, argv1, argv2, NULL};
 
   ck_assert_int_eq(args_parse(3, argv, &cfg), ARGS_ERR);
@@ -143,7 +157,8 @@ START_TEST(multi_all_named_false_without_pat) {
 END_TEST
 
 START_TEST(multi_all_named_false_when_multi_program_not_enabled) {
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t slen;
   psi_t *p = psi_new(); /* psi_enable_multi_program() not called */
 
@@ -158,7 +173,8 @@ START_TEST(multi_all_named_false_when_multi_program_not_enabled) {
 END_TEST
 
 START_TEST(multi_all_named_false_until_every_program_resolved_and_named) {
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t slen;
   psi_t *p = psi_new();
   psi_enable_multi_program(p);
@@ -183,7 +199,8 @@ START_TEST(multi_all_named_false_until_every_program_resolved_and_named) {
 END_TEST
 
 START_TEST(multi_all_named_false_when_only_some_programs_named) {
-  unsigned char sec[128], pkt[188];
+  unsigned char sec[128];
+  unsigned char pkt[188];
   size_t slen;
   psi_pat_entry_t progs[2];
   psi_t *p = psi_new();
@@ -219,7 +236,8 @@ START_TEST(multi_all_named_false_when_only_some_programs_named) {
 END_TEST
 
 START_TEST(probe_cb_single_mode_stops_once_named) {
-  unsigned char sec[64], pkt[188];
+  unsigned char sec[64];
+  unsigned char pkt[188];
   size_t slen;
   probe_ctx_t pc;
   pc.psi = psi_new();
@@ -246,7 +264,8 @@ END_TEST
 typedef struct {
   const unsigned char *const *pkts;
   const size_t *lens;
-  size_t count, next;
+  size_t count;
+  size_t next;
 } stub_reader_t;
 
 static ssize_t stub_read(void *ctx, unsigned char *buf, size_t cap) {
@@ -270,7 +289,9 @@ static void probe_once(chan_read_fn rf, void *rctx, int timeout_ms, int multi, i
 
 START_TEST(probe_common_resolves_named_single_program) {
   unsigned char sec[64];
-  unsigned char pat[188], pmt[188], sdt[188];
+  unsigned char pat[188];
+  unsigned char pmt[188];
+  unsigned char sdt[188];
   size_t slen;
   const unsigned char *pkts[3];
   size_t lens[3];
@@ -357,7 +378,9 @@ END_TEST
 
 START_TEST(probe_common_detects_rtp_wrapping_and_strips_header) {
   unsigned char sec[64];
-  unsigned char pat[12 + 188], pmt[12 + 188], sdt[12 + 188];
+  unsigned char pat[12 + 188];
+  unsigned char pmt[12 + 188];
+  unsigned char sdt[12 + 188];
   size_t slen;
   const unsigned char *pkts[3];
   size_t lens[3];
@@ -458,7 +481,10 @@ static ssize_t delayed_read(void *ctx, unsigned char *buf, size_t cap) {
 }
 
 START_TEST(probe_common_first_packet_wait_scales_with_timeout) {
-  unsigned char sec[64], pat[188], pmt[188], sdt[188];
+  unsigned char sec[64];
+  unsigned char pat[188];
+  unsigned char pmt[188];
+  unsigned char sdt[188];
   size_t slen;
   const unsigned char *pkts[3];
   size_t lens[3];
@@ -490,7 +516,11 @@ END_TEST
 
 START_TEST(probe_common_multi_mode_resolves_every_program) {
   unsigned char sec[128];
-  unsigned char pat[188], pmt1[188], pmt2[188], sdt1[188], sdt2[188];
+  unsigned char pat[188];
+  unsigned char pmt1[188];
+  unsigned char pmt2[188];
+  unsigned char sdt1[188];
+  unsigned char sdt2[188];
   size_t slen;
   psi_pat_entry_t progs[2];
   const unsigned char *pkts[5];

@@ -96,32 +96,23 @@ static int apply_compress(void *c, const char *v, char *e, size_t n) {
 
 static int apply_publisher(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (!bcg_publisher_valid(v)) {
-    snprintf(e, n, "invalid '%s' (<domain>/<readable name>, RFC 3986 encoded)", v);
-    return -1;
-  }
+  if (!bcg_publisher_valid(v)) return yamlcfg_bad(e, n, v, "<domain>/<readable name>, RFC 3986 encoded");
   return yamlcfg_set_str(&cfg->str_pool, &cfg->publisher, v, e, n);
 }
 
 static int apply_lang(void *c, const char *v, char *e, size_t n) {
   config_t *cfg = c;
-  if (!bcg_lang_valid(v)) {
-    snprintf(e, n, "invalid '%s' (xs:language, e.g. en or de-AT)", v);
-    return -1;
-  }
+  if (!bcg_lang_valid(v)) return yamlcfg_bad(e, n, v, "xs:language, e.g. en or de-AT");
   return yamlcfg_set_str(&cfg->str_pool, &cfg->lang, v, e, n);
 }
 
-int bcg_index_names(const char *list, unsigned *mask) {
+static int bcg_index_names(const char *list, unsigned *mask) {
   /* GroupInformation not produced: gi-* indices always empty */
   return bim_index_parse_names(list, mask) || (*mask & (1u << BIM_INDEX_GI_CRID | 1u << BIM_INDEX_GI_TITLE)) ? -1 : 0;
 }
 
 static int apply_index(void *c, const char *v, char *e, size_t n) {
-  if (bcg_index_names(v, &((config_t *)c)->index_mask)) {
-    snprintf(e, n, "invalid '%s' (comma list of " BCG_INDEX_NAMES ")", v);
-    return -1;
-  }
+  if (bcg_index_names(v, &((config_t *)c)->index_mask)) return yamlcfg_bad(e, n, v, "comma list of " BCG_INDEX_NAMES);
   return 0;
 }
 
@@ -131,8 +122,7 @@ static int apply_format(void *c, const char *v, char *e, size_t n) {
   else if (!strcmp(v, "tva")) cfg->format = FMT_TVA;
   else if (!strcmp(v, "bim")) cfg->format = FMT_BIM;
   else {
-    snprintf(e, n, "invalid '%s' (xmltv|tva|bim)", v);
-    return -1;
+    return yamlcfg_bad(e, n, v, "xmltv|tva|bim");
   }
   cfg->fl.have_format = 1;
   return 0;
@@ -143,8 +133,7 @@ static int apply_encoding(void *c, const char *v, char *e, size_t n) {
   if (!strcmp(v, "bim")) cfg->encoding = ENC_BIM;
   else if (!strcmp(v, "plain")) cfg->encoding = ENC_PLAIN;
   else {
-    snprintf(e, n, "invalid '%s' (bim|plain)", v);
-    return -1;
+    return yamlcfg_bad(e, n, v, "bim|plain");
   }
   cfg->fl.have_encoding = 1;
   return 0;
@@ -193,7 +182,7 @@ static int apply_metrics_interval(void *c, const char *v, char *e, size_t n) {
   return yamlcfg_set_uint(&((config_t *)c)->metrics_interval_s, v, 1, 86400, e, n);
 }
 
-static const yamlcfg_key_t keys[] = {
+const yamlcfg_key_t bcg_cfg_keys[] = {
     {"announce", apply_announce, 0, 0},
     {"listen", apply_listen, 0, 0},
     {"input", apply_input, 1, 0},
@@ -225,11 +214,12 @@ static const yamlcfg_key_t keys[] = {
     {"metrics.id", apply_metrics_id, 0, 0},
     {"metrics.interval", apply_metrics_interval, 0, 0},
 };
+const size_t bcg_cfg_nkeys = sizeof bcg_cfg_keys / sizeof bcg_cfg_keys[0];
 
 int bcg_cfg_load(config_t *cfg, const char *path, int strict) {
   yamlcfg_t y;
   int mode = strict ? YAMLCFG_STRICT : 0;
-  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], cfg);
+  int rc = yamlcfg_load(&y, TOOL_NAME, mode, path, DEFAULT_CONFIG_PATH, bcg_cfg_keys, bcg_cfg_nkeys, cfg);
   return rc == YAMLCFG_ERROR ? -1 : 0;
 }
 
@@ -239,7 +229,7 @@ int bcg_cfg_test(const char *path, int strict) {
   config_t cfg;
   const args_flags_t *fl = &cfg.fl;
   bcg_cfg_defaults(&cfg);
-  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, keys, sizeof keys / sizeof keys[0], &cfg) != YAMLCFG_LOADED) {
+  if (yamlcfg_load(&y, TOOL_NAME, strict ? YAMLCFG_CHECK | YAMLCFG_STRICT : YAMLCFG_CHECK, path, DEFAULT_CONFIG_PATH, bcg_cfg_keys, bcg_cfg_nkeys, &cfg) != YAMLCFG_LOADED) {
     yamlcfg_strpool_free(cfg.str_pool);
     return -1;
   }

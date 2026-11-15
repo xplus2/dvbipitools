@@ -149,8 +149,6 @@ void p4_wfd(mp4_t *m, const void *p, size_t n);
 track_t *p4_find_track(mp4_t *m, unsigned pid);
 void p4_start(mp4_t *m);
 void p4_track_free(track_t *t);
-void p4_pend_add(mp4_t *m, int trk, int64_t ts, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur);
-void p4_write_sample(mp4_t *m, track_t *t, int64_t ts_ms, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur);
 void p4_route(mp4_t *m, track_t *t, int64_t ts_ms, int32_t cts, const unsigned char *d, size_t n, int key, uint32_t dur);
 
 /* moov.c */

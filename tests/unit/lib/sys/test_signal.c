@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "lib/sys/signal.h"
+#include "lib/helper/dateutil.h"
 
 static double elapsed_since(const struct timespec *start) {
   struct timespec now;

@@ -12,7 +12,7 @@
 
 #include "dipiradiohead/cli/args.h"
 #include "dipiradiohead/input/inputset.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "http_fixture.h"
 
 static void noop_meta_cb(void *ctx, const char *artist, const char *title) {

@@ -8,6 +8,7 @@
 
 #if defined(HAVE_HTTP2) || defined(HAVE_HTTP3)
 
+#include "../reactor/dispatch/route_common.h"
 #include "../reactor/internal.h"
 #include "../ts/pidfilter.h"
 
@@ -18,7 +19,7 @@
 /* decimal ASCII, no leading zeros. returns digit count written */
 size_t httpng_u64_to_dec(char *buf, uint64_t v);
 
-/* hls_resp_t.status is always one of these */
+/* hls_resp_t.status and respond_status codes */
 const char *httpng_status_str(int status);
 
 /* quotes etag into etag_buf (cap etag_buf_sz), clamped to fit. 0 if etag
@@ -50,9 +51,8 @@ void httpng_parse_known_header(const char *name, size_t namelen, const char *val
 int httpng_ws_drain_pending(pthread_mutex_t *lock, uint8_t **pending, size_t *pending_len, size_t *pending_cap, uint8_t **out_data, size_t *out_len);
 
 /* h2_hls_cold_finish/h3_hls_cold_finish non-MP4 render dispatch
-   returns hls_render()/hls_render_ll()/dash_render() handled flag */
-int httpng_hls_cold_render(hls_cold_kind_t kind, seg_container_t container, int want_ll, const char *utc_url, capture_ctx_t *ctx, const pid_filter_t *filter, unsigned pmt_pid,
-    const lcevc_select_t *lcevc, const char *filename, int is_head, hls_resp_t *out);
+   returns hls_render(, hls_store_find())/hls_render_ll(, hls_store_find())/dash_render(, hls_store_find()) handled flag */
+int httpng_hls_cold_render(hls_cold_kind_t kind, const stream_key_t *k, int want_ll, const char *utc_url, const route_file_t *f, int is_head, hls_resp_t *out);
 
 /* per-request soapaction / sid / callback / nt / timeout header bufs */
 #define HTTPNG_SOAPACTION_MAX 256
@@ -63,6 +63,11 @@ int httpng_hls_cold_render(hls_cold_kind_t kind, seg_container_t container, int 
 
 /* request body cap, h1 REACTOR_MAX_REQ parity. only POST bodies kept */
 #define HTTPNG_BODY_MAX 8192
+
+/* thread local pool of HTTPNG_BODY_MAX + 1 buffers */
+uint8_t *httpng_body_get(void);
+void httpng_body_put(uint8_t *b);
+void httpng_body_pool_release(void);
 
 /* respond_content len: no content-length header (unbounded stream HEAD) */
 #define HTTPNG_NO_LENGTH ((size_t)-1)
@@ -76,7 +81,7 @@ typedef struct {
 
 typedef struct {
   conn_proto_t proto;
-  void (*respond_status)(void *conn, void *req, const char *status);
+  void (*respond_status)(void *conn, void *req, int status);
   void (*respond_401)(void *conn, void *req);
   void (*respond_hls)(void *conn, void *req, int handled, const hls_resp_t *resp, const char *origin_hdr);
   void (*ws_dispatch)(void *conn, void *req);
@@ -134,17 +139,14 @@ typedef struct {
 } httpng_req_t;
 
 void dispatch_ts_route(httpng_req_t *rq);
-void dispatch_hls_route(httpng_req_t *rq);
-void dispatch_llhls_route(httpng_req_t *rq);
-void dispatch_dash_route(httpng_req_t *rq);
-void dispatch_mp4_route(httpng_req_t *rq);
+void dispatch_store_route(httpng_req_t *rq);
 
 /* 1: handled, response sent. path: query already stripped, query: after '?' or NULL.
    index, status.js, metrics, playlist export, DLNA GET descriptors */
-int httpng_dispatch_special(const httpng_ops_t *ops, void *conn, void *req, const httpng_req_hdrs_t *hdrs, const char *query, const pid_filter_t *filter, const lcevc_select_t *lcevc, int is_head);
+int httpng_dispatch_special(const httpng_ops_t *ops, void *conn, void *req, special_path_t sp, const httpng_req_hdrs_t *hdrs, const char *query, const pid_filter_t *filter, const lcevc_select_t *lcevc, int is_head);
 
 /* POST/SUBSCRIBE/UNSUBSCRIBE: DLNA control and eventing, any path */
-void httpng_dispatch_dlna(const httpng_ops_t *ops, void *conn, void *req, const httpng_req_hdrs_t *hdrs, const char *client_ip);
+void httpng_dispatch_dlna(const httpng_ops_t *ops, void *conn, void *req, http_method_t method, special_path_t sp, const httpng_req_hdrs_t *hdrs, const char *client_ip);
 
 /* ts cold-start waiter finish: 1 + *sub when streaming may start, 0 + *err set (503/504 string) */
 int httpng_ts_cold_subscribe(ts_cold_waiter_t *w, conn_proto_t proto, int fd, const char *client_ip, int *sub, const char **err);

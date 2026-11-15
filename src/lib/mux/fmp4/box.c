@@ -78,7 +78,7 @@ void put_matrix_unity(mp4buf_t *b) {
   mb_u32(b, 0x40000000);
 }
 
-void put_desc_size(mp4buf_t *out, size_t len) {
+static void put_desc_size(mp4buf_t *out, size_t len) {
   unsigned char tmp[4];
   int n = 0;
   do {
@@ -92,7 +92,7 @@ void put_desc_size(mp4buf_t *out, size_t len) {
   mb_u8(out, tmp[0]);
 }
 
-void put_desc(mp4buf_t *out, unsigned tag, mp4buf_t *payload) {
+static void put_desc(mp4buf_t *out, unsigned tag, mp4buf_t *payload) {
   mb_u8(out, tag);
   put_desc_size(out, payload->len);
   if (payload->err) out->err = 1;

@@ -7,7 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
+#include "lib/helper/growutil.h"
 #include "lib/helper/log.h"
 #include "../version.h"
 #include "priv.h"
@@ -321,7 +322,9 @@ static void hned_collision_note(channel_t *c, uint32_t ssrc, time_t now) {
 }
 
 void channel_hned_seen(channel_t *c, uint32_t ssrc, const struct sockaddr *from, socklen_t fromlen, const char *cname, size_t cname_len) {
-  size_t i, free_slot = CHANNEL_HNED_TRACK_MAX, oldest = 0;
+  size_t i;
+  size_t free_slot = CHANNEL_HNED_TRACK_MAX;
+  size_t oldest = 0;
   time_t now = time(NULL);
   time_t oldest_time = now;
   int have_cname = cname && cname_len > 0;
@@ -412,11 +415,6 @@ static void reap_slot(channel_table_t *t, size_t i, time_t now, time_t max_age_s
     atomic_compare_exchange_strong_explicit(&t->resolve_hash[c->resolve_slot], &expect, 0, memory_order_acq_rel, memory_order_relaxed);
   }
   atomic_store_explicit(&c->in_use, 0, memory_order_release);
-}
-
-void channel_table_reap(channel_table_t *t, time_t max_age_s) {
-  time_t now = time(NULL);
-  for (size_t i = 0; i < t->max_channels; i++) reap_slot(t, i, now, max_age_s);
 }
 
 void channel_table_reap_step(channel_table_t *t, time_t max_age_s, size_t max_scan) {

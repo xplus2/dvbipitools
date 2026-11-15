@@ -7,7 +7,8 @@
 #include <string.h>
 
 #include "lib/dash/mpd.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
+#include "lib/helper/dateutil.h"
 static http_url_t make_base(const char *host, unsigned port, const char *path) {
   http_url_t u;
   memset(&u, 0, sizeof u);
@@ -223,12 +224,6 @@ START_TEST(dash_mpd_parse_static_type) {
 }
 END_TEST
 
-START_TEST(dash_effective_availability_ms_subtracts_offset) {
-  ck_assert_uint_eq(dash_effective_availability_ms(6000, 4500), 1500ULL);
-  ck_assert_uint_eq(dash_effective_availability_ms(1000, 4500), 0ULL);
-}
-END_TEST
-
 START_TEST(dash_media_url_expands_identifier_bandwidth_and_widths) {
   dash_representation_t r;
   char out[256];
@@ -417,7 +412,7 @@ START_TEST(dash_mpd_live_period_picks_by_wall_clock) {
   mpd.periods[2].start_ms = 2000;
   ck_assert_uint_eq(dash_mpd_live_period(&mpd), 2u);
   mpd.has_availability_start = 1;
-  mpd.availability_start_ms = dash_wall_ms() - 1500;
+  mpd.availability_start_ms = wall_ms() - 1500;
   ck_assert_uint_eq(dash_mpd_live_period(&mpd), 1u);
   mpd.is_dynamic = 0;
   ck_assert_uint_eq(dash_mpd_live_period(&mpd), 0u);
@@ -765,7 +760,7 @@ START_TEST(live_period_degenerate_inputs) {
   m.n_periods = 2;
   m.periods[1].start_ms = 1000;
   m.has_availability_start = 1;
-  m.availability_start_ms = dash_wall_ms() + 100000;
+  m.availability_start_ms = wall_ms() + 100000;
   ck_assert_uint_eq(dash_mpd_live_period(&m), 0u);
 }
 END_TEST
@@ -793,7 +788,6 @@ static Suite *dash_mpd_suite(void) {
   tcase_add_test(tc, dash_mpd_parse_detects_low_latency_via_service_description);
   tcase_add_test(tc, dash_mpd_parse_detects_low_latency_via_ato_alone);
   tcase_add_test(tc, dash_mpd_parse_regular_dash_is_not_low_latency);
-  tcase_add_test(tc, dash_effective_availability_ms_subtracts_offset);
   tcase_add_test(tc, dash_mpd_parse_reads_type_and_minimum_update_period);
   tcase_add_test(tc, dash_mpd_parse_static_type);
   tcase_add_test(tc, dash_media_url_expands_identifier_bandwidth_and_widths);

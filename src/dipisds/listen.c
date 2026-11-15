@@ -143,7 +143,8 @@ static int on_segment(void *ctx, const dvbstp_header_t *hdr, const unsigned char
 }
 
 int listen_run(const config_t *cfg) {
-  char invocation[128], mcast[80];
+  char invocation[128];
+  char mcast[80];
   FILE *f;
   mcast_t *m;
   listen_ctx_t *c;

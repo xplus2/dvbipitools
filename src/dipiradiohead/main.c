@@ -3,7 +3,7 @@
 
 #include "cli/args.h"
 #include "lib/sys/antidebug.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/metrics/export.h"
 #include "lib/sys/signal.h"

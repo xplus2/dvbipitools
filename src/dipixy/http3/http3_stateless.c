@@ -7,6 +7,7 @@
 
 #include "http3_stateless.h"
 #include "http3_udp.h"
+#include "lib/helper/dateutil.h"
 
 #include <ngtcp2/ngtcp2_crypto.h>
 #include <openssl/rand.h>
@@ -61,14 +62,14 @@ int h3_reset_token(uint8_t *token, const ngtcp2_cid *cid) {
 void h3_stateless_offer_token(ngtcp2_conn *qconn, const struct sockaddr *peer, socklen_t peerlen) {
   uint8_t tok[NGTCP2_CRYPTO_MAX_REGULAR_TOKENLEN];
   if (g_mode == H3_RETRY_OFF) return;
-  ngtcp2_ssize n = h3_token_new_make(tok, peer, peerlen, h3_ts());
+  ngtcp2_ssize n = h3_token_new_make(tok, peer, peerlen, now_ns());
   if (n > 0) ngtcp2_conn_submit_new_token(qconn, tok, (size_t)n);
 }
 
 static int budget_ok(void) {
   static _Thread_local uint64_t win_start;
   static _Thread_local unsigned sent;
-  uint64_t now = h3_ts();
+  uint64_t now = now_ns();
   if (now - win_start >= 1000000000ULL) {
     win_start = now;
     sent = 0;
@@ -146,7 +147,7 @@ int h3_stateless_admit(int udp_fd, const uint8_t *pkt, size_t pktlen, const stru
 
   memset(ai, 0, sizeof *ai);
   ai->type = NGTCP2_TOKEN_TYPE_UNKNOWN;
-  ts = h3_ts();
+  ts = now_ns();
   if (hd->tokenlen > 0) {
     if (hd->token[0] == NGTCP2_CRYPTO_TOKEN_MAGIC_RETRY2) {
       if (h3_token_retry_check(&ai->odcid, hd->token, hd->tokenlen, peer, peerlen, hd->version, &hd->dcid, ts) != 0) {

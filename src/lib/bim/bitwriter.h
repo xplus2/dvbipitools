@@ -32,6 +32,9 @@ int bitwriter_vluimsbf8_len(uint64_t value);
 int bitwriter_put_vluimsbf5(bitwriter_t *bw, uint64_t value);
 /* all bits of src, byte aligned or not. src is not changed. returns 0 ok, -1 oom */
 int bitwriter_append(bitwriter_t *dst, const bitwriter_t *src);
+int bitwriter_append_range(bitwriter_t *dst, const bitwriter_t *src, size_t start, size_t nbits);
+size_t bitwriter_bits(const bitwriter_t *bw);
+void bitwriter_truncate(bitwriter_t *bw, size_t nbits);
 /* implies flush. NULL with *out_len 0 if flush fails */
 const unsigned char *bitwriter_data(bitwriter_t *bw, size_t *out_len);
 

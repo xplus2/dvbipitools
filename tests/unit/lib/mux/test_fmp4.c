@@ -179,8 +179,13 @@ START_TEST(ac4_stsd_has_ac4_dac4_entry) {
   static const unsigned char dsi[] = {0x20, 0x2c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3f, 0xff, 0xff, 0xff, 0xc0};
   fmp4_mux_t *m = make_ac4_mux(1, dsi, sizeof dsi);
   unsigned char *out;
-  const unsigned char *stsd, *entry, *dac4;
-  size_t len, stsd_len, entry_len, dac4_len;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  const unsigned char *dac4;
+  size_t len;
+  size_t stsd_len;
+  size_t entry_len;
+  size_t dac4_len;
 
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
@@ -249,8 +254,13 @@ END_TEST
 START_TEST(ac3_stsd_has_dac3_with_bsi_fields) {
   fmp4_mux_t *m = make_ac3_mux(CODEC_AC3, 8, 1, 7, 1, 15);
   unsigned char *out;
-  const unsigned char *stsd, *entry, *dac3;
-  size_t len, stsd_len, entry_len, dac3_len;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  const unsigned char *dac3;
+  size_t len;
+  size_t stsd_len;
+  size_t entry_len;
+  size_t dac3_len;
 
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
@@ -272,8 +282,13 @@ END_TEST
 START_TEST(eac3_stsd_has_dec3_with_bsi_fields) {
   fmp4_mux_t *m = make_ac3_mux(CODEC_EAC3, 16, 3, 2, 1, 192);
   unsigned char *out;
-  const unsigned char *stsd, *entry, *dec3;
-  size_t len, stsd_len, entry_len, dec3_len;
+  const unsigned char *stsd;
+  const unsigned char *entry;
+  const unsigned char *dec3;
+  size_t len;
+  size_t stsd_len;
+  size_t entry_len;
+  size_t dec3_len;
 
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.mdia.minf.stbl.stsd", &stsd, &stsd_len));
@@ -306,8 +321,15 @@ END_TEST
 START_TEST(init_segment_track_fields_correct) {
   fmp4_mux_t *m = make_video_mux(7, 1280, 720);
   unsigned char *out;
-  const unsigned char *tkhd, *mdhd, *stsd, *avc1;
-  size_t len, tkhd_len, mdhd_len, stsd_len, avc1_len;
+  const unsigned char *tkhd;
+  const unsigned char *mdhd;
+  const unsigned char *stsd;
+  const unsigned char *avc1;
+  size_t len;
+  size_t tkhd_len;
+  size_t mdhd_len;
+  size_t stsd_len;
+  size_t avc1_len;
 
   len = fmp4_init_segment(m, &out);
   ck_assert(find_box(out, len, "moov.trak.tkhd", &tkhd, &tkhd_len));
@@ -336,8 +358,16 @@ START_TEST(fragment_moof_and_mdat_match_samples) {
   static const unsigned char sample0[] = {0xAA, 0xAA, 0xAA, 0xAA};
   static const unsigned char sample1[] = {0xBB, 0xBB};
   fmp4_sample_t s;
-  const unsigned char *mfhd, *tfhd, *tfdt, *trun, *mdat;
-  size_t mfhd_len, tfhd_len, tfdt_len, trun_len, mdat_len;
+  const unsigned char *mfhd;
+  const unsigned char *tfhd;
+  const unsigned char *tfdt;
+  const unsigned char *trun;
+  const unsigned char *mdat;
+  size_t mfhd_len;
+  size_t tfhd_len;
+  size_t tfdt_len;
+  size_t trun_len;
+  size_t mdat_len;
 
   fmp4_segment_begin(m, 42);
   memset(&s, 0, sizeof s);
@@ -495,8 +525,19 @@ START_TEST(lcevc_stsd_has_lvc1_lvcc_entry_and_tref_sbas) {
   fmp4_track_cfg_t trk[2];
   fmp4_mux_t *m;
   unsigned char *out;
-  const unsigned char *moov, *trak2, *stsd, *lvc1, *lvcc, *tref;
-  size_t len, moov_len, trak2_len, stsd_len, lvc1_len, lvcc_len, tref_len;
+  const unsigned char *moov;
+  const unsigned char *trak2;
+  const unsigned char *stsd;
+  const unsigned char *lvc1;
+  const unsigned char *lvcc;
+  const unsigned char *tref;
+  size_t len;
+  size_t moov_len;
+  size_t trak2_len;
+  size_t stsd_len;
+  size_t lvc1_len;
+  size_t lvcc_len;
+  size_t tref_len;
 
   memset(trk, 0, sizeof trk);
   trk[0].codec = CODEC_H264;

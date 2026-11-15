@@ -57,7 +57,8 @@ static ssize_t read_all(tssrc_t *s, unsigned char *buf, size_t cap) {
 }
 
 START_TEST(tssrc_file_raw_ts_passthrough) {
-  unsigned char content[20 * 188], readback[20 * 188];
+  unsigned char content[20 * 188];
+  unsigned char readback[20 * 188];
   char *path;
   tssrc_cfg_t cfg;
   tssrc_t *s;
@@ -122,7 +123,9 @@ START_TEST(tssrc_file_rtp_framed_deframes) {
 END_TEST
 
 START_TEST(tssrc_rewind_restarts_raw_file_from_zero) {
-  unsigned char content[10 * 188], first_pass[188], second_pass[3 * 188];
+  unsigned char content[10 * 188];
+  unsigned char first_pass[188];
+  unsigned char second_pass[3 * 188];
   char *path;
   tssrc_cfg_t cfg;
   tssrc_t *s;

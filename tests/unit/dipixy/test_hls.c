@@ -13,16 +13,25 @@
 #include "dipixy/dash/dash.h"
 #include "dipixy/segstore/priv.h"
 #include "dipixy/ts/pidfilter.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 
 /* ctx: opaque key only (pointer identity) */
-static int g_ctx_a, g_ctx_b;
+static int g_ctx_a;
+static int g_ctx_b;
 #define CTX_A ((capture_ctx_t *)&g_ctx_a)
 #define CTX_B ((capture_ctx_t *)&g_ctx_b)
 
 static void no_filter(pid_filter_t *f) { memset(f, 0, sizeof *f); }
 
 static const lcevc_select_t full = {LCEVC_SEL_FULL, 0, 0};
+
+static const route_file_t *rf(const char *name) {
+  static route_file_t ring[8];
+  static unsigned n;
+  route_file_t *f = &ring[n++ % 8];
+  if (route_file_parse(name, f)) f->kind = ROUTE_FILE_NONE;
+  return f;
+}
 
 void *__real_malloc(size_t size);
 static size_t g_fail_size;
@@ -39,7 +48,7 @@ START_TEST(render_before_store_open_is_404) {
   pid_filter_t f;
   hls_resp_t r;
   no_filter(&f);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 404);
   ck_assert_ptr_null(r.body);
 }
@@ -49,7 +58,7 @@ START_TEST(render_unrecognized_filename_not_handled) {
   pid_filter_t f;
   hls_resp_t r;
   no_filter(&f);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "bogus.txt", 0, NULL, &r), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("bogus.txt"), 0, NULL, &r), 0);
 }
 END_TEST
 
@@ -58,9 +67,9 @@ START_TEST(index_lists_pushed_segment) {
   hls_resp_t r;
   const uint8_t data[188] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "application/vnd.apple.mpegurl");
   ck_assert_ptr_nonnull(r.body);
@@ -78,9 +87,9 @@ START_TEST(segment_body_matches_pushed_bytes) {
   no_filter(&f);
   for (i = 0; i < 188; i++)
     data[i] = (uint8_t)i;
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg00000.ts", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg00000.ts"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "video/mp2t");
   ck_assert_uint_eq(r.body_len, sizeof data);
@@ -94,15 +103,13 @@ START_TEST(segment_ext_must_match_container_and_seq_must_not_wrap) {
   hls_resp_t r;
   uint8_t data[188] = {0};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg00000.m4s", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg00000.m4s"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 404);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg4294967296.ts", 0, NULL, &r), 1);
-  ck_assert_int_eq(r.status, 404);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg99999999999999999999.ts", 0, NULL, &r), 1);
-  ck_assert_int_eq(r.status, 404);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "seg00000.ts", 0, NULL, &r), 1);
+  ck_assert_int_eq(rf("seg4294967296.ts")->kind, ROUTE_FILE_NONE);
+  ck_assert_int_eq(rf("seg99999999999999999999.ts")->kind, ROUTE_FILE_NONE);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), rf("seg00000.ts"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 404);
 }
 END_TEST
@@ -126,15 +133,15 @@ START_TEST(if_none_match_returns_304) {
   const uint8_t data[188] = {0x47};
   char etag[48];
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0);
 
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg00000.ts", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg00000.ts"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   bufcpy(etag, sizeof etag, r.etag);
   hls_resp_body_release(r.body, r.owner, r.zc);
 
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg00000.ts", 0, etag, &r), 1);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg00000.ts"), 0, etag, &r), 1);
   ck_assert_int_eq(r.status, 304);
   ck_assert_ptr_null(r.body);
 }
@@ -145,10 +152,10 @@ START_TEST(head_request_omits_body) {
   hls_resp_t r;
   const uint8_t data[188] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0);
 
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg00000.ts", 1, NULL, &r), 1);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg00000.ts"), 1, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_ptr_null(r.body);
 }
@@ -159,10 +166,10 @@ START_TEST(store_close_then_render_is_404) {
   hls_resp_t r;
   const uint8_t data[188] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0);
-  hls_store_close(CTX_A, &f, 0, &full, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0);
+  hls_store_close(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS});
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 404);
 }
 END_TEST
@@ -172,9 +179,9 @@ START_TEST(distinct_ctx_get_distinct_stores) {
   hls_resp_t r;
   const uint8_t data[188] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0);
-  ck_assert_int_eq(hls_render(CTX_B, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_B, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_B, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 404);
 }
 END_TEST
@@ -184,9 +191,9 @@ START_TEST(fmp4_init_segment_roundtrip) {
   hls_resp_t r;
   const uint8_t init[16] = {'f', 't', 'y', 'p'};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  ck_assert_int_eq(hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "init.mp4", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  ck_assert_int_eq(hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), rf("init.mp4"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "video/mp4");
   ck_assert_uint_eq(r.body_len, sizeof init);
@@ -200,19 +207,19 @@ START_TEST(llhls_part_roundtrip) {
   hls_resp_t r;
   const uint8_t part[64] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5);
-  ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), 0);
-  ck_assert_int_eq(hls_part_available(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0, 0), 0);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), 1);
-  ck_assert_int_eq(hls_part_available(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0, 0), 1);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.0.ts", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 0.5);
+  ck_assert_int_eq(hls_ll_store_ready_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS})), 0);
+  ck_assert_int_eq(hls_part_available_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), 0, 0), 0);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_ll_store_ready_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS})), 1);
+  ck_assert_int_eq(hls_part_available_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), 0, 0), 1);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg0.0.ts"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_uint_eq(r.body_len, sizeof part);
   ck_assert_mem_eq(r.body, part, sizeof part);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index_ll.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index_ll.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(memmem(r.body, r.body_len, "#EXT-X-PART-INF", 15) != NULL);
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -227,11 +234,11 @@ START_TEST(llhls_large_part_is_served_by_reference) {
   memset(p0, 0x11, sizeof p0);
   memset(p1, 0x22, sizeof p1);
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, p0, sizeof p0, 0.5, 1), 0);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, p1, sizeof p1, 0.5, 0), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.1.ts", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 0.5);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), p0, sizeof p0, 0.5, 1), 0);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), p1, sizeof p1, 0.5, 0), 0);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg0.1.ts"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_eq(r.zc, 1);
   ck_assert_ptr_nonnull(r.owner);
@@ -248,19 +255,19 @@ START_TEST(llhls_part_with_matching_etag_is_not_modified) {
   char etag[48];
   const uint8_t part[64] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.0.ts", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 0.5);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg0.0.ts"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_ne(r.etag[0], '\0');
   snprintf(etag, sizeof etag, "%s", r.etag);
   hls_resp_body_release(r.body, r.owner, r.zc);
 
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.0.ts", 0, etag, &r), 1);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg0.0.ts"), 0, etag, &r), 1);
   ck_assert_int_eq(r.status, 304);
   ck_assert_ptr_null(r.body);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.0.ts", 0, "stale", &r), 1);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg0.0.ts"), 0, "stale", &r), 1);
   ck_assert_int_eq(r.status, 200);
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
@@ -273,12 +280,12 @@ START_TEST(llhls_lcevc_all_playlist_becomes_a_master_once_pids_are_known) {
   const unsigned pids[2] = {101, 102};
   static const lcevc_select_t all = {LCEVC_SEL_ALL, 0, 0};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &all, 2.0, 6, SEG_CONTAINER_TS);
-  hls_llhls_enable(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, 0.5);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_set_lcevc_pids(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, pids, 2), 0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}, 0.5);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}), part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_set_lcevc_pids_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}), pids, 2), 0);
 
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, "index_ll.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}), rf("index_ll.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(memmem(r.body, r.body_len, "EXT-X-STREAM-INF", 16) != NULL);
   ck_assert(memmem(r.body, r.body_len, "GROUP-ID=\"lcevc\"", 16) != NULL);
@@ -291,11 +298,11 @@ START_TEST(llhls_finalized_segment_part_still_served) {
   hls_resp_t r;
   const uint8_t part[64] = {0x11};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5);
-  hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1);
-  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg0.0.ts", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 0.5);
+  hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), part, sizeof part, 0.5, 1);
+  ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), 0.5), 0);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg0.0.ts"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_uint_eq(r.body_len, sizeof part);
   ck_assert_mem_eq(r.body, part, sizeof part);
@@ -309,12 +316,12 @@ START_TEST(dash_availability_start_time_follows_the_anchor) {
   const uint8_t init[8] = {'f', 't', 'y', 'p'};
   const uint8_t seg[256] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
-  ck_assert_int_eq(hls_store_anchor_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4), 1700000000123ULL), 0);
-  ck_assert_int_eq(hls_store_anchor_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4), 1800000000000ULL), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init);
+  ck_assert_int_eq(hls_store_anchor_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 1700000000123ULL), 0);
+  ck_assert_int_eq(hls_store_anchor_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 1800000000000ULL), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert(memmem(r.body, r.body_len, "availabilityStartTime=\"2023-11-14T22:13:20.123Z\"", 48) != NULL);
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
@@ -326,15 +333,15 @@ START_TEST(dash_manifest_and_segment_roundtrip) {
   const uint8_t init[8] = {'f', 't', 'y', 'p'};
   const uint8_t seg[256] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "application/dash+xml");
   ck_assert(memmem(r.body, r.body_len, "<MPD", 4) != NULL);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, &full, "dseg0.m4s", 0, &r), 1);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("dseg0.m4s"), 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "video/mp4");
   ck_assert_uint_eq(r.body_len, sizeof seg);
@@ -353,15 +360,15 @@ START_TEST(discontinuity_restarts_the_hls_window) {
   const uint8_t data[188] = {0x47};
   uint64_t base = 0;
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), &base), 0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), &base), 0);
   ck_assert_uint_eq(base, 4000u);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 404);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_eq(body_has(&r, "#EXT-X-MEDIA-SEQUENCE:3\n#EXT-X-DISCONTINUITY\n#EXTINF:2.000,\nseg00003.ts\n"), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY-SEQUENCE"), 0);
@@ -376,17 +383,17 @@ START_TEST(discontinuity_tag_leaves_with_its_segment_and_the_sequence_catches_up
   const uint8_t data[188] = {0x47};
   uint64_t base = 0;
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 2, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), &base), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 2);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), &base), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY\n"), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY-SEQUENCE"), 0);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY\n"), 0);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY-SEQUENCE:1\n"), 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -399,12 +406,12 @@ START_TEST(back_to_back_breaks_emit_one_tag_and_count_both) {
   const uint8_t data[188] = {0x47};
   uint64_t base = 0;
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), &base), 0);
-  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), &base), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), &base), 0);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), &base), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY-SEQUENCE:1\n"), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY\n#EXTINF"), 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -418,17 +425,17 @@ START_TEST(fmp4_map_uri_follows_the_init_generation) {
   const uint8_t seg[256] = {0x47};
   uint64_t base = 0;
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  ck_assert_int_eq(hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "index.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  ck_assert_int_eq(hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-MAP:URI=\"init.mp4?g=1\"\n"), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY\n"), 0);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4), &base), 0);
-  ck_assert_int_eq(hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_HEVC, init, sizeof init), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "index.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), &base), 0);
+  ck_assert_int_eq(hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_HEVC, init, sizeof init), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"init.mp4?g=2\"\n#EXTINF"), 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
@@ -440,9 +447,9 @@ START_TEST(plain_playlist_carries_the_lcevc_selector_into_segment_uris) {
   const uint8_t seg[256] = {0x47};
   static const lcevc_select_t pid = {LCEVC_SEL_N, 101, 1};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &pid, 2.0, 6, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &pid, SEG_CONTAINER_TS, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &pid, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &pid, SEG_CONTAINER_TS}, 2.0, 6);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &pid, SEG_CONTAINER_TS}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &pid, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &pid, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(body_has(&r, "seg00000.ts?lcevc=101\n"), 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
@@ -455,10 +462,10 @@ START_TEST(fmp4_map_uri_carries_the_lcevc_selector) {
   const uint8_t seg[256] = {0x47};
   static const lcevc_select_t base = {LCEVC_SEL_BASE, 0, 0};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &base, 2.0, 6, SEG_CONTAINER_FMP4);
-  ck_assert_int_eq(hls_set_init_segment(CTX_A, &f, 0, &base, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &base, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &base, SEG_CONTAINER_FMP4, "index.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &base, SEG_CONTAINER_FMP4}, 2.0, 6);
+  ck_assert_int_eq(hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &base, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &base, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &base, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &base, SEG_CONTAINER_FMP4}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-MAP:URI=\"init.mp4?g=1&lcevc=base\"\n"), 1);
   ck_assert_int_eq(body_has(&r, "seg00000.m4s?lcevc=base\n"), 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -471,10 +478,10 @@ START_TEST(llhls_playlist_carries_the_lcevc_selector_into_part_uris) {
   const uint8_t part[188] = {0x47};
   static const lcevc_select_t base = {LCEVC_SEL_BASE, 0, 0};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &base, 2.0, 6, SEG_CONTAINER_TS);
-  hls_llhls_enable(CTX_A, &f, 0, &base, SEG_CONTAINER_TS, 0.5);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &base, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &base, SEG_CONTAINER_TS, "index_ll.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &base, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &base, SEG_CONTAINER_TS}, 0.5);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &base, SEG_CONTAINER_TS}), part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &base, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &base, SEG_CONTAINER_TS}), rf("index_ll.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(body_has(&r, "URI=\"seg00000.0.ts?lcevc=base\",INDEPENDENT=YES"), 1);
   ck_assert_int_eq(body_has(&r, "PRELOAD-HINT:TYPE=PART,URI=\"seg00000.1.ts?lcevc=base\""), 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -488,12 +495,12 @@ START_TEST(llhls_discontinuity_precedes_the_first_live_part) {
   const uint8_t part[188] = {0x47};
   uint64_t base = 0;
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, 0.5);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), &base), 0);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index_ll.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 0.5);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), &base), 0);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index_ll.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY\n#EXT-X-PART:"), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY-SEQUENCE"), 0);
@@ -507,14 +514,14 @@ START_TEST(llhls_fmp4_playlist_maps_the_init_and_lists_m4s_parts) {
   const uint8_t init[8] = {'f', 't', 'y', 'p'};
   const uint8_t part[64] = {0x11};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
-  ck_assert_int_eq(hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init), 0);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 0), 0);
-  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 1.0), 0);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "index_ll.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 0.5);
+  ck_assert_int_eq(hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init), 0);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), part, sizeof part, 0.5, 0), 0);
+  ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 1.0), 0);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), rf("index_ll.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_eq(body_has(&r, "#EXT-X-VERSION:7\n"), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-MAP:URI=\"init.mp4?g=1\"\n"), 1);
@@ -533,16 +540,16 @@ START_TEST(llhls_fmp4_parts_are_served_as_mp4_and_only_by_their_container) {
   hls_resp_t r;
   const uint8_t part[64] = {0x11};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "seg00000.0.m4s", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 0.5);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), rf("seg00000.0.m4s"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "video/mp4");
   ck_assert_uint_eq(r.body_len, sizeof part);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "seg00000.0.ts", 0, NULL, &r), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "seg00000.0.m4s", 0, NULL, &r), 0);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), rf("seg00000.0.ts"), 0, NULL, &r), 0);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("seg00000.0.m4s"), 0, NULL, &r), 0);
 }
 END_TEST
 
@@ -553,15 +560,15 @@ START_TEST(llhls_fmp4_discontinuity_precedes_the_init_map) {
   const uint8_t part[64] = {0x11};
   uint64_t base = 0;
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
-  hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
-  hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 1);
-  hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
-  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4), &base), 0);
-  ck_assert_int_eq(hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_HEVC, init, sizeof init), 0);
-  ck_assert_int_eq(hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, part, sizeof part, 0.5, 1), 0);
-  ck_assert_int_eq(hls_render_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, "index_ll.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 0.5);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init);
+  hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), part, sizeof part, 0.5, 1);
+  hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0.5);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), &base), 0);
+  ck_assert_int_eq(hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_HEVC, init, sizeof init), 0);
+  ck_assert_int_eq(hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), part, sizeof part, 0.5, 1), 0);
+  ck_assert_int_eq(hls_render_ll(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), rf("index_ll.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(body_has(&r, "#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"init.mp4?g=2\"\n#EXT-X-PART:"), 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
@@ -574,20 +581,20 @@ START_TEST(discontinuity_opens_a_new_dash_period_on_continuing_time) {
   const uint8_t seg[256] = {0x47};
   uint64_t base = 0;
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4), &base), 0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), &base), 0);
   ck_assert_uint_eq(base, 2000u);
-  hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_HEVC, init, sizeof init);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_HEVC, init, sizeof init);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_eq(body_has(&r, "<Period id=\"1\" start=\"PT2.000S\">"), 1);
   ck_assert_int_eq(body_has(&r, "presentationTimeOffset=\"2000\""), 1);
   ck_assert_int_eq(body_has(&r, "<S t=\"2000\" d=\"2000\"/>"), 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, &full, "dseg2000.m4s", 0, &r), 1);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("dseg2000.m4s"), 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
@@ -597,8 +604,8 @@ START_TEST(discontinuity_on_a_store_without_segments_is_a_noop) {
   pid_filter_t f;
   uint64_t base = 99;
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), &base), 0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), &base), 0);
   ck_assert_uint_eq(base, 0u);
 }
 END_TEST
@@ -611,18 +618,18 @@ START_TEST(dash_lcevc_all_emits_one_adaptation_set_per_alternative) {
   const unsigned pids[2] = {101, 102};
   static const lcevc_select_t all = {LCEVC_SEL_ALL, 0, 0};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &all, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_set_init_segment(CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
 
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &all, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_eq(memmem(r.body, r.body_len, "dependencyId", 12) == NULL, 1);
   ck_assert_int_eq(memmem(r.body, r.body_len, "init.mp4\"", 9) != NULL, 1);
   hls_resp_body_release(r.body, r.owner, r.zc);
 
-  ck_assert_int_eq(hls_set_lcevc_pids(CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4, pids, 2), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &all, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(hls_set_lcevc_pids_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}), pids, 2), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_int_eq(memmem(r.body, r.body_len, "adaptation-set-switching", 24) != NULL, 1);
   ck_assert_int_eq(memmem(r.body, r.body_len, "dependencyId=\"base\"", 19) != NULL, 1);
@@ -640,16 +647,16 @@ static void open_split_stores(const pid_filter_t *f, unsigned pmt, const lcevc_s
   const uint8_t vinit[8] = {'f', 't', 'y', 'p'};
   const uint8_t seg[256] = {0x47};
   hls_set_init_codecs_cb(dash_compute_codecs);
-  hls_store_open(CTX_A, f, pmt, sel, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_store_open(CTX_A, f, pmt, sel, 2.0, 6, SEG_CONTAINER_FMP4_VIDEO);
-  hls_store_open(CTX_A, f, pmt, sel, 2.0, 6, SEG_CONTAINER_FMP4_AUDIO);
-  hls_set_init_segment(CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4, CODEC_H264, split_audio_init, sizeof split_audio_init);
-  hls_set_init_segment(CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_VIDEO, CODEC_H264, vinit, sizeof vinit);
-  hls_set_init_segment(CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_AUDIO, CODEC_H264, split_audio_init, sizeof split_audio_init);
-  ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_AUDIO), 48000, HLS_CHCFG_COUNT, 2), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_VIDEO, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_AUDIO, seg, 100, 2.0), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
+  hls_store_open(&(stream_key_t){CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_store_open(&(stream_key_t){CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_VIDEO}, 2.0, 6);
+  hls_store_open(&(stream_key_t){CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_AUDIO}, 2.0, 6);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4}), CODEC_H264, split_audio_init, sizeof split_audio_init);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_VIDEO}), CODEC_H264, vinit, sizeof vinit);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_AUDIO}), CODEC_H264, split_audio_init, sizeof split_audio_init);
+  ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(&(stream_key_t){CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_AUDIO}), 48000, HLS_CHCFG_COUNT, 2), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_VIDEO}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4_AUDIO}), seg, 100, 2.0), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, f, pmt, sel, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
 }
 
 START_TEST(dash_manifest_splits_video_and_audio_when_track_stores_list_segments) {
@@ -657,7 +664,7 @@ START_TEST(dash_manifest_splits_video_and_audio_when_track_stores_list_segments)
   hls_resp_t r;
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(body_has(&r, "contentType=\"video\""));
   ck_assert(body_has(&r, "contentType=\"audio\" mimeType=\"audio/mp4\""));
@@ -679,12 +686,12 @@ START_TEST(dash_manifest_describes_the_video_and_claims_the_dvb_profile) {
   hls_resp_t r;
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert(!body_has(&r, "dvb-dash"));
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO), &video_1080p25), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO}), &video_1080p25), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), (const uint8_t[]){0x47}, 1, 2.0), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert(body_has(&r, "profiles=\"urn:mpeg:dash:profile:isoff-live:2011,urn:dvb:dash:profile:dvb-dash:2014,urn:dvb:dash:profile:dvb-dash:isoff-ext-live:2014\""));
   ck_assert(body_has(&r, "<AdaptationSet id=\"1\" contentType=\"video\""));
   ck_assert(body_has(&r, "<AdaptationSet id=\"2\" contentType=\"audio\""));
@@ -701,9 +708,9 @@ START_TEST(dash_manifest_signals_interlace_fractions_and_sap) {
   hls_resp_t r;
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO), &i), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO}), &i), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), (const uint8_t[]){0x47}, 1, 2.0), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert(body_has(&r, " frameRate=\"30000/1001\" scanType=\"interlaced\">"));
   ck_assert(body_has(&r, "contentType=\"video\" mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"3\""));
   ck_assert(!body_has(&r, "dvb-dash")); /* SAP 3 */
@@ -718,10 +725,10 @@ START_TEST(dash_manifest_without_dvb_audio_keeps_the_plain_profile) {
   hls_resp_t r;
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO), &video_1080p25), 0);
-  hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, mp2_init, sizeof mp2_init);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO}), &video_1080p25), 0);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_H264, mp2_init, sizeof mp2_init);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), (const uint8_t[]){0x47}, 1, 2.0), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert(body_has(&r, "codecs=\"mp4a.6B\""));
   ck_assert(!body_has(&r, "dvb-dash"));
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -740,13 +747,13 @@ START_TEST(dash_manifest_profile_follows_the_aac_signalling) {
   uint8_t init[32] = {'e', 's', 'd', 's', [15] = 0x40};
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO), &video_1080p25), 0);
+  ck_assert_int_eq(hls_set_video_info_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO}), &video_1080p25), 0);
   for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
     init[30] = cases[i].aot_byte;
-    hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, CODEC_H264, init, sizeof init);
-    ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_AUDIO), cases[i].rate, HLS_CHCFG_COUNT, 2), 0);
-    ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
-    ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+    hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), CODEC_H264, init, sizeof init);
+    ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_AUDIO}), cases[i].rate, HLS_CHCFG_COUNT, 2), 0);
+    ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), (const uint8_t[]){0x47}, 1, 2.0), 0);
+    ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
     ck_assert_int_eq(body_has(&r, "dvb-dash"), cases[i].dvb);
     hls_resp_body_release(r.body, r.owner, r.zc);
   }
@@ -759,10 +766,10 @@ START_TEST(dash_plain_manifest_follows_the_requesting_clients_utc_url) {
   hls_resp_t r;
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://a.example/time", 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://a.example/time", 0, &r), 1);
   ck_assert(body_has(&r, "value=\"http://a.example/time\""));
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://b.example/time", 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://b.example/time", 0, &r), 1);
   ck_assert(body_has(&r, "value=\"http://b.example/time\""));
   ck_assert(!body_has(&r, "a.example"));
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -792,11 +799,11 @@ START_TEST(dash_split_audio_rate_and_channels_are_exact) {
   for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
     char want_rate[40];
     char want_ch[16];
-    ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_AUDIO), cases[i].rate, HLS_CHCFG_COUNT, cases[i].channels), 0);
-    ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
+    ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_AUDIO}), cases[i].rate, HLS_CHCFG_COUNT, cases[i].channels), 0);
+    ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), (const uint8_t[]){0x47}, 1, 2.0), 0);
     snprintf(want_rate, sizeof want_rate, "audioSamplingRate=\"%u\"", cases[i].rate);
     snprintf(want_ch, sizeof want_ch, "value=\"%u\"/>", cases[i].channels);
-    ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+    ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
     ck_assert_int_eq(r.status, 200);
     ck_assert(body_has(&r, want_rate));
     ck_assert(body_has(&r, want_ch));
@@ -825,16 +832,16 @@ START_TEST(dash_split_channel_configuration_scheme_follows_the_codec) {
   no_filter(&f);
   open_split_stores(&f, 0, &full);
   for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
-    ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_AUDIO), 48000, cases[i].scheme, cases[i].value), 0);
-    ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
-    ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+    ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_AUDIO}), 48000, cases[i].scheme, cases[i].value), 0);
+    ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), (const uint8_t[]){0x47}, 1, 2.0), 0);
+    ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
     ck_assert_int_eq(r.status, 200);
     ck_assert_msg(body_has(&r, cases[i].want), "case %zu", i);
     hls_resp_body_release(r.body, r.owner, r.zc);
   }
-  ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_AUDIO), 48000, HLS_CHCFG_NONE, 0), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, (const uint8_t[]){0x47}, 1, 2.0), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(hls_set_audio_params_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_AUDIO}), 48000, HLS_CHCFG_NONE, 0), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), (const uint8_t[]){0x47}, 1, 2.0), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert(!body_has(&r, "AudioChannelConfiguration"));
   hls_resp_body_release(r.body, r.owner, r.zc);
   hls_set_init_codecs_cb(NULL);
@@ -848,7 +855,7 @@ START_TEST(dash_split_bandwidth_follows_each_track) {
   const char *ab;
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   vb = memmem(r.body, r.body_len, "id=\"video\"", 10);
   ab = memmem(r.body, r.body_len, "id=\"audio\"", 10);
   ck_assert_ptr_nonnull(vb);
@@ -866,10 +873,10 @@ START_TEST(dash_manifest_is_unavailable_with_audio_but_without_track_stores) {
   const uint8_t seg[256] = {0x47};
   no_filter(&f);
   hls_set_init_codecs_cb(dash_compute_codecs);
-  hls_store_open(CTX_A, &f, 5, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_set_init_segment(CTX_A, &f, 5, &full, SEG_CONTAINER_FMP4, CODEC_H264, split_audio_init, sizeof split_audio_init);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 5, &full, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 5, &full, 0, "http://example.invalid/", 0, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 5, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 5, &full, SEG_CONTAINER_FMP4}), CODEC_H264, split_audio_init, sizeof split_audio_init);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 5, &full, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 5, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 5, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert_int_eq(r.status, 404);
   hls_resp_body_release(r.body, r.owner, r.zc);
   hls_set_init_codecs_cb(NULL);
@@ -883,9 +890,9 @@ START_TEST(dash_manifest_is_unavailable_when_track_stores_lag_a_period) {
   uint64_t base;
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4), &base), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(hls_store_discontinuity_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), &base), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert_int_eq(r.status, 404);
   hls_resp_body_release(r.body, r.owner, r.zc);
   hls_set_init_codecs_cb(NULL);
@@ -899,8 +906,8 @@ START_TEST(dash_split_lcevc_all_adds_one_audio_set_after_the_alternatives) {
   static const lcevc_select_t all = {LCEVC_SEL_ALL, 0, 0};
   no_filter(&f);
   open_split_stores(&f, 0, &all);
-  ck_assert_int_eq(hls_set_lcevc_pids(CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4, pids, 2), 0);
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &all, 0, "http://example.invalid/", 0, &r), 1);
+  ck_assert_int_eq(hls_set_lcevc_pids_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}), pids, 2), 0);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_FMP4}), 0, "http://example.invalid/", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(body_has(&r, "initialization=\"dinitv.mp4?lcevc=base\""));
   ck_assert(body_has(&r, "initialization=\"dinitv.mp4?lcevc=101\""));
@@ -919,12 +926,12 @@ START_TEST(dash_split_lldash_manifest_gives_each_set_its_own_reference_time) {
   static const seg_container_t kinds[] = {SEG_CONTAINER_FMP4_VIDEO, SEG_CONTAINER_FMP4_AUDIO, SEG_CONTAINER_FMP4};
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 0.5);
   for (size_t i = 0; i < sizeof kinds / sizeof kinds[0]; i++) {
-    hls_push_part(CTX_A, &f, 0, &full, kinds[i], chunk, sizeof chunk, 0.5, 1);
-    ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, &full, kinds[i], 0.5), 0);
+    hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, kinds[i]}), chunk, sizeof chunk, 0.5, 1);
+    ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, kinds[i]}), 0.5), 0);
   }
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 1, "http://t.example/", 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 1, "http://t.example/", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(body_has(&r, "<ProducerReferenceTime id=\"0\" inband=\"false\" type=\"encoder\" wallClockTime=\""));
   ck_assert(body_has(&r, "<ProducerReferenceTime id=\"1\""));
@@ -944,14 +951,14 @@ START_TEST(dash_lldash_manifest_carries_the_requesting_clients_utc_url) {
   static const char *const urls[] = {"http://a.example/time", "https://b.example/time", "http://c.example/time", "https://d.example/time", "http://e.example/time", "https://f.example/time"};
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
-  hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, chunk, sizeof chunk, 0.5, 1);
-  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5), 0);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 0.5);
+  hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), chunk, sizeof chunk, 0.5, 1);
+  ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0.5), 0);
   for (int round = 0; round < 2; round++) {
     for (size_t i = 0; i < sizeof urls / sizeof urls[0]; i++) {
       char want[96];
       snprintf(want, sizeof want, "value=\"%s\"", urls[i]);
-      ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 1, urls[i], 0, &r), 1);
+      ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 1, urls[i], 0, &r), 1);
       ck_assert_int_eq(r.status, 200);
       ck_assert(body_has(&r, want));
       for (size_t k = 0; k < sizeof urls / sizeof urls[0]; k++) {
@@ -973,30 +980,30 @@ START_TEST(dash_track_segments_and_inits_are_served_from_their_store) {
   const uint8_t vinit[8] = {'f', 't', 'y', 'p'};
   no_filter(&f);
   open_split_stores(&f, 0, &full);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, &full, "dsegv0.m4s", 0, &r), 1);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("dsegv0.m4s"), 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "video/mp4");
   ck_assert_uint_eq(r.body_len, 256);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, &full, "dsega0.m4s", 0, &r), 1);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("dsega0.m4s"), 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "audio/mp4");
   ck_assert_uint_eq(r.body_len, 100);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, &full, "dinitv.mp4", 0, &r), 1);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("dinitv.mp4"), 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "video/mp4");
   ck_assert_uint_eq(r.body_len, sizeof vinit);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, &full, "dinita.mp4", 0, &r), 1);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("dinita.mp4"), 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_str_eq(r.content_type, "audio/mp4");
   ck_assert_uint_eq(r.body_len, sizeof split_audio_init);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, &full, "dsega1.m4s", 0, &r), 1);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("dsega1.m4s"), 0, &r), 1);
   ck_assert_int_eq(r.status, 404);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 7, &full, "dinitv.mp4", 0, &r), 1);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 7, &full, SEG_CONTAINER_FMP4}, rf("dinitv.mp4"), 0, &r), 1);
   ck_assert_int_eq(r.status, 404);
   hls_resp_body_release(r.body, r.owner, r.zc);
   hls_set_init_codecs_cb(NULL);
@@ -1010,21 +1017,21 @@ START_TEST(store_sync_takes_the_timeline_position_and_drops_segments) {
   uint64_t base;
   hls_store_t *muxed;
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4_VIDEO);
-  muxed = hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, seg, sizeof seg, 2.0), 0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO}, 2.0, 6);
+  muxed = hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4});
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), seg, sizeof seg, 2.0), 0);
   ck_assert_int_eq(hls_store_anchor_at(muxed, 1700000000000ULL), 0);
   ck_assert_int_eq(hls_store_discontinuity_at(muxed, &base), 0);
   ck_assert_uint_eq(base, 4000);
-  ck_assert_int_eq(hls_store_sync_at(hls_store_find(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO), muxed), 0);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, &full, "dsegv0.m4s", 0, &r), 1);
+  ck_assert_int_eq(hls_store_sync_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO}), muxed), 0);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("dsegv0.m4s"), 0, &r), 1);
   ck_assert_int_eq(r.status, 404);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, &full, "dsegv4000.m4s", 0, &r), 1);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4_VIDEO}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("dsegv4000.m4s"), 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
@@ -1035,11 +1042,11 @@ START_TEST(store_sync_from_an_empty_store_restarts_at_zero) {
   hls_resp_t r;
   const uint8_t seg[64] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 9, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_store_open(CTX_A, &f, 9, &full, 2.0, 6, SEG_CONTAINER_FMP4_AUDIO);
-  ck_assert_int_eq(hls_store_sync_at(hls_store_find(CTX_A, &f, 9, &full, SEG_CONTAINER_FMP4_AUDIO), hls_store_find(CTX_A, &f, 9, &full, SEG_CONTAINER_FMP4)), 0);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 9, &full, SEG_CONTAINER_FMP4_AUDIO, seg, sizeof seg, 2.0), 0);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 9, &full, "dsega0.m4s", 0, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 9, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 9, &full, SEG_CONTAINER_FMP4_AUDIO}, 2.0, 6);
+  ck_assert_int_eq(hls_store_sync_at(hls_store_find(&(stream_key_t){CTX_A, &f, 9, &full, SEG_CONTAINER_FMP4_AUDIO}), hls_store_find(&(stream_key_t){CTX_A, &f, 9, &full, SEG_CONTAINER_FMP4})), 0);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 9, &full, SEG_CONTAINER_FMP4_AUDIO}), seg, sizeof seg, 2.0), 0);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 9, &full, SEG_CONTAINER_FMP4}, rf("dsega0.m4s"), 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   hls_resp_body_release(r.body, r.owner, r.zc);
 }
@@ -1049,31 +1056,31 @@ START_TEST(llhls_enable_on_the_muxed_store_reaches_the_track_stores) {
   pid_filter_t f;
   const uint8_t chunk[64] = {0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p'};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 11, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_store_open(CTX_A, &f, 11, &full, 2.0, 6, SEG_CONTAINER_FMP4_VIDEO);
-  hls_store_open(CTX_A, &f, 11, &full, 2.0, 6, SEG_CONTAINER_FMP4_AUDIO);
-  hls_push_part(CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_VIDEO, chunk, sizeof chunk, 0.5, 1);
-  hls_push_part(CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_AUDIO, chunk, sizeof chunk, 0.5, 1);
-  ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_VIDEO), 0);
-  hls_llhls_enable(CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4, 0.5);
-  ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_VIDEO), 1);
-  ck_assert_int_eq(hls_ll_store_ready(CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_AUDIO), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_VIDEO}, 2.0, 6);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_AUDIO}, 2.0, 6);
+  hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_VIDEO}), chunk, sizeof chunk, 0.5, 1);
+  hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_AUDIO}), chunk, sizeof chunk, 0.5, 1);
+  ck_assert_int_eq(hls_ll_store_ready_at(hls_store_find(&(stream_key_t){CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_VIDEO})), 0);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4}, 0.5);
+  ck_assert_int_eq(hls_ll_store_ready_at(hls_store_find(&(stream_key_t){CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_VIDEO})), 1);
+  ck_assert_int_eq(hls_ll_store_ready_at(hls_store_find(&(stream_key_t){CTX_A, &f, 11, &full, SEG_CONTAINER_FMP4_AUDIO})), 1);
 }
 END_TEST
 
-/* regression: hls_push_segment_ll() start_ms/cum_ms */
+/* regression: hls_push_segment_ll_at(hls_store_find()) start_ms/cum_ms */
 START_TEST(lldash_second_segment_addressable_by_start_ms) {
   pid_filter_t f;
   hls_resp_t r;
   const uint8_t chunk[64] = {0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p'};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
-  hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, chunk, sizeof chunk, 0.5, 1);
-  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5), 0);
-  hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, chunk, sizeof chunk, 0.5, 1);
-  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5), 0);
-  ck_assert_int_eq(dash_render_seg(CTX_A, &f, 0, &full, "dseg500.m4s", 0, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 0.5);
+  hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), chunk, sizeof chunk, 0.5, 1);
+  ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0.5), 0);
+  hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), chunk, sizeof chunk, 0.5, 1);
+  ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0.5), 0);
+  ck_assert_int_eq(dash_render_seg(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, rf("dseg500.m4s"), 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_uint_eq(r.body_len, sizeof chunk);
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -1084,10 +1091,10 @@ START_TEST(store_ready_reflects_pushed_segments) {
   pid_filter_t f;
   const uint8_t data[188] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_store_ready(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), 0);
-  hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0);
-  ck_assert_int_eq(hls_store_ready(CTX_A, &f, 0, &full, SEG_CONTAINER_TS), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  ck_assert_int_eq(hls_store_ready_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS})), 0);
+  hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0);
+  ck_assert_int_eq(hls_store_ready_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS})), 1);
 }
 END_TEST
 
@@ -1098,16 +1105,16 @@ START_TEST(lcevc_all_emits_master_playlist_once_pids_known) {
   const unsigned pids[2] = {101, 102};
   static const lcevc_select_t all = {LCEVC_SEL_ALL, 0, 0};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &all, 2.0, 6, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}, 2.0, 6);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
 
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(memmem(r.body, r.body_len, "EXT-X-STREAM-INF", 16) == NULL);
   hls_resp_body_release(r.body, r.owner, r.zc);
 
-  ck_assert_int_eq(hls_set_lcevc_pids(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, pids, 2), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &all, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  ck_assert_int_eq(hls_set_lcevc_pids_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}), pids, 2), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &all, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(memmem(r.body, r.body_len, "EXT-X-STREAM-INF", 16) != NULL);
   ck_assert(memmem(r.body, r.body_len, "GROUP-ID=\"lcevc\"", 16) != NULL);
@@ -1130,10 +1137,10 @@ START_TEST(av1_ts_container_playlist_uses_version_7) {
   const uint8_t data[188] = {0x47};
   const uint8_t init[4] = {0};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_set_init_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, CODEC_AV1, init, sizeof init);
-  ck_assert_int_eq(hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0), 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_set_init_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), CODEC_AV1, init, sizeof init);
+  ck_assert_int_eq(hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0), 0);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(memmem(r.body, r.body_len, "#EXT-X-VERSION:7", 16) != NULL);
   hls_resp_body_release(r.body, r.owner, r.zc);
@@ -1189,12 +1196,12 @@ START_TEST(lldash_manifest_advertises_chunked_availability_and_utc_timing) {
   hls_resp_t r;
   const uint8_t chunk[64] = {0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p'};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_FMP4);
-  hls_llhls_enable(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
-  hls_push_part(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, chunk, sizeof chunk, 0.5, 1);
-  ck_assert_int_eq(hls_push_segment_ll(CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4, 0.5), 0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 6);
+  hls_llhls_enable(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, 0.5);
+  hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), chunk, sizeof chunk, 0.5, 1);
+  ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0.5), 0);
 
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 1, "http://t.example/?a=<b>&c=\"d\"'e", 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 1, "http://t.example/?a=<b>&c=\"d\"'e", 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert(memmem(r.body, r.body_len, "availabilityTimeOffset=\"1.500\"", 29) != NULL);
   ck_assert(memmem(r.body, r.body_len, "availabilityTimeComplete=\"false\"", 31) != NULL);
@@ -1202,7 +1209,7 @@ START_TEST(lldash_manifest_advertises_chunked_availability_and_utc_timing) {
   ck_assert(memmem(r.body, r.body_len, "a=&lt;b&gt;&amp;c=&quot;d&quot;&apos;e", 36) != NULL);
   hls_resp_body_release(r.body, r.owner, r.zc);
 
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 0, "http://t.example/", 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 0, "http://t.example/", 0, &r), 1);
   ck_assert(memmem(r.body, r.body_len, "availabilityTimeOffset", 22) == NULL);
   ck_assert(body_has(&r, "<UTCTiming schemeIdUri=\"urn:mpeg:dash:utc:http-xsdate:2014\" value=\"http://t.example/\"/>"));
   ck_assert(!body_has(&r, "ProducerReferenceTime"));
@@ -1215,11 +1222,11 @@ END_TEST
 static void fill_ll_store(pid_filter_t *f, int segs) {
   const uint8_t chunk[64] = {0x00, 0x00, 0x00, 0x18, 'f', 't', 'y', 'p'};
   no_filter(f);
-  hls_store_open(CTX_A, f, 0, &full, 2.0, 30, SEG_CONTAINER_FMP4);
-  hls_llhls_enable(CTX_A, f, 0, &full, SEG_CONTAINER_FMP4, 0.5);
+  hls_store_open(&(stream_key_t){CTX_A, f, 0, &full, SEG_CONTAINER_FMP4}, 2.0, 30);
+  hls_llhls_enable(&(stream_key_t){CTX_A, f, 0, &full, SEG_CONTAINER_FMP4}, 0.5);
   for (int i = 0; i < segs; i++) {
-    hls_push_part(CTX_A, f, 0, &full, SEG_CONTAINER_FMP4, chunk, sizeof chunk, 0.5, 1);
-    ck_assert_int_eq(hls_push_segment_ll(CTX_A, f, 0, &full, SEG_CONTAINER_FMP4, 0.5), 0);
+    hls_push_part_at(hls_store_find(&(stream_key_t){CTX_A, f, 0, &full, SEG_CONTAINER_FMP4}), chunk, sizeof chunk, 0.5, 1);
+    ck_assert_int_eq(hls_push_segment_ll_at(hls_store_find(&(stream_key_t){CTX_A, f, 0, &full, SEG_CONTAINER_FMP4}), 0.5), 0);
   }
 }
 
@@ -1231,7 +1238,7 @@ START_TEST(lldash_manifest_stays_in_buffer_with_longest_escaped_utc_url) {
   url[sizeof url - 1] = 0;
   fill_ll_store(&f, 30);
 
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 1, url, 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 1, url, 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_uint_le(r.body_len, MPD_CAP);
   ck_assert_uint_gt(r.body_len, 7);
@@ -1249,7 +1256,7 @@ START_TEST(lldash_manifest_omits_utc_timing_when_url_cannot_fit) {
   url[sizeof url - 1] = 0;
   fill_ll_store(&f, 30);
 
-  ck_assert_int_eq(dash_render(CTX_A, &f, 0, &full, 1, url, 0, &r), 1);
+  ck_assert_int_eq(dash_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_FMP4}), 1, url, 0, &r), 1);
   ck_assert_int_eq(r.status, 200);
   ck_assert_uint_le(r.body_len, MPD_CAP);
   ck_assert(memcmp((const char *)r.body + r.body_len - 7, "</MPD>\n", 7) == 0);
@@ -1267,14 +1274,48 @@ START_TEST(dash_compute_codecs_av01_string) {
 }
 END_TEST
 
-START_TEST(async_retire_oom_keeps_the_snapshot_alive) {
+#define RETIRE_POOL_MAX 64
+
+static int retire_pool_drain(slot_retire_node_t **keep) {
+  int n = 0;
+  for (;;) {
+    slot_retire_node_t *node;
+    g_fail_size = sizeof(slot_retire_node_t);
+    node = slot_retire_node_get();
+    if (!node) return n;
+    ck_assert_int_lt(n, RETIRE_POOL_MAX);
+    keep[n++] = node;
+  }
+}
+
+static void retire_pool_refill(slot_retire_node_t **keep, int n) {
+  for (int i = 0; i < n; i++) slot_retire_node_put(keep[i]);
+}
+
+START_TEST(async_retire_uses_the_pool_without_malloc) {
   hls_snapshot_t *snap = snap_clone(NULL);
 
   ck_assert_ptr_nonnull(snap);
+  g_fail_size = sizeof(slot_retire_node_t);
+  snap_retire_async(snap);
+  ck_assert_uint_eq(g_fail_size, sizeof(slot_retire_node_t));
+  g_fail_size = 0;
+  hls_store_slot_reclaim_sweep();
+}
+END_TEST
+
+START_TEST(async_retire_oom_keeps_the_snapshot_alive) {
+  slot_retire_node_t *keep[RETIRE_POOL_MAX];
+  hls_snapshot_t *snap = snap_clone(NULL);
+  int n;
+
+  ck_assert_ptr_nonnull(snap);
   snap->next_seq = 42;
+  n = retire_pool_drain(keep);
   g_fail_size = sizeof(slot_retire_node_t);
   snap_retire_async(snap);
   ck_assert_uint_eq(g_fail_size, 0);
+  retire_pool_refill(keep, n);
   hls_store_slot_reclaim_sweep();
   ck_assert_uint_eq(snap->next_seq, 42);
   snap_free(snap);
@@ -1291,20 +1332,24 @@ START_TEST(async_retire_defers_free_to_the_sweep) {
 END_TEST
 
 START_TEST(store_close_oom_leaves_the_store_open) {
+  slot_retire_node_t *keep[RETIRE_POOL_MAX];
+  int n;
   pid_filter_t f;
   hls_resp_t r;
   const uint8_t data[188] = {0x47};
   no_filter(&f);
-  hls_store_open(CTX_A, &f, 0, &full, 2.0, 6, SEG_CONTAINER_TS);
-  hls_push_segment(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, data, sizeof data, 2.0);
+  hls_store_open(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, 2.0, 6);
+  hls_push_segment_at(hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), data, sizeof data, 2.0);
+  n = retire_pool_drain(keep);
   g_fail_size = sizeof(slot_retire_node_t);
-  hls_store_close(CTX_A, &f, 0, &full, SEG_CONTAINER_TS);
+  hls_store_close(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS});
   ck_assert_uint_eq(g_fail_size, 0);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  retire_pool_refill(keep, n);
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 200);
   hls_resp_body_release(r.body, r.owner, r.zc);
-  hls_store_close(CTX_A, &f, 0, &full, SEG_CONTAINER_TS);
-  ck_assert_int_eq(hls_render(CTX_A, &f, 0, &full, SEG_CONTAINER_TS, "index.m3u8", 0, NULL, &r), 1);
+  hls_store_close(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS});
+  ck_assert_int_eq(hls_render(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}, hls_store_find(&(stream_key_t){CTX_A, &f, 0, &full, SEG_CONTAINER_TS}), rf("index.m3u8"), 0, NULL, &r), 1);
   ck_assert_int_eq(r.status, 404);
   hls_store_slot_reclaim_sweep();
 }
@@ -1403,6 +1448,7 @@ static Suite *hls_suite(void) {
   tcase_add_test(tc, lldash_manifest_advertises_chunked_availability_and_utc_timing);
   tcase_add_test(tc, lldash_manifest_stays_in_buffer_with_longest_escaped_utc_url);
   tcase_add_test(tc, lldash_manifest_omits_utc_timing_when_url_cannot_fit);
+  tcase_add_test(tc, async_retire_uses_the_pool_without_malloc);
   tcase_add_test(tc, async_retire_oom_keeps_the_snapshot_alive);
   tcase_add_test(tc, async_retire_defers_free_to_the_sweep);
   tcase_add_test(tc, store_close_oom_leaves_the_store_open);

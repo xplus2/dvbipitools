@@ -15,13 +15,14 @@
 #include "lib/demux/rtp.h"
 #include "lib/demux/tspack.h"
 #include "lib/helper/describe.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "lib/net/httpclient/httpclient.h"
 #include "lib/net/multicast.h"
 #include "lib/sys/signal.h"
 #include "scan.h"
 #include "version.h"
+#include "lib/helper/dateutil.h"
 
 /* candidate group address at idx i in cfg->start, cfg->end */
 void addr_at(const config_t *cfg, unsigned i, char *buf, size_t n) {
@@ -69,7 +70,8 @@ void probe_common(psi_t *psi, chan_read_fn rf, void *rctx, int timeout_ms, int m
   unsigned char buf[65536];
   tspack_t pz;
   probe_ctx_t pc;
-  double deadline, quiet_deadline;
+  double deadline;
+  double quiet_deadline;
   unsigned rtp_dgrams = 0;
   unsigned plain_dgrams = 0;
 
@@ -313,56 +315,39 @@ static void *scan_worker(void *arg) {
   return NULL;
 }
 
-static void inv_str(char *buf, size_t n, const char *s) {
-  size_t len = strlen(buf);
-  if (len >= n - 1) return;
-  bufcpy(buf + len, n - len, s);
-}
-
-static void inv_num(char *buf, size_t n, long v) {
-  char tmp[24];
-  snprintf(tmp, sizeof tmp, "%ld", v);
-  inv_str(buf, n, tmp);
-}
-
-static void inv_quoted(char *buf, size_t n, const char *opt, const char *val) {
-  inv_str(buf, n, opt);
-  inv_str(buf, n, val);
-  inv_str(buf, n, "'");
+static void add_quoted(sbuf_t *b, const char *opt, const char *val) {
+  sbuf_add(b, opt);
+  sbuf_add(b, val);
+  sbuf_add(b, "'");
 }
 
 static void invocation_build(const config_t *cfg, const char *basestr, char *buf, size_t n) {
   static const char *const fmt_names[] = {"m3u", "csv", "xspf", "xml", "null"};
-  buf[0] = '\0';
-  inv_str(buf, n, TOOL_NAME);
-  inv_str(buf, n, " --mcast ");
-  inv_str(buf, n, basestr);
-  inv_str(buf, n, " --port ");
-  inv_num(buf, n, (long)cfg->port_lo);
+  sbuf_t b;
+  sbuf_init(&b, buf, n);
+  sbuf_add(&b, TOOL_NAME " --mcast ");
+  sbuf_add(&b, basestr);
+  sbuf_add(&b, " --port ");
+  sbuf_add_uint(&b, cfg->port_lo);
   if (cfg->port_lo != cfg->port_hi) {
-    inv_str(buf, n, "-");
-    inv_num(buf, n, (long)cfg->port_hi);
+    sbuf_add(&b, "-");
+    sbuf_add_uint(&b, cfg->port_hi);
   }
-  inv_str(buf, n, " --timeout ");
-  inv_num(buf, n, (long)(cfg->timeout_ms / 1000));
-  inv_str(buf, n, " -f ");
-  inv_str(buf, n, fmt_names[cfg->format]);
-  if (cfg->mpts) inv_str(buf, n, " -M");
+  sbuf_add(&b, " --timeout ");
+  sbuf_add_uint(&b, (unsigned)(cfg->timeout_ms / 1000));
+  sbuf_add(&b, " -f ");
+  sbuf_add(&b, fmt_names[cfg->format]);
+  if (cfg->mpts) sbuf_add(&b, " -M");
   if (cfg->http_proxy) {
-    inv_str(buf, n, " -u '");
-    if (strchr(cfg->http_proxy_host, ':')) {
-      inv_str(buf, n, "[");
-      inv_str(buf, n, cfg->http_proxy_host);
-      inv_str(buf, n, "]");
-    } else {
-      inv_str(buf, n, cfg->http_proxy_host);
-    }
-    inv_str(buf, n, ":");
-    inv_num(buf, n, (long)cfg->http_proxy_port);
-    inv_str(buf, n, "'");
+    int v6 = strchr(cfg->http_proxy_host, ':') != NULL;
+    sbuf_add(&b, v6 ? " -u '[" : " -u '");
+    sbuf_add(&b, cfg->http_proxy_host);
+    sbuf_add(&b, v6 ? "]:" : ":");
+    sbuf_add_uint(&b, cfg->http_proxy_port);
+    sbuf_add(&b, "'");
   }
-  if (cfg->http_path_tmpl) inv_quoted(buf, n, " -x '", cfg->http_path_tmpl);
-  if (cfg->iface) inv_quoted(buf, n, " -I '", cfg->iface);
+  if (cfg->http_path_tmpl) add_quoted(&b, " -x '", cfg->http_path_tmpl);
+  if (cfg->iface) add_quoted(&b, " -I '", cfg->iface);
 }
 
 int scan_run(const config_t *cfg, FILE *out) {

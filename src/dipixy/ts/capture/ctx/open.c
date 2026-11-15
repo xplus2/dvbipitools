@@ -7,7 +7,7 @@
 #include <time.h>
 
 #include "dipixy/ts/capture/priv.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "lib/helper/log.h"
 #include "dipixy/version.h"
 
@@ -20,10 +20,6 @@ ssize_t capture_fec_read(capture_ctx_t *ctx, unsigned char *buf, size_t cap) {
   if (n < 0) return -1;
   if (n > 0) fec2022_dec_source(ctx->fec_dec, buf, (size_t)n);
   return (ssize_t)fec2022_dec_drain(ctx->fec_dec, buf, cap);
-}
-
-void capture_set_ring_cap(size_t bytes) {
-  if (bytes) g_capture_ring_cap = bytes;
 }
 
 static int addr_family(const char *addr) { return strchr(addr, ':') ? AF_INET6 : AF_INET; }
@@ -77,24 +73,13 @@ capture_ctx_t *capture_open(int family, const char *group, const char *source, u
   capture_ctx_t *c;
   capture_ctx_t *dup;
   if (!source) source = "";
-  pthread_mutex_lock(&g_lock);
-  c = find_existing(family, group, source, port, iface);
-  if (c) {
-    atomic_fetch_add_explicit(&c->refcount, 1, memory_order_relaxed);
-    pthread_mutex_unlock(&g_lock);
-    return c;
-  }
-  pthread_mutex_unlock(&g_lock);
+  c = ref_existing(family, group, source, port, iface);
+  if (c) return c;
   if (strlen(group) >= sizeof c->group || strlen(source) >= sizeof c->source) return NULL;
   c = calloc(1, sizeof *c);
   if (!c) return NULL;
   atomic_init(&c->ts_push_head, -1);
   c->pump_shard = next_pump_shard();
-  c->ring = malloc(g_capture_ring_cap);
-  if (!c->ring) {
-    free_ctx_resources(c);
-    return NULL;
-  }
   c->backend = CAP_BACKEND_MCAST;
   bufcpy(c->group, sizeof c->group, group);
   bufcpy(c->source, sizeof c->source, source);
@@ -109,6 +94,7 @@ capture_ctx_t *capture_open(int family, const char *group, const char *source, u
   }
   if (ret) c->ret = open_ret(ret, family, group, port, iface);
   if (fcc) c->fcc = open_fcc(fcc);
+  if (!c->ret && !c->fcc) mcast_set_batch(c->m, CAPTURE_MCAST_BATCH);
   if (fec && al_fec_l) open_fec(c, fec, al_fec_l, al_fec_d, iface);
   c->refcount = 1;
   dup = link_ctx(c);

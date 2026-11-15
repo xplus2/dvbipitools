@@ -11,7 +11,7 @@ unsigned pmt_select_parse_query(const char *query) {
 
   if (!query_param_extract(query, "pmt=", buf, sizeof buf))
     return 0;
-  if (!pid_token_parse(buf, &end, &v) || v > 8191)
+  if (!pid_token_parse(buf, &end, &v) || v > TS_PID_MAX)
     return 0;
   return (unsigned)v;
 }

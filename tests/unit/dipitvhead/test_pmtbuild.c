@@ -11,7 +11,7 @@
 #include "dipitvhead/mux/pmtbuild.h"
 #include "lib/demux/crc32.h"
 #include "lib/mux/psi_build.h"
-#include "lib/sys/ioutil.h"
+#include "lib/helper/strutil.h"
 #include "../fx_ts.h"
 
 START_TEST(pmtbuild_map_es_picks_video_first_and_drops_unsupported) {

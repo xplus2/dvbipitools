@@ -5,8 +5,12 @@
 #define DIPISDS_CONFIG_H
 
 #include "cli/args.h"
+#include "lib/config/yamlcfg.h"
 
 #define DEFAULT_CONFIG_PATH "/etc/dvbipitools/dipisds.yaml"
+
+extern const yamlcfg_key_t sds_cfg_keys[];
+extern const size_t sds_cfg_nkeys;
 
 void sds_cfg_defaults(config_t *cfg);
 

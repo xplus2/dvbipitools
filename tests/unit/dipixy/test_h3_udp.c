@@ -145,7 +145,8 @@ static int wild_sock(struct sockaddr_in *bound) {
 }
 
 START_TEST(recv_reports_local_destination) {
-  struct sockaddr_in w, to;
+  struct sockaddr_in w;
+  struct sockaddr_in to;
   struct sockaddr_storage d;
   uint8_t buf[20] = {1};
   h3_rx_t rx[H3_RX_BATCH];

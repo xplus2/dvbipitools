@@ -6,6 +6,7 @@
 
 #include "lib/bim/codec/decode/priv.h"
 #include "lib/bim/codec/laxsym.h"
+#include "lib/helper/strutil.h"
 
 typedef struct {
   int ns;
