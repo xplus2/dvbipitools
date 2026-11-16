@@ -27,9 +27,9 @@ typedef struct {
 #define STREAM_KEY_AS(k, c) (&(stream_key_t){(k)->ctx, (k)->filter, (k)->pmt_pid, (k)->lcevc, (c)})
 
 static inline uint32_t stream_key_hash(const stream_key_t *k) {
-  uint64_t h = (uint64_t)(uintptr_t)k->ctx * 0x9E3779B97F4A7C15ull;
+  uint64_t h = (uint64_t)(uintptr_t)k->ctx * 0x9E3779B97F4A7C15ULL;
   h ^= (uint64_t)k->pmt_pid << 8 ^ (uint64_t)k->container;
-  for (int i = 0; i < k->filter->count; i++) h = (h ^ k->filter->pids[i]) * 0x100000001B3ull;
+  for (int i = 0; i < k->filter->count; i++) h = (h ^ k->filter->pids[i]) * 0x100000001B3ULL;
   return (uint32_t)(h ^ h >> 29);
 }
 
@@ -51,7 +51,8 @@ static inline int stream_key_index_init(stream_key_index_t *ix, int cap) {
   if (!ix->head || !ix->next) {
     free(ix->head);
     free(ix->next);
-    ix->head = ix->next = NULL;
+    ix->head = NULL;
+    ix->next = NULL;
     return -1;
   }
   for (uint32_t i = 0; i < nb; i++) atomic_init(&ix->head[i], -1);

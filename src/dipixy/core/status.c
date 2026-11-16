@@ -213,8 +213,6 @@ static void emit_config(jbuf_t *jp, const config_t *cfg) {
 }
 
 static void emit_tls(jbuf_t *jp) {
-  int i;
-
   JOBJ("tls");
   if (tls_is_running()) {
     tls_cert_detail_t d;
@@ -223,7 +221,7 @@ static void emit_tls(jbuf_t *jp) {
     JFIELD(jbuf_json_string, "cn", d.cn, ",");
     jbuf_key(jp, "aliases");
     jbuf_str(jp, "[");
-    for (i = 0; i < d.alias_count; i++) {
+    for (int i = 0; i < d.alias_count; i++) {
       if (i) jbuf_str(jp, ",");
       jbuf_json_string(jp, d.aliases[i]);
     }

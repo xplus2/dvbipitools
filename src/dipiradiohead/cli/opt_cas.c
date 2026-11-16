@@ -54,7 +54,10 @@ static const char *cas_flag_name(int c) {
   }
 }
 
-static args_status_t opt_status(int r) { return r > 0 ? ARGS_OK : r < 0 ? ARGS_ERR : OPT_UNHANDLED; }
+static args_status_t opt_status(int r) {
+  if (r > 0) return ARGS_OK;
+  return r < 0 ? ARGS_ERR : OPT_UNHANDLED;
+}
 
 static args_status_t vendor_apply(rdh_opt_t *p, int c) {
   config_t *cfg = p->cfg;

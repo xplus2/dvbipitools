@@ -53,7 +53,7 @@ static void xor16(unsigned char *d, const unsigned char *a, const unsigned char 
 }
 
 /* CBC restarts per packet (TS 103 127 6.3, random access): block j of every packet goes through one ECB call */
-static int encrypt_batch(cissa_key_t *k, cissa_batch_entry_t *e, unsigned n) {
+static int encrypt_batch(const cissa_key_t *k, cissa_batch_entry_t *e, unsigned n) {
   unsigned char tmp[CISSA_BATCH_MAX * 16];
   const unsigned char *prev[CISSA_BATCH_MAX];
   size_t max_len = 0;
@@ -76,7 +76,7 @@ static int encrypt_batch(cissa_key_t *k, cissa_batch_entry_t *e, unsigned n) {
   return 0;
 }
 
-static int decrypt_batch(cissa_key_t *k, cissa_batch_entry_t *e, unsigned n) {
+static int decrypt_batch(const cissa_key_t *k, cissa_batch_entry_t *e, unsigned n) {
   unsigned char tmp[CISSA_BATCH_MAX * 192];
   size_t total = 0;
   for (unsigned i = 0; i < n; i++) {

@@ -80,8 +80,8 @@ static int is_field_start(const char *p) {
 }
 
 /* end quote must be followed by ';' then end or next Key= field */
-static char *find_value_end(char *start) {
-  char *p = start;
+static const char *find_value_end(const char *start) {
+  const char *p = start;
   while ((p = strstr(p, "';")) != NULL) {
     if (p[2] == '\0' || is_field_start(p + 2)) return p;
     p++;
@@ -93,7 +93,7 @@ static char *find_value_end(char *start) {
 static void handle_meta_block(icy_t *c) {
   const char *tag = "StreamTitle='";
   char *start;
-  char *end;
+  const char *end;
   size_t len;
   char artist[2 * sizeof c->last_title];
   char title[2 * sizeof c->last_title];

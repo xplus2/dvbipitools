@@ -252,7 +252,7 @@ int bim_tvafrag_steps(const xsd_compiled_t *c, const bim_tvans_t *ns, unsigned c
     n = steps_compute(c, ns, row, full);
     if (k && n >= -1 && n <= CACHE_DEPTH) {
       k->slot[row].n = n;
-      if (n > 0) memcpy(k->slot[row].s, full, sizeof *full * (size_t)n);
+      if (n > 0) memcpy(k->slot[row].s, full, sizeof full[0] * (size_t)n);
     }
   }
   if (n < 0 || n > cap) return -1;

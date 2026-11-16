@@ -52,7 +52,7 @@ void reactor_wake_close_all(void) {
 void reactor_wake(int tid, wake_kind_t kind) {
   if (tid < 0 || tid >= REACTOR_MAX_WORKERS) return;
   if (atomic_fetch_or_explicit(&g_wake[tid].pending, 1u << kind, memory_order_release)) return;
-  if (t_batching) t_batch[tid / 64] |= 1ull << (tid % 64);
+  if (t_batching) t_batch[tid / 64] |= 1ULL << (tid % 64);
   else wake_write(tid);
 }
 
@@ -86,7 +86,8 @@ int reactor_wait_timeout_ms(int tid, int cap_ms) {
   if (!atomic_exchange_explicit(&g_wake[tid].waiting, waiting, memory_order_seq_cst) && waiting) return 0;
   if (!waiting) return cap_ms;
   left = next - now_ms();
-  return left <= 0 ? 0 : left < cap_ms ? (int)left : cap_ms;
+  if (left <= 0) return 0;
+  return left < cap_ms ? (int)left : cap_ms;
 }
 
 void reactor_wake_waiters(void) {

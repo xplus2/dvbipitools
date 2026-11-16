@@ -14,7 +14,7 @@ void *array_grow(void *arr, int *cap, int need, size_t elemsz) {
   if (need <= *cap) return arr;
   newcap = *cap ? *cap * 2 : 16;
   if (newcap < need) newcap = need;
-  if (elemsz && (size_t)newcap > PTRDIFF_MAX / elemsz) return NULL;
+  if (!elemsz || (size_t)newcap > PTRDIFF_MAX / elemsz) return NULL;
   p = realloc(arr, (size_t)newcap * elemsz);
   if (!p) return NULL;
   *cap = newcap;

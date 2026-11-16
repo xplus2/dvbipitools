@@ -145,7 +145,10 @@ void bitwriter_truncate(bitwriter_t *bw, size_t nbits) {
   bw->cur_bits = rest;
 }
 
-static unsigned src_byte(const bitwriter_t *src, size_t i) { return i < src->len ? src->buf[i] : i == src->len ? src->cur : 0; }
+static unsigned src_byte(const bitwriter_t *src, size_t i) {
+  if (i < src->len) return src->buf[i];
+  return i == src->len ? src->cur : 0;
+}
 
 int bitwriter_append_range(bitwriter_t *dst, const bitwriter_t *src, size_t start, size_t nbits) {
   int off = (int)(start % 8);

@@ -68,7 +68,7 @@ static bim_tbc_t *push(fr_t *r, bim_tbc_kind_t kind, const bim_type_t *parent, u
     range(r, "context path length");
     return NULL;
   }
-  if (growbuf_reserve((void **)&f->tbcs, &r->cap, sizeof *f->tbcs, (size_t)f->ntbcs + 1, 8)) {
+  if (growbuf_reserve((void **)&f->tbcs, &r->cap, sizeof *f->tbcs, f->ntbcs + 1, 8)) {
     bim_oom(r->r.err);
     return NULL;
   }

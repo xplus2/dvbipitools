@@ -120,5 +120,6 @@ args_status_t tvh_opt_cas(tvh_opt_t *p, int c) {
   r = yamlcfg_opt_apply(TOOL_NAME, vendor_opts, ARRAY_SIZE(vendor_opts), tvh_cfg_keys, tvh_cfg_nkeys, cfg, c, optarg);
   cfg->parse_item = saved;
   if (!r) r = yamlcfg_opt_apply(TOOL_NAME, global_opts, ARRAY_SIZE(global_opts), tvh_cfg_keys, tvh_cfg_nkeys, cfg, c, optarg);
-  return r > 0 ? ARGS_OK : r < 0 ? ARGS_ERR : OPT_UNHANDLED;
+  if (r > 0) return ARGS_OK;
+  return r < 0 ? ARGS_ERR : OPT_UNHANDLED;
 }

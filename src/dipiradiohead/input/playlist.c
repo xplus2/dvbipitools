@@ -30,7 +30,7 @@ static int is_relative_ref(const char *l) { return *l && l[0] != '#' && !strstr(
 
 static int parse_m3u(char *text, const http_url_t *base, char *url, size_t n) {
   char *cur = text;
-  char *line;
+  const char *line;
   int extm3u = !strncmp(text, "#EXTM3U", 7);
   while ((line = playlist_next_line(&cur)) != NULL) {
     if (!*line || line[0] == '#') continue;
@@ -58,7 +58,7 @@ static int is_file_key(const char *l, const char **value) {
 
 static int parse_pls(char *text, char *url, size_t n) {
   char *cur = text;
-  char *line;
+  const char *line;
   while ((line = playlist_next_line(&cur)) != NULL) {
     const char *v;
     if (is_file_key(line, &v) && is_url_line(v)) {

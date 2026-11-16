@@ -50,7 +50,7 @@ static size_t drain(capture_ctx_t *c, unsigned char *buf, size_t cap) {
   collect_t col = {buf, cap, 0};
   for (int i = 0; i < 40 && !col.len; i++) {
     capture_drain(c, collect_sink, &col);
-    if (!col.len) usleep(5000);
+    if (!col.len) sleep_ms(5);
   }
   return col.len;
 }

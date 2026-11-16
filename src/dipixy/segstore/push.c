@@ -146,7 +146,9 @@ void hls_llhls_enable(const stream_key_t *k, double part_target) {
   hls_store_t *s = hls_store_find(k);
   hls_snapshot_t *old;
   hls_snapshot_t *ns;
-  if (!s || !(ns = snap_begin(s, &old))) return;
+  if (!s) return;
+  ns = snap_begin(s, &old);
+  if (!ns) return;
   ns->part_target = part_target;
   ns->live_msn = ns->next_seq;
   snap_commit(s, old, ns);

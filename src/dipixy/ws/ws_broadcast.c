@@ -54,7 +54,8 @@ void ws_broadcast_register(ws_sink_fn fn, void *ctx) {
   pthread_mutex_lock(&g_mtx);
   old = atomic_load_explicit(&g_snapshot, memory_order_relaxed);
   n = old ? old->n : 0;
-  if (n < WS_BROADCAST_MAX_SINKS && (fresh = malloc(sizeof *fresh + sizeof(sink_t) * (size_t)(n + 1)))) {
+  fresh = n < WS_BROADCAST_MAX_SINKS ? malloc(sizeof *fresh + sizeof(sink_t) * (size_t)(n + 1)) : NULL;
+  if (fresh) {
     if (n) memcpy(fresh->sinks, old->sinks, sizeof(sink_t) * (size_t)n);
     fresh->sinks[n] = (sink_t){fn, ctx};
     fresh->n = n + 1;

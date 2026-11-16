@@ -7,7 +7,9 @@
 #include "lib/bim/codec/decode/priv.h"
 
 static void aod_reset(dec_t *d) {
-  if (d->opts && d->opts->aod) d->zpos = d->zlen = 0;
+  if (!d->opts || !d->opts->aod) return;
+  d->zpos = 0;
+  d->zlen = 0;
 }
 
 static void string_resync(dec_t *d) {

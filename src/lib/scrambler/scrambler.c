@@ -51,7 +51,8 @@ scrambler_t *scrambler_new(scramble_algo_t algo) {
   s->algo = algo;
   s->queue_parity = -1;
   s->queue_mode = SCRAMBLER_QUEUE_MODE_NONE;
-  s->queue_batch_size = algo == SCRAMBLE_ALGO_CSA2 ? csa2_batch_size() : cissa_available() ? CISSA_BATCH_MAX : 0;
+  if (algo == SCRAMBLE_ALGO_CSA2) s->queue_batch_size = csa2_batch_size();
+  else s->queue_batch_size = cissa_available() ? CISSA_BATCH_MAX : 0;
   if (s->queue_batch_size > 0) {
     s->queue_cap = s->queue_batch_size * SCRAMBLER_QUEUE_CAP_MULTIPLIER;
     s->queue = calloc(s->queue_cap, sizeof *s->queue);
@@ -212,7 +213,7 @@ static void scrambler_queue_flush(scrambler_t *s, scrambler_emit_cb emit, void *
     if (s->cissa_entries)
       failed = cissa_crypt_batch(s->cissa_key[s->queue_parity], enc, s->cissa_entries, ei) != 0;
     else
-      failed = (enc ? csa2_encrypt_batch : csa2_decrypt_batch)(s->csa2_key[s->queue_parity], s->batch_entries, ei) != 0;
+      failed = (enc ? &csa2_encrypt_batch : &csa2_decrypt_batch)(s->csa2_key[s->queue_parity], s->batch_entries, ei) != 0;
   }
   for (unsigned i = 0; i < s->queue_len; i++) {
     if (failed && s->queue[i].needs_crypto) {

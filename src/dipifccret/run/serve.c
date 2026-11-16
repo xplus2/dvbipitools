@@ -248,6 +248,11 @@ static void serve_cleanup(serve_t *v) {
   tsinspect_agg_free(v->agg);
 }
 
+static const char *ret_mode_str(const config_t *cfg, const serve_t *v) {
+  if (cfg->no_ret) return "no RET";
+  return v->mt ? "RET+MC" : "RET unicast-only";
+}
+
 int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_capture_fn open_capture) {
   serve_t v = {.cfg = cfg, .mx = mx, .max_channels = cfg->max_channels ? cfg->max_channels : CHANNEL_DEFAULT_MAX};
   char errbuf[256];
@@ -264,7 +269,7 @@ int fccret_serve(const config_t *cfg, metrics_exporter_t *mx, fccret_open_captur
   if (start_listeners(&v) || start_threads(&v)) goto cleanup;
 
   log_line(TOOL_NAME ": capturing, %u worker(s) on %s:%u, %zu channel slots [%s%s%s%s]", cfg->workers ? cfg->workers : 1u, cfg->listen_addr, cfg->listen_port, v.max_channels,
-      cfg->no_ret ? "no RET" : (v.mt ? "RET+MC" : "RET unicast-only"), cfg->no_ret || cfg->no_fcc ? "" : ", ", cfg->no_fcc ? "no FCC" : "FCC", v.rsi_started ? "+RSI" : "");
+      ret_mode_str(cfg, &v), cfg->no_ret || cfg->no_fcc ? "" : ", ", cfg->no_fcc ? "no FCC" : "FCC", v.rsi_started ? "+RSI" : "");
   rc = 0;
   if (capture_run(v.cap, capture_cb, &v.dispatch_ctx) != 0) {
     log_code("FE500244", "%s: capture poll failed: %s", TOOL_NAME, strerror(errno));

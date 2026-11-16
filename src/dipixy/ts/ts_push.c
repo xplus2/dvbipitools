@@ -135,7 +135,6 @@ void ts_push_account_bytes(ts_sub_t *s) {
 #define TS_PUSH_SUBS_FLOOR 32
 
 void ts_push_init(int prealloc, int max_clients) {
-  int i;
   int n;
   n = (max_clients > 0 ? max_clients : 0) + TS_PUSH_SUBS_HEADROOM;
   if (n < TS_PUSH_SUBS_FLOOR) n = TS_PUSH_SUBS_FLOOR;
@@ -151,7 +150,7 @@ void ts_push_init(int prealloc, int max_clients) {
     return;
   }
   if (!prealloc) return;
-  for (i = 0; i < TS_PUSH_PREALLOC_SUBS && i < g_ts_subs_n; i++) {
+  for (int i = 0; i < TS_PUSH_PREALLOC_SUBS && i < g_ts_subs_n; i++) {
     byte_ring_reset(&g_ts_subs[i].pkt_ring, TS_RING_PUSH_BYTES);
     byte_ring_reset(&g_ts_subs[i].h2_ring, TS_RING_H2_BYTES);
     byte_ring_reset(&g_ts_subs[i].h3_ring, TS_RING_H3_BYTES);

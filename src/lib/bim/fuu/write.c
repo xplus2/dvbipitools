@@ -121,7 +121,9 @@ static int wr_any_attr(fw_t *x, const bim_tbc_t *t) {
     int c = -1;
     for (size_t i = 0; i < x->st->nschemas && c < 0; i++) {
       const bim_schema_t *sc = &x->st->schemas[i];
-      if (sc->known && (int)i != x->st->opts.lax_schema && (c = bim_schema_attr(sc, t->ns, t->name)) >= 0) id = i;
+      if (!sc->known || (int)i == x->st->opts.lax_schema) continue;
+      c = bim_schema_attr(sc, t->ns, t->name);
+      if (c >= 0) id = i;
     }
     if (c < 0) {
       bitwriter_free(&tmp);

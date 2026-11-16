@@ -10,7 +10,7 @@
 
 #include "priv.h"
 
-static int ecmg_client_target_parity(ecmg_client_t *c);
+static int ecmg_client_target_parity(const ecmg_client_t *c);
 
 int ecmg_stopping(const ecmg_client_t *c) {
   return cas_dial_stopping(&c->stop);
@@ -70,7 +70,7 @@ unsigned long ecmg_client_cryptoperiod_transitions(ecmg_client_t *c) { return at
 unsigned long ecmg_client_ecm_total(ecmg_client_t *c) { return atomic_load_explicit(&c->ecm_total, memory_order_relaxed); }
 unsigned long ecmg_client_ecm_errors(ecmg_client_t *c) { return atomic_load_explicit(&c->ecm_errors_total, memory_order_relaxed); }
 
-static int ecmg_client_target_parity(ecmg_client_t *c) {
+static int ecmg_client_target_parity(const ecmg_client_t *c) {
   unsigned long last_parity = (unsigned long)atomic_load_explicit(&c->last_parity, memory_order_relaxed);
   unsigned long cur = atomic_load_explicit(c->packet_counter, memory_order_relaxed);
   unsigned long published_at = atomic_load_explicit(&c->cw_published_at, memory_order_relaxed);

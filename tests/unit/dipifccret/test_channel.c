@@ -237,7 +237,7 @@ START_TEST(channel_lookup_by_resolve_slot_ignores_reused_index_with_other_slot) 
   size_t idx = (size_t)(a - &t->chan[0]);
 
   atomic_store_explicit(&a->last_seen, time(NULL) - 100, memory_order_relaxed);
-  channel_table_reap_step(t, 10, (t)->max_channels);
+  channel_table_reap_step(t, 10, t->max_channels);
   atomic_store_explicit(&t->resolve_hash[old_slot], idx + 1, memory_order_relaxed); /* stale entry */
   a = lookup_ip(t, "239.1.1.1", 5000);
   a->resolve_slot = (old_slot + 1) % 8; /* index reused under another slot */
@@ -253,7 +253,7 @@ START_TEST(channel_lookup_by_resolve_slot_survives_reap_and_rediscovery) {
   size_t slot = a->resolve_slot;
 
   atomic_store_explicit(&a->last_seen, time(NULL) - 100, memory_order_relaxed);
-  channel_table_reap_step(t, 10, (t)->max_channels);
+  channel_table_reap_step(t, 10, t->max_channels);
   ck_assert_ptr_null(channel_lookup_by_resolve_slot(t, slot));
 
   a = lookup_ip(t, "239.1.1.1", 5000);
@@ -316,7 +316,7 @@ START_TEST(channel_table_reap_frees_stale_channels) {
   channel_t *b;
   a = lookup_ip(t, "239.1.1.1", 5000);
   ck_assert_ptr_nonnull(a);
-  channel_table_reap_step(t, -1, (t)->max_channels); /* max_age -1: always "older" than now */
+  channel_table_reap_step(t, -1, t->max_channels); /* max_age -1: always "older" than now */
   b = lookup_ip(t, "239.1.1.2", 5000); /* slot should be free again */
   ck_assert_ptr_nonnull(b);
   ck_assert_ptr_eq(a, b); /* same underlying slot, reused */
@@ -333,7 +333,7 @@ START_TEST(channel_lookup_reclaim_resets_rtx_seq_mc) {
   a = lookup_ip(t, "239.1.1.1", 5000);
   ck_assert_ptr_nonnull(a);
   atomic_store_explicit(&a->rtx_seq_mc, 42, memory_order_relaxed);
-  channel_table_reap_step(t, -1, (t)->max_channels); /* max_age -1: always "older" than now */
+  channel_table_reap_step(t, -1, t->max_channels); /* max_age -1: always "older" than now */
   b = lookup_ip(t, "239.1.1.2", 5000); /* slot reused for a different group */
   ck_assert_ptr_eq(a, b);
   ck_assert_uint_eq(atomic_load_explicit(&b->rtx_seq_mc, memory_order_relaxed), 0u);
@@ -381,7 +381,7 @@ START_TEST(channel_lookup_churn_triggers_rebuild_without_hanging) {
     snprintf(group, sizeof group, "239.9.9.%d", i + 1);
     c = lookup_ip(t, group, 5000);
     ck_assert_ptr_nonnull(c);
-    channel_table_reap_step(t, -1, (t)->max_channels); /* expire immediately: piles up tombstones */
+    channel_table_reap_step(t, -1, t->max_channels); /* expire immediately: piles up tombstones */
   }
 
   {
@@ -641,7 +641,7 @@ START_TEST(channel_table_at_reflects_in_use_and_capacity) {
     ck_assert_int_eq(found, 1);
   }
 
-  channel_table_reap_step(t, -1, (t)->max_channels); /* max_age -1: always "older" than now */
+  channel_table_reap_step(t, -1, t->max_channels); /* max_age -1: always "older" than now */
   for (i = 0; i < channel_table_capacity(t); i++)
     ck_assert_ptr_null(channel_table_at(t, i)); /* reclaimed, no longer visible */
 
@@ -942,7 +942,7 @@ START_TEST(reap_walks_past_tombstones_and_the_table_stays_usable) {
       addr[3] = (unsigned char)(i + 1);
       ck_assert_ptr_nonnull(channel_lookup(t, AF_INET, addr, sizeof addr, 5000 + round));
     }
-    channel_table_reap_step(t, -1, (t)->max_channels);
+    channel_table_reap_step(t, -1, t->max_channels);
     for (i = 0; i < channel_table_capacity(t); i++)
       ck_assert_ptr_null(channel_table_at(t, i));
   }
@@ -961,7 +961,7 @@ START_TEST(reap_leaves_fresh_channels_and_removes_only_stale_ones) {
   channel_store(t, fresh, 0xA1, 1, 0, 0, payload, sizeof payload);
   channel_store(t, stale, 0xA2, 1, 0, 0, payload, sizeof payload);
   atomic_store(&stale->last_seen, time(NULL) - 500);
-  channel_table_reap_step(t, 100, (t)->max_channels);
+  channel_table_reap_step(t, 100, t->max_channels);
   ck_assert_ptr_nonnull(channel_find_by_ssrc(t, 0xA1));
   ck_assert_ptr_null(channel_find_by_ssrc(t, 0xA2));
   channel_table_free(t);
@@ -983,7 +983,7 @@ START_TEST(reap_of_a_channel_whose_home_bucket_is_taken_probes_to_its_own_entry)
   ck_assert_ptr_nonnull(a);
   ck_assert_ptr_nonnull(b);
   atomic_store(&b->last_seen, time(NULL) - 500);
-  channel_table_reap_step(t, 100, (t)->max_channels);
+  channel_table_reap_step(t, 100, t->max_channels);
   ck_assert_ptr_eq(channel_lookup(t, AF_INET, first, sizeof first, 5000), a);
   ck_assert_ptr_ne(channel_lookup(t, AF_INET, second, sizeof second, 5000), NULL);
   channel_table_free(t);
@@ -1040,7 +1040,7 @@ START_TEST(set_inspect_registers_the_aggregate_and_reclaim_detaches_the_channel_
   c = lookup_ip(t, "239.1.1.1", 5000);
   c->insp = tsinspect_agg_add(agg);
   ck_assert_ptr_nonnull(c->insp);
-  channel_table_reap_step(t, -1, (t)->max_channels);
+  channel_table_reap_step(t, -1, t->max_channels);
   c = lookup_ip(t, "239.1.1.2", 5000);
   ck_assert_ptr_nonnull(c);
   ck_assert_ptr_null(c->insp);

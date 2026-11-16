@@ -8,7 +8,8 @@
 #include "../segstore_int.h"
 
 static inline seg_container_t dash_track_container(route_track_t t) {
-  return t == ROUTE_TRACK_VIDEO ? SEG_CONTAINER_FMP4_VIDEO : t == ROUTE_TRACK_AUDIO ? SEG_CONTAINER_FMP4_AUDIO : SEG_CONTAINER_FMP4;
+  if (t == ROUTE_TRACK_VIDEO) return SEG_CONTAINER_FMP4_VIDEO;
+  return t == ROUTE_TRACK_AUDIO ? SEG_CONTAINER_FMP4_AUDIO : SEG_CONTAINER_FMP4;
 }
 
 #define DASH_MPD_BUF_CAP 8192

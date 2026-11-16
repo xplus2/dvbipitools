@@ -118,7 +118,7 @@ static int is_file(const char *p) {
 
 static int index_dir(loader_t *l, const char *dir, int id, int depth) {
   DIR *d = opendir(dir);
-  struct dirent *e;
+  const struct dirent *e;
   int rc = 0;
   if (!d) return xsd_set_fail(l->s, "LS000743", "bim: cannot open directory %s", dir);
   while (!rc) {

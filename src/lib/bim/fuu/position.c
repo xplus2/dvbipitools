@@ -124,7 +124,7 @@ static int rd_multi(fr_t *r, const int *has) {
     if (rational ? rat_next(&cur[layers[c - 1]]) : (cur[layers[c - 1]]++, 0)) return range(r, "rational position increment");
     for (int l = (int)c; l < nl; l++) cur[layers[l]] = rational ? fuu_rat_order(0) : 0;
     if (skip) continue;
-    if (growbuf_reserve((void **)&f->pos, &cap, n * sizeof *f->pos, (size_t)f->npayloads + 1, 1)) return bim_oom(r->r.err);
+    if (growbuf_reserve((void **)&f->pos, &cap, n * sizeof *f->pos, f->npayloads + 1, 1)) return bim_oom(r->r.err);
     memcpy(&f->pos[f->npayloads++ * n], cur, n * sizeof cur[0]);
   }
   return 0;

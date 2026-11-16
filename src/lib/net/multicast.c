@@ -500,7 +500,7 @@ void mcast_close(mcast_t *m) {
   free(m);
 }
 
-static int gso_send(mcast_t *m, const void *const *hdr, size_t hdr_len, const void *const *payload, const size_t *len, int n) {
+static int gso_send(const mcast_t *m, const void *const *hdr, size_t hdr_len, const void *const *payload, const size_t *len, int n) {
   struct iovec iov[2 * MCAST_SEND_BATCH_MAX];
   union {
     struct cmsghdr align;
@@ -534,7 +534,7 @@ static int gso_send(mcast_t *m, const void *const *hdr, size_t hdr_len, const vo
   return sendmsg(m->fd, &msg, 0) < 0 ? -1 : 0;
 }
 
-static int mmsg_send(mcast_t *m, const void *const *hdr, size_t hdr_len, const void *const *payload, const size_t *len, int n) {
+static int mmsg_send(const mcast_t *m, const void *const *hdr, size_t hdr_len, const void *const *payload, const size_t *len, int n) {
   struct iovec iov[MCAST_SEND_BATCH_MAX][2];
   struct mmsghdr msgs[MCAST_SEND_BATCH_MAX];
   socklen_t salen;

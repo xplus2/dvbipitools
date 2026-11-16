@@ -56,7 +56,7 @@ static uint64_t key_id(const ratelimit_t *rl, const struct sockaddr *addr) {
   if (addr->sa_family == AF_INET) memcpy(&k, &((const struct sockaddr_in *)addr)->sin_addr, 4);
   else if (addr->sa_family == AF_INET6) memcpy(&k, &((const struct sockaddr_in6 *)addr)->sin6_addr, 8);
   else return 0;
-  h = (k ^ rl->seed ^ (uint64_t)addr->sa_family << 56) * 0x9E3779B97F4A7C15ull;
+  h = (k ^ rl->seed ^ (uint64_t)addr->sa_family << 56) * 0x9E3779B97F4A7C15ULL;
   h ^= h >> 29;
   return h | 1;
 }
@@ -76,7 +76,9 @@ unsigned ratelimit_take(ratelimit_t *rl, const struct sockaddr *addr, unsigned r
   bucket_t *b;
 
   if (rate == 0 || !rl) return want;
-  if (!addr || !(id = key_id(rl, addr))) return 0;
+  if (!addr) return 0;
+  id = key_id(rl, addr);
+  if (!id) return 0;
   if (burst < 1) burst = 1;
   if (burst > TOKEN_MAX) burst = TOKEN_MAX;
   full = (uint64_t)burst << TOKEN_Q;
